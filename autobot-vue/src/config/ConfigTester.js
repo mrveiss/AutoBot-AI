@@ -4,6 +4,9 @@
  */
 
 import appConfig from './AppConfig.js';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('ConfigTester');
 
 export class ConfigTester {
   constructor() {
@@ -14,7 +17,7 @@ export class ConfigTester {
    * Test all service URL resolution
    */
   async testAllServiceUrls() {
-    console.log('[ConfigTester] Testing all service URL resolution...');
+    logger.debug('Testing all service URL resolution...');
     
     const services = [
       'backend',
@@ -41,7 +44,7 @@ export class ConfigTester {
           responseTime: endTime - startTime
         };
         
-        console.log(`✅ ${service}: ${url} (${endTime - startTime}ms)`);
+        logger.debug(`✅ ${service}: ${url} (${endTime - startTime}ms)`);
       } catch (error) {
         results[service] = {
           success: false,
@@ -49,7 +52,7 @@ export class ConfigTester {
           responseTime: null
         };
         
-        console.log(`❌ ${service}: ${error.message}`);
+        logger.debug(`❌ ${service}: ${error.message}`);
       }
     }
 
@@ -61,7 +64,7 @@ export class ConfigTester {
    * Test VNC URL generation with different options
    */
   async testVncUrls() {
-    console.log('[ConfigTester] Testing VNC URL generation...');
+    logger.debug('Testing VNC URL generation...');
     
     const vncTypes = ['desktop', 'terminal', 'playwright'];
     const results = {};
@@ -89,10 +92,10 @@ export class ConfigTester {
           responseTime: endTime - startTime
         };
         
-        console.log(`✅ VNC ${type}:`);
-        console.log(`   Default: ${defaultUrl}`);
-        console.log(`   Custom:  ${customUrl}`);
-        console.log(`   Time: ${endTime - startTime}ms`);
+        logger.debug(`✅ VNC ${type}:`);
+        logger.debug(`   Default: ${defaultUrl}`);
+        logger.debug(`   Custom:  ${customUrl}`);
+        logger.debug(`   Time: ${endTime - startTime}ms`);
         
       } catch (error) {
         results[type] = {
@@ -100,7 +103,7 @@ export class ConfigTester {
           error: error.message
         };
         
-        console.log(`❌ VNC ${type}: ${error.message}`);
+        logger.debug(`❌ VNC ${type}: ${error.message}`);
       }
     }
 
@@ -112,7 +115,7 @@ export class ConfigTester {
    * Test API URL generation with cache busting
    */
   async testApiUrls() {
-    console.log('[ConfigTester] Testing API URL generation...');
+    logger.debug('Testing API URL generation...');
     
     const endpoints = [
       '/api/health',
@@ -142,9 +145,9 @@ export class ConfigTester {
           responseTime: endTime - startTime
         };
         
-        console.log(`✅ API ${endpoint}:`);
-        console.log(`   With cache bust: ${defaultUrl}`);
-        console.log(`   No cache bust:   ${noCacheUrl}`);
+        logger.debug(`✅ API ${endpoint}:`);
+        logger.debug(`   With cache bust: ${defaultUrl}`);
+        logger.debug(`   No cache bust:   ${noCacheUrl}`);
         
       } catch (error) {
         results[endpoint] = {
@@ -152,7 +155,7 @@ export class ConfigTester {
           error: error.message
         };
         
-        console.log(`❌ API ${endpoint}: ${error.message}`);
+        logger.debug(`❌ API ${endpoint}: ${error.message}`);
       }
     }
 
@@ -164,7 +167,7 @@ export class ConfigTester {
    * Test configuration value retrieval
    */
   testConfigValues() {
-    console.log('[ConfigTester] Testing configuration value retrieval...');
+    logger.debug('Testing configuration value retrieval...');
     
     const testPaths = [
       'api.timeout',
@@ -186,14 +189,14 @@ export class ConfigTester {
           type: typeof value
         };
         
-        console.log(`✅ Config ${path}: ${JSON.stringify(value)} (${typeof value})`);
+        logger.debug(`✅ Config ${path}: ${JSON.stringify(value)} (${typeof value})`);
       } catch (error) {
         results[path] = {
           success: false,
           error: error.message
         };
         
-        console.log(`❌ Config ${path}: ${error.message}`);
+        logger.debug(`❌ Config ${path}: ${error.message}`);
       }
     });
 
@@ -205,7 +208,7 @@ export class ConfigTester {
    * Test feature flags
    */
   testFeatureFlags() {
-    console.log('[ConfigTester] Testing feature flags...');
+    logger.debug('Testing feature flags...');
     
     const features = [
       'enableDebug',
@@ -226,14 +229,14 @@ export class ConfigTester {
           enabled: enabled
         };
         
-        console.log(`✅ Feature ${feature}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        logger.debug(`✅ Feature ${feature}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
       } catch (error) {
         results[feature] = {
           success: false,
           error: error.message
         };
         
-        console.log(`❌ Feature ${feature}: ${error.message}`);
+        logger.debug(`❌ Feature ${feature}: ${error.message}`);
       }
     });
 
@@ -245,29 +248,25 @@ export class ConfigTester {
    * Run all tests
    */
   async runAllTests() {
-    console.log('\n🧪 [ConfigTester] Running comprehensive configuration tests...\n');
+    logger.debug('🧪 Running comprehensive configuration tests...');
     
     const startTime = Date.now();
     
     try {
       await this.testAllServiceUrls();
-      console.log('');
       
-      await this.testVncUrls(); 
-      console.log('');
+      await this.testVncUrls();
       
       await this.testApiUrls();
-      console.log('');
       
       this.testConfigValues();
-      console.log('');
       
       this.testFeatureFlags();
       
       const endTime = Date.now();
       
-      console.log(`\n✅ [ConfigTester] All tests completed in ${endTime - startTime}ms`);
-      console.log('📊 [ConfigTester] Test results:', this.results);
+      logger.debug(`✅ All tests completed in ${endTime - startTime}ms`);
+      logger.debug('📊 Test results:', this.results);
       
       return {
         success: true,
@@ -276,7 +275,7 @@ export class ConfigTester {
       };
       
     } catch (error) {
-      console.error('❌ [ConfigTester] Test suite failed:', error);
+      logger.error('❌ Test suite failed:', error);
       return {
         success: false,
         error: error.message,

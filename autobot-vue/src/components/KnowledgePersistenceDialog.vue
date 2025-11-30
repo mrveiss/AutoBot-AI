@@ -259,6 +259,9 @@ import { useToast } from '@/composables/useToast';
 import { apiService } from '@/services/api.js';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('KnowledgePersistenceDialog');
 
 // Props
 const props = defineProps({
@@ -334,7 +337,7 @@ const loadPendingItems = async () => {
       });
     }
   } catch (error) {
-    console.error('Failed to load pending knowledge:', error);
+    logger.error('Failed to load pending knowledge:', error);
     showToast('Failed to load knowledge items', 'error');
   } finally {
     loading.value = false;
@@ -408,9 +411,9 @@ const applyAllDecisions = async () => {
     showToast(`Applied ${decisions.length} knowledge decisions`, 'success');
     emit('decisions-applied', decisions);
     closeDialog();
-    
+
   } catch (error) {
-    console.error('Failed to apply decisions:', error);
+    logger.error('Failed to apply decisions:', error);
     showToast('Failed to apply knowledge decisions', 'error');
   } finally {
     loading.value = false;
@@ -432,9 +435,9 @@ const compileChat = async () => {
       emit('chat-compiled', response.compiled);
       closeDialog();
     }
-    
+
   } catch (error) {
-    console.error('Failed to compile chat:', error);
+    logger.error('Failed to compile chat:', error);
     showToast('Failed to compile chat to knowledge base', 'error');
   } finally {
     loading.value = false;

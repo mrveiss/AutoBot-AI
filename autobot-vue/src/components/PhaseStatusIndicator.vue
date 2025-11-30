@@ -118,6 +118,9 @@ import { apiService } from '../services/api';
 import { formatDateTime } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('PhaseStatusIndicator');
 
 export default {
   name: 'PhaseStatusIndicator',
@@ -185,7 +188,7 @@ export default {
           lastValidated.value = new Date();
         }
       } catch (error) {
-        console.warn('Project status API not available, using fallback:', error.message);
+        logger.warn('Project status API not available, using fallback:', error.message);
         // Provide fallback status when API is not available
         projectStatus.value = {
           current_phase: 'Advanced AI Features',
@@ -226,7 +229,7 @@ export default {
         await apiService.post('/api/project/validate');
         await refreshStatus(); // Refresh after validation
       } catch (error) {
-        console.error('Failed to run validation:', error);
+        logger.error('Failed to run validation:', error);
       } finally {
         isValidating.value = false;
       }
@@ -240,7 +243,7 @@ export default {
           showReportModal.value = true;
         }
       } catch (error) {
-        console.error('Failed to load validation report:', error);
+        logger.error('Failed to load validation report:', error);
       }
     };
 

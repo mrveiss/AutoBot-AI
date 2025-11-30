@@ -103,6 +103,10 @@ class OperationIntegrationManager:
         self.operation_manager = None
         self.websocket_connections: Dict[str, List[WebSocket]] = {}
         self.router = APIRouter(prefix="/operations", tags=["long-running-operations"])
+
+        # Lock for thread-safe access to websocket_connections
+        self._ws_lock = asyncio.Lock()
+
         self._setup_routes()
 
     async def initialize(self):
@@ -290,10 +294,11 @@ class OperationIntegrationManager:
             """WebSocket endpoint for real-time progress updates"""
             await websocket.accept()
 
-            # Add to connections
-            if operation_id not in self.websocket_connections:
-                self.websocket_connections[operation_id] = []
-            self.websocket_connections[operation_id].append(websocket)
+            # Add to connections (thread-safe)
+            async with self._ws_lock:
+                if operation_id not in self.websocket_connections:
+                    self.websocket_connections[operation_id] = []
+                self.websocket_connections[operation_id].append(websocket)
 
             try:
                 # Send current progress if operation exists
@@ -320,12 +325,13 @@ class OperationIntegrationManager:
             except WebSocketDisconnect:
                 pass
             finally:
-                # Remove from connections
-                if (
-                    operation_id in self.websocket_connections
-                    and websocket in self.websocket_connections[operation_id]
-                ):
-                    self.websocket_connections[operation_id].remove(websocket)
+                # Remove from connections (thread-safe)
+                async with self._ws_lock:
+                    if (
+                        operation_id in self.websocket_connections
+                        and websocket in self.websocket_connections[operation_id]
+                    ):
+                        self.websocket_connections[operation_id].remove(websocket)
 
         # Specialized operation endpoints
         @self.router.post("/codebase/index")
@@ -533,22 +539,34 @@ class OperationIntegrationManager:
         )
 
     async def _broadcast_progress_update(self, progress_data: Dict[str, Any]):
-        """Broadcast progress update to WebSocket connections"""
+        """Broadcast progress update to WebSocket connections (thread-safe)"""
         operation_id = progress_data["operation_id"]
 
-        if operation_id in self.websocket_connections:
-            disconnected = []
-            for websocket in self.websocket_connections[operation_id]:
-                try:
-                    await websocket.send_json(
-                        {"type": "progress_update", "data": progress_data}
-                    )
-                except Exception:
-                    disconnected.append(websocket)
+        # Get a copy of connections under lock
+        async with self._ws_lock:
+            if operation_id not in self.websocket_connections:
+                return
+            connections = list(self.websocket_connections[operation_id])
 
-            # Remove disconnected websockets
-            for ws in disconnected:
-                self.websocket_connections[operation_id].remove(ws)
+        # Send to connections outside lock (avoid holding lock during I/O)
+        disconnected = []
+        for websocket in connections:
+            try:
+                await websocket.send_json(
+                    {"type": "progress_update", "data": progress_data}
+                )
+            except Exception:
+                disconnected.append(websocket)
+
+        # Remove disconnected websockets under lock
+        if disconnected:
+            async with self._ws_lock:
+                for ws in disconnected:
+                    if (
+                        operation_id in self.websocket_connections
+                        and ws in self.websocket_connections[operation_id]
+                    ):
+                        self.websocket_connections[operation_id].remove(ws)
 
 
 # Singleton instance for global access

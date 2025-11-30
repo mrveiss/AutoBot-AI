@@ -10,6 +10,7 @@ import gc
 import logging
 import os
 import sys
+import threading
 import weakref
 from functools import wraps
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
@@ -289,7 +290,7 @@ def memory_efficient_cache(
 
 
 class MemoryMonitor:
-    """Real-time memory usage monitoring"""
+    """Real-time memory usage monitoring (thread-safe)"""
 
     def __init__(
         self,
@@ -299,32 +300,45 @@ class MemoryMonitor:
         self.process = psutil.Process()
         self.peak_memory = 0.0
         self.warnings_issued = 0
+        self._lock = threading.Lock()  # Lock for thread-safe counter access
 
     def check_memory(self) -> Dict[str, Any]:
-        """Check current memory usage"""
+        """Check current memory usage (thread-safe)"""
         memory_info = self.process.memory_info()
         rss_mb = memory_info.rss / (1024**2)
         vms_mb = memory_info.vms / (1024**2)
 
-        # Update peak memory
-        if rss_mb > self.peak_memory:
-            self.peak_memory = rss_mb
+        # CRITICAL: Protect shared state modifications with lock
+        with self._lock:
+            # Update peak memory
+            if rss_mb > self.peak_memory:
+                self.peak_memory = rss_mb
 
-        # Check threshold
-        if rss_mb > self.threshold_mb:
-            self.warnings_issued += 1
+            # Check threshold
+            if rss_mb > self.threshold_mb:
+                self.warnings_issued += 1
+                warning_count = self.warnings_issued
+            else:
+                warning_count = None
+
+            # Capture current state for return
+            peak_mb = self.peak_memory
+            warnings = self.warnings_issued
+
+        # Log outside lock to avoid holding lock during I/O
+        if warning_count is not None:
             logger.warning(
                 f"Memory usage {rss_mb:.1f}MB exceeds threshold {self.threshold_mb}MB "
-                f"(warning #{self.warnings_issued})"
+                f"(warning #{warning_count})"
             )
 
         return {
             "rss_mb": rss_mb,
             "vms_mb": vms_mb,
-            "peak_mb": self.peak_memory,
+            "peak_mb": peak_mb,
             "threshold_mb": self.threshold_mb,
             "above_threshold": rss_mb > self.threshold_mb,
-            "warnings_issued": self.warnings_issued,
+            "warnings_issued": warnings,
         }
 
     def force_garbage_collection(self) -> Dict[str, int]:

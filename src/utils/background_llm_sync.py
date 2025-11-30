@@ -57,6 +57,9 @@ class BackgroundLLMSync:
         self.services: Dict[str, LLMServiceStatus] = {}
         self._task: Optional[asyncio.Task] = None
 
+        # Lock for thread-safe service status access
+        self._lock = asyncio.Lock()
+
         # Initialize known services
         self._initialize_known_services()
 
@@ -88,7 +91,7 @@ class BackgroundLLMSync:
             )
 
     async def check_service_health(self, service: LLMServiceStatus) -> bool:
-        """Check the health of a specific LLM service."""
+        """Check the health of a specific LLM service (thread-safe)."""
         try:
             start_time = time.time()
 
@@ -97,10 +100,13 @@ class BackgroundLLMSync:
             await asyncio.sleep(0.1)  # Simulate network delay
 
             response_time = time.time() - start_time
-            service.response_time = response_time
-            service.last_check = time.time()
-            service.success_count += 1
-            service.status = "healthy"
+
+            # Update service status under lock
+            async with self._lock:
+                service.response_time = response_time
+                service.last_check = time.time()
+                service.success_count += 1
+                service.status = "healthy"
 
             logger.debug(
                 f"Health check passed for {service.service_name} ({response_time:.3f}s)"
@@ -108,9 +114,11 @@ class BackgroundLLMSync:
             return True
 
         except Exception as e:
-            service.error_count += 1
-            service.status = "offline"
-            service.last_check = time.time()
+            # Update service status under lock
+            async with self._lock:
+                service.error_count += 1
+                service.status = "offline"
+                service.last_check = time.time()
 
             logger.warning(f"Health check failed for {service.service_name}: {e}")
             return False
@@ -148,20 +156,23 @@ class BackgroundLLMSync:
             logger.warning(f"Failed to warm connection pools: {e}")
 
     async def collect_performance_metrics(self):
-        """Collect and log performance metrics."""
+        """Collect and log performance metrics (thread-safe)."""
         try:
-            total_services = len(self.services)
-            healthy_services = sum(
-                1 for s in self.services.values() if s.status == "healthy"
-            )
-            offline_services = sum(
-                1 for s in self.services.values() if s.status == "offline"
-            )
+            # Copy service data under lock
+            async with self._lock:
+                total_services = len(self.services)
+                healthy_services = sum(
+                    1 for s in self.services.values() if s.status == "healthy"
+                )
+                offline_services = sum(
+                    1 for s in self.services.values() if s.status == "offline"
+                )
+                response_times = [
+                    s.response_time for s in self.services.values() if s.response_time
+                ]
 
+            # Process outside lock
             avg_response_time = 0.0
-            response_times = [
-                s.response_time for s in self.services.values() if s.response_time
-            ]
             if response_times:
                 avg_response_time = sum(response_times) / len(response_times)
 
@@ -230,14 +241,13 @@ class BackgroundLLMSync:
 
         logger.info("✅ Background LLM sync stopped")
 
-    def get_service_status(self, service_name: str) -> Optional[LLMServiceStatus]:
-        """Get status for a specific service."""
-        return self.services.get(service_name)
-
-    def get_all_services_status(self) -> Dict[str, Dict[str, Any]]:
-        """Get status for all services."""
-        return {
-            name: {
+    async def get_service_status(self, service_name: str) -> Optional[Dict[str, Any]]:
+        """Get status for a specific service (thread-safe)."""
+        async with self._lock:
+            service = self.services.get(service_name)
+            if service is None:
+                return None
+            return {
                 "service_name": service.service_name,
                 "endpoint": service.endpoint,
                 "status": service.status,
@@ -245,10 +255,25 @@ class BackgroundLLMSync:
                 "response_time": service.response_time,
                 "error_count": service.error_count,
                 "success_count": service.success_count,
-                "metadata": service.metadata,
+                "metadata": service.metadata.copy(),
             }
-            for name, service in self.services.items()
-        }
+
+    async def get_all_services_status(self) -> Dict[str, Dict[str, Any]]:
+        """Get status for all services (thread-safe)."""
+        async with self._lock:
+            return {
+                name: {
+                    "service_name": service.service_name,
+                    "endpoint": service.endpoint,
+                    "status": service.status,
+                    "last_check": service.last_check,
+                    "response_time": service.response_time,
+                    "error_count": service.error_count,
+                    "success_count": service.success_count,
+                    "metadata": service.metadata.copy(),  # Copy to prevent mutation
+                }
+                for name, service in self.services.items()
+            }
 
 
 # Global instance (thread-safe)

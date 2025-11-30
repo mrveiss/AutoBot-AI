@@ -36,6 +36,11 @@ class DistributedRedisClient:
         self._max_retries = 3
         self._retry_delay = 2
 
+        # Lock for thread-safe state access
+        import threading
+
+        self._lock = threading.Lock()
+
     def _get_redis_password(self) -> Optional[str]:
         """Get Redis password from environment"""
         import os
@@ -44,24 +49,29 @@ class DistributedRedisClient:
 
     def get_client(self) -> Optional[redis.Redis]:
         """
-        Get Redis client with proper error handling for distributed setup
+        Get Redis client with proper error handling for distributed setup (thread-safe).
         Returns None if connection fails (non-blocking)
         """
         current_time = time.time()
 
-        # Rate limit connection attempts (max 1 per 5 seconds)
-        if current_time - self._last_connection_time < 5:
-            return self._client
+        with self._lock:
+            # Rate limit connection attempts (max 1 per 5 seconds)
+            if current_time - self._last_connection_time < 5:
+                return self._client
 
-        self._last_connection_time = current_time
+            self._last_connection_time = current_time
+            client = self._client
 
-        if self._client is None or not self._test_connection():
-            self._client = self._create_connection()
+        if client is None or not self._test_connection():
+            new_client = self._create_connection()
+            with self._lock:
+                self._client = new_client
+            return new_client
 
-        return self._client
+        return client
 
     def _create_connection(self) -> Optional[redis.Redis]:
-        """Create Redis connection using canonical get_redis_client()
+        """Create Redis connection using canonical get_redis_client() (thread-safe)
 
         Uses the canonical get_redis_client() pattern which provides:
         - Connection pooling
@@ -70,7 +80,9 @@ class DistributedRedisClient:
         - Centralized configuration
         """
         try:
-            self._connection_attempts += 1
+            with self._lock:
+                self._connection_attempts += 1
+                attempts = self._connection_attempts
 
             # Use canonical Redis client (already configured for distributed setup)
             client = get_redis_client(async_client=False, database="main")
@@ -85,13 +97,16 @@ class DistributedRedisClient:
             logger.info(
                 f"✅ Connected to Redis VM at {self.redis_host}:{self.redis_port}"
             )
-            self._connection_attempts = 0
+            with self._lock:
+                self._connection_attempts = 0
             return client
 
         except redis.ConnectionError as e:
-            if self._connection_attempts <= self._max_retries:
+            with self._lock:
+                attempts = self._connection_attempts
+            if attempts <= self._max_retries:
                 logger.warning(
-                    f"Redis VM connection attempt {self._connection_attempts}/{self._max_retries} failed: {e}"
+                    f"Redis VM connection attempt {attempts}/{self._max_retries} failed: {e}"
                 )
             else:
                 logger.error(
@@ -104,12 +119,15 @@ class DistributedRedisClient:
             return None
 
     def _test_connection(self) -> bool:
-        """Test if current connection is working"""
-        if self._client is None:
+        """Test if current connection is working (thread-safe)"""
+        with self._lock:
+            client = self._client
+
+        if client is None:
             return False
 
         try:
-            self._client.ping()
+            client.ping()
             return True
         except Exception:
             return False
@@ -119,18 +137,25 @@ class DistributedRedisClient:
         return await asyncio.to_thread(self.get_client)
 
     def is_connected(self) -> bool:
-        """Check if Redis client is connected to remote VM"""
-        return self._client is not None and self._test_connection()
+        """Check if Redis client is connected to remote VM (thread-safe)"""
+        with self._lock:
+            has_client = self._client is not None
+        return has_client and self._test_connection()
 
     def get_connection_info(self) -> dict:
-        """Get connection status and info"""
+        """Get connection status and info (thread-safe)"""
+        with self._lock:
+            connection_attempts = self._connection_attempts
+            last_connection_time = self._last_connection_time
+            client_exists = self._client is not None
+
         return {
             "host": self.redis_host,
             "port": self.redis_port,
             "connected": self.is_connected(),
-            "connection_attempts": self._connection_attempts,
-            "last_connection_time": self._last_connection_time,
-            "client_exists": self._client is not None,
+            "connection_attempts": connection_attempts,
+            "last_connection_time": last_connection_time,
+            "client_exists": client_exists,
         }
 
 

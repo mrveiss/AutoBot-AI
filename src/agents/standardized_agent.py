@@ -63,6 +63,9 @@ class StandardizedAgent(BaseAgent):
         self._error_count = 0
         self._last_error = None
 
+        # Lock for thread-safe counter access
+        self._stats_lock = asyncio.Lock()
+
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
         self._action_handlers[action] = handler
@@ -87,8 +90,11 @@ class StandardizedAgent(BaseAgent):
         5. Track performance metrics
         """
         start_time = time.time()
-        self._request_count += 1
-        self._last_request_time = start_time
+
+        # Increment request count (thread-safe)
+        async with self._stats_lock:
+            self._request_count += 1
+            self._last_request_time = start_time
 
         try:
             self.logger.debug(
@@ -132,9 +138,10 @@ class StandardizedAgent(BaseAgent):
             # Call the specific handler
             result = await self._call_handler_safely(handler_method, request)
 
-            # Track performance
+            # Track performance (thread-safe)
             processing_time = time.time() - start_time
-            self._total_processing_time += processing_time
+            async with self._stats_lock:
+                self._total_processing_time += processing_time
 
             self.logger.debug(
                 f"Request {request.request_id} processed successfully in {processing_time:.3f}s"
@@ -154,8 +161,10 @@ class StandardizedAgent(BaseAgent):
             )
 
         except Exception as e:
-            self._error_count += 1
-            self._last_error = str(e)
+            # Update error count (thread-safe)
+            async with self._stats_lock:
+                self._error_count += 1
+                self._last_error = str(e)
 
             processing_time = time.time() - start_time
             self.logger.error(f"Error processing request {request.request_id}: {e}")
@@ -263,19 +272,20 @@ class StandardizedAgent(BaseAgent):
 
         return base_health
 
-    def cleanup(self):
-        """Standardized cleanup with logging"""
+    async def cleanup(self):
+        """Standardized cleanup with logging (thread-safe)"""
         self.logger.info(f"Cleaning up {self.agent_type} agent")
 
         # Log final stats
         stats = self.get_performance_stats()
         self.logger.info(f"Final stats: {stats}")
 
-        # Reset counters
-        self._request_count = 0
-        self._total_processing_time = 0.0
-        self._error_count = 0
-        self._last_error = None
+        # Reset counters (thread-safe)
+        async with self._stats_lock:
+            self._request_count = 0
+            self._total_processing_time = 0.0
+            self._error_count = 0
+            self._last_error = None
 
         # Call parent cleanup if it exists
         if hasattr(super(), "cleanup"):

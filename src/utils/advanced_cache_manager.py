@@ -6,6 +6,7 @@ Advanced Redis-based Caching Manager
 Implements intelligent caching strategies for different data types
 """
 
+import asyncio
 import hashlib
 import inspect
 import json
@@ -53,6 +54,9 @@ class AdvancedCacheManager:
         self.stats_prefix = "autobot:cache:stats:"
         self._redis_client_initialized = False
 
+        # Lock for thread-safe async Redis client initialization
+        self._lock = asyncio.Lock()
+
         # Cache configurations for different data types
         self.cache_configs = {
             # Static data - long TTL
@@ -90,8 +94,15 @@ class AdvancedCacheManager:
             )
 
     async def _ensure_redis_client(self):
-        """Ensure async Redis client is initialized"""
-        if not self._redis_client_initialized:
+        """Ensure async Redis client is initialized (thread-safe)"""
+        # Fast path: check without lock first
+        if self._redis_client_initialized:
+            return
+
+        # Slow path: acquire lock and double-check
+        async with self._lock:
+            if self._redis_client_initialized:
+                return  # Another coroutine initialized while we waited
             try:
                 self.redis_client = await get_redis_client(async_client=True)
                 self._redis_client_initialized = True

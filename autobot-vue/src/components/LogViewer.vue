@@ -118,6 +118,9 @@ import { useApiService } from '@/composables/useApiService'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useWebSocket } from '@/composables/useWebSocket'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LogViewer')
 
 export default {
   name: 'LogViewer',
@@ -177,7 +180,7 @@ export default {
           }
         },
         onError: (error) => {
-          console.error('WebSocket error:', error)
+          logger.error('WebSocket error:', error)
         }
       }
     )
@@ -189,7 +192,7 @@ export default {
 
     const refreshFiles = async () => {
       await refreshFilesOp(refreshFilesFn).catch(err => {
-        console.error('Failed to load log sources:', err)
+        logger.error('Failed to load log sources:', err)
       })
     }
 
@@ -266,7 +269,7 @@ export default {
     const loadLog = async () => {
       if (!selectedSource.value) return
       await loadLogOp(loadLogFn).catch(err => {
-        console.error('Load log error:', err)
+        logger.error('Load log error:', err)
       })
     }
     

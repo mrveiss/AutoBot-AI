@@ -685,7 +685,7 @@ class SecretsManager:
                     # Get last 10 events
                     recent_activity = audit_log[-10:]
                 except Exception:
-                    pass
+                    pass  # Audit log unreadable, activity remains empty
 
         return {
             "generated_at": datetime.now().isoformat(),

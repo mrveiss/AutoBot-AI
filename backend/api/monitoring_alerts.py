@@ -97,8 +97,8 @@ class NotificationChannelRequest(BaseModel):
 async def alerts_health_check():
     """Health check for monitoring alerts system"""
     alerts_manager = get_alerts_manager()
-    active_alerts = alerts_manager.get_active_alerts()
-    alert_rules = alerts_manager.get_alert_rules()
+    active_alerts = await alerts_manager.get_active_alerts()
+    alert_rules = await alerts_manager.get_alert_rules()
 
     return {
         "status": "healthy",
@@ -120,8 +120,8 @@ async def alerts_health_check():
 async def get_alerts_status():
     """Get comprehensive alerts system status"""
     alerts_manager = get_alerts_manager()
-    active_alerts = alerts_manager.get_active_alerts()
-    alert_rules = alerts_manager.get_alert_rules()
+    active_alerts = await alerts_manager.get_active_alerts()
+    alert_rules = await alerts_manager.get_alert_rules()
 
     # Count alerts by severity
     severity_counts = {"low": 0, "medium": 0, "high": 0, "critical": 0}
@@ -182,7 +182,7 @@ async def get_active_alerts(
 ):
     """Get all active alerts with optional filters"""
     alerts_manager = get_alerts_manager()
-    alerts = alerts_manager.get_active_alerts()
+    alerts = await alerts_manager.get_active_alerts()
 
     # Apply filters
     if severity:
@@ -230,7 +230,7 @@ async def get_active_alerts(
 async def acknowledge_alert(rule_id: str, acknowledged_by: str = "api_user"):
     """Acknowledge an active alert"""
     alerts_manager = get_alerts_manager()
-    success = alerts_manager.acknowledge_alert(rule_id, acknowledged_by)
+    success = await alerts_manager.acknowledge_alert(rule_id, acknowledged_by)
 
     if success:
         return {
@@ -253,7 +253,7 @@ async def get_alert_rules(
 ):
     """Get all alert rules"""
     alerts_manager = get_alerts_manager()
-    rules = alerts_manager.get_alert_rules()
+    rules = await alerts_manager.get_alert_rules()
 
     if enabled_only:
         rules = [r for r in rules if r.enabled]
@@ -322,7 +322,7 @@ async def create_alert_rule(rule_request: AlertRuleRequest):
         tags=rule_request.tags,
     )
 
-    alerts_manager.add_alert_rule(rule)
+    await alerts_manager.add_alert_rule(rule)
 
     return AlertRuleResponse(
         id=rule.id,
@@ -382,7 +382,7 @@ async def update_alert_rule(rule_id: str, rule_request: AlertRuleRequest):
         tags=rule_request.tags,
     )
 
-    alerts_manager.add_alert_rule(rule)  # This will update existing rule
+    await alerts_manager.add_alert_rule(rule)  # This will update existing rule
 
     return {
         "status": "success",

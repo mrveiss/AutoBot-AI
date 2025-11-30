@@ -59,6 +59,9 @@ import { ref, onMounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { useAsyncHandler } from '@/composables/useErrorHandler';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('HistoryView');
 
 export default {
   name: 'HistoryView',
@@ -97,7 +100,7 @@ export default {
           if (result.status === 'fulfilled') {
             return result.value;
           } else {
-            console.error(`Error loading messages for chat ${chats[index].chatId}:`, result.reason);
+            logger.error(`Error loading messages for chat ${chats[index].chatId}:`, result.reason);
             return {
               id: chats[index].chatId,
               date: 'Unknown date',
@@ -139,7 +142,7 @@ export default {
                 name: ''
               });
             } catch (e) {
-              console.error(`Error parsing messages for chat ${chatId}:`, e);
+              logger.error(`Error parsing messages for chat ${chatId}:`, e);
             }
           }
         }
@@ -155,7 +158,7 @@ export default {
             await apiClient.deleteChat(entry.id);
             localStorage.removeItem(`chat_${entry.id}_messages`);
           } catch (error) {
-            console.error(`Failed to delete chat ${entry.id}:`, error);
+            logger.error(`Failed to delete chat ${entry.id}:`, error);
             // Continue with other deletions even if one fails
           }
         });

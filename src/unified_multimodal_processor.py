@@ -229,8 +229,8 @@ class VisionProcessor(BaseModalProcessor):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"GPU cleanup skipped: {e}")
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process visual input (images, screenshots, video)"""
@@ -517,8 +517,8 @@ class VoiceProcessor(BaseModalProcessor):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"GPU cleanup skipped: {e}")
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process audio input (voice commands, speech)"""

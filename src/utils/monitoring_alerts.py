@@ -293,6 +293,9 @@ class MonitoringAlertsManager:
         self._alert_rate_limits = {}  # rule_id -> last_alert_time
         self._alert_rate_limit_interval = 300  # 5 minutes between same alerts
 
+        # Lock for thread-safe access to shared mutable state
+        self._lock = asyncio.Lock()
+
         self._initialize_redis()
         self._load_default_rules()
         self._setup_default_channels()
@@ -459,34 +462,41 @@ class MonitoringAlertsManager:
 
         logger.info(f"Loaded {len(default_rules)} default alert rules")
 
-    def add_alert_rule(self, rule: AlertRule):
-        """Add or update an alert rule"""
-        self.alert_rules[rule.id] = rule
+    async def add_alert_rule(self, rule: AlertRule):
+        """Add or update an alert rule (thread-safe)"""
+        async with self._lock:
+            self.alert_rules[rule.id] = rule
         logger.info(f"Added alert rule: {rule.name} ({rule.id})")
 
     async def remove_alert_rule(self, rule_id: str):
-        """Remove an alert rule"""
-        if rule_id in self.alert_rules:
+        """Remove an alert rule (thread-safe)"""
+        async with self._lock:
+            if rule_id not in self.alert_rules:
+                return
             rule = self.alert_rules.pop(rule_id)
-            logger.info(f"Removed alert rule: {rule.name} ({rule_id})")
+            has_active_alert = rule_id in self.active_alerts
 
-            # Also resolve any active alerts for this rule
-            if rule_id in self.active_alerts:
-                await self._resolve_alert(rule_id)
+        logger.info(f"Removed alert rule: {rule.name} ({rule_id})")
 
-    def add_notification_channel(self, channel: AlertNotificationChannel):
-        """Add a notification channel"""
-        self.notification_channels[channel.name] = channel
+        # Also resolve any active alerts for this rule (outside lock)
+        if has_active_alert:
+            await self._resolve_alert(rule_id)
+
+    async def add_notification_channel(self, channel: AlertNotificationChannel):
+        """Add a notification channel (thread-safe)"""
+        async with self._lock:
+            self.notification_channels[channel.name] = channel
         logger.info(f"Added notification channel: {channel.name}")
 
-    def set_websocket_manager(self, websocket_manager):
-        """Set WebSocket manager for real-time notifications"""
-        if "websocket" in self.notification_channels:
-            self.notification_channels["websocket"].set_websocket_manager(
-                websocket_manager
-            )
-            self.notification_channels["websocket"].enabled = True
-            logger.info("Enabled WebSocket notifications")
+    async def set_websocket_manager(self, websocket_manager):
+        """Set WebSocket manager for real-time notifications (thread-safe)"""
+        async with self._lock:
+            if "websocket" in self.notification_channels:
+                self.notification_channels["websocket"].set_websocket_manager(
+                    websocket_manager
+                )
+                self.notification_channels["websocket"].enabled = True
+        logger.info("Enabled WebSocket notifications")
 
     def _evaluate_operator(
         self, current_value: float, threshold: float, operator: str
@@ -539,26 +549,30 @@ class MonitoringAlertsManager:
             logger.debug(f"Could not get value for path {path}: {e}")
             return None
 
-    def _should_trigger_alert(self, rule: AlertRule, current_value: float) -> bool:
-        """Check if alert should be triggered based on duration"""
+    async def _should_trigger_alert(self, rule: AlertRule, current_value: float) -> bool:
+        """Check if alert should be triggered based on duration (thread-safe)"""
         current_time = time.time()
 
-        # Track metric history for duration checking
-        if rule.metric_path not in self.metric_history:
-            self.metric_history[rule.metric_path] = []
+        # Track metric history for duration checking under lock
+        async with self._lock:
+            if rule.metric_path not in self.metric_history:
+                self.metric_history[rule.metric_path] = []
 
-        history = self.metric_history[rule.metric_path]
-        history.append((current_time, current_value))
+            history = self.metric_history[rule.metric_path]
+            history.append((current_time, current_value))
 
-        # Keep only relevant history (duration + buffer)
-        cutoff_time = current_time - (rule.duration + 300)  # Add 5 min buffer
-        self.metric_history[rule.metric_path] = [
-            (t, v) for t, v in history if t > cutoff_time
-        ]
+            # Keep only relevant history (duration + buffer)
+            cutoff_time = current_time - (rule.duration + 300)  # Add 5 min buffer
+            self.metric_history[rule.metric_path] = [
+                (t, v) for t, v in history if t > cutoff_time
+            ]
 
-        # Check if condition has been met for the required duration
+            # Copy history for processing
+            history_copy = list(history)
+
+        # Check if condition has been met for the required duration (outside lock)
         condition_start_time = None
-        for timestamp, value in reversed(history):
+        for timestamp, value in reversed(history_copy):
             if self._evaluate_operator(value, rule.threshold, rule.operator):
                 condition_start_time = timestamp
             else:
@@ -570,17 +584,18 @@ class MonitoringAlertsManager:
 
         return False
 
-    def _should_suppress_alert(self, rule: AlertRule) -> bool:
-        """Check if alert should be suppressed due to cooldown"""
-        if rule.id in self.active_alerts:
-            alert = self.active_alerts[rule.id]
-            if alert.status == AlertStatus.ACTIVE:
-                last_alert_time = alert.updated_at.timestamp()
-                return (time.time() - last_alert_time) < rule.cooldown
+    async def _should_suppress_alert(self, rule: AlertRule) -> bool:
+        """Check if alert should be suppressed due to cooldown (thread-safe)"""
+        async with self._lock:
+            if rule.id in self.active_alerts:
+                alert = self.active_alerts[rule.id]
+                if alert.status == AlertStatus.ACTIVE:
+                    last_alert_time = alert.updated_at.timestamp()
+                    return (time.time() - last_alert_time) < rule.cooldown
         return False
 
     async def _create_alert(self, rule: AlertRule, current_value: float) -> Alert:
-        """Create a new alert"""
+        """Create a new alert (thread-safe)"""
         alert = Alert(
             rule_id=rule.id,
             rule_name=rule.name,
@@ -595,9 +610,11 @@ class MonitoringAlertsManager:
             tags=rule.tags.copy(),
         )
 
-        self.active_alerts[rule.id] = alert
+        # Store alert under lock
+        async with self._lock:
+            self.active_alerts[rule.id] = alert
 
-        # Store in Redis if available
+        # Store in Redis if available (outside lock)
         if self.redis_client:
             try:
                 alert_data = {
@@ -619,75 +636,118 @@ class MonitoringAlertsManager:
         # Send notifications
         await self._send_alert_notifications(alert)
 
-        # Apply rate limiting to alert logging to prevent spam
+        # Apply rate limiting to alert logging to prevent spam (under lock)
         current_time = time.time()
-        last_alert_time = self._alert_rate_limits.get(rule.id, 0)
+        async with self._lock:
+            last_alert_time = self._alert_rate_limits.get(rule.id, 0)
+            should_log = current_time - last_alert_time >= self._alert_rate_limit_interval
+            if should_log:
+                self._alert_rate_limits[rule.id] = current_time
 
-        if current_time - last_alert_time >= self._alert_rate_limit_interval:
+        if should_log:
             logger.warning(f"🚨 Alert created: {alert.rule_name} - {alert.message}")
-            self._alert_rate_limits[rule.id] = current_time
 
         return alert
 
     async def _resolve_alert(self, rule_id: str):
-        """Resolve an active alert"""
-        if rule_id in self.active_alerts:
+        """Resolve an active alert (thread-safe)"""
+        # Get and update alert under lock
+        async with self._lock:
+            if rule_id not in self.active_alerts:
+                return
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.RESOLVED
             alert.resolved_at = datetime.now()
             alert.updated_at = datetime.now()
-
-            # Update in Redis
-            if self.redis_client:
-                try:
-                    self.redis_client.hset(
-                        f"alert:{rule_id}",
-                        mapping={
-                            "status": alert.status.value,
-                            "resolved_at": alert.resolved_at.isoformat(),
-                            "updated_at": alert.updated_at.isoformat(),
-                        },
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not update alert in Redis: {e}")
-
-            # Send recovery notifications
-            await self._send_recovery_notifications(alert)
-
+            # Copy alert data for external operations
+            alert_copy = Alert(
+                rule_id=alert.rule_id,
+                rule_name=alert.rule_name,
+                metric_path=alert.metric_path,
+                current_value=alert.current_value,
+                threshold=alert.threshold,
+                severity=alert.severity,
+                status=alert.status,
+                message=alert.message,
+                created_at=alert.created_at,
+                updated_at=alert.updated_at,
+                acknowledged_at=alert.acknowledged_at,
+                resolved_at=alert.resolved_at,
+                acknowledged_by=alert.acknowledged_by,
+                tags=list(alert.tags),
+                metadata=dict(alert.metadata),
+            )
             # Remove from active alerts
             del self.active_alerts[rule_id]
 
-            logger.info(f"✅ Alert resolved: {alert.rule_name}")
+        # Update in Redis (outside lock)
+        if self.redis_client:
+            try:
+                self.redis_client.hset(
+                    f"alert:{rule_id}",
+                    mapping={
+                        "status": alert_copy.status.value,
+                        "resolved_at": alert_copy.resolved_at.isoformat(),
+                        "updated_at": alert_copy.updated_at.isoformat(),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Could not update alert in Redis: {e}")
+
+        # Send recovery notifications (outside lock)
+        await self._send_recovery_notifications(alert_copy)
+
+        logger.info(f"✅ Alert resolved: {alert_copy.rule_name}")
 
     async def _send_alert_notifications(self, alert: Alert):
-        """Send alert to all enabled notification channels"""
-        for channel_name, channel in self.notification_channels.items():
-            if channel.enabled:
-                try:
-                    success = await channel.send_alert(alert)
-                    if success:
-                        logger.debug(f"Alert sent via {channel_name}")
-                    else:
-                        logger.warning(f"Failed to send alert via {channel_name}")
-                except Exception as e:
-                    logger.error(f"Error sending alert via {channel_name}: {e}")
+        """Send alert to all enabled notification channels (thread-safe)"""
+        # Copy channels list under lock
+        async with self._lock:
+            channels = [
+                (name, channel)
+                for name, channel in self.notification_channels.items()
+                if channel.enabled
+            ]
+
+        # Send notifications outside lock
+        for channel_name, channel in channels:
+            try:
+                success = await channel.send_alert(alert)
+                if success:
+                    logger.debug(f"Alert sent via {channel_name}")
+                else:
+                    logger.warning(f"Failed to send alert via {channel_name}")
+            except Exception as e:
+                logger.error(f"Error sending alert via {channel_name}: {e}")
 
     async def _send_recovery_notifications(self, alert: Alert):
-        """Send recovery notification to all enabled notification channels"""
-        for channel_name, channel in self.notification_channels.items():
-            if channel.enabled:
-                try:
-                    success = await channel.send_recovery(alert)
-                    if success:
-                        logger.debug(f"Recovery sent via {channel_name}")
-                    else:
-                        logger.warning(f"Failed to send recovery via {channel_name}")
-                except Exception as e:
-                    logger.error(f"Error sending recovery via {channel_name}: {e}")
+        """Send recovery notification to all enabled notification channels (thread-safe)"""
+        # Copy channels list under lock
+        async with self._lock:
+            channels = [
+                (name, channel)
+                for name, channel in self.notification_channels.items()
+                if channel.enabled
+            ]
+
+        # Send notifications outside lock
+        for channel_name, channel in channels:
+            try:
+                success = await channel.send_recovery(alert)
+                if success:
+                    logger.debug(f"Recovery sent via {channel_name}")
+                else:
+                    logger.warning(f"Failed to send recovery via {channel_name}")
+            except Exception as e:
+                logger.error(f"Error sending recovery via {channel_name}: {e}")
 
     async def check_metrics(self, infrastructure_data: Dict[str, Any]):
-        """Check all metrics against alert rules"""
-        for rule_id, rule in self.alert_rules.items():
+        """Check all metrics against alert rules (thread-safe)"""
+        # Copy rules under lock
+        async with self._lock:
+            rules_copy = [(rule_id, rule) for rule_id, rule in self.alert_rules.items()]
+
+        for rule_id, rule in rules_copy:
             if not rule.enabled:
                 continue
 
@@ -706,19 +766,26 @@ class MonitoringAlertsManager:
 
                 if condition_met:
                     # Check if alert should be triggered based on duration
-                    if self._should_trigger_alert(rule, current_value):
+                    if await self._should_trigger_alert(rule, current_value):
                         # Check if we're not in cooldown period
-                        if not self._should_suppress_alert(rule):
-                            if rule_id not in self.active_alerts:
+                        if not await self._should_suppress_alert(rule):
+                            # Check and update under lock
+                            async with self._lock:
+                                if rule_id not in self.active_alerts:
+                                    should_create = True
+                                else:
+                                    # Update existing alert under lock
+                                    should_create = False
+                                    alert = self.active_alerts[rule_id]
+                                    alert.current_value = current_value
+                                    alert.updated_at = datetime.now()
+                            if should_create:
                                 await self._create_alert(rule, current_value)
-                            else:
-                                # Update existing alert
-                                alert = self.active_alerts[rule_id]
-                                alert.current_value = current_value
-                                alert.updated_at = datetime.now()
                 else:
                     # Condition not met, resolve alert if active
-                    if rule_id in self.active_alerts:
+                    async with self._lock:
+                        has_active = rule_id in self.active_alerts
+                    if has_active:
                         await self._resolve_alert(rule_id)
 
             except Exception as e:
@@ -796,45 +863,54 @@ class MonitoringAlertsManager:
         self.running = False
         logger.info("⏹️ Stopped monitoring alerts system")
 
-    def get_active_alerts(self) -> List[Alert]:
-        """Get all active alerts"""
-        return list(self.active_alerts.values())
+    async def get_active_alerts(self) -> List[Alert]:
+        """Get all active alerts (thread-safe)"""
+        async with self._lock:
+            return list(self.active_alerts.values())
 
-    def get_alert_rules(self) -> List[AlertRule]:
-        """Get all alert rules"""
-        return list(self.alert_rules.values())
+    async def get_alert_rules(self) -> List[AlertRule]:
+        """Get all alert rules (thread-safe)"""
+        async with self._lock:
+            return list(self.alert_rules.values())
 
-    def acknowledge_alert(self, rule_id: str, acknowledged_by: str = "system"):
-        """Acknowledge an active alert"""
-        if rule_id in self.active_alerts:
+    async def acknowledge_alert(
+        self, rule_id: str, acknowledged_by: str = "system"
+    ) -> bool:
+        """Acknowledge an active alert (thread-safe)"""
+        # Get and update alert under lock
+        async with self._lock:
+            if rule_id not in self.active_alerts:
+                return False
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.ACKNOWLEDGED
             alert.acknowledged_at = datetime.now()
             alert.acknowledged_by = acknowledged_by
             alert.updated_at = datetime.now()
+            # Copy data for Redis update
+            alert_rule_name = alert.rule_name
+            acknowledged_at_str = alert.acknowledged_at.isoformat()
+            updated_at_str = alert.updated_at.isoformat()
+            status_value = alert.status.value
 
-            # Update in Redis
-            if self.redis_client:
-                try:
-                    self.redis_client.hset(
-                        f"alert:{rule_id}",
-                        mapping={
-                            "status": alert.status.value,
-                            "acknowledged_at": alert.acknowledged_at.isoformat(),
-                            "acknowledged_by": acknowledged_by,
-                            "updated_at": alert.updated_at.isoformat(),
-                        },
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Could not update alert acknowledgment in Redis: {e}"
-                    )
+        # Update in Redis (outside lock)
+        if self.redis_client:
+            try:
+                self.redis_client.hset(
+                    f"alert:{rule_id}",
+                    mapping={
+                        "status": status_value,
+                        "acknowledged_at": acknowledged_at_str,
+                        "acknowledged_by": acknowledged_by,
+                        "updated_at": updated_at_str,
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Could not update alert acknowledgment in Redis: {e}"
+                )
 
-            logger.info(
-                f"👤 Alert acknowledged: {alert.rule_name} by {acknowledged_by}"
-            )
-            return True
-        return False
+        logger.info(f"👤 Alert acknowledged: {alert_rule_name} by {acknowledged_by}")
+        return True
 
 
 # Global instance

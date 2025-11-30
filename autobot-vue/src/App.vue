@@ -443,6 +443,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('App');
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
@@ -526,12 +529,12 @@ export default {
         // Reload the page
         window.location.reload();
       } catch (error) {
-        console.error('Error clearing caches:', error);
+        logger.error('Error clearing caches:', error);
       }
     };
 
     const handleGlobalError = (error: Error) => {
-      console.error('Global error:', error);
+      logger.error('Global error:', error);
       if (appStore && typeof appStore.addSystemNotification === 'function') {
         appStore.addSystemNotification({
           severity: 'error',
@@ -543,19 +546,19 @@ export default {
 
     // Unified loading event handlers
     const handleLoadingComplete = () => {
-      console.log('[App] Loading completed successfully');
+      logger.debug('Loading completed successfully');
       if (appStore && typeof appStore.setLoading === 'function') {
         appStore.setLoading(false);
       }
     };
 
     const handleLoadingError = (error: string | Error) => {
-      console.error('[App] Loading error:', error);
+      logger.error('Loading error:', error);
       handleGlobalError(error instanceof Error ? error : new Error(String(error)));
     };
 
     const handleLoadingTimeout = () => {
-      console.warn('[App] Loading timed out - continuing with available content');
+      logger.warn('Loading timed out - continuing with available content');
       if (appStore && typeof appStore.addSystemNotification === 'function') {
         appStore.addSystemNotification({
           severity: 'warning',
@@ -567,7 +570,7 @@ export default {
 
     // OPTIMIZED: Intelligent system health monitoring
     const startOptimizedHealthCheck = () => {
-      console.log('[App] Starting optimized health monitoring system...');
+      logger.debug('Starting optimized health monitoring system...');
 
       // Listen for health changes from optimized monitor
       optimizedHealthMonitor.onHealthChange((healthData) => {
@@ -600,7 +603,7 @@ export default {
         }
       });
 
-      console.log('[App] Optimized health monitoring initialized');
+      logger.debug('Optimized health monitoring initialized');
     };
 
     // OPTIMIZED: Smart notification cleanup with adaptive intervals
@@ -614,14 +617,14 @@ export default {
 
       notificationCleanup = setInterval(() => {
         if (appStore && appStore.systemNotifications && appStore.systemNotifications.length > 5) {
-          console.log('[App] Cleaning up excessive notifications:', appStore.systemNotifications.length);
+          logger.debug('Cleaning up excessive notifications:', appStore.systemNotifications.length);
           // Keep only the last 5 notifications
           const recentNotifications = appStore.systemNotifications.slice(-5);
           appStore.systemNotifications.splice(0, appStore.systemNotifications.length, ...recentNotifications);
         }
       }, cleanupInterval);
 
-      console.log(`[App] Notification cleanup scheduled every ${Math.round(cleanupInterval/60000)} minutes`);
+      logger.debug(`Notification cleanup scheduled every ${Math.round(cleanupInterval/60000)} minutes`);
     };
 
     const stopOptimizedNotificationCleanup = () => {
@@ -635,7 +638,7 @@ export default {
     const setupRouterMonitoring = () => {
       // Monitor router navigation events
       router.afterEach((to, from) => {
-        console.log(`[App] Navigation: ${from.path} → ${to.path}`);
+        logger.debug(`Navigation: ${from.path} → ${to.path}`);
 
         // Update user activity in smart monitoring controller
         smartMonitoringController.userActivity.lastActivity = Date.now();
@@ -644,14 +647,14 @@ export default {
 
       // Monitor router errors
       router.onError((error) => {
-        console.error('[App] Router error:', error);
+        logger.error('Router error:', error);
         handleGlobalError(error);
       });
     };
 
     // Lifecycle hooks
     onMounted(async () => {
-      console.log('[App] Initializing optimized AutoBot application...');
+      logger.debug('Initializing optimized AutoBot application...');
 
       // Add global click listener for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
@@ -666,7 +669,7 @@ export default {
       });
 
       // CRITICAL FIX: Clear any stuck system notifications on startup
-      console.log('[App] Clearing stuck system notifications on startup...');
+      logger.debug('Clearing stuck system notifications on startup...');
       clearAllSystemNotifications();
       resetHealthMonitor();
 
@@ -681,22 +684,22 @@ export default {
         startOptimizedHealthCheck();
 
         // FIXED: Use useSystemStatus composable's refresh method
-        console.log('[App] Initializing system status with composable...');
+        logger.debug('Initializing system status with composable...');
         try {
           await refreshSystemStatus();
           updateSystemStatus();
         } catch (statusError) {
-          console.warn('[App] System status initialization failed, but Vue app will continue:', statusError);
+          logger.warn('System status initialization failed, but Vue app will continue:', statusError);
           // Don't throw - let Vue app mount successfully
         }
 
         // OPTIMIZED: Setup router monitoring (event-driven)
         setupRouterMonitoring();
 
-        console.log('[App] Optimized monitoring systems initialized successfully');
+        logger.debug('Optimized monitoring systems initialized successfully');
 
       } catch (error) {
-        console.error('[App] Error initializing optimized systems:', error);
+        logger.error('Error initializing optimized systems:', error);
         // Don't let initialization errors prevent app mounting
       }
 
@@ -708,11 +711,11 @@ export default {
         appStore.setLoading(false);
       }
 
-      console.log('[App] ✅ Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
+      logger.debug('✅ Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
     });
 
     onUnmounted(() => {
-      console.log('[App] Cleaning up optimized monitoring systems...');
+      logger.debug('Cleaning up optimized monitoring systems...');
 
       // Clean up listeners
       document.removeEventListener('click', closeNavbarOnClickOutside);

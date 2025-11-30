@@ -175,6 +175,9 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('KnowledgeAdvanced')
 
 const store = useKnowledgeStore()
 
@@ -326,7 +329,7 @@ const populateSystemCommands = async () => {
       throw new Error(response.message || 'Failed to populate system commands')
     }
   } catch (error: any) {
-    console.error('Failed to populate system commands:', error)
+    logger.error('Failed to populate system commands:', error)
     populateStatus.value.systemCommands = 'error'
     addStatusMessage('error', 'System Commands Failed',
       error.message || 'An error occurred while populating system commands')
@@ -365,7 +368,7 @@ const populateManPages = async () => {
       throw new Error(response.message || 'Failed to populate manual pages')
     }
   } catch (error: any) {
-    console.error('Failed to populate manual pages:', error)
+    logger.error('Failed to populate manual pages:', error)
     populateStatus.value.manPages = 'error'
     addStatusMessage('error', 'Manual Pages Failed',
       error.message || 'An error occurred while populating manual pages')
@@ -404,7 +407,7 @@ const populateAutoBotDocs = async () => {
       throw new Error(response.message || 'Failed to populate AutoBot documentation')
     }
   } catch (error: any) {
-    console.error('Failed to populate AutoBot docs:', error)
+    logger.error('Failed to populate AutoBot docs:', error)
     populateStatus.value.autobotDocs = 'error'
     addStatusMessage('error', 'AutoBot Documentation Failed',
       error.message || 'An error occurred while populating AutoBot documentation')
@@ -471,10 +474,10 @@ const clearAllKnowledge = async () => {
       throw new Error(response.message || 'Failed to clear knowledge base')
     }
   } catch (error: any) {
-    console.error('Failed to clear knowledge base:', error)
+    logger.error('Failed to clear knowledge base:', error)
     addStatusMessage('error', 'Clear Operation Failed',
       error.message || 'An error occurred while clearing the knowledge base')
-  } finally {
+  } finally{
     isClearing.value = false
     stopProgress()
   }

@@ -108,6 +108,14 @@ async def append_init_error(error: str) -> None:
         background_init_status["errors"].append(error)
 
 
+async def get_init_status(key: str = None) -> dict:
+    """Thread-safe read of background_init_status."""
+    async with _init_status_lock:
+        if key is None:
+            return dict(background_init_status)  # Return copy
+        return background_init_status.get(key)
+
+
 def log_initialization_step(
     stage: str, message: str, percentage: int = 0, success: bool = True
 ):
@@ -179,10 +187,8 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
             await update_init_status("knowledge_base", "ready")
 
             # Enhanced: Check if AI Stack integration is available
-            if (
-                hasattr(app.state, "ai_stack_client")
-                and background_init_status.get("ai_stack") == "ready"
-            ):
+            ai_stack_status = await get_init_status("ai_stack")
+            if hasattr(app.state, "ai_stack_client") and ai_stack_status == "ready":
                 logger.info(
                     "Knowledge Base initialized with AI Stack enhancement available"
                 )
@@ -319,10 +325,11 @@ async def enhanced_background_init(app: FastAPI):
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Check overall initialization status
+        # Check overall initialization status (thread-safe)
+        init_status_snapshot = await get_init_status()
         failed_services = [
             service
-            for service, status in background_init_status.items()
+            for service, status in init_status_snapshot.items()
             if status == "failed" and service != "errors"
         ]
 
@@ -425,13 +432,15 @@ def create_enhanced_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
         logger.error(f"Global exception: {exc}\n{traceback.format_exc()}")
+        # Thread-safe access to init status
+        ai_stack_status = await get_init_status("ai_stack")
         return JSONResponse(
             status_code=500,
             content={
                 "detail": "Internal server error",
                 "path": str(request.url.path),
                 "timestamp": time.time(),
-                "ai_stack_available": background_init_status.get("ai_stack") == "ready",
+                "ai_stack_available": ai_stack_status == "ready",
             },
         )
 
@@ -440,43 +449,36 @@ def create_enhanced_app() -> FastAPI:
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def enhanced_health_check():
         """Enhanced health check endpoint with AI Stack status."""
+        # Thread-safe snapshot of init status
+        init_status = await get_init_status()
+        ai_stack_ready = init_status.get("ai_stack") == "ready"
+        ai_agents_ready = init_status.get("ai_stack_agents") == "ready"
+
         return {
             "status": "healthy",
             "timestamp": time.time(),
-            "background_init": background_init_status,
+            "background_init": init_status,
             "services": {
-                "redis_pools": background_init_status.get("redis_pools", "unknown"),
-                "knowledge_base": background_init_status.get(
-                    "knowledge_base", "unknown"
-                ),
-                "chat_workflow": background_init_status.get("chat_workflow", "unknown"),
-                "llm_sync": background_init_status.get("llm_sync", "unknown"),
-                "ai_stack": background_init_status.get("ai_stack", "unknown"),
-                "ai_stack_agents": background_init_status.get(
-                    "ai_stack_agents", "unknown"
-                ),
-                "distributed_tracing": background_init_status.get(
+                "redis_pools": init_status.get("redis_pools", "unknown"),
+                "knowledge_base": init_status.get("knowledge_base", "unknown"),
+                "chat_workflow": init_status.get("chat_workflow", "unknown"),
+                "llm_sync": init_status.get("llm_sync", "unknown"),
+                "ai_stack": init_status.get("ai_stack", "unknown"),
+                "ai_stack_agents": init_status.get("ai_stack_agents", "unknown"),
+                "distributed_tracing": init_status.get(
                     "distributed_tracing", "unknown"
                 ),
             },
-            "ai_enhanced": background_init_status.get("ai_stack") == "ready",
+            "ai_enhanced": ai_stack_ready,
             "agent_count": len(
                 getattr(app.state, "ai_stack_agents", {}).get("agents", [])
             ),
             "capabilities": {
-                "rag_enhanced_search": (
-                    background_init_status.get("ai_stack") == "ready"
-                ),
-                "multi_agent_coordination": (
-                    background_init_status.get("ai_stack_agents") == "ready"
-                ),
-                "knowledge_extraction": (
-                    background_init_status.get("ai_stack") == "ready"
-                ),
-                "enhanced_chat": background_init_status.get("ai_stack") == "ready",
-                "npu_acceleration": (
-                    background_init_status.get("ai_stack_agents") == "ready"
-                ),
+                "rag_enhanced_search": ai_stack_ready,
+                "multi_agent_coordination": ai_agents_ready,
+                "knowledge_extraction": ai_stack_ready,
+                "enhanced_chat": ai_stack_ready,
+                "npu_acceleration": ai_agents_ready,
             },
         }
 

@@ -7,6 +7,9 @@ import { reactive, ref } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('TerminalService');
 
 // Use singleton ApiClient instance for terminal operations
 
@@ -36,25 +39,25 @@ class TerminalService {
   async initializeWebSocketUrl() {
     try {
       const wsUrl = await appConfig.getWebSocketUrl();
-      console.log(`[TerminalService] Raw WebSocket URL from appConfig: ${wsUrl}`);
+      logger.debug(`[TerminalService] Raw WebSocket URL from appConfig: ${wsUrl}`);
 
       // CRITICAL FIX: Check if we got a relative URL (proxy mode)
       // WebSockets CANNOT use relative URLs for cross-origin connections
       if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-        console.warn('[TerminalService] Got relative WebSocket URL, falling back to absolute URL');
+        logger.warn('[TerminalService] Got relative WebSocket URL, falling back to absolute URL');
         // Use NetworkConstants for absolute URL - backend is always on main machine
         this.baseUrl = `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`;
-        console.log(`[TerminalService] Absolute fallback baseUrl: ${this.baseUrl}`);
+        logger.debug(`[TerminalService] Absolute fallback baseUrl: ${this.baseUrl}`);
       } else {
         // WebSocket URL format: ws://host:port/ws
         // We need: ws://host:port/api/terminal/ws
         this.baseUrl = `${wsUrl.replace('/ws', '')}/api/terminal/ws`;
-        console.log(`[TerminalService] Constructed baseUrl: ${this.baseUrl}`);
+        logger.debug(`[TerminalService] Constructed baseUrl: ${this.baseUrl}`);
       }
     } catch (error) {
-      console.warn('[TerminalService] Using fallback WebSocket URL, error:', error);
+      logger.warn('[TerminalService] Using fallback WebSocket URL, error:', error);
       this.baseUrl = `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`;
-      console.log(`[TerminalService] Fallback baseUrl: ${this.baseUrl}`);
+      logger.debug(`[TerminalService] Fallback baseUrl: ${this.baseUrl}`);
     }
   }
 
@@ -140,7 +143,7 @@ class TerminalService {
       try {
         connection.send(JSON.stringify({ type: 'ping' }));
       } catch (error) {
-        console.error('Failed to send ping:', error);
+        logger.error('Failed to send ping:', error);
         this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
       }
     }
@@ -166,7 +169,7 @@ class TerminalService {
 
       return result.session_id;
     } catch (error) {
-      console.error('Error creating terminal session:', error);
+      logger.error('Error creating terminal session:', error);
       throw error;
     }
   }
@@ -182,7 +185,7 @@ class TerminalService {
    */
   async connect(sessionId, callbacks = {}) {
     if (this.connections.has(sessionId)) {
-      console.warn(`Already connected to session ${sessionId}`);
+      logger.warn(`Already connected to session ${sessionId}`);
       return;
     }
 
@@ -198,13 +201,13 @@ class TerminalService {
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = `${this.baseUrl}/${sessionId}`;
-        console.log(`[TerminalService] Connecting to WebSocket: ${wsUrl}`);
-        console.log(`[TerminalService] BaseURL: ${this.baseUrl}, SessionID: ${sessionId}`);
+        logger.debug(`[TerminalService] Connecting to WebSocket: ${wsUrl}`);
+        logger.debug(`[TerminalService] BaseURL: ${this.baseUrl}, SessionID: ${sessionId}`);
 
         // Verify URL is valid
         if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
           const error = new Error(`Invalid WebSocket URL: ${wsUrl}`);
-          console.error('[TerminalService]', error);
+          logger.error('[TerminalService]', error);
           reject(error);
           return;
         }
@@ -216,7 +219,7 @@ class TerminalService {
         // Set a connection timeout
         const connectionTimeout = setTimeout(() => {
           if (ws.readyState !== WebSocket.OPEN) {
-            console.error(`WebSocket connection timeout for session ${sessionId}`);
+            logger.error(`WebSocket connection timeout for session ${sessionId}`);
             ws.close();
             this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
             this.triggerCallback(sessionId, 'onError', 'Connection timeout');
@@ -262,14 +265,14 @@ class TerminalService {
 
         ws.onerror = (error) => {
           clearTimeout(connectionTimeout);
-          console.error(`Terminal session ${sessionId} error:`, error);
+          logger.error(`Terminal session ${sessionId} error:`, error);
           this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
           this.triggerCallback(sessionId, 'onError', 'WebSocket connection error');
           reject(new Error('WebSocket connection error'));
         };
 
       } catch (error) {
-        console.error(`Failed to connect to terminal session ${sessionId}:`, error);
+        logger.error(`Failed to connect to terminal session ${sessionId}:`, error);
         this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
         this.triggerCallback(sessionId, 'onError', error.message);
         reject(error);
@@ -296,7 +299,7 @@ class TerminalService {
       try {
         await this.connect(sessionId, callbacks);
       } catch (error) {
-        console.error(`Reconnection attempt ${attempts + 1} failed:`, error);
+        logger.error(`Reconnection attempt ${attempts + 1} failed:`, error);
         if (attempts + 1 >= this.maxReconnectAttempts) {
           this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
         }
@@ -374,7 +377,7 @@ class TerminalService {
 
         case 'connected':
           // Backend confirmation that terminal is connected
-          console.log('[TerminalService] Terminal connected:', message.content);
+          logger.debug('[TerminalService] Terminal connected:', message.content);
           this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
           // Set to READY immediately since backend confirms it's ready
           this.setConnectionState(sessionId, CONNECTION_STATES.READY);
@@ -393,10 +396,10 @@ class TerminalService {
           break;
 
         default:
-          console.warn(`Unknown message type: ${message.type}`, message);
+          logger.warn(`Unknown message type: ${message.type}`, message);
       }
     } catch (error) {
-      console.error('Failed to parse terminal message:', error, data);
+      logger.error('Failed to parse terminal message:', error, data);
       // Treat as raw output
       this.triggerCallback(sessionId, 'onOutput', {
         content: data,
@@ -413,7 +416,7 @@ class TerminalService {
   sendInput(sessionId, input) {
     const connection = this.connections.get(sessionId);
     if (!connection || connection.readyState !== WebSocket.OPEN) {
-      console.error(`No active connection for session ${sessionId}`);
+      logger.error(`No active connection for session ${sessionId}`);
       return false;
     }
 
@@ -428,7 +431,7 @@ class TerminalService {
       // Don't echo locally - let the backend handle it
       return true;
     } catch (error) {
-      console.error('Failed to send input:', error);
+      logger.error('Failed to send input:', error);
       this.triggerCallback(sessionId, 'onError', 'Failed to send input');
       return false;
     }
@@ -444,7 +447,7 @@ class TerminalService {
   sendStdin(sessionId, content, isPassword = false, commandId = null) {
     const connection = this.connections.get(sessionId);
     if (!connection || connection.readyState !== WebSocket.OPEN) {
-      console.error(`[STDIN] No active connection for session ${sessionId}`);
+      logger.error(`[STDIN] No active connection for session ${sessionId}`);
       return false;
     }
 
@@ -457,10 +460,10 @@ class TerminalService {
       });
 
       connection.send(message);
-      console.log(`[STDIN] Sent ${content.length} bytes to PTY (password: ${isPassword}, command: ${commandId})`);
+      logger.debug(`[STDIN] Sent ${content.length} bytes to PTY (password: ${isPassword}, command: ${commandId})`);
       return true;
     } catch (error) {
-      console.error('[STDIN] Failed to send stdin:', error);
+      logger.error('[STDIN] Failed to send stdin:', error);
       this.triggerCallback(sessionId, 'onError', 'Failed to send stdin');
       return false;
     }
@@ -474,7 +477,7 @@ class TerminalService {
   sendSignal(sessionId, signal) {
     const connection = this.connections.get(sessionId);
     if (!connection || connection.readyState !== WebSocket.OPEN) {
-      console.error(`No active connection for session ${sessionId}`);
+      logger.error(`No active connection for session ${sessionId}`);
       return false;
     }
 
@@ -487,7 +490,7 @@ class TerminalService {
       connection.send(message);
       return true;
     } catch (error) {
-      console.error('Failed to send signal:', error);
+      logger.error('Failed to send signal:', error);
       return false;
     }
   }
@@ -514,7 +517,7 @@ class TerminalService {
       connection.send(message);
       return true;
     } catch (error) {
-      console.error('Failed to resize terminal:', error);
+      logger.error('Failed to resize terminal:', error);
       return false;
     }
   }
@@ -529,7 +532,7 @@ class TerminalService {
       try {
         connection.close(1000, 'Client disconnect');
       } catch (error) {
-        console.error('Error closing WebSocket:', error);
+        logger.error('Error closing WebSocket:', error);
       }
       this.connections.delete(sessionId);
       this.callbacks.delete(sessionId);
@@ -548,7 +551,7 @@ class TerminalService {
     try {
       await apiClient.deleteTerminalSession(sessionId);
     } catch (error) {
-      console.warn('Failed to close session on server:', error.message);
+      logger.warn('Failed to close session on server:', error.message);
     } finally {
       // Continue cleanup regardless of server response
     }
@@ -563,7 +566,7 @@ class TerminalService {
       const result = await apiClient.getTerminalSessions();
       return result || [];
     } catch (error) {
-      console.error('Error getting sessions:', error);
+      logger.error('Error getting sessions:', error);
       return [];
     }
   }
@@ -584,7 +587,7 @@ class TerminalService {
 
       return result;
     } catch (error) {
-      console.error('Error executing command:', error);
+      logger.error('Error executing command:', error);
       throw error;
     }
   }
@@ -599,7 +602,7 @@ class TerminalService {
       const result = await apiClient.getTerminalSessionInfo(sessionId);
       return result;
     } catch (error) {
-      console.error('Error getting session info:', error);
+      logger.error('Error getting session info:', error);
       throw error;
     }
   }
@@ -616,7 +619,7 @@ class TerminalService {
       try {
         callbacks[callbackName](data);
       } catch (error) {
-        console.error(`Error in ${callbackName} callback:`, error);
+        logger.error(`Error in ${callbackName} callback:`, error);
       }
     }
   }
@@ -639,7 +642,7 @@ class TerminalService {
       try {
         connection.close(1000, 'Service cleanup');
       } catch (error) {
-        console.error(`Error closing connection ${sessionId}:`, error);
+        logger.error(`Error closing connection ${sessionId}:`, error);
       }
     }
     this.connections.clear();

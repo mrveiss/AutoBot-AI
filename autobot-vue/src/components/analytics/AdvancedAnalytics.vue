@@ -325,6 +325,9 @@ import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AdvancedAnalytics')
 
 // State
 const loading = ref(false)
@@ -406,7 +409,7 @@ const fetchCostData = async () => {
     costTrends.value = trendsRes.data
     modelCosts.value = modelsRes.data?.models || []
   } catch (error) {
-    console.error('Failed to fetch cost data:', error)
+    logger.error('Failed to fetch cost data:', error)
   }
 }
 
@@ -419,7 +422,7 @@ const fetchAgentData = async () => {
     agentMetrics.value = metricsRes.data
     recommendations.value = recsRes.data
   } catch (error) {
-    console.error('Failed to fetch agent data:', error)
+    logger.error('Failed to fetch agent data:', error)
   }
 }
 
@@ -436,7 +439,7 @@ const fetchExportFormats = async () => {
       else f.icon = 'fas fa-file'
     })
   } catch (error) {
-    console.error('Failed to fetch export formats:', error)
+    logger.error('Failed to fetch export formats:', error)
   }
 }
 
@@ -451,7 +454,7 @@ const fetchBehaviorData = async () => {
     behaviorMetrics.value = featuresRes.data
     usageHeatmap.value = heatmapRes.data
   } catch (error) {
-    console.error('Failed to fetch behavior data:', error)
+    logger.error('Failed to fetch behavior data:', error)
   }
 }
 
@@ -475,7 +478,7 @@ const downloadExport = async (path: string) => {
     link.click()
     link.remove()
   } catch (error) {
-    console.error('Failed to download export:', error)
+    logger.error('Failed to download export:', error)
   }
 }
 

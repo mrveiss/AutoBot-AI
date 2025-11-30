@@ -191,6 +191,9 @@ import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('DeduplicationManager')
 
 // Interfaces
 interface DuplicateGroup {
@@ -274,7 +277,7 @@ const scanForIssues = async () => {
 
     scanned.value = true
   } catch (err) {
-    console.error('Error scanning for issues:', err)
+    logger.error('Error scanning for issues:', err)
     error.value = `Error scanning: ${err}`
   } finally {
     scanning.value = false
@@ -295,14 +298,14 @@ const cleanupDuplicates = async () => {
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
-      console.log(`Successfully removed ${data.deleted_count} duplicates`)
+      logger.info(`Successfully removed ${data.deleted_count} duplicates`)
       // Refresh scan
       await scanForIssues()
     } else {
       error.value = `Failed to remove duplicates: ${data.message || 'Unknown error'}`
     }
   } catch (err) {
-    console.error('Error removing duplicates:', err)
+    logger.error('Error removing duplicates:', err)
     error.value = `Error removing duplicates: ${err}`
   } finally {
     cleaning.value = false
@@ -323,14 +326,14 @@ const cleanupOrphans = async () => {
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
-      console.log(`Successfully removed ${data.deleted_count} orphans`)
+      logger.info(`Successfully removed ${data.deleted_count} orphans`)
       // Refresh scan
       await scanForIssues()
     } else {
       error.value = `Failed to remove orphans: ${data.message || 'Unknown error'}`
     }
   } catch (err) {
-    console.error('Error removing orphans:', err)
+    logger.error('Error removing orphans:', err)
     error.value = `Error removing orphans: ${err}`
   } finally {
     cleaning.value = false

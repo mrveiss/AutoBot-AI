@@ -301,6 +301,9 @@ import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('KnowledgeSearch')
 
 // Repository instance
 const knowledgeRepo = new KnowledgeRepository()
@@ -348,7 +351,7 @@ const loadCategories = async () => {
   try {
     categories.value = await fetchCategories()
   } catch (error) {
-    console.error('Failed to load categories:', error)
+    logger.error('Failed to load categories:', error)
     categories.value = []
     categoriesError.value = error instanceof Error ? error.message : 'Failed to load categories'
   } finally {
@@ -432,7 +435,7 @@ const handleSearch = async () => {
       searchResults.value = results
     }
   } catch (error) {
-    console.error('Knowledge search failed:', error)
+    logger.error('Knowledge search failed:', error)
     searchResults.value = []
     if (useRagSearch.value) {
       ragError.value = 'Search failed - backend may be unavailable'
@@ -481,7 +484,7 @@ const openDocument = async (document: KnowledgeDocument) => {
       selectedDocument.value = document
     }
   } catch (error) {
-    console.error('Failed to load document:', error)
+    logger.error('Failed to load document:', error)
     selectedDocument.value = document // Show what we have
   } finally {
     loadingDocument.value = false
@@ -499,9 +502,9 @@ const copyDocument = async () => {
   try {
     await navigator.clipboard.writeText(selectedDocument.value.content)
     // Could add a toast notification here
-    console.log('Document content copied to clipboard')
+    logger.debug('Document content copied to clipboard')
   } catch (error) {
-    console.error('Failed to copy document:', error)
+    logger.error('Failed to copy document:', error)
   }
 }
 </script>

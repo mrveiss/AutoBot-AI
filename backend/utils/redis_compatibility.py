@@ -7,6 +7,7 @@ Provides backward compatibility for existing code while transitioning to async R
 """
 
 import asyncio
+import threading
 import warnings
 from typing import Optional, Union
 
@@ -223,6 +224,9 @@ class RedisCompatibilityWrapper:
 # Global compatibility instances for each database
 _compatibility_instances = {}
 
+# Lock for thread-safe access to _compatibility_instances (synchronous function needs threading.Lock)
+_instances_lock = threading.Lock()
+
 
 def get_redis_client_compat(database: str = "main") -> RedisCompatibilityWrapper:
     """
@@ -237,10 +241,11 @@ def get_redis_client_compat(database: str = "main") -> RedisCompatibilityWrapper
     Returns:
         RedisCompatibilityWrapper instance
     """
-    if database not in _compatibility_instances:
-        _compatibility_instances[database] = RedisCompatibilityWrapper(database)
+    with _instances_lock:
+        if database not in _compatibility_instances:
+            _compatibility_instances[database] = RedisCompatibilityWrapper(database)
 
-    return _compatibility_instances[database]
+        return _compatibility_instances[database]
 
 
 # Convenience functions for specific databases

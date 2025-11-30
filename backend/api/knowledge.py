@@ -985,7 +985,6 @@ async def get_facts_by_category(
 
     from backend.knowledge_categories import (
         KnowledgeCategory,
-        get_category_for_source,
     )
 
     categories_dict = {}

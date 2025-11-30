@@ -801,6 +801,9 @@ import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import { useToast } from '@/composables/useToast'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodebaseAnalytics')
 
 // ApexCharts components
 import {
@@ -977,7 +980,7 @@ const checkCurrentIndexingJob = async () => {
       }
     }
   } catch (error) {
-    console.warn('[CodebaseAnalytics] Could not check for running job:', error.message)
+    logger.warn('Could not check for running job:', error.message)
   }
 }
 
@@ -1069,7 +1072,7 @@ const pollJobStatus = async () => {
       }
     }
   } catch (error) {
-    console.warn('[CodebaseAnalytics] Job polling error:', error.message)
+    logger.warn('Job polling error:', error.message)
   }
 }
 
@@ -1151,10 +1154,10 @@ const loadProjectRoot = async () => {
     if (config.project && config.project.root_path) {
       rootPath.value = config.project.root_path
     } else {
-      console.warn('⚠️ Project root not found in config, using default')
+      logger.warn('Project root not found in config, using default')
     }
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load project root:', error)
+    logger.error('Failed to load project root:', error)
     progressStatus.value = 'Please enter project path to analyze'
   }
 }
@@ -1176,7 +1179,7 @@ const loadCodebaseAnalyticsData = async () => {
     ])
 
   } catch (error) {
-    console.error('❌ Failed to load codebase analytics data:', error)
+    logger.error('Failed to load codebase analytics data:', error)
     // Provide user feedback for critical failures
     progressStatus.value = `Failed to load analytics: ${error.message}`
   }
@@ -1205,7 +1208,7 @@ const loadChartData = async () => {
 
     if (data.status === 'success' && data.chart_data) {
       chartData.value = data.chart_data
-      console.log('[CodebaseAnalytics] Chart data loaded:', {
+      logger.debug('Chart data loaded:', {
         problemTypes: data.chart_data.problem_types?.length || 0,
         severities: data.chart_data.severity_counts?.length || 0,
         raceConditions: data.chart_data.race_conditions?.length || 0,
@@ -1213,11 +1216,11 @@ const loadChartData = async () => {
       })
     } else if (data.status === 'no_data') {
       chartData.value = null
-      console.log('[CodebaseAnalytics] No chart data available - run indexing first')
+      logger.debug('No chart data available - run indexing first')
     }
 
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load chart data:', error)
+    logger.error('Failed to load chart data:', error)
     chartDataError.value = error.message
   } finally {
     chartDataLoading.value = false
@@ -1247,7 +1250,7 @@ const loadUnifiedReport = async () => {
 
     if (data.status === 'success') {
       unifiedReport.value = data
-      console.log('[CodebaseAnalytics] Unified report loaded:', {
+      logger.debug('Unified report loaded:', {
         healthScore: data.summary?.health_score,
         grade: data.summary?.grade,
         totalIssues: data.summary?.total_issues,
@@ -1255,7 +1258,7 @@ const loadUnifiedReport = async () => {
       })
     }
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load unified report:', error)
+    logger.error('Failed to load unified report:', error)
     unifiedReportError.value = error.message
   } finally {
     unifiedReportLoading.value = false
@@ -1314,7 +1317,7 @@ const loadDependencyData = async () => {
 
     if (data.status === 'success' && data.dependency_data) {
       dependencyData.value = data.dependency_data
-      console.log('[CodebaseAnalytics] Dependency data loaded:', {
+      logger.debug('Dependency data loaded:', {
         modules: data.dependency_data.modules?.length || 0,
         relationships: data.dependency_data.import_relationships?.length || 0,
         externalDeps: data.dependency_data.external_dependencies?.length || 0,
@@ -1323,7 +1326,7 @@ const loadDependencyData = async () => {
     }
 
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load dependency data:', error)
+    logger.error('Failed to load dependency data:', error)
     dependencyError.value = error.message
   } finally {
     dependencyLoading.value = false
@@ -1353,14 +1356,14 @@ const loadImportTreeData = async () => {
 
     if (data.status === 'success' && data.import_tree) {
       importTreeData.value = data.import_tree
-      console.log('[CodebaseAnalytics] Import tree loaded:', {
+      logger.debug('Import tree loaded:', {
         files: data.import_tree.length,
         summary: data.summary
       })
     }
 
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load import tree:', error)
+    logger.error('Failed to load import tree:', error)
     importTreeError.value = error.message
   } finally {
     importTreeLoading.value = false
@@ -1369,7 +1372,7 @@ const loadImportTreeData = async () => {
 
 // Handle file navigation from import tree
 const handleFileNavigate = (filePath: string) => {
-  console.log('[CodebaseAnalytics] Navigate to file:', filePath)
+  logger.debug('Navigate to file:', filePath)
   // Could scroll to file in problems list or open in editor
   // For now, just log it - can be extended later
   showToast(`Selected: ${filePath}`, 'info', 2000)
@@ -1399,7 +1402,7 @@ const loadCallGraphData = async () => {
     if (data.status === 'success' && data.call_graph) {
       callGraphData.value = data.call_graph
       callGraphSummary.value = data.summary
-      console.log('[CodebaseAnalytics] Call graph loaded:', {
+      logger.debug('Call graph loaded:', {
         nodes: data.call_graph.nodes?.length || 0,
         edges: data.call_graph.edges?.length || 0,
         summary: data.summary
@@ -1407,7 +1410,7 @@ const loadCallGraphData = async () => {
     }
 
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load call graph:', error)
+    logger.error('Failed to load call graph:', error)
     callGraphError.value = error.message
   } finally {
     callGraphLoading.value = false
@@ -1416,7 +1419,7 @@ const loadCallGraphData = async () => {
 
 // Handle function selection from call graph
 const handleFunctionSelect = (funcId: string) => {
-  console.log('[CodebaseAnalytics] Selected function:', funcId)
+  logger.debug('Selected function:', funcId)
   showToast(`Selected: ${funcId}`, 'info', 2000)
 }
 
@@ -1439,7 +1442,7 @@ const loadDeclarations = async () => {
     const data = await response.json()
     declarationAnalysis.value = data.declarations || []
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load declarations:', error)
+    logger.error('Failed to load declarations:', error)
   } finally {
     loadingProgress.declarations = false
   }
@@ -1464,7 +1467,7 @@ const loadDuplicates = async () => {
     const data = await response.json()
     duplicateAnalysis.value = data.duplicates || []
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to load duplicates:', error)
+    logger.error('Failed to load duplicates:', error)
   } finally {
     loadingProgress.duplicates = false
   }
@@ -1524,7 +1527,7 @@ const indexCodebase = async () => {
     progressPercent.value = 20
     startJobPolling()
   } catch (error) {
-    console.error('[CodebaseAnalytics] Indexing failed:', error)
+    logger.error('Indexing failed:', error)
     progressStatus.value = `Indexing failed to start: ${error.message}`
     notify(`Indexing failed: ${error.message}`, 'error')
     analyzing.value = false
@@ -1546,7 +1549,7 @@ const getCodebaseStats = async () => {
       codebaseStats.value = data.stats
     }
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to get stats:', error)
+    logger.error('Failed to get stats:', error)
   }
 }
 
@@ -1565,7 +1568,7 @@ const getProblemsReport = async () => {
     const data = await response.json()
     problemsReport.value = data.problems || []
   } catch (error) {
-    console.error('[CodebaseAnalytics] Failed to get problems:', error)
+    logger.error('Failed to get problems:', error)
   } finally {
     loadingProgress.problems = false
   }
@@ -1597,7 +1600,7 @@ const getDeclarationsData = async () => {
     notify(`Found ${declarationAnalysis.value.length} declarations (${responseTime}ms)`, 'success')
   } catch (error) {
     const responseTime = Date.now() - startTime
-    console.error('[CodebaseAnalytics] Declarations failed:', error)
+    logger.error('Declarations failed:', error)
     notify(`Declarations failed: ${error.message} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.declarations = false
@@ -1631,7 +1634,7 @@ const getDuplicatesData = async () => {
     notify(`Found ${duplicateAnalysis.value.length} duplicates (${responseTime}ms)`, 'success')
   } catch (error) {
     const responseTime = Date.now() - startTime
-    console.error('[CodebaseAnalytics] Duplicates failed:', error)
+    logger.error('Duplicates failed:', error)
     notify(`Duplicates failed: ${error.message} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.duplicates = false
@@ -1666,7 +1669,7 @@ const getHardcodesData = async () => {
     notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
   } catch (error) {
     const responseTime = Date.now() - startTime
-    console.error('[CodebaseAnalytics] Hardcodes failed:', error)
+    logger.error('Hardcodes failed:', error)
     notify(`Hardcodes failed: ${error.message} (${responseTime}ms)`, 'error')
   } finally {
     loadingProgress.hardcodes = false
@@ -1711,7 +1714,7 @@ const testNpuConnection = async () => {
   } catch (error) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[CodebaseAnalytics] NPU connection failed:', error)
+    logger.error('NPU connection failed:', error)
     notify(`NPU failed: ${errorMessage} (${responseTime}ms)`, 'error')
   }
 }
@@ -1779,10 +1782,10 @@ const testAllEndpoints = async () => {
     const summary = `API Tests: ${passed}/${results.length} passed`
     notify(summary, failed === 0 ? 'success' : 'warning')
     // Log full results to console for detailed review
-    console.log('API Test Results:', results.join('\n'))
+    logger.debug('API Test Results:', results.join('\n'))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[CodebaseAnalytics] API tests failed:', error)
+    logger.error('API tests failed:', error)
     notify(`API tests failed: ${errorMessage}`, 'error')
   } finally {
     progressStatus.value = 'Ready'
@@ -1824,7 +1827,7 @@ const runCodeSmellAnalysis = async () => {
   } catch (error) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[CodebaseAnalytics] Code smell analysis failed:', error)
+    logger.error('Code smell analysis failed:', error)
     notify(`Code smell analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
     progressStatus.value = 'Code smell analysis failed'
   } finally {
@@ -1862,7 +1865,7 @@ const getCodeHealthScore = async () => {
   } catch (error) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[CodebaseAnalytics] Health score failed:', error)
+    logger.error('Health score failed:', error)
     notify(`Health score failed: ${errorMessage} (${responseTime}ms)`, 'error')
     progressStatus.value = 'Health score calculation failed'
   } finally {
@@ -1906,7 +1909,7 @@ const runFullAnalysis = async () => {
     notify(`Full analysis completed in ${totalAnalysisTime}ms`, 'success')
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('[CodebaseAnalytics] Analysis failed:', error)
+    logger.error('Analysis failed:', error)
     progressStatus.value = `Analysis failed: ${errorMessage}`
     notify(`Analysis failed: ${errorMessage}`, 'error')
   } finally {
@@ -1934,7 +1937,7 @@ const loadSystemOverview = async () => {
     systemOverview.value = data
   } catch (error) {
     // Silent failure for dashboard cards
-    console.error('[CodebaseAnalytics] loadSystemOverview failed:', error)
+    logger.error('loadSystemOverview failed:', error)
   }
 }
 
@@ -1951,7 +1954,7 @@ const loadCommunicationPatterns = async () => {
     communicationPatterns.value = data
   } catch (error) {
     // Silent failure for dashboard cards
-    console.error('[CodebaseAnalytics] loadCommunicationPatterns failed:', error)
+    logger.error('loadCommunicationPatterns failed:', error)
   }
 }
 
@@ -1983,7 +1986,7 @@ const loadCodeQuality = async () => {
     codeQuality.value = data
   } catch (error) {
     // Silent failure for dashboard cards
-    console.error('[CodebaseAnalytics] loadCodeQuality failed:', error)
+    logger.error('loadCodeQuality failed:', error)
   }
 }
 
@@ -2021,7 +2024,7 @@ const loadPerformanceMetrics = async () => {
     performanceMetrics.value = data
   } catch (error) {
     // Silent failure for dashboard cards
-    console.error('[CodebaseAnalytics] loadPerformanceMetrics failed:', error)
+    logger.error('loadPerformanceMetrics failed:', error)
   }
 }
 

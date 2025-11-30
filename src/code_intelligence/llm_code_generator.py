@@ -25,6 +25,7 @@ Technical Requirements:
 """
 
 import ast
+import asyncio
 import difflib
 import hashlib
 import logging
@@ -778,12 +779,15 @@ class LLMCodeGenerator:
 
         self._request_counter = 0
         self._cache: Dict[str, GeneratedCode] = {}
+        self._lock = asyncio.Lock()  # Lock for thread-safe counter access
 
-    def _generate_request_id(self) -> str:
-        """Generate a unique request ID."""
-        self._request_counter += 1
+    async def _generate_request_id(self) -> str:
+        """Generate a unique request ID (thread-safe)."""
+        async with self._lock:
+            self._request_counter += 1
+            counter = self._request_counter
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        return f"req_{timestamp}_{self._request_counter:04d}"
+        return f"req_{timestamp}_{counter:04d}"
 
     def _get_cache_key(self, request: RefactoringRequest) -> str:
         """Generate a cache key for a request."""
@@ -804,7 +808,7 @@ class LLMCodeGenerator:
         """
         import time
         start_time = time.time()
-        request_id = self._generate_request_id()
+        request_id = await self._generate_request_id()
 
         # Check cache
         cache_key = self._get_cache_key(request)

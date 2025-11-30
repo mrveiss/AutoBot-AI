@@ -43,6 +43,9 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('PlaywrightDesktopViewer');
 
 export default {
   name: 'PlaywrightDesktopViewer',
@@ -59,7 +62,7 @@ export default {
         const response = await fetch('/vnc-proxy/', { method: 'HEAD' });
         return response.ok;
       } catch (error) {
-        console.warn('Playwright health check failed:', error);
+        logger.warn('Playwright health check failed:', error);
         // If proxy fails, assume service is available anyway
         // since we know container is running
         return true;
@@ -83,7 +86,7 @@ export default {
         }, 1000);
 
       } catch (error) {
-        console.error('Failed to connect to Playwright:', error);
+        logger.error('Failed to connect to Playwright:', error);
         isConnecting.value = false;
       }
     };
@@ -104,7 +107,7 @@ export default {
     };
 
     const onVNCError = () => {
-      console.error('VNC iframe failed to load');
+      logger.error('VNC iframe failed to load');
       alert('Failed to load VNC interface. Please check the connection.');
     };
 
@@ -112,7 +115,7 @@ export default {
       healthCheckInterval.value = setInterval(async () => {
         const isHealthy = await checkPlaywrightHealth();
         if (!isHealthy && isConnected.value) {
-          console.warn('Playwright service became unhealthy');
+          logger.warn('Playwright service became unhealthy');
           // Could show a warning or automatically disconnect
         }
       }, 30000); // Check every 30 seconds
@@ -134,7 +137,7 @@ export default {
         });
         vncUrl.value = dynamicVncUrl;
       } catch (error) {
-        console.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
+        logger.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
 
         // Try to get configuration from backend as fallback
         try {
@@ -143,7 +146,7 @@ export default {
           const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
           vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=scale&password=playwright`;
         } catch (backendError) {
-          console.warn('Backend config also failed, using NetworkConstants fallback');
+          logger.warn('Backend config also failed, using NetworkConstants fallback');
           vncUrl.value = `http://${NetworkConstants.BROWSER_VM_IP}:6081/vnc.html?autoconnect=true&resize=scale&password=playwright`;
         }
       }

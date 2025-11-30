@@ -10,6 +10,9 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('BaseXTerminal')
 
 // Props
 interface Props {
@@ -99,7 +102,7 @@ const themes = {
 // Initialize terminal
 const initTerminal = async () => {
   if (!terminalRef.value) {
-    console.error('[BaseXTerminal] Terminal ref not available')
+    logger.error('Terminal ref not available')
     return
   }
 
@@ -134,7 +137,7 @@ const initTerminal = async () => {
 
     // Handle terminal data input
     terminal.value.onData((data) => {
-      console.log('[BaseXTerminal] onData fired:', {
+      logger.debug('onData fired:', {
         data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
         readOnly: props.readOnly,
         disableStdin: terminal.value?.options.disableStdin
@@ -154,13 +157,13 @@ const initTerminal = async () => {
     // Emit ready event
     emit('ready', terminal.value)
 
-    console.log('[BaseXTerminal] Terminal initialized', {
+    logger.debug('Terminal initialized', {
       sessionId: props.sessionId,
       cols: terminal.value.cols,
       rows: terminal.value.rows
     })
   } catch (error) {
-    console.error('[BaseXTerminal] Failed to initialize terminal:', error)
+    logger.error('Failed to initialize terminal:', error)
   }
 }
 
@@ -175,7 +178,7 @@ const disposeTerminal = () => {
           try {
             fitAddon.value.dispose()
           } catch (err) {
-            console.warn('[BaseXTerminal] Error disposing fit addon:', err)
+            logger.warn('Error disposing fit addon:', err)
           }
         }
 
@@ -183,7 +186,7 @@ const disposeTerminal = () => {
           try {
             webLinksAddon.value.dispose()
           } catch (err) {
-            console.warn('[BaseXTerminal] Error disposing web links addon:', err)
+            logger.warn('Error disposing web links addon:', err)
           }
         }
       }
@@ -199,7 +202,7 @@ const disposeTerminal = () => {
 
       emit('disposed')
     } catch (error) {
-      console.error('[BaseXTerminal] Error disposing terminal:', error)
+      logger.error('Error disposing terminal:', error)
       // Continue cleanup despite error
       terminal.value = undefined
       fitAddon.value = undefined
@@ -323,11 +326,11 @@ onMounted(async () => {
         entries.forEach((entry) => {
           if (entry.isIntersecting && entry.intersectionRatio > 0) {
             // Container is now visible - refit terminal
-            console.log('[BaseXTerminal] Container became visible - refitting terminal')
+            logger.debug('Container became visible - refitting terminal')
             setTimeout(() => {
               if (fitAddon.value) {
                 fitAddon.value.fit()
-                console.log('[BaseXTerminal] Terminal refitted:', {
+                logger.debug('Terminal refitted:', {
                   cols: terminal.value?.cols,
                   rows: terminal.value?.rows
                 })

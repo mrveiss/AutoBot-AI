@@ -17,6 +17,8 @@ from typing import Any, Dict
 
 import aiosqlite
 
+# Import shared database helpers (Issue #292 - Eliminate duplicate code)
+from src.utils.database_helpers import join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +151,7 @@ class AsyncSQLiteConnectionPool:
                 try:
                     await conn.close()
                 except Exception:
-                    pass
+                    pass  # Best-effort cleanup - connection already failed
                 conn = None
             raise
         finally:
@@ -164,13 +166,13 @@ class AsyncSQLiteConnectionPool:
                     try:
                         await conn.close()
                     except Exception:
-                        pass
+                        pass  # Best-effort cleanup during pool overflow
                 except Exception as e:
                     logger.error(f"Error returning connection to pool: {e}")
                     try:
                         await conn.close()
                     except Exception:
-                        pass
+                        pass  # Best-effort cleanup after pool error
 
     async def close_all(self):
         """Close all connections in the pool."""
@@ -307,23 +309,8 @@ class AsyncEagerLoader:
 
         return result
 
-    @staticmethod
-    def join_results(
-        main_results: list, related_data: dict, join_key: str, related_key: str
-    ):
-        """
-        Join main results with related data to prevent N+1 queries.
-
-        Args:
-            main_results: List of main query results
-            related_data: Dict of related data grouped by key
-            join_key: Key in main results to join on
-            related_key: Name for related data in result
-        """
-        for item in main_results:
-            key_value = item.get(join_key)
-            item[related_key] = related_data.get(key_value, [])
-        return main_results
+    # join_results moved to src/utils/database_helpers.py (Issue #292)
+    # Re-exported at module level for backward compatibility
 
 
 # Example usage for async knowledge base optimization

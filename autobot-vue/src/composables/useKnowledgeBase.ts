@@ -15,6 +15,9 @@ import {
 } from '@/utils/formatHelpers'
 import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import appConfig from '@/config/AppConfig.js'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useKnowledgeBase')
 import type {
   KnowledgeStats,
   KnowledgeStatsResponse,
@@ -92,7 +95,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data as KnowledgeStats
     } catch (error) {
-      console.error('Error fetching stats:', error)
+      logger.error('Error fetching stats:', error)
       throw error
     }
   }
@@ -119,7 +122,7 @@ export function useKnowledgeBase() {
 
       return data.categories
     } catch (error) {
-      console.error('Error fetching categories:', error)
+      logger.error('Error fetching categories:', error)
       throw error // Throw consistently with other API functions
     }
   }
@@ -138,7 +141,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error fetching category:', error)
+      logger.error('Error fetching category:', error)
       throw error
     }
   }
@@ -157,7 +160,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error searching knowledge:', error)
+      logger.error('Error searching knowledge:', error)
       throw error
     }
   }
@@ -180,7 +183,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error adding fact:', error)
+      logger.error('Error adding fact:', error)
       throw error
     }
   }
@@ -198,16 +201,16 @@ export function useKnowledgeBase() {
       })
 
       if (!response.ok) {
-        console.error('File upload failed with status:', response.status)
+        logger.error('File upload failed with status:', response.status)
         const errorText = await response.text()
-        console.error('Error response:', errorText)
+        logger.error('Error response:', errorText)
         throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
       }
 
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error uploading file:', error)
+      logger.error('Error uploading file:', error)
       throw error
     }
   }
@@ -226,7 +229,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return Array.isArray(data) ? data : []
     } catch (error) {
-      console.error('Error fetching machine profiles:', error)
+      logger.error('Error fetching machine profiles:', error)
       return []
     }
   }
@@ -245,7 +248,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error fetching man pages summary:', error)
+      logger.error('Error fetching man pages summary:', error)
       return null
     }
   }
@@ -266,7 +269,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error integrating man pages:', error)
+      logger.error('Error integrating man pages:', error)
       throw error
     }
   }
@@ -285,7 +288,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('Error getting vectorization status:', error)
+      logger.error('Error getting vectorization status:', error)
       throw error
     }
   }
@@ -310,7 +313,7 @@ export function useKnowledgeBase() {
         skip_existing: skipExisting
       })
 
-      console.log('[vectorizeFacts] Response received:', {
+      logger.debug('[vectorizeFacts] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText,
@@ -326,7 +329,7 @@ export function useKnowledgeBase() {
 
       return data
     } catch (error) {
-      console.error('[vectorizeFacts] Error occurred:', error)
+      logger.error('[vectorizeFacts] Error occurred:', error)
 
       // Enhanced error with more context
       if (error instanceof Error) {
@@ -348,7 +351,7 @@ export function useKnowledgeBase() {
         machine_id: machineId
       })
 
-      console.log('[initializeMachineKnowledge] Response received:', {
+      logger.debug('[initializeMachineKnowledge] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -361,7 +364,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('[initializeMachineKnowledge] Error:', error)
+      logger.error('[initializeMachineKnowledge] Error:', error)
       throw error
     }
   }
@@ -377,7 +380,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
 
-      console.log('[refreshSystemKnowledge] Response received:', {
+      logger.debug('[refreshSystemKnowledge] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -390,7 +393,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('[refreshSystemKnowledge] Error:', error)
+      logger.error('[refreshSystemKnowledge] Error:', error)
       throw error
     }
   }
@@ -405,7 +408,7 @@ export function useKnowledgeBase() {
     try {
       const response = await apiClient.get(`/api/knowledge_base/job_status/${taskId}`)
 
-      console.log('[pollJobStatus] Response received:', {
+      logger.debug('[pollJobStatus] Response received:', {
         ok: response.ok,
         status: response.status,
         taskId
@@ -418,7 +421,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('[pollJobStatus] Error:', error)
+      logger.error('[pollJobStatus] Error:', error)
       throw error
     }
   }
@@ -434,7 +437,7 @@ export function useKnowledgeBase() {
         machine_id: machineId
       })
 
-      console.log('[populateManPages] Response received:', {
+      logger.debug('[populateManPages] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -447,7 +450,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('[populateManPages] Error:', error)
+      logger.error('[populateManPages] Error:', error)
       throw error
     }
   }
@@ -461,7 +464,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', {})
 
-      console.log('[populateAutoBotDocs] Response received:', {
+      logger.debug('[populateAutoBotDocs] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -474,7 +477,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data
     } catch (error) {
-      console.error('[populateAutoBotDocs] Error:', error)
+      logger.error('[populateAutoBotDocs] Error:', error)
       throw error
     }
   }
@@ -490,7 +493,7 @@ export function useKnowledgeBase() {
         `/api/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
       )
 
-      console.log('[fetchMachineProfile] Response received:', {
+      logger.debug('[fetchMachineProfile] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -503,7 +506,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data as MachineProfile
     } catch (error) {
-      console.error('[fetchMachineProfile] Error:', error)
+      logger.error('[fetchMachineProfile] Error:', error)
       return null
     }
   }
@@ -517,7 +520,7 @@ export function useKnowledgeBase() {
 
       const response = await apiClient.get('/api/knowledge_base/stats/basic')
 
-      console.log('[fetchBasicStats] Response received:', {
+      logger.debug('[fetchBasicStats] Response received:', {
         ok: response.ok,
         status: response.status,
         statusText: response.statusText
@@ -530,7 +533,7 @@ export function useKnowledgeBase() {
       const data = await parseApiResponse(response)
       return data as KnowledgeStats
     } catch (error) {
-      console.error('[fetchBasicStats] Error:', error)
+      logger.error('[fetchBasicStats] Error:', error)
       return null
     }
   }

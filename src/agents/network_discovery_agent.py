@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.command_utils import execute_shell_command
+from src.utils.agent_command_helpers import run_agent_command
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class NetworkDiscoveryAgent:
             # Use nmap for network discovery
             cmd = ["nmap", "-sn", network, "-oX", "-"]
 
-            result = await self._run_command(cmd)
+            result = await run_agent_command(cmd)
 
             if result["status"] == "success":
                 hosts = self._parse_host_discovery(result["output"])
@@ -160,12 +160,12 @@ class NetworkDiscoveryAgent:
             cmd = ["arp-scan", "--local", network]
 
             # Check if arp-scan is available
-            check_cmd = await self._run_command(["which", "arp-scan"])
+            check_cmd = await run_agent_command(["which", "arp-scan"])
             if check_cmd["status"] != "success":
                 # Fallback to nmap ARP scan
                 cmd = ["nmap", "-sn", "-PR", network]
 
-            result = await self._run_command(cmd)
+            result = await run_agent_command(cmd)
 
             if result["status"] == "success":
                 hosts = self._parse_arp_scan(result["output"])
@@ -200,7 +200,7 @@ class NetworkDiscoveryAgent:
             # Use traceroute command
             cmd = ["traceroute", "-m", str(max_hops), target]
 
-            result = await self._run_command(cmd, timeout=60)
+            result = await run_agent_command(cmd, timeout=60)
 
             if result["status"] == "success":
                 hops = self._parse_traceroute(result["output"])
@@ -308,12 +308,12 @@ class NetworkDiscoveryAgent:
                     hostname = socket.gethostbyaddr(host["ip"])[0]
                     asset["hostname"] = hostname
                 except Exception:
-                    pass
+                    pass  # Reverse DNS lookup failed, hostname unavailable
 
                 # Quick port scan for common ports
                 common_ports = "22,80,443,445,3389"
                 port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
-                port_result = await self._run_command(port_cmd, timeout=30)
+                port_result = await run_agent_command(port_cmd, timeout=30)
 
                 if port_result["status"] == "success":
                     open_ports = self._parse_nmap_output(port_result["output"])
@@ -358,7 +358,7 @@ class NetworkDiscoveryAgent:
     async def _ping_sweep(self, network: str) -> Dict[str, Any]:
         """Perform ping sweep"""
         cmd = ["nmap", "-sn", "-PE", network]
-        result = await self._run_command(cmd)
+        result = await run_agent_command(cmd)
 
         if result["status"] == "success":
             hosts = self._parse_host_discovery(result["output"])
@@ -368,33 +368,15 @@ class NetworkDiscoveryAgent:
     async def _tcp_discovery(self, network: str) -> Dict[str, Any]:
         """TCP SYN discovery"""
         cmd = ["nmap", "-sn", "-PS80,443,22", network]
-        result = await self._run_command(cmd)
+        result = await run_agent_command(cmd)
 
         if result["status"] == "success":
             hosts = self._parse_host_discovery(result["output"])
             return {"status": "success", "hosts": hosts}
         return {"status": "error", "hosts": []}
 
-    async def _run_command(self, cmd: List[str], timeout: int = 60) -> Dict[str, Any]:
-        """Run a command with timeout - wrapper around common utility"""
-        result = await execute_shell_command(cmd, timeout=timeout)
-
-        # Convert to expected format for this agent
-        if result["status"] == "success":
-            return {"status": "success", "output": result["stdout"]}
-        else:
-            # Combine stderr and error info for backward compatibility
-            error_msg = (
-                result["stderr"]
-                or f"Command failed with return code {result['return_code']}"
-            )
-            if result["status"] == "timeout":
-                error_msg = f"Command timed out after {timeout} seconds"
-
-            return {
-                "status": "error",
-                "message": error_msg,
-            }
+    # _run_command moved to src/utils/agent_command_helpers.py (Issue #292)
+    # Use run_agent_command() directly
 
     def _parse_host_discovery(self, output: str) -> List[Dict[str, Any]]:
         """Parse host discovery output"""

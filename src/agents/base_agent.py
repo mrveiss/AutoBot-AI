@@ -16,6 +16,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+import threading
+
 # Import communication protocol
 from src.protocols.agent_communication import (
     AgentIdentity,
@@ -130,16 +132,18 @@ class BaseAgent(ABC):
         self.capabilities: List[str] = []
         self.startup_time = datetime.now()
 
-        # Performance tracking
+        # Performance tracking (protected by _stats_lock)
         self.request_count = 0
         self.success_count = 0
         self.error_count = 0
         self.total_execution_time = 0.0
+        self._stats_lock = threading.Lock()
 
         # Communication protocol integration
         self.agent_id = f"{agent_type}_{uuid.uuid4().hex[:8]}"
         self.communication_protocol = None
         self._message_handlers = {}
+        self._handlers_lock = threading.Lock()
 
         logger.info(f"Initialized {agent_type} agent in {deployment_mode.value} mode")
 
@@ -172,7 +176,13 @@ class BaseAgent(ABC):
             if response_time > 5000:  # 5 second threshold
                 status = AgentStatus.DEGRADED
 
-            success_rate = (self.success_count / max(self.request_count, 1)) * 100
+            # Read counters under lock (thread-safe)
+            with self._stats_lock:
+                success_count = self.success_count
+                request_count = self.request_count
+                error_count = self.error_count
+
+            success_rate = (success_count / max(request_count, 1)) * 100
 
             return AgentHealth(
                 agent_type=self.agent_type,
@@ -181,7 +191,7 @@ class BaseAgent(ABC):
                 last_heartbeat=datetime.now(),
                 response_time_ms=response_time,
                 success_rate=success_rate,
-                error_count=self.error_count,
+                error_count=error_count,
                 resource_usage=await self._get_resource_usage(),
                 capabilities=self.get_capabilities(),
                 details={},
@@ -189,6 +199,9 @@ class BaseAgent(ABC):
 
         except Exception as e:
             logger.error(f"Health check failed for {self.agent_type}: {e}")
+            # Read error count under lock
+            with self._stats_lock:
+                error_count = self.error_count
             return AgentHealth(
                 agent_type=self.agent_type,
                 status=AgentStatus.UNHEALTHY,
@@ -196,7 +209,7 @@ class BaseAgent(ABC):
                 last_heartbeat=datetime.now(),
                 response_time_ms=0.0,
                 success_rate=0.0,
-                error_count=self.error_count + 1,
+                error_count=error_count + 1,
                 resource_usage={},
                 capabilities=[],
                 details={},
@@ -234,25 +247,34 @@ class BaseAgent(ABC):
         Used by agent clients for monitoring.
         """
         start_time = datetime.now()
-        self.request_count += 1
+
+        # Increment request count (thread-safe)
+        with self._stats_lock:
+            self.request_count += 1
 
         try:
             response = await self.process_request(request)
 
-            if response.status == "success":
-                self.success_count += 1
-            else:
-                self.error_count += 1
-
             execution_time = (datetime.now() - start_time).total_seconds()
-            self.total_execution_time += execution_time
+
+            # Update counters (thread-safe)
+            with self._stats_lock:
+                if response.status == "success":
+                    self.success_count += 1
+                else:
+                    self.error_count += 1
+                self.total_execution_time += execution_time
+
             response.execution_time = execution_time
 
             return response
 
         except Exception as e:
-            self.error_count += 1
             execution_time = (datetime.now() - start_time).total_seconds()
+
+            # Increment error count (thread-safe)
+            with self._stats_lock:
+                self.error_count += 1
 
             logger.error(f"Agent {self.agent_type} error: {e}")
             return AgentResponse(
@@ -388,18 +410,25 @@ class BaseAgent(ABC):
                 logger.error(f"Error shutting down communication: {e}")
 
     def get_statistics(self) -> Dict[str, Any]:
-        """Get performance statistics for this agent"""
-        avg_execution_time = self.total_execution_time / max(self.request_count, 1)
+        """Get performance statistics for this agent (thread-safe)"""
+        # Read all counters under lock
+        with self._stats_lock:
+            request_count = self.request_count
+            success_count = self.success_count
+            error_count = self.error_count
+            total_execution_time = self.total_execution_time
+
+        avg_execution_time = total_execution_time / max(request_count, 1)
 
         return {
             "agent_type": self.agent_type,
             "deployment_mode": self.deployment_mode.value,
-            "total_requests": self.request_count,
-            "successful_requests": self.success_count,
-            "failed_requests": self.error_count,
-            "success_rate": (self.success_count / max(self.request_count, 1)) * 100,
+            "total_requests": request_count,
+            "successful_requests": success_count,
+            "failed_requests": error_count,
+            "success_rate": (success_count / max(request_count, 1)) * 100,
             "avg_execution_time_seconds": avg_execution_time,
-            "total_execution_time_seconds": self.total_execution_time,
+            "total_execution_time_seconds": total_execution_time,
             "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
         }
 

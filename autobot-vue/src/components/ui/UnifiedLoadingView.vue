@@ -51,7 +51,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
+
+const logger = createLogger('UnifiedLoadingView')
 
 interface Props {
   loadingKey?: string
@@ -78,7 +81,7 @@ const { isLoading, error, message, hasTimedOut, stopLoading, setError } = useUni
 onMounted(() => {
   const timeoutId = setTimeout(() => {
     if (isLoading.value) {
-      console.warn(`[UnifiedLoading] Auto-stopping loading for key: ${props.loadingKey}`)
+      logger.warn(`Auto-stopping loading for key: ${props.loadingKey}`)
       stopLoading()
       emit('loading-timeout')
     }

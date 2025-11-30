@@ -7,6 +7,9 @@ import appConfig from '@/config/AppConfig.js';
 import errorHandler from '@/utils/ErrorHandler.js';
 import { EnhancedFetch } from '@/utils/ApiCircuitBreaker.js';
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('ApiClient');
 
 class ApiClient {
   constructor() {
@@ -62,7 +65,7 @@ class ApiClient {
       this.enableDebug = appConfig.get('features.enableDebug', false);
 
     } catch (error) {
-      console.warn('[ApiClient] Failed to initialize from AppConfig, using fallback:', error.message);
+      logger.warn('Failed to initialize from AppConfig, using fallback:', error.message);
 
       // Fallback to environment variables
       this.baseUrl = this.detectBaseUrl();
@@ -101,7 +104,7 @@ class ApiClient {
       const stored = localStorage.getItem('autobot_backend_settings');
       return stored ? JSON.parse(stored) : {};
     } catch (error) {
-      console.warn('[ApiClient] Failed to load settings:', error);
+      logger.warn('Failed to load settings:', error);
       return {};
     }
   }
@@ -111,7 +114,7 @@ class ApiClient {
       localStorage.setItem('autobot_backend_settings', JSON.stringify(settings));
       this.settings = settings;
     } catch (error) {
-      console.error('[ApiClient] Failed to save settings:', error);
+      logger.error('Failed to save settings:', error);
     }
   }
 
@@ -121,7 +124,7 @@ class ApiClient {
       // Use AppConfig for URL construction when available
       return await appConfig.getApiUrl(endpoint, options);
     } catch (error) {
-      console.warn('[ApiClient] AppConfig URL construction failed, using fallback:', error.message);
+      logger.warn('AppConfig URL construction failed, using fallback:', error.message);
 
       // Fallback to manual construction
       const baseUrl = this.baseUrl;
@@ -155,7 +158,7 @@ class ApiClient {
       // Try to use AppConfig fetch if available
       return await appConfig.fetchApi(endpoint, options);
     } catch (error) {
-      console.warn('[ApiClient] AppConfig fetch failed, using fallback:', error.message);
+      logger.warn('AppConfig fetch failed, using fallback:', error.message);
 
       // Fallback to manual fetch
       const url = await this.getApiUrl(endpoint, options);
@@ -227,7 +230,7 @@ class ApiClient {
 
       } catch (error) {
         lastError = error;
-        console.warn(`[ApiClient] GET attempt ${attempt} failed for ${endpoint}:`, error.message);
+        logger.warn(`GET attempt ${attempt} failed for ${endpoint}:`, error.message);
 
         // Don't retry on 4xx errors (client errors)
         if (error.message.includes('HTTP 4')) {
@@ -243,7 +246,7 @@ class ApiClient {
     }
 
     // All retries failed
-    console.error(`[ApiClient] GET failed after ${maxRetries} attempts: ${endpoint}`, lastError);
+    logger.error(`GET failed after ${maxRetries} attempts: ${endpoint}`, lastError);
     throw lastError;
   }
 
@@ -283,7 +286,7 @@ class ApiClient {
       return responseData;
 
     } catch (error) {
-      console.error(`[ApiClient] POST failed: ${endpoint}`, error);
+      logger.error(`POST failed: ${endpoint}`, error);
       throw error;
     }
   }
@@ -311,7 +314,7 @@ class ApiClient {
       return responseData;
 
     } catch (error) {
-      console.error(`[ApiClient] PUT failed: ${endpoint}`, error);
+      logger.error(`PUT failed: ${endpoint}`, error);
       throw error;
     }
   }
@@ -341,14 +344,14 @@ class ApiClient {
       return responseData;
 
     } catch (error) {
-      console.error(`[ApiClient] DELETE failed: ${endpoint}`, error);
+      logger.error(`DELETE failed: ${endpoint}`, error);
       throw error;
     }
   }
 
   // File upload with progress tracking
   async uploadFile(endpoint, file, progressCallback = null, options = {}) {
-    console.log(`[ApiClient] File Upload: ${endpoint}`, {
+    logger.debug(`File Upload: ${endpoint}`, {
       filename: file.name,
       size: file.size,
       type: file.type
@@ -408,7 +411,7 @@ class ApiClient {
       return result;
 
     } catch (error) {
-      console.error(`[ApiClient] File Upload failed: ${endpoint}`, error);
+      logger.error(`File Upload failed: ${endpoint}`, error);
       throw error;
     }
   }
@@ -437,7 +440,7 @@ class ApiClient {
       const health = await this.get('/api/health', { timeout: 5000 });
       return health?.status === 'healthy';
     } catch (error) {
-      console.warn('[ApiClient] Health check failed:', error.message);
+      logger.warn('Health check failed:', error.message);
       return false;
     }
   }
@@ -448,7 +451,7 @@ class ApiClient {
       // Use AppConfig validation if available
       return await appConfig.validateConnection();
     } catch (error) {
-      console.warn('[ApiClient] AppConfig validation failed, using fallback:', error.message);
+      logger.warn('AppConfig validation failed, using fallback:', error.message);
       return await this.checkHealth();
     }
   }
@@ -459,7 +462,7 @@ class ApiClient {
       // Use AppConfig cache invalidation if available
       appConfig.invalidateCache();
     } catch (error) {
-      console.warn('[ApiClient] AppConfig cache invalidation failed:', error.message);
+      logger.warn('AppConfig cache invalidation failed:', error.message);
 
       // Fallback cache invalidation
       Object.keys(localStorage).forEach(key => {
@@ -492,7 +495,7 @@ class ApiClient {
       // This matches the TypeScript version behavior
       return response;
     } catch (error) {
-      console.error('[ApiClient] Failed to save chat messages:', error);
+      logger.error('Failed to save chat messages:', error);
       throw error;
     }
   }
@@ -585,7 +588,7 @@ const apiClientInstance = new ApiClient();
 // Initialize configuration after construction
 if (typeof window !== 'undefined') {
   apiClientInstance.initializeConfiguration().catch(error => {
-    console.warn('[ApiClient] Async configuration initialization failed:', error.message);
+    logger.warn('Async configuration initialization failed:', error.message);
   });
 }
 

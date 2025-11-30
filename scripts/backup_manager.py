@@ -490,7 +490,7 @@ class BackupManager:
                     return json.load(metadata_file)
 
         except Exception:
-            pass
+            pass  # Archive read/parse error, metadata unavailable
 
         return None
 

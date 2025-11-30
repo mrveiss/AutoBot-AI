@@ -201,9 +201,9 @@ class AutoBotMemoryGraph:
                 await self.redis_client.execute_command("FT.INFO", "memory_entity_idx")
                 logger.info("Search index 'memory_entity_idx' already exists")
                 return
-            except Exception:
+            except Exception as e:
                 # Index doesn't exist, create it
-                pass
+                logger.debug(f"Search index not found, will create: {e}")
 
             # Create entity search index
             await self.redis_client.execute_command(

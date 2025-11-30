@@ -323,15 +323,15 @@ class SimplePTY:
         # Signal writer thread to stop
         try:
             self.input_queue.put(None)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to signal writer thread: {e}")
 
         # Close file descriptor
         if self.master_fd:
             try:
                 os.close(self.master_fd)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to close master fd: {e}")
             self.master_fd = None
 
         # Terminate process
@@ -347,8 +347,8 @@ class SimplePTY:
                     self.process.kill()
                     # Wait without timeout for kill to complete
                     self.process.wait()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to terminate process: {e}")
             self.process = None
 
         # Wait for threads to complete naturally

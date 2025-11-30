@@ -131,6 +131,7 @@ class EnhancedProjectStateTracker:
         self._api_call_count = 0
         self._user_interaction_count = 0
         self._error_count = 0
+        self._counter_lock = asyncio.Lock()  # Lock for thread-safe counter access
 
         # Metric keys for Redis
         self.REDIS_KEYS = {
@@ -739,9 +740,10 @@ class EnhancedProjectStateTracker:
     async def track_error(
         self, error: Exception, context: Optional[Dict[str, Any]] = None
     ):
-        """Track an error occurrence for error rate calculation"""
+        """Track an error occurrence for error rate calculation (thread-safe)"""
         try:
-            self._error_count += 1
+            async with self._counter_lock:
+                self._error_count += 1
 
             # Store in Redis for hourly aggregation
             if self.redis_client:
@@ -780,9 +782,10 @@ class EnhancedProjectStateTracker:
     async def track_api_call(
         self, endpoint: str, method: str = "GET", response_status: Optional[int] = None
     ):
-        """Track an API call for metrics"""
+        """Track an API call for metrics (thread-safe)"""
         try:
-            self._api_call_count += 1
+            async with self._counter_lock:
+                self._api_call_count += 1
 
             # Store in Redis for hourly aggregation
             if self.redis_client:
@@ -809,9 +812,10 @@ class EnhancedProjectStateTracker:
         user_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
     ):
-        """Track a user interaction for metrics"""
+        """Track a user interaction for metrics (thread-safe)"""
         try:
-            self._user_interaction_count += 1
+            async with self._counter_lock:
+                self._user_interaction_count += 1
 
             # Store in Redis for hourly aggregation
             if self.redis_client:

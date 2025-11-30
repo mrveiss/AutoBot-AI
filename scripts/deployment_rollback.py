@@ -121,7 +121,7 @@ class RollbackManager:
                 with open(self.deployment_info_file, "r") as f:
                     return json.load(f)
             except Exception:
-                pass
+                pass  # Deployment info file corrupt or unreadable
 
         # Fallback deployment info
         return {
@@ -146,7 +146,7 @@ class RollbackManager:
             if result.returncode == 0:
                 return result.stdout.strip()[:8]
         except Exception:
-            pass
+            pass  # Git command failed, return unknown below
         return "unknown"
 
     def list_available_versions(self) -> List[Dict[str, Any]]:

@@ -36,6 +36,7 @@ class InteractiveTerminalAgent:
         self.pending_sudo = False
         self.command_buffer = ""
         self.output_buffer = []
+        self._buffer_lock = asyncio.Lock()  # Lock for output_buffer access
         self.start_time = None
         self.terminal_size = (80, 24)  # cols, rows
 
@@ -143,13 +144,14 @@ class InteractiveTerminalAgent:
         return bool(readable)
 
     async def _process_output(self, data: bytes):
-        """Process and send terminal output"""
+        """Process and send terminal output (thread-safe)"""
         try:
             # Decode output
             output = data.decode("utf-8", errors="replace")
 
-            # Add to buffer
-            self.output_buffer.append(output)
+            # Add to buffer (thread-safe)
+            async with self._buffer_lock:
+                self.output_buffer.append(output)
 
             # Detect special prompts
             if self._detect_sudo_prompt(output):
@@ -331,9 +333,13 @@ class InteractiveTerminalAgent:
                 logger.error(f"Error sending signal: {e}")
 
     async def _handle_session_end(self):
-        """Handle terminal session end"""
+        """Handle terminal session end (thread-safe)"""
         duration = time.time() - self.start_time if self.start_time else 0
         exit_code = self.process.returncode if self.process else -1
+
+        # Read buffer length under lock
+        async with self._buffer_lock:
+            output_lines = len(self.output_buffer)
 
         await event_manager.publish(
             "terminal_session",
@@ -342,7 +348,7 @@ class InteractiveTerminalAgent:
                 "status": "ended",
                 "exit_code": exit_code,
                 "duration": duration,
-                "output_lines": len(self.output_buffer),
+                "output_lines": output_lines,
             },
         )
 
@@ -352,22 +358,30 @@ class InteractiveTerminalAgent:
     async def wait_for_completion(
         self, timeout: Optional[float] = None
     ) -> Dict[str, Any]:
-        """Wait for the terminal session to complete"""
+        """Wait for the terminal session to complete (thread-safe)"""
         try:
             if self.process:
                 await asyncio.wait_for(self.process.wait(), timeout=timeout)
 
+            # Read buffer length under lock
+            async with self._buffer_lock:
+                line_count = len(self.output_buffer)
+
             return {
                 "exit_code": self.process.returncode if self.process else -1,
                 "duration": time.time() - self.start_time if self.start_time else 0,
-                "line_count": len(self.output_buffer),
+                "line_count": line_count,
                 "status": "completed",
             }
         except asyncio.TimeoutError:
+            # Read buffer length under lock
+            async with self._buffer_lock:
+                line_count = len(self.output_buffer)
+
             return {
                 "exit_code": None,
                 "duration": time.time() - self.start_time if self.start_time else 0,
-                "line_count": len(self.output_buffer),
+                "line_count": line_count,
                 "status": "timeout",
             }
 
@@ -382,19 +396,19 @@ class InteractiveTerminalAgent:
                 if self.process.returncode is None:
                     self.process.kill()
             except Exception:
-                pass
+                pass  # Best-effort process termination during cleanup
 
         if self.master_fd:
             try:
                 os.close(self.master_fd)
             except Exception:
-                pass
+                pass  # Best-effort fd cleanup - may already be closed
 
         if self.slave_fd:
             try:
                 os.close(self.slave_fd)
             except Exception:
-                pass
+                pass  # Best-effort fd cleanup - may already be closed
 
         self.master_fd = None
         self.slave_fd = None

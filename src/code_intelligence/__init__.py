@@ -18,6 +18,7 @@ Provides advanced code analysis capabilities including:
 - Conversation flow analysis
 - LLM-powered code generation and auto-refactoring
 - LLM pattern analysis for cost optimization
+- Code fingerprinting for clone detection (Type 1-4)
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -180,6 +181,25 @@ from .llm_pattern_analyzer import (
     get_prompt_issue_types,
     get_usage_pattern_types,
 )
+from .code_fingerprinting import (
+    CloneDetectionReport,
+    CloneDetector,
+    CloneGroup,
+    CloneInstance,
+    CloneSeverity,
+    CloneType,
+    CodeFragment,
+    Fingerprint,
+    FingerprintType,
+    ASTHasher,
+    ASTNormalizer,
+    SemanticHasher,
+    SimilarityCalculator,
+    detect_clones,
+    get_clone_types,
+    get_clone_severities,
+    get_fingerprint_types,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -331,4 +351,22 @@ __all__ = [
     "get_optimization_priorities",
     "get_prompt_issue_types",
     "get_usage_pattern_types",
+    # Code fingerprinting and clone detection (Issue #237)
+    "CloneDetectionReport",
+    "CloneDetector",
+    "CloneGroup",
+    "CloneInstance",
+    "CloneSeverity",
+    "CloneType",
+    "CodeFragment",
+    "Fingerprint",
+    "FingerprintType",
+    "ASTHasher",
+    "ASTNormalizer",
+    "SemanticHasher",
+    "SimilarityCalculator",
+    "detect_clones",
+    "get_clone_types",
+    "get_clone_severities",
+    "get_fingerprint_types",
 ]

@@ -86,7 +86,7 @@ class AutoBotMonitor:
                     if "Intel(R) Core(TM) Ultra" in cpuinfo:
                         npu_status["hardware_detected"] = True
             except Exception:
-                pass
+                pass  # cpuinfo unavailable
 
             # Check if running in WSL
             try:
@@ -95,7 +95,7 @@ class AutoBotMonitor:
                     if "WSL" in version_info or "Microsoft" in version_info:
                         npu_status["wsl_limitation"] = True
             except Exception:
-                pass
+                pass  # /proc/version unavailable
 
             # Check OpenVINO NPU support
             try:
@@ -109,9 +109,9 @@ class AutoBotMonitor:
                     npu_status["driver_available"] = True
                     # Could attempt to get utilization here if NPU was available
             except ImportError:
-                pass
+                pass  # OpenVINO not installed
             except Exception:
-                pass
+                pass  # OpenVINO initialization error
 
             # Check for Intel NPU device files (Linux native)
             try:

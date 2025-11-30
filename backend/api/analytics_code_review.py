@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Query, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

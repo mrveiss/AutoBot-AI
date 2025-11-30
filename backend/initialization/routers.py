@@ -1168,6 +1168,26 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: analytics_llm_patterns - {e}")
 
+    # Embedding Pattern Analyzer router (Issue #285)
+    try:
+        from backend.api.analytics_embedding_patterns import (
+            router as embedding_patterns_router,
+        )
+
+        optional_routers.append(
+            (
+                embedding_patterns_router,
+                "/embedding-analytics",
+                ["embedding-analytics", "analytics"],
+                "analytics_embedding_patterns",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_embedding_patterns")
+    except ImportError as e:
+        logger.warning(
+            f"⚠️ Optional router not available: analytics_embedding_patterns - {e}"
+        )
+
     # Unified Analytics Report router (Issue #271)
     try:
         from backend.api.analytics_unified import router as unified_router
@@ -1183,5 +1203,125 @@ def load_optional_routers():
         logger.info("✅ Optional router loaded: analytics_unified")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: analytics_unified - {e}")
+
+    # Control Flow Graph Analyzer router (Issue #233)
+    try:
+        from backend.api.analytics_cfg import router as cfg_router
+
+        optional_routers.append(
+            (
+                cfg_router,
+                "/cfg-analytics",
+                ["cfg", "analytics"],
+                "analytics_cfg",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_cfg")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: analytics_cfg - {e}")
+
+    # Data Flow Analysis Engine router (Issue #234)
+    try:
+        from backend.api.analytics_dfa import router as dfa_router
+
+        optional_routers.append(
+            (
+                dfa_router,
+                "/dfa-analytics",
+                ["dfa", "analytics"],
+                "analytics_dfa",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_dfa")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: analytics_dfa - {e}")
+
+    # Natural Language Code Search router (Issue #232)
+    try:
+        from backend.api.natural_language_search import router as nl_search_router
+
+        optional_routers.append(
+            (
+                nl_search_router,
+                "",
+                ["natural-language-search", "code-search"],
+                "natural_language_search",
+            )
+        )
+        logger.info("✅ Optional router loaded: natural_language_search")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: natural_language_search - {e}")
+
+    # Pattern Learning Engine router (Issue #235)
+    try:
+        from backend.api.analytics_pattern_learning import (
+            router as pattern_learning_router,
+        )
+
+        optional_routers.append(
+            (
+                pattern_learning_router,
+                "/pattern-learning",
+                ["pattern-learning", "analytics", "self-improving"],
+                "analytics_pattern_learning",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_pattern_learning")
+    except ImportError as e:
+        logger.warning(
+            f"⚠️ Optional router not available: analytics_pattern_learning - {e}"
+        )
+
+    # Architectural Pattern Recognition router (Issue #238)
+    try:
+        from backend.api.analytics_architecture import router as architecture_router
+
+        optional_routers.append(
+            (
+                architecture_router,
+                "/architecture",
+                ["architecture", "analytics", "patterns"],
+                "analytics_architecture",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_architecture")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: analytics_architecture - {e}")
+
+    # Continuous Pattern Learning System router (Issue #239)
+    try:
+        from backend.api.analytics_continuous_learning import (
+            router as continuous_learning_router,
+        )
+
+        optional_routers.append(
+            (
+                continuous_learning_router,
+                "/continuous-learning",
+                ["continuous-learning", "analytics", "learning"],
+                "analytics_continuous_learning",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_continuous_learning")
+    except ImportError as e:
+        logger.warning(
+            f"⚠️ Optional router not available: analytics_continuous_learning - {e}"
+        )
+
+    # IDE Integration router (Issue #240)
+    try:
+        from backend.api.ide_integration import router as ide_router
+
+        optional_routers.append(
+            (
+                ide_router,
+                "/ide",
+                ["ide", "code-intelligence", "real-time"],
+                "ide_integration",
+            )
+        )
+        logger.info("✅ Optional router loaded: ide_integration")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: ide_integration - {e}")
 
     return optional_routers

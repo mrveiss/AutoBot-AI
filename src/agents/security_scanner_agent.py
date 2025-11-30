@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.command_utils import execute_shell_command
+from src.utils.agent_command_helpers import run_agent_command
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class SecurityScannerAgent:
             cmd = ["nmap", scan_type, "-p", ports, target, "-oX", "-"]
 
             # Execute scan
-            result = await self._run_command(cmd)
+            result = await run_agent_command(cmd)
 
             if result["status"] == "success":
                 # Parse nmap output
@@ -170,7 +170,7 @@ class SecurityScannerAgent:
             # Use nmap service detection
             cmd = ["nmap", "-sV", "-p", ports, target, "-oX", "-"]
 
-            result = await self._run_command(cmd)
+            result = await run_agent_command(cmd)
 
             if result["status"] == "success":
                 services = self._parse_nmap_services(result["output"])
@@ -203,7 +203,7 @@ class SecurityScannerAgent:
             # Basic example using nmap vulnerability scripts
             cmd = ["nmap", "--script", "vuln", "-p-", target]
 
-            result = await self._run_command(cmd, timeout=300)  # 5 minute timeout
+            result = await run_agent_command(cmd, timeout=300)  # 5 minute timeout
 
             if result["status"] == "success":
                 vulnerabilities = self._parse_vulnerabilities(result["output"])
@@ -234,7 +234,7 @@ class SecurityScannerAgent:
             # Fallback to nmap ssl scripts
             cmd = ["nmap", "--script", "ssl-*", "-p", str(port), target]
 
-            result = await self._run_command(cmd)
+            result = await run_agent_command(cmd)
 
             if result["status"] == "success":
                 ssl_info = self._parse_ssl_info(result["output"])
@@ -266,7 +266,7 @@ class SecurityScannerAgent:
             record_types = ["A", "AAAA", "MX", "TXT", "NS", "SOA"]
             for record_type in record_types:
                 cmd = ["dig", "+short", record_type, target]
-                result = await self._run_command(cmd)
+                result = await run_agent_command(cmd)
                 if result["status"] == "success" and result["output"].strip():
                     results["dns_records"][record_type] = (
                         result["output"].strip().split("\n")
@@ -277,7 +277,7 @@ class SecurityScannerAgent:
             for subdomain in common_subdomains:
                 full_domain = f"{subdomain}.{target}"
                 cmd = ["dig", "+short", "A", full_domain]
-                result = await self._run_command(cmd)
+                result = await run_agent_command(cmd)
                 if result["status"] == "success" and result["output"].strip():
                     results["subdomains"].append(
                         {"subdomain": full_domain, "ip": result["output"].strip()}
@@ -319,7 +319,7 @@ class SecurityScannerAgent:
                             }
                         )
             except Exception:
-                pass
+                pass  # HTTP request failed, robots.txt not accessible
 
             # Check common admin paths
             admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
@@ -338,7 +338,7 @@ class SecurityScannerAgent:
                                 }
                             )
                 except Exception:
-                    pass
+                    pass  # Path check failed, likely not accessible
 
             return {
                 "status": "success",
@@ -351,26 +351,8 @@ class SecurityScannerAgent:
             logger.error(f"Web scan failed: {e}")
             return {"status": "error", "message": f"Web scan failed: {str(e)}"}
 
-    async def _run_command(self, cmd: List[str], timeout: int = 60) -> Dict[str, Any]:
-        """Run a command with timeout - wrapper around common utility"""
-        result = await execute_shell_command(cmd, timeout=timeout)
-
-        # Convert to expected format for this agent
-        if result["status"] == "success":
-            return {"status": "success", "output": result["stdout"]}
-        else:
-            # Combine stderr and error info for backward compatibility
-            error_msg = (
-                result["stderr"]
-                or f"Command failed with return code {result['return_code']}"
-            )
-            if result["status"] == "timeout":
-                error_msg = f"Command timed out after {timeout} seconds"
-
-            return {
-                "status": "error",
-                "message": error_msg,
-            }
+    # _run_command moved to src/utils/agent_command_helpers.py (Issue #292)
+    # Use run_agent_command() directly
 
     def _parse_nmap_output(self, output: str) -> List[Dict[str, Any]]:
         """Parse nmap XML output for open ports"""
@@ -443,7 +425,7 @@ class SecurityScannerAgent:
     async def _check_tool_availability(self, tool_name: str) -> bool:
         """Check if a security tool is available on the system"""
         try:
-            result = await self._run_command(["which", tool_name], timeout=5)
+            result = await run_agent_command(["which", tool_name], timeout=5)
             return result["status"] == "success"
         except Exception:
             return False

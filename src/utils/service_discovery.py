@@ -91,6 +91,9 @@ class ServiceDiscovery:
         self._health_check_task: Optional[asyncio.Task] = None
         self._http_client = get_http_client()  # Use singleton HTTP client
 
+        # Lock for thread-safe access to services dictionary
+        self._lock = asyncio.Lock()
+
         # Service definitions for AutoBot's 6-VM architecture
         self._init_default_services()
 
@@ -281,10 +284,14 @@ class ServiceDiscovery:
                 await asyncio.sleep(5)  # Brief pause on error
 
     async def check_all_services(self) -> Dict[str, ServiceStatus]:
-        """Check health of all registered services concurrently"""
+        """Check health of all registered services concurrently (thread-safe)"""
         tasks = []
 
-        for service_name in self.services:
+        # Get service names under lock
+        async with self._lock:
+            service_names = list(self.services.keys())
+
+        for service_name in service_names:
             task = asyncio.create_task(
                 self.check_service_health(service_name),
                 name=f"health_check_{service_name}",
@@ -300,8 +307,11 @@ class ServiceDiscovery:
             result = completed_tasks[i]
             if isinstance(result, Exception):
                 logger.error(f"Health check failed for {service_name}: {result}")
-                self.services[service_name].status = ServiceStatus.UNHEALTHY
-                self.services[service_name].error_message = str(result)
+                # Update service status under lock
+                async with self._lock:
+                    if service_name in self.services:
+                        self.services[service_name].status = ServiceStatus.UNHEALTHY
+                        self.services[service_name].error_message = str(result)
                 results[service_name] = ServiceStatus.UNHEALTHY
             else:
                 results[service_name] = result
@@ -309,49 +319,58 @@ class ServiceDiscovery:
         return results
 
     async def check_service_health(self, service_name: str) -> ServiceStatus:
-        """Check health of a specific service with circuit breaker logic"""
-        if service_name not in self.services:
-            logger.warning(f"Unknown service: {service_name}")
-            return ServiceStatus.UNKNOWN
+        """Check health of a specific service with circuit breaker logic (thread-safe)"""
+        # Get service under lock
+        async with self._lock:
+            if service_name not in self.services:
+                logger.warning(f"Unknown service: {service_name}")
+                return ServiceStatus.UNKNOWN
+            service = self.services[service_name]
+            consecutive_failures = service.consecutive_failures
+            last_check = service.last_check
+            current_status = service.status
+            protocol = service.protocol
 
-        service = self.services[service_name]
         start_time = time.time()
 
         try:
             # Circuit breaker logic
-            if service.consecutive_failures >= self.circuit_breaker_threshold:
+            if consecutive_failures >= self.circuit_breaker_threshold:
                 # Service is in circuit breaker mode - reduce check frequency
-                if service.last_check:
-                    time_since_check = (datetime.now() - service.last_check).seconds
+                if last_check:
+                    time_since_check = (datetime.now() - last_check).seconds
                     if time_since_check < (self.health_check_interval * 2):
-                        return service.status  # Skip check, too recent
+                        return current_status  # Skip check, too recent
 
             # Perform health check based on service type
-            if service.protocol == "tcp":
+            if protocol == "tcp":
                 status = await self._check_tcp_service(service)
             else:
                 status = await self._check_http_service(service)
 
-            # Update service status
-            service.status = status
-            service.last_check = datetime.now()
-            service.response_time = time.time() - start_time
+            # Update service status under lock
+            async with self._lock:
+                service.status = status
+                service.last_check = datetime.now()
+                service.response_time = time.time() - start_time
 
-            if status == ServiceStatus.HEALTHY:
-                service.consecutive_failures = 0
-                service.last_healthy = datetime.now()
-                service.error_message = None
-            else:
-                service.consecutive_failures += 1
+                if status == ServiceStatus.HEALTHY:
+                    service.consecutive_failures = 0
+                    service.last_healthy = datetime.now()
+                    service.error_message = None
+                else:
+                    service.consecutive_failures += 1
 
             return status
 
         except Exception as e:
-            service.status = ServiceStatus.UNHEALTHY
-            service.last_check = datetime.now()
-            service.consecutive_failures += 1
-            service.error_message = str(e)
-            service.response_time = time.time() - start_time
+            # Update service status under lock
+            async with self._lock:
+                service.status = ServiceStatus.UNHEALTHY
+                service.last_check = datetime.now()
+                service.consecutive_failures += 1
+                service.error_message = str(e)
+                service.response_time = time.time() - start_time
 
             logger.error(f"Health check error for {service_name}: {e}")
             return ServiceStatus.UNHEALTHY
@@ -438,32 +457,49 @@ class ServiceDiscovery:
         except Exception:
             return ServiceStatus.UNHEALTHY
 
-    def get_service_url(self, service_name: str) -> Optional[str]:
-        """Get service URL with automatic failover"""
-        if service_name not in self.services:
-            return None
+    async def get_service_url(self, service_name: str) -> Optional[str]:
+        """Get service URL with automatic failover (thread-safe)"""
+        async with self._lock:
+            if service_name not in self.services:
+                return None
 
-        service = self.services[service_name]
+            service = self.services[service_name]
 
-        # Check if service is available
-        if not service.is_available and service.required:
-            logger.warning(f"Required service {service_name} is not available")
+            # Check if service is available
+            if not service.is_available and service.required:
+                logger.warning(f"Required service {service_name} is not available")
 
-        return service.url
+            return service.url
 
-    def get_healthy_services(self) -> List[str]:
-        """Get list of currently healthy services"""
-        return [
-            name
-            for name, service in self.services.items()
-            if service.status == ServiceStatus.HEALTHY
-        ]
+    async def get_healthy_services(self) -> List[str]:
+        """Get list of currently healthy services (thread-safe)"""
+        async with self._lock:
+            return [
+                name
+                for name, service in self.services.items()
+                if service.status == ServiceStatus.HEALTHY
+            ]
 
-    def get_service_status_summary(self) -> Dict:
-        """Get comprehensive status summary of all services"""
+    async def get_service_status_summary(self) -> Dict:
+        """Get comprehensive status summary of all services (thread-safe)"""
+        # Copy service data under lock
+        async with self._lock:
+            services_snapshot = {
+                name: {
+                    "status": service.status,
+                    "url": service.url,
+                    "required": service.required,
+                    "last_check": service.last_check,
+                    "response_time": service.response_time,
+                    "consecutive_failures": service.consecutive_failures,
+                    "error": service.error_message,
+                }
+                for name, service in self.services.items()
+            }
+
         summary = {
             "timestamp": datetime.now().isoformat(),
-            "total_services": len(self.services),
+            "total_services": len(services_snapshot),
             "healthy": 0,
             "degraded": 0,
             "unhealthy": 0,
@@ -471,26 +507,28 @@ class ServiceDiscovery:
             "services": {},
         }
 
-        for name, service in self.services.items():
-            status_str = service.status.value
+        for name, service_data in services_snapshot.items():
+            status = service_data["status"]
             summary["services"][name] = {
-                "status": status_str,
-                "url": service.url,
-                "required": service.required,
+                "status": status.value,
+                "url": service_data["url"],
+                "required": service_data["required"],
                 "last_check": (
-                    service.last_check.isoformat() if service.last_check else None
+                    service_data["last_check"].isoformat()
+                    if service_data["last_check"]
+                    else None
                 ),
-                "response_time": service.response_time,
-                "consecutive_failures": service.consecutive_failures,
-                "error": service.error_message,
+                "response_time": service_data["response_time"],
+                "consecutive_failures": service_data["consecutive_failures"],
+                "error": service_data["error"],
             }
 
             # Update counters
-            if service.status == ServiceStatus.HEALTHY:
+            if status == ServiceStatus.HEALTHY:
                 summary["healthy"] += 1
-            elif service.status == ServiceStatus.DEGRADED:
+            elif status == ServiceStatus.DEGRADED:
                 summary["degraded"] += 1
-            elif service.status == ServiceStatus.UNHEALTHY:
+            elif status == ServiceStatus.UNHEALTHY:
                 summary["unhealthy"] += 1
             else:
                 summary["unknown"] += 1
@@ -498,9 +536,10 @@ class ServiceDiscovery:
         return summary
 
     async def wait_for_service(self, service_name: str, timeout: float = 60.0) -> bool:
-        """Wait for a service to become healthy with timeout"""
-        if service_name not in self.services:
-            return False
+        """Wait for a service to become healthy with timeout (thread-safe)"""
+        async with self._lock:
+            if service_name not in self.services:
+                return False
 
         start_time = time.time()
 
@@ -516,10 +555,12 @@ class ServiceDiscovery:
     async def wait_for_core_services(
         self, timeout: float = 120.0
     ) -> Tuple[bool, List[str]]:
-        """Wait for all required services to become healthy"""
-        required_services = [
-            name for name, service in self.services.items() if service.required
-        ]
+        """Wait for all required services to become healthy (thread-safe)"""
+        # Get required services under lock
+        async with self._lock:
+            required_services = [
+                name for name, service in self.services.items() if service.required
+            ]
 
         start_time = time.time()
         ready_services = []
@@ -527,11 +568,14 @@ class ServiceDiscovery:
         while time.time() - start_time < timeout:
             await self.check_all_services()
 
-            ready_services = [
-                name
-                for name in required_services
-                if self.services[name].status == ServiceStatus.HEALTHY
-            ]
+            # Check service statuses under lock
+            async with self._lock:
+                ready_services = [
+                    name
+                    for name in required_services
+                    if name in self.services
+                    and self.services[name].status == ServiceStatus.HEALTHY
+                ]
 
             if len(ready_services) == len(required_services):
                 return True, ready_services
@@ -551,7 +595,7 @@ service_discovery = ServiceDiscovery()
 # Convenience functions for backward compatibility
 async def get_service_url(service_name: str) -> Optional[str]:
     """Get service URL - backward compatible function"""
-    return service_discovery.get_service_url(service_name)
+    return await service_discovery.get_service_url(service_name)
 
 
 async def check_service_health(service_name: str) -> ServiceStatus:

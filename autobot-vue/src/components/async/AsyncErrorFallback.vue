@@ -65,6 +65,9 @@
 import { ref, computed, inject, withDefaults } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AsyncErrorFallback')
 
 interface Props {
   error?: Error
@@ -153,7 +156,7 @@ const retry = async () => {
   } catch (retryError: unknown) {
     // Properly type the retry error
     const typedRetryError = retryError instanceof Error ? retryError : new Error(String(retryError))
-    console.error(`[AsyncErrorFallback] Retry failed for ${props.componentName}:`, typedRetryError)
+    logger.error(`Retry failed for ${props.componentName}:`, typedRetryError)
 
     if (rum) {
       rum.trackError('async_component_retry_failed', {
@@ -201,7 +204,7 @@ const goHome = () => {
   }
 
   router.push('/chat').catch(err => {
-    console.error('Failed to navigate to home:', err)
+    logger.error('Failed to navigate to home:', err)
     // Last resort - hard navigation
     window.location.href = '/chat'
   })
@@ -220,7 +223,7 @@ const toggleDetails = () => {
 
 // Log error for debugging
 if (props.error) {
-  console.error(`[AsyncErrorFallback] Component loading failed:`, {
+  logger.error('Component loading failed:', {
     component: props.componentName,
     error: props.error,
     retryCount: props.retryCount,

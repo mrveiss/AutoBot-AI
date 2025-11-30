@@ -536,51 +536,53 @@ class UnifiedConfigManager:
             current[keys[-1]] = value
 
     def save_settings(self) -> None:
-        """Save current configuration to settings.json (synchronous)"""
-        try:
-            # Filter out prompts before saving
-            import copy
+        """Save current configuration to settings.json (synchronous, thread-safe)"""
+        with self._get_sync_lock():
+            try:
+                # Filter out prompts before saving
+                import copy
 
-            filtered_config = copy.deepcopy(self._config)
-            if "prompts" in filtered_config:
-                logger.info("Removing prompts section from settings save")
-                del filtered_config["prompts"]
+                filtered_config = copy.deepcopy(self._config)
+                if "prompts" in filtered_config:
+                    logger.info("Removing prompts section from settings save")
+                    del filtered_config["prompts"]
 
-            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, "w", encoding="utf-8") as f:
-                json.dump(filtered_config, f, indent=2, ensure_ascii=False)
+                self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.settings_file, "w", encoding="utf-8") as f:
+                    json.dump(filtered_config, f, indent=2, ensure_ascii=False)
 
-            # Clear cache to force fresh load on next access
-            self._sync_cache_timestamp = None
-            logger.info(f"Settings saved to {self.settings_file} and cache cleared")
-        except Exception as e:
-            logger.error(f"Failed to save settings: {e}")
-            raise
+                # Clear cache to force fresh load on next access
+                self._sync_cache_timestamp = None
+                logger.info(f"Settings saved to {self.settings_file} and cache cleared")
+            except Exception as e:
+                logger.error(f"Failed to save settings: {e}")
+                raise
 
     def save_config_to_yaml(self) -> None:
-        """Save configuration to config.yaml file (synchronous)"""
-        try:
-            # Filter out prompts and legacy fields before saving
-            import copy
+        """Save configuration to config.yaml file (synchronous, thread-safe)"""
+        with self._get_sync_lock():
+            try:
+                # Filter out prompts and legacy fields before saving
+                import copy
 
-            filtered_config = copy.deepcopy(self._config)
+                filtered_config = copy.deepcopy(self._config)
 
-            if "prompts" in filtered_config:
-                logger.info("Removing prompts section from YAML save")
-                del filtered_config["prompts"]
+                if "prompts" in filtered_config:
+                    logger.info("Removing prompts section from YAML save")
+                    del filtered_config["prompts"]
 
-            self.base_config_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.base_config_file, "w", encoding="utf-8") as f:
-                yaml.dump(filtered_config, f, default_flow_style=False, indent=2)
+                self.base_config_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.base_config_file, "w", encoding="utf-8") as f:
+                    yaml.dump(filtered_config, f, default_flow_style=False, indent=2)
 
-            # Clear cache to force fresh load on next access
-            self._sync_cache_timestamp = None
-            logger.info(
-                f"Configuration saved to {self.base_config_file} and cache cleared"
-            )
-        except Exception as e:
-            logger.error(f"Failed to save YAML configuration: {e}")
-            raise
+                # Clear cache to force fresh load on next access
+                self._sync_cache_timestamp = None
+                logger.info(
+                    f"Configuration saved to {self.base_config_file} and cache cleared"
+                )
+            except Exception as e:
+                logger.error(f"Failed to save YAML configuration: {e}")
+                raise
 
     def reload(self) -> None:
         """Reload configuration from files (synchronous)"""

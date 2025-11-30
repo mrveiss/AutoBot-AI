@@ -258,6 +258,9 @@ import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatInput')
 
 const store = useChatStore()
 const controller = useChatController()
@@ -406,7 +409,7 @@ const sendMessage = async () => {
     })
 
   } catch (error) {
-    console.error('Failed to send message:', error)
+    logger.error('Failed to send message:', error)
     // Restore message on error
     messageText.value = message
     attachedFiles.value = files
@@ -493,16 +496,16 @@ const startVoiceRecording = async () => {
   try {
     // Web Speech API implementation would go here
     isVoiceRecording.value = true
-    console.log('Voice recording started')
+    logger.debug('Voice recording started')
   } catch (error) {
-    console.error('Failed to start voice recording:', error)
+    logger.error('Failed to start voice recording:', error)
     alert('Voice recording is not supported in your browser')
   }
 }
 
 const stopVoiceRecording = () => {
   isVoiceRecording.value = false
-  console.log('Voice recording stopped')
+  logger.debug('Voice recording stopped')
 }
 
 const toggleEmojiPicker = () => {
@@ -663,7 +666,7 @@ const uploadFile = async (upload: any, file: File): Promise<void> => {
 const retryUpload = async (uploadId: string) => {
   const upload = uploadProgress.value.find(u => u.id === uploadId)
   if (!upload || !upload.file) {
-    console.error('Cannot retry upload: Upload or file not found')
+    logger.error('Cannot retry upload: Upload or file not found')
     return
   }
 

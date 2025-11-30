@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -87,6 +88,7 @@ class ChatHistoryManager:
         self.max_session_files = 1000  # Maximum session files to keep
         self.memory_check_counter = 0  # Counter for periodic memory checks
         self.memory_check_interval = 50  # Check memory every N operations
+        self._counter_lock = threading.Lock()  # Lock for thread-safe counter access
 
         # MEMORY GRAPH INTEGRATION: Entity tracking for conversations
         self.memory_graph: Optional[AutoBotMemoryGraph] = None
@@ -329,22 +331,26 @@ class ChatHistoryManager:
             )
 
     def _periodic_memory_check(self):
-        """PERFORMANCE OPTIMIZATION: Periodic memory usage monitoring"""
-        self.memory_check_counter += 1
-        if self.memory_check_counter >= self.memory_check_interval:
-            self.memory_check_counter = 0
+        """PERFORMANCE OPTIMIZATION: Periodic memory usage monitoring (thread-safe)"""
+        with self._counter_lock:
+            self.memory_check_counter += 1
+            should_check = self.memory_check_counter >= self.memory_check_interval
+            if should_check:
+                self.memory_check_counter = 0
+        if not should_check:
+            return
 
-            # Check memory usage
-            message_count = len(self.history)
-            if message_count > self.max_messages * 0.8:  # 80% threshold warning
-                logger.warning(
-                    "MEMORY WARNING: Chat history approaching limit - "
-                    f"{message_count}/{self.max_messages} messages "
-                    f"({(message_count/self.max_messages)*100:.1f}%)"
-                )
+        # Check memory usage
+        message_count = len(self.history)
+        if message_count > self.max_messages * 0.8:  # 80% threshold warning
+            logger.warning(
+                "MEMORY WARNING: Chat history approaching limit - "
+                f"{message_count}/{self.max_messages} messages "
+                f"({(message_count/self.max_messages)*100:.1f}%)"
+            )
 
-            # Cleanup if needed
-            self._cleanup_messages_if_needed()
+        # Cleanup if needed
+        self._cleanup_messages_if_needed()
 
     def _cleanup_old_session_files(self):
         """PERFORMANCE OPTIMIZATION: Clean up old session files"""
@@ -1601,13 +1607,15 @@ class ChatHistoryManager:
                         f"⚠️ Failed to update Memory Graph entity (continuing): {mg_error}"
                     )
 
-            # PERFORMANCE: Periodic cleanup of old session files
-            if hasattr(self, "_session_save_counter"):
-                self._session_save_counter += 1
-            else:
-                self._session_save_counter = 1
+            # PERFORMANCE: Periodic cleanup of old session files (thread-safe)
+            with self._counter_lock:
+                if hasattr(self, "_session_save_counter"):
+                    self._session_save_counter += 1
+                else:
+                    self._session_save_counter = 1
+                should_cleanup = self._session_save_counter % 10 == 0
 
-            if self._session_save_counter % 10 == 0:  # Every 10th save
+            if should_cleanup:  # Every 10th save
                 self._cleanup_old_session_files()
 
         except Exception as e:

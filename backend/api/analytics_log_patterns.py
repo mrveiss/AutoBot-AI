@@ -6,9 +6,7 @@ Dynamic Pattern Mining from Logs API (Issue #226)
 Provides endpoints for discovering patterns, anomalies, and trends in log data
 """
 
-import asyncio
 import logging
-import os
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -19,7 +17,6 @@ import aiofiles
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

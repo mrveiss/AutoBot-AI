@@ -265,8 +265,8 @@ class FeatureFlags:
                     entry = entry.decode()
                 try:
                     history.append(json.loads(entry))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Skipping malformed history entry: {e}")
 
             # Get endpoint overrides
             endpoint_keys = []

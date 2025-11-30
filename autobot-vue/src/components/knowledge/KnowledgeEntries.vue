@@ -411,6 +411,9 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { useModal } from '@/composables/useModal'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('KnowledgeEntries')
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -570,7 +573,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
   try {
     await controller.deleteDocument(entry.id)
   } catch (error) {
-    console.error('Failed to delete entry:', error)
+    logger.error('Failed to delete entry:', error)
   }
 }
 
@@ -581,7 +584,7 @@ const deleteSelected = async () => {
     await controller.bulkDeleteDocuments(selectedEntries.value)
     selectedEntries.value = []
   } catch (error) {
-    console.error('Failed to delete entries:', error)
+    logger.error('Failed to delete entries:', error)
   }
 }
 
@@ -638,7 +641,7 @@ const saveEdit = async () => {
 
     closeDialog()
   } catch (error) {
-    console.error('Failed to save changes:', error)
+    logger.error('Failed to save changes:', error)
   }
 }
 

@@ -113,10 +113,12 @@ async def list_active_workflows():
 @router.get("/workflow/{workflow_id}")
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific workflow."""
-    if workflow_id not in active_workflows:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    async with _workflows_lock:
+        if workflow_id not in active_workflows:
+            raise HTTPException(status_code=404, detail="Workflow not found")
 
-    workflow = active_workflows[workflow_id]
+        # Create a copy to avoid race conditions
+        workflow = dict(active_workflows[workflow_id])
 
     return {"success": True, "workflow": workflow}
 
@@ -161,18 +163,20 @@ async def get_workflow_status(workflow_id: str):
 @router.post("/workflow/{workflow_id}/approve")
 async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResponse):
     """Approve or deny a workflow step that requires user confirmation."""
-    if workflow_id not in active_workflows:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    async with _workflows_lock:
+        if workflow_id not in active_workflows:
+            raise HTTPException(status_code=404, detail="Workflow not found")
 
     approval_key = f"{workflow_id}_{approval.step_id}"
 
-    if approval_key not in pending_approvals:
-        raise HTTPException(
-            status_code=404, detail="No pending approval for this workflow step"
-        )
+    async with _approvals_lock:
+        if approval_key not in pending_approvals:
+            raise HTTPException(
+                status_code=404, detail="No pending approval for this workflow step"
+            )
 
-    # Set the approval result
-    future = pending_approvals.pop(approval_key)
+        # Set the approval result
+        future = pending_approvals.pop(approval_key)
     if not future.done():
         future.set_result(
             {
@@ -182,17 +186,18 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
             }
         )
 
-    # Update workflow status
-    workflow = active_workflows[workflow_id]
-    steps = workflow.get("steps", [])
-    current_step = workflow.get("current_step", 0)
+    # Update workflow status (thread-safe)
+    async with _workflows_lock:
+        workflow = active_workflows[workflow_id]
+        steps = workflow.get("steps", [])
+        current_step = workflow.get("current_step", 0)
 
-    if current_step < len(steps):
-        steps[current_step]["status"] = "approved" if approval.approved else "denied"
-        steps[current_step]["user_response"] = approval.user_input
+        if current_step < len(steps):
+            steps[current_step]["status"] = "approved" if approval.approved else "denied"
+            steps[current_step]["user_response"] = approval.user_input
 
-    # Record Prometheus approval metric
-    workflow_type = workflow.get("classification", "unknown")
+        # Get workflow type for metrics
+        workflow_type = workflow.get("classification", "unknown")
     prometheus_metrics.record_workflow_approval(
         workflow_type=workflow_type,
         decision="approved" if approval.approved else "rejected",
@@ -366,7 +371,10 @@ async def execute_workflow(
         steps.append(step)
 
     workflow_data["steps"] = steps
-    active_workflows[workflow_id] = workflow_data
+
+    # Store workflow (thread-safe)
+    async with _workflows_lock:
+        active_workflows[workflow_id] = workflow_data
 
     # Start workflow execution in background
     background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
@@ -383,19 +391,20 @@ async def execute_workflow(
 
 async def execute_workflow_steps(workflow_id: str, orchestrator):
     """Execute workflow steps in sequence with proper coordination."""
-    if workflow_id not in active_workflows:
-        return
+    async with _workflows_lock:
+        if workflow_id not in active_workflows:
+            return
 
-    workflow = active_workflows[workflow_id]
-    steps = workflow["steps"]
-
-    try:
+        workflow = active_workflows[workflow_id]
+        steps = workflow["steps"]
         workflow["status"] = "executing"
 
+    try:
         for step_index, step in enumerate(steps):
-            workflow["current_step"] = step_index
-            step["status"] = "in_progress"
-            step["started_at"] = datetime.now().isoformat()
+            async with _workflows_lock:
+                workflow["current_step"] = step_index
+                step["status"] = "in_progress"
+                step["started_at"] = datetime.now().isoformat()
 
             # Publish step start event
             await event_manager.publish(
@@ -410,13 +419,20 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
             )
 
             # Check if step requires approval
-            if step["requires_approval"] and not workflow.get("auto_approve", False):
-                step["status"] = "waiting_approval"
+            async with _workflows_lock:
+                workflow = active_workflows[workflow_id]
+                auto_approve = workflow.get("auto_approve", False)
+                requires_approval = step["requires_approval"] and not auto_approve
 
-                # Create approval request
+            if requires_approval:
+                async with _workflows_lock:
+                    step["status"] = "waiting_approval"
+
+                # Create approval request (thread-safe)
                 approval_key = f"{workflow_id}_{step['step_id']}"
                 approval_future = asyncio.Future()
-                pending_approvals[approval_key] = approval_future
+                async with _approvals_lock:
+                    pending_approvals[approval_key] = approval_future
 
                 # Publish approval request event
                 await event_manager.publish(
@@ -442,22 +458,26 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
                     )
 
                     if not approval_result.get("approved", False):
-                        step["status"] = "cancelled"
-                        workflow["status"] = "cancelled"
+                        async with _workflows_lock:
+                            step["status"] = "cancelled"
+                            workflow["status"] = "cancelled"
                         return
 
-                    step["user_response"] = approval_result.get("user_input")
+                    async with _workflows_lock:
+                        step["user_response"] = approval_result.get("user_input")
 
                 except asyncio.TimeoutError:
-                    step["status"] = "timeout"
-                    workflow["status"] = "timeout"
+                    async with _workflows_lock:
+                        step["status"] = "timeout"
+                        workflow["status"] = "timeout"
                     return
 
             # Execute the step (mock execution for demonstration)
             await execute_single_step(workflow_id, step, orchestrator)
 
-            step["status"] = "completed"
-            step["completed_at"] = datetime.now().isoformat()
+            async with _workflows_lock:
+                step["status"] = "completed"
+                step["completed_at"] = datetime.now().isoformat()
 
             # Publish step completion event
             await event_manager.publish(
@@ -471,13 +491,15 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
             )
 
         # Workflow completed
-        workflow["status"] = "completed"
-        workflow["completed_at"] = datetime.now().isoformat()
+        async with _workflows_lock:
+            workflow["status"] = "completed"
+            workflow["completed_at"] = datetime.now().isoformat()
+            workflow_start_time = workflow.get("workflow_start_time")
+            workflow_type = workflow.get("classification", "unknown")
 
         # Record Prometheus workflow execution metric (success)
-        if "workflow_start_time" in workflow:
-            duration = time.time() - workflow["workflow_start_time"]
-            workflow_type = workflow.get("classification", "unknown")
+        if workflow_start_time:
+            duration = time.time() - workflow_start_time
             prometheus_metrics.record_workflow_execution(
                 workflow_type=workflow_type, status="success", duration=duration
             )
@@ -509,13 +531,15 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
         )
 
     except Exception as e:
-        workflow["status"] = "failed"
-        workflow["error"] = str(e)
+        async with _workflows_lock:
+            workflow["status"] = "failed"
+            workflow["error"] = str(e)
+            workflow_start_time = workflow.get("workflow_start_time")
+            workflow_type = workflow.get("classification", "unknown")
 
         # Record Prometheus workflow execution metric (failed)
-        if "workflow_start_time" in workflow:
-            duration = time.time() - workflow["workflow_start_time"]
-            workflow_type = workflow.get("classification", "unknown")
+        if workflow_start_time:
+            duration = time.time() - workflow_start_time
             prometheus_metrics.record_workflow_execution(
                 workflow_type=workflow_type, status="failed", duration=duration
             )
@@ -763,23 +787,26 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
 @router.delete("/workflow/{workflow_id}")
 async def cancel_workflow(workflow_id: str):
     """Cancel an active workflow."""
-    if workflow_id not in active_workflows:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+    async with _workflows_lock:
+        if workflow_id not in active_workflows:
+            raise HTTPException(status_code=404, detail="Workflow not found")
 
-    workflow = active_workflows[workflow_id]
-    workflow["status"] = "cancelled"
-    workflow["cancelled_at"] = datetime.now().isoformat()
+        workflow = active_workflows[workflow_id]
+        workflow["status"] = "cancelled"
+        workflow["cancelled_at"] = datetime.now().isoformat()
+        user_message = workflow.get("user_message", "")
 
-    # Cancel any pending approvals
-    for key in list(pending_approvals.keys()):
-        if key.startswith(workflow_id):
-            future = pending_approvals.pop(key)
-            if not future.done():
-                future.cancel()
+    # Cancel any pending approvals (thread-safe)
+    async with _approvals_lock:
+        for key in list(pending_approvals.keys()):
+            if key.startswith(workflow_id):
+                future = pending_approvals.pop(key)
+                if not future.done():
+                    future.cancel()
 
     await event_manager.publish(
         "workflow_cancelled",
-        {"workflow_id": workflow_id, "user_message": workflow.get("user_message", "")},
+        {"workflow_id": workflow_id, "user_message": user_message},
     )
 
     return {"success": True, "message": "Workflow cancelled successfully"}

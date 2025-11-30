@@ -7,6 +7,7 @@ Exposes VNC observation capabilities as MCP tools for AutoBot's LLM agents
 Integrates with backend VNC proxy for browser and desktop observation
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List
@@ -22,6 +23,9 @@ from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vnc_mcp", "mcp", "vnc"])
+
+# Lock for thread-safe access to vnc_observations
+_vnc_observations_lock = asyncio.Lock()
 
 # VNC observation cache
 vnc_observations = {
@@ -196,10 +200,11 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     vnc_type = request.vnc_type
     duration = request.duration_seconds
 
-    # Get cached observations
-    cache = vnc_observations.get(vnc_type, {})
-    recent_activity = cache.get("recent_activity", [])
-    last_check = cache.get("last_check")
+    # Get cached observations (thread-safe)
+    async with _vnc_observations_lock:
+        cache = vnc_observations.get(vnc_type, {})
+        recent_activity = list(cache.get("recent_activity", []))  # Copy list
+        last_check = cache.get("last_check")
 
     # Filter by duration
     cutoff_time = datetime.now() - timedelta(seconds=duration)
@@ -279,11 +284,10 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                     "endpoint": vnc_data.get("endpoint"),
                 }
 
-                # Include recent observations
-                cache = vnc_observations.get("browser", {})
-                recent = cache.get("recent_activity", [])[
-                    -5:
-                ]  # Last 5 observations
+                # Include recent observations (thread-safe)
+                async with _vnc_observations_lock:
+                    cache = vnc_observations.get("browser", {})
+                    recent = list(cache.get("recent_activity", [])[-5:])
                 context["vnc_state"]["recent_observations"] = recent
     except Exception as e:
         logger.warning(f"Failed to get VNC state: {e}")
@@ -306,18 +310,22 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
     This endpoint is called by the VNC WebSocket proxy to log observations
     for later retrieval by MCP tools
     """
-    if vnc_type not in vnc_observations:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
-
     # Add timestamp
     observation["timestamp"] = datetime.now().isoformat()
 
-    # Append to recent activity (keep last 100)
-    vnc_observations[vnc_type]["recent_activity"].append(observation)
-    vnc_observations[vnc_type]["recent_activity"] = vnc_observations[vnc_type][
-        "recent_activity"
-    ][-100:]
-    vnc_observations[vnc_type]["last_check"] = datetime.now()
+    # Thread-safe update of observations
+    async with _vnc_observations_lock:
+        if vnc_type not in vnc_observations:
+            raise HTTPException(
+                status_code=404, detail=f"Unknown VNC type: {vnc_type}"
+            )
+
+        # Append to recent activity (keep last 100)
+        vnc_observations[vnc_type]["recent_activity"].append(observation)
+        vnc_observations[vnc_type]["recent_activity"] = vnc_observations[vnc_type][
+            "recent_activity"
+        ][-100:]
+        vnc_observations[vnc_type]["last_check"] = datetime.now()
 
     logger.debug(f"Recorded VNC observation for {vnc_type}: {observation.get('type')}")
 

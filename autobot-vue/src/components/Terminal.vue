@@ -70,6 +70,9 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('Terminal')
 
 // Props
 interface Props {
@@ -129,7 +132,7 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
       }
     },
     onError: (error) => {
-      console.error('[Terminal] WebSocket error:', error)
+      logger.error('WebSocket error:', error)
       statusMessage.value = 'Connection error'
       addTerminalLine('system', 'Connection error occurred', 'error')
     },
@@ -228,7 +231,7 @@ const initializeSession = async (): Promise<string> => {
     sessionInitialized.value = true
     return sessionId.value as string
   } catch (error) {
-    console.error('[Terminal] Failed to initialize session:', error)
+    logger.error('Failed to initialize session:', error)
     // Fallback to local generation
     sessionId.value = props.chatSessionId
       ? `chat_terminal_${props.chatSessionId}_${Date.now()}`
@@ -268,7 +271,7 @@ const connectTerminal = async () => {
     wsConnect()
 
   } catch (error) {
-    console.error('[Terminal] Connection failed:', error)
+    logger.error('Connection failed:', error)
     statusMessage.value = 'Failed to connect'
     addTerminalLine('system', `Connection failed: ${error}`, 'error')
   }
@@ -317,7 +320,7 @@ const sendCommand = (command: string) => {
     currentCommand.value = ''
 
   } catch (error) {
-    console.error('[Terminal] Failed to send command:', error)
+    logger.error('Failed to send command:', error)
     addTerminalLine('system', `Failed to send command: ${error}`, 'error')
   }
 }

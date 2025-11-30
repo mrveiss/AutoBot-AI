@@ -484,6 +484,9 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatMessages')
 
 // Disable automatic attribute inheritance
 defineOptions({
@@ -804,14 +807,14 @@ const retryMessage = async (messageId: string) => {
     // Find the message in the store
     const message = store.currentMessages.find(m => m.id === messageId)
     if (!message || !message.content) {
-      console.error('Message not found or has no content:', messageId)
+      logger.error('Message not found or has no content:', messageId)
       return
     }
 
     // Resend the message using the controller
     await controller.sendMessage(message.content)
   } catch (error) {
-    console.error('Failed to retry message:', error)
+    logger.error('Failed to retry message:', error)
   }
 }
 
@@ -825,7 +828,7 @@ const detectToolCalls = (message: ChatMessage) => {
       const params = JSON.parse(match[1])
       const description = match[2].trim()
 
-      console.log('🔧 TOOL_CALL detected:', { command: params.command, host: params.host, purpose: description })
+      logger.debug('TOOL_CALL detected:', { command: params.command, host: params.host, purpose: description })
 
       // Search for terminal_session_id in recent assistant messages
       // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
@@ -841,13 +844,13 @@ const detectToolCalls = (message: ChatMessage) => {
         for (const msg of recentAssistantMessages) {
           if (msg.metadata?.terminal_session_id) {
             terminal_session_id = msg.metadata.terminal_session_id
-            console.log('[TOOL_CALL] Found terminal_session_id in message metadata:', terminal_session_id)
+            logger.debug('Found terminal_session_id in message metadata:', terminal_session_id)
             break
           }
         }
 
         if (!terminal_session_id) {
-          console.warn('[TOOL_CALL] No terminal_session_id found in recent messages')
+          logger.warn('No terminal_session_id found in recent messages')
         }
       }
 
@@ -860,7 +863,7 @@ const detectToolCalls = (message: ChatMessage) => {
         terminal_session_id: terminal_session_id
       })
     } catch (error) {
-      console.error('Failed to parse TOOL_CALL:', error)
+      logger.error('Failed to parse TOOL_CALL:', error)
     }
   }
 }
@@ -876,7 +879,7 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
       const response = await fetch(backendUrl)
 
       if (!response.ok) {
-        console.error('[ChatMessages][POLL] Failed to get command state:', response.status)
+        logger.error('Failed to get command state:', response.status)
         if (attempt < maxAttempts) {
           attempt++
           setTimeout(poll, 500)
@@ -887,11 +890,11 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
       }
 
       const command = await response.json()
-      console.log(`[ChatMessages][POLL] Command state (attempt ${attempt + 1}):`, command.state)
+      logger.debug(`Command state (attempt ${attempt + 1}):`, command.state)
 
       // Check if command is finished
       if (command.state === 'completed' || command.state === 'failed' || command.state === 'denied') {
-        console.log('[ChatMessages][POLL] ✅ Command finished:', {
+        logger.debug('Command finished:', {
           state: command.state,
           output_length: command.output?.length || 0,
           return_code: command.return_code
@@ -911,11 +914,11 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
         attempt++
         setTimeout(poll, 500)  // Poll every 500ms
       } else {
-        console.error('[ChatMessages][POLL] ⏱️ Polling timed out after 50 seconds')
+        logger.error('Polling timed out after 50 seconds')
         callback({ state: 'timeout', error: 'Polling timeout' })
       }
     } catch (error) {
-      console.error('[ChatMessages][POLL] Error:', error)
+      logger.error('Polling error:', error)
       if (attempt < maxAttempts) {
         attempt++
         setTimeout(poll, 500)
@@ -926,24 +929,24 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
   }
 
   // Start polling
-  console.log('[ChatMessages][POLL] 🚀 Starting command state polling for:', command_id)
+  logger.debug('Starting command state polling for:', command_id)
   poll()
 }
 
 // Command Approval - Use HTTP POST to agent-terminal API with dynamic URL
 const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string, command_id?: string) => {
   if (!terminal_session_id) {
-    console.error('No terminal_session_id provided for approval')
+    logger.error('No terminal_session_id provided for approval')
     return
   }
 
   processingApproval.value = true
-  console.log(`${approved ? 'Approving' : 'Denying'} command for session:`, terminal_session_id)
+  logger.debug(`${approved ? 'Approving' : 'Denying'} command for session:`, terminal_session_id)
   if (comment) {
-    console.log('With comment:', comment)
+    logger.debug('With comment:', comment)
   }
   if (autoApproveFuture.value) {
-    console.log('Auto-approve similar commands in future:', autoApproveFuture.value)
+    logger.debug('Auto-approve similar commands in future:', autoApproveFuture.value)
   }
 
   try {
@@ -964,10 +967,10 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
     })
 
     const result = await response.json()
-    console.log('Approval response:', result)
+    logger.debug('Approval response:', result)
 
     if (result.status === 'approved' || result.status === 'denied') {
-      console.log(`[ChatMessages] Command ${approved ? 'approved' : 'denied'} successfully`)
+      logger.debug(`Command ${approved ? 'approved' : 'denied'} successfully`)
       notify(`Command ${approved ? 'approved' : 'denied'}`, approved ? 'success' : 'warning')
 
       // Update the message metadata to reflect approval status
@@ -979,48 +982,48 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
       if (targetMessage && targetMessage.metadata) {
         targetMessage.metadata.approval_status = result.status
         targetMessage.metadata.approval_comment = comment || result.comment
-        console.log('Updated message approval status:', targetMessage.metadata)
+        logger.debug('Updated message approval status:', targetMessage.metadata)
       } else {
-        console.warn('Could not find message to update approval status')
+        logger.warn('Could not find message to update approval status')
       }
 
       // START POLLING: If approved and we have command_id, poll for completion
       if (result.status === 'approved' && approved && command_id) {
-        console.log('[ChatMessages][POLL] Starting polling for approved command:', command_id)
+        logger.debug('Starting polling for approved command:', command_id)
 
         pollCommandState(command_id, (pollResult) => {
-          console.log('[ChatMessages][POLL] 🎯 Command execution complete:', pollResult)
+          logger.debug('Command execution complete:', pollResult)
 
           if (pollResult.state === 'completed') {
-            console.log('[ChatMessages][POLL] ✅ Command completed successfully')
-            console.log('[ChatMessages][POLL] Output:', pollResult.output)
+            logger.debug('Command completed successfully')
+            logger.debug('Output:', pollResult.output)
             // Note: Backend already handles LLM interpretation and sends it to chat
             // The output will appear naturally through the WebSocket/streaming flow
           } else if (pollResult.state === 'failed') {
-            console.error('[ChatMessages][POLL] ❌ Command failed:', pollResult.stderr)
+            logger.error('Command failed:', pollResult.stderr)
             notify('Command execution failed', 'error')
           } else if (pollResult.state === 'timeout') {
-            console.warn('[ChatMessages][POLL] ⏱️ Polling timed out')
+            logger.warn('Polling timed out')
             notify('Command execution timed out', 'warning')
           } else if (pollResult.state === 'error') {
-            console.error('[ChatMessages][POLL] ❌ Polling error:', pollResult.error)
+            logger.error('Polling error:', pollResult.error)
             notify('Command polling error', 'error')
           }
         })
       } else if (!command_id && approved) {
-        console.warn('[ChatMessages][POLL] ⚠️ No command_id available for polling (legacy approval flow)')
+        logger.warn('No command_id available for polling (legacy approval flow)')
       }
 
       // Reset auto-approve checkbox after submission
       autoApproveFuture.value = false
     } else if (result.status === 'error') {
-      console.error('[ChatMessages] Approval error:', result.error)
+      logger.error('Approval error:', result.error)
       notify(`Approval failed: ${result.error}`, 'error')
     }
 
     processingApproval.value = false
   } catch (error) {
-    console.error('[ChatMessages] Error sending approval:', error)
+    logger.error('Error sending approval:', error)
     notify('Failed to process command approval', 'error')
     processingApproval.value = false
   }
@@ -1046,7 +1049,7 @@ const promptForComment = (sessionId: string) => {
 
 const submitApprovalWithComment = async (sessionId: string, approved: boolean | null) => {
   if (!approvalComment.value.trim()) {
-    console.warn('Cannot submit approval with empty comment')
+    logger.warn('Cannot submit approval with empty comment')
     return
   }
 
@@ -1054,7 +1057,7 @@ const submitApprovalWithComment = async (sessionId: string, approved: boolean | 
   const finalDecision = approved !== null ? approved : pendingApprovalDecision.value
 
   if (finalDecision === null) {
-    console.error('No approval decision provided')
+    logger.error('No approval decision provided')
     return
   }
 

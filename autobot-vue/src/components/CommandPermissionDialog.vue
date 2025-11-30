@@ -134,6 +134,9 @@ import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseButton from '@/components/base/BaseButton.vue';
 import { useModal } from '@/composables/useModal';
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('CommandPermissionDialog');
 
 export default {
   name: 'CommandPermissionDialog',
@@ -217,7 +220,7 @@ export default {
       const data = await fetchResponse.json();
 
       // DEBUG: Log exact response to understand what we're getting
-      console.log('[CommandPermissionDialog] Status check result:', {
+      logger.debug('Status check result:', {
         isApproved: data.status === 'approved',
         isSuccess: data.status === 'success',
         isError: data.status === 'error',
@@ -227,15 +230,15 @@ export default {
 
       // CRITICAL FIX: Handle "No pending approval" error (stale dialog from cleared session)
       if (data.status === 'error' && data.error === 'No pending approval') {
-        console.warn('[CommandPermissionDialog] ⚠️ No pending approval found - this approval request is stale');
-        console.warn('[CommandPermissionDialog] Closing dialog - session may have been cleared or approval already processed');
+        logger.warn('No pending approval found - this approval request is stale');
+        logger.warn('Closing dialog - session may have been cleared or approval already processed');
 
         // Close the dialog without emitting approval event
         // The session no longer has a pending approval to process
         closeDialog();
 
         // Show user-friendly message (optional - could use a toast notification)
-        console.info('[CommandPermissionDialog] Dialog closed: This approval request is no longer valid');
+        logger.info('Dialog closed: This approval request is no longer valid');
         return;
       }
 
@@ -248,7 +251,7 @@ export default {
         });
         closeDialog();
       } else {
-        console.error('[CommandPermissionDialog] ❌ Status did NOT match - showing error');
+        logger.error('Status did NOT match - showing error');
         throw new Error(data.error || 'Command execution failed');
       }
     };
@@ -256,13 +259,13 @@ export default {
     const handleAllow = async () => {
       // CRITICAL: Prevent double-click/concurrent execution
       if (isProcessing.value) {
-        console.warn('handleAllow: Already processing, ignoring duplicate click');
+        logger.warn('handleAllow: Already processing, ignoring duplicate click');
         return;
       }
 
       await executeAllow(allowCommandFn).catch(err => {
         // Error already handled by useAsyncOperation
-        console.error('[CommandPermissionDialog] Command approval error:', err);
+        logger.error('Command approval error:', err);
       });
     };
 
@@ -281,8 +284,8 @@ export default {
 
           // CRITICAL FIX: Handle "No pending approval" error (stale dialog from cleared session)
           if (response.data?.status === 'error' && response.data?.error === 'No pending approval') {
-            console.warn('[CommandPermissionDialog] ⚠️ No pending approval found when denying - this approval request is stale');
-            console.warn('[CommandPermissionDialog] Closing dialog - session may have been cleared or approval already processed');
+            logger.warn('No pending approval found when denying - this approval request is stale');
+            logger.warn('Closing dialog - session may have been cleared or approval already processed');
 
             // Close the dialog without emitting denial event
             // The session no longer has a pending approval to process
@@ -290,7 +293,7 @@ export default {
             return;
           }
         } else {
-          console.warn('[CommandPermissionDialog] handleDeny: terminal_session_id is missing - continuing with client-side denial');
+          logger.warn('handleDeny: terminal_session_id is missing - continuing with client-side denial');
         }
 
         emit('denied', {
@@ -299,7 +302,7 @@ export default {
         });
         closeDialog();
       } catch (err) {
-        console.error('[CommandPermissionDialog] Command denial error:', err);
+        logger.error('Command denial error:', err);
         // Still close dialog even if API call fails
         emit('denied', {
           command: props.command,
@@ -335,7 +338,7 @@ export default {
     const submitComment = async () => {
       await executeComment(submitCommentFn).catch(err => {
         // Error already handled by useAsyncOperation
-        console.error('[CommandPermissionDialog] Comment submission error:', err);
+        logger.error('Comment submission error:', err);
       });
     };
 

@@ -7,6 +7,7 @@ Manages tool knowledge, coordinates with other agents, and handles dynamic tool
 discovery
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,7 @@ class EnhancedKBLibrarian:
         self.knowledge_base = knowledge_base
         self.web_assistant = WebResearchAssistant()
         self.tool_cache = {}  # Cache for frequently requested tools
+        self._cache_lock = asyncio.Lock()  # Lock for tool_cache access
 
     async def search_tool_knowledge(self, tool_type: str) -> Dict[str, Any]:
         """Search for tool information in KB"""
@@ -61,15 +63,16 @@ class EnhancedKBLibrarian:
         }
 
     async def request_tool_research(self, tool_type: str) -> List[Dict[str, Any]]:
-        """Ask WebAssistant to research tools when KB doesn't have info"""
+        """Ask WebAssistant to research tools when KB doesn't have info (thread-safe)"""
         logger.info(f"Requesting web research for tool type: {tool_type}")
 
-        # Check cache first
-        if tool_type in self.tool_cache:
-            logger.info(f"Returning cached results for {tool_type}")
-            return self.tool_cache[tool_type]
+        # Check cache first (thread-safe)
+        async with self._cache_lock:
+            if tool_type in self.tool_cache:
+                logger.info(f"Returning cached results for {tool_type}")
+                return list(self.tool_cache[tool_type])  # Return copy
 
-        # Research tools on the web
+        # Research tools on the web (outside lock - long operation)
         research_query = f"best {tool_type} tools linux command line"
         web_results = await self.web_assistant.research_query(research_query)
 
@@ -98,8 +101,9 @@ class EnhancedKBLibrarian:
                 if tool_info:
                     detailed_tools.append({**tool, **tool_info})
 
-            # Cache results
-            self.tool_cache[tool_type] = detailed_tools
+            # Cache results (thread-safe)
+            async with self._cache_lock:
+                self.tool_cache[tool_type] = detailed_tools
 
             # Store in KB for future use
             await self._store_tool_research_results(tool_type, detailed_tools)

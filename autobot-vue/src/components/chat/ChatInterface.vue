@@ -130,6 +130,9 @@ import batchApiService from '@/services/BatchApiService'
 import appConfig from '@/config/AppConfig.js'
 // FIXED: Import NetworkConstants for IP fallback values
 import { NetworkConstants } from '@/constants/network'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatInterface')
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -202,13 +205,13 @@ const loadNovncUrl = async () => {
 
     if (response.ok) {
       const result = await response.json()
-      console.log('[ChatInterface] VNC status:', result.status, '-', result.message)
+      logger.debug('VNC status:', result.status, '-', result.message)
     } else {
-      console.warn('[ChatInterface] VNC ensure-running check failed:', response.status)
+      logger.warn('VNC ensure-running check failed:', response.status)
       notify('VNC server check failed - desktop may not be available', 'warning')
     }
   } catch (error) {
-    console.warn('[ChatInterface] Failed to check VNC status:', error)
+    logger.warn('Failed to check VNC status:', error)
     // Continue anyway - VNC might be running, but notify user
     notify('Could not verify VNC server status', 'warning')
   }
@@ -297,7 +300,7 @@ const exportSession = async () => {
     URL.revokeObjectURL(url)
 
   } catch (error) {
-    console.error('Failed to export session:', error)
+    logger.error('Failed to export session:', error)
     appStore.setGlobalError('Failed to export chat session')
   }
 }
@@ -309,7 +312,7 @@ const clearSession = async () => {
     try {
       await controller.resetCurrentChat()
     } catch (error) {
-      console.error('Failed to clear session:', error)
+      logger.error('Failed to clear session:', error)
       appStore.setGlobalError('Failed to clear chat session')
     }
   }
@@ -317,41 +320,41 @@ const clearSession = async () => {
 
 // Unified loading event handlers
 const handleSidebarLoadingComplete = () => {
-  console.log('[ChatInterface] Sidebar loading completed')
+  logger.debug('Sidebar loading completed')
 }
 
 const handleSidebarLoadingError = (error: any) => {
-  console.error('[ChatInterface] Sidebar loading error:', error)
+  logger.error('Sidebar loading error:', error)
   appStore.setGlobalError('Failed to load chat sessions')
 }
 
 const handleSidebarLoadingTimeout = () => {
-  console.warn('[ChatInterface] Sidebar loading timed out')
+  logger.warn('Sidebar loading timed out')
 }
 
 const handleContentLoadingComplete = () => {
-  console.log('[ChatInterface] Content loading completed')
+  logger.debug('Content loading completed')
 }
 
 const handleContentLoadingError = (error: any) => {
-  console.error('[ChatInterface] Content loading error:', error)
+  logger.error('Content loading error:', error)
   appStore.setGlobalError('Failed to load chat content')
 }
 
 const handleContentLoadingTimeout = () => {
-  console.warn('[ChatInterface] Content loading timed out')
+  logger.warn('Content loading timed out')
 }
 
 // Tab change handler - ensures local tab state change without router navigation
 const handleTabChange = (tabKey: string) => {
-  console.log('[ChatInterface] Tab change requested:', tabKey)
+  logger.debug('Tab change requested:', tabKey)
 
   // Prevent any router navigation and only update local state
   // This fixes the Terminal tab issue where it was triggering unwanted navigation
   activeTab.value = tabKey
 
   // Log successful tab change
-  console.log('[ChatInterface] Active tab changed to:', activeTab.value)
+  logger.debug('Active tab changed to:', activeTab.value)
 }
 
 // Terminal tab handler for explicit new tab opening (not used for tab clicks)
@@ -362,18 +365,18 @@ const openTerminalInNewTab = () => {
 
 // Dialog handlers
 const onKnowledgeDecisionsApplied = (decisions: any) => {
-  console.log('Knowledge decisions applied:', decisions)
+  logger.debug('Knowledge decisions applied:', decisions)
   // Handle knowledge persistence decisions
 }
 
 const onChatCompiled = (compiledData: any) => {
-  console.log('Chat compiled:', compiledData)
+  logger.debug('Chat compiled:', compiledData)
   // Handle compiled chat data
 }
 
 // Handle TOOL_CALL detection from chat messages
 const handleToolCallDetected = async (toolCall: any) => {
-  console.log('[ChatInterface] TOOL_CALL detected, showing approval dialog:', toolCall)
+  logger.debug('TOOL_CALL detected, showing approval dialog:', toolCall)
 
   // Assess risk level (simple heuristics for now)
   let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'MEDIUM'
@@ -401,7 +404,7 @@ const handleToolCallDetected = async (toolCall: any) => {
 }
 
 const onCommandApproved = async (commandData: any) => {
-  console.log('[ChatInterface] Command approved:', commandData)
+  logger.debug('Command approved:', commandData)
 
   // IMPORTANT: The backend is already waiting for approval and will execute automatically.
   // CommandPermissionDialog has already sent the approval POST request.
@@ -414,17 +417,17 @@ const onCommandApproved = async (commandData: any) => {
   // Close dialog
   showCommandDialog.value = false
 
-  console.log('[ChatInterface] Dialog closed, backend will execute the approved command')
+  logger.debug('Dialog closed, backend will execute the approved command')
 }
 
 const onCommandDenied = (reason: string) => {
-  console.log('Command denied:', reason)
+  logger.debug('Command denied:', reason)
   showCommandDialog.value = false
   // Handle command denial
 }
 
 const onCommandCommented = async (commentData: any) => {
-  console.log('[ChatInterface] Command commented:', commentData)
+  logger.debug('Command commented:', commentData)
 
   try {
     // CRITICAL: Send denial with comment/feedback to agent terminal
@@ -450,7 +453,7 @@ const onCommandCommented = async (commentData: any) => {
 
       const result = await response.json()
 
-      console.log('[ChatInterface] Command denied with user feedback/alternative approach')
+      logger.debug('Command denied with user feedback/alternative approach')
       notify('Feedback sent to agent', 'success')
     }
 
@@ -460,7 +463,7 @@ const onCommandCommented = async (commentData: any) => {
     // The comment was already sent to chat via CommandPermissionDialog
     // The agent will receive the denial + feedback and can propose an alternative
   } catch (error) {
-    console.error('[ChatInterface] Error sending command comment/denial:', error)
+    logger.error('Error sending command comment/denial:', error)
     notify('Failed to send feedback to agent', 'error')
   }
 }
@@ -509,7 +512,7 @@ const enableAutoSave = () => {
   autoSaveInterval.value = setInterval(() => {
     if (store.settings.autoSave && store.currentSessionId) {
       controller.saveChatSession()
-        .catch((error: any) => console.warn('Auto-save failed:', error))
+        .catch((error: any) => logger.warn('Auto-save failed:', error))
     }
   }, 2 * 60 * 1000) as unknown as number
 }
@@ -522,7 +525,7 @@ const startMessagePolling = () => {
     clearInterval(messagePollingInterval.value)
   }
 
-  console.log('[ChatInterface] Starting message polling (10s interval - optimized)')
+  logger.debug('Starting message polling (10s interval - optimized)')
 
   // Poll for new messages every 10 seconds (reduced from 3s to prevent flicker)
   // This still picks up LLM interpretations and new messages, just less aggressively
@@ -536,7 +539,7 @@ const startMessagePolling = () => {
         // Fail silently - don't spam console with polling errors
         // Only log if it's not a simple 404 (session not found)
         if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
-          console.warn('[ChatInterface] Message polling failed:', error)
+          logger.warn('[ChatInterface] Message polling failed:', error)
         }
       }
     }
@@ -574,7 +577,7 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 // STREAMLINED: Simplified initialization without complex timeout racing
 const initializeChatInterface = async () => {
   try {
-    console.log('🚀 Starting streamlined chat interface initialization')
+    logger.debug('🚀 Starting streamlined chat interface initialization')
 
     // Load data with simple timeout
     const loadPromise = batchApiService.initializeChatInterface()
@@ -598,17 +601,17 @@ const initializeChatInterface = async () => {
         baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
       }
     } catch (error) {
-      console.warn('⏱️ Initialization failed or timed out, using fallback:', error)
+      logger.warn('⏱️ Initialization failed or timed out, using fallback:', error)
       // Fallback to individual loading
       if (store.sessions.length === 0) {
-        await controller.loadChatSessions().catch(console.warn)
+        await controller.loadChatSessions().catch((err) => logger.warn('Failed to load chat sessions:', err))
       }
     }
 
-    console.log('✅ Chat interface initialization completed')
+    logger.debug('✅ Chat interface initialization completed')
 
   } catch (error) {
-    console.error('❌ Chat initialization failed:', error)
+    logger.error('❌ Chat initialization failed:', error)
     appStore.setGlobalError('Failed to initialize chat interface')
   }
 }
@@ -654,7 +657,7 @@ onUnmounted(() => {
   }
 
   if (messagePollingInterval.value) {
-    console.log('[ChatInterface] Stopping message polling')
+    logger.debug('[ChatInterface] Stopping message polling')
     clearInterval(messagePollingInterval.value)
     messagePollingInterval.value = null
   }
@@ -664,7 +667,7 @@ onUnmounted(() => {
 watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   if (newSessionId !== oldSessionId) {
     // Session changed, reload NoVNC URL
-    console.log('[ChatInterface] Session changed:', newSessionId)
+    logger.debug('[ChatInterface] Session changed:', newSessionId)
     loadNovncUrl()
 
     // Close file panel when switching sessions

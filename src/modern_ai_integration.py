@@ -103,6 +103,7 @@ class BaseAIProvider(ABC):
         self.request_count = 0
         self.last_request_time = 0
         self.client = None
+        self._rate_lock = asyncio.Lock()  # Lock for rate limiting state
         self._initialize_client()
 
     @abstractmethod
@@ -122,18 +123,23 @@ class BaseAIProvider(ABC):
         """Initialize the client for this provider"""
 
     async def _check_rate_limit(self):
-        """Check and enforce rate limits"""
-        current_time = time.time()
-        if (current_time - self.last_request_time) < (
-            60 / self.config.rate_limit_per_minute
-        ):
-            wait_time = (60 / self.config.rate_limit_per_minute) - (
-                current_time - self.last_request_time
-            )
-            await asyncio.sleep(wait_time)
+        """Check and enforce rate limits (thread-safe)"""
+        async with self._rate_lock:
+            current_time = time.time()
+            wait_time = 0.0
+            if (current_time - self.last_request_time) < (
+                60 / self.config.rate_limit_per_minute
+            ):
+                wait_time = (60 / self.config.rate_limit_per_minute) - (
+                    current_time - self.last_request_time
+                )
 
-        self.last_request_time = time.time()
-        self.request_count += 1
+            self.last_request_time = time.time()
+            self.request_count += 1
+
+        # Sleep outside lock to allow other operations
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
 
 
 class OpenAIGPT4VProvider(BaseAIProvider):

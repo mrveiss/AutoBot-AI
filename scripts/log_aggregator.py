@@ -517,7 +517,7 @@ class LogAggregator:
                                     if log_time < since_time:
                                         continue
                                 except Exception:
-                                    pass
+                                    pass  # Invalid timestamp, include log anyway
 
                             results.append(parsed)
 
@@ -580,7 +580,7 @@ class LogAggregator:
                         if datetime.fromisoformat(a["timestamp"]) > cutoff_time
                     ]
             except Exception:
-                pass
+                pass  # Alert filtering failed, alerts remain empty
 
         return analysis
 
@@ -676,7 +676,7 @@ class LogAggregator:
                                 if log_time < since_time:
                                     continue
                             except Exception:
-                                pass
+                                pass  # Invalid timestamp, include log anyway
 
                         logs.append(parsed)
 

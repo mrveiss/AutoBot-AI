@@ -9,6 +9,9 @@
  */
 
 import backendFallback from './BackendFallback.js';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('OptimizedServiceIntegration');
 
 export class OptimizedServiceIntegration {
   constructor() {
@@ -388,7 +391,7 @@ export class OptimizedServiceIntegration {
    */
   log(...args) {
     if (import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true') {
-      console.log('[AutoBot Service Integration]', ...args);
+      logger.debug('[OptimizedServiceIntegration]', ...args);
     }
   }
 

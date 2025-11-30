@@ -219,6 +219,9 @@ import { NetworkConstants } from '@/constants/network'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('RedisServiceControl')
 
 // Service management composable
 const {
@@ -288,7 +291,7 @@ const handleStartService = async () => {
   try {
     await startService()
   } catch (err) {
-    console.error('[RedisServiceControl] Failed to start service:', err)
+    logger.error('Failed to start service:', err)
   }
 }
 
@@ -307,7 +310,7 @@ const handleRestartService = () => {
       try {
         await restartService()
       } catch (err) {
-        console.error('[RedisServiceControl] Failed to restart service:', err)
+        logger.error('Failed to restart service:', err)
       }
     }
   }
@@ -328,7 +331,7 @@ const handleStopService = () => {
       try {
         await stopService(true)
       } catch (err) {
-        console.error('[RedisServiceControl] Failed to stop service:', err)
+        logger.error('Failed to stop service:', err)
       }
     }
   }

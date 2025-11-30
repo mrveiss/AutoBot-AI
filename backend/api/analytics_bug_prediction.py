@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -467,7 +466,7 @@ async def analyze_codebase(
             if root.is_dir():
                 files_to_analyze = list(root.rglob(include_pattern))[:limit]
         except Exception:
-            pass
+            pass  # Path traversal error, files_to_analyze remains empty
 
         if not files_to_analyze:
             # Return demo data if no files found

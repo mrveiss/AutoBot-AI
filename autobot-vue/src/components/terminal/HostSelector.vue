@@ -28,6 +28,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('HostSelector')
 
 // Props
 interface Props {
@@ -71,7 +74,7 @@ const handleHostChange = () => {
     // Update store
     terminalStore.setSelectedHost(host)
 
-    console.log('[HostSelector] Host changed:', {
+    logger.info('Host changed:', {
       hostId: host.id,
       hostName: host.name,
       hostIp: host.ip

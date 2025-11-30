@@ -21,6 +21,11 @@ from pydantic import BaseModel, Field
 
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+from backend.utils.response_helpers import (
+    create_error_response,
+    create_success_response,
+    handle_ai_stack_error,
+)
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -94,56 +99,9 @@ class ResearchTaskRequest(BaseModel):
 
 
 # ====================================================================
-# Utility Functions
+# Utility Functions - Now imported from backend.utils.response_helpers
+# (Issue #292: Duplicate code elimination)
 # ====================================================================
-
-
-def create_success_response(
-    data: Any, message: str = "Operation completed successfully"
-) -> Metadata:
-    """Create standardized success response."""
-    return {
-        "success": True,
-        "data": data,
-        "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-
-
-def create_error_response(
-    error_code: str = "INTERNAL_ERROR",
-    message: str = "An error occurred",
-    status_code: int = 500,
-) -> JSONResponse:
-    """Create standardized error response."""
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "success": False,
-            "error": {
-                "code": error_code,
-                "message": message,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        },
-    )
-
-
-async def handle_ai_stack_error(error: AIStackError, context: str):
-    """Handle AI Stack errors gracefully."""
-    logger.error(f"{context} failed: {error.message}")
-    status_code = (
-        503 if error.status_code is None else (400 if error.status_code < 500 else 503)
-    )
-
-    raise HTTPException(
-        status_code=status_code,
-        detail={
-            "error": error.message,
-            "context": context,
-            "ai_stack_details": error.details,
-        },
-    )
 
 
 async def get_optimal_agents_for_goal(

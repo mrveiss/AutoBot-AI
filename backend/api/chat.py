@@ -33,6 +33,12 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
+
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from backend.utils.chat_exceptions import (
+    get_exceptions_lazy,
+    log_exception,
+)
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
@@ -100,46 +106,6 @@ def handle_api_error(error, request_id="unknown"):
     """Simple error handler replacement"""
     logger.error(f"[{request_id}] API error: {str(error)}")
     return {"error": str(error)}
-
-
-def log_exception(error, context="chat"):
-    """Simple exception logger replacement"""
-    logger.error(f"[{context}] Exception: {str(error)}")
-
-
-def get_exceptions_lazy():
-    """Lazy load exception classes to avoid import errors"""
-
-    class AutoBotError(Exception):
-        pass
-
-    class InternalError(AutoBotError):
-        def __init__(self, message, details=None):
-            self.message = message
-            self.details = details or {}
-            super().__init__(message)
-
-    class ResourceNotFoundError(AutoBotError):
-        pass
-
-    class ValidationError(AutoBotError):
-        pass
-
-    def get_error_code(error_type):
-        error_codes = {
-            "INTERNAL_ERROR": "INTERNAL_ERROR",
-            "VALIDATION_ERROR": "VALIDATION_ERROR",
-            "NOT_FOUND": "NOT_FOUND",
-        }
-        return error_codes.get(error_type, "UNKNOWN_ERROR")
-
-    return (
-        AutoBotError,
-        InternalError,
-        ResourceNotFoundError,
-        ValidationError,
-        get_error_code,
-    )
 
 
 def log_request_context(request, endpoint, request_id):
@@ -882,7 +848,9 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
                             current_group = []
                     last_streaming_ts = current_ts
             except (ValueError, TypeError):
-                pass  # If timestamp parsing fails, add to current group anyway
+                # Timestamp parsing failed - continue grouping without time-based breaks
+                # This is intentional: malformed timestamps should not break message grouping
+                pass
             current_group.append(msg)
         else:
             # Non-streaming message - finalize current streaming group

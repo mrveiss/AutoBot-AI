@@ -3,6 +3,9 @@ import type { Component } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('Router');
 
 // Initialize global async component error handler
 setupAsyncComponentErrorHandler()
@@ -390,14 +393,14 @@ const router = createRouter({
 
 // Enhanced error handling for routing failures
 router.onError((error) => {
-  console.error('[Router] Navigation error:', error)
+  logger.error('Navigation error:', error)
 
   // Handle chunk loading failures with enhanced error recovery
   if (error.message.includes('Loading chunk') ||
       error.message.includes('Loading CSS chunk') ||
       error.message.includes('ChunkLoadError')) {
 
-    console.warn('[Router] Chunk loading failed, attempting recovery...', {
+    logger.warn('Chunk loading failed, attempting recovery...', {
       error: error.message,
       url: window.location.href,
       timestamp: new Date().toISOString()
@@ -424,7 +427,7 @@ router.onError((error) => {
         sessionStorage.setItem('chunk-reload-attempted', 'true')
         sessionStorage.setItem('chunk-reload-count', (reloadCount + 1).toString())
 
-        console.log('[Router] Attempting page reload for chunk recovery...')
+        logger.debug('Attempting page reload for chunk recovery...')
 
         // Clear service worker cache if available
         if ('serviceWorker' in navigator) {
@@ -438,12 +441,12 @@ router.onError((error) => {
         }
       } else {
         // Fallback: Navigate to safe route
-        console.log('[Router] Max reload attempts reached, navigating to fallback route...')
+        logger.debug('Max reload attempts reached, navigating to fallback route...')
         sessionStorage.removeItem('chunk-reload-attempted')
         sessionStorage.removeItem('chunk-reload-count')
 
         router.push('/chat').catch((fallbackError) => {
-          console.error('[Router] Failed to navigate to fallback route, hard redirect:', fallbackError)
+          logger.error('Failed to navigate to fallback route, hard redirect:', fallbackError)
           window.location.href = '/chat'
         })
       }
@@ -452,7 +455,7 @@ router.onError((error) => {
     handleChunkError()
   } else {
     // Handle other router errors
-    console.error('[Router] Non-chunk error occurred:', error)
+    logger.error('Non-chunk error occurred:', error)
 
     if (window.rum) {
       window.rum.trackError('router_navigation_error', {
@@ -470,8 +473,8 @@ router.beforeEach(async (to, from, next) => {
     const appStore = useAppStore()
     const userStore = useUserStore()
 
-    console.log('[Router] Navigating to:', to.path)
-    console.log('[Router] Route matched:', to.matched.length > 0)
+    logger.debug('Navigating to:', to.path)
+    logger.debug('Route matched:', to.matched.length > 0)
 
     // Clear chunk reload flags on successful navigation
     if (to.matched.length > 0) {
@@ -488,7 +491,7 @@ router.beforeEach(async (to, from, next) => {
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
 
     if (requiresAuth && !userStore.isAuthenticated) {
-      console.log('[Router] Authentication required, redirecting to login')
+      logger.debug('Authentication required, redirecting to login')
 
       // Track authentication redirect
       if (window.rum) {
@@ -509,14 +512,14 @@ router.beforeEach(async (to, from, next) => {
 
     // If user is authenticated and trying to access login page, redirect to dashboard
     if (to.name === 'login' && userStore.isAuthenticated) {
-      console.log('[Router] User already authenticated, redirecting to dashboard')
+      logger.debug('User already authenticated, redirecting to dashboard')
       next({ path: '/dashboard' })
       return
     }
 
     // Check for expired tokens
     if (userStore.isAuthenticated && userStore.isTokenExpired) {
-      console.log('[Router] Token expired, logging out user')
+      logger.debug('Token expired, logging out user')
       userStore.logout()
 
       // If the route requires auth, redirect to login
@@ -560,7 +563,7 @@ router.beforeEach(async (to, from, next) => {
     next()
 
   } catch (error: unknown) {
-    console.error('[Router] Navigation guard error:', error)
+    logger.error('Navigation guard error:', error)
 
     // Issue #156 Fix: Type guard for error handling
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -592,7 +595,7 @@ router.afterEach((to, from) => {
   }
 
   // Log successful navigation
-  console.log('[Router] Successfully navigated to:', to.path)
+  logger.debug('Successfully navigated to:', to.path)
 })
 
 // Route helper functions

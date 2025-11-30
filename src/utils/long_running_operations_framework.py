@@ -369,11 +369,15 @@ class OperationProgressTracker:
         self.progress_callbacks: Dict[str, List[Callable]] = {}
         self.websocket_connections: Dict[str, List] = {}
 
-    def subscribe_to_progress(self, operation_id: str, callback: Callable):
-        """Subscribe to progress updates"""
-        if operation_id not in self.progress_callbacks:
-            self.progress_callbacks[operation_id] = []
-        self.progress_callbacks[operation_id].append(callback)
+        # Lock for thread-safe access to callbacks and connections
+        self._lock = asyncio.Lock()
+
+    async def subscribe_to_progress(self, operation_id: str, callback: Callable):
+        """Subscribe to progress updates (thread-safe)"""
+        async with self._lock:
+            if operation_id not in self.progress_callbacks:
+                self.progress_callbacks[operation_id] = []
+            self.progress_callbacks[operation_id].append(callback)
 
     async def update_progress(
         self,
@@ -414,7 +418,7 @@ class OperationProgressTracker:
         await self._broadcast_progress_update(operation)
 
     async def _broadcast_progress_update(self, operation: LongRunningOperation):
-        """Broadcast progress update to subscribers"""
+        """Broadcast progress update to subscribers (thread-safe)"""
 
         progress_data = {
             "operation_id": operation.operation_id,
@@ -424,8 +428,12 @@ class OperationProgressTracker:
             "timestamp": datetime.now().isoformat(),
         }
 
-        # Call registered callbacks
-        for callback in self.progress_callbacks.get(operation.operation_id, []):
+        # Copy callbacks under lock to avoid race conditions
+        async with self._lock:
+            callbacks = list(self.progress_callbacks.get(operation.operation_id, []))
+
+        # Call registered callbacks outside lock
+        for callback in callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback(progress_data)
@@ -462,6 +470,9 @@ class LongRunningOperationManager:
         self.max_concurrent_operations = 3
         self.active_operations = 0
 
+        # Lock for thread-safe access to operations and counters
+        self._lock = asyncio.Lock()
+
         # Start background processor
         self._background_processor_task = None
 
@@ -483,30 +494,46 @@ class LongRunningOperationManager:
             self._background_processor_task = None
 
     async def _background_processor(self):
-        """Process background operations with concurrency control"""
+        """Process background operations with concurrency control (thread-safe)"""
         while True:
             try:
-                # Wait for available slot
-                while self.active_operations >= self.max_concurrent_operations:
+                # Wait for available slot (check under lock)
+                while True:
+                    async with self._lock:
+                        if self.active_operations < self.max_concurrent_operations:
+                            break
                     await asyncio.sleep(1)
 
                 # Get next operation from queue
                 operation_id = await self.background_queue.get()
-                operation = self.operations.get(operation_id)
+
+                # Get operation under lock
+                async with self._lock:
+                    operation = self.operations.get(operation_id)
 
                 if operation and operation.status == OperationStatus.QUEUED:
-                    self.active_operations += 1
+                    async with self._lock:
+                        self.active_operations += 1
+
                     task = asyncio.create_task(
                         self._execute_operation_with_monitoring(operation)
                     )
-                    self.operation_tasks[operation_id] = task
 
-                    # Clean up when done
-                    task.add_done_callback(
-                        lambda t: setattr(
-                            self, "active_operations", self.active_operations - 1
-                        )
-                    )
+                    async with self._lock:
+                        self.operation_tasks[operation_id] = task
+
+                    # Clean up when done - use a closure to capture self properly
+                    def make_done_callback(manager):
+                        async def decrement():
+                            async with manager._lock:
+                                manager.active_operations -= 1
+
+                        def callback(t):
+                            asyncio.create_task(decrement())
+
+                        return callback
+
+                    task.add_done_callback(make_done_callback(self))
 
             except asyncio.CancelledError:
                 break
@@ -547,7 +574,9 @@ class LongRunningOperationManager:
         # Store operation function
         operation.context["operation_function"] = operation_function
 
-        self.operations[operation_id] = operation
+        # Store operation under lock
+        async with self._lock:
+            self.operations[operation_id] = operation
 
         if execute_immediately:
             await self.execute_operation(operation_id)
@@ -558,9 +587,10 @@ class LongRunningOperationManager:
         return operation_id
 
     async def execute_operation(self, operation_id: str) -> Any:
-        """Execute operation immediately (not in background)"""
+        """Execute operation immediately (not in background) (thread-safe)"""
 
-        operation = self.operations.get(operation_id)
+        async with self._lock:
+            operation = self.operations.get(operation_id)
         if not operation:
             raise ValueError(f"Operation {operation_id} not found")
 
@@ -661,9 +691,10 @@ class LongRunningOperationManager:
             raise
 
         finally:
-            # Clean up
-            if operation.operation_id in self.operation_tasks:
-                del self.operation_tasks[operation.operation_id]
+            # Clean up under lock
+            async with self._lock:
+                if operation.operation_id in self.operation_tasks:
+                    del self.operation_tasks[operation.operation_id]
 
     async def _execute_with_context(
         self, operation_function: Callable, context: "OperationExecutionContext"
@@ -714,7 +745,7 @@ class LongRunningOperationManager:
                 logger.warning(f"Progress report failed: {e}")
 
     async def resume_operation(self, checkpoint_id: str) -> str:
-        """Resume operation from checkpoint"""
+        """Resume operation from checkpoint (thread-safe)"""
 
         checkpoint = await self.checkpoint_manager.load_checkpoint(checkpoint_id)
         if not checkpoint:
@@ -723,8 +754,9 @@ class LongRunningOperationManager:
         # Create new operation for resume
         new_operation_id = str(uuid.uuid4())
 
-        # Find original operation or create new one
-        original_operation = self.operations.get(checkpoint.operation_id)
+        # Find original operation under lock
+        async with self._lock:
+            original_operation = self.operations.get(checkpoint.operation_id)
         if not original_operation:
             raise ValueError(f"Original operation {checkpoint.operation_id} not found")
 
@@ -751,7 +783,8 @@ class LongRunningOperationManager:
         resumed_operation.progress.processed_items = checkpoint.processed_items
         resumed_operation.progress.total_items = checkpoint.total_items
 
-        self.operations[new_operation_id] = resumed_operation
+        async with self._lock:
+            self.operations[new_operation_id] = resumed_operation
 
         logger.info(
             f"Resuming operation from checkpoint {checkpoint_id} as {new_operation_id}"
@@ -761,18 +794,20 @@ class LongRunningOperationManager:
         await self.background_queue.put(new_operation_id)
         return new_operation_id
 
-    def get_operation(self, operation_id: str) -> Optional[LongRunningOperation]:
-        """Get operation by ID"""
-        return self.operations.get(operation_id)
+    async def get_operation(self, operation_id: str) -> Optional[LongRunningOperation]:
+        """Get operation by ID (thread-safe)"""
+        async with self._lock:
+            return self.operations.get(operation_id)
 
-    def list_operations(
+    async def list_operations(
         self,
         status_filter: Optional[OperationStatus] = None,
         operation_type_filter: Optional[OperationType] = None,
     ) -> List[LongRunningOperation]:
-        """List operations with optional filtering"""
+        """List operations with optional filtering (thread-safe)"""
 
-        operations = list(self.operations.values())
+        async with self._lock:
+            operations = list(self.operations.values())
 
         if status_filter:
             operations = [op for op in operations if op.status == status_filter]
@@ -787,16 +822,17 @@ class LongRunningOperationManager:
         return operations
 
     async def cancel_operation(self, operation_id: str) -> bool:
-        """Cancel a running operation"""
+        """Cancel a running operation (thread-safe)"""
 
-        operation = self.operations.get(operation_id)
-        if not operation:
-            return False
+        async with self._lock:
+            operation = self.operations.get(operation_id)
+            if not operation:
+                return False
 
-        if operation_id in self.operation_tasks:
-            task = self.operation_tasks[operation_id]
-            task.cancel()
-            del self.operation_tasks[operation_id]
+            task = self.operation_tasks.get(operation_id)
+            if task:
+                task.cancel()
+                del self.operation_tasks[operation_id]
 
         operation.status = OperationStatus.CANCELLED
         operation.completed_at = datetime.now()
@@ -1039,8 +1075,8 @@ if __name__ == "__main__":
 
             # Monitor operations
             while True:
-                indexing_op = manager.get_operation(indexing_op_id)
-                test_op = manager.get_operation(test_op_id)
+                indexing_op = await manager.get_operation(indexing_op_id)
+                test_op = await manager.get_operation(test_op_id)
 
                 print(
                     f"Indexing: {indexing_op.status.value} - {indexing_op.progress.progress_percentage:.1f}%"
