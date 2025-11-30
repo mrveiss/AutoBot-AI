@@ -26,6 +26,9 @@ router = APIRouter(tags=["startup", "status"])
 import threading
 _startup_lock = threading.Lock()
 
+# Async lock for WebSocket client access
+_ws_lock = asyncio.Lock()
+
 
 class StartupPhase(Enum):
     INITIALIZING = "initializing"
@@ -98,21 +101,22 @@ def add_startup_message(
 
 async def broadcast_startup_message(message: StartupMessage):
     """Broadcast startup message to all connected WebSocket clients"""
-    if not startup_state["websocket_clients"]:
-        return
+    async with _ws_lock:
+        if not startup_state["websocket_clients"]:
+            return
 
-    message_json = json.dumps(message.dict())
-    disconnected = []
+        message_json = json.dumps(message.dict())
+        disconnected = []
 
-    for websocket in startup_state["websocket_clients"]:
-        try:
-            await websocket.send_text(message_json)
-        except Exception:
-            disconnected.append(websocket)
+        for websocket in startup_state["websocket_clients"]:
+            try:
+                await websocket.send_text(message_json)
+            except Exception:
+                disconnected.append(websocket)
 
-    # Remove disconnected clients
-    for ws in disconnected:
-        startup_state["websocket_clients"].discard(ws)
+        # Remove disconnected clients
+        for ws in disconnected:
+            startup_state["websocket_clients"].discard(ws)
 
 
 @with_error_handling(
@@ -123,14 +127,18 @@ async def broadcast_startup_message(message: StartupMessage):
 @router.get("/status")
 async def get_startup_status():
     """Get current startup status"""
-    elapsed_time = time.time() - startup_state["start_time"]
+    with _startup_lock:
+        elapsed_time = time.time() - startup_state["start_time"]
+        current_phase = startup_state["current_phase"]
+        progress = startup_state["progress"]
+        messages = list(startup_state["messages"][-10:])  # Last 10 messages
 
     return {
-        "current_phase": startup_state["current_phase"].value,
-        "progress": startup_state["progress"],
-        "messages": startup_state["messages"][-10:],  # Last 10 messages
+        "current_phase": current_phase.value,
+        "progress": progress,
+        "messages": messages,
         "elapsed_time": round(elapsed_time, 1),
-        "is_ready": startup_state["current_phase"] == StartupPhase.READY,
+        "is_ready": current_phase == StartupPhase.READY,
     }
 
 
@@ -143,7 +151,9 @@ async def get_startup_status():
 async def startup_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time startup messages"""
     await websocket.accept()
-    startup_state["websocket_clients"].add(websocket)
+
+    async with _ws_lock:
+        startup_state["websocket_clients"].add(websocket)
 
     try:
         # Send current status immediately
@@ -152,8 +162,11 @@ async def startup_websocket(websocket: WebSocket):
             json.dumps({"type": "status", "data": current_status})
         )
 
-        # Send recent messages
-        for message in startup_state["messages"][-5:]:
+        # Send recent messages (get copy under lock)
+        with _startup_lock:
+            recent_messages = list(startup_state["messages"][-5:])
+
+        for message in recent_messages:
             await websocket.send_text(json.dumps({"type": "message", "data": message}))
 
         # Keep connection alive
@@ -166,7 +179,8 @@ async def startup_websocket(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Startup WebSocket error: {e}")
     finally:
-        startup_state["websocket_clients"].discard(websocket)
+        async with _ws_lock:
+            startup_state["websocket_clients"].discard(websocket)
 
 
 @with_error_handling(

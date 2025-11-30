@@ -495,13 +495,19 @@ class UserBehaviorAnalytics:
             return []
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _behavior_analytics: Optional[UserBehaviorAnalytics] = None
+_behavior_analytics_lock = threading.Lock()
 
 
 def get_behavior_analytics() -> UserBehaviorAnalytics:
-    """Get the singleton UserBehaviorAnalytics instance"""
+    """Get the singleton UserBehaviorAnalytics instance (thread-safe)."""
     global _behavior_analytics
     if _behavior_analytics is None:
-        _behavior_analytics = UserBehaviorAnalytics()
+        with _behavior_analytics_lock:
+            # Double-check after acquiring lock
+            if _behavior_analytics is None:
+                _behavior_analytics = UserBehaviorAnalytics()
     return _behavior_analytics

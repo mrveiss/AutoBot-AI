@@ -304,11 +304,17 @@ class InterruptRequest(BaseModel):
 _agent_terminal_service_instance: Optional[AgentTerminalService] = None
 
 
+# Thread-safe lock for singleton
+import threading
+
+_agent_terminal_service_lock = threading.Lock()
+
+
 def get_agent_terminal_service(
     redis_client=Depends(get_redis_client),
 ) -> AgentTerminalService:
     """
-    Get singleton AgentTerminalService instance.
+    Get singleton AgentTerminalService instance (thread-safe).
 
     IMPORTANT: This MUST return the same instance for all requests,
     otherwise sessions will be lost between API calls.
@@ -316,10 +322,13 @@ def get_agent_terminal_service(
     global _agent_terminal_service_instance
 
     if _agent_terminal_service_instance is None:
-        logger.info("Initializing AgentTerminalService singleton")
-        _agent_terminal_service_instance = AgentTerminalService(
-            redis_client=redis_client
-        )
+        with _agent_terminal_service_lock:
+            # Double-check after acquiring lock
+            if _agent_terminal_service_instance is None:
+                logger.info("Initializing AgentTerminalService singleton")
+                _agent_terminal_service_instance = AgentTerminalService(
+                    redis_client=redis_client
+                )
 
     return _agent_terminal_service_instance
 

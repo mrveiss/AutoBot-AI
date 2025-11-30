@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 # Create singleton config instance
 config = UnifiedConfigManager()
 
+# Lock for thread-safe analytics state access
+_analytics_state_lock = asyncio.Lock()
+
 
 # Simple service address function using configuration
 def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
@@ -108,15 +111,16 @@ class AnalyticsController:
         if status_code >= 400:
             self.error_counts[endpoint] += 1
 
-        # Store in analytics state
-        analytics_state["api_call_patterns"].append(
-            {
-                "endpoint": endpoint,
-                "response_time": response_time,
-                "status_code": status_code,
-                "timestamp": timestamp,
-            }
-        )
+        # Store in analytics state (thread-safe)
+        async with _analytics_state_lock:
+            analytics_state["api_call_patterns"].append(
+                {
+                    "endpoint": endpoint,
+                    "response_time": response_time,
+                    "status_code": status_code,
+                    "timestamp": timestamp,
+                }
+            )
 
         # Store in Redis for persistence
         try:
@@ -208,9 +212,10 @@ class AnalyticsController:
             ]:
                 await self._run_code_indexing(request, analysis_results)
 
-            # Store results in cache
-            analytics_state["code_analysis_cache"] = analysis_results
-            analytics_state["last_analysis_time"] = datetime.now().isoformat()
+            # Store results in cache (thread-safe)
+            async with _analytics_state_lock:
+                analytics_state["code_analysis_cache"] = analysis_results
+                analytics_state["last_analysis_time"] = datetime.now().isoformat()
 
         except Exception as e:
             logger.error(f"Code analysis failed: {e}")
