@@ -550,14 +550,20 @@ class SecurityMemoryIntegration:
         }
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _security_memory: Optional[SecurityMemoryIntegration] = None
+_security_memory_lock = _asyncio_lock.Lock()
 
 
 async def get_security_memory_integration() -> SecurityMemoryIntegration:
-    """Get or create the security memory integration singleton."""
+    """Get or create the security memory integration singleton (thread-safe)."""
     global _security_memory
     if _security_memory is None:
-        _security_memory = SecurityMemoryIntegration()
-        await _security_memory.initialize()
+        async with _security_memory_lock:
+            # Double-check after acquiring lock
+            if _security_memory is None:
+                _security_memory = SecurityMemoryIntegration()
+                await _security_memory.initialize()
     return _security_memory

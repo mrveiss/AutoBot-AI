@@ -192,15 +192,21 @@ class QueryKnowledgeIntentDetector:
             )
 
 
-# Global detector instance for reuse
+# Global detector instance for reuse (thread-safe)
+import threading as _threading_intent
+
 _query_intent_detector: Optional[QueryKnowledgeIntentDetector] = None
+_query_intent_detector_lock = _threading_intent.Lock()
 
 
 def get_query_intent_detector() -> QueryKnowledgeIntentDetector:
-    """Get or create the global query intent detector instance."""
+    """Get or create the global query intent detector instance (thread-safe)."""
     global _query_intent_detector
     if _query_intent_detector is None:
-        _query_intent_detector = QueryKnowledgeIntentDetector()
+        with _query_intent_detector_lock:
+            # Double-check after acquiring lock
+            if _query_intent_detector is None:
+                _query_intent_detector = QueryKnowledgeIntentDetector()
     return _query_intent_detector
 
 
@@ -431,15 +437,21 @@ class ConversationContextEnhancer:
         return "; ".join(reasons)
 
 
-# Global context enhancer instance
+# Global context enhancer instance (thread-safe)
+import threading as _threading_context
+
 _context_enhancer: Optional[ConversationContextEnhancer] = None
+_context_enhancer_lock = _threading_context.Lock()
 
 
 def get_context_enhancer() -> ConversationContextEnhancer:
-    """Get or create the global context enhancer instance."""
+    """Get or create the global context enhancer instance (thread-safe)."""
     global _context_enhancer
     if _context_enhancer is None:
-        _context_enhancer = ConversationContextEnhancer()
+        with _context_enhancer_lock:
+            # Double-check after acquiring lock
+            if _context_enhancer is None:
+                _context_enhancer = ConversationContextEnhancer()
     return _context_enhancer
 
 
@@ -641,15 +653,21 @@ class DocumentationSearcher:
         return "\n".join(lines)
 
 
-# Global documentation searcher instance
+# Global documentation searcher instance (thread-safe)
+import threading as _threading_doc
+
 _doc_searcher: Optional[DocumentationSearcher] = None
+_doc_searcher_lock = _threading_doc.Lock()
 
 
 def get_documentation_searcher() -> DocumentationSearcher:
-    """Get or create the global documentation searcher instance."""
+    """Get or create the global documentation searcher instance (thread-safe)."""
     global _doc_searcher
     if _doc_searcher is None:
-        _doc_searcher = DocumentationSearcher()
+        with _doc_searcher_lock:
+            # Double-check after acquiring lock
+            if _doc_searcher is None:
+                _doc_searcher = DocumentationSearcher()
     return _doc_searcher
 
 

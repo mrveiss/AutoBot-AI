@@ -521,15 +521,21 @@ class ClaudeAPIMonitor:
         logger.info("Claude API monitoring statistics reset")
 
 
-# Global monitor instance
+# Global monitor instance (thread-safe)
+import threading
+
 _global_monitor: Optional[ClaudeAPIMonitor] = None
+_global_monitor_lock = threading.Lock()
 
 
 def get_api_monitor() -> ClaudeAPIMonitor:
-    """Get the global API monitor instance"""
+    """Get the global API monitor instance (thread-safe)."""
     global _global_monitor
     if _global_monitor is None:
-        _global_monitor = ClaudeAPIMonitor()
+        with _global_monitor_lock:
+            # Double-check after acquiring lock
+            if _global_monitor is None:
+                _global_monitor = ClaudeAPIMonitor()
     return _global_monitor
 
 

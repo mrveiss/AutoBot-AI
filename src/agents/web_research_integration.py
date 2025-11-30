@@ -533,28 +533,34 @@ class WebResearchIntegration:
         return health_status
 
 
-# Global research integration instance
+# Global research integration instance (thread-safe)
+import threading
+
 _global_research_integration = None
+_global_research_integration_lock = threading.Lock()
 
 
 def get_web_research_integration(
     config: Optional[Dict[str, Any]] = None,
 ) -> WebResearchIntegration:
-    """Get or create global web research integration instance"""
+    """Get or create global web research integration instance (thread-safe)."""
     global _global_research_integration
 
     if _global_research_integration is None:
-        # Load config from config manager if not provided
-        if config is None:
-            try:
-                from src.unified_config_manager import config_manager
+        with _global_research_integration_lock:
+            # Double-check after acquiring lock
+            if _global_research_integration is None:
+                # Load config from config manager if not provided
+                if config is None:
+                    try:
+                        from src.unified_config_manager import config_manager
 
-                config = config_manager.get_nested("web_research", {})
-            except Exception as e:
-                logger.warning(f"Could not load web research config: {e}")
-                config = {}
+                        config = config_manager.get_nested("web_research", {})
+                    except Exception as e:
+                        logger.warning(f"Could not load web research config: {e}")
+                        config = {}
 
-        _global_research_integration = WebResearchIntegration(config)
+                _global_research_integration = WebResearchIntegration(config)
 
     return _global_research_integration
 

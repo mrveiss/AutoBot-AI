@@ -739,13 +739,19 @@ class PhaseProgressionManager:
         }
 
 
-# Singleton instance for global access
+# Singleton instance for global access (thread-safe)
+import threading
+
 _progression_manager = None
+_progression_manager_lock = threading.Lock()
 
 
 def get_progression_manager() -> PhaseProgressionManager:
-    """Get singleton instance of PhaseProgressionManager"""
+    """Get singleton instance of PhaseProgressionManager (thread-safe)."""
     global _progression_manager
     if _progression_manager is None:
-        _progression_manager = PhaseProgressionManager()
+        with _progression_manager_lock:
+            # Double-check after acquiring lock
+            if _progression_manager is None:
+                _progression_manager = PhaseProgressionManager()
     return _progression_manager

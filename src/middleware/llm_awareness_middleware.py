@@ -225,15 +225,21 @@ Active capabilities ({context['current_capabilities']['count']}):"""
             return {"error": str(e), "relevant_capabilities": []}
 
 
-# Global injector instance
+# Global injector instance (thread-safe)
+import threading
+
 _awareness_injector = None
+_awareness_injector_lock = threading.Lock()
 
 
 def get_awareness_injector() -> LLMAwarenessInjector:
-    """Get global awareness injector instance"""
+    """Get global awareness injector instance (thread-safe)."""
     global _awareness_injector
     if _awareness_injector is None:
-        _awareness_injector = LLMAwarenessInjector()
+        with _awareness_injector_lock:
+            # Double-check after acquiring lock
+            if _awareness_injector is None:
+                _awareness_injector = LLMAwarenessInjector()
     return _awareness_injector
 
 

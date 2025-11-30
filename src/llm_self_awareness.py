@@ -520,15 +520,21 @@ You should be aware of your current capabilities and limitations based on the sy
         return output_path
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _llm_self_awareness = None
+_llm_self_awareness_lock = threading.Lock()
 
 
 def get_llm_self_awareness() -> LLMSelfAwareness:
-    """Get singleton instance of LLM self-awareness module"""
+    """Get singleton instance of LLM self-awareness module (thread-safe)."""
     global _llm_self_awareness
     if _llm_self_awareness is None:
-        _llm_self_awareness = LLMSelfAwareness()
+        with _llm_self_awareness_lock:
+            # Double-check after acquiring lock
+            if _llm_self_awareness is None:
+                _llm_self_awareness = LLMSelfAwareness()
     return _llm_self_awareness
 
 

@@ -513,13 +513,19 @@ class CaptchaSolver:
         return None
 
 
-# Global solver instance
+# Global solver instance (thread-safe)
+import threading
+
 _captcha_solver: Optional[CaptchaSolver] = None
+_captcha_solver_lock = threading.Lock()
 
 
 def get_captcha_solver() -> CaptchaSolver:
-    """Get or create the global CaptchaSolver instance."""
+    """Get or create the global CaptchaSolver instance (thread-safe)."""
     global _captcha_solver
     if _captcha_solver is None:
-        _captcha_solver = CaptchaSolver()
+        with _captcha_solver_lock:
+            # Double-check after acquiring lock
+            if _captcha_solver is None:
+                _captcha_solver = CaptchaSolver()
     return _captcha_solver

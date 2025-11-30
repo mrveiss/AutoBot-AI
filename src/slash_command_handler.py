@@ -362,7 +362,7 @@ class SlashCommandHandler:
   • `guides` - How-to Guides
 
 **Security Assessment:**
-  • `/scan 192.168.1.0/24` - Scan a network
+  • `/scan <network/24>` - Scan a network (e.g., target subnet)
   • `/scan host.com --training` - Scan with exploitation enabled
   • `/security list` - List active assessments
   • `/security status <id>` - Check assessment progress
@@ -436,10 +436,10 @@ check the monitoring dashboard or system logs.
 **Usage:** `/scan <target> [options]`
 
 **Examples:**
-  • `/scan 192.168.1.1` - Scan single host
-  • `/scan 192.168.1.0/24` - Scan network range
+  • `/scan <target_host>` - Scan single host
+  • `/scan <target_network/24>` - Scan network range
   • `/scan example.com` - Scan by hostname
-  • `/scan 192.168.1.1 --training` - Enable training mode (exploitation)
+  • `/scan <target_host> --training` - Enable training mode (exploitation)
 
 **Options:**
   • `--training` - Enable exploitation phase (for authorized testing)
@@ -552,7 +552,7 @@ check the monitoring dashboard or system logs.
 | `/security phases` | Show workflow phases |
 
 **Quick Start:**
-  • `/scan 192.168.1.0/24` - Start new scan
+  • `/scan <target_network/24>` - Start new scan
   • `/security list` - See active assessments
   • `/security status abc123` - Check specific assessment
 
@@ -611,7 +611,7 @@ INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING"""
 No active assessments found.
 
 **Start a new scan:**
-  • `/scan 192.168.1.0/24` - Scan a network
+  • `/scan <target_network/24>` - Scan a network
   • `/scan example.com` - Scan a host"""
         else:
             lines = [
@@ -839,18 +839,24 @@ No active assessments found.
         )
 
 
-# Module-level instance for easy access
+# Module-level instance for easy access (thread-safe)
+import threading
+
 _handler_instance: Optional[SlashCommandHandler] = None
+_handler_instance_lock = threading.Lock()
 
 
 def get_slash_command_handler() -> SlashCommandHandler:
     """
-    Get or create the global slash command handler instance.
+    Get or create the global slash command handler instance (thread-safe).
 
     Returns:
         SlashCommandHandler singleton instance
     """
     global _handler_instance
     if _handler_instance is None:
-        _handler_instance = SlashCommandHandler()
+        with _handler_instance_lock:
+            # Double-check after acquiring lock
+            if _handler_instance is None:
+                _handler_instance = SlashCommandHandler()
     return _handler_instance

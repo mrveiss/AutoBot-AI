@@ -800,16 +800,22 @@ class AIHardwareAccelerator:
         return recommendations
 
 
-# Global instance
+# Global instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _ai_accelerator = None
+_ai_accelerator_lock = _asyncio_lock.Lock()
 
 
 async def get_ai_accelerator() -> AIHardwareAccelerator:
-    """Get the global AI hardware accelerator instance."""
+    """Get the global AI hardware accelerator instance (thread-safe)."""
     global _ai_accelerator
     if _ai_accelerator is None:
-        _ai_accelerator = AIHardwareAccelerator()
-        await _ai_accelerator.initialize()
+        async with _ai_accelerator_lock:
+            # Double-check after acquiring lock
+            if _ai_accelerator is None:
+                _ai_accelerator = AIHardwareAccelerator()
+                await _ai_accelerator.initialize()
     return _ai_accelerator
 
 
