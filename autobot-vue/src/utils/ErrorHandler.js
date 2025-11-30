@@ -3,6 +3,11 @@
  * Provides consistent error handling, logging, and user feedback
  */
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ErrorHandler
+const logger = createLogger('ErrorHandler');
+
 class ErrorHandler {
   constructor() {
     this.isProduction = import.meta.env.PROD;
@@ -152,17 +157,15 @@ class ErrorHandler {
 
     // Console logging based on environment
     if (!this.isProduction) {
-      console.group(`🚨 Error in ${errorInfo.context || 'Unknown Context'}`);
-      console.error('User Message:', errorInfo.userMessage);
-      console.error('Technical:', errorInfo.technicalMessage);
-      console.error('Original Error:', errorInfo.originalError);
-      if (errorInfo.stack) {
-        console.error('Stack Trace:', errorInfo.stack);
-      }
-      console.groupEnd();
+      logger.error(`Error in ${errorInfo.context || 'Unknown Context'}:`, {
+        userMessage: errorInfo.userMessage,
+        technical: errorInfo.technicalMessage,
+        originalError: errorInfo.originalError,
+        stack: errorInfo.stack
+      });
     } else {
       // Production: minimal logging
-      console.error(`Error [${errorInfo.context}]:`, errorInfo.userMessage);
+      logger.error(`Error [${errorInfo.context}]:`, errorInfo.userMessage);
     }
   }
 
@@ -180,7 +183,7 @@ class ErrorHandler {
     };
 
     if (!this.isProduction) {
-      console.warn(`⚠️ Warning [${context}]:`, message);
+      logger.warn(`Warning [${context}]:`, message);
     }
 
     // Could send to monitoring for production warnings
@@ -194,7 +197,7 @@ class ErrorHandler {
    */
   handleInfo(message, context = '') {
     if (!this.isProduction) {
-      console.info(`ℹ️ Info [${context}]:`, message);
+      logger.info(`Info [${context}]:`, message);
     }
   }
 
@@ -232,7 +235,7 @@ class ErrorHandler {
     if (type === 'error' && this.isProduction) {
       // In production, could show a modal or toast
       // For now, just ensure the error is accessible
-      console.error('User Error:', message);
+      logger.error('User Error:', message);
     }
 
     // TODO: Integrate with actual notification system

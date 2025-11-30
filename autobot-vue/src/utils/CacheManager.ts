@@ -1,6 +1,11 @@
 // AutoBot Cache Management Utility
 // Comprehensive browser cache clearing and management
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for CacheManager
+const logger = createLogger('CacheManager');
+
 export interface CacheStats {
   localStorage: number;
   sessionStorage: number;
@@ -58,7 +63,7 @@ export class CacheManager {
           cacheNames.map(name => caches.delete(name))
         );
       } catch (error) {
-        console.warn('[AutoBot CacheManager] Failed to clear browser caches:', error);
+        logger.warn('Failed to clear browser caches:', error);
       }
     }
     
@@ -89,9 +94,9 @@ export class CacheManager {
       Object.entries(preservedData).forEach(([key, value]) => {
         localStorage.setItem(key, value);
       });
-      
+
     } catch (error) {
-      console.warn('[AutoBot CacheManager] Failed to clear localStorage:', error);
+      logger.warn('Failed to clear localStorage:', error);
     }
   }
   
@@ -102,7 +107,7 @@ export class CacheManager {
     try {
       sessionStorage.clear();
     } catch (error) {
-      console.warn('[AutoBot CacheManager] Failed to clear sessionStorage:', error);
+      logger.warn('Failed to clear sessionStorage:', error);
     }
   }
   
@@ -129,7 +134,7 @@ export class CacheManager {
       
       await Promise.all(deletePromises);
     } catch (error) {
-      console.warn('[AutoBot CacheManager] Failed to clear IndexedDB:', error);
+      logger.warn('Failed to clear IndexedDB:', error);
     }
   }
   
@@ -158,7 +163,7 @@ export class CacheManager {
         await clearPromise;
       }
     } catch (error) {
-      console.warn('[AutoBot CacheManager] Failed to clear service worker caches:', error);
+      logger.warn('Failed to clear service worker caches:', error);
     }
   }
   
@@ -182,9 +187,9 @@ export class CacheManager {
           sessionStorage.removeItem(key);
         }
       });
-      
+
     } catch (error) {
-      console.warn('[AutoBot CacheManager] Failed to clear API caches:', error);
+      logger.warn('Failed to clear API caches:', error);
     }
   }
   
@@ -196,7 +201,7 @@ export class CacheManager {
     const storedVersion = localStorage.getItem(this.BUILD_VERSION_KEY);
     
     if (!storedVersion || storedVersion !== currentVersion) {
-      console.log('[AutoBot CacheManager] Version mismatch detected:', {
+      logger.info('Version mismatch detected:', {
         current: currentVersion,
         stored: storedVersion
       });

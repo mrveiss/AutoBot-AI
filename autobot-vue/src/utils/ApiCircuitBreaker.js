@@ -3,6 +3,11 @@
  * No arbitrary timeouts - immediate success/failure with smart fallback
  */
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ApiCircuitBreaker
+const logger = createLogger('CircuitBreaker');
+
 class ApiCircuitBreaker {
   constructor(options = {}) {
     // Circuit breaker settings
@@ -21,8 +26,8 @@ class ApiCircuitBreaker {
     // Performance tracking
     this.responseTimeHistory = [];
     this.maxHistorySize = 10;
-    
-    console.log('[ApiCircuitBreaker] Initialized with settings:', {
+
+    logger.info('Initialized with settings:', {
       failureThreshold: this.failureThreshold,
       recoveryTime: this.recoveryTime,
       monitoringWindow: this.monitoringWindow
@@ -89,8 +94,8 @@ class ApiCircuitBreaker {
     this.lastFailureTime = Date.now();
     this.failureCount++;
     this.requestCount++;
-    
-    console.log('[ApiCircuitBreaker] Recording failure:', {
+
+    logger.debug('Recording failure:', {
       failureCount: this.failureCount,
       threshold: this.failureThreshold,
       error: error?.message || 'Unknown error'
@@ -158,7 +163,7 @@ class ApiCircuitBreaker {
         try {
           return await fallbackHandler();
         } catch (fallbackError) {
-          console.error('[ApiCircuitBreaker] Fallback also failed:', fallbackError);
+          logger.error('Fallback also failed:', fallbackError);
           throw error;
         }
       }
@@ -173,24 +178,24 @@ class ApiCircuitBreaker {
       // Record success with response time
       const responseTime = Date.now() - startTime;
       this.recordSuccess(responseTime);
-      
-      console.log('[ApiCircuitBreaker] ✅ API call successful', {
+
+      logger.debug('API call successful', {
         responseTime: `${responseTime}ms`,
         state: this.state
       });
-      
+
       return result;
       
     } catch (error) {
       // Record failure
       this.recordFailure(error);
-      
-      console.error('[ApiCircuitBreaker] ❌ API call failed:', {
+
+      logger.error('API call failed:', {
         error: error.message,
         state: this.state,
         failureCount: this.failureCount
       });
-      
+
       throw error;
     }
   }
@@ -303,7 +308,7 @@ class EnhancedFetch {
         }
       }
     } catch (error) {
-      console.warn('[EnhancedFetch] Cache read error:', error);
+      logger.warn('Cache read error:', error);
     }
     return null;
   }
@@ -318,7 +323,7 @@ class EnhancedFetch {
         timestamp: Date.now()
       }));
     } catch (error) {
-      console.warn('[EnhancedFetch] Cache write error:', error);
+      logger.warn('Cache write error:', error);
     }
   }
 
