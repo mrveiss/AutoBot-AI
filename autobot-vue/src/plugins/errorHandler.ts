@@ -5,6 +5,10 @@
 
 import type { App } from 'vue'
 import rumAgent from '../utils/RumAgent'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for errorHandler
+const logger = createLogger('errorHandler')
 
 interface ErrorNotification {
   id: string
@@ -27,7 +31,7 @@ class GlobalErrorHandler {
   private setupGlobalHandlers() {
     // Catch unhandled promise rejections
     window.addEventListener('unhandledrejection', (event) => {
-      console.error('Unhandled promise rejection:', event.reason)
+      logger.error('Unhandled promise rejection:', event.reason)
 
       this.addNotification({
         message: this.getUnhandledRejectionMessage(event.reason),
@@ -49,7 +53,7 @@ class GlobalErrorHandler {
 
     // Catch JavaScript errors
     window.addEventListener('error', (event) => {
-      console.error('Global JavaScript error:', event.error)
+      logger.error('Global JavaScript error:', event.error)
 
       this.addNotification({
         message: this.getJavaScriptErrorMessage(event.error, event.filename, event.lineno),
@@ -97,11 +101,11 @@ class GlobalErrorHandler {
 
           // Log HTTP errors to console for debugging (especially 404s)
           if (response.status === 404) {
-            console.error(`[HTTP 404] Resource not found: ${requestUrl}`)
+            logger.error(`[HTTP 404] Resource not found: ${requestUrl}`)
           } else if (response.status >= 400 && response.status < 500) {
-            console.warn(`[HTTP ${response.status}] Client error: ${requestUrl} - ${response.statusText}`)
+            logger.warn(`[HTTP ${response.status}] Client error: ${requestUrl} - ${response.statusText}`)
           } else if (response.status >= 500) {
-            console.error(`[HTTP ${response.status}] Server error: ${requestUrl} - ${response.statusText}`)
+            logger.error(`[HTTP ${response.status}] Server error: ${requestUrl} - ${response.statusText}`)
           }
 
           if (response.status >= 500) {
@@ -136,7 +140,7 @@ class GlobalErrorHandler {
         // Don't log expected health check failures
         const isHealthCheck = typeof args[0] === 'string' && args[0].includes('/health')
         if (!isHealthCheck) {
-          console.error('Fetch error:', error)
+          logger.error('Fetch error:', error)
         }
 
         // Track network errors
@@ -282,7 +286,7 @@ export default {
     const originalErrorHandler = app.config.errorHandler
 
     app.config.errorHandler = (error, instance, info) => {
-      console.error('Vue Error:', error, info)
+      logger.error('Vue Error:', error, info)
 
       // Call original handler (RUM plugin)
       if (originalErrorHandler) {

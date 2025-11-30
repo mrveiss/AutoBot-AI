@@ -4,6 +4,10 @@
  */
 
 import { nextTick } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for RouterHealthMonitor
+const logger = createLogger('RouterHealthMonitor');
 
 class RouterHealthMonitor {
     constructor() {
@@ -62,7 +66,7 @@ class RouterHealthMonitor {
 
         // Monitor navigation errors
         this.router.onError((error) => {
-            console.warn('[RouterHealth] Navigation error:', error);
+            logger.warn('[RouterHealth] Navigation error:', error);
             // Disable automatic failure handling - was causing false positives
             // Only log errors for debugging, don't trigger recovery
             // if (!error.message.includes('Loading chunk') && !error.message.includes('ChunkLoadError')) {
@@ -210,7 +214,7 @@ class RouterHealthMonitor {
      * Handle navigation timeouts
      */
     handleNavigationTimeout(to, from) {
-        console.warn('[RouterHealth] Navigation timeout:', { to: to.path, from: from.path, timeout: this.navigationTimeout });
+        logger.warn('[RouterHealth] Navigation timeout:', { to: to.path, from: from.path, timeout: this.navigationTimeout });
 
         if (this.pendingNavigation) {
             clearTimeout(this.pendingNavigation.timeout);
@@ -308,7 +312,7 @@ class RouterHealthMonitor {
                         .filter(node => node.tagName === 'ROUTER-VIEW');
 
                     if (removedRouterViews.length > 0) {
-                        console.warn('[RouterHealth] Router-view removed from DOM');
+                        logger.warn('[RouterHealth] Router-view removed from DOM');
                         this.triggerRecovery('router_view_removed');
                     }
                 }
@@ -383,7 +387,7 @@ class RouterHealthMonitor {
                 this.failureCount = 0;
                 this.setHealthy(true);
             } catch (error) {
-                console.error('[RouterHealth] Navigation recovery failed:', error);
+                logger.error('[RouterHealth] Navigation recovery failed:', error);
                 throw error;
             }
         }
@@ -435,7 +439,7 @@ class RouterHealthMonitor {
                 try {
                     callback(data);
                 } catch (error) {
-                    console.error(`[RouterHealth] Listener error for ${event}:`, error);
+                    logger.error(`[RouterHealth] Listener error for ${event}:`, error);
                 }
             });
         }
