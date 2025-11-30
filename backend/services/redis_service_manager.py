@@ -118,28 +118,31 @@ class RedisServiceManager:
         # Error tracking for health metrics
         self._error_count: int = 0
         self._error_count_hour_start: datetime = datetime.now()
+        self._error_lock = asyncio.Lock()  # Lock for thread-safe error tracking
 
         logger.info(
             f"Redis Service Manager initialized for host={redis_host}, "
             f"service={service_name}"
         )
 
-    def _record_error(self) -> None:
-        """Record an error for health metrics tracking."""
-        now = datetime.now()
-        # Reset counter if hour has passed
-        if (now - self._error_count_hour_start).total_seconds() >= 3600:
-            self._error_count = 0
-            self._error_count_hour_start = now
-        self._error_count += 1
+    async def _record_error(self) -> None:
+        """Record an error for health metrics tracking (thread-safe)."""
+        async with self._error_lock:
+            now = datetime.now()
+            # Reset counter if hour has passed
+            if (now - self._error_count_hour_start).total_seconds() >= 3600:
+                self._error_count = 0
+                self._error_count_hour_start = now
+            self._error_count += 1
 
-    def _get_error_count_last_hour(self) -> int:
-        """Get error count for the last hour, resetting if needed."""
-        now = datetime.now()
-        if (now - self._error_count_hour_start).total_seconds() >= 3600:
-            self._error_count = 0
-            self._error_count_hour_start = now
-        return self._error_count
+    async def _get_error_count_last_hour(self) -> int:
+        """Get error count for the last hour, resetting if needed (thread-safe)."""
+        async with self._error_lock:
+            now = datetime.now()
+            if (now - self._error_count_hour_start).total_seconds() >= 3600:
+                self._error_count = 0
+                self._error_count_hour_start = now
+            return self._error_count
 
     async def start(self):
         """Start Redis Service Manager"""
@@ -198,7 +201,7 @@ class RedisServiceManager:
 
         except Exception as e:
             logger.error(f"Failed to execute systemctl {command}: {e}")
-            self._record_error()
+            await self._record_error()
             raise RedisConnectionError(
                 f"Cannot execute command on Redis VM: {str(e)}"
             ) from e
@@ -275,7 +278,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Start service failed: {e}")
-            self._record_error()
+            await self._record_error()
 
             self._audit_log(
                 "redis_service_start_failed", {"error": str(e)}, user_id=user_id
@@ -363,7 +366,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Stop service failed: {e}")
-            self._record_error()
+            await self._record_error()
 
             self._audit_log(
                 "redis_service_stop_failed", {"error": str(e)}, user_id=user_id
@@ -438,7 +441,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Restart service failed: {e}")
-            self._record_error()
+            await self._record_error()
 
             self._audit_log(
                 "redis_service_restart_failed", {"error": str(e)}, user_id=user_id
@@ -500,8 +503,8 @@ class RedisServiceManager:
                         pid_str = line.split("Main PID:")[1].strip().split()[0]
                         pid = int(pid_str) if pid_str.isdigit() else None
                         break
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to parse PID from status output: {e}")
 
             service_status = ServiceStatus(
                 status=status, pid=pid, last_check=datetime.now()
@@ -515,7 +518,7 @@ class RedisServiceManager:
 
         except Exception as e:
             logger.error(f"Failed to get service status: {e}")
-            self._record_error()
+            await self._record_error()
             return ServiceStatus(status="unknown", last_check=datetime.now())
 
     async def get_health(self) -> HealthStatus:
@@ -583,18 +586,18 @@ class RedisServiceManager:
                 connectivity=connectivity,
                 response_time_ms=response_time_ms,
                 last_successful_command=datetime.now() if connectivity else None,
-                error_count_last_hour=self._get_error_count_last_hour(),
+                error_count_last_hour=await self._get_error_count_last_hour(),
                 recommendations=recommendations,
             )
 
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            self._record_error()
+            await self._record_error()
             return HealthStatus(
                 overall_status="critical",
                 service_running=False,
                 connectivity=False,
                 response_time_ms=0.0,
-                error_count_last_hour=self._get_error_count_last_hour(),
+                error_count_last_hour=await self._get_error_count_last_hour(),
                 recommendations=["Health check failed - cannot determine status"],
             )

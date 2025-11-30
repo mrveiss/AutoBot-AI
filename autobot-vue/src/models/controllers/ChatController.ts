@@ -3,6 +3,9 @@ import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import type { ChatMessage, ChatSession } from '@/stores/useChatStore'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatController')
 
 export class ChatController {
   // FIXED: Lazy initialization - stores only created when accessed, not at module load
@@ -29,7 +32,7 @@ export class ChatController {
       try {
         this._appStore = useAppStore()
       } catch (error) {
-        console.warn('[ChatController] AppStore not available, running without store integration')
+        logger.warn('AppStore not available, running without store integration')
         return null
       }
     }
@@ -89,7 +92,7 @@ export class ChatController {
 
         } catch (error: any) {
           lastError = error
-          console.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, error.message)
+          logger.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, error.message)
 
           if (attempt < this.retryAttempts) {
             // Wait before retrying
@@ -133,7 +136,7 @@ export class ChatController {
       return await chatRepository.sendMessage(request.message, request.chatId, request.options)
     } catch (error: any) {
       // Enhanced error context for debugging
-      console.error(`Chat message send attempt ${attempt} failed:`, {
+      logger.error(`Chat message send attempt ${attempt} failed:`, {
         error: error.message,
         status: error.status,
         chatId: request.chatId,
@@ -192,13 +195,13 @@ export class ChatController {
     let buffer = ''
 
     try {
-      console.log('[ChatController] Starting to read streaming response')
+      logger.debug('Starting to read streaming response')
 
       while (true) {
         const { done, value } = await reader.read()
 
         if (done) {
-          console.log('[ChatController] Stream completed')
+          logger.debug('Stream completed')
           break
         }
 
@@ -219,14 +222,14 @@ export class ChatController {
               if (!jsonStr) continue
 
               const data = JSON.parse(jsonStr)
-              console.log('[ChatController] Received stream data:', data.type || 'unknown')
+              logger.debug('Received stream data:', data.type || 'unknown')
 
               if (data.type === 'start') {
-                console.log('[ChatController] Stream started:', data.session_id)
+                logger.debug('Stream started:', data.session_id)
               } else if (data.type === 'command_approval_request') {
                 // CRITICAL FIX: Stop typing indicator when approval is requested
                 // Backend is waiting for user approval - no more streaming until approved/denied
-                console.log('[ChatController] Approval request detected - stopping typing indicator')
+                logger.debug('Approval request detected - stopping typing indicator')
                 this.chatStore.setTyping(false)
 
                 // Add approval request message to chat
@@ -241,10 +244,10 @@ export class ChatController {
                   }
                 })
               } else if (data.type === 'end') {
-                console.log('[ChatController] Stream ended')
+                logger.debug('Stream ended')
               } else if (data.type === 'error') {
                 // Display error as message content instead of throwing
-                console.error('[ChatController] Stream error:', data.content)
+                logger.error('Stream error:', data.content)
                 accumulatedContent += `⚠️ Error: ${data.content || 'Stream error'}`
                 this.chatStore.updateMessage(assistantMessageId, {
                   content: accumulatedContent,
@@ -282,7 +285,7 @@ export class ChatController {
                 })
               }
             } catch (e) {
-              console.warn('[ChatController] Failed to parse stream data:', line, e)
+              logger.warn('Failed to parse stream data:', line, e)
             }
           }
         }
@@ -297,7 +300,7 @@ export class ChatController {
       }
 
     } catch (error) {
-      console.error('[ChatController] Streaming response error:', error)
+      logger.error('Streaming response error:', error)
       this.chatStore.updateMessage(assistantMessageId, {
         content: accumulatedContent || 'Response was interrupted due to an error.',
         status: 'error'
@@ -357,9 +360,9 @@ export class ChatController {
       // Sync with backend with retry logic
       try {
         await chatRepository.createNewChat(title)
-        console.log('New chat session synced with backend:', sessionId)
+        logger.debug('New chat session synced with backend:', sessionId)
       } catch (error) {
-        console.warn('Failed to sync new chat with backend, continuing with local session:', error)
+        logger.warn('Failed to sync new chat with backend, continuing with local session:', error)
         // Don't throw error here, allow local session to work
       }
 
@@ -387,13 +390,13 @@ export class ChatController {
         sessions.forEach(session => {
           this.chatStore.importSession(session)
         })
-        console.log(`Loaded ${sessions.length} chat sessions`)
+        logger.debug(`Loaded ${sessions.length} chat sessions`)
       } else {
-        console.warn('getChatList() returned non-array value:', sessions)
+        logger.warn('getChatList() returned non-array value:', sessions)
       }
 
     } catch (error: any) {
-      console.error('Failed to load chat sessions:', error)
+      logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${error.message}`)
     } finally {
@@ -403,26 +406,26 @@ export class ChatController {
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
-      console.log(`[ChatController] 🔍 Loading messages for session: ${sessionId}`)
+      logger.debug(`Loading messages for session: ${sessionId}`)
       this.getAppStore()?.setLoading(true, 'Loading messages...')
 
       const messages = await chatRepository.getChatMessages(sessionId)
-      console.log(`[ChatController] 📦 Received ${messages.length} messages from repository`)
+      logger.debug(`Received ${messages.length} messages from repository`)
 
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
-        console.log(`[ChatController] 📝 Found session in store, updating messages (before: ${session.messages.length}, after: ${messages.length})`)
+        logger.debug(`Found session in store, updating messages (before: ${session.messages.length}, after: ${messages.length})`)
         session.messages = messages as any // Type assertion: repository transforms messages to match store format
         this.chatStore.switchToSession(sessionId)
-        console.log(`[ChatController] ✅ Loaded ${messages.length} messages for session ${sessionId}`)
-        console.log(`[ChatController] 🔍 Store currentMessages count: ${this.chatStore.currentMessages.length}`)
+        logger.debug(`Loaded ${messages.length} messages for session ${sessionId}`)
+        logger.debug(`Store currentMessages count: ${this.chatStore.currentMessages.length}`)
       } else {
-        console.error(`[ChatController] ❌ Session ${sessionId} not found in store! Store has ${this.chatStore.sessions.length} sessions:`, this.chatStore.sessions.map(s => s.id))
+        logger.error(`Session ${sessionId} not found in store! Store has ${this.chatStore.sessions.length} sessions:`, this.chatStore.sessions.map(s => s.id))
       }
 
     } catch (error: any) {
-      console.error('[ChatController] ❌ Failed to load messages:', error)
+      logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(`Failed to load messages: ${error.message}`)
     } finally {
       this.getAppStore()?.setLoading(false)
@@ -444,10 +447,10 @@ export class ChatController {
         name: session.name || ''
       })
 
-      console.log('Chat session saved successfully:', targetSessionId)
+      logger.debug('Chat session saved successfully:', targetSessionId)
 
     } catch (error: any) {
-      console.error('Failed to save chat session:', error)
+      logger.error('Failed to save chat session:', error)
       this.getAppStore()?.setGlobalError(`Failed to save chat: ${error.message}`)
     }
   }
@@ -468,21 +471,21 @@ export class ChatController {
       try {
         await chatRepository.deleteChat(sessionId, fileAction, fileOptions)
         if (fileAction) {
-          console.log(`File action executed: ${fileAction}`, fileOptions)
+          logger.debug(`File action executed: ${fileAction}`, fileOptions)
         }
         backendDeleteSucceeded = true
-        console.log('Chat successfully deleted from backend:', sessionId)
+        logger.debug('Chat successfully deleted from backend:', sessionId)
       } catch (error: any) {
-        console.error('Backend deletion failed:', error)
+        logger.error('Backend deletion failed:', error)
         // Don't throw yet - we'll handle this based on error type
 
         // If it's a 404 (chat not found), still proceed with local deletion
         if (error.status === 404) {
-          console.warn('Chat not found on backend, proceeding with local deletion')
+          logger.warn('Chat not found on backend, proceeding with local deletion')
           backendDeleteSucceeded = true // Treat as success since it's already gone
         } else {
           // For other errors, show user error but still try local deletion
-          console.warn('Backend deletion failed, but proceeding with local deletion to maintain consistency')
+          logger.warn('Backend deletion failed, but proceeding with local deletion to maintain consistency')
           this.getAppStore()?.setGlobalError(`Backend deletion failed: ${error.message}. Chat removed locally.`)
         }
       }
@@ -499,7 +502,7 @@ export class ChatController {
         const afterCount = this.chatStore.sessions.length
         if (afterCount < beforeCount) {
           storeDeleteSucceeded = true
-          console.log('Chat successfully deleted from store:', sessionId)
+          logger.debug('Chat successfully deleted from store:', sessionId)
 
           // CRITICAL FIX: Force persistence to ensure localStorage is updated immediately
           // Since Pinia persistence is automatic, we'll add a small delay to ensure it completes
@@ -512,33 +515,33 @@ export class ChatController {
               const parsed = JSON.parse(persistedData)
               const persistedSession = parsed.sessions?.find((s: any) => s.id === sessionId)
               if (!persistedSession) {
-                console.log('✅ Chat deletion confirmed in localStorage')
+                logger.debug('Chat deletion confirmed in localStorage')
               } else {
-                console.warn('⚠️ Chat still exists in localStorage - persistence may have failed')
+                logger.warn('Chat still exists in localStorage - persistence may have failed')
               }
             }
           } catch (persistError) {
-            console.warn('Could not verify localStorage persistence:', persistError)
+            logger.warn('Could not verify localStorage persistence:', persistError)
           }
 
         } else {
-          console.warn('Store deletion did not reduce session count - session may not have existed')
+          logger.warn('Store deletion did not reduce session count - session may not have existed')
           storeDeleteSucceeded = true // If it wasn't there, consider it a success
         }
       } catch (error: any) {
-        console.error('Store deletion failed:', error)
+        logger.error('Store deletion failed:', error)
         throw new Error(`Failed to delete chat from local storage: ${error.message}`)
       }
 
       // Step 3: Report final status
       if (storeDeleteSucceeded) {
-        console.log(`✅ Chat session ${sessionId} successfully deleted (Backend: ${backendDeleteSucceeded ? 'Success' : 'Failed'}, Store: Success)`)
+        logger.debug(`Chat session ${sessionId} successfully deleted (Backend: ${backendDeleteSucceeded ? 'Success' : 'Failed'}, Store: Success)`)
       } else {
         throw new Error('Failed to delete chat from local storage')
       }
 
     } catch (error: any) {
-      console.error('Failed to delete chat session:', error)
+      logger.error('Failed to delete chat session:', error)
       this.getAppStore()?.setGlobalError(`Failed to delete chat: ${error.message}`)
       throw error // Re-throw to let caller handle
     } finally {
@@ -557,12 +560,12 @@ export class ChatController {
   }
 
   async switchToSession(sessionId: string): Promise<void> {
-    console.log(`[ChatController] 🔀 Switching to session: ${sessionId}`)
+    logger.debug(`Switching to session: ${sessionId}`)
     this.chatStore.switchToSession(sessionId)
-    console.log(`[ChatController] 📲 Calling loadChatMessages...`)
+    logger.debug('Calling loadChatMessages...')
     // Load messages from backend when switching sessions
     await this.loadChatMessages(sessionId)
-    console.log(`[ChatController] ✅ Switch complete, currentSessionId: ${this.chatStore.currentSessionId}`)
+    logger.debug(`Switch complete, currentSessionId: ${this.chatStore.currentSessionId}`)
   }
 
   updateSessionTitle(sessionId: string, title: string): void {
@@ -612,7 +615,7 @@ export class ChatController {
       // Note: cleanupAllChatData doesn't exist in repository, clearing from store only
       this.chatStore.clearAllSessions()
 
-      console.log('All chats cleared successfully')
+      logger.debug('All chats cleared successfully')
 
     } catch (error: any) {
       this.getAppStore()?.setGlobalError(`Failed to clear chats: ${error.message}`)
@@ -631,7 +634,7 @@ export class ChatController {
     setInterval(() => {
       if (this.chatStore.settings.autoSave && this.chatStore.currentSessionId) {
         this.saveChatSession().catch(error => {
-          console.warn('Auto-save failed:', error)
+          logger.warn('Auto-save failed:', error)
           // Don't show global error for auto-save failures
         })
       }
@@ -708,11 +711,11 @@ export class ChatController {
         }
       }
 
-      console.log('Connection test successful')
+      logger.debug('Connection test successful')
       return true
 
     } catch (error) {
-      console.error('Connection test failed:', error)
+      logger.error('Connection test failed:', error)
       return false
     } finally {
       this.getAppStore()?.setLoading(false)

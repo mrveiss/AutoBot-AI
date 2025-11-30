@@ -105,6 +105,9 @@ import { formatDateTime } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('FailedVectorizationsManager')
 
 interface FailedJob {
   job_id: string
@@ -151,12 +154,12 @@ const retryJob = async (jobId: string) => {
       // Remove from failed list
       failedJobs.value = failedJobs.value.filter(job => job.job_id !== jobId)
 
-      console.log(`[FailedVectorizationsManager] Job ${jobId} retry started as ${data.new_job_id}`)
+      logger.debug(`Job ${jobId} retry started as ${data.new_job_id}`)
     } else {
       error.value = new Error(`Failed to retry job: ${data.message || 'Unknown error'}`)
     }
   } catch (err) {
-    console.error('[FailedVectorizationsManager] Error retrying job:', err)
+    logger.error('Error retrying job:', err)
     error.value = new Error(`Error retrying job: ${err}`)
   } finally {
     retryingJobs.value.delete(jobId)
@@ -194,7 +197,7 @@ const clearAllFailed = async () => {
 
     if (data.status === 'success') {
       failedJobs.value = []
-      console.log(`[FailedVectorizationsManager] Cleared ${data.deleted_count} failed jobs`)
+      logger.debug(`Cleared ${data.deleted_count} failed jobs`)
     } else {
       throw new Error(data.message || 'Failed to clear jobs')
     }

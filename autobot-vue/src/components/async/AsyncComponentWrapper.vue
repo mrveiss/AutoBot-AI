@@ -44,6 +44,9 @@
 import { ref, computed, onUnmounted, inject, withDefaults, useAttrs } from 'vue'
 import type { Component, AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from './AsyncErrorFallback.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AsyncComponentWrapper')
 
 // Disable automatic attribute inheritance to handle manually
 defineOptions({
@@ -136,7 +139,7 @@ async function loadComponent(attempt = 1): Promise<void> {
       retryCount.value = 0
     }
   } catch (error: unknown) {
-    console.error(`[AsyncWrapper] Failed to load ${props.componentName}:`, error)
+    logger.error(`Failed to load ${props.componentName}:`, error)
 
     // Properly type the error
     const typedError = error instanceof Error ? error : new Error(String(error))
@@ -162,7 +165,7 @@ async function loadComponent(attempt = 1): Promise<void> {
       return loadComponent(attempt + 1)
     } else {
       // Max retries reached
-      console.error(`[AsyncWrapper] Max retries reached for ${props.componentName}`)
+      logger.error(`Max retries reached for ${props.componentName}`)
       showAsyncError.value = true
       emit('error', typedError)
     }
@@ -173,14 +176,14 @@ async function loadComponent(attempt = 1): Promise<void> {
 }
 
 function handleAsyncError(error: Error) {
-  console.error(`[AsyncWrapper] Suspense error in ${props.componentName}:`, error)
+  logger.error(`Suspense error in ${props.componentName}:`, error)
   asyncError.value = error
   showAsyncError.value = true
   emit('error', error)
 }
 
 function handleComponentError(error: Error) {
-  console.error(`[AsyncWrapper] Component error in ${props.componentName}:`, error)
+  logger.error(`Component error in ${props.componentName}:`, error)
   asyncError.value = error
   emit('error', error)
 }

@@ -401,9 +401,11 @@ class AnalyticsController:
                 ),
             }
 
-            # WebSocket usage
+            # WebSocket usage (thread-safe access)
+            async with _analytics_state_lock:
+                active_ws_connections = len(analytics_state["websocket_connections"])
             stats["websocket_usage"] = {
-                "active_connections": len(analytics_state["websocket_connections"]),
+                "active_connections": active_ws_connections,
                 "activity_by_type": dict(self.websocket_activity),
             }
 
@@ -442,9 +444,13 @@ class AnalyticsController:
         trends = {}
 
         try:
-            # Performance trends from history
-            if analytics_state["performance_history"]:
-                recent_performance = list(analytics_state["performance_history"])[-50:]
+            # Performance trends from history (thread-safe access)
+            async with _analytics_state_lock:
+                performance_history_copy = list(analytics_state["performance_history"])
+                api_patterns_copy = list(analytics_state["api_call_patterns"])
+
+            if performance_history_copy:
+                recent_performance = performance_history_copy[-50:]
 
                 # Calculate trends
                 cpu_trend = self._calculate_trend(
@@ -463,7 +469,7 @@ class AnalyticsController:
                 }
 
             # API usage trends
-            recent_calls = list(analytics_state["api_call_patterns"])[-100:]
+            recent_calls = api_patterns_copy[-100:]
             if recent_calls:
                 response_times = [call["response_time"] for call in recent_calls]
                 response_time_trend = self._calculate_trend(response_times)

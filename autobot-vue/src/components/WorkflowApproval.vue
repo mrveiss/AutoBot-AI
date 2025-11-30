@@ -198,6 +198,9 @@ import type { WorkflowResponse } from '@/types/models'
 import { formatDateTime as formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('WorkflowApproval')
 
 // Types
 interface Workflow {
@@ -243,7 +246,7 @@ const loadWorkflows = async () => {
     const response = await apiService.get('/api/workflow/workflows') as { workflows?: any[] }
     workflows.value = response.workflows || []
   } catch (error) {
-    console.error('Failed to load workflows:', error)
+    logger.error('Failed to load workflows:', error)
   } finally {
     loading.value = false
   }
@@ -260,7 +263,7 @@ const selectWorkflow = async (workflowId: string) => {
     selectedWorkflow.value = workflowResponse.workflow as unknown as Workflow
     workflowSteps.value = (workflowResponse.workflow.steps || []) as unknown as WorkflowStep[]
   } catch (error) {
-    console.error('Failed to load workflow details:', error)
+    logger.error('Failed to load workflow details:', error)
   }
 }
 
@@ -280,7 +283,7 @@ const approveStep = async (workflowId: string, stepId: string) => {
     await selectWorkflow(workflowId)
 
   } catch (error) {
-    console.error('Failed to approve step:', error)
+    logger.error('Failed to approve step:', error)
   } finally {
     approvingSteps.value.delete(stepId)
   }
@@ -302,7 +305,7 @@ const denyStep = async (workflowId: string, stepId: string) => {
     await selectWorkflow(workflowId)
 
   } catch (error) {
-    console.error('Failed to deny step:', error)
+    logger.error('Failed to deny step:', error)
   } finally {
     approvingSteps.value.delete(stepId)
   }
@@ -324,7 +327,7 @@ const cancelWorkflow = async (workflowId: string) => {
       workflowSteps.value = []
     }
   } catch (error) {
-    console.error('Failed to cancel workflow:', error)
+    logger.error('Failed to cancel workflow:', error)
   }
 }
 

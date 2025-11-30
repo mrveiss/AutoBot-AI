@@ -78,6 +78,9 @@ import { useTerminalStore } from '@/composables/useTerminalStore'
 import { useTerminalService } from '@/services/TerminalService'
 import type { Terminal } from '@xterm/xterm'
 import appConfig from '@/config/AppConfig.js'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatTerminal')
 
 // Props
 interface Props {
@@ -211,13 +214,13 @@ const saveScrollback = (content: string) => {
       const existing = localStorage.getItem(SCROLLBACK_KEY.value) || ''
       const newContent = existing + content
       localStorage.setItem(SCROLLBACK_KEY.value, newContent)
-      console.log('[ChatTerminal] Saved scrollback:', {
+      logger.debug('Saved scrollback:', {
         contentLength: content.length,
         totalLength: newContent.length,
         key: SCROLLBACK_KEY.value
       })
     } catch (error) {
-      console.error('[ChatTerminal] Failed to save scrollback:', error)
+      logger.error('Failed to save scrollback:', error)
     }
   }
 }
@@ -227,7 +230,7 @@ const loadScrollback = (): string | null => {
     try {
       return localStorage.getItem(SCROLLBACK_KEY.value)
     } catch (error) {
-      console.error('[ChatTerminal] Failed to load scrollback:', error)
+      logger.error('Failed to load scrollback:', error)
     }
   }
   return null
@@ -238,7 +241,7 @@ const clearScrollback = () => {
     try {
       localStorage.removeItem(SCROLLBACK_KEY.value)
     } catch (error) {
-      console.error('[ChatTerminal] Failed to clear scrollback:', error)
+      logger.error('Failed to clear scrollback:', error)
     }
   }
 }
@@ -249,7 +252,7 @@ const handleTerminalReady = (term: Terminal) => {
 
   // Restore previous scrollback if exists
   const previousContent = loadScrollback()
-  console.log('[ChatTerminal] Scrollback restore:', {
+  logger.debug('Scrollback restore:', {
     hasContent: !!previousContent,
     contentLength: previousContent?.length || 0,
     firstChars: previousContent?.substring(0, 100) || 'none',
@@ -275,7 +278,7 @@ const handleTerminalReady = (term: Terminal) => {
 const handleTerminalData = (data: string) => {
   // Only allow input in user control mode
   if (!isConnected.value || isAgentControlled.value) {
-    console.warn('[ChatTerminal] Input blocked:', {
+    logger.warn('Input blocked:', {
       isConnected: isConnected.value,
       isAgentControlled: isAgentControlled.value
     })
@@ -284,7 +287,7 @@ const handleTerminalData = (data: string) => {
 
   const wsSessionId = ptySessionId.value || backendSessionId.value
   if (!wsSessionId) {
-    console.warn('[ChatTerminal] No WebSocket session ID')
+    logger.warn('No WebSocket session ID')
     return
   }
 
@@ -302,13 +305,13 @@ const handleTerminalResize = (cols: number, rows: number) => {
 }
 
 const connectTerminal = async () => {
-  console.log('[ChatTerminal] connectTerminal() called', { isConnected: isConnected.value })
+  logger.debug('connectTerminal() called', { isConnected: isConnected.value })
   if (isConnected.value) return
 
   try {
     // Create session in store (defaults to 'agent' mode - user approves commands via dialog)
     const host = terminalStore.selectedHost
-    console.log('[ChatTerminal] Creating session in store:', { sessionId: sessionId.value, host })
+    logger.debug('Creating session in store:', { sessionId: sessionId.value, host })
     terminalStore.createSession(sessionId.value, host)
 
     // CRITICAL: Use Agent Terminal API to ensure approval workflow works
@@ -371,7 +374,7 @@ const connectTerminal = async () => {
     // CRITICAL: Use PTY session ID for WebSocket, NOT agent terminal session ID
     const wsSessionId = ptySessionId.value || backendSession
 
-    console.log('[ChatTerminal] Session IDs:', {
+    logger.debug('Session IDs:', {
       frontend: sessionId.value,
       backend: backendSessionId.value,
       pty: ptySessionId.value,
@@ -419,7 +422,7 @@ const connectTerminal = async () => {
       terminal.value.focus()
     }
   } catch (error) {
-    console.error('[ChatTerminal] Connection failed:', error)
+    logger.error('Connection failed:', error)
     terminalStore.updateSessionStatus(sessionId.value, 'error')
 
     if (terminal.value) {
@@ -456,7 +459,7 @@ const clearTerminal = () => {
 
 const toggleControl = async () => {
   if (!backendSessionId.value) {
-    console.error('[ChatTerminal] No backend session ID for control toggle')
+    logger.error('No backend session ID for control toggle')
     return
   }
 
@@ -480,7 +483,7 @@ const toggleControl = async () => {
           terminal.value.focus()
         }
       } else {
-        console.error('[ChatTerminal] Failed to interrupt agent session:', await response.text())
+        logger.error('Failed to interrupt agent session:', await response.text())
         if (terminal.value) {
           terminal.value.writeln('\x1b[1;31m>>> Failed to take control <<<\x1b[0m')
         }
@@ -500,14 +503,14 @@ const toggleControl = async () => {
           terminal.value.blur()
         }
       } else {
-        console.error('[ChatTerminal] Failed to resume agent session:', await response.text())
+        logger.error('Failed to resume agent session:', await response.text())
         if (terminal.value) {
           terminal.value.writeln('\x1b[1;31m>>> Failed to activate agent control <<<\x1b[0m')
         }
       }
     }
   } catch (error) {
-    console.error('[ChatTerminal] Error toggling control:', error)
+    logger.error('Error toggling control:', error)
     if (terminal.value) {
       terminal.value.writeln('\x1b[1;31m>>> Control toggle failed <<<\x1b[0m')
     }

@@ -7,6 +7,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('WorkflowAutomation')
 
 interface WorkflowStep {
   stepNumber: number
@@ -344,7 +347,7 @@ const handleWorkflowMessage = (message: string) => {
       processNextAutomationStep()
     }
   } catch (error) {
-    console.warn('Failed to parse workflow message:', error)
+    logger.warn('Failed to parse workflow message:', error)
   }
 }
 

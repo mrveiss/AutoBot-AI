@@ -83,8 +83,8 @@ class SystemIntegration:
                         if len(parts) > 1:
                             info["windows_os_name"] = parts[0].strip('"')
                             info["windows_os_version"] = parts[1].strip('"')
-                except Exception:
-                    pass  # Ignore parsing errors
+                except Exception as e:
+                    logger.debug(f"Failed to parse Windows systeminfo: {e}")
 
         elif self.os_type == "Linux":
             # Example: Get distribution info

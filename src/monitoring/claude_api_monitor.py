@@ -10,6 +10,7 @@ and prevent rate limit issues during development conversations.
 
 import logging
 import statistics
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
@@ -52,6 +53,7 @@ class UsageTracker:
         self.call_history = deque(maxlen=history_limit)
         self.tool_usage = defaultdict(list)
         self.error_patterns = defaultdict(int)
+        self._stats_lock = threading.Lock()  # Lock for thread-safe stats access
 
         # Performance metrics
         self.total_calls = 0
@@ -60,25 +62,28 @@ class UsageTracker:
         self.total_response_time = 0.0
 
     def add_call(self, record: APICallRecord):
-        """Add a new API call record"""
-        self.call_history.append(record)
-        self.total_calls += 1
-        self.total_payload_size += record.payload_size
-        self.total_response_size += record.response_size
-        self.total_response_time += record.response_time
+        """Add a new API call record (thread-safe)"""
+        # CRITICAL: Protect shared state modifications with lock
+        with self._stats_lock:
+            self.call_history.append(record)
+            self.total_calls += 1
+            self.total_payload_size += record.payload_size
+            self.total_response_size += record.response_size
+            self.total_response_time += record.response_time
 
-        # Track tool usage
-        if record.tool_name:
-            self.tool_usage[record.tool_name].append(record)
+            # Track tool usage
+            if record.tool_name:
+                self.tool_usage[record.tool_name].append(record)
 
-        # Track error patterns
-        if not record.success and record.error_type:
-            self.error_patterns[record.error_type] += 1
+            # Track error patterns
+            if not record.success and record.error_type:
+                self.error_patterns[record.error_type] += 1
 
     def get_recent_calls(self, minutes: int = 60) -> List[APICallRecord]:
-        """Get calls from the last N minutes"""
+        """Get calls from the last N minutes (thread-safe)"""
         cutoff = time.time() - (minutes * 60)
-        return [call for call in self.call_history if call.timestamp > cutoff]
+        with self._stats_lock:
+            return [call for call in self.call_history if call.timestamp > cutoff]
 
     def calculate_usage_rate(self, window_minutes: int = 60) -> float:
         """Calculate calls per minute in the given window"""
@@ -120,10 +125,14 @@ class UsageTracker:
         }
 
     def get_tool_usage_stats(self) -> Dict[str, Dict[str, Any]]:
-        """Get usage statistics per tool"""
+        """Get usage statistics per tool (thread-safe)"""
         stats = {}
 
-        for tool_name, calls in self.tool_usage.items():
+        # CRITICAL: Snapshot tool_usage under lock to prevent race conditions
+        with self._stats_lock:
+            tool_usage_copy = {k: list(v) for k, v in self.tool_usage.items()}
+
+        for tool_name, calls in tool_usage_copy.items():
             recent_calls = [
                 call for call in calls if time.time() - call.timestamp <= 3600
             ]  # Last hour
@@ -522,8 +531,6 @@ class ClaudeAPIMonitor:
 
 
 # Global monitor instance (thread-safe)
-import threading
-
 _global_monitor: Optional[ClaudeAPIMonitor] = None
 _global_monitor_lock = threading.Lock()
 

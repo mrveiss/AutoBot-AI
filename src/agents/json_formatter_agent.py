@@ -12,6 +12,7 @@ and data type validation.
 import json
 import logging
 import re
+import threading
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -49,6 +50,7 @@ class JSONFormatterAgent:
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.parse_attempts = 0
         self.successful_parses = 0
+        self._stats_lock = threading.Lock()  # Lock for thread-safe counter access
 
         # Common patterns for broken JSON
         self.cleanup_patterns = [
@@ -71,7 +73,8 @@ class JSONFormatterAgent:
         Returns:
             JSONParseResult with parsed data and metadata
         """
-        self.parse_attempts += 1
+        with self._stats_lock:
+            self.parse_attempts += 1
 
         if not response or not response.strip():
             return JSONParseResult(
@@ -87,7 +90,8 @@ class JSONFormatterAgent:
         try:
             parsed = json.loads(response.strip())
             if isinstance(parsed, dict):
-                self.successful_parses += 1
+                with self._stats_lock:
+                    self.successful_parses += 1
                 return JSONParseResult(
                     success=True,
                     data=parsed,
@@ -137,7 +141,8 @@ class JSONFormatterAgent:
                 try:
                     parsed = json.loads(match)
                     if isinstance(parsed, dict) and parsed:  # Valid non-empty dict
-                        self.successful_parses += 1
+                        with self._stats_lock:
+                            self.successful_parses += 1
                         confidence = 0.9 if len(matches) == 1 else 0.7
                         if len(matches) > 1:
                             warnings.append(
@@ -217,7 +222,8 @@ class JSONFormatterAgent:
         try:
             parsed = json.loads(json_content)
             if isinstance(parsed, dict):
-                self.successful_parses += 1
+                with self._stats_lock:
+                    self.successful_parses += 1
                 confidence = 0.8 - (
                     len(fixes_applied) * 0.1
                 )  # Lower confidence for more fixes
@@ -291,7 +297,8 @@ class JSONFormatterAgent:
                             reconstructed[field_name] = value.strip('"')
 
                 if reconstructed:
-                    self.successful_parses += 1
+                    with self._stats_lock:
+                        self.successful_parses += 1
                     warnings.append(
                         f"Reconstructed from {len(matches)} empty key patterns"
                     )
@@ -340,7 +347,7 @@ class JSONFormatterAgent:
                         fallback[field] = typed_value
                         warnings.append(f"Extracted {field} from text")
                     except Exception:
-                        pass
+                        pass  # Type conversion failed, skip field
         else:
             # Create minimal JSON
             fallback = {"error": "failed_to_parse", "original_text": text[:100]}

@@ -421,6 +421,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('CodeQualityDashboard');
 
 // Types
 interface HealthScore {
@@ -602,7 +605,7 @@ async function refreshData(): Promise<void> {
       loadSnapshot(),
     ]);
   } catch (error) {
-    console.error('Failed to refresh data:', error);
+    logger.error('Failed to refresh data:', error);
   } finally {
     loading.value = false;
   }
@@ -615,7 +618,7 @@ async function loadHealthScore(): Promise<void> {
       healthScore.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load health score:', error);
+    logger.error('Failed to load health score:', error);
     // Demo data
     healthScore.value = {
       overall: 73.5,
@@ -645,7 +648,7 @@ async function loadMetrics(): Promise<void> {
       metrics.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load metrics:', error);
+    logger.error('Failed to load metrics:', error);
     metrics.value = [
       { name: 'Maintainability', category: 'maintainability', value: 75.5, grade: 'C', trend: 1.2, weight: 0.25 },
       { name: 'Reliability', category: 'reliability', value: 82.3, grade: 'B', trend: 0.8, weight: 0.20 },
@@ -664,7 +667,7 @@ async function loadPatterns(): Promise<void> {
       patterns.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load patterns:', error);
+    logger.error('Failed to load patterns:', error);
     patterns.value = [
       { type: 'anti_pattern', display_name: 'Anti Patterns', count: 23, percentage: 26, severity: 'high' },
       { type: 'code_smell', display_name: 'Code Smells', count: 45, percentage: 51, severity: 'medium' },
@@ -681,7 +684,7 @@ async function loadComplexity(): Promise<void> {
       complexity.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load complexity:', error);
+    logger.error('Failed to load complexity:', error);
     complexity.value = {
       averages: { cyclomatic: 4.2, cognitive: 6.8 },
       maximums: { cyclomatic: 28, cognitive: 45 },
@@ -704,7 +707,7 @@ async function loadTrends(): Promise<void> {
       trendData.value = data.data_points || [];
     }
   } catch (error) {
-    console.error('Failed to load trends:', error);
+    logger.error('Failed to load trends:', error);
     // Generate demo trend data
     const days = parseInt(selectedPeriod.value);
     trendData.value = Array.from({ length: days }, (_, i) => {
@@ -726,7 +729,7 @@ async function loadSnapshot(): Promise<void> {
       codebaseStats.value = data.codebase_stats || { files: 247, lines: 45230, issues: 88 };
     }
   } catch (error) {
-    console.error('Failed to load snapshot:', error);
+    logger.error('Failed to load snapshot:', error);
     codebaseStats.value = { files: 247, lines: 45230, issues: 88 };
   }
 }
@@ -739,7 +742,7 @@ async function drillDown(category: string): Promise<void> {
       drillDownData.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load drill-down data:', error);
+    logger.error('Failed to load drill-down data:', error);
     drillDownData.value = {
       total_files: 5,
       total_issues: 43,
@@ -764,11 +767,11 @@ async function exportReport(format: string): Promise<void> {
       } else if (format === 'csv') {
         downloadFile(data.content, `quality-report-${Date.now()}.csv`, 'text/csv');
       } else {
-        console.log('PDF export not yet implemented');
+        logger.info('PDF export not yet implemented');
       }
     }
   } catch (error) {
-    console.error('Failed to export report:', error);
+    logger.error('Failed to export report:', error);
   }
 }
 
@@ -792,7 +795,7 @@ function connectWebSocket(): void {
 
   ws.onopen = () => {
     wsConnected.value = true;
-    console.log('WebSocket connected');
+    logger.debug('WebSocket connected');
   };
 
   ws.onmessage = (event) => {
@@ -800,19 +803,19 @@ function connectWebSocket(): void {
       const message = JSON.parse(event.data);
       handleWebSocketMessage(message);
     } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
+      logger.error('Failed to parse WebSocket message:', error);
     }
   };
 
   ws.onclose = () => {
     wsConnected.value = false;
-    console.log('WebSocket disconnected');
+    logger.debug('WebSocket disconnected');
     // Reconnect after 5 seconds
     setTimeout(connectWebSocket, 5000);
   };
 
   ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
+    logger.error('WebSocket error:', error);
     wsConnected.value = false;
   };
 }

@@ -8,6 +8,7 @@ Replaces timeout-based Redis connection with immediate success/failure patterns
 
 import asyncio
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
@@ -146,7 +147,7 @@ async def create_redis_with_fallback(
 
 class RedisCircuitBreaker:
     """
-    Circuit breaker pattern for Redis - no timeouts, just immediate state tracking
+    Circuit breaker pattern for Redis - no timeouts, just immediate state tracking (thread-safe)
     """
 
     def __init__(self, failure_threshold: int = 3):
@@ -155,27 +156,45 @@ class RedisCircuitBreaker:
         self.is_circuit_open = False
         self.last_success_time = None
         self.last_failure_time = None
+        self._lock = threading.Lock()  # Lock for thread-safe state access
 
     def record_success(self):
-        """Record successful operation"""
-        self.failure_count = 0
-        self.is_circuit_open = False
-        self.last_success_time = asyncio.get_event_loop().time()
+        """Record successful operation (thread-safe)"""
+        with self._lock:
+            self.failure_count = 0
+            self.is_circuit_open = False
+            try:
+                self.last_success_time = asyncio.get_event_loop().time()
+            except RuntimeError:
+                # No event loop running, use 0
+                self.last_success_time = 0
 
     def record_failure(self):
-        """Record failed operation"""
-        self.failure_count += 1
-        self.last_failure_time = asyncio.get_event_loop().time()
+        """Record failed operation (thread-safe)"""
+        with self._lock:
+            self.failure_count += 1
+            try:
+                self.last_failure_time = asyncio.get_event_loop().time()
+            except RuntimeError:
+                # No event loop running, use 0
+                self.last_failure_time = 0
 
-        if self.failure_count >= self.failure_threshold:
-            self.is_circuit_open = True
+            if self.failure_count >= self.failure_threshold:
+                self.is_circuit_open = True
+                failure_count = self.failure_count
+            else:
+                failure_count = None
+
+        # Log outside lock to avoid holding lock during I/O
+        if failure_count is not None:
             logger.warning(
-                f"🚫 Redis circuit breaker OPENED after {self.failure_count} failures"
+                f"🚫 Redis circuit breaker OPENED after {failure_count} failures"
             )
 
     def should_attempt_connection(self) -> bool:
-        """Check if we should attempt connection (no timeout logic)"""
-        return not self.is_circuit_open
+        """Check if we should attempt connection (no timeout logic, thread-safe)"""
+        with self._lock:
+            return not self.is_circuit_open
 
     async def attempt_redis_operation(self, client: redis.Redis, operation_name: str):
         """Attempt Redis operation with circuit breaker"""

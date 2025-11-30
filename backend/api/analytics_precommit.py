@@ -532,7 +532,7 @@ async def get_status() -> HookStatus:
             if "AutoBot" in content:
                 version = "1.0.0"
         except Exception:
-            pass
+            pass  # Hook file unreadable, version remains None
 
     last_run = None
     with _history_lock:

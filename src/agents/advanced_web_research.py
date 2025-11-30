@@ -197,6 +197,7 @@ class AdvancedWebResearcher:
         self.context: Optional[BrowserContext] = None
         self.search_cache = {}
         self.rate_limiter = {}  # Domain -> last request time
+        self._rate_lock = asyncio.Lock()  # Lock for rate_limiter access
 
     async def initialize(self):
         """Initialize browser automation"""
@@ -481,7 +482,7 @@ class AdvancedWebResearcher:
                     await accept_button.click()
                     await page.wait_for_timeout(1000)
             except Exception:
-                pass
+                pass  # Cookie dialog not found or not clickable
 
             # Perform search
             search_box = await page.query_selector('[name="q"], [title="Search"]')
@@ -811,19 +812,26 @@ class AdvancedWebResearcher:
         return sorted(results, key=lambda x: x.get("relevance_score", 0), reverse=True)
 
     async def _respect_rate_limit(self, domain: str):
-        """Implement rate limiting per domain"""
+        """Implement rate limiting per domain (thread-safe)"""
         min_interval = 2  # Minimum 2 seconds between requests to same domain
 
-        if domain in self.rate_limiter:
-            last_request = self.rate_limiter[domain]
-            elapsed = time.time() - last_request
+        # Check rate limit under lock
+        async with self._rate_lock:
+            wait_time = 0.0
+            if domain in self.rate_limiter:
+                last_request = self.rate_limiter[domain]
+                elapsed = time.time() - last_request
 
-            if elapsed < min_interval:
-                wait_time = min_interval - elapsed
-                logger.info(f"Rate limiting: waiting {wait_time:.2f}s for {domain}")
-                await asyncio.sleep(wait_time)
+                if elapsed < min_interval:
+                    wait_time = min_interval - elapsed
 
-        self.rate_limiter[domain] = time.time()
+            # Update timestamp before waiting (prevents other requests from also waiting)
+            self.rate_limiter[domain] = time.time()
+
+        # Wait outside lock if needed
+        if wait_time > 0:
+            logger.info(f"Rate limiting: waiting {wait_time:.2f}s for {domain}")
+            await asyncio.sleep(wait_time)
 
     async def _random_delay(self, min_seconds: float, max_seconds: float):
         """Add random delay to mimic human behavior"""

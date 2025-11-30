@@ -321,7 +321,7 @@ class MetricsCollector:
             )
 
         except Exception:
-            pass
+            pass  # Redis metrics unavailable
 
         return metrics
 
@@ -426,7 +426,7 @@ class MetricsCollector:
                 if file_date < cutoff_date:
                     file_path.unlink()
             except Exception:
-                pass
+                pass  # File cleanup failed, skip
 
     def load_alerts(self, config_file: str) -> None:
         """Load alert configurations from file."""
@@ -653,7 +653,7 @@ class MetricsCollector:
                                 metric = Metric(**metric_data)
                                 all_metrics.append(metric)
                 except Exception:
-                    pass
+                    pass  # Metrics file read/parse error
 
         # Analyze by metric name
         by_metric = defaultdict(list)

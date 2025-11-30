@@ -583,7 +583,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass
+            pass  # Index error or other issue, return empty below
         return ""
 
 

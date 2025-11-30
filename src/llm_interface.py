@@ -78,7 +78,19 @@ try:
 except ImportError:
     logger.warning("PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
-    torch = None
+
+# LLM Pattern Analyzer integration for cost optimization (Issue #229)
+try:
+    from backend.api.analytics_llm_patterns import (
+        get_pattern_analyzer,
+        UsageRecordRequest,
+    )
+
+    PATTERN_ANALYZER_AVAILABLE = True
+except ImportError:
+    PATTERN_ANALYZER_AVAILABLE = False
+    UsageRecordRequest = None
+    logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
 try:
     import openai
@@ -557,8 +569,8 @@ class LLMInterface:
             # This would check for Intel Arc graphics and NPU
             detected.add("intel_arc")
             detected.add("openvino")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Intel Arc/NPU detection unavailable: {e}")
 
         return detected
 
@@ -668,6 +680,15 @@ class LLMInterface:
             processing_time = time.time() - start_time
             self._update_metrics(provider, processing_time, success=True)
 
+            # Track usage for cost optimization (Issue #229)
+            await self._track_llm_usage(
+                messages=messages,
+                model=model_name,
+                response=response,
+                processing_time=processing_time,
+                session_id=kwargs.get("session_id"),
+            )
+
             return response
 
         except Exception as e:
@@ -769,6 +790,60 @@ class LLMInterface:
         self._metrics["avg_response_time"] = (
             self._metrics["total_response_time"] / self._metrics["total_requests"]
         )
+
+    async def _track_llm_usage(
+        self,
+        messages: list,
+        model: str,
+        response: "LLMResponse",
+        processing_time: float,
+        session_id: Optional[str] = None,
+    ):
+        """
+        Track LLM usage for cost optimization analysis (Issue #229).
+
+        Sends usage data to the LLM Pattern Analyzer for:
+        - Prompt pattern detection
+        - Cost tracking
+        - Cache opportunity identification
+        - Optimization recommendations
+        """
+        if not PATTERN_ANALYZER_AVAILABLE:
+            return
+
+        try:
+            # Extract prompt content from messages
+            prompt_content = " ".join(
+                m.get("content", "") for m in messages if m.get("role") != "system"
+            )
+
+            # Get token usage from response
+            usage = response.usage if hasattr(response, "usage") else {}
+            input_tokens = usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0)
+
+            # If no token info in response, estimate from content
+            if input_tokens == 0:
+                input_tokens = len(prompt_content.split()) * 1.3
+
+            if output_tokens == 0 and hasattr(response, "content"):
+                output_tokens = len(str(response.content).split()) * 1.3
+
+            # Record usage asynchronously (fire-and-forget pattern)
+            analyzer = get_pattern_analyzer()
+            usage_request = UsageRecordRequest(
+                prompt=prompt_content[:2000],  # Limit prompt size
+                model=model,
+                input_tokens=int(input_tokens),
+                output_tokens=int(output_tokens),
+                response_time=processing_time,
+                success=not bool(getattr(response, "error", None)),
+                session_id=session_id,
+            )
+            asyncio.create_task(analyzer.record_usage(usage_request))
+        except Exception as e:
+            # Don't let tracking failures affect main LLM operations
+            logger.debug(f"LLM usage tracking failed (non-critical): {e}")
 
     @circuit_breaker_async(
         "ollama_service",

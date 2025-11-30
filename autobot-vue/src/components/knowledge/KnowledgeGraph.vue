@@ -392,6 +392,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('KnowledgeGraph')
 
 // ============================================================================
 // Types
@@ -527,7 +530,7 @@ async function refreshGraph() {
     await fetchRelations()
 
   } catch (error) {
-    console.error('Failed to fetch graph data:', error)
+    logger.error('Failed to fetch graph data:', error)
     errorMessage.value = error instanceof Error ? error.message : 'Failed to load graph'
   } finally {
     isLoading.value = false
@@ -562,7 +565,7 @@ async function fetchRelations() {
       }
     } catch {
       // Silently skip entities without relations
-      console.debug(`No relations for entity ${entity.id}`)
+      logger.debug(`No relations for entity ${entity.id}`)
     }
   }
 
@@ -615,7 +618,7 @@ async function createEntity() {
     showCreateModal.value = false
     newEntity.value = { name: '', type: '', observations: '' }
   } catch (error) {
-    console.error('Failed to create entity:', error)
+    logger.error('Failed to create entity:', error)
     errorMessage.value = error instanceof Error ? error.message : 'Failed to create entity'
   } finally {
     isCreating.value = false
@@ -803,7 +806,7 @@ function focusOnEntity(entity: Entity) {
 
 function expandEntity(entity: Entity) {
   // Placeholder for expanding to show more connected entities
-  console.log('Expand entity:', entity.id)
+  logger.debug('Expand entity:', entity.id)
 }
 
 // ============================================================================

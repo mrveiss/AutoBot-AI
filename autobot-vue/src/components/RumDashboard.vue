@@ -177,6 +177,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { isPerformanceModeEnabled, getPerformanceInterval, logPerformanceIssue } from '@/config/performance.js'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('RumDashboard')
 
 export default {
   name: 'RumDashboard',
@@ -240,7 +243,7 @@ export default {
       lastUpdated.value = Date.now()
     }, {
       onError: (error) => {
-        console.error('[RumDashboard] Error refreshing data:', error)
+        logger.error('Error refreshing data:', error)
         logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
       }
     })
@@ -262,7 +265,7 @@ export default {
         }
         systemData.value.uptime = performance.now()
       } catch (error) {
-        console.error('[RumDashboard] Error fetching system data:', error)
+        logger.error('Error fetching system data:', error)
       }
     }
 
@@ -278,7 +281,7 @@ export default {
           }
         }
       } catch (error) {
-        console.error('[RumDashboard] Error fetching performance data:', error)
+        logger.error('Error fetching performance data:', error)
       }
     }
 
@@ -316,7 +319,7 @@ export default {
         localStorage.setItem('rum_critical_issues', JSON.stringify(criticalIssues.value))
 
       } catch (error) {
-        console.error('[RumDashboard] Error fetching critical issues:', error)
+        logger.error('Error fetching critical issues:', error)
       }
     }
 
@@ -331,7 +334,7 @@ export default {
         recentEvents.value = events.filter(event => event.timestamp > oneHourAgo)
 
       } catch (error) {
-        console.error('[RumDashboard] Error fetching recent events:', error)
+        logger.error('Error fetching recent events:', error)
       }
     }
 

@@ -803,6 +803,11 @@ async def get_browser_mcp_status() -> Metadata:
     except Exception:
         vm_status = "unavailable"
 
+    # Thread-safe access to rate limit state
+    async with _rate_limit_lock:
+        current_count = request_counter["count"]
+        reset_time_iso = request_counter["reset_time"].isoformat()
+
     return {
         "success": True,
         "bridge": "browser_mcp",
@@ -816,9 +821,9 @@ async def get_browser_mcp_status() -> Metadata:
             "rate_limit": f"{MAX_REQUESTS_PER_MINUTE} requests/minute",
         },
         "rate_limit_status": {
-            "current_count": request_counter["count"],
+            "current_count": current_count,
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
-            "reset_time": request_counter["reset_time"].isoformat(),
+            "reset_time": reset_time_iso,
         },
         "tools_available": 10,
         "timestamp": datetime.now().isoformat(),

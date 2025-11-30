@@ -295,6 +295,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('PrecommitHookDashboard')
 
 // Types
 interface CheckResult {
@@ -507,7 +510,7 @@ async function installHooks() {
     await loadStatus()
     showToast('Pre-commit hooks installed successfully', 'success')
   } catch (error) {
-    console.error('Failed to install hooks:', error)
+    logger.error('Failed to install hooks:', error)
     showToast('Failed to install hooks', 'error')
   } finally {
     installing.value = false
@@ -521,7 +524,7 @@ async function uninstallHooks() {
     await loadStatus()
     showToast('Pre-commit hooks uninstalled', 'info')
   } catch (error) {
-    console.error('Failed to uninstall hooks:', error)
+    logger.error('Failed to uninstall hooks:', error)
     showToast('Failed to uninstall hooks', 'error')
   } finally {
     installing.value = false

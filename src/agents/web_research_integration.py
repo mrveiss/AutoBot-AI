@@ -12,6 +12,7 @@ rate limiting, and user preference management.
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime
 from enum import Enum
@@ -38,7 +39,7 @@ class CircuitBreakerState(Enum):
 
 
 class CircuitBreaker:
-    """Circuit breaker for web research services"""
+    """Circuit breaker for web research services (thread-safe)"""
 
     def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
         self.failure_threshold = failure_threshold
@@ -46,55 +47,92 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = None
         self.state = CircuitBreakerState.CLOSED
+        self._lock = threading.Lock()  # Lock for thread-safe state access
 
     def call_succeeded(self):
-        """Record successful call"""
-        self.failure_count = 0
-        self.state = CircuitBreakerState.CLOSED
+        """Record successful call (thread-safe)"""
+        with self._lock:
+            self.failure_count = 0
+            self.state = CircuitBreakerState.CLOSED
 
     def call_failed(self):
-        """Record failed call"""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
+        """Record failed call (thread-safe)"""
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
 
-        if self.failure_count >= self.failure_threshold:
-            self.state = CircuitBreakerState.OPEN
-            logger.warning(
-                f"Circuit breaker opened after {self.failure_count} failures"
-            )
+            if self.failure_count >= self.failure_threshold:
+                self.state = CircuitBreakerState.OPEN
+                logger.warning(
+                    f"Circuit breaker opened after {self.failure_count} failures"
+                )
 
     def can_execute(self) -> bool:
-        """Check if we can execute a call"""
-        if self.state == CircuitBreakerState.CLOSED:
+        """Check if we can execute a call (thread-safe)"""
+        with self._lock:
+            if self.state == CircuitBreakerState.CLOSED:
+                return True
+
+            if self.state == CircuitBreakerState.OPEN:
+                if (time.time() - self.last_failure_time) > self.recovery_timeout:
+                    self.state = CircuitBreakerState.HALF_OPEN
+                    logger.info("Circuit breaker transitioning to half-open")
+                    return True
+                return False
+
+            # HALF_OPEN state
             return True
 
-        if self.state == CircuitBreakerState.OPEN:
-            if (time.time() - self.last_failure_time) > self.recovery_timeout:
-                self.state = CircuitBreakerState.HALF_OPEN
-                logger.info("Circuit breaker transitioning to half-open")
-                return True
-            return False
-
-        # HALF_OPEN state
-        return True
-
     def reset(self):
-        """Reset circuit breaker"""
-        self.failure_count = 0
-        self.last_failure_time = None
-        self.state = CircuitBreakerState.CLOSED
+        """Reset circuit breaker (thread-safe)"""
+        with self._lock:
+            self.failure_count = 0
+            self.last_failure_time = None
+            self.state = CircuitBreakerState.CLOSED
 
 
 class RateLimiter:
-    """Rate limiter for web research requests"""
+    """Rate limiter for web research requests (thread-safe)"""
 
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = []
+        self._lock = asyncio.Lock()  # Lock for thread-safe request tracking
 
     async def acquire(self) -> bool:
-        """Acquire permission for a request"""
+        """Acquire permission for a request (thread-safe)"""
+        async with self._lock:
+            now = time.time()
+
+            # Remove old requests outside the window
+            self.requests = [
+                req_time
+                for req_time in self.requests
+                if now - req_time < self.window_seconds
+            ]
+
+            if len(self.requests) >= self.max_requests:
+                # Calculate wait time until next request can be made
+                oldest_request = min(self.requests)
+                wait_time = self.window_seconds - (now - oldest_request)
+
+                if wait_time > 0:
+                    logger.info(f"Rate limit reached, waiting {wait_time:.2f}s")
+                    # Release lock while sleeping to allow other operations
+                    self._lock.release()
+                    try:
+                        await asyncio.sleep(wait_time)
+                    finally:
+                        await self._lock.acquire()
+                    # Re-check after waiting (recursive call will re-acquire lock)
+                    return await self._acquire_internal()
+
+            self.requests.append(now)
+            return True
+
+    async def _acquire_internal(self) -> bool:
+        """Internal acquire without lock (called when lock is already held)"""
         now = time.time()
 
         # Remove old requests outside the window
@@ -111,8 +149,13 @@ class RateLimiter:
 
             if wait_time > 0:
                 logger.info(f"Rate limit reached, waiting {wait_time:.2f}s")
-                await asyncio.sleep(wait_time)
-                return await self.acquire()  # Retry after waiting
+                # Release lock while sleeping to allow other operations
+                self._lock.release()
+                try:
+                    await asyncio.sleep(wait_time)
+                finally:
+                    await self._lock.acquire()
+                return await self._acquire_internal()
 
         self.requests.append(now)
         return True

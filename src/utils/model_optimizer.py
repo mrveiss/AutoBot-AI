@@ -298,7 +298,7 @@ class ModelOptimizer:
                 else:
                     return ModelPerformanceLevel.ADVANCED
         except Exception:
-            pass
+            pass  # Parameter parsing failed, use default below
 
         # Default classification
         return ModelPerformanceLevel.STANDARD

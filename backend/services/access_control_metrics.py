@@ -269,8 +269,8 @@ class AccessControlMetrics:
 
                         try:
                             violations.append(json.loads(violation_data))
-                        except Exception:
-                            pass
+                        except (json.JSONDecodeError, ValueError) as e:
+                            logger.debug(f"Failed to parse violation data: {e}")
 
                 if len(violations) >= limit:
                     break

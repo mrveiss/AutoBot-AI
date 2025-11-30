@@ -88,6 +88,9 @@ class GPUAccelerationOptimizer:
         self.baseline_metrics = None
         self.current_optimizations = set()
 
+        # Lock for thread-safe access to shared mutable state
+        self._lock = asyncio.Lock()
+
         # GPU availability and capabilities
         self.gpu_available = self._check_gpu_availability()
         self.gpu_capabilities = self._detect_gpu_capabilities()
@@ -268,8 +271,9 @@ class GPUAccelerationOptimizer:
                 timestamp=time.time(),
             )
 
-            # Store optimization result
-            self.optimization_history.append(result)
+            # Store optimization result (thread-safe)
+            async with self._lock:
+                self.optimization_history.append(result)
 
             self.logger.info(
                 f"Multi-modal optimization completed: {performance_improvement:.1f}% improvement"
@@ -995,14 +999,15 @@ class GPUAccelerationOptimizer:
         """Get current optimization configuration"""
         return self.config
 
-    def update_optimization_config(self, config_updates: Dict[str, Any]) -> bool:
-        """Update optimization configuration"""
+    async def update_optimization_config(self, config_updates: Dict[str, Any]) -> bool:
+        """Update optimization configuration (thread-safe)"""
         try:
-            for key, value in config_updates.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, value)
-                else:
-                    self.logger.warning(f"Unknown config key: {key}")
+            async with self._lock:
+                for key, value in config_updates.items():
+                    if hasattr(self.config, key):
+                        setattr(self.config, key, value)
+                    else:
+                        self.logger.warning(f"Unknown config key: {key}")
 
             self.logger.info("GPU optimization configuration updated")
             return True
@@ -1011,9 +1016,10 @@ class GPUAccelerationOptimizer:
             self.logger.error(f"Failed to update optimization config: {e}")
             return False
 
-    def get_optimization_history(self) -> List[GPUOptimizationResult]:
-        """Get history of optimization operations"""
-        return self.optimization_history
+    async def get_optimization_history(self) -> List[GPUOptimizationResult]:
+        """Get history of optimization operations (thread-safe)"""
+        async with self._lock:
+            return list(self.optimization_history)
 
     def get_gpu_capabilities_report(self) -> Dict[str, Any]:
         """Get comprehensive GPU capabilities report"""
@@ -1096,9 +1102,9 @@ def get_gpu_capabilities() -> Dict[str, Any]:
     return gpu_optimizer.get_gpu_capabilities_report()
 
 
-def update_gpu_config(config_updates: Dict[str, Any]) -> bool:
+async def update_gpu_config(config_updates: Dict[str, Any]) -> bool:
     """Update GPU optimization configuration"""
-    return gpu_optimizer.update_optimization_config(config_updates)
+    return await gpu_optimizer.update_optimization_config(config_updates)
 
 
 if __name__ == "__main__":

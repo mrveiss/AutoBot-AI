@@ -31,6 +31,7 @@ class WebResearchAssistant:
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
         self.search_cache = {}  # Cache for recent searches
+        self._cache_lock = asyncio.Lock()  # Lock for search_cache access
         self.quality_threshold = 0.7  # Minimum quality score for KB storage
         self.use_advanced_research = ADVANCED_RESEARCH_AVAILABLE and self.config.get(
             "enable_advanced_research", False
@@ -39,16 +40,17 @@ class WebResearchAssistant:
 
     async def research_query(self, query: str) -> Dict[str, Any]:
         """
-        Research a query on the web and return structured results
+        Research a query on the web and return structured results (thread-safe)
         """
         logger.info(f"Starting web research for query: {query}")
 
-        # Check cache first
-        if query in self.search_cache:
-            logger.info(f"Returning cached results for query: {query}")
-            cached_result = self.search_cache[query]
-            cached_result["from_cache"] = True
-            return cached_result
+        # Check cache first (thread-safe)
+        async with self._cache_lock:
+            if query in self.search_cache:
+                logger.info(f"Returning cached results for query: {query}")
+                cached_result = dict(self.search_cache[query])  # Copy
+                cached_result["from_cache"] = True
+                return cached_result
 
         try:
             # Use advanced research if available and enabled
@@ -83,7 +85,9 @@ class WebResearchAssistant:
         if search_results.get("status") == "success":
             # Convert to expected format
             processed_results = self._convert_advanced_results(search_results, query)
-            self.search_cache[query] = processed_results
+            # Cache results (thread-safe)
+            async with self._cache_lock:
+                self.search_cache[query] = processed_results
             return processed_results
         else:
             # Fallback to basic research
@@ -144,8 +148,9 @@ class WebResearchAssistant:
         # Process and filter results
         processed_results = await self._process_search_results(search_results, query)
 
-        # Cache results
-        self.search_cache[query] = processed_results
+        # Cache results (thread-safe)
+        async with self._cache_lock:
+            self.search_cache[query] = processed_results
 
         logger.info(
             f"Web research completed for query: {query}, "
@@ -480,14 +485,16 @@ Relevance Score: {relevance}
 
         return formatted_content.strip()
 
-    def clear_cache(self):
-        """Clear the search cache"""
-        self.search_cache.clear()
+    async def clear_cache(self):
+        """Clear the search cache (thread-safe)"""
+        async with self._cache_lock:
+            self.search_cache.clear()
         logger.info("Web research cache cleared")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
-        return {
-            "cached_queries": len(self.search_cache),
-            "cache_keys": list(self.search_cache.keys()),
-        }
+    async def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics (thread-safe)"""
+        async with self._cache_lock:
+            return {
+                "cached_queries": len(self.search_cache),
+                "cache_keys": list(self.search_cache.keys()),
+            }

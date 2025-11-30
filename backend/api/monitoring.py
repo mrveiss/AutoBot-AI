@@ -791,9 +791,9 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
                             )
                         )
 
-            except json.JSONDecodeError:
-                # Ignore invalid JSON messages
-                pass
+            except json.JSONDecodeError as e:
+                # Invalid JSON messages are ignored - client may send malformed data
+                logger.debug(f"Invalid JSON in monitoring WebSocket: {e}")
 
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)

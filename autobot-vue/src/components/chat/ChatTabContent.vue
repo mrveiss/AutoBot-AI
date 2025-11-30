@@ -79,6 +79,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatTabContent')
 
 // Component imports
 import ChatMessages from './ChatMessages.vue'
@@ -103,7 +106,7 @@ const terminalMounted = ref(false)
 // Previously: terminal only mounted when switching to terminal tab → commands lost
 watch(() => props.currentSessionId, (sessionId) => {
   if (sessionId && !terminalMounted.value) {
-    console.log('[ChatTabContent] Session created - mounting terminal immediately:', sessionId)
+    logger.info('Session created - mounting terminal immediately:', sessionId)
     terminalMounted.value = true
   }
 }, { immediate: true })
@@ -127,7 +130,7 @@ const emit = defineEmits<{
 
 // Handler for tool call detection from ChatMessages
 const handleToolCallDetected = (toolCall: any) => {
-  console.log('[ChatTabContent] Propagating TOOL_CALL to ChatInterface:', toolCall)
+  logger.info('Propagating TOOL_CALL to ChatInterface:', toolCall)
   emit('tool-call-detected', toolCall)
 }
 </script>

@@ -224,7 +224,7 @@ class PerformanceMonitor:
                 # NPU is available but actual utilization requires specific Intel tools
                 return 0.0  # Placeholder
         except Exception:
-            pass
+            pass  # NPU check failed, likely not available
         return None
 
     async def test_service_performance(self, service_name: str, endpoint: str) -> ServiceMetrics:

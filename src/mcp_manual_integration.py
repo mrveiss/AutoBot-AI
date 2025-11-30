@@ -717,9 +717,9 @@ class MCPManualService:
                         sources.append(
                             {"name": doc_dir, "type": "directory", "searchable": True}
                         )
-                except Exception:
+                except Exception as e:
                     # Directory doesn't exist or not accessible
-                    pass
+                    logger.debug(f"Documentation directory {doc_dir} not accessible: {e}")
 
         # Add AutoBot specific documentation
         autobot_docs = [
@@ -869,8 +869,8 @@ class MCPManualService:
                                 query, content, file_path
                             )
                             results.extend(matches)
-                    except Exception:
-                        pass  # Skip files that can't be read
+                    except Exception as e:
+                        logger.debug(f"Skipping unreadable file {file_path}: {e}")
 
         except Exception as e:
             logger.warning(f"Failed to search file {file_path}: {e}")

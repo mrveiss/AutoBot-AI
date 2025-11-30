@@ -549,7 +549,7 @@ class ZeroDowntimeDeployer:
                             self.print_step(f"{service_name} is healthy", "success")
                             return True
             except Exception:
-                pass
+                pass  # Health check failed, will retry
 
             await asyncio.sleep(self.deployment_config["health_check_interval"])
 
@@ -649,7 +649,7 @@ server {{
                     f"docker rm autobot-{service_name}-green 2>/dev/null || true"
                 )
             except Exception:
-                pass
+                pass  # Best-effort cleanup of green containers
 
     async def _rolling_update_service(self, service_name: str, version: str) -> bool:
         """Perform rolling update on a single service."""

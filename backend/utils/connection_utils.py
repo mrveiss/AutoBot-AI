@@ -6,6 +6,7 @@ Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -29,6 +30,9 @@ logger = logging.getLogger(__name__)
 # Cache for health status with 30-second TTL
 _health_cache = {"data": None, "timestamp": 0, "ttl": 30}
 
+# Lock for thread-safe access to _health_cache
+_health_cache_lock = asyncio.Lock()
+
 
 class ConnectionTester:
     """Centralized connection testing for all backend services"""
@@ -37,13 +41,14 @@ class ConnectionTester:
     async def get_fast_health_status() -> Metadata:
         """Fast health check without expensive operations (< 1 second)"""
         try:
-            # Check cache first
+            # Check cache first (thread-safe)
             current_time = time.time()
-            if (
-                _health_cache["data"]
-                and current_time - _health_cache["timestamp"] < _health_cache["ttl"]
-            ):
-                return _health_cache["data"]
+            async with _health_cache_lock:
+                if (
+                    _health_cache["data"]
+                    and current_time - _health_cache["timestamp"] < _health_cache["ttl"]
+                ):
+                    return _health_cache["data"]
 
             # Quick Redis check
             redis_client = get_redis_client()
@@ -52,8 +57,8 @@ class ConnectionTester:
                 if redis_client:
                     redis_client.ping()
                     redis_status = "connected"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Redis health check failed: {e}")
 
             # Quick Ollama availability check (no generation test)
             ollama_status = "disconnected"
@@ -66,8 +71,8 @@ class ConnectionTester:
                 response = requests.get(ollama_check_url, timeout=3)
                 if response.status_code == 200:
                     ollama_status = "connected"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Ollama health check failed: {e}")
 
             health_data = {
                 "status": "healthy",
@@ -78,9 +83,10 @@ class ConnectionTester:
                 "fast_check": True,
             }
 
-            # Cache the result
-            _health_cache["data"] = health_data
-            _health_cache["timestamp"] = current_time
+            # Cache the result (thread-safe)
+            async with _health_cache_lock:
+                _health_cache["data"] = health_data
+                _health_cache["timestamp"] = current_time
 
             return health_data
 

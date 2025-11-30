@@ -277,6 +277,9 @@ import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ChatSidebar')
 
 const store = useChatStore()
 const controller = useChatController()
@@ -424,7 +427,7 @@ const deleteSession = async (sessionId: string) => {
     const data = await response.json()
     deleteFileStats.value = data?.stats || null
   } catch (error) {
-    console.warn('Failed to fetch file stats, proceeding without file info:', error)
+    logger.warn('Failed to fetch file stats, proceeding without file info:', error)
     deleteFileStats.value = null
   }
 
@@ -447,7 +450,7 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any) => {
     deleteTargetSessionId.value = null
     deleteFileStats.value = null
   } catch (error) {
-    console.error('Failed to delete session:', error)
+    logger.error('Failed to delete session:', error)
   }
 }
 
@@ -482,15 +485,15 @@ const reloadSystem = async () => {
 
       // Log reloaded components for debugging
       if (data.reloaded_components) {
-        console.log('Reloaded components:', data.reloaded_components)
+        logger.debug('Reloaded components:', data.reloaded_components)
       }
     } else {
       systemStatus.value = 'Error'
-      console.error('System reload failed:', data?.message || 'Unknown error')
+      logger.error('System reload failed:', data?.message || 'Unknown error')
     }
   } catch (error) {
     systemStatus.value = 'Error'
-    console.error('System reload failed:', error)
+    logger.error('System reload failed:', error)
   } finally {
     isSystemReloading.value = false
   }

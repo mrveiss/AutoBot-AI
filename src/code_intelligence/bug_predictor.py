@@ -692,7 +692,7 @@ class BugPredictor:
             try:
                 last_date = datetime.fromisoformat(bugs[0].get("date", ""))
             except Exception:
-                pass
+                pass  # Invalid date format, last_date remains None
 
         return {"count": count, "score": score, "last_date": last_date}
 

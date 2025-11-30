@@ -11,6 +11,7 @@ including logging, retry mechanisms, and error recovery strategies.
 import asyncio
 import functools
 import logging
+import threading
 import time
 import traceback
 from contextlib import contextmanager
@@ -206,6 +207,7 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = None
         self._state = "closed"  # closed, open, half-open
+        self._lock = threading.Lock()  # Lock for thread-safe state access
 
     @property
     def state(self) -> str:
@@ -226,8 +228,9 @@ class CircuitBreaker:
             try:
                 result = func(*args, **kwargs)
                 if self.state == "half-open":
-                    self._state = "closed"
-                    self.failure_count = 0
+                    with self._lock:
+                        self._state = "closed"
+                        self.failure_count = 0
                     logger.info(f"Circuit breaker closed for {func.__name__}")
                 return result
             except self.expected_exception:
@@ -242,8 +245,9 @@ class CircuitBreaker:
             try:
                 result = await func(*args, **kwargs)
                 if self.state == "half-open":
-                    self._state = "closed"
-                    self.failure_count = 0
+                    with self._lock:
+                        self._state = "closed"
+                        self.failure_count = 0
                     logger.info(f"Circuit breaker closed for {func.__name__}")
                 return result
             except self.expected_exception:
@@ -255,15 +259,17 @@ class CircuitBreaker:
         return wrapper
 
     def _handle_failure(self, func_name: str):
-        self.failure_count += 1
-        self.last_failure_time = time.time()
+        """Handle a failure by incrementing counter and potentially opening circuit (thread-safe)"""
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
 
-        if self.failure_count >= self.failure_threshold:
-            self._state = "open"
-            logger.error(
-                f"Circuit breaker opened for {func_name} after "
-                f"{self.failure_count} failures"
-            )
+            if self.failure_count >= self.failure_threshold:
+                self._state = "open"
+                logger.error(
+                    f"Circuit breaker opened for {func_name} after "
+                    f"{self.failure_count} failures"
+                )
 
 
 @contextmanager

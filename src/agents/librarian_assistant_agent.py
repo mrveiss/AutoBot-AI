@@ -366,7 +366,7 @@ class LibrarianAssistantAgent:
                 if desc_element:
                     description = await desc_element.get_attribute("content") or ""
             except Exception:
-                pass
+                pass  # Meta description selector failed
 
             # Extract main content
             content = await self._extract_main_content(page)

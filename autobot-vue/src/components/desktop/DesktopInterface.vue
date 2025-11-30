@@ -72,6 +72,9 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('DesktopInterface')
 
 // Async operation composables
 const { execute: executeLoadVnc, loading: loadingVnc, error: errorVnc } = useAsyncOperation()
@@ -98,7 +101,7 @@ const loadVncUrlFn = async () => {
 
 const loadVncUrl = async () => {
   await executeLoadVnc(loadVncUrlFn).catch(err => {
-    console.error('[DesktopInterface] Failed to load VNC URL from config:', err);
+    logger.error('Failed to load VNC URL from config:', err);
 
     // CRITICAL: No fallbacks - config failure is real failure
     // Desktop cannot function without proper configuration
@@ -120,7 +123,7 @@ const loadVncUrl = async () => {
 
     // CRITICAL: No hardcoded fallbacks - config file is the only source of truth
     // Desktop cannot function without configuration - this is a real error state
-    console.error('[DesktopInterface] Desktop unavailable - no configuration loaded');
+    logger.error('Desktop unavailable - no configuration loaded');
   });
 }
 
@@ -216,14 +219,14 @@ const handleDesktopConnected = () => {
 }
 
 const handleDesktopError = (error) => {
-  console.error('[DesktopInterface] Desktop connection error:', error)
+  logger.error('Desktop connection error:', error)
   loading.value = false
   connectionStatus.value = 'Error'
   error.value = `Desktop service error: ${error.message || error}`
 }
 
 const handleDesktopTimeout = () => {
-  console.warn('[DesktopInterface] Desktop connection timeout')
+  logger.warn('Desktop connection timeout')
   loading.value = false
   connectionStatus.value = 'Timeout'
   error.value = 'Desktop service connection timed out. Service may be starting up.'
@@ -236,7 +239,7 @@ onMounted(async () => {
   try {
     await loadVncUrl()
   } catch (error) {
-    console.error('[DesktopInterface] Critical error in loadVncUrl:', error)
+    logger.error('Critical error in loadVncUrl:', error)
     // Fallback to default state
     loading.value = false
     connectionStatus.value = 'Configuration Error'

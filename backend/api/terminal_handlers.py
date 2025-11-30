@@ -264,7 +264,7 @@ class ConsolidatedTerminalWebSocket:
                 self.pty_output_task.cancel()
                 await asyncio.wait_for(self.pty_output_task, timeout=1.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+                pass  # Expected during task cancellation - normal shutdown
             except Exception as e:
                 logger.error(f"Error cancelling output task: {e}")
 
@@ -274,7 +274,7 @@ class ConsolidatedTerminalWebSocket:
                 self._output_sender_task.cancel()
                 await asyncio.wait_for(self._output_sender_task, timeout=1.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+                pass  # Expected during task cancellation - normal shutdown
             except Exception as e:
                 logger.error(f"Error cancelling output sender task: {e}")
 
@@ -596,8 +596,8 @@ class ConsolidatedTerminalWebSocket:
             if is_password:
                 try:
                     self.pty_process.set_echo(True)
-                except Exception:
-                    pass
+                except Exception as echo_err:
+                    logger.debug(f"Failed to re-enable echo: {echo_err}")
 
             await self.send_message(
                 {

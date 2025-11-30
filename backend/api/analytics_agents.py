@@ -306,7 +306,7 @@ async def get_agent_recommendations():
                         "suggestion": "Check if agent is properly configured and active",
                     })
             except Exception:
-                pass
+                pass  # Invalid date format, skip activity check
 
         if agent_recommendations:
             recommendations.append({

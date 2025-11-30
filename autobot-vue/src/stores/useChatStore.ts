@@ -2,6 +2,9 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { NetworkConstants } from '@/constants/network'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useChatStore')
 
 export interface ChatMessage {
   id: string
@@ -153,16 +156,16 @@ export const useChatStore = defineStore('chat', () => {
 
   function deleteSession(sessionId: string): boolean {
     // CRITICAL FIX: Enhanced session deletion with validation and persistence verification
-    console.log(`🗑️ Attempting to delete session: ${sessionId}`)
+    logger.debug(`🗑️ Attempting to delete session: ${sessionId}`)
 
     const sessionIndex = sessions.value.findIndex(s => s.id === sessionId)
     if (sessionIndex === -1) {
-      console.warn(`⚠️ Session ${sessionId} not found in store`)
+      logger.warn(`⚠️ Session ${sessionId} not found in store`)
       return false // Session doesn't exist
     }
 
     const session = sessions.value[sessionIndex]
-    console.log(`📝 Found session to delete: "${session.title}" (${sessionId})`)
+    logger.debug(`📝 Found session to delete: "${session.title}" (${sessionId})`)
 
     // Store count before deletion for verification
     const beforeCount = sessions.value.length
@@ -178,19 +181,19 @@ export const useChatStore = defineStore('chat', () => {
     const deletionSucceeded = afterCount === beforeCount - 1
 
     if (!deletionSucceeded) {
-      console.error(`❌ Session deletion failed - count before: ${beforeCount}, after: ${afterCount}`)
+      logger.error(`❌ Session deletion failed - count before: ${beforeCount}, after: ${afterCount}`)
       return false
     }
 
-    console.log(`✅ Session removed from array (${beforeCount} → ${afterCount})`)
+    logger.debug(`✅ Session removed from array (${beforeCount} → ${afterCount})`)
 
     // If deleted session was current, switch to another or clear
     if (currentSessionId.value === sessionId) {
       if (sessions.value.length > 0) {
-        console.log(`🔄 Switching to first available session: ${sessions.value[0].id}`)
+        logger.debug(`🔄 Switching to first available session: ${sessions.value[0].id}`)
         switchToSession(sessions.value[0].id)
       } else {
-        console.log(`🔄 No sessions remaining, clearing current session`)
+        logger.debug(`🔄 No sessions remaining, clearing current session`)
         currentSessionId.value = null
       }
     }
@@ -199,7 +202,7 @@ export const useChatStore = defineStore('chat', () => {
     // This is critical for ensuring localStorage is updated
     sessions.value = [...sessions.value]
 
-    console.log(`✅ Session ${sessionId} successfully deleted from store`)
+    logger.debug(`✅ Session ${sessionId} successfully deleted from store`)
     return true
   }
 
@@ -212,11 +215,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearAllSessions() {
-    console.log(`🗑️ Clearing all ${sessions.value.length} sessions`)
+    logger.debug(`🗑️ Clearing all ${sessions.value.length} sessions`)
     sessions.value = []
     currentSessionId.value = null
     isTyping.value = false // Reset typing indicator
-    console.log(`✅ All sessions cleared`)
+    logger.debug(`✅ All sessions cleared`)
   }
 
   function updateSettings(newSettings: Partial<ChatSettings>) {
@@ -240,7 +243,7 @@ export const useChatStore = defineStore('chat', () => {
     // Skip if session already exists (prevent duplicate imports)
     const existingSession = sessions.value.find(s => s.id === session.id)
     if (existingSession) {
-      console.log(`Session ${session.id} already exists, skipping import`)
+      logger.debug(`Session ${session.id} already exists, skipping import`)
       return
     }
 
@@ -259,7 +262,7 @@ export const useChatStore = defineStore('chat', () => {
      *
      * This fixes the bug where deleted sessions reappear after page reload.
      */
-    console.log(`🔄 Syncing sessions: Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
+    logger.debug(`🔄 Syncing sessions: Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
 
     const backendIds = new Set(backendSessions.map(s => s.id))
     const storeIds = new Set(sessions.value.map(s => s.id))
@@ -267,14 +270,14 @@ export const useChatStore = defineStore('chat', () => {
     // Find sessions to remove (exist in store but not on backend)
     const sessionsToRemove = sessions.value.filter(s => !backendIds.has(s.id))
     if (sessionsToRemove.length > 0) {
-      console.log(`🗑️ Removing ${sessionsToRemove.length} stale sessions from store:`, sessionsToRemove.map(s => s.id))
+      logger.debug(`🗑️ Removing ${sessionsToRemove.length} stale sessions from store:`, sessionsToRemove.map(s => s.id))
       sessions.value = sessions.value.filter(s => backendIds.has(s.id))
     }
 
     // Find sessions to add (exist on backend but not in store)
     const sessionsToAdd = backendSessions.filter(s => !storeIds.has(s.id))
     if (sessionsToAdd.length > 0) {
-      console.log(`➕ Adding ${sessionsToAdd.length} new sessions to store:`, sessionsToAdd.map(s => s.id))
+      logger.debug(`➕ Adding ${sessionsToAdd.length} new sessions to store:`, sessionsToAdd.map(s => s.id))
       sessions.value.push(...sessionsToAdd)
     }
 
@@ -292,7 +295,7 @@ export const useChatStore = defineStore('chat', () => {
       }
     })
 
-    console.log(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
+    logger.debug(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
   }
 
   // Desktop session management
@@ -388,37 +391,37 @@ export const useChatStore = defineStore('chat', () => {
       const persistedData = localStorage.getItem('autobot-chat-store')
       if (persistedData) {
         const parsed = JSON.parse(persistedData)
-        console.log('📊 Persistence Debug:')
-        console.log(`  Store sessions: ${sessions.value.length}`)
-        console.log(`  Persisted sessions: ${parsed.sessions?.length || 0}`)
-        console.log(`  Store currentSessionId: ${currentSessionId.value}`)
-        console.log(`  Persisted currentSessionId: ${parsed.currentSessionId}`)
+        logger.debug('📊 Persistence Debug:')
+        logger.debug(`  Store sessions: ${sessions.value.length}`)
+        logger.debug(`  Persisted sessions: ${parsed.sessions?.length || 0}`)
+        logger.debug(`  Store currentSessionId: ${currentSessionId.value}`)
+        logger.debug(`  Persisted currentSessionId: ${parsed.currentSessionId}`)
 
         // Check for specific session IDs
         const storeIds = sessions.value.map(s => s.id)
         const persistedIds = parsed.sessions?.map((s: any) => s.id) || []
-        console.log(`  Store IDs: [${storeIds.join(', ')}]`)
-        console.log(`  Persisted IDs: [${persistedIds.join(', ')}]`)
+        logger.debug(`  Store IDs: [${storeIds.join(', ')}]`)
+        logger.debug(`  Persisted IDs: [${persistedIds.join(', ')}]`)
 
         // Find discrepancies
         const missingFromPersisted = storeIds.filter(id => !persistedIds.includes(id))
         const extraInPersisted = persistedIds.filter((id: string) => !storeIds.includes(id))
 
         if (missingFromPersisted.length > 0) {
-          console.warn(`⚠️ Sessions in store but not persisted: [${missingFromPersisted.join(', ')}]`)
+          logger.warn(`⚠️ Sessions in store but not persisted: [${missingFromPersisted.join(', ')}]`)
         }
         if (extraInPersisted.length > 0) {
-          console.warn(`⚠️ Sessions persisted but not in store: [${extraInPersisted.join(', ')}]`)
+          logger.warn(`⚠️ Sessions persisted but not in store: [${extraInPersisted.join(', ')}]`)
         }
 
         if (missingFromPersisted.length === 0 && extraInPersisted.length === 0) {
-          console.log('✅ Store and persistence are in sync')
+          logger.debug('✅ Store and persistence are in sync')
         }
       } else {
-        console.log('📊 No persisted data found in localStorage')
+        logger.debug('📊 No persisted data found in localStorage')
       }
     } catch (error) {
-      console.error('❌ Error checking persistence state:', error)
+      logger.error('❌ Error checking persistence state:', error)
     }
   }
 

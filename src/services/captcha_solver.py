@@ -31,16 +31,13 @@ Usage:
 Related: Issue #206
 """
 
-import asyncio
-import base64
 import io
 import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
-import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
 logger = logging.getLogger(__name__)
@@ -122,7 +119,7 @@ class CaptchaSolver:
     def _check_opencv(self) -> bool:
         """Check if OpenCV is available"""
         try:
-            import cv2
+            pass
 
             return True
         except ImportError:
@@ -508,7 +505,7 @@ class CaptchaSolver:
                     return a // b
 
         except Exception:
-            pass
+            pass  # Regex parsing failed, return None below
 
         return None
 

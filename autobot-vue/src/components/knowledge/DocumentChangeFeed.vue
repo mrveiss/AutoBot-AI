@@ -187,7 +187,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useDocumentChanges } from '@/composables/useDocumentChanges'
+
+const logger = createLogger('DocumentChangeFeed')
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -231,9 +234,9 @@ const filteredChanges = computed(() => {
 const handleScanNow = async () => {
   const result = await scanForChanges(false, autoVectorizeEnabled.value)
   if (result) {
-    console.log('Scan completed:', result)
+    logger.info('Scan completed:', result)
     if (result.vectorization) {
-      console.log('Vectorization results:', result.vectorization)
+      logger.info('Vectorization results:', result.vectorization)
     }
   }
 }

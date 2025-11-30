@@ -8,6 +8,7 @@ Aggregates health status from all system components into a single comprehensive 
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime
 
@@ -25,18 +26,22 @@ class ConsolidatedHealthService:
         self.cached_status = None
         self.cache_timestamp = None
         self.cache_duration = 10  # Cache for 10 seconds
+        self._async_lock = asyncio.Lock()  # Async lock for async methods
+        self._sync_lock = threading.Lock()  # Sync lock for sync methods
 
     def register_component(self, component_name: str, health_checker):
-        """Register a health checker for a component"""
-        self.component_checkers[component_name] = health_checker
+        """Register a health checker for a component (thread-safe)"""
+        with self._sync_lock:
+            self.component_checkers[component_name] = health_checker
 
     async def get_comprehensive_health(self) -> Metadata:
-        """Get comprehensive health status from all registered components"""
+        """Get comprehensive health status from all registered components (thread-safe)"""
 
-        # Check cache first
-        if self.cached_status and self.cache_timestamp:
-            if time.time() - self.cache_timestamp < self.cache_duration:
-                return self.cached_status
+        # Check cache first (under lock)
+        async with self._async_lock:
+            if self.cached_status and self.cache_timestamp:
+                if time.time() - self.cache_timestamp < self.cache_duration:
+                    return dict(self.cached_status)  # Return copy
 
         health_status = {
             "overall_status": "healthy",
@@ -46,8 +51,12 @@ class ConsolidatedHealthService:
             "fast_check": False,
         }
 
-        # Check each registered component
-        for component_name, checker in self.component_checkers.items():
+        # Copy component checkers under lock to avoid race conditions
+        async with self._async_lock:
+            checkers_snapshot = dict(self.component_checkers)
+
+        # Check each registered component (iterate over snapshot)
+        for component_name, checker in checkers_snapshot.items():
             try:
                 if hasattr(checker, "__call__"):
                     # It's a function/method
@@ -90,9 +99,10 @@ class ConsolidatedHealthService:
         else:
             health_status["overall_status"] = "healthy"
 
-        # Cache the result
-        self.cached_status = health_status
-        self.cache_timestamp = time.time()
+        # Cache the result (thread-safe)
+        async with self._async_lock:
+            self.cached_status = health_status
+            self.cache_timestamp = time.time()
 
         return health_status
 
@@ -109,16 +119,19 @@ class ConsolidatedHealthService:
         }
 
     def get_component_health(self, component_name: str) -> Metadata:
-        """Get health status for a specific component"""
-        if component_name not in self.component_checkers:
-            return {
-                "status": "unknown",
-                "error": f"Component '{component_name}' not registered",
-                "timestamp": datetime.now().isoformat(),
-            }
-
-        try:
+        """Get health status for a specific component (thread-safe)"""
+        # Get checker under lock
+        with self._sync_lock:
+            if component_name not in self.component_checkers:
+                return {
+                    "status": "unknown",
+                    "error": f"Component '{component_name}' not registered",
+                    "timestamp": datetime.now().isoformat(),
+                }
             checker = self.component_checkers[component_name]
+
+        # Execute checker outside lock
+        try:
             if hasattr(checker, "__call__"):
                 return checker()
             else:

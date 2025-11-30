@@ -335,7 +335,8 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
                 if "timestamp" in json_data:
                     parsed["timestamp"] = json_data["timestamp"]
             except json.JSONDecodeError:
-                pass
+                # JSON parsing failed - message is plain text, not JSON
+                pass  # Intentional: log message is not JSON format, continue with plain text
 
     except Exception as e:
         logger.debug(f"Failed to parse Docker log line: {e}")
@@ -455,8 +456,8 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
                     if level in line.upper():
                         parsed["level"] = "WARNING" if level == "WARN" else level
                         break
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to parse general log line: {e}")
 
     return parsed
 
@@ -536,13 +537,13 @@ async def tail_log(websocket: WebSocket, filename: str):
         logger.error(f"WebSocket error for {filename}: {e}")
         try:
             await websocket.send_json({"error": str(e)})
-        except Exception:
-            pass
+        except Exception as send_err:
+            logger.debug(f"Failed to send error to WebSocket: {send_err}")
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as close_err:
+            logger.debug(f"Failed to close WebSocket: {close_err}")
 
 
 @with_error_handling(

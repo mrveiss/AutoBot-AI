@@ -41,6 +41,7 @@ class HTTPClientManager:
             self._closed = False
             self._request_count = 0
             self._error_count = 0
+            self._counter_lock = asyncio.Lock()  # Lock for thread-safe counter access
 
     async def get_session(self) -> ClientSession:
         """
@@ -104,11 +105,13 @@ class HTTPClientManager:
         session = await self.get_session()
 
         try:
-            self._request_count += 1
+            async with self._counter_lock:
+                self._request_count += 1
             response = await session.request(method, url, **kwargs)
             return response
         except Exception as e:
-            self._error_count += 1
+            async with self._counter_lock:
+                self._error_count += 1
             logger.error(f"HTTP request failed: {e}")
             raise
 

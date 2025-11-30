@@ -60,6 +60,9 @@ class WebSocketManager:
         self.message_handlers: Dict[str, Callable] = {}
         self._shutdown = False
 
+        # Lock for thread-safe access to connection dictionaries
+        self._lock = asyncio.Lock()
+
     async def start_heartbeat_monitor(self):
         """Start the heartbeat monitoring task"""
         if self.heartbeat_task and not self.heartbeat_task.done():
@@ -80,13 +83,17 @@ class WebSocketManager:
         logger.info("🫀 WebSocket heartbeat monitor stopped")
 
     async def _heartbeat_loop(self):
-        """Main heartbeat monitoring loop"""
+        """Main heartbeat monitoring loop (thread-safe)"""
         while not self._shutdown:
             try:
                 current_time = time.time()
 
-                # Check all active connections
-                for connection_id in list(self.active_connections.keys()):
+                # Copy connection IDs under lock to avoid race conditions
+                async with self._lock:
+                    connection_ids = list(self.active_connections.keys())
+
+                # Check all active connections (outside lock to avoid deadlock)
+                for connection_id in connection_ids:
                     await self._check_connection_health(connection_id, current_time)
 
                 # Wait before next check
@@ -97,15 +104,17 @@ class WebSocketManager:
                 await asyncio.sleep(5.0)  # Wait longer on error
 
     async def _check_connection_health(self, connection_id: str, current_time: float):
-        """Check health of a specific connection"""
-        websocket = self.active_connections.get(connection_id)
-        if not websocket:
-            return
+        """Check health of a specific connection (thread-safe)"""
+        # Get connection info under lock
+        async with self._lock:
+            websocket = self.active_connections.get(connection_id)
+            if not websocket:
+                return
 
-        state = self.connection_states.get(connection_id, ConnectionState.CONNECTED)
-        last_heartbeat_sent = self.last_heartbeat_sent.get(connection_id, 0)
+            state = self.connection_states.get(connection_id, ConnectionState.CONNECTED)
+            last_heartbeat_sent = self.last_heartbeat_sent.get(connection_id, 0)
 
-        # Check if it's time to send heartbeat
+        # Check if it's time to send heartbeat (outside lock)
         time_since_last_heartbeat = current_time - last_heartbeat_sent
 
         if time_since_last_heartbeat >= self.config.heartbeat_interval:
@@ -115,9 +124,10 @@ class WebSocketManager:
         if state == ConnectionState.HEARTBEAT_SENT:
             response_time = current_time - last_heartbeat_sent
             if response_time > self.config.heartbeat_response_window:
-                # Heartbeat response overdue
-                missed_count = self.missed_heartbeats.get(connection_id, 0) + 1
-                self.missed_heartbeats[connection_id] = missed_count
+                # Update missed count under lock
+                async with self._lock:
+                    missed_count = self.missed_heartbeats.get(connection_id, 0) + 1
+                    self.missed_heartbeats[connection_id] = missed_count
 
                 logger.warning(f"Missed heartbeat #{missed_count} for {connection_id}")
 
@@ -125,12 +135,13 @@ class WebSocketManager:
                     await self._handle_connection_lost(connection_id)
                 else:
                     # Reset state and try again
-                    self.connection_states[connection_id] = ConnectionState.CONNECTED
+                    async with self._lock:
+                        self.connection_states[connection_id] = ConnectionState.CONNECTED
 
     async def _send_heartbeat(
         self, connection_id: str, websocket: WebSocket, current_time: float
     ):
-        """Send heartbeat ping to connection"""
+        """Send heartbeat ping to connection (thread-safe)"""
         try:
             heartbeat_message = {
                 "type": "heartbeat",
@@ -140,8 +151,10 @@ class WebSocketManager:
 
             await websocket.send_json(heartbeat_message)
 
-            self.last_heartbeat_sent[connection_id] = current_time
-            self.connection_states[connection_id] = ConnectionState.HEARTBEAT_SENT
+            # Update state under lock
+            async with self._lock:
+                self.last_heartbeat_sent[connection_id] = current_time
+                self.connection_states[connection_id] = ConnectionState.HEARTBEAT_SENT
 
             logger.debug(f"💓 Heartbeat sent to {connection_id}")
 
@@ -157,9 +170,11 @@ class WebSocketManager:
         await self.disconnect(connection_id)
 
     async def _handle_connection_error(self, connection_id: str, error: Exception):
-        """Handle connection errors"""
+        """Handle connection errors (thread-safe)"""
         logger.error(f"🚫 Connection error for {connection_id}: {error}")
-        self.connection_states[connection_id] = ConnectionState.ERROR
+
+        async with self._lock:
+            self.connection_states[connection_id] = ConnectionState.ERROR
 
         # Clean up on serious errors
         if isinstance(error, WebSocketDisconnect):
@@ -167,20 +182,21 @@ class WebSocketManager:
 
     async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
         """
-        Accept WebSocket connection with heartbeat setup.
+        Accept WebSocket connection with heartbeat setup (thread-safe).
         No timeouts - either succeeds immediately or fails immediately.
         """
         try:
             await websocket.accept()
 
-            # Register connection
-            self.active_connections[connection_id] = websocket
-            self.connection_states[connection_id] = ConnectionState.CONNECTED
-            self.missed_heartbeats[connection_id] = 0
-
             current_time = time.time()
-            self.last_heartbeat_received[connection_id] = current_time
-            self.last_heartbeat_sent[connection_id] = current_time
+
+            # Register connection under lock
+            async with self._lock:
+                self.active_connections[connection_id] = websocket
+                self.connection_states[connection_id] = ConnectionState.CONNECTED
+                self.missed_heartbeats[connection_id] = 0
+                self.last_heartbeat_received[connection_id] = current_time
+                self.last_heartbeat_sent[connection_id] = current_time
 
             # Start heartbeat monitoring if not already running
             await self.start_heartbeat_monitor()
@@ -203,47 +219,54 @@ class WebSocketManager:
             return False
 
     async def disconnect(self, connection_id: str):
-        """Disconnect and clean up connection"""
-        if connection_id in self.active_connections:
+        """Disconnect and clean up connection (thread-safe)"""
+        # Get websocket and state under lock
+        async with self._lock:
+            if connection_id not in self.active_connections:
+                return
             websocket = self.active_connections[connection_id]
+            state = self.connection_states.get(connection_id)
 
-            try:
-                # Send disconnect message if possible
-                if self.connection_states.get(connection_id) not in [
-                    ConnectionState.ERROR,
-                    ConnectionState.DISCONNECTED,
-                ]:
-                    await websocket.send_json(
-                        {
-                            "type": "disconnecting",
-                            "connection_id": connection_id,
-                            "timestamp": time.time(),
-                        }
-                    )
-            except Exception:
-                pass  # Ignore errors when disconnecting
+        try:
+            # Send disconnect message if possible (outside lock)
+            if state not in [ConnectionState.ERROR, ConnectionState.DISCONNECTED]:
+                await websocket.send_json(
+                    {
+                        "type": "disconnecting",
+                        "connection_id": connection_id,
+                        "timestamp": time.time(),
+                    }
+                )
+        except Exception:
+            pass  # Ignore errors when disconnecting
 
-            # Clean up
-            del self.active_connections[connection_id]
-            del self.connection_states[connection_id]
-            del self.missed_heartbeats[connection_id]
+        # Clean up under lock
+        async with self._lock:
+            if connection_id in self.active_connections:
+                del self.active_connections[connection_id]
+            if connection_id in self.connection_states:
+                del self.connection_states[connection_id]
+            if connection_id in self.missed_heartbeats:
+                del self.missed_heartbeats[connection_id]
             if connection_id in self.last_heartbeat_sent:
                 del self.last_heartbeat_sent[connection_id]
             if connection_id in self.last_heartbeat_received:
                 del self.last_heartbeat_received[connection_id]
 
-            logger.info(f"🔌 WebSocket disconnected: {connection_id}")
+        logger.info(f"🔌 WebSocket disconnected: {connection_id}")
 
     async def handle_message(self, connection_id: str, message: str) -> bool:
         """
-        Handle incoming message with heartbeat processing.
+        Handle incoming message with heartbeat processing (thread-safe).
         Returns True if message was handled, False if connection should close.
         """
-        if connection_id not in self.active_connections:
-            return False
+        # Check connection exists under lock
+        async with self._lock:
+            if connection_id not in self.active_connections:
+                return False
 
-        current_time = time.time()
-        self.last_heartbeat_received[connection_id] = current_time
+            current_time = time.time()
+            self.last_heartbeat_received[connection_id] = current_time
 
         try:
             # Parse message
@@ -279,23 +302,28 @@ class WebSocketManager:
     async def _handle_heartbeat_response(
         self, connection_id: str, message_data: Dict[str, Any], current_time: float
     ):
-        """Handle heartbeat response from client"""
+        """Handle heartbeat response from client (thread-safe)"""
         logger.debug(f"💓 Heartbeat response received from {connection_id}")
 
-        # Reset missed heartbeat count
-        self.missed_heartbeats[connection_id] = 0
-        self.connection_states[connection_id] = ConnectionState.HEARTBEAT_RECEIVED
+        # Reset missed heartbeat count and get websocket under lock
+        async with self._lock:
+            self.missed_heartbeats[connection_id] = 0
+            self.connection_states[connection_id] = ConnectionState.HEARTBEAT_RECEIVED
+            websocket = self.active_connections.get(connection_id)
 
-        # Optional: Send acknowledgment
-        websocket = self.active_connections[connection_id]
-        await websocket.send_json({"type": "heartbeat_ack", "timestamp": current_time})
+        # Send acknowledgment outside lock
+        if websocket:
+            await websocket.send_json({"type": "heartbeat_ack", "timestamp": current_time})
 
     async def _echo_message(self, connection_id: str, message_data: Dict[str, Any]):
-        """Default echo behavior for unknown message types"""
-        websocket = self.active_connections[connection_id]
-        await websocket.send_json(
-            {"type": "echo", "original": message_data, "timestamp": time.time()}
-        )
+        """Default echo behavior for unknown message types (thread-safe)"""
+        async with self._lock:
+            websocket = self.active_connections.get(connection_id)
+
+        if websocket:
+            await websocket.send_json(
+                {"type": "echo", "original": message_data, "timestamp": time.time()}
+            )
 
     def register_message_handler(self, message_type: str, handler: Callable):
         """Register handler for specific message types"""
@@ -305,11 +333,15 @@ class WebSocketManager:
     async def broadcast_message(
         self, message: Dict[str, Any], exclude: Optional[Set[str]] = None
     ):
-        """Broadcast message to all active connections"""
+        """Broadcast message to all active connections (thread-safe)"""
         exclude = exclude or set()
         message["timestamp"] = time.time()
 
-        for connection_id, websocket in self.active_connections.items():
+        # Copy connections under lock
+        async with self._lock:
+            connections = list(self.active_connections.items())
+
+        for connection_id, websocket in connections:
             if connection_id not in exclude:
                 try:
                     await websocket.send_json(message)
@@ -317,11 +349,12 @@ class WebSocketManager:
                     logger.error(f"Failed to broadcast to {connection_id}: {e}")
 
     async def send_message(self, connection_id: str, message: Dict[str, Any]) -> bool:
-        """Send message to specific connection"""
-        if connection_id not in self.active_connections:
-            return False
+        """Send message to specific connection (thread-safe)"""
+        async with self._lock:
+            if connection_id not in self.active_connections:
+                return False
+            websocket = self.active_connections[connection_id]
 
-        websocket = self.active_connections[connection_id]
         message["timestamp"] = time.time()
 
         try:
@@ -331,24 +364,29 @@ class WebSocketManager:
             logger.error(f"Failed to send message to {connection_id}: {e}")
             return False
 
-    def get_connection_stats(self) -> Dict[str, Any]:
-        """Get statistics about active connections"""
+    async def get_connection_stats(self) -> Dict[str, Any]:
+        """Get statistics about active connections (thread-safe)"""
         current_time = time.time()
 
+        # Copy all data under lock
+        async with self._lock:
+            connection_ids = list(self.active_connections.keys())
+            states_copy = {k: v for k, v in self.connection_states.items()}
+            heartbeat_received_copy = {k: v for k, v in self.last_heartbeat_received.items()}
+            missed_copy = {k: v for k, v in self.missed_heartbeats.items()}
+
         stats = {
-            "total_connections": len(self.active_connections),
+            "total_connections": len(connection_ids),
             "connection_states": {},
             "heartbeat_health": {},
         }
 
-        for connection_id in self.active_connections.keys():
-            state = self.connection_states.get(connection_id, ConnectionState.CONNECTED)
+        for connection_id in connection_ids:
+            state = states_copy.get(connection_id, ConnectionState.CONNECTED)
             stats["connection_states"][connection_id] = state.value
 
-            last_heartbeat = self.last_heartbeat_received.get(
-                connection_id, current_time
-            )
-            missed_count = self.missed_heartbeats.get(connection_id, 0)
+            last_heartbeat = heartbeat_received_copy.get(connection_id, current_time)
+            missed_count = missed_copy.get(connection_id, 0)
 
             stats["heartbeat_health"][connection_id] = {
                 "seconds_since_last_heartbeat": current_time - last_heartbeat,

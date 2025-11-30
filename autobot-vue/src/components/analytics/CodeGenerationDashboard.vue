@@ -326,6 +326,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodeGenerationDashboard')
 
 // Types
 interface GenerateRequest {
@@ -469,7 +472,7 @@ const copyCode = async () => {
     copied.value = true
     setTimeout(() => { copied.value = false }, 2000)
   } catch (err) {
-    console.error('Failed to copy:', err)
+    logger.error('Failed to copy:', err)
   }
 }
 
@@ -489,7 +492,7 @@ const generateCode = async () => {
     result.value = await response.json()
     await fetchStats()
   } catch (err) {
-    console.error('Generation error:', err)
+    logger.error('Generation error:', err)
     result.value = {
       success: false,
       error: String(err),
@@ -517,7 +520,7 @@ const refactorCode = async () => {
     result.value = await response.json()
     await fetchStats()
   } catch (err) {
-    console.error('Refactoring error:', err)
+    logger.error('Refactoring error:', err)
     result.value = {
       success: false,
       error: String(err),
@@ -544,7 +547,7 @@ const validateCodeSubmit = async () => {
 
     validationResult.value = await response.json()
   } catch (err) {
-    console.error('Validation error:', err)
+    logger.error('Validation error:', err)
   }
 }
 
@@ -556,7 +559,7 @@ const fetchStats = async () => {
       stats.value = data
     }
   } catch (err) {
-    console.error('Failed to fetch stats:', err)
+    logger.error('Failed to fetch stats:', err)
   }
 }
 
@@ -568,7 +571,7 @@ const fetchRefactoringTypes = async () => {
       refactoringTypes.value = data.types
     }
   } catch (err) {
-    console.error('Failed to fetch refactoring types:', err)
+    logger.error('Failed to fetch refactoring types:', err)
   }
 }
 

@@ -301,6 +301,9 @@
 import { ref, computed, onMounted } from 'vue';
 import AppConfig from '@/config/AppConfig';
 import { useToast } from '@/composables/useToast';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('MCPManager');
 
 export default {
   name: 'MCPManager',
@@ -394,7 +397,7 @@ export default {
         const data = await response.json();
         bridges.value = data.bridges || [];
       } catch (error) {
-        console.error('[MCPManager] Failed to fetch MCP bridges:', error);
+        logger.error('Failed to fetch MCP bridges:', error);
         notify('Failed to load MCP bridges', 'error');
       }
     };
@@ -409,7 +412,7 @@ export default {
         const data = await response.json();
         tools.value = data.tools || [];
       } catch (error) {
-        console.error('[MCPManager] Failed to fetch MCP tools:', error);
+        logger.error('Failed to fetch MCP tools:', error);
         notify('Failed to load MCP tools', 'error');
       }
     };
@@ -424,7 +427,7 @@ export default {
         const data = await response.json();
         healthData.value = data;
       } catch (error) {
-        console.error('[MCPManager] Failed to fetch MCP health:', error);
+        logger.error('Failed to fetch MCP health:', error);
         notify('Failed to load MCP health status', 'warning');
       }
     };
@@ -439,7 +442,7 @@ export default {
         const data = await response.json();
         stats.value = data.overview || {};
       } catch (error) {
-        console.error('[MCPManager] Failed to fetch MCP stats:', error);
+        logger.error('Failed to fetch MCP stats:', error);
         notify('Failed to load MCP statistics', 'warning');
       }
     };

@@ -249,7 +249,9 @@ import { ref, reactive, onMounted } from 'vue'
 import { useUserStore } from '../../stores/useUserStore'
 import LoginForm from '../auth/LoginForm.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('UserManagementSettings')
 const userStore = useUserStore()
 
 // Props
@@ -302,7 +304,7 @@ const handleLogout = async () => {
     await userStore.logout()
     emit('setting-changed', 'user.logout', true)
   } catch (error) {
-    console.error('Logout failed:', error)
+    logger.error('Logout failed:', error)
   }
 }
 
@@ -313,7 +315,7 @@ const onLoginSuccess = () => {
 }
 
 const onLoginError = (error: string) => {
-  console.error('Login error:', error)
+  logger.error('Login error:', error)
 }
 
 const saveProfile = async () => {
@@ -326,7 +328,7 @@ const saveProfile = async () => {
     isEditingProfile.value = false
     emit('setting-changed', 'user.profile', profileForm)
   } catch (error) {
-    console.error('Failed to save profile:', error)
+    logger.error('Failed to save profile:', error)
   } finally {
     isSaving.value = false
   }
@@ -394,7 +396,7 @@ const changePassword = async () => {
     passwordForm.confirmPassword = ''
     // emit('setting-changed', 'user.password', true)
   } catch (error) {
-    console.error('Failed to change password:', error)
+    logger.error('Failed to change password:', error)
     alert('Failed to change password')
   } finally {
     isChangingPassword.value = false

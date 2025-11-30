@@ -7,6 +7,9 @@
 
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('AppConfig');
 
 export class AppConfigService {
   constructor() {
@@ -458,7 +461,7 @@ export class AppConfigService {
    */
   log(...args) {
     if (this.debugMode) {
-      console.log('[AutoBot Config]', ...args);
+      logger.debug('[AppConfig]', ...args);
     }
   }
 
@@ -519,7 +522,7 @@ const appConfig = new AppConfigService();
 
 // Initialize remote configuration on load
 if (typeof window !== 'undefined') {
-  appConfig.loadRemoteConfig().catch(console.warn);
+  appConfig.loadRemoteConfig().catch((err) => logger.warn('Failed to load remote config:', err));
 }
 
 export default appConfig;

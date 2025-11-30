@@ -192,7 +192,7 @@ class OSDetector:
                     content = f.read().lower()
                     return "microsoft" in content or "wsl" in content
         except Exception:
-            pass
+            pass  # File read error, assume not WSL
 
         return False
 

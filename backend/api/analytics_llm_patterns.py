@@ -27,7 +27,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.utils.redis_client import RedisDatabase, get_redis_client

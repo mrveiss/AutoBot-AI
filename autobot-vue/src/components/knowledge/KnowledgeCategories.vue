@@ -144,6 +144,9 @@ import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('KnowledgeCategories')
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -190,7 +193,7 @@ const getKBStats = async () => {
     const response = await fetchBasicStats()
     kbStats.value = response
   } catch (error) {
-    console.error('Error fetching KB stats:', error)
+    logger.error('Error fetching KB stats:', error)
   } finally {
     isLoadingKBStats.value = false
   }
@@ -214,7 +217,7 @@ const viewCategoryDocuments = async (category: any) => {
     categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
   } catch (error) {
-    console.error('Error loading category documents:', error)
+    logger.error('Error loading category documents:', error)
     categoryDocuments.value = []
   } finally {
     isLoadingCategoryDocs.value = false
@@ -244,7 +247,7 @@ const loadMainCategories = async () => {
     const data = await parseApiResponse(response)
     mainCategories.value = data?.categories || []
   } catch (error) {
-    console.error('Failed to load main categories:', error)
+    logger.error('Failed to load main categories:', error)
     mainCategories.value = []
   }
 }

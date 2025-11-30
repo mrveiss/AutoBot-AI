@@ -292,8 +292,8 @@ class SecureSandboxExecutor:
             # Clean up script file
             try:
                 os.unlink(script_path)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Failed to cleanup script file {script_path}: {e}")
 
     def _validate_command(
         self, command: Union[str, List[str]], config: SandboxConfig
@@ -513,8 +513,8 @@ class SecureSandboxExecutor:
                 try:
                     event = json.loads(raw_event)
                     events.append(event)
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Skipping malformed security event: {e}")
 
             return events
 

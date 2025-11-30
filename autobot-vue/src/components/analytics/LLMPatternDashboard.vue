@@ -324,6 +324,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LLMPatternDashboard')
 
 // Types
 interface Stats {
@@ -481,7 +484,7 @@ const fetchStats = async () => {
       stats.value = await response.json()
     }
   } catch (err) {
-    console.error('Failed to fetch stats:', err)
+    logger.error('Failed to fetch stats:', err)
   }
 }
 
@@ -493,7 +496,7 @@ const fetchRecommendations = async () => {
       recommendations.value = data.recommendations || []
     }
   } catch (err) {
-    console.error('Failed to fetch recommendations:', err)
+    logger.error('Failed to fetch recommendations:', err)
   }
 }
 
@@ -505,7 +508,7 @@ const fetchModelComparison = async () => {
       modelComparison.value = data.models || []
     }
   } catch (err) {
-    console.error('Failed to fetch model comparison:', err)
+    logger.error('Failed to fetch model comparison:', err)
   }
 }
 
@@ -516,7 +519,7 @@ const fetchCategoryDistribution = async () => {
       categoryData.value = await response.json()
     }
   } catch (err) {
-    console.error('Failed to fetch category distribution:', err)
+    logger.error('Failed to fetch category distribution:', err)
   }
 }
 
@@ -528,7 +531,7 @@ const fetchCacheOpportunities = async () => {
       cacheOpportunities.value = data.opportunities || []
     }
   } catch (err) {
-    console.error('Failed to fetch cache opportunities:', err)
+    logger.error('Failed to fetch cache opportunities:', err)
   }
 }
 
@@ -549,7 +552,7 @@ const runAnalysis = async () => {
       analysisResult.value = await response.json()
     }
   } catch (err) {
-    console.error('Failed to analyze prompt:', err)
+    logger.error('Failed to analyze prompt:', err)
   }
 }
 

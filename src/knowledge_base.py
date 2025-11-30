@@ -347,8 +347,8 @@ class KnowledgeBase:
                 try:
                     chroma_collection = self.vector_store._collection
                     vector_count = chroma_collection.count()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not get vector count: {e}")
 
             # Initialize the counters
             await self.aioredis_client.hset(
@@ -405,8 +405,8 @@ class KnowledgeBase:
                 try:
                     chroma_collection = self.vector_store._collection
                     actual_vector_count = chroma_collection.count()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not get actual vector count: {e}")
 
             # Calculate drift
             fact_drift = actual_fact_count - stored_facts
@@ -516,8 +516,8 @@ class KnowledgeBase:
             try:
                 chroma_client.delete_collection(name=target_name)
                 logger.info(f"Deleted existing collection: {target_name}")
-            except Exception:
-                pass  # Collection doesn't exist
+            except Exception as e:
+                logger.debug(f"Collection {target_name} does not exist or could not be deleted: {e}")
 
             # Create new collection with optimized parameters
             new_collection = chroma_client.create_collection(
@@ -2290,8 +2290,8 @@ class KnowledgeBase:
                 try:
                     info = await self.aioredis_client.info("memory")
                     stats["db_size"] = info.get("used_memory", 0)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not get Redis memory info: {e}")
 
                 # Extract categories from sampled facts
                 categories = set()

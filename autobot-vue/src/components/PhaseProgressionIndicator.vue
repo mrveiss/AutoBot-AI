@@ -343,6 +343,9 @@
 import { apiRequest } from '@/config/api.js';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import BaseButton from '@/components/base/BaseButton.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('PhaseProgressionIndicator');
 
 export default {
   name: 'PhaseProgressionIndicator',
@@ -427,9 +430,9 @@ export default {
 
         // Only log in development mode
         if (import.meta.env.DEV) {
-          console.debug('Validation service unavailable:', error.message);
+          logger.debug('Validation service unavailable:', error.message);
         }
-      } finally {
+      } finally{
         this.loading = false;
       }
     },
@@ -448,7 +451,7 @@ export default {
 
         this.$emit('success', 'System validation completed successfully');
       } catch (error) {
-        console.error('Validation failed:', error);
+        logger.error('Validation failed:', error);
         this.$emit('error', 'System validation failed');
       } finally {
         this.validationInProgress = false;
@@ -473,7 +476,7 @@ export default {
           await this.loadPhaseData();
         }, 3000);
       } catch (error) {
-        console.error('Auto-progression failed:', error);
+        logger.error('Auto-progression failed:', error);
         this.$emit('error', 'Auto-progression failed');
       } finally {
         this.progressionInProgress = false;
@@ -499,7 +502,7 @@ export default {
         this.$emit('success', `Successfully progressed to ${phaseName}`);
         await this.loadPhaseData();
       } catch (error) {
-        console.error('Manual progression failed:', error);
+        logger.error('Manual progression failed:', error);
         this.$emit('error', `Failed to progress to ${phaseName}: ${error.message}`);
       } finally {
         this.progressionInProgress = false;
@@ -523,7 +526,7 @@ export default {
         this.$emit('phase-validated', { phase: phaseName, result });
         await this.loadPhaseData();
       } catch (error) {
-        console.error('Phase validation failed:', error);
+        logger.error('Phase validation failed:', error);
         this.$emit('error', `Validation failed for ${phaseName}`);
       } finally {
         this.validationInProgress = false;
@@ -541,7 +544,7 @@ export default {
 
         this.$emit('success', `Auto-progression ${this.autoProgressionEnabled ? 'enabled' : 'disabled'}`);
       } catch (error) {
-        console.error('Failed to update auto-progression setting:', error);
+        logger.error('Failed to update auto-progression setting:', error);
         // Revert the toggle
         this.autoProgressionEnabled = !this.autoProgressionEnabled;
       }

@@ -290,8 +290,8 @@ class CommonUtils:
             file_path = Path(file_path)
             if file_path.exists():
                 return file_path.stat().st_size / (1024 * 1024)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not get file size for {file_path}: {e}")
         return 0.0
 
     @staticmethod

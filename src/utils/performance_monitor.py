@@ -177,6 +177,9 @@ class Phase9PerformanceMonitor:
         self.collection_interval = 5.0  # Collect metrics every 5 seconds
         self.retention_hours = 24
 
+        # Lock for thread-safe access to shared mutable state
+        self._lock = asyncio.Lock()
+
         # Performance data buffers
         self.gpu_metrics_buffer = deque(maxlen=1440)  # 2 hours at 5s intervals
         self.npu_metrics_buffer = deque(maxlen=1440)
@@ -824,20 +827,21 @@ class Phase9PerformanceMonitor:
                 ),
                 service_metrics = []
 
-            # Store metrics in buffers
-            if gpu_metrics:
-                self.gpu_metrics_buffer.append(gpu_metrics)
-            if npu_metrics:
-                self.npu_metrics_buffer.append(npu_metrics)
-            if multimodal_metrics:
-                self.multimodal_metrics_buffer.append(multimodal_metrics)
-            if system_metrics:
-                self.system_metrics_buffer.append(system_metrics)
+            # Store metrics in buffers under lock
+            async with self._lock:
+                if gpu_metrics:
+                    self.gpu_metrics_buffer.append(gpu_metrics)
+                if npu_metrics:
+                    self.npu_metrics_buffer.append(npu_metrics)
+                if multimodal_metrics:
+                    self.multimodal_metrics_buffer.append(multimodal_metrics)
+                if system_metrics:
+                    self.system_metrics_buffer.append(system_metrics)
 
-            for service_metric in service_metrics or []:
-                self.service_metrics_buffer[service_metric.service_name].append(
-                    service_metric
-                )
+                for service_metric in service_metrics or []:
+                    self.service_metrics_buffer[service_metric.service_name].append(
+                        service_metric
+                    )
 
             # Persist to Redis if available
             if self.redis_client:
@@ -1077,13 +1081,16 @@ class Phase9PerformanceMonitor:
                             }
                         )
 
-            # Store alerts
-            for alert in alerts:
-                self.performance_alerts.append(alert)
+            # Store alerts and get callbacks under lock
+            async with self._lock:
+                for alert in alerts:
+                    self.performance_alerts.append(alert)
+                # Copy callbacks to avoid race during iteration
+                callbacks = list(self.alert_callbacks)
 
-            # Trigger alert callbacks
+            # Trigger alert callbacks outside lock
             if alerts:
-                for callback in self.alert_callbacks:
+                for callback in callbacks:
                     try:
                         await callback(alerts)
                     except Exception as e:
@@ -1148,41 +1155,43 @@ class Phase9PerformanceMonitor:
 
         self.logger.info("Phase 9 performance monitoring stopped")
 
-    def get_current_performance_dashboard(self) -> Dict[str, Any]:
-        """Get comprehensive performance dashboard data"""
+    async def get_current_performance_dashboard(self) -> Dict[str, Any]:
+        """Get comprehensive performance dashboard data (thread-safe)"""
         try:
-            dashboard = {
-                "timestamp": time.time(),
-                "monitoring_active": self.monitoring_active,
-                "hardware_acceleration": {
-                    "gpu_available": self.gpu_available,
-                    "npu_available": self.npu_available,
-                },
-                "performance_baselines": self.performance_baselines,
-                "recent_alerts": list(self.performance_alerts)[-10:],  # Last 10 alerts
-            }
+            # Get all data under lock
+            async with self._lock:
+                dashboard = {
+                    "timestamp": time.time(),
+                    "monitoring_active": self.monitoring_active,
+                    "hardware_acceleration": {
+                        "gpu_available": self.gpu_available,
+                        "npu_available": self.npu_available,
+                    },
+                    "performance_baselines": dict(self.performance_baselines),
+                    "recent_alerts": list(self.performance_alerts)[-10:],  # Last 10 alerts
+                }
 
-            # Add latest metrics
-            if self.gpu_metrics_buffer:
-                dashboard["gpu"] = asdict(self.gpu_metrics_buffer[-1])
+                # Add latest metrics
+                if self.gpu_metrics_buffer:
+                    dashboard["gpu"] = asdict(self.gpu_metrics_buffer[-1])
 
-            if self.npu_metrics_buffer:
-                dashboard["npu"] = asdict(self.npu_metrics_buffer[-1])
+                if self.npu_metrics_buffer:
+                    dashboard["npu"] = asdict(self.npu_metrics_buffer[-1])
 
-            if self.multimodal_metrics_buffer:
-                dashboard["multimodal"] = asdict(self.multimodal_metrics_buffer[-1])
+                if self.multimodal_metrics_buffer:
+                    dashboard["multimodal"] = asdict(self.multimodal_metrics_buffer[-1])
 
-            if self.system_metrics_buffer:
-                dashboard["system"] = asdict(self.system_metrics_buffer[-1])
+                if self.system_metrics_buffer:
+                    dashboard["system"] = asdict(self.system_metrics_buffer[-1])
 
-            # Add service statuses
-            dashboard["services"] = {}
-            for service_name, service_buffer in self.service_metrics_buffer.items():
-                if service_buffer:
-                    dashboard["services"][service_name] = asdict(service_buffer[-1])
+                # Add service statuses
+                dashboard["services"] = {}
+                for service_name, service_buffer in self.service_metrics_buffer.items():
+                    if service_buffer:
+                        dashboard["services"][service_name] = asdict(service_buffer[-1])
 
-            # Calculate performance trends
-            dashboard["trends"] = self._calculate_performance_trends()
+            # Calculate performance trends (has its own lock handling)
+            dashboard["trends"] = await self._calculate_performance_trends()
 
             return dashboard
 
@@ -1190,15 +1199,19 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error generating performance dashboard: {e}")
             return {"error": str(e), "timestamp": time.time()}
 
-    def _calculate_performance_trends(self) -> Dict[str, Any]:
-        """Calculate performance trends from recent metrics"""
+    async def _calculate_performance_trends(self) -> Dict[str, Any]:
+        """Calculate performance trends from recent metrics (thread-safe)"""
         try:
             trends = {}
 
-            # GPU utilization trend
-            if len(self.gpu_metrics_buffer) >= 5:
-                recent_gpu = list(self.gpu_metrics_buffer)[-5:]
-                utilizations = [g.utilization_percent for g in recent_gpu]
+            # Copy buffer data under lock
+            async with self._lock:
+                gpu_buffer_copy = list(self.gpu_metrics_buffer)[-5:] if len(self.gpu_metrics_buffer) >= 5 else []
+                system_buffer_copy = list(self.system_metrics_buffer)[-5:] if len(self.system_metrics_buffer) >= 5 else []
+
+            # GPU utilization trend (process outside lock)
+            if gpu_buffer_copy:
+                utilizations = [g.utilization_percent for g in gpu_buffer_copy]
                 trends["gpu_utilization"] = {
                     "average": round(sum(utilizations) / len(utilizations), 1),
                     "trend": (
@@ -1212,10 +1225,9 @@ class Phase9PerformanceMonitor:
                     ),
                 }
 
-            # System load trend
-            if len(self.system_metrics_buffer) >= 5:
-                recent_system = list(self.system_metrics_buffer)[-5:]
-                loads = [s.cpu_load_1m for s in recent_system]
+            # System load trend (process outside lock)
+            if system_buffer_copy:
+                loads = [s.cpu_load_1m for s in system_buffer_copy]
                 trends["cpu_load"] = {
                     "average": round(sum(loads) / len(loads), 2),
                     "trend": (
@@ -1226,7 +1238,7 @@ class Phase9PerformanceMonitor:
                 }
 
                 # Memory usage trend
-                memory_usage = [s.memory_usage_percent for s in recent_system]
+                memory_usage = [s.memory_usage_percent for s in system_buffer_copy]
                 trends["memory_usage"] = {
                     "average": round(sum(memory_usage) / len(memory_usage), 1),
                     "trend": (
@@ -1246,19 +1258,24 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error calculating performance trends: {e}")
             return {}
 
-    def add_alert_callback(self, callback):
-        """Add callback function for performance alerts"""
-        self.alert_callbacks.append(callback)
+    async def add_alert_callback(self, callback):
+        """Add callback function for performance alerts (thread-safe)"""
+        async with self._lock:
+            self.alert_callbacks.append(callback)
 
-    def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
-        """Generate performance optimization recommendations"""
+    async def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate performance optimization recommendations (thread-safe)"""
         recommendations = []
 
         try:
-            # GPU optimization recommendations
-            if self.gpu_metrics_buffer:
-                latest_gpu = self.gpu_metrics_buffer[-1]
+            # Get latest metrics under lock
+            async with self._lock:
+                latest_gpu = self.gpu_metrics_buffer[-1] if self.gpu_metrics_buffer else None
+                latest_npu = self.npu_metrics_buffer[-1] if self.npu_available and self.npu_metrics_buffer else None
+                latest_system = self.system_metrics_buffer[-1] if self.system_metrics_buffer else None
 
+            # GPU optimization recommendations (process outside lock)
+            if latest_gpu:
                 if latest_gpu.utilization_percent < 50:
                     recommendations.append(
                         {
@@ -1292,9 +1309,7 @@ class Phase9PerformanceMonitor:
                     )
 
             # NPU optimization recommendations
-            if self.npu_available and self.npu_metrics_buffer:
-                latest_npu = self.npu_metrics_buffer[-1]
-
+            if latest_npu:
                 if latest_npu.acceleration_ratio < 3.0:
                     recommendations.append(
                         {
@@ -1313,9 +1328,7 @@ class Phase9PerformanceMonitor:
                     )
 
             # System optimization recommendations
-            if self.system_metrics_buffer:
-                latest_system = self.system_metrics_buffer[-1]
-
+            if latest_system:
                 if latest_system.memory_usage_percent > 85:
                     recommendations.append(
                         {
@@ -1367,14 +1380,14 @@ async def stop_monitoring():
     await phase9_monitor.stop_monitoring()
 
 
-def get_phase9_performance_dashboard() -> Dict[str, Any]:
+async def get_phase9_performance_dashboard() -> Dict[str, Any]:
     """Get Phase 9 performance dashboard"""
-    return phase9_monitor.get_current_performance_dashboard()
+    return await phase9_monitor.get_current_performance_dashboard()
 
 
-def get_phase9_optimization_recommendations() -> List[Dict[str, Any]]:
+async def get_phase9_optimization_recommendations() -> List[Dict[str, Any]]:
     """Get Phase 9 performance optimization recommendations"""
-    return phase9_monitor.get_performance_optimization_recommendations()
+    return await phase9_monitor.get_performance_optimization_recommendations()
 
 
 async def collect_phase9_metrics() -> Dict[str, Any]:
@@ -1382,9 +1395,9 @@ async def collect_phase9_metrics() -> Dict[str, Any]:
     return await phase9_monitor.collect_all_metrics()
 
 
-def add_phase9_alert_callback(callback):
+async def add_phase9_alert_callback(callback):
     """Add callback for Phase 9 performance alerts"""
-    phase9_monitor.add_alert_callback(callback)
+    await phase9_monitor.add_alert_callback(callback)
 
 
 # Performance monitoring decorator for functions
@@ -1425,7 +1438,7 @@ def monitor_performance(category: str = "general"):
                             key, 3600
                         )  # 1 hour retention
                     except Exception:
-                        pass
+                        pass  # Non-critical: Redis metrics storage failure
 
                 return result
             except Exception as e:
@@ -1477,11 +1490,11 @@ if __name__ == "__main__":
         print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")
 
         # Get dashboard
-        dashboard = phase9_monitor.get_current_performance_dashboard()
+        dashboard = await phase9_monitor.get_current_performance_dashboard()
         print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")
 
         # Get recommendations
-        recommendations = phase9_monitor.get_performance_optimization_recommendations()
+        recommendations = await phase9_monitor.get_performance_optimization_recommendations()
         print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")
 
     # Run test
