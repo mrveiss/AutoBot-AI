@@ -17,6 +17,7 @@ Provides advanced code analysis capabilities including:
 - Dynamic log pattern mining
 - Conversation flow analysis
 - LLM-powered code generation and auto-refactoring
+- LLM pattern analysis for cost optimization
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -147,6 +148,38 @@ from .llm_code_generator import (
     refactor_code,
     validate_code,
 )
+from .llm_pattern_analyzer import (
+    AnalysisResult as PatternAnalysisResult,
+    BatchingAnalyzer,
+    BatchingOpportunity,
+    CacheOpportunity,
+    CacheOpportunityDetector,
+    CacheOpportunityType,
+    CodePatternScanner,
+    CostCalculator,
+    CostEstimate,
+    LLMPatternAnalyzer,
+    OptimizationCategory,
+    OptimizationPriority,
+    OptimizationRecommendation,
+    PromptAnalyzer,
+    PromptIssueType,
+    PromptTemplate as PatternPromptTemplate,
+    RecommendationEngine,
+    RetryPattern,
+    TokenTracker,
+    TokenUsage,
+    UsagePattern,
+    UsagePatternType,
+    analyze_llm_patterns,
+    analyze_prompt,
+    estimate_prompt_tokens,
+    get_cache_opportunity_types,
+    get_optimization_categories,
+    get_optimization_priorities,
+    get_prompt_issue_types,
+    get_usage_pattern_types,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -267,4 +300,35 @@ __all__ = [
     "list_prompt_templates",
     "refactor_code",
     "validate_code",
+    # LLM pattern analysis (Issue #229)
+    "PatternAnalysisResult",
+    "BatchingAnalyzer",
+    "BatchingOpportunity",
+    "CacheOpportunity",
+    "CacheOpportunityDetector",
+    "CacheOpportunityType",
+    "CodePatternScanner",
+    "CostCalculator",
+    "CostEstimate",
+    "LLMPatternAnalyzer",
+    "OptimizationCategory",
+    "OptimizationPriority",
+    "OptimizationRecommendation",
+    "PromptAnalyzer",
+    "PromptIssueType",
+    "PatternPromptTemplate",
+    "RecommendationEngine",
+    "RetryPattern",
+    "TokenTracker",
+    "TokenUsage",
+    "UsagePattern",
+    "UsagePatternType",
+    "analyze_llm_patterns",
+    "analyze_prompt",
+    "estimate_prompt_tokens",
+    "get_cache_opportunity_types",
+    "get_optimization_categories",
+    "get_optimization_priorities",
+    "get_prompt_issue_types",
+    "get_usage_pattern_types",
 ]
