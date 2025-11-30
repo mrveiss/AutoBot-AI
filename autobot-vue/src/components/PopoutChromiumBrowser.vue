@@ -359,6 +359,10 @@ import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { NetworkConstants } from '@/constants/network'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for PopoutChromiumBrowser
+const logger = createLogger('PopoutChromiumBrowser')
 
 interface ConsoleLogEntry {
   timestamp: string
@@ -478,7 +482,7 @@ export default {
             // ApiClient.get() returns parsed JSON directly, throws on error
             sessionData = await apiClient.get(`/api/research/browser/${props.sessionId}`)
           } catch (sessionError) {
-            console.warn('Could not get session info, using manual mode')
+            logger.warn('Could not get session info, using manual mode')
           }
         }
 
@@ -504,7 +508,7 @@ export default {
             browserStatus.value = 'connected'
             addConsoleLog('info', 'Connected to Playwright automation service')
           } else {
-            console.warn('Playwright service not available, using VNC only')
+            logger.warn('Playwright service not available, using VNC only')
             playwrightStatus.value = 'unavailable'
             browserStatus.value = 'connected' // Still connected via VNC
             addConsoleLog('warn', 'Playwright automation not available')
@@ -553,7 +557,7 @@ export default {
               session_id: props.sessionId
             })
           } catch (navError) {
-            console.warn('Playwright navigation failed, relying on VNC')
+            logger.warn('Playwright navigation failed, relying on VNC')
           }
         }
 
@@ -830,9 +834,9 @@ export default {
           autoconnect: true,
           resize: 'scale'
         })
-        console.log('[Browser] Loaded VNC URL for headed mode:', vncUrl.value)
+        logger.debug('Loaded VNC URL for headed mode:', vncUrl.value)
       } catch (error) {
-        console.error('[Browser] Failed to load VNC URL:', error)
+        logger.error('Failed to load VNC URL:', error)
       }
 
       // Initialize Playwright connection
@@ -865,13 +869,13 @@ export default {
     }
 
     const handlePlaywrightError = (error: any) => {
-      console.error('[PopoutChromiumBrowser] Playwright connection error:', error)
+      logger.error('Playwright connection error:', error)
       browserStatus.value = 'error'
       addConsoleLog('error', `Playwright connection failed: ${error.message || error}`)
     }
 
     const handlePlaywrightTimeout = () => {
-      console.warn('[PopoutChromiumBrowser] Playwright connection timeout')
+      logger.warn('Playwright connection timeout')
       browserStatus.value = 'error'
       addConsoleLog('warning', 'Playwright connection timed out')
     }
@@ -882,14 +886,14 @@ export default {
     }
 
     const handleSessionError = (error: any) => {
-      console.error('[PopoutChromiumBrowser] Session initialization error:', error)
+      logger.error('Session initialization error:', error)
       loading.value = false
       browserStatus.value = 'error'
       addConsoleLog('error', `Session initialization failed: ${error.message || error}`)
     }
 
     const handleSessionTimeout = () => {
-      console.warn('[PopoutChromiumBrowser] Session initialization timeout')
+      logger.warn('Session initialization timeout')
       loading.value = false
       browserStatus.value = 'error'
       addConsoleLog('warning', 'Session initialization timed out')

@@ -320,6 +320,10 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { secretsApiClient } from '../utils/SecretsApiClient';
 import { useAppStore } from '../stores/useAppStore.ts';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for SecretsManager
+const logger = createLogger('SecretsManager');
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { useModal } from '@/composables/useModal';
@@ -411,7 +415,7 @@ export default {
         const response = await secretsApiClient.getSecrets({ scope: selectedScope.value });
         secrets.value = response.secrets || [];
       } catch (error) {
-        console.error('Failed to load secrets:', error);
+        logger.error('Failed to load secrets:', error);
       } finally {
         loading.value = false;
       }
@@ -422,7 +426,7 @@ export default {
         const response = await secretsApiClient.getSecretTypes();
         secretTypes.value = response.types || [];
       } catch (error) {
-        console.error('Failed to load secret types:', error);
+        logger.error('Failed to load secret types:', error);
       }
     };
     
@@ -431,7 +435,7 @@ export default {
         const response = await secretsApiClient.getSecretsStats();
         stats.value = response;
       } catch (error) {
-        console.error('Failed to load secrets stats:', error);
+        logger.error('Failed to load secrets stats:', error);
       }
     };
     
@@ -446,7 +450,7 @@ export default {
         showSecretValue.value = false;
         showViewModal.value = true;
       } catch (error) {
-        console.error('Failed to load secret details:', error);
+        logger.error('Failed to load secret details:', error);
         alert('Failed to load secret details');
       }
     };
@@ -472,7 +476,7 @@ export default {
         await loadSecrets();
         await loadStats();
       } catch (error) {
-        console.error('Failed to delete secret:', error);
+        logger.error('Failed to delete secret:', error);
         alert('Failed to delete secret');
       }
     };
@@ -498,7 +502,7 @@ export default {
         await loadSecrets();
         await loadStats();
       } catch (error) {
-        console.error('Failed to transfer secret:', error);
+        logger.error('Failed to transfer secret:', error);
         alert('Failed to transfer secret');
       } finally {
         transferring.value = false;
@@ -531,7 +535,7 @@ export default {
         await loadSecrets();
         await loadStats();
       } catch (error) {
-        console.error('Failed to save secret:', error);
+        logger.error('Failed to save secret:', error);
         alert('Failed to save secret');
       } finally {
         saving.value = false;
@@ -588,7 +592,7 @@ export default {
           await navigator.clipboard.writeText(viewingSecret.value.value);
           alert('Secret value copied to clipboard');
         } catch (error) {
-          console.error('Failed to copy to clipboard:', error);
+          logger.error('Failed to copy to clipboard:', error);
           alert('Failed to copy to clipboard');
         }
       }

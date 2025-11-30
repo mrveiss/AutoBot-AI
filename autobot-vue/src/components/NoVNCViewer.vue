@@ -197,6 +197,10 @@
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import appConfig from '@/config/AppConfig.js'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for NoVNCViewer
+const logger = createLogger('NoVNCViewer')
 import { NetworkConstants } from '@/constants/network'
 import { formatTime } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
@@ -256,7 +260,7 @@ const onIframeLoad = async () => {
 }
 
 const onIframeError = (event: Event) => {
-  console.error('[NoVNCViewer] Iframe error:', event)
+  logger.error('Iframe error:', event)
   isLoading.value = false
   connectionError.value = true
   errorCount.value += 1
@@ -306,7 +310,7 @@ const checkVNCServiceFn = async () => {
 
 const checkVNCService = async () => {
   await executeServiceCheck(checkVNCServiceFn).catch(async (error: any) => {
-    console.warn('[NoVNCViewer] VNC service check failed:', error.message)
+    logger.warn('VNC service check failed:', error.message)
     if (error.name === 'AbortError') {
       errorDetails.value = 'Connection timeout - service may be starting up'
     } else {
@@ -371,7 +375,7 @@ const refreshViewer = async () => {
       reconnect: true
     })
   } catch (error) {
-    console.error('[NoVNCViewer] Failed to reload VNC URL:', error)
+    logger.error('Failed to reload VNC URL:', error)
   }
 
   // Force iframe refresh
@@ -413,14 +417,14 @@ const toggleFullscreen = async () => {
       await document.documentElement.requestFullscreen()
       isFullscreen.value = true
     } catch (error) {
-      console.error('[NoVNCViewer] Failed to enter fullscreen:', error)
+      logger.error('Failed to enter fullscreen:', error)
     }
   } else {
     try {
       await document.exitFullscreen()
       isFullscreen.value = false
     } catch (error) {
-      console.error('[NoVNCViewer] Failed to exit fullscreen:', error)
+      logger.error('Failed to exit fullscreen:', error)
     }
   }
 }
@@ -442,7 +446,7 @@ const handleVNCConnected = () => {
 }
 
 const handleVNCError = (error: any) => {
-  console.error('[NoVNCViewer] VNC connection error:', error)
+  logger.error('VNC connection error:', error)
   isLoading.value = false
   connectionError.value = true
   errorDetails.value = `VNC service error: ${error.message || error}`
@@ -451,7 +455,7 @@ const handleVNCError = (error: any) => {
 }
 
 const handleVNCTimeout = () => {
-  console.warn('[NoVNCViewer] VNC connection timeout')
+  logger.warn('VNC connection timeout')
   isLoading.value = false
   connectionError.value = true
   errorDetails.value = 'VNC service connection timed out. Service may be starting up.'
@@ -478,7 +482,7 @@ onMounted(async () => {
     vncPort.value = Number(backendConfig?.services?.vnc?.desktop?.port || NetworkConstants.VNC_DESKTOP_PORT)
 
   } catch (error) {
-    console.warn('[NoVNCViewer] Failed to load VNC configuration from appConfig:', error)
+    logger.warn('Failed to load VNC configuration from appConfig:', error)
     // Fallback values will be used
     vncHost.value = NetworkConstants.MAIN_MACHINE_IP
     vncPort.value = NetworkConstants.VNC_DESKTOP_PORT
