@@ -43,6 +43,10 @@
  */
 
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for usePagination
+const logger = createLogger('usePagination')
 
 // ========================================
 // Types & Interfaces
@@ -337,7 +341,7 @@ export function usePagination<T = any>(
       currentPage.value = page
       triggerPageChange()
     } else {
-      console.warn(`[usePagination] Invalid page number: ${page}. Must be between 1 and ${totalPages.value}`)
+      logger.warn(`[usePagination] Invalid page number: ${page}. Must be between 1 and ${totalPages.value}`)
     }
   }
 
@@ -376,7 +380,7 @@ export function usePagination<T = any>(
    */
   const setItemsPerPage = (count: number): void => {
     if (count <= 0 && count !== Infinity) {
-      console.warn('[usePagination] itemsPerPage must be positive or Infinity')
+      logger.warn('[usePagination] itemsPerPage must be positive or Infinity')
       return
     }
 

@@ -4,6 +4,10 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useUnifiedLoading
+const logger = createLogger('useUnifiedLoading')
 
 export interface LoadingOptions {
   timeout?: number // milliseconds, default 10000 (10 seconds)
@@ -78,7 +82,7 @@ class UnifiedLoadingManager {
         if (fallbackOnTimeout) {
           state.isLoading.value = false
           state.error.value = showError ? `Operation timed out after ${timeout/1000} seconds` : null
-          console.warn(`[Loading] ${key} timed out after ${timeout}ms`)
+          logger.warn(`[Loading] ${key} timed out after ${timeout}ms`)
         }
       }
     }, timeout)
@@ -101,7 +105,7 @@ class UnifiedLoadingManager {
       state.error.value = showError ? (error as Error).message : null
       this.clearTimeout(key)
 
-      console.error(`[Loading] ${key} failed:`, error)
+      logger.error(`[Loading] ${key} failed:`, error)
       throw error
     }
   }

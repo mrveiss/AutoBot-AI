@@ -4,7 +4,11 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
+
+// Create scoped logger for useHealthMonitoring
+const logger = createLogger('useHealthMonitoring')
 import { useAppStore } from '@/stores/useAppStore'
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js'
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js'
@@ -78,7 +82,7 @@ export function useHealthMonitoring() {
 
     // Monitor router errors
     router.onError((error) => {
-      console.error('[App] Router error:', error)
+      logger.error('[App] Router error:', error)
       // Note: handleGlobalError should be passed in or accessed via a store
     })
   }
@@ -104,7 +108,7 @@ export function useHealthMonitoring() {
 
 
     } catch (error) {
-      console.error('[App] Error initializing optimized systems:', error)
+      logger.error('[App] Error initializing optimized systems:', error)
     }
 
     // OPTIMIZED: Start adaptive notification cleanup
