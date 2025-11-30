@@ -246,15 +246,21 @@ class OllamaConnectionPool:
             return await request_func(session, *args, **kwargs)
 
 
-# Global connection pool instance
+# Global connection pool instance (thread-safe)
+import threading
+
 _ollama_pool: Optional[OllamaConnectionPool] = None
+_ollama_pool_lock = threading.Lock()
 
 
 def get_ollama_pool() -> OllamaConnectionPool:
-    """Get the global Ollama connection pool instance"""
+    """Get the global Ollama connection pool instance (thread-safe)"""
     global _ollama_pool
     if _ollama_pool is None:
-        _ollama_pool = OllamaConnectionPool()
+        with _ollama_pool_lock:
+            # Double-check after acquiring lock
+            if _ollama_pool is None:
+                _ollama_pool = OllamaConnectionPool()
     return _ollama_pool
 
 

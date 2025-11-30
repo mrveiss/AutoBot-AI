@@ -427,17 +427,23 @@ def memory_usage_decorator(func: Callable) -> Callable:
     return wrapper
 
 
-# Global memory monitor instance
+# Global memory monitor instance (thread-safe)
+import threading
+
 _memory_monitor = None
+_memory_monitor_lock = threading.Lock()
 
 
 def get_memory_monitor(
     threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0"))
 ) -> MemoryMonitor:
-    """Get global memory monitor instance"""
+    """Get global memory monitor instance (thread-safe)"""
     global _memory_monitor
     if _memory_monitor is None:
-        _memory_monitor = MemoryMonitor(threshold_mb)
+        with _memory_monitor_lock:
+            # Double-check after acquiring lock
+            if _memory_monitor is None:
+                _memory_monitor = MemoryMonitor(threshold_mb)
     return _memory_monitor
 
 

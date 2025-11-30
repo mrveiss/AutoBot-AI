@@ -251,15 +251,21 @@ class BackgroundLLMSync:
         }
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _background_sync: Optional[BackgroundLLMSync] = None
+_background_sync_lock = threading.Lock()
 
 
 def get_background_llm_sync() -> BackgroundLLMSync:
-    """Get the global background LLM sync instance."""
+    """Get the global background LLM sync instance (thread-safe)."""
     global _background_sync
     if _background_sync is None:
-        _background_sync = BackgroundLLMSync()
+        with _background_sync_lock:
+            # Double-check after acquiring lock
+            if _background_sync is None:
+                _background_sync = BackgroundLLMSync()
     return _background_sync
 
 

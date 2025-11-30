@@ -782,17 +782,23 @@ class ClaudeAPIOptimizationSuite:
             return False
 
 
-# Global optimization suite instance
+# Global optimization suite instance (thread-safe)
+import threading
+
 _global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
+_global_optimization_suite_lock = threading.Lock()
 
 
 def get_optimization_suite(
     config: Optional[OptimizationConfig] = None,
 ) -> ClaudeAPIOptimizationSuite:
-    """Get global optimization suite instance"""
+    """Get global optimization suite instance (thread-safe)"""
     global _global_optimization_suite
     if _global_optimization_suite is None:
-        _global_optimization_suite = ClaudeAPIOptimizationSuite(config)
+        with _global_optimization_suite_lock:
+            # Double-check after acquiring lock
+            if _global_optimization_suite is None:
+                _global_optimization_suite = ClaudeAPIOptimizationSuite(config)
     return _global_optimization_suite
 
 

@@ -768,17 +768,23 @@ class TodoWriteInterceptor:
         return success_count > 0
 
 
-# Global optimizer instance for easy access
+# Global optimizer instance for easy access (thread-safe)
+import threading
+
 _global_optimizer: Optional[TodoWriteOptimizer] = None
+_global_optimizer_lock = threading.Lock()
 
 
 def get_todowrite_optimizer(
     config: Optional[Dict[str, Any]] = None,
 ) -> TodoWriteOptimizer:
-    """Get global TodoWrite optimizer instance"""
+    """Get global TodoWrite optimizer instance (thread-safe)"""
     global _global_optimizer
     if _global_optimizer is None:
-        _global_optimizer = TodoWriteOptimizer(config)
+        with _global_optimizer_lock:
+            # Double-check after acquiring lock
+            if _global_optimizer is None:
+                _global_optimizer = TodoWriteOptimizer(config)
     return _global_optimizer
 
 

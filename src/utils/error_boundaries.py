@@ -591,15 +591,21 @@ class ErrorBoundaryManager:
             raise
 
 
-# Global error boundary manager instance
+# Global error boundary manager instance (thread-safe)
+import threading
+
 _error_boundary_manager = None
+_error_boundary_manager_lock = threading.Lock()
 
 
 def get_error_boundary_manager() -> ErrorBoundaryManager:
-    """Get global error boundary manager instance"""
+    """Get global error boundary manager instance (thread-safe)"""
     global _error_boundary_manager
     if _error_boundary_manager is None:
-        _error_boundary_manager = ErrorBoundaryManager()
+        with _error_boundary_manager_lock:
+            # Double-check after acquiring lock
+            if _error_boundary_manager is None:
+                _error_boundary_manager = ErrorBoundaryManager()
     return _error_boundary_manager
 
 

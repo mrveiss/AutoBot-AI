@@ -198,16 +198,22 @@ class AdaptiveMemoryManager:
         return cleaned
 
 
-# Global adaptive memory manager instance
+# Global adaptive memory manager instance (thread-safe)
+import threading
+
 _memory_manager = None
+_memory_manager_lock = threading.Lock()
 
 
 def get_adaptive_memory_manager() -> AdaptiveMemoryManager:
-    """Get global adaptive memory manager instance"""
+    """Get global adaptive memory manager instance (thread-safe)"""
     global _memory_manager
     if _memory_manager is None:
-        _memory_manager = AdaptiveMemoryManager()
-        _memory_manager.start_monitoring()
+        with _memory_manager_lock:
+            # Double-check after acquiring lock
+            if _memory_manager is None:
+                _memory_manager = AdaptiveMemoryManager()
+                _memory_manager.start_monitoring()
     return _memory_manager
 
 

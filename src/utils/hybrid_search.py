@@ -397,15 +397,21 @@ class HybridSearchEngine:
             return {"error": str(e)}
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _hybrid_search_engine = None
+_hybrid_search_engine_lock = threading.Lock()
 
 
 def get_hybrid_search_engine(knowledge_base=None) -> HybridSearchEngine:
-    """Get the global hybrid search engine instance."""
+    """Get the global hybrid search engine instance (thread-safe)."""
     global _hybrid_search_engine
     if _hybrid_search_engine is None:
-        _hybrid_search_engine = HybridSearchEngine(knowledge_base)
+        with _hybrid_search_engine_lock:
+            # Double-check after acquiring lock
+            if _hybrid_search_engine is None:
+                _hybrid_search_engine = HybridSearchEngine(knowledge_base)
     elif knowledge_base and _hybrid_search_engine.knowledge_base != knowledge_base:
         # Update knowledge base reference
         _hybrid_search_engine.knowledge_base = knowledge_base

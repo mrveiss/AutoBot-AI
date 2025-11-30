@@ -116,13 +116,19 @@ class LLMStreamingInterface:
         """No-op: HTTP session is managed by singleton HTTPClientManager"""
 
 
-# Global LLM streaming interface instance
+# Global LLM streaming interface instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _llm_streaming_interface = None
+_llm_streaming_interface_lock = _asyncio_lock.Lock()
 
 
 async def get_llm_streaming_interface() -> LLMStreamingInterface:
-    """Get global LLM streaming interface instance"""
+    """Get global LLM streaming interface instance (thread-safe)"""
     global _llm_streaming_interface
     if _llm_streaming_interface is None:
-        _llm_streaming_interface = LLMStreamingInterface()
+        async with _llm_streaming_interface_lock:
+            # Double-check after acquiring lock
+            if _llm_streaming_interface is None:
+                _llm_streaming_interface = LLMStreamingInterface()
     return _llm_streaming_interface

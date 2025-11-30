@@ -315,15 +315,21 @@ class TerminalInputHandler:
             self.default_responses.update(defaults)
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _terminal_input_handler = None
+_terminal_input_handler_lock = threading.Lock()
 
 
 def get_terminal_input_handler() -> TerminalInputHandler:
-    """Get or create global terminal input handler."""
+    """Get or create global terminal input handler (thread-safe)."""
     global _terminal_input_handler
     if _terminal_input_handler is None:
-        _terminal_input_handler = TerminalInputHandler()
+        with _terminal_input_handler_lock:
+            # Double-check after acquiring lock
+            if _terminal_input_handler is None:
+                _terminal_input_handler = TerminalInputHandler()
     return _terminal_input_handler
 
 

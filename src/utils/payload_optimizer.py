@@ -490,15 +490,21 @@ class PayloadOptimizer:
         self.chunking_count = 0
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _global_optimizer: Optional[PayloadOptimizer] = None
+_global_optimizer_lock = threading.Lock()
 
 
 def get_payload_optimizer() -> PayloadOptimizer:
-    """Get the global payload optimizer instance"""
+    """Get the global payload optimizer instance (thread-safe)"""
     global _global_optimizer
     if _global_optimizer is None:
-        _global_optimizer = PayloadOptimizer()
+        with _global_optimizer_lock:
+            # Double-check after acquiring lock
+            if _global_optimizer is None:
+                _global_optimizer = PayloadOptimizer()
     return _global_optimizer
 
 
