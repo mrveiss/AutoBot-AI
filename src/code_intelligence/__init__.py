@@ -15,6 +15,7 @@ Provides advanced code analysis capabilities including:
 - Bug prediction and risk scoring
 - AI-powered code review automation
 - Dynamic log pattern mining
+- Conversation flow analysis
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -100,6 +101,29 @@ from .log_pattern_miner import (
     get_log_levels,
     get_pattern_types,
 )
+from .conversation_flow_analyzer import (
+    AnalysisResult,
+    Bottleneck,
+    BottleneckType,
+    ConversationFlow,
+    ConversationFlowAnalyzer,
+    ConversationMessage,
+    FlowPattern,
+    FlowState,
+    IntentCategory,
+    IntentClassifier,
+    Optimization,
+    OptimizationType as ConversationOptimizationType,
+    ResponseClassifier,
+    ResponseType,
+    analyze_conversations,
+    classify_intent,
+    classify_response,
+    get_bottleneck_types,
+    get_intent_categories,
+    get_optimization_types,
+    get_response_types,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -177,4 +201,26 @@ __all__ = [
     "get_anomaly_types",
     "get_log_levels",
     "get_pattern_types",
+    # Conversation flow analysis (Issue #227)
+    "AnalysisResult",
+    "Bottleneck",
+    "BottleneckType",
+    "ConversationFlow",
+    "ConversationFlowAnalyzer",
+    "ConversationMessage",
+    "FlowPattern",
+    "FlowState",
+    "IntentCategory",
+    "IntentClassifier",
+    "Optimization",
+    "ConversationOptimizationType",
+    "ResponseClassifier",
+    "ResponseType",
+    "analyze_conversations",
+    "classify_intent",
+    "classify_response",
+    "get_bottleneck_types",
+    "get_intent_categories",
+    "get_optimization_types",
+    "get_response_types",
 ]
