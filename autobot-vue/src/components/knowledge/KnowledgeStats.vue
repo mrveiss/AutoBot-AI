@@ -381,6 +381,10 @@ import {
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for KnowledgeStats
+const logger = createLogger('KnowledgeStats')
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -429,14 +433,14 @@ const store = useKnowledgeStore()
 let controller: KnowledgeController | null = null
 try {
   controller = useKnowledgeController()
-  console.log('Knowledge controller initialized:', controller)
+  logger.info('Knowledge controller initialized:', controller)
 } catch (error) {
-  console.error('Failed to initialize knowledge controller:', error)
+  logger.error('Failed to initialize knowledge controller:', error)
   controller = {
-    refreshStats: async () => console.warn('Controller not available'),
+    refreshStats: async () => { logger.warn('Controller not available') },
     getDetailedStats: async () => ({}),
-    cleanupKnowledgeBase: async () => console.warn('Controller not available'),
-    reindexKnowledgeBase: async () => console.warn('Controller not available')
+    cleanupKnowledgeBase: async () => { logger.warn('Controller not available') },
+    reindexKnowledgeBase: async () => { logger.warn('Controller not available') }
   }
 }
 
@@ -539,19 +543,19 @@ const refreshStats = async () => {
     if (controller && typeof controller.refreshStats === 'function') {
       await controller.refreshStats()
     } else {
-      console.warn('Controller refreshStats method not available')
+      logger.warn('Controller refreshStats method not available')
     }
-    
+
     if (controller && typeof controller.getDetailedStats === 'function') {
       detailedStats.value = await controller.getDetailedStats()
     } else {
-      console.warn('Controller getDetailedStats method not available')
+      logger.warn('Controller getDetailedStats method not available')
       detailedStats.value = {}
     }
-    
+
     generateRecentActivities()
   } catch (error) {
-    console.error('Failed to refresh stats:', error)
+    logger.error('Failed to refresh stats:', error)
   } finally {
     isRefreshing.value = false
   }
@@ -617,18 +621,18 @@ const optimizeKnowledge = async () => {
     if (controller && typeof controller.cleanupKnowledgeBase === 'function') {
       await controller.cleanupKnowledgeBase()
     } else {
-      console.warn('Controller cleanupKnowledgeBase method not available')
+      logger.warn('Controller cleanupKnowledgeBase method not available')
     }
-    
+
     if (controller && typeof controller.reindexKnowledgeBase === 'function') {
       await controller.reindexKnowledgeBase()
     } else {
-      console.warn('Controller reindexKnowledgeBase method not available')
+      logger.warn('Controller reindexKnowledgeBase method not available')
     }
-    
+
     await refreshStats()
   } catch (error) {
-    console.error('Failed to optimize knowledge base:', error)
+    logger.error('Failed to optimize knowledge base:', error)
   }
 }
 
@@ -720,7 +724,7 @@ const capitalize = (str: string): string => {
 // Helper function to show error notifications
 const showErrorNotification = (message: string) => {
   errorMessage.value = message
-  console.error(message)
+  logger.error(message)
   // Clear error message after 5 seconds
   setTimeout(() => {
     errorMessage.value = ''
@@ -773,11 +777,11 @@ const refreshVectorStats = async () => {
         categoryFactCounts.value = counts
       }
     } catch (factsError) {
-      console.warn('Failed to fetch category facts, continuing with basic stats:', factsError)
+      logger.warn('Failed to fetch category facts, continuing with basic stats:', factsError)
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
-    console.error('Failed to refresh vector stats:', error)
+    logger.error('Failed to refresh vector stats:', error)
     showErrorNotification(`Failed to load statistics: ${errorMsg}`)
 
     // Set default values on error to prevent UI breaking
