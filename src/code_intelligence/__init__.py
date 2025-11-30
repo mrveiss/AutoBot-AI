@@ -16,6 +16,7 @@ Provides advanced code analysis capabilities including:
 - AI-powered code review automation
 - Dynamic log pattern mining
 - Conversation flow analysis
+- LLM-powered code generation and auto-refactoring
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -124,6 +125,28 @@ from .conversation_flow_analyzer import (
     get_optimization_types,
     get_response_types,
 )
+from .llm_code_generator import (
+    CodeContext,
+    CodeValidator,
+    DiffGenerator,
+    GeneratedCode,
+    GenerationStatus,
+    LLMCodeGenerator,
+    PromptTemplate,
+    PromptTemplateManager,
+    RefactoringRequest,
+    RefactoringResult,
+    RefactoringType,
+    ValidationResult,
+    ValidationStatus,
+    generate_diff,
+    get_generation_statuses,
+    get_refactoring_types,
+    get_validation_statuses,
+    list_prompt_templates,
+    refactor_code,
+    validate_code,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -223,4 +246,25 @@ __all__ = [
     "get_intent_categories",
     "get_optimization_types",
     "get_response_types",
+    # LLM code generation (Issue #228)
+    "CodeContext",
+    "CodeValidator",
+    "DiffGenerator",
+    "GeneratedCode",
+    "GenerationStatus",
+    "LLMCodeGenerator",
+    "PromptTemplate",
+    "PromptTemplateManager",
+    "RefactoringRequest",
+    "RefactoringResult",
+    "RefactoringType",
+    "ValidationResult",
+    "ValidationStatus",
+    "generate_diff",
+    "get_generation_statuses",
+    "get_refactoring_types",
+    "get_validation_statuses",
+    "list_prompt_templates",
+    "refactor_code",
+    "validate_code",
 ]
