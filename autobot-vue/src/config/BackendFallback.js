@@ -9,6 +9,9 @@
  */
 
 import { NetworkConstants, ServiceURLs } from '../constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('BackendFallback');
 
 export class BackendFallbackService {
   constructor() {
@@ -341,7 +344,7 @@ export class BackendFallbackService {
    */
   log(...args) {
     if (import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true') {
-      console.log('[AutoBot Backend Fallback]', ...args);
+      logger.debug('[BackendFallback]', ...args);
     }
   }
 

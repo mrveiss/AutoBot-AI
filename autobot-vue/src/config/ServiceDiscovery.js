@@ -7,6 +7,9 @@
 
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
 import { NetworkConstants } from '../constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('ServiceDiscovery');
 
 export default class ServiceDiscovery {
   constructor() {
@@ -324,7 +327,7 @@ export default class ServiceDiscovery {
 
       return legacyFallbacks[serviceName] || null;
     } catch (error) {
-      console.warn(`Failed to build fallback URL for ${serviceName}:`, error.message);
+      logger.warn(`Failed to build fallback URL for ${serviceName}:`, error.message);
       return null;
     }
   }
@@ -479,7 +482,7 @@ export default class ServiceDiscovery {
    */
   log(...args) {
     if (this.debugMode) {
-      console.log('[AutoBot ServiceDiscovery]', ...args);
+      logger.debug('[ServiceDiscovery]', ...args);
     }
   }
 }
