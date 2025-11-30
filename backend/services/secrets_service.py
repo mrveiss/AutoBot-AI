@@ -604,13 +604,19 @@ class SecretsService:
         return audit_entries
 
 
-# Singleton instance getter
+# Singleton instance getter (thread-safe)
+import threading
+
 _secrets_service = None
+_secrets_service_lock = threading.Lock()
 
 
 def get_secrets_service() -> SecretsService:
-    """Get or create the secrets service singleton"""
+    """Get or create the secrets service singleton (thread-safe)."""
     global _secrets_service
     if _secrets_service is None:
-        _secrets_service = SecretsService()
+        with _secrets_service_lock:
+            # Double-check after acquiring lock
+            if _secrets_service is None:
+                _secrets_service = SecretsService()
     return _secrets_service

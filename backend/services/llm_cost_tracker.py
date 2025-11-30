@@ -456,13 +456,19 @@ class LLMCostTracker:
             return []
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _cost_tracker: Optional[LLMCostTracker] = None
+_cost_tracker_lock = threading.Lock()
 
 
 def get_cost_tracker() -> LLMCostTracker:
-    """Get the singleton cost tracker instance"""
+    """Get the singleton cost tracker instance (thread-safe)."""
     global _cost_tracker
     if _cost_tracker is None:
-        _cost_tracker = LLMCostTracker()
+        with _cost_tracker_lock:
+            # Double-check after acquiring lock
+            if _cost_tracker is None:
+                _cost_tracker = LLMCostTracker()
     return _cost_tracker

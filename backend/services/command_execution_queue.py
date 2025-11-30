@@ -394,13 +394,19 @@ class CommandExecutionQueue:
         return await self.update_command(command)
 
 
-# Global singleton instance
+# Global singleton instance (thread-safe)
+import threading
+
 _command_queue: Optional[CommandExecutionQueue] = None
+_command_queue_lock = threading.Lock()
 
 
 def get_command_queue() -> CommandExecutionQueue:
-    """Get global command queue instance"""
+    """Get global command queue instance (thread-safe)."""
     global _command_queue
     if _command_queue is None:
-        _command_queue = CommandExecutionQueue()
+        with _command_queue_lock:
+            # Double-check after acquiring lock
+            if _command_queue is None:
+                _command_queue = CommandExecutionQueue()
     return _command_queue
