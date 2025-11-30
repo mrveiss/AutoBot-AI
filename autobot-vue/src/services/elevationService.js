@@ -5,6 +5,10 @@
 
 import { ref, reactive } from 'vue';
 import { apiService } from './api';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for elevationService
+const logger = createLogger('elevationService');
 
 class ElevationService {
   constructor() {
@@ -55,7 +59,7 @@ class ElevationService {
       
       throw new Error(response.data.message || 'Failed to create elevation request');
     } catch (error) {
-      console.error('Elevation request failed:', error);
+      logger.error('Elevation request failed:', error);
       throw error;
     }
   }
@@ -158,7 +162,7 @@ class ElevationService {
       try {
         await apiService.delete(`/system/elevation/session/${this.activeSession.value}`);
       } catch (error) {
-        console.error('Failed to revoke session:', error);
+        logger.error('Failed to revoke session:', error);
       }
     }
     
@@ -195,7 +199,7 @@ class ElevationService {
       }
       return {};
     } catch (error) {
-      console.error('Failed to get pending requests:', error);
+      logger.error('Failed to get pending requests:', error);
       return {};
     }
   }

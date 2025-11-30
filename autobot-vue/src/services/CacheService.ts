@@ -3,6 +3,11 @@
  * Provides intelligent caching for API responses with TTL and invalidation
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for CacheService
+const logger = createLogger('CacheService')
+
 interface CacheEntry {
   data: any;
   createdAt: number;
@@ -191,7 +196,7 @@ class CacheService {
     toDelete.forEach(key => this.cache.delete(key));
 
     if (toDelete.length > 0) {
-      console.debug(`🧹 Cache cleanup: removed ${toDelete.length} expired entries`);
+      logger.debug(`🧹 Cache cleanup: removed ${toDelete.length} expired entries`);
     }
   }
 
@@ -205,7 +210,7 @@ class CacheService {
       '/api/knowledge_base/stats'
     ];
 
-    console.log('🔥 Warming up cache...');
+    logger.info('🔥 Warming up cache...');
 
     for (const endpoint of commonEndpoints) {
       try {
@@ -217,7 +222,7 @@ class CacheService {
           this.set(key, { warmedUp: true }, 10 * 1000); // 10 seconds
         }
       } catch (error) {
-        console.warn(`Cache warmup failed for ${endpoint}:`, error);
+        logger.warn(`Cache warmup failed for ${endpoint}:`, error);
       }
     }
   }

@@ -221,6 +221,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useInfrastructure } from '@/composables/useInfrastructure'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for InfrastructureManager
+const logger = createLogger('InfrastructureManager')
 import HostCard from '@/components/infrastructure/HostCard.vue'
 import AddHostModal from '@/components/infrastructure/AddHostModal.vue'
 import DeploymentProgressModal from '@/components/infrastructure/DeploymentProgressModal.vue'
@@ -263,7 +267,7 @@ async function handleAddHost(formData: any) {
     showAddHostModal.value = false
     await refreshHosts()
   } catch (error) {
-    console.error('[InfrastructureManager] Failed to add host:', error)
+    logger.error('Failed to add host:', error)
   }
 }
 
@@ -276,7 +280,7 @@ async function handleDeploy(hostId: string) {
     // Start polling for deployment status
     startDeploymentPolling(deployment.id)
   } catch (error) {
-    console.error('[InfrastructureManager] Failed to start deployment:', error)
+    logger.error('Failed to start deployment:', error)
   }
 }
 
@@ -286,7 +290,7 @@ async function handleTestConnection(hostId: string) {
 
 async function handleEditHost(host: Host) {
   // TODO: Implement edit modal
-  console.log('Edit host:', host)
+  logger.debug('Edit host:', host)
 }
 
 async function handleDeleteHost(hostId: string) {
@@ -295,7 +299,7 @@ async function handleDeleteHost(hostId: string) {
       await deleteHost(hostId)
       await refreshHosts()
     } catch (error) {
-      console.error('[InfrastructureManager] Failed to delete host:', error)
+      logger.error('Failed to delete host:', error)
     }
   }
 }

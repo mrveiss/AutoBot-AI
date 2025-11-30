@@ -1,4 +1,8 @@
 import apiClient from '../utils/ApiClient.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for HealthService
+const logger = createLogger('HealthService');
 
 class HealthService {
   constructor() {
@@ -128,11 +132,11 @@ class HealthService {
     }
 
     // Initial check
-    this.checkHealth().catch(console.error);
+    this.checkHealth().catch(err => logger.error('Health check failed:', err));
 
     // Periodic checks
     this.checkInterval = setInterval(() => {
-      this.checkHealth().catch(console.error);
+      this.checkHealth().catch(err => logger.error('Health check failed:', err));
     }, interval);
   }
 
