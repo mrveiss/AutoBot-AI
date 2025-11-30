@@ -89,7 +89,7 @@ class SQLiteConnectionPool:
     @contextmanager
     def get_connection(self):
         """
-        Get a connection from the pool (context manager).
+        Get a connection from the pool (context manager, thread-safe).
 
         Yields:
             sqlite3.Connection: Database connection
@@ -101,7 +101,8 @@ class SQLiteConnectionPool:
             # Try to get existing connection from pool
             try:
                 conn = self._pool.get(timeout=self.timeout)
-                self._stats["connections_reused"] += 1
+                with self._lock:
+                    self._stats["connections_reused"] += 1
                 logger.debug("Reused connection from pool")
             except Exception:
                 # Pool exhausted, create new connection if under limit
@@ -111,11 +112,14 @@ class SQLiteConnectionPool:
                     else:
                         self._stats["pool_exhausted_count"] += 1
                         logger.warning("Connection pool exhausted, waiting...")
-                        conn = self._pool.get(timeout=self.timeout)
+                # Get connection without holding lock (may block)
+                if conn is None:
+                    conn = self._pool.get(timeout=self.timeout)
 
-            # Record wait time
+            # Record wait time (thread-safe)
             wait_time = (datetime.now() - start_time).total_seconds()
-            self._stats["total_wait_time"] += wait_time
+            with self._lock:
+                self._stats["total_wait_time"] += wait_time
 
             # Test connection is alive
             conn.execute("SELECT 1")
@@ -146,7 +150,7 @@ class SQLiteConnectionPool:
                         pass
 
     def close_all(self):
-        """Close all connections in the pool."""
+        """Close all connections in the pool (thread-safe)."""
         closed = 0
         while not self._pool.empty():
             try:
@@ -157,22 +161,23 @@ class SQLiteConnectionPool:
                 break
 
         logger.info(f"Closed {closed} connections from pool")
-        self._created_connections = 0
+        with self._lock:
+            self._created_connections = 0
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get pool usage statistics."""
+        """Get pool usage statistics (thread-safe)."""
+        with self._lock:
+            stats_copy = dict(self._stats)
+            created = self._created_connections
+
+        total_ops = stats_copy["connections_reused"] + stats_copy["connections_created"]
+        avg_wait = stats_copy["total_wait_time"] / max(1, total_ops)
+
         return {
-            **self._stats,
+            **stats_copy,
             "current_pool_size": self._pool.qsize(),
-            "total_connections_created": self._created_connections,
-            "average_wait_time": (
-                self._stats["total_wait_time"]
-                / max(
-                    1,
-                    self._stats["connections_reused"]
-                    + self._stats["connections_created"],
-                )
-            ),
+            "total_connections_created": created,
+            "average_wait_time": avg_wait,
         }
 
 

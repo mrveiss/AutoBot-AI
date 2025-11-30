@@ -336,7 +336,7 @@ class StaticResponseStrategy(FallbackStrategy):
 
 
 class GracefulDegradationManager:
-    """Main manager for graceful degradation strategies"""
+    """Main manager for graceful degradation strategies (thread-safe)"""
 
     def __init__(self, cache_dir: str = "data/cache/claude_responses"):
         # Initialize strategies in order of preference
@@ -345,6 +345,9 @@ class GracefulDegradationManager:
             TemplateResponseStrategy(),
             StaticResponseStrategy(),
         ]
+
+        # Lock for thread-safe access to shared state
+        self._lock = asyncio.Lock()
 
         # Service monitoring
         self.service_status = ServiceStatus(
@@ -390,14 +393,16 @@ class GracefulDegradationManager:
     async def handle_request(
         self, request: str, context: Dict[str, Any] = None
     ) -> FallbackResponse:
-        """Handle a request with graceful degradation"""
+        """Handle a request with graceful degradation (thread-safe)"""
         context = context or {}
-        self.metrics["total_requests"] += 1
+        async with self._lock:
+            self.metrics["total_requests"] += 1
+            degradation_level = self.service_status.degradation_level
         start_time = time.time()
 
         try:
             # Try to determine appropriate degradation strategy
-            if self.service_status.degradation_level == DegradationLevel.NORMAL:
+            if degradation_level == DegradationLevel.NORMAL:
                 # In normal operation, this would attempt the actual API call
                 # For this implementation, we'll simulate occasional failures
                 if await self._should_simulate_failure():
@@ -411,8 +416,9 @@ class GracefulDegradationManager:
                 if isinstance(self.strategies[0], CachedResponseStrategy):
                     await self.strategies[0].cache_response(request, response)
 
-                self.metrics["successful_requests"] += 1
-                self._record_success()
+                async with self._lock:
+                    self.metrics["successful_requests"] += 1
+                await self._record_success()
 
                 return FallbackResponse(
                     content=response,
@@ -427,24 +433,26 @@ class GracefulDegradationManager:
 
         except Exception as e:
             logger.warning(f"Primary service failed: {e}")
-            self._record_failure()
+            await self._record_failure()
             return await self._use_fallback_strategy(request, context)
 
         finally:
             response_time = time.time() - start_time
-            self._update_response_time_metric(response_time)
+            await self._update_response_time_metric(response_time)
 
     async def _use_fallback_strategy(
         self, request: str, context: Dict[str, Any]
     ) -> FallbackResponse:
-        """Use fallback strategies to handle the request"""
-        self.metrics["degraded_responses"] += 1
+        """Use fallback strategies to handle the request (thread-safe)"""
+        async with self._lock:
+            self.metrics["degraded_responses"] += 1
 
         for strategy in self.strategies:
             try:
                 if await strategy.can_handle(request, context):
                     response = await strategy.generate_response(request, context)
-                    self.metrics["fallback_usage"][strategy.get_strategy_name()] += 1
+                    async with self._lock:
+                        self.metrics["fallback_usage"][strategy.get_strategy_name()] += 1
                     logger.info(
                         f"Used fallback strategy: {strategy.get_strategy_name()}"
                     )
@@ -468,71 +476,75 @@ class GracefulDegradationManager:
 
         return random.random() < 0.1  # 10% failure rate for simulation
 
-    def _record_success(self):
-        """Record a successful request"""
-        self.service_status.last_success = time.time()
-        self.service_status.consecutive_failures = 0
-        self._update_service_health()
+    async def _record_success(self):
+        """Record a successful request (thread-safe)"""
+        async with self._lock:
+            self.service_status.last_success = time.time()
+            self.service_status.consecutive_failures = 0
+        await self._update_service_health()
 
-    def _record_failure(self):
-        """Record a failed request"""
+    async def _record_failure(self):
+        """Record a failed request (thread-safe)"""
         current_time = time.time()
-        self.service_status.last_failure = current_time
-        self.service_status.consecutive_failures += 1
-        self.failure_history.append(current_time)
+        async with self._lock:
+            self.service_status.last_failure = current_time
+            self.service_status.consecutive_failures += 1
+            self.failure_history.append(current_time)
 
-        # Trim failure history
-        if len(self.failure_history) > self.max_failure_history:
-            self.failure_history.pop(0)
+            # Trim failure history
+            if len(self.failure_history) > self.max_failure_history:
+                self.failure_history.pop(0)
 
-        self._update_service_health()
+        await self._update_service_health()
 
-    def _update_service_health(self):
-        """Update service health status and degradation level"""
-        consecutive_failures = self.service_status.consecutive_failures
+    async def _update_service_health(self):
+        """Update service health status and degradation level (thread-safe)"""
+        async with self._lock:
+            consecutive_failures = self.service_status.consecutive_failures
 
-        # Calculate error rate (failures in last 5 minutes)
-        current_time = time.time()
-        recent_failures = [f for f in self.failure_history if current_time - f <= 300]
-        error_rate = len(recent_failures) / max(1, self.metrics["total_requests"]) * 100
+            # Calculate error rate (failures in last 5 minutes)
+            current_time = time.time()
+            recent_failures = [f for f in self.failure_history if current_time - f <= 300]
+            total_requests = self.metrics["total_requests"]
+            error_rate = len(recent_failures) / max(1, total_requests) * 100
 
-        # Update health status
-        if consecutive_failures == 0 and error_rate < 5:
-            self.service_status.health = ServiceHealth.HEALTHY
-            self.service_status.degradation_level = DegradationLevel.NORMAL
-        elif consecutive_failures < 3 and error_rate < 15:
-            self.service_status.health = ServiceHealth.DEGRADED
-            self.service_status.degradation_level = DegradationLevel.REDUCED
-        elif consecutive_failures < 5 and error_rate < 30:
-            self.service_status.health = ServiceHealth.UNSTABLE
-            self.service_status.degradation_level = DegradationLevel.MINIMAL
-        elif consecutive_failures < 10:
-            self.service_status.health = ServiceHealth.FAILING
-            self.service_status.degradation_level = DegradationLevel.EMERGENCY
-        else:
-            self.service_status.health = ServiceHealth.DOWN
-            self.service_status.degradation_level = DegradationLevel.OFFLINE
+            # Update health status
+            if consecutive_failures == 0 and error_rate < 5:
+                self.service_status.health = ServiceHealth.HEALTHY
+                self.service_status.degradation_level = DegradationLevel.NORMAL
+            elif consecutive_failures < 3 and error_rate < 15:
+                self.service_status.health = ServiceHealth.DEGRADED
+                self.service_status.degradation_level = DegradationLevel.REDUCED
+            elif consecutive_failures < 5 and error_rate < 30:
+                self.service_status.health = ServiceHealth.UNSTABLE
+                self.service_status.degradation_level = DegradationLevel.MINIMAL
+            elif consecutive_failures < 10:
+                self.service_status.health = ServiceHealth.FAILING
+                self.service_status.degradation_level = DegradationLevel.EMERGENCY
+            else:
+                self.service_status.health = ServiceHealth.DOWN
+                self.service_status.degradation_level = DegradationLevel.OFFLINE
 
-        self.service_status.error_rate = error_rate
+            self.service_status.error_rate = error_rate
+            health = self.service_status.health.value
+            level = self.service_status.degradation_level.name
 
-        logger.info(
-            f"Service health updated: {self.service_status.health.value} "
-            f"(degradation: {self.service_status.degradation_level.name})"
-        )
+        logger.info(f"Service health updated: {health} (degradation: {level})")
 
-    def _update_response_time_metric(self, response_time: float):
-        """Update average response time metric"""
-        current_avg = self.metrics["average_response_time"]
-        total_requests = self.metrics["total_requests"]
+    async def _update_response_time_metric(self, response_time: float):
+        """Update average response time metric (thread-safe)"""
+        async with self._lock:
+            current_avg = self.metrics["average_response_time"]
+            total_requests = self.metrics["total_requests"]
 
-        if total_requests == 1:
-            self.metrics["average_response_time"] = response_time
-        else:
-            self.metrics["average_response_time"] = (
-                current_avg * (total_requests - 1) + response_time
-            ) / total_requests
+            if total_requests == 1:
+                self.metrics["average_response_time"] = response_time
+            else:
+                self.metrics["average_response_time"] = (
+                    current_avg * (total_requests - 1) + response_time
+                ) / total_requests
 
-        self.service_status.response_time = response_time
+            self.service_status.response_time = response_time
 
     async def _monitoring_loop(self):
         """Background monitoring loop"""
@@ -545,29 +557,42 @@ class GracefulDegradationManager:
                 await asyncio.sleep(10)
 
     async def _perform_health_check(self):
-        """Perform periodic health check"""
+        """Perform periodic health check (thread-safe)"""
         # Calculate uptime percentage based on success rate
-        if self.metrics["total_requests"] > 0:
-            success_rate = (
-                self.metrics["successful_requests"] / self.metrics["total_requests"]
-            ) * 100
-            self.service_status.uptime_percentage = success_rate
+        async with self._lock:
+            total_requests = self.metrics["total_requests"]
+            successful_requests = self.metrics["successful_requests"]
+            if total_requests > 0:
+                success_rate = (successful_requests / total_requests) * 100
+                self.service_status.uptime_percentage = success_rate
+            health = self.service_status.health.value
+            uptime = self.service_status.uptime_percentage
 
-        # Log health status
-        logger.debug(
-            f"Health check: {self.service_status.health.value} "
-            f"(uptime: {self.service_status.uptime_percentage:.1f}%)"
-        )
+        # Log health status (outside lock)
+        logger.debug(f"Health check: {health} (uptime: {uptime:.1f}%)")
 
-    def get_service_status(self) -> ServiceStatus:
-        """Get current service status"""
-        return self.service_status
+    async def get_service_status(self) -> ServiceStatus:
+        """Get current service status (thread-safe, returns snapshot)"""
+        async with self._lock:
+            # Return a copy to prevent external modification
+            return ServiceStatus(
+                health=self.service_status.health,
+                degradation_level=self.service_status.degradation_level,
+                last_success=self.service_status.last_success,
+                last_failure=self.service_status.last_failure,
+                consecutive_failures=self.service_status.consecutive_failures,
+                error_rate=self.service_status.error_rate,
+                response_time=self.service_status.response_time,
+                uptime_percentage=self.service_status.uptime_percentage,
+            )
 
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get comprehensive metrics"""
-        return {
-            **self.metrics,
-            "service_status": {
+    async def get_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive metrics (thread-safe, returns snapshot)"""
+        async with self._lock:
+            # Copy metrics dict to prevent external modification
+            metrics_copy = dict(self.metrics)
+            metrics_copy["fallback_usage"] = dict(self.metrics["fallback_usage"])
+            service_status_copy = {
                 "health": self.service_status.health.value,
                 "degradation_level": self.service_status.degradation_level.name,
                 "consecutive_failures": self.service_status.consecutive_failures,
@@ -575,23 +600,31 @@ class GracefulDegradationManager:
                 "uptime_percentage": self.service_status.uptime_percentage,
                 "last_success": self.service_status.last_success,
                 "last_failure": self.service_status.last_failure,
-            },
-            "degradation_active": (
+            }
+            degradation_active = (
                 self.service_status.degradation_level != DegradationLevel.NORMAL
-            ),
+            )
+
+        return {
+            **metrics_copy,
+            "service_status": service_status_copy,
+            "degradation_active": degradation_active,
         }
 
     async def force_degradation_level(self, level: DegradationLevel):
-        """Force a specific degradation level (for testing)"""
-        self.service_status.degradation_level = level
-        logger.info(f"Forced degradation level to: {level.name}")
+        """Force a specific degradation level (for testing, thread-safe)"""
+        async with self._lock:
+            self.service_status.degradation_level = level
+            level_name = level.name
+        logger.info(f"Forced degradation level to: {level_name}")
 
     async def reset_service_status(self):
-        """Reset service status to healthy (for recovery)"""
-        self.service_status = ServiceStatus(
-            health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL
-        )
-        self.failure_history.clear()
+        """Reset service status to healthy (for recovery, thread-safe)"""
+        async with self._lock:
+            self.service_status = ServiceStatus(
+                health=ServiceHealth.HEALTHY, degradation_level=DegradationLevel.NORMAL
+            )
+            self.failure_history.clear()
         logger.info("Service status reset to healthy")
 
 
@@ -660,7 +693,7 @@ async def main():
         # Print final metrics
         print("\n" + "=" * 50)
         print("Final Metrics:")
-        metrics = manager.get_metrics()
+        metrics = await manager.get_metrics()
         for key, value in metrics.items():
             print(f"  {key}: {value}")
 

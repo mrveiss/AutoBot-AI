@@ -187,6 +187,9 @@ class TaskQueue:
         self.is_running = False
         self.logger = logging.getLogger(__name__)
 
+        # Lock for thread-safe stats access
+        self._stats_lock = asyncio.Lock()
+
         # Statistics
         self.stats = {
             "tasks_processed": 0,
@@ -311,12 +314,13 @@ class TaskQueue:
         return None
 
     async def start_workers(self) -> None:
-        """Start worker processes."""
+        """Start worker processes (thread-safe)."""
         if self.is_running:
             return
 
         self.is_running = True
-        self.stats["started_at"] = datetime.utcnow()
+        async with self._stats_lock:
+            self.stats["started_at"] = datetime.utcnow()
 
         # Start task workers
         for i in range(self.max_workers):
@@ -478,8 +482,9 @@ class TaskQueue:
             result.completed_at = datetime.utcnow()
             result.execution_time = time.time() - start_time
 
-            self.stats["tasks_processed"] += 1
-            self.stats["total_execution_time"] += result.execution_time
+            async with self._stats_lock:
+                self.stats["tasks_processed"] += 1
+                self.stats["total_execution_time"] += result.execution_time
 
             self.logger.info(
                 f"Task {task_id} completed successfully in "
@@ -553,7 +558,8 @@ class TaskQueue:
                 await self.redis.zadd(self.completed_key, {task.id: time.time()})
             else:
                 await self.redis.zadd(self.failed_key, {task.id: time.time()})
-                self.stats["tasks_failed"] += 1
+                async with self._stats_lock:
+                    self.stats["tasks_failed"] += 1
 
         # Store result
         result_data = json.dumps(result.to_dict())
@@ -625,7 +631,7 @@ class TaskQueue:
         return False
 
     async def get_queue_stats(self) -> Dict[str, Any]:
-        """Get queue statistics."""
+        """Get queue statistics (thread-safe)."""
         if not self.redis:
             return {
                 "queue_name": self.queue_name,
@@ -638,6 +644,11 @@ class TaskQueue:
         completed_count = self.redis.zcard(self.completed_key)
         failed_count = self.redis.zcard(self.failed_key)
         scheduled_count = self.redis.zcard(self.scheduled_key)
+
+        # Copy stats under lock
+        async with self._stats_lock:
+            stats_copy = dict(self.stats)
+            started_at = self.stats["started_at"]
 
         stats = {
             "queue_name": self.queue_name,
@@ -652,12 +663,12 @@ class TaskQueue:
             "workers": len(self.workers),
             "is_running": self.is_running,
             "registered_functions": list(self.task_registry.keys()),
-            "performance": self.stats.copy(),
+            "performance": stats_copy,
             "redis_available": True,
         }
 
-        if self.stats["started_at"]:
-            uptime = datetime.utcnow() - self.stats["started_at"]
+        if started_at:
+            uptime = datetime.utcnow() - started_at
             stats["uptime_seconds"] = uptime.total_seconds()
 
         return stats
