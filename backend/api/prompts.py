@@ -21,6 +21,9 @@ _prompts_cache: Optional[Dict] = None
 _cache_timestamp: float = 0
 _cache_ttl: int = 300  # 5 minutes cache
 
+# Lock for thread-safe cache access
+_cache_lock = asyncio.Lock()
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -32,14 +35,15 @@ async def get_prompts():
     global _prompts_cache, _cache_timestamp
 
     try:
-        # Check cache first
+        # Check cache first (thread-safe)
         current_time = time.time()
-        if _prompts_cache and (current_time - _cache_timestamp) < _cache_ttl:
-            logger.info(
-                f"Returning cached prompts "
-                f"({len(_prompts_cache.get('prompts', []))} items)"
-            )
-            return _prompts_cache
+        async with _cache_lock:
+            if _prompts_cache and (current_time - _cache_timestamp) < _cache_ttl:
+                logger.info(
+                    f"Returning cached prompts "
+                    f"({len(_prompts_cache.get('prompts', []))} items)"
+                )
+                return _prompts_cache
 
         # Adjust path to look for prompts directory at project root
         prompts_dir = os.path.abspath(
@@ -161,9 +165,10 @@ async def get_prompts():
         else:
             logger.warning(f"Prompts directory {prompts_dir} not found")
 
-        # Cache the results
-        _prompts_cache = {"prompts": prompts, "defaults": defaults}
-        _cache_timestamp = current_time
+        # Cache the results (thread-safe)
+        async with _cache_lock:
+            _prompts_cache = {"prompts": prompts, "defaults": defaults}
+            _cache_timestamp = current_time
 
         logger.info(f"Successfully loaded {len(prompts)} prompts")
         return _prompts_cache
@@ -185,8 +190,9 @@ async def get_prompts():
 async def clear_prompts_cache():
     """Clear the prompts cache to force reload on next request"""
     global _prompts_cache, _cache_timestamp
-    _prompts_cache = None
-    _cache_timestamp = 0
+    async with _cache_lock:
+        _prompts_cache = None
+        _cache_timestamp = 0
     logger.info("Prompts cache cleared")
     return {"status": "success", "message": "Prompts cache cleared"}
 
