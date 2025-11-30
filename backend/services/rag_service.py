@@ -356,11 +356,12 @@ class RAGService:
 
 # Global service instance (lazily initialized per knowledge base)
 _rag_service_instance: Optional[RAGService] = None
+_rag_service_lock = asyncio.Lock()
 
 
 async def get_rag_service(knowledge_base: Any) -> RAGService:
     """
-    Get or create RAG service instance.
+    Get or create RAG service instance (thread-safe).
 
     This function is designed for FastAPI dependency injection.
 
@@ -373,7 +374,10 @@ async def get_rag_service(knowledge_base: Any) -> RAGService:
     global _rag_service_instance
 
     if _rag_service_instance is None:
-        _rag_service_instance = RAGService(knowledge_base)
-        await _rag_service_instance.initialize()
+        async with _rag_service_lock:
+            # Double-check after acquiring lock
+            if _rag_service_instance is None:
+                _rag_service_instance = RAGService(knowledge_base)
+                await _rag_service_instance.initialize()
 
     return _rag_service_instance

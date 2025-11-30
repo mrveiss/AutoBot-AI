@@ -2,10 +2,13 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import asyncio
+import logging
 import os
 import subprocess
 
 import pyautogui
+
+logger = logging.getLogger(__name__)
 
 
 class GUIController:
@@ -23,8 +26,8 @@ class GUIController:
         # Check if running under Xvfb or need virtual display
         if "DISPLAY" not in os.environ:
             self.virtual_display = True
-            print(
-                "Warning: DISPLAY environment variable not set. "
+            logger.warning(
+                "DISPLAY environment variable not set. "
                 "Attempting to start virtual display."
             )
             self.start_virtual_display()
@@ -38,8 +41,8 @@ class GUIController:
         try:
             # Check if Xvfb is installed
             if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
-                print(
-                    "Error: Xvfb is not installed. Please install it to use the virtual display."
+                logger.error(
+                    "Xvfb is not installed. Please install it to use the virtual display."
                 )
                 return
 
@@ -50,9 +53,9 @@ class GUIController:
                 stderr=subprocess.PIPE,
             )
             os.environ["DISPLAY"] = ":99"
-            print("Virtual display started on :99")
+            logger.info("Virtual display started on :99")
         except Exception as e:
-            print(f"Error starting virtual display: {e}")
+            logger.error(f"Error starting virtual display: {e}")
 
     def stop_virtual_display(self):
         """Stop the Xvfb virtual display if it was started by this controller."""
@@ -61,31 +64,31 @@ class GUIController:
             self.xvfb_process = None
             if "DISPLAY" in os.environ:
                 del os.environ["DISPLAY"]
-            print("Virtual display stopped.")
+            logger.info("Virtual display stopped")
 
     async def capture_screen(self):
         """Capture a screenshot of the current screen."""
         try:
             return await asyncio.to_thread(pyautogui.screenshot)
         except Exception as e:
-            print(f"Error capturing screenshot: {e}")
+            logger.error(f"Error capturing screenshot: {e}")
             return None
 
     async def click_at(self, x, y):
         """Simulate a mouse click at the specified coordinates."""
         try:
             await asyncio.to_thread(pyautogui.click, x, y)
-            print(f"Clicked at ({x}, {y})")
+            logger.debug(f"Clicked at ({x}, {y})")
         except Exception as e:
-            print(f"Error clicking at ({x}, {y}): {e}")
+            logger.error(f"Error clicking at ({x}, {y}): {e}")
 
     async def type_text(self, text):
         """Simulate typing the specified text."""
         try:
             await asyncio.to_thread(pyautogui.write, text)
-            print(f"Typed text: {text}")
+            logger.debug(f"Typed text: {text}")
         except Exception as e:
-            print(f"Error typing text: {e}")
+            logger.error(f"Error typing text: {e}")
 
     async def locate_element_by_image(self, image_path, confidence=0.8):
         """Locate an element on the screen by matching an image."""
@@ -94,13 +97,13 @@ class GUIController:
                 pyautogui.locateCenterOnScreen, image_path, confidence=confidence
             )
             if location:
-                print(f"Found element at {location}")
+                logger.debug(f"Found element at {location}")
                 return location
             else:
-                print(f"Element not found for image: {image_path}")
+                logger.debug(f"Element not found for image: {image_path}")
                 return None
         except Exception as e:
-            print(f"Error locating element by image {image_path}: {e}")
+            logger.error(f"Error locating element by image {image_path}: {e}")
             return None
 
     async def draw_visual_feedback(self, x, y, duration=2):
@@ -111,14 +114,14 @@ class GUIController:
             await asyncio.to_thread(pyautogui.moveTo, x, y)
             await asyncio.sleep(duration)
             await asyncio.to_thread(pyautogui.moveTo, original_pos)
-            print(f"Drew visual feedback at ({x}, {y})")
+            logger.debug(f"Drew visual feedback at ({x}, {y})")
         except Exception as e:
-            print(f"Error drawing visual feedback: {e}")
+            logger.error(f"Error drawing visual feedback: {e}")
 
     def check_wsl2_kex(self):
         """Check if running under WSL2 and if Kex is available."""
         if "WSL_DISTRO_NAME" in os.environ:
-            print("Detected WSL2 environment.")
+            logger.info("Detected WSL2 environment")
             try:
                 import subprocess
 
@@ -126,19 +129,19 @@ class GUIController:
                     ["which", "kex"], capture_output=True, text=True
                 )
                 if result.stdout.strip():
-                    print(
+                    logger.info(
                         "Kex is available. If GUI fails, consider starting "
                         "a Kex session."
                     )
                     return True
                 else:
-                    print(
+                    logger.warning(
                         "Kex not found. GUI automation may fail without "
                         "a VNC session."
                     )
                     return False
             except Exception as e:
-                print(f"Error checking for Kex: {e}")
+                logger.error(f"Error checking for Kex: {e}")
                 return False
         return False
 

@@ -170,13 +170,16 @@ def load_rag_config_from_yaml(config_manager: Any) -> RAGConfig:
         return RAGConfig()
 
 
-# Singleton instance
+# Singleton instance with thread-safe access
+import threading as _threading_rag_config
+
 _rag_config_instance: Optional[RAGConfig] = None
+_rag_config_lock = _threading_rag_config.Lock()
 
 
 def get_rag_config(config_manager: Optional[Any] = None) -> RAGConfig:
     """
-    Get the global RAG configuration instance.
+    Get the global RAG configuration instance (thread-safe).
 
     Args:
         config_manager: Optional config manager to reload from
@@ -187,17 +190,20 @@ def get_rag_config(config_manager: Optional[Any] = None) -> RAGConfig:
     global _rag_config_instance
 
     if _rag_config_instance is None or config_manager is not None:
-        if config_manager:
-            _rag_config_instance = load_rag_config_from_yaml(config_manager)
-        else:
-            _rag_config_instance = RAGConfig()
+        with _rag_config_lock:
+            # Double-check after acquiring lock
+            if _rag_config_instance is None or config_manager is not None:
+                if config_manager:
+                    _rag_config_instance = load_rag_config_from_yaml(config_manager)
+                else:
+                    _rag_config_instance = RAGConfig()
 
     return _rag_config_instance
 
 
 def update_rag_config(updates: Metadata) -> RAGConfig:
     """
-    Update RAG configuration at runtime.
+    Update RAG configuration at runtime (thread-safe).
 
     Args:
         updates: Dictionary of configuration updates
@@ -207,15 +213,16 @@ def update_rag_config(updates: Metadata) -> RAGConfig:
     """
     global _rag_config_instance
 
-    if _rag_config_instance is None:
-        _rag_config_instance = RAGConfig()
+    with _rag_config_lock:
+        if _rag_config_instance is None:
+            _rag_config_instance = RAGConfig()
 
-    # Update configuration
-    current_config = _rag_config_instance.to_dict()
-    current_config.update(updates)
+        # Update configuration
+        current_config = _rag_config_instance.to_dict()
+        current_config.update(updates)
 
-    # Create new instance with updated values
-    _rag_config_instance = RAGConfig.from_dict(current_config)
+        # Create new instance with updated values
+        _rag_config_instance = RAGConfig.from_dict(current_config)
 
-    logger.info(f"RAG configuration updated: {list(updates.keys())}")
-    return _rag_config_instance
+        logger.info(f"RAG configuration updated: {list(updates.keys())}")
+        return _rag_config_instance

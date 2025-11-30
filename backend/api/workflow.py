@@ -66,6 +66,10 @@ class WorkflowExecutionRequest(BaseModel):
 active_workflows: Dict[str, Metadata] = {}
 pending_approvals: Dict[str, asyncio.Future] = {}
 
+# Locks for thread-safe access to workflow state
+_workflows_lock = asyncio.Lock()
+_approvals_lock = asyncio.Lock()
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -75,25 +79,28 @@ pending_approvals: Dict[str, asyncio.Future] = {}
 @router.get("/workflows")
 async def list_active_workflows():
     """List all active workflows with their current status."""
-    workflows_summary = []
+    async with _workflows_lock:
+        workflows_summary = []
 
-    for workflow_id, workflow_data in active_workflows.items():
-        summary = {
-            "workflow_id": workflow_id,
-            "user_message": workflow_data.get("user_message", ""),
-            "classification": workflow_data.get("classification", "unknown"),
-            "total_steps": len(workflow_data.get("steps", [])),
-            "current_step": workflow_data.get("current_step", 0),
-            "status": workflow_data.get("status", "unknown"),
-            "created_at": workflow_data.get("created_at", ""),
-            "estimated_duration": workflow_data.get("estimated_duration", "unknown"),
-            "agents_involved": workflow_data.get("agents_involved", []),
-        }
-        workflows_summary.append(summary)
+        for workflow_id, workflow_data in active_workflows.items():
+            summary = {
+                "workflow_id": workflow_id,
+                "user_message": workflow_data.get("user_message", ""),
+                "classification": workflow_data.get("classification", "unknown"),
+                "total_steps": len(workflow_data.get("steps", [])),
+                "current_step": workflow_data.get("current_step", 0),
+                "status": workflow_data.get("status", "unknown"),
+                "created_at": workflow_data.get("created_at", ""),
+                "estimated_duration": workflow_data.get("estimated_duration", "unknown"),
+                "agents_involved": workflow_data.get("agents_involved", []),
+            }
+            workflows_summary.append(summary)
+
+        active_count = len(active_workflows)
 
     return {
         "success": True,
-        "active_workflows": len(active_workflows),
+        "active_workflows": active_count,
         "workflows": workflows_summary,
     }
 

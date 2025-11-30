@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import json
+import logging
 import os
 import platform
 import subprocess
@@ -14,11 +15,13 @@ from markdownify import (
 
 from src.utils.http_client import get_http_client
 
+logger = logging.getLogger(__name__)
+
 
 class SystemIntegration:
     def __init__(self):
         self.os_type = platform.system()
-        print(f"SystemIntegration initialized for OS: {self.os_type}")
+        logger.info(f"SystemIntegration initialized for OS: {self.os_type}")
 
     def _run_command(self, command: List[str], shell: bool = False) -> Dict[str, Any]:
         """Helper to run shell commands and capture output."""
