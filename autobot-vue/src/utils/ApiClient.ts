@@ -1,5 +1,9 @@
 import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ApiClient
+const logger = createLogger('ApiClient');
 
 // Type definitions for API client
 export interface RequestOptions {
@@ -57,7 +61,7 @@ export class ApiClient {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
     } catch (error) {
-      console.warn('[ApiClient.ts] AppConfig initialization failed, using NetworkConstants fallback');
+      logger.warn('[ApiClient.ts] AppConfig initialization failed, using NetworkConstants fallback');
       // Use NetworkConstants instead of hardcoded IP
       this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
     }
@@ -216,7 +220,7 @@ export class ApiClient {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to save chat messages:', error);
+      logger.error('Failed to save chat messages:', error);
       throw error;
     }
   }

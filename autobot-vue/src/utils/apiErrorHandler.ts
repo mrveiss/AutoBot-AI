@@ -12,6 +12,10 @@
  */
 
 import { ref, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for apiErrorHandler
+const logger = createLogger('apiErrorHandler')
 
 /**
  * Standard API error structure
@@ -174,7 +178,7 @@ export function showErrorToast(error: ApiError, options: ErrorHandlerOptions = {
   }
 
   // Console warning as final fallback
-  console.warn(`[API Error] ${message}`)
+  logger.warn(`[API Error] ${message}`)
 }
 
 /**
@@ -182,7 +186,7 @@ export function showErrorToast(error: ApiError, options: ErrorHandlerOptions = {
  */
 export function logApiError(error: ApiError, options: ErrorHandlerOptions = {}): void {
   const context = options.componentName ? `[${options.componentName}]` : '[API]'
-  console.error(`${context} API Error:`, {
+  logger.error(`${context} API Error:`, {
     message: error.message,
     code: error.code,
     status: error.status,
@@ -245,7 +249,7 @@ export async function handleApiCall<T>(
       // Check if we should retry
       const shouldRetry = lastError.retryable && attempts < maxAttempts
       if (shouldRetry) {
-        console.log(`[API] Retrying request (attempt ${attempts + 1}/${maxAttempts})...`)
+        logger.info(`[API] Retrying request (attempt ${attempts + 1}/${maxAttempts})...`)
         await sleep(opts.retryDelay || 1000)
         continue
       }
