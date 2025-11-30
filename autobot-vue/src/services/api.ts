@@ -1,12 +1,16 @@
 // API Service Layer - TypeScript version with proper typing
-import type { 
-  ApiResponse, 
-  ChatMessage, 
-  ChatSession, 
-  WorkflowApproval 
+import type {
+  ApiResponse,
+  ChatMessage,
+  ChatSession,
+  WorkflowApproval
 } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for ApiService
+const logger = createLogger('ApiService')
 
 /**
  * API Service - provides typed methods for interacting with AutoBot backend
@@ -200,7 +204,7 @@ class ApiService {
       return response;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn('[ApiService] Service health check failed, using fallback:', errorMessage);
+      logger.warn('[ApiService] Service health check failed, using fallback:', errorMessage);
       return {
         success: false,
         error: errorMessage,

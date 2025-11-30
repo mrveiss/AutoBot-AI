@@ -2,6 +2,11 @@
  * API Configuration
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for api config
+const logger = createLogger('api.config')
+
 // Determine API base URL based on environment
 const getApiBaseUrl = () => {
   // Check for environment variable first
@@ -56,7 +61,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   } catch (error) {
     // Only log API errors in development mode
     if (import.meta.env.DEV) {
-      console.debug(`API request to ${endpoint} failed:`, error.message);
+      logger.debug(`API request to ${endpoint} failed:`, error.message);
     }
     throw error;
   }

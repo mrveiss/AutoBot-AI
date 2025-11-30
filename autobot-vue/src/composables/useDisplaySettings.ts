@@ -1,4 +1,8 @@
 import { ref, watch } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useDisplaySettings
+const logger = createLogger('useDisplaySettings')
 
 const DISPLAY_SETTINGS_KEY = 'autobot_display_settings'
 
@@ -29,7 +33,7 @@ const loadDisplaySettings = (): DisplaySettings => {
       return { ...getDefaultSettings(), ...JSON.parse(saved) }
     }
   } catch (error) {
-    console.warn('[DisplaySettings] Failed to load settings:', error)
+    logger.warn('[DisplaySettings] Failed to load settings:', error)
   }
   return getDefaultSettings()
 }
@@ -38,7 +42,7 @@ const saveDisplaySettings = (settings: DisplaySettings) => {
   try {
     localStorage.setItem(DISPLAY_SETTINGS_KEY, JSON.stringify(settings))
   } catch (error) {
-    console.warn('[DisplaySettings] Failed to save settings:', error)
+    logger.warn('[DisplaySettings] Failed to save settings:', error)
   }
 }
 

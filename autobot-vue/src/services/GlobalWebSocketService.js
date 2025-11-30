@@ -8,6 +8,9 @@
 
 import { ref, reactive } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('GlobalWebSocketService')
 
 class GlobalWebSocketService {
   constructor() {
@@ -36,7 +39,7 @@ class GlobalWebSocketService {
     // Persist connection state across reloads
     this.restoreConnectionState()
 
-    console.log('🌐 Global WebSocket Service initialized with URL:', this.state.url)
+    logger.debug('🌐 Global WebSocket Service initialized with URL:', this.state.url)
   }
 
   /**
@@ -60,18 +63,18 @@ class GlobalWebSocketService {
         // Development mode with Vite dev server - use proxy
         // FIXED: WebSocket is at /api/ws not /ws
         const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
-        console.log('🔗 Development WebSocket URL (via Vite proxy):', wsUrl)
+        logger.debug('🔗 Development WebSocket URL (via Vite proxy):', wsUrl)
         return wsUrl
       }
 
       // Production mode or when frontend is on VM1 - connect directly to backend
       // FIXED: WebSocket is at /api/ws not /ws
       const wsUrl = `${wsProtocol}//${backendHost}:${backendPort}/api/ws`
-      console.log('🔗 Production WebSocket URL (direct to backend):', wsUrl)
+      logger.debug('🔗 Production WebSocket URL (direct to backend):', wsUrl)
       return wsUrl
 
     } catch (error) {
-      console.error('Failed to construct WebSocket URL:', error)
+      logger.error('Failed to construct WebSocket URL:', error)
       // CRITICAL: Error in URL construction - this should never happen
       // If DEFAULT_CONFIG fails, something is fundamentally wrong
       throw new Error(`WebSocket URL construction failed: ${error.message}`)
@@ -90,7 +93,7 @@ class GlobalWebSocketService {
         this.state.reconnectCount = this.reconnectAttempts
       }
     } catch (error) {
-      console.warn('Failed to restore WebSocket state:', error)
+      logger.warn('Failed to restore WebSocket state:', error)
     }
   }
 
@@ -105,7 +108,7 @@ class GlobalWebSocketService {
       }
       localStorage.setItem('autobot-websocket-state', JSON.stringify(stateToSave))
     } catch (error) {
-      console.warn('Failed to save WebSocket state:', error)
+      logger.warn('Failed to save WebSocket state:', error)
     }
   }
 
@@ -129,7 +132,7 @@ class GlobalWebSocketService {
     })
 
     const wsUrl = this.state.url
-    console.log('🔌 Connecting WebSocket (attempt', this.reconnectAttempts + 1, '):', wsUrl)
+    logger.debug('🔌 Connecting WebSocket (attempt', this.reconnectAttempts + 1, '):', wsUrl)
 
     // Track with RUM if available
     this.trackEvent('connection_attempt', {
@@ -145,7 +148,7 @@ class GlobalWebSocketService {
         // Connection timeout
         const timeoutId = setTimeout(() => {
           if (this.connectionState.value === 'connecting') {
-            console.error('❌ WebSocket connection timeout')
+            logger.error('❌ WebSocket connection timeout')
             this.handleConnectionError(new Error('Connection timeout'))
             this.ws?.close()
             reject(new Error('Connection timeout'))
@@ -157,7 +160,7 @@ class GlobalWebSocketService {
         this.ws.addEventListener('error', () => clearTimeout(timeoutId), { once: true })
 
       } catch (error) {
-        console.error('❌ Failed to create WebSocket:', error)
+        logger.error('❌ Failed to create WebSocket:', error)
         this.handleConnectionError(error)
         reject(error)
       }
@@ -192,7 +195,7 @@ class GlobalWebSocketService {
     if (!this.ws) return
 
     this.ws.onopen = () => {
-      console.log('✅ WebSocket connected successfully')
+      logger.debug('✅ WebSocket connected successfully')
 
       this.connectionState.value = 'connected'
       this.isConnected.value = true
@@ -237,7 +240,7 @@ class GlobalWebSocketService {
         })
 
       } catch (error) {
-        console.error('❌ Failed to parse WebSocket message:', error)
+        logger.error('❌ Failed to parse WebSocket message:', error)
         this.trackEvent('message_parse_error', {
           error: error.message,
           rawDataLength: event.data?.length || 0
@@ -246,13 +249,13 @@ class GlobalWebSocketService {
     }
 
     this.ws.onerror = (error) => {
-      console.error('❌ WebSocket error:', error)
+      logger.error('❌ WebSocket error:', error)
       this.handleConnectionError(error)
       reject(error)
     }
 
     this.ws.onclose = (event) => {
-      console.log('🔌 WebSocket closed:', {
+      logger.debug('🔌 WebSocket closed:', {
         code: event.code,
         reason: event.reason,
         wasClean: event.wasClean
@@ -305,7 +308,7 @@ class GlobalWebSocketService {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('❌ Max reconnection attempts reached')
+      logger.debug('❌ Max reconnection attempts reached')
       this.state.lastError = `Connection failed after ${this.reconnectAttempts} attempts`
       return
     }
@@ -321,12 +324,12 @@ class GlobalWebSocketService {
     const jitter = Math.random() * 1000 // Add up to 1s of jitter
     const delay = backoffDelay + jitter
 
-    console.log(`🔄 Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+    logger.debug(`🔄 Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
       if (this.connectionState.value !== 'connected') {
         this.connect().catch(error => {
-          console.error('Reconnection failed:', error)
+          logger.error('Reconnection failed:', error)
         })
       }
     }, delay)
@@ -349,11 +352,11 @@ class GlobalWebSocketService {
 
         return true
       } catch (error) {
-        console.error('❌ Failed to send WebSocket message:', error)
+        logger.error('❌ Failed to send WebSocket message:', error)
         return false
       }
     } else {
-      console.warn('⚠️ Cannot send message - WebSocket not connected')
+      logger.warn('⚠️ Cannot send message - WebSocket not connected')
       return false
     }
   }
@@ -407,7 +410,7 @@ class GlobalWebSocketService {
    * Disconnect cleanly
    */
   disconnect() {
-    console.log('🔌 Disconnecting WebSocket')
+    logger.debug('🔌 Disconnecting WebSocket')
     this.reconnectAttempts = this.maxReconnectAttempts // Prevent auto-reconnect
     this.cleanup()
     this.connectionState.value = 'disconnected'
@@ -419,7 +422,7 @@ class GlobalWebSocketService {
    * Force reconnection
    */
   forceReconnect() {
-    console.log('🔄 Forcing WebSocket reconnection')
+    logger.debug('🔄 Forcing WebSocket reconnection')
     this.reconnectAttempts = 0
     this.state.reconnectCount = 0
     this.disconnect()
@@ -464,7 +467,7 @@ class GlobalWebSocketService {
         try {
           callback(data)
         } catch (error) {
-          console.error('❌ Error in WebSocket event listener:', error)
+          logger.error('❌ Error in WebSocket event listener:', error)
         }
       })
     }
@@ -487,7 +490,7 @@ class GlobalWebSocketService {
       }
     } catch (error) {
       // Silently fail - RUM tracking is optional and shouldn't break WebSocket
-      console.debug('[GlobalWebSocketService] RUM tracking not available:', error.message)
+      logger.debug('[GlobalWebSocketService] RUM tracking not available:', error.message)
     }
   }
 
@@ -509,7 +512,7 @@ class GlobalWebSocketService {
    * Test connection
    */
   async testConnection() {
-    console.log('🧪 Testing WebSocket connection...')
+    logger.debug('🧪 Testing WebSocket connection...')
 
     if (this.isConnected.value) {
       return new Promise((resolve) => {
@@ -546,7 +549,7 @@ if (typeof window !== 'undefined' && !window._autobotWebSocketInitialized) {
   setTimeout(() => {
     if (!globalWebSocketService.isConnected.value && globalWebSocketService.connectionState.value !== 'connecting') {
       globalWebSocketService.connect().catch(error => {
-        console.error('Initial WebSocket connection failed:', error)
+        logger.error('Initial WebSocket connection failed:', error)
       })
     }
   }, 500) // Reduced delay
@@ -564,7 +567,7 @@ if (typeof window !== 'undefined') {
     state: () => globalWebSocketService.getState(),
     clearState: () => {
       localStorage.removeItem('autobot-websocket-state')
-      console.log('WebSocket state cleared')
+      logger.debug('WebSocket state cleared')
     }
   }
 }
