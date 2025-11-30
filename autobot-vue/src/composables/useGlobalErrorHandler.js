@@ -4,6 +4,10 @@
  */
 
 import { onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useGlobalErrorHandler
+const logger = createLogger('useGlobalErrorHandler')
 import { useAppStore } from '@/stores/useAppStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
@@ -15,7 +19,7 @@ export function useGlobalErrorHandler() {
   const knowledgeStore = useKnowledgeStore()
 
   const handleGlobalError = (error) => {
-    console.error('Global error:', error)
+    logger.error('Global error:', error)
 
     // Extract error message
     const errorMessage = error.message || 'An unexpected error occurred'
@@ -72,12 +76,12 @@ export function useGlobalErrorHandler() {
   }
 
   const handleLoadingError = (error) => {
-    console.error('[App] Loading error:', error)
+    logger.error('[App] Loading error:', error)
     handleGlobalError(new Error(error))
   }
 
   const handleLoadingTimeout = () => {
-    console.warn('[App] Loading timed out - continuing with available content')
+    logger.warn('[App] Loading timed out - continuing with available content')
 
     // Use subtle notification for timeout warnings (non-intrusive)
     showSubtleErrorNotification(
@@ -106,7 +110,7 @@ export function useGlobalErrorHandler() {
       // Reload the page
       window.location.reload()
     } catch (error) {
-      console.error('Error clearing caches:', error)
+      logger.error('Error clearing caches:', error)
     }
   }
 

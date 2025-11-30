@@ -3,6 +3,11 @@
  * Replaces time-based delays with event-driven and state-based patterns
  */
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ObserverPatterns
+const logger = createLogger('ObserverPatterns');
+
 class EventObserver {
   constructor() {
     this.observers = new Map();
@@ -46,7 +51,7 @@ class EventObserver {
       try {
         callback(data);
       } catch (error) {
-        console.error(`[EventObserver] Error in callback for '${eventType}':`, error);
+        logger.error(`[EventObserver] Error in callback for '${eventType}':`, error);
       }
     }
   }
@@ -120,7 +125,7 @@ class StateObserver {
       try {
         callback(newValue, oldValue, key);
       } catch (error) {
-        console.error(`[StateObserver] Error in watcher for '${key}':`, error);
+        logger.error(`[StateObserver] Error in watcher for '${key}':`, error);
       }
     }
     
@@ -261,7 +266,7 @@ class ConditionWaiter {
         }
       }
     } catch (error) {
-      console.error(`[ConditionWaiter] Error checking condition '${conditionName}':`, error);
+      logger.error(`[ConditionWaiter] Error checking condition '${conditionName}':`, error);
       condition.reject(error);
       this.conditions.delete(conditionName);
       
@@ -416,8 +421,8 @@ class ResourceMonitor {
         }
       }
     } catch (error) {
-      console.error(`[ResourceMonitor] Error checking resource '${resourceName}':`, error);
-      
+      logger.error(`[ResourceMonitor] Error checking resource '${resourceName}':`, error);
+
       if (resource.lastState !== false) {
         resource.lastState = false;
         resource.isAvailable = false;
