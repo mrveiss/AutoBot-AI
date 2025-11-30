@@ -8,6 +8,7 @@ This module handles WebSocket connections for real-time event streaming
 between the backend and frontend clients.
 """
 
+import asyncio
 import json
 import logging
 
@@ -23,6 +24,9 @@ router = APIRouter()
 # Connected WebSocket clients for NPU workers
 _npu_worker_ws_clients: list[WebSocket] = []
 _npu_events_subscribed = False
+
+# Lock for thread-safe access to _npu_worker_ws_clients
+_ws_clients_lock = asyncio.Lock()
 
 
 @with_error_handling(
@@ -380,8 +384,9 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         logger.info(f"NPU Worker WebSocket connected from client: {websocket.client}")
 
-        # Add to connected clients
-        _npu_worker_ws_clients.append(websocket)
+        # Add to connected clients (thread-safe)
+        async with _ws_clients_lock:
+            _npu_worker_ws_clients.append(websocket)
 
         # Send initial worker list
         try:
@@ -460,9 +465,10 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"NPU Worker WebSocket error: {e}", exc_info=True)
     finally:
-        # Remove from connected clients
-        if websocket in _npu_worker_ws_clients:
-            _npu_worker_ws_clients.remove(websocket)
+        # Remove from connected clients (thread-safe)
+        async with _ws_clients_lock:
+            if websocket in _npu_worker_ws_clients:
+                _npu_worker_ws_clients.remove(websocket)
         logger.info("NPU Worker WebSocket connection cleanup completed")
 
 
@@ -510,10 +516,13 @@ async def broadcast_npu_worker_event(event_data: dict):
     if not message:
         return
 
-    # Broadcast to all connected clients
+    # Broadcast to all connected clients (thread-safe)
     disconnected_clients = []
 
-    for client in _npu_worker_ws_clients:
+    async with _ws_clients_lock:
+        clients_copy = list(_npu_worker_ws_clients)
+
+    for client in clients_copy:
         try:
             if client.client_state == WebSocketState.CONNECTED:
                 await client.send_json(message)
@@ -526,10 +535,12 @@ async def broadcast_npu_worker_event(event_data: dict):
             logger.error(f"Error broadcasting NPU worker event: {e}")
             disconnected_clients.append(client)
 
-    # Remove disconnected clients
-    for client in disconnected_clients:
-        if client in _npu_worker_ws_clients:
-            _npu_worker_ws_clients.remove(client)
+    # Remove disconnected clients (thread-safe)
+    if disconnected_clients:
+        async with _ws_clients_lock:
+            for client in disconnected_clients:
+                if client in _npu_worker_ws_clients:
+                    _npu_worker_ws_clients.remove(client)
 
 
 def init_npu_worker_websocket():
