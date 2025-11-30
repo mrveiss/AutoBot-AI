@@ -523,20 +523,26 @@ class OSDetector:
         return None
 
 
-# Global detector instance
+# Global detector instance (thread-safe)
+import asyncio
+
 _detector_instance: Optional[OSDetector] = None
+_detector_lock = asyncio.Lock()
 
 
 async def get_os_detector() -> OSDetector:
     """
-    Get singleton OS detector instance.
+    Get singleton OS detector instance (thread-safe).
 
     Returns:
         OSDetector: Global detector instance
     """
     global _detector_instance
     if _detector_instance is None:
-        _detector_instance = OSDetector()
+        async with _detector_lock:
+            # Double-check after acquiring lock
+            if _detector_instance is None:
+                _detector_instance = OSDetector()
     return _detector_instance
 
 

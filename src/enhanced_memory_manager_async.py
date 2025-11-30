@@ -579,13 +579,19 @@ class AsyncEnhancedMemoryManager:
         logger.info("Async enhanced memory manager closed")
 
 
-# Global async enhanced memory manager instance
+# Global async enhanced memory manager instance (thread-safe)
+import threading
+
 _async_enhanced_memory_manager = None
+_async_enhanced_memory_manager_lock = threading.Lock()
 
 
 def get_async_enhanced_memory_manager() -> AsyncEnhancedMemoryManager:
-    """Get global async enhanced memory manager instance"""
+    """Get global async enhanced memory manager instance (thread-safe)"""
     global _async_enhanced_memory_manager
     if _async_enhanced_memory_manager is None:
-        _async_enhanced_memory_manager = AsyncEnhancedMemoryManager()
+        with _async_enhanced_memory_manager_lock:
+            # Double-check after acquiring lock
+            if _async_enhanced_memory_manager is None:
+                _async_enhanced_memory_manager = AsyncEnhancedMemoryManager()
     return _async_enhanced_memory_manager

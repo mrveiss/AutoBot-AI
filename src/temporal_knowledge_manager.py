@@ -486,15 +486,21 @@ class TemporalKnowledgeManager:
         }
 
 
-# Global instance for system integration
+# Global instance for system integration (thread-safe)
+import threading
+
 _temporal_manager_instance = None
+_temporal_manager_lock = threading.Lock()
 
 
 def get_temporal_manager() -> TemporalKnowledgeManager:
-    """Get the global temporal knowledge manager instance."""
+    """Get the global temporal knowledge manager instance (thread-safe)."""
     global _temporal_manager_instance
 
     if _temporal_manager_instance is None:
-        _temporal_manager_instance = TemporalKnowledgeManager()
+        with _temporal_manager_lock:
+            # Double-check after acquiring lock
+            if _temporal_manager_instance is None:
+                _temporal_manager_instance = TemporalKnowledgeManager()
 
     return _temporal_manager_instance

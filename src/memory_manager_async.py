@@ -512,13 +512,19 @@ class AsyncLongTermMemoryManager:
         self.logger.info("Async memory manager closed")
 
 
-# Global async memory manager instance
+# Global async memory manager instance (thread-safe)
+import threading
+
 _async_memory_manager = None
+_async_memory_manager_lock = threading.Lock()
 
 
 def get_async_memory_manager() -> AsyncLongTermMemoryManager:
-    """Get global async memory manager instance"""
+    """Get global async memory manager instance (thread-safe)"""
     global _async_memory_manager
     if _async_memory_manager is None:
-        _async_memory_manager = AsyncLongTermMemoryManager()
+        with _async_memory_manager_lock:
+            # Double-check after acquiring lock
+            if _async_memory_manager is None:
+                _async_memory_manager = AsyncLongTermMemoryManager()
     return _async_memory_manager

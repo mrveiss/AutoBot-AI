@@ -889,13 +889,19 @@ class EnterpriseFeatureManager:
         )
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _enterprise_manager: Optional[EnterpriseFeatureManager] = None
+_enterprise_manager_lock = threading.Lock()
 
 
 def get_enterprise_manager() -> EnterpriseFeatureManager:
-    """Get singleton enterprise feature manager"""
+    """Get singleton enterprise feature manager (thread-safe)"""
     global _enterprise_manager
     if _enterprise_manager is None:
-        _enterprise_manager = EnterpriseFeatureManager()
+        with _enterprise_manager_lock:
+            # Double-check after acquiring lock
+            if _enterprise_manager is None:
+                _enterprise_manager = EnterpriseFeatureManager()
     return _enterprise_manager
