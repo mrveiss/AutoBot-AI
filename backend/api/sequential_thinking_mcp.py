@@ -230,8 +230,10 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
             f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})"
         )
 
-    # Store thought
-    thinking_sessions[session_id].append(thought_record)
+    # Store thought (thread-safe)
+    async with _thinking_sessions_lock:
+        thinking_sessions[session_id].append(thought_record)
+        session_thought_count = len(thinking_sessions[session_id])
 
     # Calculate progress
     progress_percentage = (request.thought_number / request.total_thoughts) * 100
@@ -247,7 +249,7 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
         "total_thoughts": request.total_thoughts,
         "progress_percentage": round(progress_percentage, 1),
         "thinking_complete": thinking_complete,
-        "session_thought_count": len(thinking_sessions[session_id]),
+        "session_thought_count": session_thought_count,
         "message": (
             f"Recorded thought {request.thought_number}/{request.total_thoughts}"
         ),
