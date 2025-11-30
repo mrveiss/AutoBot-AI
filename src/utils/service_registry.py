@@ -497,15 +497,21 @@ class ServiceRegistry:
         }
 
 
-# Global service registry instance
+# Global service registry instance (thread-safe)
+import threading
+
 _registry: Optional[ServiceRegistry] = None
+_registry_lock = threading.Lock()
 
 
 def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
-    """Get global service registry instance (singleton)"""
+    """Get global service registry instance (singleton, thread-safe)"""
     global _registry
     if _registry is None:
-        _registry = ServiceRegistry(config_file)
+        with _registry_lock:
+            # Double-check after acquiring lock
+            if _registry is None:
+                _registry = ServiceRegistry(config_file)
     return _registry
 
 

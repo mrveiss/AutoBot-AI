@@ -484,13 +484,19 @@ class SystemMetricsCollector:
         self._is_collecting = False
 
 
-# Global metrics collector instance
+# Global metrics collector instance (thread-safe)
+import threading
+
 _metrics_collector = None
+_metrics_collector_lock = threading.Lock()
 
 
 def get_metrics_collector() -> SystemMetricsCollector:
-    """Get the global metrics collector instance"""
+    """Get the global metrics collector instance (thread-safe)"""
     global _metrics_collector
     if _metrics_collector is None:
-        _metrics_collector = SystemMetricsCollector()
+        with _metrics_collector_lock:
+            # Double-check after acquiring lock
+            if _metrics_collector is None:
+                _metrics_collector = SystemMetricsCollector()
     return _metrics_collector

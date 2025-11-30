@@ -795,13 +795,19 @@ class ModelOptimizer:
             return [{"type": "error", "message": str(e)}]
 
 
-# Global optimizer instance
+# Global optimizer instance (thread-safe)
+import threading
+
 _model_optimizer = None
+_model_optimizer_lock = threading.Lock()
 
 
 def get_model_optimizer() -> ModelOptimizer:
-    """Get the global model optimizer instance"""
+    """Get the global model optimizer instance (thread-safe)"""
     global _model_optimizer
     if _model_optimizer is None:
-        _model_optimizer = ModelOptimizer()
+        with _model_optimizer_lock:
+            # Double-check after acquiring lock
+            if _model_optimizer is None:
+                _model_optimizer = ModelOptimizer()
     return _model_optimizer

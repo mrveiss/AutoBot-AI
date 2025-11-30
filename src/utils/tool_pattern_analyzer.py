@@ -895,17 +895,23 @@ class ToolPatternAnalyzer:
         logger.info("Tool pattern analyzer reset")
 
 
-# Global analyzer instance
+# Global analyzer instance (thread-safe)
+import threading
+
 _global_analyzer: Optional[ToolPatternAnalyzer] = None
+_global_analyzer_lock = threading.Lock()
 
 
 def get_tool_pattern_analyzer(
     config: Optional[Dict[str, Any]] = None,
 ) -> ToolPatternAnalyzer:
-    """Get global tool pattern analyzer instance"""
+    """Get global tool pattern analyzer instance (thread-safe)"""
     global _global_analyzer
     if _global_analyzer is None:
-        _global_analyzer = ToolPatternAnalyzer(config)
+        with _global_analyzer_lock:
+            # Double-check after acquiring lock
+            if _global_analyzer is None:
+                _global_analyzer = ToolPatternAnalyzer(config)
     return _global_analyzer
 
 

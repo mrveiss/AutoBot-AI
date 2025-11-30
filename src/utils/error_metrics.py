@@ -21,21 +21,27 @@ from src.utils.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular dependencies
+# Lazy import to avoid circular dependencies (thread-safe)
+import threading
+
 _alerts_manager = None
+_alerts_manager_lock = threading.Lock()
 
 
 def _get_alerts_manager():
-    """Lazy load alerts manager to avoid circular imports."""
+    """Lazy load alerts manager to avoid circular imports (thread-safe)."""
     global _alerts_manager
     if _alerts_manager is None:
-        try:
-            from src.utils.monitoring_alerts import get_alerts_manager
+        with _alerts_manager_lock:
+            # Double-check after acquiring lock
+            if _alerts_manager is None:
+                try:
+                    from src.utils.monitoring_alerts import get_alerts_manager
 
-            _alerts_manager = get_alerts_manager()
-        except ImportError:
-            logger.warning("monitoring_alerts not available for alert notifications")
-            _alerts_manager = None
+                    _alerts_manager = get_alerts_manager()
+                except ImportError:
+                    logger.warning("monitoring_alerts not available for alert notifications")
+                    _alerts_manager = None
     return _alerts_manager
 
 
@@ -520,13 +526,14 @@ class ErrorMetricsCollector:
                 logger.info("Reset all error metrics")
 
 
-# Global metrics collector instance
+# Global metrics collector instance (thread-safe)
 _metrics_collector: Optional[ErrorMetricsCollector] = None
+_metrics_collector_lock = threading.Lock()
 
 
 def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
     """
-    Get global metrics collector instance
+    Get global metrics collector instance (thread-safe)
 
     Args:
         redis_client: Optional Redis client for persistence
@@ -537,7 +544,10 @@ def get_metrics_collector(redis_client=None) -> ErrorMetricsCollector:
     global _metrics_collector
 
     if _metrics_collector is None:
-        _metrics_collector = ErrorMetricsCollector(redis_client)
+        with _metrics_collector_lock:
+            # Double-check after acquiring lock
+            if _metrics_collector is None:
+                _metrics_collector = ErrorMetricsCollector(redis_client)
 
     return _metrics_collector
 

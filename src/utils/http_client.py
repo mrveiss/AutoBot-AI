@@ -193,20 +193,26 @@ class HTTPClientManager:
         await self.close()
 
 
-# Global singleton instance
+# Global singleton instance (thread-safe)
+import threading
+
 _http_client: Optional[HTTPClientManager] = None
+_http_client_lock = threading.Lock()
 
 
 def get_http_client() -> HTTPClientManager:
     """
-    Get the global HTTP client manager instance.
+    Get the global HTTP client manager instance (thread-safe).
 
     Returns:
         HTTPClientManager: The singleton HTTP client
     """
     global _http_client
     if _http_client is None:
-        _http_client = HTTPClientManager()
+        with _http_client_lock:
+            # Double-check after acquiring lock
+            if _http_client is None:
+                _http_client = HTTPClientManager()
     return _http_client
 
 

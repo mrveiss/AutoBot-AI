@@ -526,16 +526,22 @@ class GPUSemanticChunker:
         return documents
 
 
-# Global GPU chunker instance
+# Global GPU chunker instance (thread-safe)
+import threading
+
 _gpu_chunker_instance = None
+_gpu_chunker_instance_lock = threading.Lock()
 
 
 def get_gpu_semantic_chunker():
-    """Get the global GPU semantic chunker instance."""
+    """Get the global GPU semantic chunker instance (thread-safe)."""
     global _gpu_chunker_instance
     if _gpu_chunker_instance is None:
-        _gpu_chunker_instance = GPUSemanticChunker(
-            gpu_batch_size=500,  # Large batches for RTX 4070
-            enable_gpu_memory_pool=True,
-        )
+        with _gpu_chunker_instance_lock:
+            # Double-check after acquiring lock
+            if _gpu_chunker_instance is None:
+                _gpu_chunker_instance = GPUSemanticChunker(
+                    gpu_batch_size=500,  # Large batches for RTX 4070
+                    enable_gpu_memory_pool=True,
+                )
     return _gpu_chunker_instance

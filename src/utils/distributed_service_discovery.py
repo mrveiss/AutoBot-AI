@@ -394,16 +394,22 @@ class DistributedServiceDiscovery:
                 await asyncio.sleep(60)  # Back off on errors
 
 
-# Global instance for easy access
+# Global instance for easy access (thread-safe)
+import asyncio as _asyncio_lock
+
 _service_discovery = None
+_service_discovery_lock = _asyncio_lock.Lock()
 
 
 async def get_service_discovery() -> DistributedServiceDiscovery:
-    """Get global service discovery instance"""
+    """Get global service discovery instance (thread-safe)"""
     global _service_discovery
     if not _service_discovery:
-        _service_discovery = DistributedServiceDiscovery()
-        _service_discovery.start_background_health_monitoring()
+        async with _service_discovery_lock:
+            # Double-check after acquiring lock
+            if not _service_discovery:
+                _service_discovery = DistributedServiceDiscovery()
+                _service_discovery.start_background_health_monitoring()
     return _service_discovery
 
 

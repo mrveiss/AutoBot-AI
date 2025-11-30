@@ -944,13 +944,19 @@ class AutoBotSemanticChunker:
         return documents
 
 
-# Global instance placeholder - will be created lazily
+# Global instance placeholder - will be created lazily (thread-safe)
+import threading
+
 _semantic_chunker_instance = None
+_semantic_chunker_instance_lock = threading.Lock()
 
 
 def get_semantic_chunker():
-    """Get the global semantic chunker instance (lazy initialization)."""
+    """Get the global semantic chunker instance (lazy initialization, thread-safe)."""
     global _semantic_chunker_instance
     if _semantic_chunker_instance is None:
-        _semantic_chunker_instance = AutoBotSemanticChunker()
+        with _semantic_chunker_instance_lock:
+            # Double-check after acquiring lock
+            if _semantic_chunker_instance is None:
+                _semantic_chunker_instance = AutoBotSemanticChunker()
     return _semantic_chunker_instance

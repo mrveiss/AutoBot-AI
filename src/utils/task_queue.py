@@ -694,16 +694,22 @@ class TaskQueue:
         return cleaned_count
 
 
-# Global task queue instance
+# Global task queue instance (thread-safe)
+import threading
+
 _task_queue: Optional[TaskQueue] = None
+_task_queue_lock = threading.Lock()
 
 
 def get_task_queue() -> TaskQueue:
-    """Get the global task queue instance."""
+    """Get the global task queue instance (thread-safe)."""
     global _task_queue
 
     if _task_queue is None:
-        _task_queue = TaskQueue()
+        with _task_queue_lock:
+            # Double-check after acquiring lock
+            if _task_queue is None:
+                _task_queue = TaskQueue()
 
     return _task_queue
 

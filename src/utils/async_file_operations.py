@@ -285,15 +285,21 @@ class AsyncFileOperations:
         logger.debug("🗑️ File cache cleared")
 
 
-# Global instance for easy access
+# Global instance for easy access (thread-safe)
+import asyncio as _asyncio_lock
+
 _async_file_ops = None
+_async_file_ops_lock = _asyncio_lock.Lock()
 
 
 async def get_async_file_operations() -> AsyncFileOperations:
-    """Get global async file operations instance"""
+    """Get global async file operations instance (thread-safe)"""
     global _async_file_ops
     if not _async_file_ops:
-        _async_file_ops = AsyncFileOperations()
+        async with _async_file_ops_lock:
+            # Double-check after acquiring lock
+            if not _async_file_ops:
+                _async_file_ops = AsyncFileOperations()
     return _async_file_ops
 
 
