@@ -27,6 +27,25 @@ from src.utils.chromadb_client import get_chromadb_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
+
+# Code intelligence analyzers for integrated analytics (Issue #268)
+try:
+    from src.code_intelligence.anti_pattern_detector import AntiPatternDetector
+    from src.code_intelligence.performance_analyzer import PerformanceAnalyzer
+    from src.code_intelligence.bug_predictor import BugPredictor
+
+    # Initialize singleton instances for performance
+    _anti_pattern_detector: Optional[AntiPatternDetector] = None
+    _performance_analyzer: Optional[PerformanceAnalyzer] = None
+    _bug_predictor: Optional[BugPredictor] = None
+    _analyzers_available = True
+except ImportError as e:
+    logger.warning(f"Code intelligence analyzers not available: {e}")
+    _analyzers_available = False
+    _anti_pattern_detector = None
+    _performance_analyzer = None
+    _bug_predictor = None
+
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
 
 # In-memory storage fallback when Redis is unavailable
@@ -636,6 +655,35 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
                         }
                     )
 
+            # Issue #272: Detect technical debt markers (TODO, FIXME, HACK, XXX)
+            debt_patterns = [
+                (r"#\s*TODO[:\s](.+)$", "todo", "low"),
+                (r"#\s*FIXME[:\s](.+)$", "fixme", "medium"),
+                (r"#\s*HACK[:\s](.+)$", "hack", "high"),
+                (r"#\s*XXX[:\s](.+)$", "xxx", "medium"),
+                (r"#\s*BUG[:\s](.+)$", "bug", "high"),
+                (r"#\s*DEPRECATED[:\s](.+)$", "deprecated", "medium"),
+            ]
+            for pattern, debt_type, severity in debt_patterns:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    description = match.group(1).strip() if match.group(1) else ""
+                    technical_debt.append({
+                        "type": debt_type,
+                        "severity": severity,
+                        "line": i,
+                        "description": description[:200],  # Limit description length
+                        "file_path": file_path,
+                    })
+                    # Also add to problems for visibility in reports
+                    problems.append({
+                        "type": f"technical_debt_{debt_type}",
+                        "severity": severity,
+                        "line": i,
+                        "description": f"{debt_type.upper()}: {description[:100]}",
+                        "suggestion": f"Address this {debt_type.upper()} comment",
+                    })
+
         # Use LLM for semantic analysis if enabled
         if use_llm:
             try:
@@ -661,6 +709,69 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
             problems.extend(race_condition_problems)
         except Exception as e:
             logger.debug(f"Race condition detection skipped for {file_path}: {e}")
+
+        # Issue #268: Integrated code intelligence analyzers
+        if _analyzers_available:
+            # Anti-pattern detection (Issue #269)
+            try:
+                global _anti_pattern_detector
+                if _anti_pattern_detector is None:
+                    _anti_pattern_detector = AntiPatternDetector()
+                anti_pattern_result = _anti_pattern_detector.analyze_file(file_path)
+                for pattern in anti_pattern_result.get("patterns", []):
+                    problems.append({
+                        "type": f"code_smell_{pattern.pattern_type.value}",
+                        "severity": pattern.severity.value,
+                        "line": pattern.line_number,
+                        "description": pattern.description,
+                        "suggestion": pattern.suggestion,
+                    })
+            except Exception as e:
+                logger.debug(f"Anti-pattern detection skipped for {file_path}: {e}")
+
+            # Performance analysis (Issue #270)
+            try:
+                global _performance_analyzer
+                if _performance_analyzer is None:
+                    _performance_analyzer = PerformanceAnalyzer()
+                perf_issues = _performance_analyzer.analyze_file(file_path)
+                for issue in perf_issues:
+                    problems.append({
+                        "type": f"performance_{issue.issue_type.value}",
+                        "severity": issue.severity.value,
+                        "line": issue.line_start,
+                        "description": issue.description,
+                        "suggestion": issue.recommendation,
+                    })
+            except Exception as e:
+                logger.debug(f"Performance analysis skipped for {file_path}: {e}")
+
+            # Bug prediction (Issue #273)
+            try:
+                global _bug_predictor
+                if _bug_predictor is None:
+                    project_root = Path(file_path).parent
+                    while project_root.parent != project_root:
+                        if (project_root / ".git").exists():
+                            break
+                        project_root = project_root.parent
+                    _bug_predictor = BugPredictor(str(project_root))
+
+                risk_assessment = _bug_predictor.analyze_file(file_path)
+                if risk_assessment.overall_risk >= 70:  # High risk threshold
+                    problems.append({
+                        "type": "bug_prediction_high_risk",
+                        "severity": "high" if risk_assessment.overall_risk >= 85 else "medium",
+                        "line": 1,
+                        "description": (
+                            f"High bug risk score: {risk_assessment.overall_risk:.0f}/100. "
+                            f"Risk level: {risk_assessment.risk_level.value}"
+                        ),
+                        "suggestion": "; ".join(risk_assessment.recommendations[:3])
+                            if risk_assessment.recommendations else "Review code complexity",
+                    })
+            except Exception as e:
+                logger.debug(f"Bug prediction skipped for {file_path}: {e}")
 
         return {
             "functions": functions,
@@ -1389,44 +1500,45 @@ async def index_codebase():
 
     logger.info("✅ ENTRY: index_codebase endpoint called!")
 
-    # Check if there's already an indexing task running
-    if _current_indexing_task_id is not None:
-        existing_task = _active_tasks.get(_current_indexing_task_id)
-        if existing_task and not existing_task.done():
-            logger.info(
-                f"🔒 Indexing already in progress: {_current_indexing_task_id}"
-            )
-            return JSONResponse(
-                {
-                    "task_id": _current_indexing_task_id,
-                    "status": "already_running",
-                    "message": (
-                        "Indexing is already in progress. Poll "
-                        f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
-                        "for progress."
-                    ),
-                }
-            )
-
-    # Always use project root
-    project_root = Path(__file__).parent.parent.parent
-    root_path = str(project_root)
-    logger.info(f"📁 project_root = {root_path}")
-
-    # Generate unique task ID
-    task_id = str(uuid.uuid4())
-    logger.info(f"🆔 Generated task_id = {task_id}")
-
-    # Set the current indexing task
-    _current_indexing_task_id = task_id
-
-    # Add async background task using asyncio and store reference
-    logger.info("🔄 About to create_task")
-    task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
-    logger.info(f"✅ Task created: {task}")
+    # Check if there's already an indexing task running (under lock)
     async with _tasks_lock:
+        if _current_indexing_task_id is not None:
+            existing_task = _active_tasks.get(_current_indexing_task_id)
+            if existing_task and not existing_task.done():
+                current_task_id = _current_indexing_task_id
+                logger.info(
+                    f"🔒 Indexing already in progress: {current_task_id}"
+                )
+                return JSONResponse(
+                    {
+                        "task_id": current_task_id,
+                        "status": "already_running",
+                        "message": (
+                            "Indexing is already in progress. Poll "
+                            f"/api/analytics/codebase/index/status/{current_task_id} "
+                            "for progress."
+                        ),
+                    }
+                )
+
+        # Always use project root
+        project_root = Path(__file__).parent.parent.parent
+        root_path = str(project_root)
+        logger.info(f"📁 project_root = {root_path}")
+
+        # Generate unique task ID
+        task_id = str(uuid.uuid4())
+        logger.info(f"🆔 Generated task_id = {task_id}")
+
+        # Set the current indexing task
+        _current_indexing_task_id = task_id
+
+        # Add async background task using asyncio and store reference
+        logger.info("🔄 About to create_task")
+        task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
+        logger.info(f"✅ Task created: {task}")
         _active_tasks[task_id] = task
-    logger.info("💾 Task stored in _active_tasks")
+        logger.info("💾 Task stored in _active_tasks")
 
     # Clean up task reference when done
     def cleanup_task(t):
@@ -1512,35 +1624,38 @@ async def get_current_indexing_job():
     - status: Current job status
     - progress: Current progress details
     """
-    global _current_indexing_task_id
+    # All accesses to shared state under lock
+    async with _tasks_lock:
+        if _current_indexing_task_id is None:
+            return JSONResponse({
+                "has_active_job": False,
+                "task_id": None,
+                "status": "idle",
+                "message": "No indexing job is currently running",
+            })
 
-    if _current_indexing_task_id is None:
-        return JSONResponse({
-            "has_active_job": False,
-            "task_id": None,
-            "status": "idle",
-            "message": "No indexing job is currently running",
-        })
+        current_task_id = _current_indexing_task_id
 
-    # Check if task is still running
-    existing_task = _active_tasks.get(_current_indexing_task_id)
-    if existing_task is None or existing_task.done():
-        # Task finished or was cleaned up
-        task_data = indexing_tasks.get(_current_indexing_task_id, {})
-        return JSONResponse({
-            "has_active_job": False,
-            "task_id": _current_indexing_task_id,
-            "status": task_data.get("status", "unknown"),
-            "result": task_data.get("result"),
-            "error": task_data.get("error"),
-            "message": "Last indexing job has completed",
-        })
+        # Check if task is still running
+        existing_task = _active_tasks.get(current_task_id)
+        if existing_task is None or existing_task.done():
+            # Task finished or was cleaned up
+            task_data = dict(indexing_tasks.get(current_task_id, {}))
+            return JSONResponse({
+                "has_active_job": False,
+                "task_id": current_task_id,
+                "status": task_data.get("status", "unknown"),
+                "result": task_data.get("result"),
+                "error": task_data.get("error"),
+                "message": "Last indexing job has completed",
+            })
 
-    # Task is still running
-    task_data = indexing_tasks.get(_current_indexing_task_id, {})
+        # Task is still running - get a copy of task data
+        task_data = dict(indexing_tasks.get(current_task_id, {}))
+
     return JSONResponse({
         "has_active_job": True,
-        "task_id": _current_indexing_task_id,
+        "task_id": current_task_id,
         "status": task_data.get("status", "running"),
         "progress": task_data.get("progress"),
         "phases": task_data.get("phases"),
@@ -1568,30 +1683,31 @@ async def cancel_indexing_job():
     """
     global _current_indexing_task_id
 
-    if _current_indexing_task_id is None:
-        return JSONResponse({
-            "success": False,
-            "task_id": None,
-            "message": "No indexing job is currently running",
-        })
+    # All accesses to shared state under lock
+    async with _tasks_lock:
+        if _current_indexing_task_id is None:
+            return JSONResponse({
+                "success": False,
+                "task_id": None,
+                "message": "No indexing job is currently running",
+            })
 
-    task_id = _current_indexing_task_id
-    existing_task = _active_tasks.get(task_id)
+        task_id = _current_indexing_task_id
+        existing_task = _active_tasks.get(task_id)
 
-    if existing_task is None or existing_task.done():
-        return JSONResponse({
-            "success": False,
-            "task_id": task_id,
-            "message": "Indexing job has already completed or was not found",
-        })
+        if existing_task is None or existing_task.done():
+            return JSONResponse({
+                "success": False,
+                "task_id": task_id,
+                "message": "Indexing job has already completed or was not found",
+            })
 
-    # Cancel the task
-    try:
-        existing_task.cancel()
-        logger.info(f"🛑 Cancelled indexing task: {task_id}")
+        # Cancel the task
+        try:
+            existing_task.cancel()
+            logger.info(f"🛑 Cancelled indexing task: {task_id}")
 
-        # Update task status (thread-safe)
-        async with _tasks_lock:
+            # Update task status
             if task_id in indexing_tasks:
                 indexing_tasks[task_id]["status"] = "cancelled"
                 indexing_tasks[task_id]["error"] = "Cancelled by user"
@@ -1601,19 +1717,19 @@ async def cancel_indexing_job():
             _current_indexing_task_id = None
             _active_tasks.pop(task_id, None)
 
-        return JSONResponse({
-            "success": True,
-            "task_id": task_id,
-            "message": "Indexing job cancelled successfully",
-        })
+            return JSONResponse({
+                "success": True,
+                "task_id": task_id,
+                "message": "Indexing job cancelled successfully",
+            })
 
-    except Exception as e:
-        logger.error(f"Failed to cancel task {task_id}: {e}")
-        return JSONResponse({
-            "success": False,
-            "task_id": task_id,
-            "message": f"Failed to cancel job: {str(e)}",
-        })
+        except Exception as e:
+            logger.error(f"Failed to cancel task {task_id}: {e}")
+            return JSONResponse({
+                "success": False,
+                "task_id": task_id,
+                "message": f"Failed to cancel job: {str(e)}",
+            })
 
 
 @with_error_handling(
