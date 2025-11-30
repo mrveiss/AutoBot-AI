@@ -251,26 +251,36 @@ class NPUTaskQueue:
             return {"success": False, "error": "NPU task timeout", "fallback": True}
 
 
-# Global NPU client instance
+# Global NPU client instance (thread-safe)
+import asyncio
+
 _npu_client = None
 _npu_queue = None
+_npu_client_lock = asyncio.Lock()
+_npu_queue_lock = asyncio.Lock()
 
 
 async def get_npu_client() -> NPUWorkerClient:
-    """Get or create global NPU client instance"""
+    """Get or create global NPU client instance (thread-safe)"""
     global _npu_client
     if _npu_client is None:
-        _npu_client = NPUWorkerClient()
-        await _npu_client.check_health()
+        async with _npu_client_lock:
+            # Double-check after acquiring lock
+            if _npu_client is None:
+                _npu_client = NPUWorkerClient()
+                await _npu_client.check_health()
     return _npu_client
 
 
 async def get_npu_queue() -> NPUTaskQueue:
-    """Get or create global NPU task queue"""
+    """Get or create global NPU task queue (thread-safe)"""
     global _npu_queue
     if _npu_queue is None:
-        client = await get_npu_client()
-        _npu_queue = NPUTaskQueue(client)
+        async with _npu_queue_lock:
+            # Double-check after acquiring lock
+            if _npu_queue is None:
+                client = await get_npu_client()
+                _npu_queue = NPUTaskQueue(client)
     return _npu_queue
 
 
