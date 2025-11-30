@@ -58,11 +58,16 @@ from backend.api.websockets import router as websocket_router
 from backend.api.workflow import router as workflow_router
 from backend.services.ai_stack_client import close_ai_stack_client, get_ai_stack_client
 
+# Import distributed tracing (Issue #57)
+from backend.services.tracing_service import get_tracing_service
+from backend.middleware.tracing_middleware import TracingMiddleware
+
 # Import additional modules
 from src.api_registry import APIRegistry
 
-# Import authentication and security middleware
-from src.auth_middleware import AuthenticationMiddleware
+# Import chat workflow manager
+# NOTE: AuthenticationMiddleware is a utility class, not ASGI middleware
+# It's accessed via auth_middleware singleton in src.auth_middleware
 from src.chat_workflow_manager import ChatWorkflowManager
 
 # REFACTORED: Removed deprecated RedisPoolManager import
@@ -78,7 +83,7 @@ logger = get_logger(__name__, "backend")
 # Lock for thread-safe access to background_init_status
 _init_status_lock = asyncio.Lock()
 
-# Enhanced initialization tracking including AI Stack
+# Enhanced initialization tracking including AI Stack and distributed tracing
 background_init_status = {
     "redis_pools": "pending",
     "knowledge_base": "pending",
@@ -86,6 +91,7 @@ background_init_status = {
     "llm_sync": "pending",
     "ai_stack": "pending",
     "ai_stack_agents": "pending",
+    "distributed_tracing": "pending",
     "errors": [],
 }
 
@@ -263,6 +269,44 @@ async def enhanced_background_init(app: FastAPI):
         async def init_ai_stack():
             await initialize_ai_stack(app)
 
+        # Distributed tracing initialization (Issue #57)
+        async def init_distributed_tracing():
+            try:
+                tracing = get_tracing_service()
+                success = tracing.initialize(
+                    service_name="autobot-backend",
+                    service_version="2.0.0",
+                    enable_console_export=False,  # Set True for debugging
+                )
+                if success:
+                    # Instrument FastAPI for automatic tracing
+                    tracing.instrument_fastapi(app)
+                    await update_init_status("distributed_tracing", "ready")
+                    log_initialization_step(
+                        "Distributed Tracing",
+                        "OpenTelemetry tracing initialized",
+                        90,
+                        True,
+                    )
+                else:
+                    await update_init_status("distributed_tracing", "disabled")
+                    log_initialization_step(
+                        "Distributed Tracing",
+                        "Tracing disabled (Jaeger not available)",
+                        90,
+                        True,
+                    )
+            except Exception as e:
+                logger.warning(f"Distributed tracing initialization failed: {e}")
+                await update_init_status("distributed_tracing", "failed")
+                # Don't add to errors - tracing is optional
+                log_initialization_step(
+                    "Distributed Tracing",
+                    f"Tracing unavailable: {e}",
+                    90,
+                    False,
+                )
+
         # Run all initialization tasks concurrently
         tasks = [
             init_redis(),
@@ -270,6 +314,7 @@ async def enhanced_background_init(app: FastAPI):
             init_chat_workflow(),
             init_llm_sync(),
             init_ai_stack(),  # New AI Stack initialization
+            init_distributed_tracing(),  # Distributed tracing (Issue #57)
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -319,6 +364,14 @@ async def enhanced_lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Error closing AI Stack client: {e}")
 
+    # Shutdown distributed tracing
+    try:
+        tracing = get_tracing_service()
+        tracing.shutdown()
+        logger.info("✅ Distributed tracing shutdown complete")
+    except Exception as e:
+        logger.error(f"❌ Error shutting down distributed tracing: {e}")
+
     # REFACTORED: Removed redis_pools cleanup - using centralized Redis client management
     # Redis connections are automatically managed by get_redis_client()
     logger.info(
@@ -357,8 +410,13 @@ def create_enhanced_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Add authentication middleware
-    app.add_middleware(AuthenticationMiddleware)
+    # Add distributed tracing middleware (Issue #57)
+    # This adds custom AutoBot attributes to traces created by OpenTelemetry
+    app.add_middleware(TracingMiddleware, service_name="autobot-backend")
+
+    # NOTE: AuthenticationMiddleware is a utility class, not ASGI middleware
+    # It's accessed via auth_middleware singleton and get_current_user dependency
+    # Do NOT use app.add_middleware() - it expects ASGI middleware interface
 
     # Configure enhanced API routes
     configure_enhanced_api_routes(app)
@@ -396,6 +454,9 @@ def create_enhanced_app() -> FastAPI:
                 "ai_stack": background_init_status.get("ai_stack", "unknown"),
                 "ai_stack_agents": background_init_status.get(
                     "ai_stack_agents", "unknown"
+                ),
+                "distributed_tracing": background_init_status.get(
+                    "distributed_tracing", "unknown"
                 ),
             },
             "ai_enhanced": background_init_status.get("ai_stack") == "ready",
@@ -595,6 +656,12 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             "/code-intelligence",
             ["code-intelligence"],
             "code_intelligence",
+        ),
+        (
+            "backend.api.analytics_unified",
+            "",  # Router has prefix="/unified"
+            ["unified-analytics", "analytics"],
+            "analytics_unified",
         ),
     ]
 
