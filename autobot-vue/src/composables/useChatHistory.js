@@ -6,6 +6,10 @@
 
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for useChatHistory
+const logger = createLogger('useChatHistory');
 
 export function useChatHistory() {
   // Reactive state
@@ -65,7 +69,7 @@ export function useChatHistory() {
       }));
 
     } catch (error) {
-      console.error('Failed to load chat list from backend:', error);
+      logger.error('Failed to load chat list from backend:', error);
       error.value = error.message;
 
       // Fallback to localStorage
@@ -114,7 +118,7 @@ export function useChatHistory() {
         }
       }
     } catch (e) {
-      console.error(`Error getting chat preview for ${chatId}:`, e);
+      logger.error(`Error getting chat preview for ${chatId}:`, e);
     }
     return 'No subject';
   };
@@ -143,7 +147,7 @@ export function useChatHistory() {
 
       return normalizedMessages;
     } catch (error) {
-      console.error(`Failed to load messages for chat ${chatId}:`, error);
+      logger.error(`Failed to load messages for chat ${chatId}:`, error);
       error.value = error.message;
 
       // Fallback to localStorage
@@ -172,7 +176,7 @@ export function useChatHistory() {
         }));
       }
     } catch (e) {
-      console.error(`Error loading messages from localStorage for chat ${chatId}:`, e);
+      logger.error(`Error loading messages from localStorage for chat ${chatId}:`, e);
     }
 
     return [];
@@ -205,7 +209,7 @@ export function useChatHistory() {
 
       return newChatId;
     } catch (error) {
-      console.error('Failed to create new chat:', error);
+      logger.error('Failed to create new chat:', error);
       error.value = error.message;
       throw error;
     }
@@ -235,7 +239,7 @@ export function useChatHistory() {
 
       return true;
     } catch (error) {
-      console.error('Error deleting chat:', error);
+      logger.error('Error deleting chat:', error);
       error.value = error.message;
       throw error;
     }
@@ -243,10 +247,10 @@ export function useChatHistory() {
 
   // Function to save chat messages (DEPRECATED - messages should be sent individually)
   const saveChatMessages = async (chatId, messageList) => {
-    console.warn('saveChatMessages is deprecated. Messages should be sent individually via sendChatMessage()');
+    logger.warn('saveChatMessages is deprecated. Messages should be sent individually via sendChatMessage()');
 
     if (!chatId) {
-      console.warn('No chat ID provided to save messages');
+      logger.warn('No chat ID provided to save messages');
       return;
     }
 
@@ -285,7 +289,7 @@ export function useChatHistory() {
 
       return result;
     } catch (error) {
-      console.error('Failed to send message:', error);
+      logger.error('Failed to send message:', error);
       error.value = error.message;
       throw error;
     }
@@ -298,7 +302,7 @@ export function useChatHistory() {
       try {
         await apiClient.updateChatSession(chatId, { title: newName });
       } catch (apiError) {
-        console.warn('Failed to update chat name via API, updating locally only:', apiError);
+        logger.warn('Failed to update chat name via API, updating locally only:', apiError);
       }
 
       // Update in local chat list
@@ -316,7 +320,7 @@ export function useChatHistory() {
 
       return true;
     } catch (error) {
-      console.error('Error updating chat name:', error);
+      logger.error('Error updating chat name:', error);
       error.value = error.message;
       return false;
     }
