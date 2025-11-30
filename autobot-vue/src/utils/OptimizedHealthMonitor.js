@@ -5,6 +5,10 @@
  */
 
 import { cacheBuster } from './CacheBuster.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for OptimizedHealthMonitor
+const logger = createLogger('OptimizedHealthMonitor');
 
 class OptimizedHealthMonitor {
     constructor() {
@@ -218,7 +222,7 @@ class OptimizedHealthMonitor {
             this.notifyHealthChange();
 
         } catch (error) {
-            console.warn('[OptimizedHealthMonitor] Health check failed or timed out:', error.message);
+            logger.warn('Health check failed or timed out:', error.message);
             this.handleHealthCheckFailure();
         } finally {
             // Track performance
@@ -318,7 +322,7 @@ class OptimizedHealthMonitor {
     processHealthResults(results) {
         results.forEach((result, index) => {
             if (result.status === 'rejected') {
-                console.warn(`[OptimizedHealthMonitor] Health check ${index} failed:`, result.reason);
+                logger.warn(`Health check ${index} failed:`, result.reason);
             }
         });
     }
@@ -360,7 +364,7 @@ class OptimizedHealthMonitor {
         // Log slow checks
         if (duration > this.config.performanceThresholds.degradeThreshold) {
             this.performanceMetrics.lastSlowCheck = { duration, timestamp: Date.now() };
-            console.warn(`[OptimizedHealthMonitor] Slow health check: ${duration.toFixed(1)}ms`);
+            logger.warn(`Slow health check: ${duration.toFixed(1)}ms`);
         }
     }
 
@@ -438,7 +442,7 @@ class OptimizedHealthMonitor {
             try {
                 callback(healthData);
             } catch (error) {
-                console.error('[OptimizedHealthMonitor] Listener error:', error);
+                logger.error('Listener error:', error);
             }
         });
     }
