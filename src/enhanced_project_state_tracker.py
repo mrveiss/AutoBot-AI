@@ -1106,15 +1106,21 @@ class EnhancedProjectStateTracker:
         logger.info(f"State data exported to {output_file}")
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _state_tracker = None
+_state_tracker_lock = threading.Lock()
 
 
 def get_state_tracker() -> EnhancedProjectStateTracker:
-    """Get singleton instance of state tracker"""
+    """Get singleton instance of state tracker (thread-safe)."""
     global _state_tracker
     if _state_tracker is None:
-        _state_tracker = EnhancedProjectStateTracker()
+        with _state_tracker_lock:
+            # Double-check after acquiring lock
+            if _state_tracker is None:
+                _state_tracker = EnhancedProjectStateTracker()
     return _state_tracker
 
 

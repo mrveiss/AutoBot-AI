@@ -539,13 +539,19 @@ class AgentAnalytics:
             return {"error": str(e)}
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _agent_analytics: Optional[AgentAnalytics] = None
+_agent_analytics_lock = threading.Lock()
 
 
 def get_agent_analytics() -> AgentAnalytics:
-    """Get the singleton agent analytics instance"""
+    """Get the singleton agent analytics instance (thread-safe)."""
     global _agent_analytics
     if _agent_analytics is None:
-        _agent_analytics = AgentAnalytics()
+        with _agent_analytics_lock:
+            # Double-check after acquiring lock
+            if _agent_analytics is None:
+                _agent_analytics = AgentAnalytics()
     return _agent_analytics

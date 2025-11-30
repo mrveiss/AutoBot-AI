@@ -471,19 +471,26 @@ class WakeWordDetector:
         logger.info("Wake word detection disabled")
 
 
-# Singleton instance for global access
+# Singleton instance for global access (thread-safe)
+import threading
+
 _wake_word_detector: Optional[WakeWordDetector] = None
+_wake_word_detector_lock = threading.Lock()
 
 
 def get_wake_word_detector() -> WakeWordDetector:
-    """Get or create the global wake word detector instance"""
+    """Get or create the global wake word detector instance (thread-safe)."""
     global _wake_word_detector
     if _wake_word_detector is None:
-        _wake_word_detector = WakeWordDetector()
+        with _wake_word_detector_lock:
+            # Double-check after acquiring lock
+            if _wake_word_detector is None:
+                _wake_word_detector = WakeWordDetector()
     return _wake_word_detector
 
 
 def reset_wake_word_detector() -> None:
-    """Reset the global wake word detector instance"""
+    """Reset the global wake word detector instance (thread-safe)."""
     global _wake_word_detector
-    _wake_word_detector = None
+    with _wake_word_detector_lock:
+        _wake_word_detector = None
