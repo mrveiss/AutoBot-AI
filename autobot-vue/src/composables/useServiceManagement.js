@@ -9,6 +9,10 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { NetworkConstants } from '@/constants/network'
 import redisServiceAPI from '@/services/RedisServiceAPI'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useServiceManagement
+const logger = createLogger('useServiceManagement')
 
 /**
  * Service management composable
@@ -56,7 +60,7 @@ export function useServiceManagement(serviceName = 'redis') {
       serviceStatus.value = statusData
       healthStatus.value = healthData
     } catch (err) {
-      console.error('[useServiceManagement] Failed to refresh status:', err)
+      logger.error('Failed to refresh status:', err)
       error.value = err.message || 'Failed to refresh service status'
 
       showSubtleErrorNotification(
@@ -87,7 +91,7 @@ export function useServiceManagement(serviceName = 'redis') {
         throw new Error(result.message || 'Failed to start service')
       }
     } catch (err) {
-      console.error('[useServiceManagement] Start service failed:', err)
+      logger.error('Start service failed:', err)
       error.value = err.message || 'Failed to start service'
 
       showSubtleErrorNotification(
@@ -120,7 +124,7 @@ export function useServiceManagement(serviceName = 'redis') {
         throw new Error(result.message || 'Failed to stop service')
       }
     } catch (err) {
-      console.error('[useServiceManagement] Stop service failed:', err)
+      logger.error('Stop service failed:', err)
       error.value = err.message || 'Failed to stop service'
 
       showSubtleErrorNotification(
@@ -153,7 +157,7 @@ export function useServiceManagement(serviceName = 'redis') {
         throw new Error(result.message || 'Failed to restart service')
       }
     } catch (err) {
-      console.error('[useServiceManagement] Restart service failed:', err)
+      logger.error('Restart service failed:', err)
       error.value = err.message || 'Failed to restart service'
 
       showSubtleErrorNotification(
@@ -179,7 +183,7 @@ export function useServiceManagement(serviceName = 'redis') {
         const wsService = module.default
 
         if (!wsService) {
-          console.warn('[useServiceManagement] WebSocket service not available')
+          logger.warn('WebSocket service not available')
           return
         }
 
@@ -220,12 +224,12 @@ export function useServiceManagement(serviceName = 'redis') {
               callback(message)
             }
           } catch (err) {
-            console.error('[useServiceManagement] WebSocket message handling error:', err)
+            logger.error('WebSocket message handling error:', err)
           }
         })
       })
     } catch (err) {
-      console.error('[useServiceManagement] Failed to subscribe to WebSocket:', err)
+      logger.error('Failed to subscribe to WebSocket:', err)
     }
   }
 
@@ -238,7 +242,7 @@ export function useServiceManagement(serviceName = 'redis') {
         wsUnsubscribe()
         wsUnsubscribe = null
       } catch (err) {
-        console.error('[useServiceManagement] Failed to unsubscribe from WebSocket:', err)
+        logger.error('Failed to unsubscribe from WebSocket:', err)
       }
     }
   }
