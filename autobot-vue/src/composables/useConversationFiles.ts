@@ -7,6 +7,10 @@
 
 import { ref, computed } from 'vue'
 import { useApi } from './useApi'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useConversationFiles
+const logger = createLogger('useConversationFiles')
 
 /**
  * File metadata interface matching backend ConversationFile model
@@ -84,7 +88,7 @@ export function useConversationFiles(sessionId: string) {
       }
     } catch (err: any) {
       error.value = err.response?.data?.detail || err.message || 'Failed to load files'
-      console.error('[useConversationFiles] Load error:', err)
+      logger.error('Load error:', err)
     } finally {
       loading.value = false
     }
@@ -148,7 +152,7 @@ export function useConversationFiles(sessionId: string) {
 
     } catch (err: any) {
       error.value = err.response?.data?.detail || err.message || 'Upload failed'
-      console.error('[useConversationFiles] Upload error:', err)
+      logger.error('Upload error:', err)
       return false
     } finally {
       loading.value = false
@@ -186,7 +190,7 @@ export function useConversationFiles(sessionId: string) {
 
     } catch (err: any) {
       error.value = err.response?.data?.detail || err.message || 'Failed to delete file'
-      console.error('[useConversationFiles] Delete error:', err)
+      logger.error('Delete error:', err)
       return false
     } finally {
       loading.value = false
@@ -232,7 +236,7 @@ export function useConversationFiles(sessionId: string) {
 
     } catch (err: any) {
       error.value = err.response?.data?.detail || err.message || 'Download failed'
-      console.error('[useConversationFiles] Download error:', err)
+      logger.error('Download error:', err)
     }
   }
 
@@ -266,7 +270,7 @@ export function useConversationFiles(sessionId: string) {
 
     } catch (err: any) {
       error.value = err.response?.data?.detail || err.message || 'Preview failed'
-      console.error('[useConversationFiles] Preview error:', err)
+      logger.error('Preview error:', err)
     }
   }
 

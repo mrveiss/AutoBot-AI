@@ -7,6 +7,10 @@
  */
 
 import apiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for RedisServiceAPI
+const logger = createLogger('RedisServiceAPI')
 
 /**
  * Redis Service API - Service lifecycle management
@@ -42,7 +46,7 @@ class RedisServiceAPI {
       const result = await this.post(`${this.baseEndpoint}/start`)
       return result
     } catch (error) {
-      console.error('[RedisServiceAPI] Start service failed:', error)
+      logger.error('Start service failed:', error)
       throw error
     }
   }
@@ -57,7 +61,7 @@ class RedisServiceAPI {
       const result = await this.post(`${this.baseEndpoint}/stop`, { confirmation })
       return result
     } catch (error) {
-      console.error('[RedisServiceAPI] Stop service failed:', error)
+      logger.error('Stop service failed:', error)
       throw error
     }
   }
@@ -71,7 +75,7 @@ class RedisServiceAPI {
       const result = await this.post(`${this.baseEndpoint}/restart`)
       return result
     } catch (error) {
-      console.error('[RedisServiceAPI] Restart service failed:', error)
+      logger.error('Restart service failed:', error)
       throw error
     }
   }
@@ -85,7 +89,7 @@ class RedisServiceAPI {
       const status = await this.get(`${this.baseEndpoint}/status`)
       return status
     } catch (error) {
-      console.error('[RedisServiceAPI] Get status failed:', error)
+      logger.error('Get status failed:', error)
       throw error
     }
   }
@@ -99,7 +103,7 @@ class RedisServiceAPI {
       const health = await this.get(`${this.baseEndpoint}/health`)
       return health
     } catch (error) {
-      console.error('[RedisServiceAPI] Get health failed:', error)
+      logger.error('Get health failed:', error)
       throw error
     }
   }
@@ -126,7 +130,7 @@ class RedisServiceAPI {
       const logs = await this.get(endpoint)
       return logs
     } catch (error) {
-      console.error('[RedisServiceAPI] Get logs failed:', error)
+      logger.error('Get logs failed:', error)
       throw error
     }
   }

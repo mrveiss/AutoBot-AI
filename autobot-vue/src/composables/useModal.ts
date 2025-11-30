@@ -31,6 +31,10 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useModal
+const logger = createLogger('useModal')
 
 export interface ModalOptions {
   /**
@@ -158,7 +162,7 @@ export function useModal(options: ModalOptions = {}): UseModalReturn {
   // Log helper for debugging
   const log = (action: string) => {
     if (id && import.meta.env.DEV) {
-      console.debug(`[useModal:${id}] ${action}`)
+      logger.debug(`[${id}] ${action}`)
     }
   }
 
@@ -176,7 +180,7 @@ export function useModal(options: ModalOptions = {}): UseModalReturn {
       try {
         await onOpen()
       } catch (error) {
-        console.error(`[useModal${id ? `:${id}` : ''}] Error in onOpen callback:`, error)
+        logger.error(`[${id || 'default'}] Error in onOpen callback:`, error)
       }
     }
 
@@ -185,7 +189,7 @@ export function useModal(options: ModalOptions = {}): UseModalReturn {
       try {
         await onToggle(true)
       } catch (error) {
-        console.error(`[useModal${id ? `:${id}` : ''}] Error in onToggle callback:`, error)
+        logger.error(`[${id || 'default'}] Error in onToggle callback:`, error)
       }
     }
   }
@@ -204,7 +208,7 @@ export function useModal(options: ModalOptions = {}): UseModalReturn {
       try {
         await onClose()
       } catch (error) {
-        console.error(`[useModal${id ? `:${id}` : ''}] Error in onClose callback:`, error)
+        logger.error(`[${id || 'default'}] Error in onClose callback:`, error)
       }
     }
 
@@ -213,7 +217,7 @@ export function useModal(options: ModalOptions = {}): UseModalReturn {
       try {
         await onToggle(false)
       } catch (error) {
-        console.error(`[useModal${id ? `:${id}` : ''}] Error in onToggle callback:`, error)
+        logger.error(`[${id || 'default'}] Error in onToggle callback:`, error)
       }
     }
   }

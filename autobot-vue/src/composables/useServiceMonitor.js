@@ -6,6 +6,10 @@
 import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { apiService } from '@/services/api.js'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useServiceMonitor
+const logger = createLogger('useServiceMonitor')
 
 export function useServiceMonitor() {
   // Service monitoring state
@@ -114,13 +118,13 @@ export function useServiceMonitor() {
         // Log status for debugging
 
       } else {
-        console.error('[useServiceMonitor] Invalid response data:', data)
+        logger.error('Invalid response data:', data)
         throw new Error('Invalid response format from service status endpoint')
       }
 
     } catch (err) {
-      console.error('[useServiceMonitor] Service monitoring error:', err)
-      console.error('[useServiceMonitor] Error stack:', err.stack)
+      logger.error('Service monitoring error:', err)
+      logger.error('Error stack:', err.stack)
       error.value = err.message
       overallStatus.value = 'error'
 
@@ -166,7 +170,7 @@ export function useServiceMonitor() {
 
       }
     } catch (err) {
-      console.warn('[useServiceMonitor] Health check failed, using minimal fallback:', err.message)
+      logger.warn('Health check failed, using minimal fallback:', err.message)
 
       // Provide minimal fallback state
       overallStatus.value = 'warning'
@@ -253,7 +257,7 @@ export function useServiceMonitor() {
       stopMonitoring()
     })
   } else {
-    console.warn('useServiceMonitor: Not inside Vue component, manual cleanup required')
+    logger.warn('Not inside Vue component, manual cleanup required')
   }
 
   return {
