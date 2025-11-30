@@ -57,6 +57,10 @@
  */
 
 import { ref, watch, onUnmounted, getCurrentInstance, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useLocalStorage
+const logger = createLogger('useLocalStorage')
 
 // ========================================
 // Types & Interfaces
@@ -249,7 +253,7 @@ export function useLocalStorage<T>(
       if (onError) {
         onError(err)
       } else {
-        console.error(`[useLocalStorage] Error reading key "${key}":`, err)
+        logger.error(`Error reading key "${key}":`, err)
       }
 
       // Return default on error
@@ -297,14 +301,14 @@ export function useLocalStorage<T>(
         if (onError) {
           onError(quotaError)
         } else {
-          console.error(quotaError.message)
+          logger.error(quotaError.message)
         }
       } else {
         // Other errors (serialization, etc.)
         if (onError) {
           onError(err)
         } else {
-          console.error(`[useLocalStorage] Error writing key "${key}":`, err)
+          logger.error(`Error writing key "${key}":`, err)
         }
       }
     }
@@ -362,8 +366,8 @@ export function useLocalStorage<T>(
           if (onError) {
             onError(err)
           } else {
-            console.error(
-              `[useLocalStorage] Error parsing storage event for key "${key}":`,
+            logger.error(
+              `Error parsing storage event for key "${key}":`,
               err
             )
           }
@@ -381,8 +385,8 @@ export function useLocalStorage<T>(
         window.removeEventListener('storage', handleStorageChange)
       })
     } else {
-      console.warn(
-        `[useLocalStorage] Key "${key}" used outside component context. ` +
+      logger.warn(
+        `Key "${key}" used outside component context. ` +
         `Auto-cleanup disabled. Use within components for proper lifecycle management.`
       )
     }
@@ -413,7 +417,7 @@ export function removeLocalStorageItem(key: string): void {
   try {
     localStorage.removeItem(key)
   } catch (error) {
-    console.error(`[useLocalStorage] Error removing key "${key}":`, error)
+    logger.error(`Error removing key "${key}":`, error)
   }
 }
 
@@ -467,7 +471,7 @@ export function clearLocalStorage(keysToPreserve: string[] = []): void {
       localStorage.setItem(key, value)
     })
   } catch (error) {
-    console.error('[useLocalStorage] Error clearing localStorage:', error)
+    logger.error('Error clearing localStorage:', error)
   }
 }
 
@@ -505,7 +509,7 @@ export function getLocalStorageKeys(prefix?: string): string[] {
 
     return keys
   } catch (error) {
-    console.error('[useLocalStorage] Error getting localStorage keys:', error)
+    logger.error('Error getting localStorage keys:', error)
     return []
   }
 }
@@ -545,7 +549,7 @@ export function getLocalStorageSize(): number {
 
     return totalSize
   } catch (error) {
-    console.error('[useLocalStorage] Error calculating localStorage size:', error)
+    logger.error('Error calculating localStorage size:', error)
     return 0
   }
 }

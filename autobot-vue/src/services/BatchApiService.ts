@@ -5,6 +5,10 @@
 
 import apiClient from '@/utils/ApiClient.ts';
 import type { ApiClient } from '@/utils/ApiClient.ts';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for BatchApiService
+const logger = createLogger('BatchApiService');
 
 // Type definitions
 interface ChatInitData {
@@ -42,7 +46,7 @@ export class BatchApiService {
    * Using fallback method to load chat interface data
    */
   async initializeChatInterface(): Promise<any> {
-    console.warn('Batch chat initialization endpoint does not exist. Using fallback individual API calls.');
+    logger.warn('Batch chat initialization endpoint does not exist. Using fallback individual API calls.');
     return await this.fallbackChatInitialization();
   }
 
@@ -51,7 +55,7 @@ export class BatchApiService {
    * Load chat initialization data for a specific session using individual calls
    */
   async loadChatInitData(sessionId: string): Promise<ChatInitData> {
-    console.warn('Batch chat init data endpoint does not exist. Using individual API calls.');
+    logger.warn('Batch chat init data endpoint does not exist. Using individual API calls.');
 
     try {
       // Get session messages
@@ -66,7 +70,7 @@ export class BatchApiService {
         const settings = await this.apiClient.getSettings();
         user_preferences = settings.user_preferences || {};
       } catch (error) {
-        console.warn('Could not load user preferences:', error);
+        logger.warn('Could not load user preferences:', error);
       }
 
       return {
@@ -75,7 +79,7 @@ export class BatchApiService {
         user_preferences
       };
     } catch (error) {
-      console.error('Failed to load chat init data:', error);
+      logger.error('Failed to load chat init data:', error);
       // Return default structure
       return {
         messages: [],
@@ -89,7 +93,7 @@ export class BatchApiService {
    * Fallback chat initialization using individual API calls with graceful error handling
    */
   async fallbackChatInitialization(): Promise<FallbackResults> {
-    console.log('🔄 Using fallback chat initialization with individual API calls');
+    logger.info('Using fallback chat initialization with individual API calls');
 
     const results: FallbackResults = {
       chat_sessions: { sessions: [] },
@@ -102,7 +106,7 @@ export class BatchApiService {
     try {
       results.chat_sessions = await this.apiClient.getChatList();
     } catch (error: any) {
-      console.warn('Failed to load chat sessions:', error.message);
+      logger.warn('Failed to load chat sessions:', error.message);
       results.chat_sessions = { error: error.message, sessions: [] };
     }
 
@@ -110,7 +114,7 @@ export class BatchApiService {
     try {
       results.system_health = await this.apiClient.getSystemHealth();
     } catch (error: any) {
-      console.warn('Failed to load system health:', error.message);
+      logger.warn('Failed to load system health:', error.message);
       results.system_health = { error: error.message, status: 'unknown' };
     }
 
@@ -118,7 +122,7 @@ export class BatchApiService {
     try {
       results.service_health = await this.apiClient.getServiceHealth();
     } catch (error: any) {
-      console.warn('Failed to load service health:', error.message);
+      logger.warn('Failed to load service health:', error.message);
       results.service_health = { error: error.message, services: [] };
     }
 
@@ -126,11 +130,11 @@ export class BatchApiService {
     try {
       results.settings = await this.apiClient.getSettings();
     } catch (error: any) {
-      console.warn('Failed to load settings:', error.message);
+      logger.warn('Failed to load settings:', error.message);
       results.settings = { error: error.message };
     }
 
-    console.log('✅ Fallback chat initialization completed');
+    logger.info('Fallback chat initialization completed');
     return results;
   }
 
@@ -139,7 +143,7 @@ export class BatchApiService {
    * This replaces the non-existent batch endpoints with parallel individual calls
    */
   async batchRequests(requests: BatchRequest[]): Promise<any[]> {
-    console.log(`🚀 Processing ${requests.length} requests in parallel`);
+    logger.info(`Processing ${requests.length} requests in parallel`);
 
     const promises = requests.map(async (request) => {
       // Issue #156 Fix: Move destructuring outside try block so catch block can access variables
@@ -172,7 +176,7 @@ export class BatchApiService {
           data: response
         };
       } catch (error: any) {
-        console.warn(`Failed request ${method} ${endpoint}:`, error.message);
+        logger.warn(`Failed request ${method} ${endpoint}:`, error.message);
         return {
           endpoint,
           method,
@@ -273,7 +277,7 @@ export class BatchApiService {
       const healthCheck = await this.apiClient.checkHealth();
 
       if (!healthCheck || healthCheck.status !== 'healthy') {
-        console.warn('System health check failed, loading minimal data');
+        logger.warn('System health check failed, loading minimal data');
         return {
           chat_sessions: { sessions: [] },
           health_status: healthCheck || { status: 'unknown' },
@@ -284,7 +288,7 @@ export class BatchApiService {
       // If healthy, load full chat data
       return await this.loadEssentialChatData();
     } catch (error) {
-      console.error('Failed to load chat with health checks:', error);
+      logger.error('Failed to load chat with health checks:', error);
       return {
         chat_sessions: { sessions: [] },
         error: (error as Error).message

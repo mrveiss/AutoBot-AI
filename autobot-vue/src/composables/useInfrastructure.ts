@@ -7,6 +7,10 @@
 import { ref, computed } from 'vue'
 import { useApi } from './useApi'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useInfrastructure
+const logger = createLogger('useInfrastructure')
 
 export interface Host {
   id: string
@@ -66,7 +70,7 @@ export function useInfrastructure() {
       error.value = err.message || 'Failed to fetch hosts'
       // Issue #156 Fix: Handle null error.value with fallback
       showSubtleErrorNotification('Fetch Hosts Failed', error.value || 'Unknown error', 'error')
-      console.error('Error fetching hosts:', err)
+      logger.error('Error fetching hosts:', err)
       return { hosts: [] }
     } finally {
       isLoading.value = false
@@ -104,7 +108,7 @@ export function useInfrastructure() {
       error.value = err.message || 'Failed to add host'
       // Issue #156 Fix: Handle null error.value with fallback
       showSubtleErrorNotification('Add Host Failed', error.value || 'Unknown error', 'error')
-      console.error('Error adding host:', err)
+      logger.error('Error adding host:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -134,7 +138,7 @@ export function useInfrastructure() {
       error.value = err.message || 'Failed to update host'
       // Issue #156 Fix: Handle null error.value with fallback
       showSubtleErrorNotification('Update Host Failed', error.value || 'Unknown error', 'error')
-      console.error('Error updating host:', err)
+      logger.error('Error updating host:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -157,7 +161,7 @@ export function useInfrastructure() {
       error.value = err.message || 'Failed to delete host'
       // Issue #156 Fix: Handle null error.value with fallback
       showSubtleErrorNotification('Delete Host Failed', error.value || 'Unknown error', 'error')
-      console.error('Error deleting host:', err)
+      logger.error('Error deleting host:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -195,7 +199,7 @@ export function useInfrastructure() {
       error.value = err.message || 'Failed to start deployment'
       // Issue #156 Fix: Handle null error.value with fallback
       showSubtleErrorNotification('Deployment Failed', error.value || 'Unknown error', 'error')
-      console.error('Error deploying:', err)
+      logger.error('Error deploying:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -218,7 +222,7 @@ export function useInfrastructure() {
 
       return data
     } catch (err: any) {
-      console.error('Error fetching deployment status:', err)
+      logger.error('Error fetching deployment status:', err)
       return null
     }
   }
@@ -232,7 +236,7 @@ export function useInfrastructure() {
       const data = await response.json()
       return data.logs || []
     } catch (err: any) {
-      console.error('Error fetching deployment logs:', err)
+      logger.error('Error fetching deployment logs:', err)
       return []
     }
   }
@@ -255,7 +259,7 @@ export function useInfrastructure() {
       return data
     } catch (err: any) {
       showSubtleErrorNotification('Connection Test', err.message || 'Connection test failed', 'error')
-      console.error('Error testing connection:', err)
+      logger.error('Error testing connection:', err)
       return { success: false, error: err.message }
     }
   }
