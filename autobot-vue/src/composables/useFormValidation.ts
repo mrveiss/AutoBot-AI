@@ -45,6 +45,10 @@
  */
 
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useFormValidation
+const logger = createLogger('useFormValidation')
 
 // ========================================
 // Types & Interfaces
@@ -379,7 +383,7 @@ export function useFormValidation(
         // Built-in validator
         const validator = validators[ruleConfig.rule]
         if (!validator) {
-          console.warn(`[useFormValidation] Unknown rule: ${ruleConfig.rule}`)
+          logger.warn(`[useFormValidation] Unknown rule: ${ruleConfig.rule}`)
           continue
         }
         result = validator(fieldValue, ruleConfig.value)

@@ -6,7 +6,11 @@
  */
 
 import { computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import globalWebSocketService from '@/services/GlobalWebSocketService.js'
+
+// Create scoped logger for useGlobalWebSocket
+const logger = createLogger('useGlobalWebSocket')
 
 export function useGlobalWebSocket() {
   const unsubscribers = []
@@ -61,7 +65,7 @@ export function useGlobalWebSocket() {
       unsubscribers.forEach(unsubscribe => unsubscribe())
     })
   } else {
-    console.warn('useGlobalWebSocket: Not inside Vue component, manual cleanup required')
+    logger.warn('useGlobalWebSocket: Not inside Vue component, manual cleanup required')
   }
 
   return {
