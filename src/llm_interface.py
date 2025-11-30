@@ -76,7 +76,7 @@ try:
 
     TORCH_AVAILABLE = True
 except ImportError:
-    print("Warning: PyTorch not available or CUDA libraries missing")
+    logger.warning("PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
     torch = None
 
