@@ -435,6 +435,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for TechnicalDebtDashboard
+const logger = createLogger('TechnicalDebtDashboard');
 
 // Types
 interface DebtItem {
@@ -665,7 +669,7 @@ async function refreshData(): Promise<void> {
   try {
     await Promise.all([loadSummary(), loadCategoryBreakdown(), loadRoiPriorities(), loadDebtItems(), loadTrends()]);
   } catch (error) {
-    console.error('Failed to load debt data:', error);
+    logger.error('Failed to load debt data:', error);
   } finally {
     loading.value = false;
   }
@@ -678,7 +682,7 @@ async function loadSummary(): Promise<void> {
       summary.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load summary:', error);
+    logger.error('Failed to load summary:', error);
     // Use demo data
     summary.value = {
       total_items: 42,
@@ -699,7 +703,7 @@ async function loadCategoryBreakdown(): Promise<void> {
       categoryBreakdown.value = data.by_category || [];
     }
   } catch (error) {
-    console.error('Failed to load category breakdown:', error);
+    logger.error('Failed to load category breakdown:', error);
     // Use demo data
     categoryBreakdown.value = [
       { category: 'code_complexity', count: 12, total_hours: 24, avg_severity: 'high' },
@@ -719,7 +723,7 @@ async function loadRoiPriorities(): Promise<void> {
       roiPriorities.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load ROI priorities:', error);
+    logger.error('Failed to load ROI priorities:', error);
     // Use demo data
     roiPriorities.value = generateDemoDebtItems().slice(0, 10);
   }
@@ -733,7 +737,7 @@ async function loadDebtItems(): Promise<void> {
       allDebtItems.value = data.items || [];
     }
   } catch (error) {
-    console.error('Failed to load debt items:', error);
+    logger.error('Failed to load debt items:', error);
     // Use demo data
     allDebtItems.value = generateDemoDebtItems();
   }
@@ -746,7 +750,7 @@ async function loadTrends(): Promise<void> {
       trendData.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load trends:', error);
+    logger.error('Failed to load trends:', error);
     // Use demo data
     trendData.value = generateDemoTrends();
   }
@@ -821,7 +825,7 @@ async function exportReport(): Promise<void> {
       window.URL.revokeObjectURL(url);
     }
   } catch (error) {
-    console.error('Failed to export report:', error);
+    logger.error('Failed to export report:', error);
   }
 }
 
@@ -840,7 +844,7 @@ function showFixDetails(item: DebtItem): void {
 
 function navigateToFile(item: DebtItem): void {
   // Emit event for parent to handle file navigation
-  console.log('Navigate to:', item.file_path, item.line_number);
+  logger.debug('Navigate to:', item.file_path, item.line_number);
   selectedItem.value = null;
 }
 

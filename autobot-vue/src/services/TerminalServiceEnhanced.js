@@ -5,6 +5,10 @@
 
 import { reactive, ref } from 'vue';
 import terminalService from '@/services/TerminalService.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for TerminalServiceEnhanced
+const logger = createLogger('TerminalServiceEnhanced');
 
 // Host-specific WebSocket URL generation
 export function getHostWebSocketUrl(host, sessionId) {
@@ -32,7 +36,7 @@ class TerminalServiceEnhanced {
    */
   async createSessionForHost(host) {
     try {
-      console.log(`[TerminalServiceEnhanced] Creating session for host: ${host.name}`);
+      logger.debug(`Creating session for host: ${host.name}`);
 
       // Use base service to create session
       // Note: This creates session on default backend (main host)
@@ -44,7 +48,7 @@ class TerminalServiceEnhanced {
 
       return sessionId;
     } catch (error) {
-      console.error(`[TerminalServiceEnhanced] Failed to create session for ${host.name}:`, error);
+      logger.error(`Failed to create session for ${host.name}:`, error);
       throw error;
     }
   }
@@ -57,7 +61,7 @@ class TerminalServiceEnhanced {
    */
   async connectToHost(sessionId, host, callbacks = {}) {
     try {
-      console.log(`[TerminalServiceEnhanced] Connecting to ${host.name} (${host.ip})`);
+      logger.debug(`Connecting to ${host.name} (${host.ip})`);
 
       // For now, all connections go through main backend
       // The backend handles routing to appropriate hosts via SSH
@@ -70,9 +74,9 @@ class TerminalServiceEnhanced {
         connection.connectedAt = new Date();
       }
 
-      console.log(`[TerminalServiceEnhanced] Successfully connected to ${host.name}`);
+      logger.debug(`Successfully connected to ${host.name}`);
     } catch (error) {
-      console.error(`[TerminalServiceEnhanced] Failed to connect to ${host.name}:`, error);
+      logger.error(`Failed to connect to ${host.name}:`, error);
       throw error;
     }
   }
@@ -94,7 +98,7 @@ class TerminalServiceEnhanced {
   disconnectFromHost(sessionId) {
     const host = this.getSessionHost(sessionId);
     if (host) {
-      console.log(`[TerminalServiceEnhanced] Disconnecting from ${host.name}`);
+      logger.debug(`Disconnecting from ${host.name}`);
     }
 
     this.baseService.disconnect(sessionId);
@@ -164,7 +168,7 @@ class TerminalServiceEnhanced {
    * @returns {Promise<Object>} Command result
    */
   async executeCommandOnHost(host, command, options = {}) {
-    console.log(`[TerminalServiceEnhanced] Executing command on ${host.name}: ${command}`);
+    logger.debug(`Executing command on ${host.name}: ${command}`);
 
     // Use base service for command execution
     // Backend will handle host-specific execution

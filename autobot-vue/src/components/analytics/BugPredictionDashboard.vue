@@ -367,6 +367,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for BugPredictionDashboard
+const logger = createLogger('BugPredictionDashboard');
 
 // Types
 interface RiskFile {
@@ -475,7 +479,7 @@ async function refreshData(): Promise<void> {
       loadFactors(),
     ]);
   } catch (error) {
-    console.error('Failed to refresh data:', error);
+    logger.error('Failed to refresh data:', error);
   } finally {
     loading.value = false;
   }
@@ -491,7 +495,7 @@ async function analyzeCodbase(): Promise<void> {
       await refreshData();
     }
   } catch (error) {
-    console.error('Failed to analyze codebase:', error);
+    logger.error('Failed to analyze codebase:', error);
   } finally {
     loading.value = false;
   }
@@ -504,7 +508,7 @@ async function loadSummary(): Promise<void> {
       summary.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load summary:', error);
+    logger.error('Failed to load summary:', error);
     // Demo data
     summary.value = {
       total_files_analyzed: 247,
@@ -535,7 +539,7 @@ async function loadHighRiskFiles(): Promise<void> {
       highRiskFiles.value = await response.json();
     }
   } catch (error) {
-    console.error('Failed to load high risk files:', error);
+    logger.error('Failed to load high risk files:', error);
     highRiskFiles.value = [
       {
         file_path: 'src/services/agent_service.py',
@@ -579,7 +583,7 @@ async function loadHeatmap(): Promise<void> {
       heatmapData.value = data.data || [];
     }
   } catch (error) {
-    console.error('Failed to load heatmap:', error);
+    logger.error('Failed to load heatmap:', error);
     heatmapData.value = [
       { name: 'src', value: 65, file_count: 150, risk_level: 'high' },
       { name: 'backend', value: 52, file_count: 45, risk_level: 'medium' },
@@ -598,7 +602,7 @@ async function loadTrends(): Promise<void> {
       trendData.value = data.data_points || [];
     }
   } catch (error) {
-    console.error('Failed to load trends:', error);
+    logger.error('Failed to load trends:', error);
     // Generate demo trend data
     const days = parseInt(selectedPeriod.value);
     trendData.value = Array.from({ length: Math.min(days, 30) }, (_, i) => {
@@ -624,7 +628,7 @@ async function loadFactors(): Promise<void> {
       );
     }
   } catch (error) {
-    console.error('Failed to load factors:', error);
+    logger.error('Failed to load factors:', error);
     riskFactors.value = {
       complexity: 0.20,
       change_frequency: 0.20,
@@ -662,7 +666,7 @@ async function recordBug(file: RiskFile): Promise<void> {
     selectedFile.value = null;
     await refreshData();
   } catch (error) {
-    console.error('Failed to record bug:', error);
+    logger.error('Failed to record bug:', error);
   }
 }
 
