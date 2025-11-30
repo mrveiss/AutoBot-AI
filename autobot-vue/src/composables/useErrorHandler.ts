@@ -42,6 +42,10 @@
  */
 
 import { ref, computed, onUnmounted, getCurrentInstance, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useErrorHandler
+const logger = createLogger('useErrorHandler')
 
 // ========================================
 // Types & Interfaces
@@ -349,7 +353,7 @@ export function useAsyncHandler<T = unknown>(
         const delay = retryDelay * Math.pow(2, attempt)
 
         if (logErrors) {
-          console.warn(
+          logger.warn(
             `${errorPrefix} Attempt ${attempt + 1}/${retryAttempts} failed. Retrying in ${delay}ms...`,
             err
           )
@@ -412,7 +416,7 @@ export function useAsyncHandler<T = unknown>(
 
       // Log error if enabled
       if (logErrors) {
-        console.error(errorPrefix, errorObj)
+        logger.error(errorPrefix, errorObj)
       }
 
       // Show error message if provided
@@ -651,7 +655,7 @@ export function useErrorBoundary(onError: (error: Error, instance: any) => void)
   if (instance) {
     // Note: Vue 3 error boundary requires app-level configuration
     // This is a placeholder for component-level error handling
-    console.warn(
+    logger.warn(
       '[useErrorBoundary] For proper error boundaries, configure app.config.errorHandler in main.ts'
     )
   }
