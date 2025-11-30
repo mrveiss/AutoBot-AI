@@ -2,6 +2,10 @@
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ChatManager
+const logger = createLogger('ChatManager');
 
 class ChatManager {
   constructor() {
@@ -23,7 +27,7 @@ class ChatManager {
       this.apiEndpoint = await appConfig.getApiUrl('');
       this.settings.backend.api_endpoint = this.apiEndpoint;
     } catch (error) {
-      console.warn('Using fallback API endpoint');
+      logger.warn('Using fallback API endpoint');
       this.apiEndpoint = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
       this.settings.backend.api_endpoint = this.apiEndpoint;
     }
@@ -38,7 +42,7 @@ class ChatManager {
         this.apiEndpoint = this.settings.backend?.api_endpoint || this.apiEndpoint;
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
+      logger.error('Error loading settings:', error);
     }
   }
 
@@ -47,7 +51,7 @@ class ChatManager {
     try {
       localStorage.setItem('chat_settings', JSON.stringify(this.settings));
     } catch (error) {
-      console.error('Error saving settings:', error);
+      logger.error('Error saving settings:', error);
     }
   }
 
@@ -65,7 +69,7 @@ class ChatManager {
       this.currentChatId = data.chatId;
       return data;
     } catch (error) {
-      console.error('Error creating new chat:', error);
+      logger.error('Error creating new chat:', error);
       throw error;
     }
   }
@@ -78,7 +82,7 @@ class ChatManager {
       // Filter out chats with invalid IDs
       return chats.filter(chat => chat.chatId && chat.chatId !== 'undefined' && chat.chatId !== 'null');
     } catch (error) {
-      console.error('Error getting chat list:', error);
+      logger.error('Error getting chat list:', error);
       return this.getFallbackChatList();
     }
   }
@@ -106,8 +110,8 @@ class ChatManager {
       const messages = await this.apiClient.getChatMessages(chatId);
       return messages;
     } catch (error) {
-      console.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
-      console.error(`Error loading messages for chat ${chatId}:`, error);
+      logger.warn(`Backend failed for chat ${chatId}, falling back to localStorage`);
+      logger.error(`Error loading messages for chat ${chatId}:`, error);
       return this.loadMessagesFromLocalStorage(chatId);
     }
   }
@@ -122,7 +126,7 @@ class ChatManager {
         return messages;
       }
     } catch (error) {
-      console.error(`Error loading messages from localStorage for chat ${chatId}:`, error);
+      logger.error(`Error loading messages from localStorage for chat ${chatId}:`, error);
     }
     return [];
   }
@@ -137,7 +141,7 @@ class ChatManager {
       await this.apiClient.saveChatMessages(chatId, messages);
       return { status: 'success', location: 'backend' };
     } catch (error) {
-      console.error(`Error saving to backend for chat ${chatId}:`, error);
+      logger.error(`Error saving to backend for chat ${chatId}:`, error);
       return { status: 'success', location: 'localStorage' };
     }
   }
@@ -148,7 +152,7 @@ class ChatManager {
       const key = `chat_${chatId}_messages`;
       localStorage.setItem(key, JSON.stringify(messages));
     } catch (error) {
-      console.error(`Error saving to localStorage for chat ${chatId}:`, error);
+      logger.error(`Error saving to localStorage for chat ${chatId}:`, error);
     }
   }
 
@@ -156,7 +160,7 @@ class ChatManager {
   async deleteChat(chatId) {
     // Validate chat ID first
     if (!chatId || chatId === 'undefined' || chatId === 'null' || chatId === null) {
-      console.error('Cannot delete chat: Invalid chat ID:', chatId);
+      logger.error('Cannot delete chat: Invalid chat ID:', chatId);
       throw new Error(`Invalid chat ID for deletion: ${chatId}`);
     }
 
@@ -165,7 +169,7 @@ class ChatManager {
       // Try to delete from backend first using ApiClient
       await this.apiClient.deleteChat(chatId);
     } catch (error) {
-      console.error(`Error deleting chat ${chatId} from backend:`, error);
+      logger.error(`Error deleting chat ${chatId} from backend:`, error);
     }
 
     // Always clean up localStorage
@@ -185,7 +189,7 @@ class ChatManager {
       const key = `chat_${chatId}_messages`;
       localStorage.removeItem(key);
     } catch (error) {
-      console.error(`Error deleting chat ${chatId} from localStorage:`, error);
+      logger.error(`Error deleting chat ${chatId} from localStorage:`, error);
     }
   }
 
@@ -205,7 +209,7 @@ class ChatManager {
 
       return { status: 'success' };
     } catch (error) {
-      console.error(`Error resetting chat ${chatId}:`, error);
+      logger.error(`Error resetting chat ${chatId}:`, error);
       throw error;
     }
   }
@@ -249,7 +253,7 @@ class ChatManager {
         throw new Error(`Chat API failed: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      logger.error('Error sending message:', error);
       throw error;
     }
   }
@@ -315,7 +319,7 @@ class ChatManager {
         throw new Error(`Cleanup failed: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Error during cleanup:', error);
+      logger.error('Error during cleanup:', error);
       throw error;
     }
   }

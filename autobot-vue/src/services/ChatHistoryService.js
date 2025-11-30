@@ -6,6 +6,10 @@
  */
 
 import apiClient from '@/utils/ApiClient.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ChatHistoryService
+const logger = createLogger('ChatHistoryService');
 
 export class ChatHistoryService {
   constructor() {
@@ -21,7 +25,7 @@ export class ChatHistoryService {
       const data = await apiClient.getChatList();
       this.chatList = data.chats || [];
     } catch (error) {
-      console.error('Error loading chat list from backend:', error);
+      logger.error('Error loading chat list from backend:', error);
       // Fallback to localStorage
       this.loadChatListFromLocalStorage();
     }
@@ -61,7 +65,7 @@ export class ChatHistoryService {
           }
         });
       } catch (e) {
-        console.error('Error loading custom chat names:', e);
+        logger.error('Error loading custom chat names:', e);
       }
     }
   }
@@ -81,7 +85,7 @@ export class ChatHistoryService {
           }
         }
       } catch (e) {
-        console.error('Error parsing chat messages for preview:', e);
+        logger.error('Error parsing chat messages for preview:', e);
       }
     }
     return '';
@@ -103,7 +107,7 @@ export class ChatHistoryService {
 
       return normalizedMessages;
     } catch (error) {
-      console.error('Error loading chat messages from backend:', error);
+      logger.error('Error loading chat messages from backend:', error);
       // Fallback to localStorage
       const persistedMessages = localStorage.getItem(`chat_${chatId}_messages`);
       if (persistedMessages) {
@@ -125,7 +129,7 @@ export class ChatHistoryService {
    */
   async saveChatMessages(chatId, messages) {
     if (!chatId) {
-      console.warn('No chat ID provided to save messages');
+      logger.warn('No chat ID provided to save messages');
       return;
     }
 
@@ -136,7 +140,7 @@ export class ChatHistoryService {
     try {
       await apiClient.saveChatMessages(chatId, messages);
     } catch (error) {
-      console.error('Error saving chat messages to backend:', error);
+      logger.error('Error saving chat messages to backend:', error);
     }
   }
 
@@ -153,7 +157,7 @@ export class ChatHistoryService {
 
       return newChatId;
     } catch (error) {
-      console.error('Failed to create new chat:', error);
+      logger.error('Failed to create new chat:', error);
       throw error;
     }
   }
@@ -177,7 +181,7 @@ export class ChatHistoryService {
 
       return true;
     } catch (error) {
-      console.error('Error deleting chat:', error);
+      logger.error('Error deleting chat:', error);
       throw error;
     }
   }
@@ -219,7 +223,7 @@ export class ChatHistoryService {
             name: chat.name || ''
           };
         } catch (error) {
-          console.error(`Error loading messages for chat ${chat.chatId}:`, error);
+          logger.error(`Error loading messages for chat ${chat.chatId}:`, error);
           return {
             id: chat.chatId,
             date: 'Unknown date',
@@ -241,7 +245,7 @@ export class ChatHistoryService {
       await apiClient.resetChat(chatId);
       return true;
     } catch (error) {
-      console.error('Error resetting chat:', error);
+      logger.error('Error resetting chat:', error);
       throw error;
     }
   }

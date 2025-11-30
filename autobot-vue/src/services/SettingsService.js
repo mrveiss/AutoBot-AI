@@ -9,6 +9,10 @@ import apiClient from '@/utils/ApiClient.js';
 import { reactive } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import cacheService from './CacheService.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for SettingsService
+const logger = createLogger('SettingsService');
 
 export class SettingsService {
   constructor() {
@@ -57,7 +61,7 @@ export class SettingsService {
         this.defaultSettings.backend.api_endpoint = backendUrl.replace(/\/$/, '');
         this.defaultSettings.backend.ollama_endpoint = ollamaUrl;
       } catch (configError) {
-        console.warn('[SettingsService] AppConfig loading failed, using appConfig defaults');
+        logger.warn('AppConfig loading failed, using appConfig defaults');
         // Use appConfig defaults instead of hardcoded IPs
         const defaults = appConfig.get('defaults', {});
         this.defaultSettings.backend.api_endpoint = defaults.backendUrl || '';
@@ -96,12 +100,12 @@ export class SettingsService {
           localStorage.setItem('chat_settings', JSON.stringify(this.settings));
         }
       } catch (backendError) {
-        console.warn('Could not load settings from backend, using localStorage/defaults:', backendError.message);
+        logger.warn('Could not load settings from backend, using localStorage/defaults:', backendError.message);
       }
 
       this.initialized = true;
     } catch (error) {
-      console.error('Error loading settings:', error);
+      logger.error('Error loading settings:', error);
       Object.assign(this.settings, this.defaultSettings);
       this.initialized = true;
     }
@@ -121,7 +125,7 @@ export class SettingsService {
       // Invalidate cache since settings changed
       cacheService.invalidateCategory('settings');
     } catch (error) {
-      console.error('❌ Error saving settings:', error);
+      logger.error('Error saving settings:', error);
       // Even if backend save fails, localStorage save should work
       // so settings persist across page reloads locally
       throw error;
@@ -135,7 +139,7 @@ export class SettingsService {
     try {
       localStorage.setItem('chat_settings', JSON.stringify(settings));
     } catch (error) {
-      console.error('Error saving settings to localStorage:', error);
+      logger.error('Error saving settings to localStorage:', error);
     }
   }
 
@@ -146,7 +150,7 @@ export class SettingsService {
     try {
       await apiClient.saveBackendSettings(this.settings.backend);
     } catch (error) {
-      console.error('Error saving backend settings:', error);
+      logger.error('Error saving backend settings:', error);
       throw error;
     }
   }
@@ -160,7 +164,7 @@ export class SettingsService {
       Object.assign(this.settings.backend, backendSettings);
       await this.saveSettings(); // Persist the merged settings
     } catch (error) {
-      console.error('Error loading backend settings:', error);
+      logger.error('Error loading backend settings:', error);
       throw error;
     }
   }
@@ -250,7 +254,7 @@ export class SettingsService {
       const response = await apiClient.get('/api/developer/config');
       return response.data || {};
     } catch (error) {
-      console.error('Failed to get developer config:', error);
+      logger.error('Failed to get developer config:', error);
       return {
         enabled: false,
         enhanced_errors: true,
@@ -270,7 +274,7 @@ export class SettingsService {
       await apiClient.post('/api/developer/config', config);
       return true;
     } catch (error) {
-      console.error('Failed to update developer config:', error);
+      logger.error('Failed to update developer config:', error);
       return false;
     }
   }
@@ -284,7 +288,7 @@ export class SettingsService {
       const response = await apiClient.get('/api/developer/endpoints');
       return response.data || {};
     } catch (error) {
-      console.error('Failed to get API endpoints:', error);
+      logger.error('Failed to get API endpoints:', error);
       return {};
     }
   }
@@ -298,7 +302,7 @@ export class SettingsService {
       const response = await apiClient.get('/api/developer/system-info');
       return response.data || {};
     } catch (error) {
-      console.error('Failed to get system info:', error);
+      logger.error('Failed to get system info:', error);
       return {};
     }
   }

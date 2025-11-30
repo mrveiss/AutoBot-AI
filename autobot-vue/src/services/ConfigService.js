@@ -7,6 +7,10 @@
 
 import appConfig from '@/config/AppConfig.js';
 import { ApiClient } from '@/utils/ApiClient.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ConfigService
+const logger = createLogger('ConfigService');
 
 // Create ApiClient instance for config operations
 const apiClient = new ApiClient();
@@ -67,7 +71,7 @@ export class ConfigService {
       fallbackDefaults.api.backend_url = await appConfig.getApiUrl('');
       fallbackDefaults.api.ollama_url = await appConfig.getServiceUrl('ollama');
     } catch (error) {
-      console.warn('[ConfigService] AppConfig URL loading failed, using defaults from appConfig:', error.message);
+      logger.warn('AppConfig URL loading failed, using defaults from appConfig:', error.message);
       // Use appConfig defaults instead of hardcoded IPs
       const defaults = appConfig.get('defaults', {});
       fallbackDefaults.api.backend_url = defaults.backendUrl || '';
@@ -116,10 +120,10 @@ export class ConfigService {
         };
 
         this.config = this.mergeDeep(this.config, externalConfig);
-        console.log('Loaded dynamic configuration from backend:', externalConfig);
+        logger.info('Loaded dynamic configuration from backend:', externalConfig);
       }
     } catch (error) {
-      console.warn('Could not load external configuration from backend:', error.message);
+      logger.warn('Could not load external configuration from backend:', error.message);
       // Continue with current config - this is not a fatal error
     }
   }
@@ -197,7 +201,7 @@ export class ConfigService {
         this.config = this.mergeDeep(this.config, parsed);
       }
     } catch (error) {
-      console.error('Error loading runtime configuration:', error);
+      logger.error('Error loading runtime configuration:', error);
     }
   }
 
@@ -208,7 +212,7 @@ export class ConfigService {
     try {
       localStorage.setItem('app_config', JSON.stringify(this.config));
     } catch (error) {
-      console.error('Error saving runtime configuration:', error);
+      logger.error('Error saving runtime configuration:', error);
     }
   }
 
