@@ -14,6 +14,7 @@ Provides advanced code analysis capabilities including:
 - Pre-commit hook analysis
 - Bug prediction and risk scoring
 - AI-powered code review automation
+- Dynamic log pattern mining
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -84,6 +85,21 @@ from .code_review_engine import (
     review_file,
     review_staged,
 )
+from .log_pattern_miner import (
+    Anomaly,
+    AnomalyType,
+    LogEntry,
+    LogLevel,
+    LogPattern,
+    LogPatternMiner,
+    MiningResult,
+    PatternType,
+    SessionFlow,
+    analyze_logs,
+    get_anomaly_types,
+    get_log_levels,
+    get_pattern_types,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -147,4 +163,18 @@ __all__ = [
     "review_diff",
     "review_file",
     "review_staged",
+    # Log pattern mining (Issue #226)
+    "Anomaly",
+    "AnomalyType",
+    "LogEntry",
+    "LogLevel",
+    "LogPattern",
+    "LogPatternMiner",
+    "MiningResult",
+    "PatternType",
+    "SessionFlow",
+    "analyze_logs",
+    "get_anomaly_types",
+    "get_log_levels",
+    "get_pattern_types",
 ]
