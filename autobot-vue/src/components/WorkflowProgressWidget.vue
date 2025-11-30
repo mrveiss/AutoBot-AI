@@ -77,7 +77,10 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { apiService } from '../services/api.js'
+
+const logger = createLogger('WorkflowProgressWidget')
 
 // Props
 const props = defineProps({
@@ -125,7 +128,7 @@ const loadWorkflowData = async () => {
     activeWorkflow.value = response.workflow
     workflowSteps.value = response.workflow.steps || []
   } catch (error) {
-    console.error('Failed to load workflow data:', error)
+    logger.error('Failed to load workflow data:', error)
   }
 }
 
@@ -150,7 +153,7 @@ const cancelWorkflow = async () => {
     activeWorkflow.value = null
     emit('workflow-cancelled', props.workflowId)
   } catch (error) {
-    console.error('Failed to cancel workflow:', error)
+    logger.error('Failed to cancel workflow:', error)
   }
 }
 

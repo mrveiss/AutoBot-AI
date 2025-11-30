@@ -266,8 +266,11 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+
+const logger = createLogger('OptimizedRumDashboard')
 
 export default {
   name: 'OptimizedRumDashboard',
@@ -409,7 +412,7 @@ export default {
       lastUpdated.value = Date.now()
     }, {
       onError: (error) => {
-        console.error('[OptimizedRumDashboard] Error refreshing data:', error)
+        logger.error('Error refreshing data:', error)
 
         // Add error as active issue
         activeIssues.value.unshift({

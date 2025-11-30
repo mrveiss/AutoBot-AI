@@ -102,7 +102,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import BaseXTerminal from '@/components/terminal/BaseXTerminal.vue'
+
+const logger = createLogger('ToolsTerminal')
 import HostSelector from '@/components/terminal/HostSelector.vue'
 import { useTerminalStore, type HostConfig } from '@/composables/useTerminalStore'
 import { useTerminalService } from '@/services/TerminalService'
@@ -243,7 +246,7 @@ const connectTerminal = async () => {
       terminal.value.focus()
     }
   } catch (error) {
-    console.error('[ToolsTerminal] Connection failed:', error)
+    logger.error('Connection failed:', error)
     terminalStore.updateSessionStatus(currentSessionId.value, 'error')
 
     if (terminal.value) {

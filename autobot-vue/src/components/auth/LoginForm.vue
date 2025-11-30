@@ -95,7 +95,10 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
+
+const logger = createLogger('LoginForm')
 import { useUserStore } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
@@ -219,7 +222,7 @@ async function handleLogin() {
     }
 
   } catch (error: any) {
-    console.error('Login error:', error)
+    logger.error('Login error:', error)
 
     if (error.status === 401) {
       loginError.value = 'Invalid username or password'

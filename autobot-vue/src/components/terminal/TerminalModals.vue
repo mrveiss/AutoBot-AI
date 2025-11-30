@@ -236,7 +236,10 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
+
+const logger = createLogger('TerminalModals')
 import BaseModal from '@/components/ui/BaseModal.vue'
 
 interface ProcessInfo {
@@ -317,7 +320,7 @@ const clearMessages = () => {
 
 // Standard error handler
 const handleError = (error: any, setter: (msg: string) => void) => {
-  console.error('Terminal modal error:', error)
+  logger.error('Terminal modal error:', error)
 
   let errorMessage = 'An unexpected error occurred'
 

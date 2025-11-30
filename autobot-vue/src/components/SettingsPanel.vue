@@ -144,6 +144,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('SettingsPanel')
 
 // Import error handling composables
 import { useAsyncHandler } from '../composables/useErrorHandler'
@@ -545,7 +548,7 @@ const refreshCacheActivity = async () => {
       })
     ]
   } catch (error) {
-    console.error('Failed to refresh cache activity:', error)
+    logger.error('Failed to refresh cache activity:', error)
     cacheActivity.value = []
   }
 }
