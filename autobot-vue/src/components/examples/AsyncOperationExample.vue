@@ -639,8 +639,11 @@ const loadAnalytics = () => analytics.execute(async () => {
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useAsyncOperation, createAsyncOperations } from '@/composables/useAsyncOperation'
 import { networkConfig } from '@/constants/network.ts'
+
+const logger = createLogger('AsyncOperationExample')
 
 // Backend URL from networkConfig (no hardcoded IPs, respects deployment mode)
 const BACKEND_URL = networkConfig.backendUrl
@@ -697,7 +700,7 @@ const validateOp = useAsyncOperation({
       timestamp: new Date().toISOString(),
       message: err.message
     })
-    console.error('[Validation Error]', err)
+    logger.error('[Validation Error]', err)
   },
   errorMessage: 'Configuration validation failed'
 })

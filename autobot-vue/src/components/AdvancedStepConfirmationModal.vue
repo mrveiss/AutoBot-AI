@@ -332,7 +332,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
+
+const logger = createLogger('AdvancedStepConfirmationModal')
 
 // Interfaces
 interface WorkflowStep {
@@ -605,7 +608,7 @@ const saveEdit = async () => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to save step'
     editError.value = errorMessage
-    console.error('Edit save error:', error)
+    logger.error('Edit save error:', error)
   } finally {
     isSavingEdit.value = false
   }

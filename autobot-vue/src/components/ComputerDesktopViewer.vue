@@ -23,7 +23,10 @@
 
 <script>
 import { ref, onMounted } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
 import appConfig from '@/config/AppConfig.js';
+
+const logger = createLogger('ComputerDesktopViewer');
 
 export default {
   name: 'ComputerDesktopViewer',
@@ -39,7 +42,7 @@ export default {
           reconnect: true
         });
       } catch (error) {
-        console.error('Error loading VNC URL from centralized configuration:', error);
+        logger.error('Error loading VNC URL from centralized configuration:', error);
         vncUrl.value = 'Configuration unavailable - check service discovery';
       }
     });

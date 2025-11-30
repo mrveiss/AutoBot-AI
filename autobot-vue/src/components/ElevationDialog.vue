@@ -106,11 +106,14 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { createLogger } from '@/utils/debugUtils';
 import { apiService } from '../services/api';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseButton from '@/components/base/BaseButton.vue';
 import { useModal } from '@/composables/useModal';
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
+
+const logger = createLogger('ElevationDialog');
 
 export default {
   name: 'ElevationDialog',
@@ -183,7 +186,7 @@ export default {
     const handleApprove = async () => {
       await authorize(authorizeFn).catch(err => {
         // Error already handled by useAsyncOperation
-        console.error('Authorization error:', err);
+        logger.error('Authorization error:', err);
       });
     };
 

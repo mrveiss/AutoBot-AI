@@ -215,6 +215,9 @@
 
 <script setup lang="ts">
 import { ref, defineProps, defineEmits, watch } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AddHostModal')
 
 defineProps<{
   visible: boolean
@@ -292,7 +295,7 @@ async function handleSubmit() {
     emit('submit', submitData)
     resetForm()
   } catch (error) {
-    console.error('Error submitting form:', error)
+    logger.error('Error submitting form:', error)
   } finally {
     isSubmitting.value = false
   }

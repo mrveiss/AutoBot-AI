@@ -227,7 +227,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
+
+const logger = createLogger('MultiMachineHealth')
 import ServiceItem from './ServiceItem.vue'
 import appConfig from '@/config/AppConfig.js'
 
@@ -526,7 +529,7 @@ const refreshAll = async () => {
       }
     }
   } catch (error) {
-    console.error('Failed to fetch infrastructure status:', error)
+    logger.error('Failed to fetch infrastructure status:', error)
     // Keep mock data on error
   }
   

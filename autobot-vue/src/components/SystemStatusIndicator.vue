@@ -182,7 +182,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import type { SystemSeverity } from '@/types/system'
+
+const logger = createLogger('SystemStatusIndicator')
 import { useAppStore } from '@/stores/useAppStore'
 import XMarkIcon from '@heroicons/vue/24/outline/XMarkIcon'
 import ExclamationTriangleIcon from '@heroicons/vue/24/outline/ExclamationTriangleIcon'
@@ -271,7 +274,7 @@ const refreshStatus = async () => {
       throw new Error(`Health check failed: ${response.status}`)
     }
   } catch (error) {
-    console.error('[SystemStatusIndicator] Manual health check failed:', error)
+    logger.error('Manual health check failed:', error)
     appStore.setBackendStatus({
       text: 'Connection Error',
       class: 'error'
