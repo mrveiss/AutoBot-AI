@@ -1,5 +1,9 @@
 // ChatInterface TypeScript definitions and setup
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for ChatInterface
+const logger = createLogger('ChatInterface')
 import type {
   ChatMessage,
   ChatSession,
@@ -270,7 +274,7 @@ export function useChatInterface() {
           uploadedFilePaths.push(filePath)
           await associateFileWithChat(filePath, file.name)
         } catch (uploadError) {
-          console.error('File upload failed:', uploadError)
+          logger.error('File upload failed:', uploadError)
           messages.value.push({
             id: generateChatId(),
             sender: 'system',
@@ -306,7 +310,7 @@ export function useChatInterface() {
         })
       }
     } catch (error) {
-      console.error('Chat interface error:', error)
+      logger.error('Chat interface error:', error)
       messages.value.push({
         id: generateChatId(),
         sender: 'assistant',
@@ -364,7 +368,7 @@ export function useChatInterface() {
         timestamp: new Date()
       })
     } catch (error) {
-      console.error('Error creating new chat:', error)
+      logger.error('Error creating new chat:', error)
       const newChatId = generateChatId()
       currentChatId.value = newChatId
       messages.value = []
@@ -422,7 +426,7 @@ export function useChatInterface() {
       }
     } catch (error) {
       if (!silent) {
-        console.error('Error loading chat messages:', error)
+        logger.error('Error loading chat messages:', error)
         messages.value = [{
           id: generateChatId(),
           sender: 'system',
@@ -448,14 +452,14 @@ export function useChatInterface() {
       }
     }, 2000)
 
-    console.log(`[ChatInterface] Started message polling for chat ${chatId}`)
+    logger.debug(`Started message polling for chat ${chatId}`)
   }
 
   const stopMessagePolling = () => {
     if (messagePollingInterval) {
       clearInterval(messagePollingInterval)
       messagePollingInterval = null
-      console.log('[ChatInterface] Stopped message polling')
+      logger.debug('Stopped message polling')
     }
   }
 
@@ -463,7 +467,7 @@ export function useChatInterface() {
     try {
       currentChatContext.value = { chatId }
     } catch (error) {
-      console.error('Failed to load chat context:', error)
+      logger.error('Failed to load chat context:', error)
     }
   }
 
@@ -485,7 +489,7 @@ export function useChatInterface() {
         type: 'upload'
       })
     } catch (error) {
-      console.error('Failed to associate file with chat:', error)
+      logger.error('Failed to associate file with chat:', error)
     }
   }
 
