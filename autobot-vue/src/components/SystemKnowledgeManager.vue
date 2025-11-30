@@ -210,6 +210,10 @@ import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import appConfig from '@/config/AppConfig.js';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BasePanel from '@/components/base/BasePanel.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for SystemKnowledgeManager
+const logger = createLogger('SystemKnowledgeManager');
 
 export default {
   name: 'SystemKnowledgeManager',
@@ -277,7 +281,7 @@ export default {
 
         addLogEntry('Stats refreshed successfully', 'success');
       }).catch(error => {
-        console.error('[SystemKnowledgeManager] Failed to fetch stats:', error);
+        logger.error('Failed to fetch stats:', error);
         addLogEntry('Failed to fetch stats', 'error');
         lastResult.value = {
           status: 'error',
@@ -327,7 +331,7 @@ export default {
         if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error('[SystemKnowledgeManager] Initialization error:', error);
+        logger.error('Initialization error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -385,7 +389,7 @@ export default {
         if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error('[SystemKnowledgeManager] Reindexing error:', error);
+        logger.error('Reindexing error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -434,7 +438,7 @@ export default {
           try {
             const statusResponse = await pollJobStatusAPI(taskId);
 
-            console.log('[refreshSystemKnowledge] Poll status:', statusResponse.status);
+            logger.debug('Poll status:', statusResponse.status);
 
             if (statusResponse.status === 'PENDING') {
               progressMessage.value = 'Task queued, waiting to start...';
@@ -492,7 +496,7 @@ export default {
             }
 
           } catch (pollError) {
-            console.error('[refreshSystemKnowledge] Polling error:', pollError);
+            logger.error('Polling error:', pollError);
             // Don't stop polling on transient errors - backend may be busy
           }
         }, 2000); // Poll every 2 seconds
@@ -504,7 +508,7 @@ export default {
         if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error('[SystemKnowledgeManager] Refresh error:', error);
+        logger.error('Refresh error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -547,7 +551,7 @@ export default {
         if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error('[SystemKnowledgeManager] Man pages error:', error);
+        logger.error('Man pages error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -595,7 +599,7 @@ export default {
         if (error instanceof Error) {
           errorMessage = error.message;
         }
-        console.error('[SystemKnowledgeManager] Documentation indexing error:', error);
+        logger.error('Documentation indexing error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -683,7 +687,7 @@ export default {
           errorMessage = error;
         }
 
-        console.error('[SystemKnowledgeManager] Vectorization error:', error);
+        logger.error('Vectorization error:', error);
 
         lastResult.value = {
           status: 'error',
@@ -720,7 +724,7 @@ export default {
       try {
         machines.value = appConfig.getMachinesArray();
       } catch (error) {
-        console.warn('[SystemKnowledgeManager] Failed to load machines from appConfig:', error);
+        logger.warn('Failed to load machines from appConfig:', error);
         // No fallback - component will just show "All Hosts" option
       }
 

@@ -379,6 +379,10 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for NPUWorkersSettings
+const logger = createLogger('NPUWorkersSettings')
 
 // Toast notifications
 const { showToast } = useToast()
@@ -520,7 +524,7 @@ const parseWorkerURL = (urlString: string): { ip: string; port: number } => {
       port: parseInt(url.port) || 8081
     }
   } catch (error) {
-    console.error(`Invalid worker URL: ${urlString}`, error)
+    logger.error(`Invalid worker URL: ${urlString}`, error)
     // Fallback to regex parsing for non-standard URLs
     const match = urlString.match(/^(?:https?:\/\/)?(.+?):(\d+)/)
     if (match) {
@@ -620,7 +624,7 @@ const loadWorkers = async () => {
       }
     })
   } catch (error) {
-    console.error('[NPUWorkersSettings] Failed to load NPU workers:', error)
+    logger.error('Failed to load NPU workers:', error)
     workerFormError.value = 'Failed to load workers. Please try again.'
     notify('Failed to load NPU workers', 'error')
   } finally {
@@ -633,7 +637,7 @@ const loadLoadBalancingConfig = async () => {
     const response = await axios.get('/api/npu/load-balancing')
     loadBalancingConfig.value = response.data
   } catch (error) {
-    console.error('[NPUWorkersSettings] Failed to load load balancing config:', error)
+    logger.error('Failed to load load balancing config:', error)
     notify('Failed to load load balancing config', 'error')
   }
 }
@@ -644,7 +648,7 @@ const handleConfigChange = async () => {
     emit('change')
     notify('Load balancing config updated', 'success')
   } catch (error) {
-    console.error('[NPUWorkersSettings] Failed to update load balancing config:', error)
+    logger.error('Failed to update load balancing config:', error)
     notify('Failed to update load balancing config', 'error')
   }
 }
@@ -709,7 +713,7 @@ const saveWorker = async () => {
     closeWorkerDialog()
     await loadWorkers()
   } catch (error: unknown) {
-    console.error('[NPUWorkersSettings] Failed to save worker:', error)
+    logger.error('Failed to save worker:', error)
 
     // Extract error message from response
     const axiosError = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
@@ -739,7 +743,7 @@ const deleteWorker = async () => {
   if (!workerToDelete.value) return
 
   if (operationInProgress.value) {
-    console.warn('[NPUWorkersSettings] Operation already in progress')
+    logger.warn('Operation already in progress')
     return
   }
 
@@ -755,7 +759,7 @@ const deleteWorker = async () => {
     notify(`Worker "${workerName}" deleted`, 'success')
     await loadWorkers()
   } catch (error) {
-    console.error('[NPUWorkersSettings] Failed to delete worker:', error)
+    logger.error('Failed to delete worker:', error)
     const axiosError = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     const errorMessage = axiosError.response?.data?.detail ||
                         axiosError.response?.data?.message ||
@@ -777,11 +781,11 @@ const testWorker = async (worker: NPUWorker) => {
     if (response.data.success) {
       notify(`Worker "${worker.name}" connection OK`, 'success')
     } else {
-      console.error(`[NPUWorkersSettings] Worker ${worker.name} test failed:`, response.data)
+      logger.error(`Worker ${worker.name} test failed:`, response.data)
       notify(`Worker "${worker.name}" test failed`, 'warning')
     }
   } catch (error) {
-    console.error(`[NPUWorkersSettings] Failed to test worker ${worker.name}:`, error)
+    logger.error(`Failed to test worker ${worker.name}:`, error)
     notify(`Failed to test worker "${worker.name}"`, 'error')
   } finally {
     isTestingWorker.value[worker.id] = false
@@ -794,7 +798,7 @@ const viewWorkerMetrics = async (worker: NPUWorker) => {
     selectedWorkerMetrics.value = { ...worker, performance_metrics: response.data }
     openMetricsDialog()
   } catch (error) {
-    console.error('[NPUWorkersSettings] Failed to load worker metrics:', error)
+    logger.error('Failed to load worker metrics:', error)
     notify(`Failed to load metrics for "${worker.name}"`, 'error')
   }
 }
@@ -907,7 +911,7 @@ const setupWebSocket = () => {
   }
 
   wsConnection.onerror = (error) => {
-    console.error('WebSocket error:', error)
+    logger.error('WebSocket error:', error)
   }
 
   wsConnection.onclose = () => {

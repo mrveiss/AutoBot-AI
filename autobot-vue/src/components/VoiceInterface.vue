@@ -193,6 +193,10 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
 import { useAsyncHandler } from '@/composables/useErrorHandler';
 import BasePanel from '@/components/base/BasePanel.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for VoiceInterface
+const logger = createLogger('VoiceInterface');
 
 export default {
   name: 'VoiceInterface',
@@ -272,7 +276,7 @@ export default {
         };
 
         recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
+          logger.error('Speech recognition error:', event.error);
           statusMessage.value = `Error: ${event.error}`;
           isListening.value = false;
         };
@@ -397,7 +401,7 @@ export default {
         statusMessage.value = 'Voice test completed';
       } catch (error) {
         statusMessage.value = 'Voice test failed';
-        console.error('TTS test error:', error);
+        logger.error('TTS test error:', error);
       }
     };
 
@@ -413,7 +417,7 @@ export default {
           };
         }
       } catch (error) {
-        console.error('Failed to load wake word settings:', error);
+        logger.error('Failed to load wake word settings:', error);
       }
     };
 
@@ -430,7 +434,7 @@ export default {
           };
         }
       } catch (error) {
-        console.error('Failed to load wake word stats:', error);
+        logger.error('Failed to load wake word stats:', error);
       }
     };
 
@@ -444,7 +448,7 @@ export default {
           statusMessage.value = 'Wake word detection disabled';
         }
       } catch (error) {
-        console.error('Failed to toggle wake word detection:', error);
+        logger.error('Failed to toggle wake word detection:', error);
         statusMessage.value = 'Failed to toggle wake word detection';
       }
     };
@@ -458,7 +462,7 @@ export default {
         });
         statusMessage.value = 'Wake word config updated';
       } catch (error) {
-        console.error('Failed to update wake word config:', error);
+        logger.error('Failed to update wake word config:', error);
         statusMessage.value = 'Failed to update config';
       }
     };
@@ -479,7 +483,7 @@ export default {
           statusMessage.value = data.message || 'Wake word already exists';
         }
       } catch (error) {
-        console.error('Failed to add wake word:', error);
+        logger.error('Failed to add wake word:', error);
         statusMessage.value = 'Failed to add wake word';
       }
     };
@@ -493,7 +497,7 @@ export default {
           statusMessage.value = `Wake word "${word}" removed`;
         }
       } catch (error) {
-        console.error('Failed to remove wake word:', error);
+        logger.error('Failed to remove wake word:', error);
         statusMessage.value = error.message || 'Failed to remove wake word';
       }
     };
@@ -508,7 +512,7 @@ export default {
         try {
           settings.value = { ...settings.value, ...JSON.parse(savedSettings) };
         } catch (e) {
-          console.error('Error loading voice settings:', e);
+          logger.error('Error loading voice settings:', e);
         }
       }
 
@@ -518,7 +522,7 @@ export default {
         try {
           voiceHistory.value = JSON.parse(savedHistory);
         } catch (e) {
-          console.error('Error loading voice history:', e);
+          logger.error('Error loading voice history:', e);
         }
       }
 
