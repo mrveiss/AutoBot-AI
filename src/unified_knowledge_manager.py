@@ -1068,10 +1068,13 @@ class UnifiedKnowledgeManager:
 
 
 # ============================================================================
-# GLOBAL INSTANCE (Singleton Pattern)
+# GLOBAL INSTANCE (Singleton Pattern, thread-safe)
 # ============================================================================
 
+import threading
+
 _unified_knowledge_manager_instance: Optional[UnifiedKnowledgeManager] = None
+_unified_knowledge_manager_lock = threading.Lock()
 
 
 def get_unified_knowledge_manager(
@@ -1080,7 +1083,7 @@ def get_unified_knowledge_manager(
     enable_machine_aware: bool = True,
 ) -> UnifiedKnowledgeManager:
     """
-    Get global UnifiedKnowledgeManager instance (singleton)
+    Get global UnifiedKnowledgeManager instance (singleton, thread-safe)
 
     Args:
         knowledge_base: KnowledgeBase instance (required on first call)
@@ -1102,16 +1105,19 @@ def get_unified_knowledge_manager(
     global _unified_knowledge_manager_instance
 
     if _unified_knowledge_manager_instance is None:
-        if knowledge_base is None:
-            raise ValueError(
-                "knowledge_base required on first call to get_unified_knowledge_manager()"
-            )
+        with _unified_knowledge_manager_lock:
+            # Double-check after acquiring lock
+            if _unified_knowledge_manager_instance is None:
+                if knowledge_base is None:
+                    raise ValueError(
+                        "knowledge_base required on first call to get_unified_knowledge_manager()"
+                    )
 
-        _unified_knowledge_manager_instance = UnifiedKnowledgeManager(
-            knowledge_base=knowledge_base,
-            enable_temporal=enable_temporal,
-            enable_machine_aware=enable_machine_aware,
-        )
+                _unified_knowledge_manager_instance = UnifiedKnowledgeManager(
+                    knowledge_base=knowledge_base,
+                    enable_temporal=enable_temporal,
+                    enable_machine_aware=enable_machine_aware,
+                )
 
     return _unified_knowledge_manager_instance
 

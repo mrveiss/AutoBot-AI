@@ -890,15 +890,21 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return {"status": "error", "error": str(e)}
 
 
-# Global instance for easy access (lazy initialization)
+# Singleton instance (thread-safe)
+import threading
+
 _npu_code_search = None
+_npu_code_search_lock = threading.Lock()
 
 
 def get_npu_code_search():
-    """Get or create the NPU code search agent instance (lazy initialization)"""
+    """Get or create the NPU code search agent instance (thread-safe)"""
     global _npu_code_search
     if _npu_code_search is None:
-        _npu_code_search = NPUCodeSearchAgent()
+        with _npu_code_search_lock:
+            # Double-check after acquiring lock
+            if _npu_code_search is None:
+                _npu_code_search = NPUCodeSearchAgent()
     return _npu_code_search
 
 

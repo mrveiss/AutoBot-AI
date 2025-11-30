@@ -505,13 +505,19 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
         return any(pattern in message_lower for pattern in rag_patterns)
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _rag_agent_instance = None
+_rag_agent_lock = threading.Lock()
 
 
 def get_rag_agent() -> RAGAgent:
-    """Get the singleton RAG Agent instance."""
+    """Get the singleton RAG Agent instance (thread-safe)."""
     global _rag_agent_instance
     if _rag_agent_instance is None:
-        _rag_agent_instance = RAGAgent()
+        with _rag_agent_lock:
+            # Double-check after acquiring lock
+            if _rag_agent_instance is None:
+                _rag_agent_instance = RAGAgent()
     return _rag_agent_instance

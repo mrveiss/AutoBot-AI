@@ -816,15 +816,21 @@ class DevelopmentSpeedupAgent:
         }
 
 
-# Lazy initialization for global instance
+# Singleton instance (thread-safe)
+import threading
+
 _development_speedup_instance = None
+_development_speedup_lock = threading.Lock()
 
 
 def get_development_speedup_agent() -> DevelopmentSpeedupAgent:
-    """Get or create the development speedup agent instance (lazy initialization)"""
+    """Get or create the development speedup agent instance (thread-safe)"""
     global _development_speedup_instance
     if _development_speedup_instance is None:
-        _development_speedup_instance = DevelopmentSpeedupAgent()
+        with _development_speedup_lock:
+            # Double-check after acquiring lock
+            if _development_speedup_instance is None:
+                _development_speedup_instance = DevelopmentSpeedupAgent()
     return _development_speedup_instance
 
 
