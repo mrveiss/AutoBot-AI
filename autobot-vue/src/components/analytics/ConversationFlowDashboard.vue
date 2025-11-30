@@ -254,6 +254,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('ConversationFlowDashboard')
 
 // Types
 interface IntentPattern {
@@ -325,7 +328,7 @@ const runAnalysis = async () => {
       analysisResult.value = await response.json()
     }
   } catch (error) {
-    console.error('Failed to analyze conversations:', error)
+    logger.error('Failed to analyze conversations:', error)
   } finally {
     isLoading.value = false
   }

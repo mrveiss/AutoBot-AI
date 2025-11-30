@@ -254,6 +254,9 @@ import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
 import MultiMachineHealth from './MultiMachineHealth.vue'
 import { formatFileSize as formatBytes } from '@/utils/formatHelpers'
 import BasePanel from '@/components/base/BasePanel.vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('SystemMonitor')
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -393,7 +396,7 @@ const fetchSystemMetrics = async () => {
 
     metricsError.value = null
   } catch (error) {
-    console.error('Failed to fetch system metrics:', error)
+    logger.error('Failed to fetch system metrics:', error)
     metricsError.value = 'Failed to fetch metrics'
   } finally {
     metricsLoading.value = false
@@ -446,7 +449,7 @@ const fetchApiHealth = async () => {
       endpoints
     }))
   } catch (error) {
-    console.error('Failed to fetch API health:', error)
+    logger.error('Failed to fetch API health:', error)
   }
 }
 
