@@ -6,6 +6,7 @@ System Knowledge Manager for AutoBot
 Manages immutable system knowledge templates and their runtime copies
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -14,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 import yaml
 
 from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
@@ -72,7 +74,7 @@ class SystemKnowledgeManager:
     async def _is_system_knowledge_imported(self) -> bool:
         """Check if system knowledge has been imported"""
         marker_file = self.runtime_knowledge_dir / ".imported"
-        return marker_file.exists()
+        return await asyncio.to_thread(marker_file.exists)
 
     async def _check_system_knowledge_changes(self) -> tuple[bool, List[str]]:
         """Check if system knowledge files have changed since last import"""
@@ -114,13 +116,18 @@ class SystemKnowledgeManager:
         """Get current state (hash) of all system knowledge files"""
         file_states = {}
 
-        if not self.system_knowledge_dir.exists():
+        dir_exists = await asyncio.to_thread(self.system_knowledge_dir.exists)
+        if not dir_exists:
             return file_states
 
-        for file_path in self.system_knowledge_dir.rglob("*.yaml"):
+        yaml_files = await asyncio.to_thread(
+            list, self.system_knowledge_dir.rglob("*.yaml")
+        )
+        for file_path in yaml_files:
             try:
                 # Get file content hash
-                content = file_path.read_text(encoding="utf-8")
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
                 file_hash = hashlib.md5(content.encode()).hexdigest()
 
                 # Use relative path as key
@@ -203,30 +210,36 @@ class SystemKnowledgeManager:
     async def _mark_system_knowledge_imported(self):
         """Mark system knowledge as imported (legacy method)"""
         marker_file = self.runtime_knowledge_dir / ".imported"
-        with open(marker_file, "w") as f:
-            json.dump(
-                {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
-                f,
-                indent=2,
+        async with aiofiles.open(marker_file, "w") as f:
+            await f.write(
+                json.dumps(
+                    {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
+                    indent=2,
+                )
             )
 
     async def _backup_current_knowledge(self):
         """Backup current system knowledge"""
-        if not self.runtime_knowledge_dir.exists():
+        dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
+        if not dir_exists:
             return
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"backup_{timestamp}"
 
-        if self.runtime_knowledge_dir.exists():
-            shutil.copytree(self.runtime_knowledge_dir, backup_path)
+        dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
+        if dir_exists:
+            await asyncio.to_thread(shutil.copytree, self.runtime_knowledge_dir, backup_path)
             logger.info(f"Backed up system knowledge to {backup_path}")
 
     async def _clear_system_knowledge(self):
         """Clear current system knowledge"""
-        if self.runtime_knowledge_dir.exists():
-            shutil.rmtree(self.runtime_knowledge_dir)
-        self.runtime_knowledge_dir.mkdir(parents=True, exist_ok=True)
+        dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
+        if dir_exists:
+            await asyncio.to_thread(shutil.rmtree, self.runtime_knowledge_dir)
+        await asyncio.to_thread(
+            self.runtime_knowledge_dir.mkdir, parents=True, exist_ok=True
+        )
 
         # Clear from knowledge base
         await self._clear_system_knowledge_from_kb()
@@ -238,7 +251,8 @@ class SystemKnowledgeManager:
 
     async def _import_system_knowledge(self):
         """Import all system knowledge from templates"""
-        if not self.system_knowledge_dir.exists():
+        dir_exists = await asyncio.to_thread(self.system_knowledge_dir.exists)
+        if not dir_exists:
             logger.warning(
                 f"System knowledge directory not found: {self.system_knowledge_dir}"
             )
@@ -258,9 +272,12 @@ class SystemKnowledgeManager:
         logger.info("Creating default system knowledge templates...")
 
         # Create directory structure
-        (self.system_knowledge_dir / "tools").mkdir(parents=True, exist_ok=True)
-        (self.system_knowledge_dir / "workflows").mkdir(parents=True, exist_ok=True)
-        (self.system_knowledge_dir / "procedures").mkdir(parents=True, exist_ok=True)
+        tools_dir = self.system_knowledge_dir / "tools"
+        workflows_dir = self.system_knowledge_dir / "workflows"
+        procedures_dir = self.system_knowledge_dir / "procedures"
+        await asyncio.to_thread(tools_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(workflows_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(procedures_dir.mkdir, parents=True, exist_ok=True)
 
         # Create default steganography tools knowledge
         steganography_tools = {
@@ -360,8 +377,9 @@ class SystemKnowledgeManager:
         }
 
         # Save steganography tools
-        with open(self.system_knowledge_dir / "tools" / "steganography.yaml", "w") as f:
-            yaml.dump(steganography_tools, f, default_flow_style=False, indent=2)
+        steg_file = self.system_knowledge_dir / "tools" / "steganography.yaml"
+        async with aiofiles.open(steg_file, "w") as f:
+            await f.write(yaml.dump(steganography_tools, default_flow_style=False, indent=2))
 
         # Create default image forensics workflow
         image_forensics_workflow = {
@@ -467,29 +485,31 @@ class SystemKnowledgeManager:
         }
 
         # Save workflow
-        with open(
-            self.system_knowledge_dir / "workflows" / "image_forensics.yaml", "w"
-        ) as f:
-            yaml.dump(image_forensics_workflow, f, default_flow_style=False, indent=2)
+        workflow_file = self.system_knowledge_dir / "workflows" / "image_forensics.yaml"
+        async with aiofiles.open(workflow_file, "w") as f:
+            await f.write(yaml.dump(image_forensics_workflow, default_flow_style=False, indent=2))
 
         logger.info("Default system knowledge templates created")
 
     async def _import_tools_knowledge(self):
         """Import tools knowledge from YAML templates"""
         tools_dir = self.system_knowledge_dir / "tools"
-        if not tools_dir.exists():
+        dir_exists = await asyncio.to_thread(tools_dir.exists)
+        if not dir_exists:
             return
 
-        for yaml_file in tools_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             logger.info(f"Importing tools from {yaml_file}")
 
-            with open(yaml_file, "r") as f:
-                tools_data = yaml.safe_load(f)
+            async with aiofiles.open(yaml_file, "r") as f:
+                content = await f.read()
+                tools_data = yaml.safe_load(content)
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
-            runtime_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(yaml_file, runtime_file)
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import tools into knowledge base
             for tool_data in tools_data.get("tools", []):
@@ -564,19 +584,22 @@ class SystemKnowledgeManager:
     async def _import_workflows_knowledge(self):
         """Import workflow knowledge from YAML templates"""
         workflows_dir = self.system_knowledge_dir / "workflows"
-        if not workflows_dir.exists():
+        dir_exists = await asyncio.to_thread(workflows_dir.exists)
+        if not dir_exists:
             return
 
-        for yaml_file in workflows_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             logger.info(f"Importing workflow from {yaml_file}")
 
-            with open(yaml_file, "r") as f:
-                workflow_data = yaml.safe_load(f)
+            async with aiofiles.open(yaml_file, "r") as f:
+                content = await f.read()
+                workflow_data = yaml.safe_load(content)
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
-            runtime_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(yaml_file, runtime_file)
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import workflow into knowledge base
             await self._import_single_workflow(workflow_data)
@@ -622,19 +645,22 @@ class SystemKnowledgeManager:
     async def _import_procedures_knowledge(self):
         """Import procedures knowledge from YAML templates"""
         procedures_dir = self.system_knowledge_dir / "procedures"
-        if not procedures_dir.exists():
+        dir_exists = await asyncio.to_thread(procedures_dir.exists)
+        if not dir_exists:
             return
 
-        for yaml_file in procedures_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             logger.info(f"Importing procedure from {yaml_file}")
 
-            with open(yaml_file, "r") as f:
-                procedure_data = yaml.safe_load(f)
+            async with aiofiles.open(yaml_file, "r") as f:
+                content = await f.read()
+                procedure_data = yaml.safe_load(content)
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
-            runtime_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(yaml_file, runtime_file)
+            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
 
             # Import procedure into knowledge base
             await self._import_single_procedure(procedure_data)
@@ -692,29 +718,38 @@ class SystemKnowledgeManager:
         """Import system knowledge from runtime files"""
         # Import tools
         tools_dir = self.runtime_knowledge_dir / "tools"
-        if tools_dir.exists():
-            for yaml_file in tools_dir.glob("*.yaml"):
-                with open(yaml_file, "r") as f:
-                    tools_data = yaml.safe_load(f)
+        tools_dir_exists = await asyncio.to_thread(tools_dir.exists)
+        if tools_dir_exists:
+            yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+            for yaml_file in yaml_files:
+                async with aiofiles.open(yaml_file, "r") as f:
+                    content = await f.read()
+                    tools_data = yaml.safe_load(content)
 
                 for tool_data in tools_data.get("tools", []):
                     await self._import_single_tool(tool_data)
 
         # Import workflows
         workflows_dir = self.runtime_knowledge_dir / "workflows"
-        if workflows_dir.exists():
-            for yaml_file in workflows_dir.glob("*.yaml"):
-                with open(yaml_file, "r") as f:
-                    workflow_data = yaml.safe_load(f)
+        workflows_dir_exists = await asyncio.to_thread(workflows_dir.exists)
+        if workflows_dir_exists:
+            yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+            for yaml_file in yaml_files:
+                async with aiofiles.open(yaml_file, "r") as f:
+                    content = await f.read()
+                    workflow_data = yaml.safe_load(content)
 
                 await self._import_single_workflow(workflow_data)
 
         # Import procedures
         procedures_dir = self.runtime_knowledge_dir / "procedures"
-        if procedures_dir.exists():
-            for yaml_file in procedures_dir.glob("*.yaml"):
-                with open(yaml_file, "r") as f:
-                    procedure_data = yaml.safe_load(f)
+        procedures_dir_exists = await asyncio.to_thread(procedures_dir.exists)
+        if procedures_dir_exists:
+            yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+            for yaml_file in yaml_files:
+                async with aiofiles.open(yaml_file, "r") as f:
+                    content = await f.read()
+                    procedure_data = yaml.safe_load(content)
 
                 await self._import_single_procedure(procedure_data)
 

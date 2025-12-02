@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+import aiofiles
 import yaml
 
 from src.agents.system_knowledge_manager import SystemKnowledgeManager
@@ -182,8 +183,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             / f"{self.current_machine_profile.machine_id}.json"
         )
 
-        with open(profile_file, "w") as f:
-            json.dump(self.current_machine_profile.to_dict(), f, indent=2)
+        async with aiofiles.open(profile_file, "w") as f:
+            await f.write(json.dumps(self.current_machine_profile.to_dict(), indent=2))
 
         logger.info(f"Machine profile saved: {profile_file}")
 
@@ -191,12 +192,14 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         """Load machine profile from disk"""
         profile_file = self.machine_profiles_dir / f"{machine_id}.json"
 
-        if not profile_file.exists():
+        profile_exists = await asyncio.to_thread(profile_file.exists)
+        if not profile_exists:
             return None
 
         try:
-            with open(profile_file, "r") as f:
-                data = json.load(f)
+            async with aiofiles.open(profile_file, "r") as f:
+                content = await f.read()
+                data = json.loads(content)
             return MachineProfile.from_dict(data)
         except Exception as e:
             logger.warning(f"Error loading machine profile {machine_id}: {e}")
@@ -238,7 +241,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         logger.info("Creating machine-specific knowledge...")
 
         machine_dir = self._get_machine_knowledge_dir()
-        machine_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(machine_dir.mkdir, parents=True, exist_ok=True)
 
         # Process each category
         await self._adapt_tools_knowledge()
@@ -251,25 +254,28 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
     async def _adapt_tools_knowledge(self):
         """Adapt tools knowledge for current machine"""
         tools_dir = self.system_knowledge_dir / "tools"
-        if not tools_dir.exists():
+        tools_dir_exists = await asyncio.to_thread(tools_dir.exists)
+        if not tools_dir_exists:
             return
 
         machine_tools_dir = self._get_machine_knowledge_dir() / "tools"
-        machine_tools_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(machine_tools_dir.mkdir, parents=True, exist_ok=True)
 
-        for yaml_file in tools_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             logger.info(f"Adapting tools from {yaml_file}")
 
-            with open(yaml_file, "r") as f:
-                tools_data = yaml.safe_load(f)
+            async with aiofiles.open(yaml_file, "r") as f:
+                content = await f.read()
+                tools_data = yaml.safe_load(content)
 
             # Filter and adapt tools for this machine
             adapted_tools = self._filter_tools_for_machine(tools_data)
 
             if adapted_tools["tools"]:  # Only save if there are applicable tools
                 machine_file = machine_tools_dir / yaml_file.name
-                with open(machine_file, "w") as f:
-                    yaml.dump(adapted_tools, f, default_flow_style=False, indent=2)
+                async with aiofiles.open(machine_file, "w") as f:
+                    await f.write(yaml.dump(adapted_tools, default_flow_style=False, indent=2))
 
     def _filter_tools_for_machine(self, tools_data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter tools based on current machine capabilities"""
@@ -351,25 +357,28 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
     async def _adapt_workflows_knowledge(self):
         """Adapt workflows for current machine capabilities"""
         workflows_dir = self.system_knowledge_dir / "workflows"
-        if not workflows_dir.exists():
+        workflows_dir_exists = await asyncio.to_thread(workflows_dir.exists)
+        if not workflows_dir_exists:
             return
 
         machine_workflows_dir = self._get_machine_knowledge_dir() / "workflows"
-        machine_workflows_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(machine_workflows_dir.mkdir, parents=True, exist_ok=True)
 
-        for yaml_file in workflows_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             logger.info(f"Adapting workflow from {yaml_file}")
 
-            with open(yaml_file, "r") as f:
-                workflow_data = yaml.safe_load(f)
+            async with aiofiles.open(yaml_file, "r") as f:
+                content = await f.read()
+                workflow_data = yaml.safe_load(content)
 
             # Adapt workflow for machine capabilities
             adapted_workflow = self._adapt_workflow_for_machine(workflow_data)
 
             if adapted_workflow:  # Only save if workflow is applicable
                 machine_file = machine_workflows_dir / yaml_file.name
-                with open(machine_file, "w") as f:
-                    yaml.dump(adapted_workflow, f, default_flow_style=False, indent=2)
+                async with aiofiles.open(machine_file, "w") as f:
+                    await f.write(yaml.dump(adapted_workflow, default_flow_style=False, indent=2))
 
     def _adapt_workflow_for_machine(
         self, workflow_data: Dict[str, Any]
@@ -421,22 +430,25 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
     async def _adapt_procedures_knowledge(self):
         """Adapt procedures for current machine"""
         procedures_dir = self.system_knowledge_dir / "procedures"
-        if not procedures_dir.exists():
+        procedures_dir_exists = await asyncio.to_thread(procedures_dir.exists)
+        if not procedures_dir_exists:
             return
 
         machine_procedures_dir = self._get_machine_knowledge_dir() / "procedures"
-        machine_procedures_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(machine_procedures_dir.mkdir, parents=True, exist_ok=True)
 
         # Simply copy procedures for now - future enhancement could adapt commands
-        for yaml_file in procedures_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             machine_file = machine_procedures_dir / yaml_file.name
-            shutil.copy2(yaml_file, machine_file)
+            await asyncio.to_thread(shutil.copy2, yaml_file, machine_file)
 
     async def _import_machine_specific_knowledge(self):
         """Import machine-specific knowledge into knowledge base"""
         machine_dir = self._get_machine_knowledge_dir()
 
-        if not machine_dir.exists():
+        machine_dir_exists = await asyncio.to_thread(machine_dir.exists)
+        if not machine_dir_exists:
             logger.warning(
                 f"Machine-specific knowledge directory not found: {machine_dir}"
             )
@@ -476,11 +488,14 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         """List all known machine profiles"""
         machines = []
 
-        if self.machine_profiles_dir.exists():
-            for profile_file in self.machine_profiles_dir.glob("*.json"):
+        profiles_dir_exists = await asyncio.to_thread(self.machine_profiles_dir.exists)
+        if profiles_dir_exists:
+            profile_files = await asyncio.to_thread(list, self.machine_profiles_dir.glob("*.json"))
+            for profile_file in profile_files:
                 try:
-                    with open(profile_file, "r") as f:
-                        profile_data = json.load(f)
+                    async with aiofiles.open(profile_file, "r") as f:
+                        content = await f.read()
+                        profile_data = json.loads(content)
                     machines.append(profile_data)
                 except Exception as e:
                     logger.warning(f"Error loading profile {profile_file}: {e}")
@@ -619,7 +634,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         """Save man page as machine-specific knowledge YAML"""
         machine_dir = self._get_machine_knowledge_dir()
         man_knowledge_dir = machine_dir / "man_pages"
-        man_knowledge_dir.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(man_knowledge_dir.mkdir, parents=True, exist_ok=True)
 
         # Convert to AutoBot knowledge format
         knowledge_data = integrator.convert_to_knowledge_yaml(man_info)
@@ -640,8 +655,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Save as YAML
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
-        with open(yaml_file, "w") as f:
-            yaml.dump(knowledge_data, f, default_flow_style=False, indent=2)
+        async with aiofiles.open(yaml_file, "w") as f:
+            await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
 
         logger.debug(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
 
@@ -663,8 +678,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             ),
         }
 
-        with open(summary_file, "w") as f:
-            json.dump(summary_data, f, indent=2)
+        async with aiofiles.open(summary_file, "w") as f:
+            await f.write(json.dumps(summary_data, indent=2))
 
         logger.info(f"Saved man page integration summary to {summary_file}")
 
@@ -673,20 +688,23 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_dir = self._get_machine_knowledge_dir()
         summary_file = machine_dir / "man_page_integration_summary.json"
 
-        if not summary_file.exists():
+        summary_exists = await asyncio.to_thread(summary_file.exists)
+        if not summary_exists:
             return {
                 "status": "not_integrated",
                 "message": "Man pages not yet integrated",
             }
 
         try:
-            with open(summary_file, "r") as f:
-                summary = json.load(f)
+            async with aiofiles.open(summary_file, "r") as f:
+                content = await f.read()
+                summary = json.loads(content)
 
             # Add current file counts
             man_pages_dir = machine_dir / "man_pages"
-            if man_pages_dir.exists():
-                yaml_files = list(man_pages_dir.glob("*.yaml"))
+            man_pages_exists = await asyncio.to_thread(man_pages_dir.exists)
+            if man_pages_exists:
+                yaml_files = await asyncio.to_thread(list, man_pages_dir.glob("*.yaml"))
                 summary["current_man_page_files"] = len(yaml_files)
                 summary["available_commands"] = [f.stem for f in yaml_files]
             else:
@@ -706,15 +724,18 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_dir = self._get_machine_knowledge_dir()
         man_pages_dir = machine_dir / "man_pages"
 
-        if not man_pages_dir.exists():
+        man_pages_exists = await asyncio.to_thread(man_pages_dir.exists)
+        if not man_pages_exists:
             return []
 
         results = []
 
-        for yaml_file in man_pages_dir.glob("*.yaml"):
+        yaml_files = await asyncio.to_thread(list, man_pages_dir.glob("*.yaml"))
+        for yaml_file in yaml_files:
             try:
-                with open(yaml_file, "r") as f:
-                    knowledge_data = yaml.safe_load(f)
+                async with aiofiles.open(yaml_file, "r") as f:
+                    content = await f.read()
+                    knowledge_data = yaml.safe_load(content)
 
                 # Search in tool data
                 for tool in knowledge_data.get("tools", []):
