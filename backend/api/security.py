@@ -8,6 +8,7 @@ Security API endpoints for command approval and audit
 import logging
 from typing import List
 
+import aiofiles
 from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Request
@@ -174,8 +175,8 @@ async def get_audit_log(request: Request, limit: int = 100):
         # Read audit log file
         audit_entries = []
         try:
-            with open(security_layer.audit_log_file, "r") as f:
-                lines = f.readlines()
+            async with aiofiles.open(security_layer.audit_log_file, "r") as f:
+                lines = await f.readlines()
 
             # Parse JSON entries
             import json

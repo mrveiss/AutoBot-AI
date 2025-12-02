@@ -225,7 +225,7 @@ class SmartCancellationHandler:
             try:
                 await self.monitor_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Cancellation monitor task stopped")
 
 
 # Global cancellation handler
@@ -286,7 +286,7 @@ async def _execute_async_with_cancellation(
             try:
                 await operation_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Operation task cancelled via token")
             token.raise_if_cancelled()
 
         # Brief sleep to allow operation to progress

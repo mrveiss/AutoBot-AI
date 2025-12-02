@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import aiofiles
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -553,8 +554,8 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
 async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata:
     """Analyze a Python file for functions, classes, and potential issues"""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
 
         tree = ast.parse(content)
 

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import aiofiles
 import yaml
 
 from src.intelligence.os_detector import get_os_detector
@@ -404,8 +405,9 @@ class ManPageKnowledgeIntegrator:
             return None
 
         try:
-            with open(cache_file, "r") as f:
-                data = json.load(f)
+            async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+                data = json.loads(content)
 
             return ManPageInfo(
                 command=data["command"],

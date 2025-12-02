@@ -386,8 +386,8 @@ class ResearchBrowserSession:
             # Clean up MHTML files
             for mhtml_file in self.mhtml_files:
                 try:
-                    if os.path.exists(mhtml_file):
-                        os.remove(mhtml_file)
+                    if await asyncio.to_thread(os.path.exists, mhtml_file):
+                        await asyncio.to_thread(os.remove, mhtml_file)
                 except Exception as e:
                     logger.warning(f"Failed to clean up MHTML file {mhtml_file}: {e}")
 

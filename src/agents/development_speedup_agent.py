@@ -223,8 +223,8 @@ class DevelopmentSpeedupAgent:
                                 function_hashes[func_hash].append(
                                     (file_path, node.lineno, func_source, node.name)
                                 )
-                except SyntaxError:
-                    pass  # Skip files with syntax errors
+                except SyntaxError as e:
+                    self.logger.debug("Skipping file with syntax error: %s", e)
 
             except Exception as e:
                 self.logger.error(f"Error analyzing {file_path}: {e}")
@@ -534,28 +534,31 @@ class DevelopmentSpeedupAgent:
         self, root_path: str, extensions: List[str]
     ) -> List[str]:
         """Get all files with specified extensions"""
-        files = []
-        for root, dirs, filenames in os.walk(root_path):
-            # Skip common ignore directories
-            dirs[:] = [
-                d
-                for d in dirs
-                if not d.startswith(".")
-                and d
-                not in {
-                    "node_modules",
-                    "__pycache__",
-                    ".git",
-                    "dist",
-                    "build",
-                    "target",
-                }
-            ]
+        def _walk_files():
+            files = []
+            for root, dirs, filenames in os.walk(root_path):
+                # Skip common ignore directories
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not d.startswith(".")
+                    and d
+                    not in {
+                        "node_modules",
+                        "__pycache__",
+                        ".git",
+                        "dist",
+                        "build",
+                        "target",
+                    }
+                ]
 
-            for filename in filenames:
-                if any(filename.endswith(ext) for ext in extensions):
-                    files.append(os.path.join(root, filename))
-        return files
+                for filename in filenames:
+                    if any(filename.endswith(ext) for ext in extensions):
+                        files.append(os.path.join(root, filename))
+            return files
+
+        return await asyncio.to_thread(_walk_files)
 
     def _normalize_code(self, code: str) -> str:
         """Normalize code for comparison by removing comments and extra whitespace"""

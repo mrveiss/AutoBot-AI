@@ -66,7 +66,7 @@ class ClassificationAgent(StandardizedAgent):
                 )
         except RuntimeError:
             # Event loop not available yet, will initialize later
-            pass
+            logger.debug("Event loop not available, will initialize communication later")
 
         # Initialize classification prompt
         self._initialize_classification_prompt()

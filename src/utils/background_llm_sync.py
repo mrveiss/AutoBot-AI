@@ -237,7 +237,7 @@ class BackgroundLLMSync:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                logger.debug("LLM sync task cancelled during shutdown")
 
         logger.info("✅ Background LLM sync stopped")
 

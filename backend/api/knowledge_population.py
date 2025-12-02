@@ -23,6 +23,7 @@ import re
 import subprocess
 from pathlib import Path as PathLib
 
+import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Request
 
 from backend.knowledge_factory import get_or_create_knowledge_base
@@ -654,8 +655,8 @@ async def populate_autobot_docs(request: dict, req: Request):
 
             if file_path.exists() and file_path.is_file():
                 # Read file content
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
 
                 if content.strip():
                     # Extract category from path

@@ -191,7 +191,7 @@ class VNCServerManager:
 
     async def _start_novnc(
         self, vnc_port: int, novnc_port: int
-    ) -> Optional[subprocess.Popen]:
+    ) -> Optional[asyncio.subprocess.Process]:
         """Start NoVNC web proxy"""
         try:
             # Try to find websockify
@@ -220,8 +220,10 @@ class VNCServerManager:
                 f"localhost:{vnc_port}",
             ]
 
-            novnc_process = subprocess.Popen(
-                novnc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            novnc_process = await asyncio.create_subprocess_exec(
+                *novnc_command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
 
             logger.info(f"NoVNC started on port {novnc_port}")

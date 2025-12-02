@@ -271,13 +271,13 @@ async def revert_prompt(prompt_id: str):
         default_file_path = os.path.join(
             prompts_dir, "default", prompt_id.replace("_", "/")
         )
-        if os.path.exists(default_file_path):
+        if await asyncio.to_thread(os.path.exists, default_file_path):
             # PERFORMANCE FIX: Convert to async file I/O
             async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
                 default_content = await f.read()
             # Save the default content to the custom prompt location
             custom_file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
-            os.makedirs(os.path.dirname(custom_file_path), exist_ok=True)
+            await asyncio.to_thread(os.makedirs, os.path.dirname(custom_file_path), exist_ok=True)
             async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
                 await f.write(default_content)
             logger.info(f"Reverted prompt {prompt_id} to default")

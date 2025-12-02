@@ -136,7 +136,7 @@ class NPUWorkerManager:
             try:
                 await self._health_check_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Health check task cancelled")
 
         # Close all worker clients
         for client in self._worker_clients.values():

@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Set
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config as global_config_manager
 
+logger = logging.getLogger(__name__)
+
 # Import communication protocol
 try:
     from src.protocols.agent_communication import get_communication_manager
@@ -56,10 +58,8 @@ try:
     from .npu_code_search_agent import get_npu_code_search
 
     DISTRIBUTED_AGENTS_AVAILABLE = True
-except ImportError:
-    pass
-
-logger = logging.getLogger(__name__)
+except ImportError as e:
+    logger.debug("Distributed agents not available: %s", e)
 
 
 class AgentType(Enum):

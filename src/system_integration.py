@@ -347,8 +347,8 @@ class SystemIntegration:
                     or (not process_name and not pid)
                 ):
                     processes_info.append(pinfo)
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+                logger.debug("Process access error: %s", e)
 
         if not processes_info and (process_name or pid):
             return {

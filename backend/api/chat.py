@@ -847,10 +847,10 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
                                 streaming_groups.append(current_group)
                             current_group = []
                     last_streaming_ts = current_ts
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
                 # Timestamp parsing failed - continue grouping without time-based breaks
                 # This is intentional: malformed timestamps should not break message grouping
-                pass
+                logger.debug("Timestamp parsing failed during message grouping: %s", e)
             current_group.append(msg)
         else:
             # Non-streaming message - finalize current streaming group

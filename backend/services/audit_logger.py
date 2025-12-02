@@ -330,7 +330,7 @@ class AuditLogger:
                 if self._batch_queue:
                     await self._flush_batch()
         except asyncio.CancelledError:
-            pass
+            logger.debug("Task cancelled")
         except Exception as e:
             logger.error(f"Batch timer error: {e}")
 
@@ -884,7 +884,7 @@ class AuditLogger:
             try:
                 await self._batch_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Batch task cancelled during shutdown")
 
         logger.info(
             f"Audit logger shutdown complete: {self._total_logged} entries logged, {self._total_failed} failed"

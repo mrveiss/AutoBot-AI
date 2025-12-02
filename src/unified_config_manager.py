@@ -1459,7 +1459,7 @@ class UnifiedConfigManager:
             try:
                 await self._file_watchers[config_type]
             except asyncio.CancelledError:
-                pass
+                logger.debug("File watcher for %s cancelled", config_type)
 
             del self._file_watchers[config_type]
             logger.info(f"Stopped file watcher for {config_type} config")

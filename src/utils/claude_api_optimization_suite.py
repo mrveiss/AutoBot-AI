@@ -21,6 +21,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
@@ -812,8 +813,8 @@ class ClaudeAPIOptimizationSuite:
         try:
             report = await self.get_comprehensive_report()
 
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(report, f, indent=2, default=str)
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(report, indent=2, default=str))
 
             logger.info(f"Optimization report exported to {file_path}")
             return True

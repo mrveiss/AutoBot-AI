@@ -14,6 +14,8 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+import aiofiles
+
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -749,7 +751,10 @@ class MCPManualService:
                 # Search files in directory using direct filesystem access
                 try:
                     files = []
-                    for root, dirs, filenames in os.walk(source["name"]):
+                    walk_results = await asyncio.to_thread(
+                        lambda: list(os.walk(source["name"]))
+                    )
+                    for root, dirs, filenames in walk_results:
                         # Limit depth to avoid excessive scanning
                         if root.count(os.sep) - source["name"].count(os.sep) > 2:
                             continue
@@ -769,10 +774,14 @@ class MCPManualService:
 
             elif source["type"] in ["autobot_docs", "readme"] and self.mcp_available:
                 # Search specific AutoBot documentation
-                if os.path.isdir(source["name"]):
+                is_dir = await asyncio.to_thread(os.path.isdir, source["name"])
+                if is_dir:
                     # If it's a directory, search recursively
                     try:
-                        for root, dirs, filenames in os.walk(source["name"]):
+                        walk_results = await asyncio.to_thread(
+                            lambda: list(os.walk(source["name"]))
+                        )
+                        for root, dirs, filenames in walk_results:
                             for filename in filenames:
                                 file_path = os.path.join(root, filename)
                                 if self._is_documentation_file(file_path):
@@ -847,10 +856,14 @@ class MCPManualService:
 
         try:
             # Read file content directly
-            if os.path.exists(file_path) and os.path.isfile(file_path):
+            file_exists = await asyncio.to_thread(os.path.exists, file_path)
+            is_file = await asyncio.to_thread(os.path.isfile, file_path)
+            if file_exists and is_file:
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                    async with aiofiles.open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as f:
+                        content = await f.read()
 
                     if content:
                         # Search for query in content
@@ -860,10 +873,10 @@ class MCPManualService:
                 except UnicodeDecodeError:
                     # Try with different encoding for binary files
                     try:
-                        with open(
+                        async with aiofiles.open(
                             file_path, "r", encoding="latin-1", errors="ignore"
                         ) as f:
-                            content = f.read()
+                            content = await f.read()
                         if content:
                             matches = self._find_query_matches(
                                 query, content, file_path

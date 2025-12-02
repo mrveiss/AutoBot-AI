@@ -214,8 +214,8 @@ class BackgroundVectorizer:
                                             "vectorized_at": datetime.now().isoformat(),
                                         },
                                     )
-                                except Exception:
-                                    pass  # Best effort, non-critical
+                                except Exception as e:
+                                    logger.debug("Status update failed (non-critical): %s", e)
                             else:
                                 failed_count += 1
                                 logger.error(

@@ -623,7 +623,7 @@ class FileMonitor:
             try:
                 await self._monitor_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Monitor task cancelled")
 
         self.state = MonitoringState.STOPPED
         logger.info("File monitoring stopped")
@@ -638,6 +638,7 @@ class FileMonitor:
                     break
                 await self._check_for_changes()
             except asyncio.CancelledError:
+                logger.debug("Monitor loop cancelled")
                 break
             except Exception as e:
                 logger.error(f"Monitor loop error: {e}")
@@ -665,8 +666,8 @@ class FileMonitor:
                         content_hash=content_hash,
                         last_modified=datetime.fromtimestamp(stat.st_mtime),
                     )
-                except Exception:
-                    pass  # File read/hash error, skip file
+                except Exception as e:
+                    logger.debug("File read/hash error, skipping %s: %s", py_file, e)
 
     async def _check_for_changes(self):
         """Check for file changes."""
@@ -703,8 +704,8 @@ class FileMonitor:
                         self.file_states[file_path].content_hash = content_hash
                         self.file_states[file_path].last_modified = modified
 
-                except Exception:
-                    pass  # File read/hash error, skip file
+                except Exception as e:
+                    logger.debug("File read/hash error, skipping %s: %s", file_path, e)
 
         # Check for deleted files
         current_files = set()
@@ -839,14 +840,14 @@ class ContinuousLearningEngine:
             try:
                 await self._processing_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Processing task cancelled during shutdown")
 
         if self._insight_task:
             self._insight_task.cancel()
             try:
                 await self._insight_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Insight task cancelled during shutdown")
 
         return {"status": "stopped"}
 

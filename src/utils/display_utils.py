@@ -180,8 +180,8 @@ class DisplayDetector:
                 width = int(os.environ["DISPLAY_WIDTH"])
                 height = int(os.environ["DISPLAY_HEIGHT"])
                 return (width, height)
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("Invalid DISPLAY_WIDTH/HEIGHT values: %s", e)
 
         # Check for common VNC variables
         if "VNC_RESOLUTION" in os.environ:
@@ -190,8 +190,8 @@ class DisplayDetector:
                 if "x" in resolution:
                     width, height = resolution.split("x")
                     return (int(width), int(height))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("Invalid VNC_RESOLUTION format: %s", e)
 
         return None
 

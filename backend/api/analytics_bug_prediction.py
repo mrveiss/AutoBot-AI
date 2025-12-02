@@ -465,8 +465,8 @@ async def analyze_codebase(
             root = Path(path)
             if root.is_dir():
                 files_to_analyze = list(root.rglob(include_pattern))[:limit]
-        except Exception:
-            pass  # Path traversal error, files_to_analyze remains empty
+        except Exception as e:
+            logger.debug("Path traversal error: %s", e)
 
         if not files_to_analyze:
             # Return demo data if no files found

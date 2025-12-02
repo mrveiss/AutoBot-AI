@@ -460,7 +460,7 @@ class TemporalKnowledgeManager:
             try:
                 await self.background_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Temporal background task cancelled during shutdown")
 
         logger.info("Temporal background processing stopped")
 

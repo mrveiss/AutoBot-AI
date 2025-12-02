@@ -7,12 +7,15 @@ LLM Self-Awareness Module
 Provides context injection for LLM agents to be aware of current system state, capabilities, and phase
 """
 
+import asyncio
 import json
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import aiofiles
 
 from src.enhanced_project_state_tracker import get_state_tracker
 from src.phase_progression_manager import get_progression_manager
@@ -513,8 +516,8 @@ You should be aware of your current capabilities and limitations based on the sy
         }
 
         # Write to file
-        with open(output_path, "w") as f:
-            json.dump(export_data, f, indent=2, default=str)
+        async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(export_data, indent=2, default=str))
 
         logger.info(f"System awareness data exported to {output_path}")
         return output_path

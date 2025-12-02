@@ -359,7 +359,7 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
                     parsed["timestamp"] = json_data["timestamp"]
             except json.JSONDecodeError:
                 # JSON parsing failed - message is plain text, not JSON
-                pass  # Intentional: log message is not JSON format, continue with plain text
+                logger.debug("Log line is plain text, not JSON format")
 
     except Exception as e:
         logger.debug(f"Failed to parse Docker log line: {e}")

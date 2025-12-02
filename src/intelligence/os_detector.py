@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional, Set, Tuple
 
+import aiofiles
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +100,7 @@ class OSDetector:
         architecture = platform.machine()
         user = os.getenv("USER", os.getenv("USERNAME", "unknown"))
         is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
-        is_wsl = self._detect_wsl()
+        is_wsl = await self._detect_wsl()
 
         # Detect package manager
         package_manager = await self._detect_package_manager(os_type, distro)
@@ -148,9 +150,12 @@ class OSDetector:
         """Detect Linux distribution."""
         try:
             # Try /etc/os-release first
-            if os.path.exists("/etc/os-release"):
-                with open("/etc/os-release", "r") as f:
-                    content = f.read().lower()
+            os_release_exists = await asyncio.to_thread(
+                os.path.exists, "/etc/os-release"
+            )
+            if os_release_exists:
+                async with aiofiles.open("/etc/os-release", "r") as f:
+                    content = (await f.read()).lower()
 
                     if "ubuntu" in content:
                         return LinuxDistro.UBUNTU
@@ -170,13 +175,28 @@ class OSDetector:
                         return LinuxDistro.KALI
 
             # Fallback to other methods
-            if os.path.exists("/etc/debian_version"):
+            debian_exists = await asyncio.to_thread(
+                os.path.exists, "/etc/debian_version"
+            )
+            if debian_exists:
                 return LinuxDistro.DEBIAN
-            elif os.path.exists("/etc/fedora-release"):
+
+            fedora_exists = await asyncio.to_thread(
+                os.path.exists, "/etc/fedora-release"
+            )
+            if fedora_exists:
                 return LinuxDistro.FEDORA
-            elif os.path.exists("/etc/centos-release"):
+
+            centos_exists = await asyncio.to_thread(
+                os.path.exists, "/etc/centos-release"
+            )
+            if centos_exists:
                 return LinuxDistro.CENTOS
-            elif os.path.exists("/etc/arch-release"):
+
+            arch_exists = await asyncio.to_thread(
+                os.path.exists, "/etc/arch-release"
+            )
+            if arch_exists:
                 return LinuxDistro.ARCH
 
         except Exception as e:
@@ -184,12 +204,15 @@ class OSDetector:
 
         return LinuxDistro.UNKNOWN
 
-    def _detect_wsl(self) -> bool:
+    async def _detect_wsl(self) -> bool:
         """Detect if running in Windows Subsystem for Linux."""
         try:
-            if os.path.exists("/proc/version"):
-                with open("/proc/version", "r") as f:
-                    content = f.read().lower()
+            proc_version_exists = await asyncio.to_thread(
+                os.path.exists, "/proc/version"
+            )
+            if proc_version_exists:
+                async with aiofiles.open("/proc/version", "r") as f:
+                    content = (await f.read()).lower()
                     return "microsoft" in content or "wsl" in content
         except Exception:
             pass  # File read error, assume not WSL

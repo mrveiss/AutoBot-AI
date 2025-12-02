@@ -567,7 +567,7 @@ async def execute_http_request(
                 try:
                     json_response = json.loads(body)
                 except json.JSONDecodeError:
-                    pass  # Keep as text
+                    logger.debug("Response body is not JSON, keeping as text")
 
             return {
                 "success": True,

@@ -548,7 +548,7 @@ class NPULoadBalancer:
             try:
                 await self._health_monitor_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Health monitor task cancelled")
             self._health_monitor_task = None
         logger.info("Stopped NPU worker health monitoring")
 

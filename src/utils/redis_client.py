@@ -1343,7 +1343,7 @@ class RedisConnectionManager:
             try:
                 await self._cleanup_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Redis cleanup task cancelled during shutdown")
 
         # Close async pools
         for pool in self._async_pools.values():

@@ -100,8 +100,8 @@ class JSONFormatterAgent:
                     confidence=1.0,
                     warnings=[],
                 )
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug("Direct JSON parse failed, trying extraction: %s", e)
 
         # Strategy 2: Extract JSON from mixed content
         json_result = self._extract_json_from_text(response)
@@ -346,8 +346,8 @@ class JSONFormatterAgent:
                         )
                         fallback[field] = typed_value
                         warnings.append(f"Extracted {field} from text")
-                    except Exception:
-                        pass  # Type conversion failed, skip field
+                    except Exception as e:
+                        logger.debug("Type conversion failed for field %s: %s", field, e)
         else:
             # Create minimal JSON
             fallback = {"error": "failed_to_parse", "original_text": text[:100]}
