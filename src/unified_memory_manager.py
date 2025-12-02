@@ -272,96 +272,104 @@ class TaskStorage:
 
     async def initialize(self):
         """Initialize task execution history table"""
-        async with self._get_connection() as conn:
-            await conn.execute(
+        try:
+            async with self._get_connection() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS task_execution_history (
+                        task_id TEXT PRIMARY KEY,
+                        task_name TEXT NOT NULL,
+                        description TEXT,
+                        status TEXT NOT NULL,
+                        priority TEXT NOT NULL,
+                        created_at TIMESTAMP NOT NULL,
+                        started_at TIMESTAMP,
+                        completed_at TIMESTAMP,
+                        duration_seconds REAL,
+                        agent_type TEXT,
+                        inputs_json TEXT,
+                        outputs_json TEXT,
+                        error_message TEXT,
+                        retry_count INTEGER DEFAULT 0,
+                        markdown_references_json TEXT,
+                        parent_task_id TEXT,
+                        subtask_ids_json TEXT,
+                        metadata_json TEXT
+                    )
                 """
-                CREATE TABLE IF NOT EXISTS task_execution_history (
-                    task_id TEXT PRIMARY KEY,
-                    task_name TEXT NOT NULL,
-                    description TEXT,
-                    status TEXT NOT NULL,
-                    priority TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    started_at TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    duration_seconds REAL,
-                    agent_type TEXT,
-                    inputs_json TEXT,
-                    outputs_json TEXT,
-                    error_message TEXT,
-                    retry_count INTEGER DEFAULT 0,
-                    markdown_references_json TEXT,
-                    parent_task_id TEXT,
-                    subtask_ids_json TEXT,
-                    metadata_json TEXT
                 )
-            """
-            )
 
-            # Indexes for common queries
-            await conn.execute(
+                # Indexes for common queries
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_task_status
+                    ON task_execution_history(status)
                 """
-                CREATE INDEX IF NOT EXISTS idx_task_status
-                ON task_execution_history(status)
-            """
-            )
-            await conn.execute(
+                )
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_task_created
+                    ON task_execution_history(created_at)
                 """
-                CREATE INDEX IF NOT EXISTS idx_task_created
-                ON task_execution_history(created_at)
-            """
-            )
-            await conn.execute(
+                )
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_task_agent
+                    ON task_execution_history(agent_type)
                 """
-                CREATE INDEX IF NOT EXISTS idx_task_agent
-                ON task_execution_history(agent_type)
-            """
-            )
+                )
 
-            await conn.commit()
+                await conn.commit()
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to initialize task storage: {e}")
+            raise RuntimeError(f"Task storage initialization failed: {e}")
 
     async def log_task(self, record: TaskExecutionRecord) -> str:
         """Log task execution record"""
-        async with self._get_connection() as conn:
-            await conn.execute(
-                """
-                INSERT OR REPLACE INTO task_execution_history (
-                    task_id, task_name, description, status, priority,
-                    created_at, started_at, completed_at, duration_seconds,
-                    agent_type, inputs_json, outputs_json, error_message,
-                    retry_count, markdown_references_json, parent_task_id,
-                    subtask_ids_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    record.task_id,
-                    record.task_name,
-                    record.description,
-                    record.status.value,
-                    record.priority.value,
-                    record.created_at,
-                    record.started_at,
-                    record.completed_at,
-                    record.duration_seconds,
-                    record.agent_type,
-                    json.dumps(record.inputs) if record.inputs else None,
-                    json.dumps(record.outputs) if record.outputs else None,
-                    record.error_message,
-                    record.retry_count,
+        try:
+            async with self._get_connection() as conn:
+                await conn.execute(
+                    """
+                    INSERT OR REPLACE INTO task_execution_history (
+                        task_id, task_name, description, status, priority,
+                        created_at, started_at, completed_at, duration_seconds,
+                        agent_type, inputs_json, outputs_json, error_message,
+                        retry_count, markdown_references_json, parent_task_id,
+                        subtask_ids_json, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                     (
-                        json.dumps(record.markdown_references)
-                        if record.markdown_references
-                        else None
+                        record.task_id,
+                        record.task_name,
+                        record.description,
+                        record.status.value,
+                        record.priority.value,
+                        record.created_at,
+                        record.started_at,
+                        record.completed_at,
+                        record.duration_seconds,
+                        record.agent_type,
+                        json.dumps(record.inputs) if record.inputs else None,
+                        json.dumps(record.outputs) if record.outputs else None,
+                        record.error_message,
+                        record.retry_count,
+                        (
+                            json.dumps(record.markdown_references)
+                            if record.markdown_references
+                            else None
+                        ),
+                        record.parent_task_id,
+                        json.dumps(record.subtask_ids) if record.subtask_ids else None,
+                        json.dumps(record.metadata) if record.metadata else None,
                     ),
-                    record.parent_task_id,
-                    json.dumps(record.subtask_ids) if record.subtask_ids else None,
-                    json.dumps(record.metadata) if record.metadata else None,
-                ),
-            )
-            await conn.commit()
+                )
+                await conn.commit()
 
-        logger.debug(f"Logged task: {record.task_id} ({record.status.value})")
-        return record.task_id
+            logger.debug(f"Logged task: {record.task_id} ({record.status.value})")
+            return record.task_id
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to log task {record.task_id}: {e}")
+            raise RuntimeError(f"Failed to log task: {e}")
 
     async def update_task(self, task_id: str, **updates) -> bool:
         """Update task fields dynamically"""
@@ -406,24 +414,32 @@ class TaskStorage:
         query = f"UPDATE task_execution_history SET {', '.join(set_clauses)} WHERE task_id = ?"
         values.append(task_id)
 
-        async with self._get_connection() as conn:
-            cursor = await conn.execute(query, values)
-            await conn.commit()
-            return cursor.rowcount > 0
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(query, values)
+                await conn.commit()
+                return cursor.rowcount > 0
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to update task {task_id}: {e}")
+            raise RuntimeError(f"Failed to update task: {e}")
 
     async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
         """Retrieve single task by ID"""
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(
-                "SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,)
-            )
-            row = await cursor.fetchone()
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    "SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,)
+                )
+                row = await cursor.fetchone()
 
-            if not row:
-                return None
+                if not row:
+                    return None
 
-            return self._row_to_record(row)
+                return self._row_to_record(row)
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get task {task_id}: {e}")
+            raise RuntimeError(f"Failed to get task: {e}")
 
     async def get_task_history(
         self, filters: Dict[str, Any]
@@ -467,45 +483,55 @@ class TaskStorage:
         """
         values.append(limit)
 
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(query, values)
-            rows = await cursor.fetchall()
-            return [self._row_to_record(row) for row in rows]
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(query, values)
+                rows = await cursor.fetchall()
+                return [self._row_to_record(row) for row in rows]
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get task history: {e}")
+            raise RuntimeError(f"Failed to get task history: {e}")
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get task storage statistics"""
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            # Total tasks
-            cursor = await conn.execute("SELECT COUNT(*) FROM task_execution_history")
-            total = (await cursor.fetchone())[0]
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                # Total tasks
+                cursor = await conn.execute(
+                    "SELECT COUNT(*) FROM task_execution_history"
+                )
+                total = (await cursor.fetchone())[0]
 
-            # Tasks by status
-            cursor = await conn.execute(
+                # Tasks by status
+                cursor = await conn.execute(
+                    """
+                    SELECT status, COUNT(*)
+                    FROM task_execution_history
+                    GROUP BY status
                 """
-                SELECT status, COUNT(*)
-                FROM task_execution_history
-                GROUP BY status
-            """
-            )
-            by_status = {row[0]: row[1] for row in await cursor.fetchall()}
+                )
+                by_status = {row[0]: row[1] for row in await cursor.fetchall()}
 
-            # Tasks by priority
-            cursor = await conn.execute(
+                # Tasks by priority
+                cursor = await conn.execute(
+                    """
+                    SELECT priority, COUNT(*)
+                    FROM task_execution_history
+                    GROUP BY priority
                 """
-                SELECT priority, COUNT(*)
-                FROM task_execution_history
-                GROUP BY priority
-            """
-            )
-            by_priority = {row[0]: row[1] for row in await cursor.fetchall()}
+                )
+                by_priority = {row[0]: row[1] for row in await cursor.fetchall()}
 
-            return {
-                "total_tasks": total,
-                "by_status": by_status,
-                "by_priority": by_priority,
-            }
+                return {
+                    "total_tasks": total,
+                    "by_status": by_status,
+                    "by_priority": by_priority,
+                }
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get task stats: {e}")
+            raise RuntimeError(f"Failed to get task stats: {e}")
 
     def _row_to_record(self, row: aiosqlite.Row) -> TaskExecutionRecord:
         """Convert database row to TaskExecutionRecord"""
@@ -566,36 +592,40 @@ class GeneralStorage:
 
     async def initialize(self):
         """Initialize memory entries table"""
-        async with self._get_connection() as conn:
-            await conn.execute(
+        try:
+            async with self._get_connection() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS memory_entries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        category TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        metadata_json TEXT,
+                        timestamp TIMESTAMP NOT NULL,
+                        reference_path TEXT,
+                        embedding BLOB
+                    )
                 """
-                CREATE TABLE IF NOT EXISTS memory_entries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    metadata_json TEXT,
-                    timestamp TIMESTAMP NOT NULL,
-                    reference_path TEXT,
-                    embedding BLOB
                 )
-            """
-            )
 
-            # Indexes for common queries
-            await conn.execute(
+                # Indexes for common queries
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_memory_category
+                    ON memory_entries(category)
                 """
-                CREATE INDEX IF NOT EXISTS idx_memory_category
-                ON memory_entries(category)
-            """
-            )
-            await conn.execute(
+                )
+                await conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_memory_timestamp
+                    ON memory_entries(timestamp)
                 """
-                CREATE INDEX IF NOT EXISTS idx_memory_timestamp
-                ON memory_entries(timestamp)
-            """
-            )
+                )
 
-            await conn.commit()
+                await conn.commit()
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to initialize general storage: {e}")
+            raise RuntimeError(f"General storage initialization failed: {e}")
 
     async def store(self, entry: MemoryEntry) -> int:
         """Store memory entry"""
@@ -605,29 +635,33 @@ class GeneralStorage:
             else entry.category
         )
 
-        async with self._get_connection() as conn:
-            cursor = await conn.execute(
-                """
-                INSERT INTO memory_entries (
-                    category, content, metadata_json, timestamp,
-                    reference_path, embedding
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    category_value,
-                    entry.content,
-                    json.dumps(entry.metadata) if entry.metadata else None,
-                    entry.timestamp,
-                    entry.reference_path,
-                    entry.embedding,
-                ),
-            )
-            await conn.commit()
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    """
+                    INSERT INTO memory_entries (
+                        category, content, metadata_json, timestamp,
+                        reference_path, embedding
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        category_value,
+                        entry.content,
+                        json.dumps(entry.metadata) if entry.metadata else None,
+                        entry.timestamp,
+                        entry.reference_path,
+                        entry.embedding,
+                    ),
+                )
+                await conn.commit()
 
-            logger.debug(
-                f"Stored memory entry: {category_value} (ID: {cursor.lastrowid})"
-            )
-            return cursor.lastrowid
+                logger.debug(
+                    f"Stored memory entry: {category_value} (ID: {cursor.lastrowid})"
+                )
+                return cursor.lastrowid
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to store memory entry: {e}")
+            raise RuntimeError(f"Failed to store memory entry: {e}")
 
     async def retrieve(
         self, category: Union[MemoryCategory, str], filters: Dict[str, Any]
@@ -662,66 +696,82 @@ class GeneralStorage:
         """
         values.append(limit)
 
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(query, values)
-            rows = await cursor.fetchall()
-            return [self._row_to_entry(row) for row in rows]
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(query, values)
+                rows = await cursor.fetchall()
+                return [self._row_to_entry(row) for row in rows]
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to retrieve memory entries: {e}")
+            raise RuntimeError(f"Failed to retrieve memory entries: {e}")
 
     async def search(self, query: str) -> List[MemoryEntry]:
         """Search memories by content or metadata"""
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(
-                """
-                SELECT * FROM memory_entries
-                WHERE content LIKE ? OR metadata_json LIKE ?
-                ORDER BY timestamp DESC
-                LIMIT 100
-            """,
-                (f"%{query}%", f"%{query}%"),
-            )
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    """
+                    SELECT * FROM memory_entries
+                    WHERE content LIKE ? OR metadata_json LIKE ?
+                    ORDER BY timestamp DESC
+                    LIMIT 100
+                """,
+                    (f"%{query}%", f"%{query}%"),
+                )
 
-            rows = await cursor.fetchall()
-            return [self._row_to_entry(row) for row in rows]
+                rows = await cursor.fetchall()
+                return [self._row_to_entry(row) for row in rows]
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to search memory entries: {e}")
+            raise RuntimeError(f"Failed to search memory entries: {e}")
 
     async def cleanup_old(self, retention_days: int) -> int:
         """Remove entries older than retention period"""
         cutoff = datetime.now() - timedelta(days=retention_days)
 
-        async with self._get_connection() as conn:
-            cursor = await conn.execute(
-                "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,)
-            )
-            await conn.commit()
-
-            deleted = cursor.rowcount
-            if deleted > 0:
-                logger.info(
-                    f"Cleaned up {deleted} old memory entries (>{retention_days} days)"
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,)
                 )
+                await conn.commit()
 
-            return deleted
+                deleted = cursor.rowcount
+                if deleted > 0:
+                    logger.info(
+                        f"Cleaned up {deleted} old memory entries (>{retention_days} days)"
+                    )
+
+                return deleted
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to cleanup old memory entries: {e}")
+            raise RuntimeError(f"Failed to cleanup old memory entries: {e}")
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics"""
-        async with self._get_connection() as conn:
-            conn.row_factory = aiosqlite.Row
-            # Total entries
-            cursor = await conn.execute("SELECT COUNT(*) FROM memory_entries")
-            total = (await cursor.fetchone())[0]
+        try:
+            async with self._get_connection() as conn:
+                conn.row_factory = aiosqlite.Row
+                # Total entries
+                cursor = await conn.execute("SELECT COUNT(*) FROM memory_entries")
+                total = (await cursor.fetchone())[0]
 
-            # Entries by category
-            cursor = await conn.execute(
+                # Entries by category
+                cursor = await conn.execute(
+                    """
+                    SELECT category, COUNT(*)
+                    FROM memory_entries
+                    GROUP BY category
                 """
-                SELECT category, COUNT(*)
-                FROM memory_entries
-                GROUP BY category
-            """
-            )
-            by_category = {row[0]: row[1] for row in await cursor.fetchall()}
+                )
+                by_category = {row[0]: row[1] for row in await cursor.fetchall()}
 
-            return {"total_entries": total, "by_category": by_category}
+                return {"total_entries": total, "by_category": by_category}
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get storage stats: {e}")
+            raise RuntimeError(f"Failed to get storage stats: {e}")
 
     def _row_to_entry(self, row: aiosqlite.Row) -> MemoryEntry:
         """Convert database row to MemoryEntry"""

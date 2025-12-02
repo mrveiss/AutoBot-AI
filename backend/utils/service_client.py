@@ -13,6 +13,7 @@ Usage:
     response = await client.post(f"{ServiceURLs.NPU_WORKER_SERVICE}/api/process", json={...})
 """
 
+import asyncio
 import time
 from typing import Dict
 
@@ -96,6 +97,10 @@ class ServiceHTTPClient:
 
         Returns:
             HTTP response object (async context manager)
+
+        Raises:
+            aiohttp.ClientError: On connection or protocol errors
+            asyncio.TimeoutError: When request times out
         """
         headers = self._sign_request("GET", url)
 
@@ -110,7 +115,24 @@ class ServiceHTTPClient:
 
         logger.debug("Service GET request", service_id=self.service_id, url=url)
 
-        return await self.http_client.get(url, **kwargs)
+        try:
+            return await self.http_client.get(url, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Service GET request failed",
+                service_id=self.service_id,
+                url=url,
+                error=str(e),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.error(
+                "Service GET request timed out",
+                service_id=self.service_id,
+                url=url,
+                timeout=self.timeout,
+            )
+            raise
 
     async def post(self, url: str, **kwargs):
         """
@@ -122,6 +144,10 @@ class ServiceHTTPClient:
 
         Returns:
             HTTP response object (async context manager)
+
+        Raises:
+            aiohttp.ClientError: On connection or protocol errors
+            asyncio.TimeoutError: When request times out
         """
         headers = self._sign_request("POST", url)
 
@@ -136,7 +162,24 @@ class ServiceHTTPClient:
 
         logger.debug("Service POST request", service_id=self.service_id, url=url)
 
-        return await self.http_client.post(url, **kwargs)
+        try:
+            return await self.http_client.post(url, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Service POST request failed",
+                service_id=self.service_id,
+                url=url,
+                error=str(e),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.error(
+                "Service POST request timed out",
+                service_id=self.service_id,
+                url=url,
+                timeout=self.timeout,
+            )
+            raise
 
     async def put(self, url: str, **kwargs):
         """
@@ -148,6 +191,10 @@ class ServiceHTTPClient:
 
         Returns:
             HTTP response object (async context manager)
+
+        Raises:
+            aiohttp.ClientError: On connection or protocol errors
+            asyncio.TimeoutError: When request times out
         """
         headers = self._sign_request("PUT", url)
 
@@ -160,7 +207,24 @@ class ServiceHTTPClient:
 
         logger.debug("Service PUT request", service_id=self.service_id, url=url)
 
-        return await self.http_client.put(url, **kwargs)
+        try:
+            return await self.http_client.put(url, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Service PUT request failed",
+                service_id=self.service_id,
+                url=url,
+                error=str(e),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.error(
+                "Service PUT request timed out",
+                service_id=self.service_id,
+                url=url,
+                timeout=self.timeout,
+            )
+            raise
 
     async def delete(self, url: str, **kwargs):
         """
@@ -172,6 +236,10 @@ class ServiceHTTPClient:
 
         Returns:
             HTTP response object (async context manager)
+
+        Raises:
+            aiohttp.ClientError: On connection or protocol errors
+            asyncio.TimeoutError: When request times out
         """
         headers = self._sign_request("DELETE", url)
 
@@ -184,7 +252,24 @@ class ServiceHTTPClient:
 
         logger.debug("Service DELETE request", service_id=self.service_id, url=url)
 
-        return await self.http_client.delete(url, **kwargs)
+        try:
+            return await self.http_client.delete(url, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Service DELETE request failed",
+                service_id=self.service_id,
+                url=url,
+                error=str(e),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.error(
+                "Service DELETE request timed out",
+                service_id=self.service_id,
+                url=url,
+                timeout=self.timeout,
+            )
+            raise
 
     async def patch(self, url: str, **kwargs):
         """
@@ -196,6 +281,10 @@ class ServiceHTTPClient:
 
         Returns:
             HTTP response object (async context manager)
+
+        Raises:
+            aiohttp.ClientError: On connection or protocol errors
+            asyncio.TimeoutError: When request times out
         """
         headers = self._sign_request("PATCH", url)
 
@@ -208,7 +297,24 @@ class ServiceHTTPClient:
 
         logger.debug("Service PATCH request", service_id=self.service_id, url=url)
 
-        return await self.http_client.patch(url, **kwargs)
+        try:
+            return await self.http_client.patch(url, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(
+                "Service PATCH request failed",
+                service_id=self.service_id,
+                url=url,
+                error=str(e),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.error(
+                "Service PATCH request timed out",
+                service_id=self.service_id,
+                url=url,
+                timeout=self.timeout,
+            )
+            raise
 
     async def close(self):
         """Close the HTTP client and cleanup resources."""
@@ -321,17 +427,29 @@ async def create_service_client(
 
     Raises:
         ValueError: If service key not found
+        redis.RedisError: On Redis connection or operation failure
     """
-    if redis_manager is None:
-        from src.utils.redis_client import get_redis_client as get_redis_manager
+    try:
+        if redis_manager is None:
+            from src.utils.redis_client import get_redis_client as get_redis_manager
 
-        redis_manager = await get_redis_manager()
+            redis_manager = await get_redis_manager()
 
-    redis = await redis_manager.main()
+        redis = await redis_manager.main()
 
-    # Get service key from Redis
-    service_key = await redis.get(f"service:key:{service_id}")
-    if not service_key:
-        raise ValueError(f"Service key not found for: {service_id}")
+        # Get service key from Redis
+        service_key = await redis.get(f"service:key:{service_id}")
+        if not service_key:
+            raise ValueError(f"Service key not found for: {service_id}")
 
-    return ServiceHTTPClient(service_id=service_id, service_key=service_key)
+        return ServiceHTTPClient(service_id=service_id, service_key=service_key)
+    except ValueError:
+        # Re-raise ValueError as-is (service key not found)
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to create service client",
+            service_id=service_id,
+            error=str(e),
+        )
+        raise RuntimeError(f"Failed to create service client for {service_id}: {e}")

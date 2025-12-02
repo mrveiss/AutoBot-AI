@@ -120,106 +120,110 @@ class AsyncEnhancedMemoryManager:
             if self._initialized:
                 return
 
-            async with aiosqlite.connect(self.db_path) as conn:
-                # Enable WAL mode for better concurrency
-                await conn.execute("PRAGMA journal_mode=WAL")
-                await conn.execute("PRAGMA synchronous=NORMAL")
-                await conn.execute("PRAGMA cache_size=10000")
-                await conn.execute("PRAGMA temp_store=MEMORY")
-                await conn.execute("PRAGMA foreign_keys=ON")
+            try:
+                async with aiosqlite.connect(self.db_path) as conn:
+                    # Enable WAL mode for better concurrency
+                    await conn.execute("PRAGMA journal_mode=WAL")
+                    await conn.execute("PRAGMA synchronous=NORMAL")
+                    await conn.execute("PRAGMA cache_size=10000")
+                    await conn.execute("PRAGMA temp_store=MEMORY")
+                    await conn.execute("PRAGMA foreign_keys=ON")
 
-                # Tasks table with enhanced schema
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS tasks (
-                        task_id TEXT PRIMARY KEY,
-                        description TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        priority INTEGER NOT NULL,
-                        created_at REAL NOT NULL,
-                        updated_at REAL NOT NULL,
-                        completed_at REAL,
-                        assigned_agent TEXT,
-                        parent_task_id TEXT,
-                        tags TEXT, -- JSON array
-                        metadata TEXT, -- JSON object
-                        execution_log TEXT, -- JSON array
-                        estimated_duration_minutes INTEGER,
-                        actual_duration_minutes INTEGER,
-                        dependencies TEXT, -- JSON array
-                        markdown_reference TEXT,
-                        FOREIGN KEY (parent_task_id) REFERENCES tasks(task_id)
+                    # Tasks table with enhanced schema
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS tasks (
+                            task_id TEXT PRIMARY KEY,
+                            description TEXT NOT NULL,
+                            status TEXT NOT NULL,
+                            priority INTEGER NOT NULL,
+                            created_at REAL NOT NULL,
+                            updated_at REAL NOT NULL,
+                            completed_at REAL,
+                            assigned_agent TEXT,
+                            parent_task_id TEXT,
+                            tags TEXT, -- JSON array
+                            metadata TEXT, -- JSON object
+                            execution_log TEXT, -- JSON array
+                            estimated_duration_minutes INTEGER,
+                            actual_duration_minutes INTEGER,
+                            dependencies TEXT, -- JSON array
+                            markdown_reference TEXT,
+                            FOREIGN KEY (parent_task_id) REFERENCES tasks(task_id)
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Execution records table
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS execution_records (
-                        record_id TEXT PRIMARY KEY,
-                        task_id TEXT NOT NULL,
-                        timestamp REAL NOT NULL,
-                        action TEXT NOT NULL,
-                        result TEXT NOT NULL,
-                        duration_ms INTEGER NOT NULL,
-                        success BOOLEAN NOT NULL,
-                        error_message TEXT,
-                        agent_context TEXT, -- JSON object
-                        FOREIGN KEY (task_id) REFERENCES tasks(task_id)
+                    # Execution records table
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS execution_records (
+                            record_id TEXT PRIMARY KEY,
+                            task_id TEXT NOT NULL,
+                            timestamp REAL NOT NULL,
+                            action TEXT NOT NULL,
+                            result TEXT NOT NULL,
+                            duration_ms INTEGER NOT NULL,
+                            success BOOLEAN NOT NULL,
+                            error_message TEXT,
+                            agent_context TEXT, -- JSON object
+                            FOREIGN KEY (task_id) REFERENCES tasks(task_id)
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Memory entries table for general storage
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS memory_entries (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        category TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        content_hash TEXT NOT NULL,
-                        metadata TEXT, -- JSON object
-                        timestamp REAL NOT NULL,
-                        embedding BLOB,
-                        reference_path TEXT,
-                        UNIQUE(category, content_hash)
+                    # Memory entries table for general storage
+                    await conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS memory_entries (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            category TEXT NOT NULL,
+                            content TEXT NOT NULL,
+                            content_hash TEXT NOT NULL,
+                            metadata TEXT, -- JSON object
+                            timestamp REAL NOT NULL,
+                            embedding BLOB,
+                            reference_path TEXT,
+                            UNIQUE(category, content_hash)
+                        )
+                        """
                     )
-                    """
-                )
 
-                # Performance indexes
-                indexes = [
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)",
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)",
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
-                    (
-                        "CREATE INDEX IF NOT EXISTS idx_execution_task "
-                        "ON execution_records(task_id)"
-                    ),
-                    (
-                        "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
-                        "ON execution_records(timestamp)"
-                    ),
-                    (
-                        "CREATE INDEX IF NOT EXISTS idx_execution_success "
-                        "ON execution_records(success)"
-                    ),
-                    "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
-                    "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
-                    "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
-                ]
+                    # Performance indexes
+                    indexes = [
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)",
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
+                        "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
+                        (
+                            "CREATE INDEX IF NOT EXISTS idx_execution_task "
+                            "ON execution_records(task_id)"
+                        ),
+                        (
+                            "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
+                            "ON execution_records(timestamp)"
+                        ),
+                        (
+                            "CREATE INDEX IF NOT EXISTS idx_execution_success "
+                            "ON execution_records(success)"
+                        ),
+                        "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
+                        "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
+                        "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
+                    ]
 
-                for index_query in indexes:
-                    await conn.execute(index_query)
+                    for index_query in indexes:
+                        await conn.execute(index_query)
 
-                await conn.commit()
+                    await conn.commit()
 
-            self._initialized = True
-            logger.info("Async enhanced memory database initialized")
+                self._initialized = True
+                logger.info("Async enhanced memory database initialized")
+            except aiosqlite.Error as e:
+                logger.error(f"Failed to initialize database: {e}")
+                raise RuntimeError(f"Database initialization failed: {e}")
 
     async def create_task(self, task: TaskEntry) -> str:
         """Create a new task with async performance"""
@@ -231,39 +235,43 @@ class AsyncEnhancedMemoryManager:
             desc_hash = hashlib.md5(task.description.encode()).hexdigest()[:8]
             task.task_id = f"task_{timestamp}_{desc_hash}"
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            await conn.execute(
-                """
-                INSERT OR REPLACE INTO tasks
-                (task_id, description, status, priority, created_at, updated_at,
-                 completed_at, assigned_agent, parent_task_id, tags, metadata,
-                 execution_log, estimated_duration_minutes, actual_duration_minutes,
-                 dependencies, markdown_reference)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    task.task_id,
-                    task.description,
-                    task.status.value,
-                    task.priority.value,
-                    task.created_at.timestamp(),
-                    task.updated_at.timestamp(),
-                    task.completed_at.timestamp() if task.completed_at else None,
-                    task.assigned_agent,
-                    task.parent_task_id,
-                    json.dumps(task.tags),
-                    json.dumps(task.metadata),
-                    json.dumps(task.execution_log),
-                    task.estimated_duration_minutes,
-                    task.actual_duration_minutes,
-                    json.dumps(task.dependencies),
-                    task.markdown_reference,
-                ),
-            )
-            await conn.commit()
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                await conn.execute(
+                    """
+                    INSERT OR REPLACE INTO tasks
+                    (task_id, description, status, priority, created_at, updated_at,
+                     completed_at, assigned_agent, parent_task_id, tags, metadata,
+                     execution_log, estimated_duration_minutes, actual_duration_minutes,
+                     dependencies, markdown_reference)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        task.task_id,
+                        task.description,
+                        task.status.value,
+                        task.priority.value,
+                        task.created_at.timestamp(),
+                        task.updated_at.timestamp(),
+                        task.completed_at.timestamp() if task.completed_at else None,
+                        task.assigned_agent,
+                        task.parent_task_id,
+                        json.dumps(task.tags),
+                        json.dumps(task.metadata),
+                        json.dumps(task.execution_log),
+                        task.estimated_duration_minutes,
+                        task.actual_duration_minutes,
+                        json.dumps(task.dependencies),
+                        task.markdown_reference,
+                    ),
+                )
+                await conn.commit()
 
-        logger.info(f"Created task: {task.task_id}")
-        return task.task_id
+            logger.info(f"Created task: {task.task_id}")
+            return task.task_id
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to create task {task.task_id}: {e}")
+            raise RuntimeError(f"Failed to create task: {e}")
 
     async def update_task_status(
         self,
@@ -274,47 +282,51 @@ class AsyncEnhancedMemoryManager:
         """Update task status with async performance"""
         await self._init_database()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            updates = {
-                "status": status.value,
-                "updated_at": datetime.now().timestamp(),
-            }
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                updates = {
+                    "status": status.value,
+                    "updated_at": datetime.now().timestamp(),
+                }
 
-            if status in [
-                TaskStatus.COMPLETED,
-                TaskStatus.FAILED,
-                TaskStatus.CANCELLED,
-            ]:
-                updates["completed_at"] = datetime.now().timestamp()
+                if status in [
+                    TaskStatus.COMPLETED,
+                    TaskStatus.FAILED,
+                    TaskStatus.CANCELLED,
+                ]:
+                    updates["completed_at"] = datetime.now().timestamp()
 
-            if metadata:
-                # Get existing metadata and merge
+                if metadata:
+                    # Get existing metadata and merge
+                    cursor = await conn.execute(
+                        "SELECT metadata FROM tasks WHERE task_id = ?", (task_id,)
+                    )
+                    row = await cursor.fetchone()
+                    if row:
+                        existing_metadata = json.loads(row[0] or "{}")
+                        existing_metadata.update(metadata)
+                        updates["metadata"] = json.dumps(existing_metadata)
+
+                # Build dynamic update query
+                set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                values = list(updates.values()) + [task_id]
+
                 cursor = await conn.execute(
-                    "SELECT metadata FROM tasks WHERE task_id = ?", (task_id,)
+                    f"UPDATE tasks SET {set_clause} WHERE task_id = ?", values
                 )
-                row = await cursor.fetchone()
-                if row:
-                    existing_metadata = json.loads(row[0] or "{}")
-                    existing_metadata.update(metadata)
-                    updates["metadata"] = json.dumps(existing_metadata)
 
-            # Build dynamic update query
-            set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
-            values = list(updates.values()) + [task_id]
+                success = cursor.rowcount > 0
+                await conn.commit()
 
-            cursor = await conn.execute(
-                f"UPDATE tasks SET {set_clause} WHERE task_id = ?", values
-            )
+            if success:
+                logger.info(f"Updated task {task_id} status to {status.value}")
+            else:
+                logger.warning(f"Task {task_id} not found for status update")
 
-            success = cursor.rowcount > 0
-            await conn.commit()
-
-        if success:
-            logger.info(f"Updated task {task_id} status to {status.value}")
-        else:
-            logger.warning(f"Task {task_id} not found for status update")
-
-        return success
+            return success
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to update task {task_id} status: {e}")
+            raise RuntimeError(f"Failed to update task status: {e}")
 
     async def log_execution(self, record: ExecutionRecord) -> str:
         """Log execution record with async performance"""
@@ -326,62 +338,70 @@ class AsyncEnhancedMemoryManager:
             record_hash = hashlib.md5(hash_input).hexdigest()[:8]
             record.record_id = f"exec_{timestamp}_{record_hash}"
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            await conn.execute(
-                """
-                INSERT INTO execution_records
-                (record_id, task_id, timestamp, action, result, duration_ms,
-                 success, error_message, agent_context)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    record.record_id,
-                    record.task_id,
-                    record.timestamp.timestamp(),
-                    record.action,
-                    record.result,
-                    record.duration_ms,
-                    record.success,
-                    record.error_message,
-                    json.dumps(record.agent_context),
-                ),
-            )
-            await conn.commit()
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO execution_records
+                    (record_id, task_id, timestamp, action, result, duration_ms,
+                     success, error_message, agent_context)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.record_id,
+                        record.task_id,
+                        record.timestamp.timestamp(),
+                        record.action,
+                        record.result,
+                        record.duration_ms,
+                        record.success,
+                        record.error_message,
+                        json.dumps(record.agent_context),
+                    ),
+                )
+                await conn.commit()
 
-        logger.debug(f"Logged execution record: {record.record_id}")
-        return record.record_id
+            logger.debug(f"Logged execution record: {record.record_id}")
+            return record.record_id
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to log execution record: {e}")
+            raise RuntimeError(f"Failed to log execution: {e}")
 
     async def get_task(self, task_id: str) -> Optional[TaskEntry]:
         """Retrieve task by ID with async performance"""
         await self._init_database()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            cursor = await conn.execute(
-                "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-            )
-            row = await cursor.fetchone()
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                cursor = await conn.execute(
+                    "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+                )
+                row = await cursor.fetchone()
 
-            if not row:
-                return None
+                if not row:
+                    return None
 
-            return TaskEntry(
-                task_id=row[0],
-                description=row[1],
-                status=TaskStatus(row[2]),
-                priority=Priority(row[3]),
-                created_at=datetime.fromtimestamp(row[4]),
-                updated_at=datetime.fromtimestamp(row[5]),
-                completed_at=datetime.fromtimestamp(row[6]) if row[6] else None,
-                assigned_agent=row[7],
-                parent_task_id=row[8],
-                tags=json.loads(row[9] or "[]"),
-                metadata=json.loads(row[10] or "{}"),
-                execution_log=json.loads(row[11] or "[]"),
-                estimated_duration_minutes=row[12],
-                actual_duration_minutes=row[13],
-                dependencies=json.loads(row[14] or "[]"),
-                markdown_reference=row[15],
-            )
+                return TaskEntry(
+                    task_id=row[0],
+                    description=row[1],
+                    status=TaskStatus(row[2]),
+                    priority=Priority(row[3]),
+                    created_at=datetime.fromtimestamp(row[4]),
+                    updated_at=datetime.fromtimestamp(row[5]),
+                    completed_at=datetime.fromtimestamp(row[6]) if row[6] else None,
+                    assigned_agent=row[7],
+                    parent_task_id=row[8],
+                    tags=json.loads(row[9] or "[]"),
+                    metadata=json.loads(row[10] or "{}"),
+                    execution_log=json.loads(row[11] or "[]"),
+                    estimated_duration_minutes=row[12],
+                    actual_duration_minutes=row[13],
+                    dependencies=json.loads(row[14] or "[]"),
+                    markdown_reference=row[15],
+                )
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get task {task_id}: {e}")
+            raise RuntimeError(f"Failed to get task: {e}")
 
     async def get_tasks_by_status(
         self, status: TaskStatus, limit: int = 100, offset: int = 0
@@ -389,38 +409,42 @@ class AsyncEnhancedMemoryManager:
         """Get tasks by status with async performance"""
         await self._init_database()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            cursor = await conn.execute(
-                "SELECT * FROM tasks WHERE status = ? "
-                "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
-                (status.value, limit, offset),
-            )
-            rows = await cursor.fetchall()
-
-            tasks = []
-            for row in rows:
-                tasks.append(
-                    TaskEntry(
-                        task_id=row[0],
-                        description=row[1],
-                        status=TaskStatus(row[2]),
-                        priority=Priority(row[3]),
-                        created_at=datetime.fromtimestamp(row[4]),
-                        updated_at=datetime.fromtimestamp(row[5]),
-                        completed_at=datetime.fromtimestamp(row[6]) if row[6] else None,
-                        assigned_agent=row[7],
-                        parent_task_id=row[8],
-                        tags=json.loads(row[9] or "[]"),
-                        metadata=json.loads(row[10] or "{}"),
-                        execution_log=json.loads(row[11] or "[]"),
-                        estimated_duration_minutes=row[12],
-                        actual_duration_minutes=row[13],
-                        dependencies=json.loads(row[14] or "[]"),
-                        markdown_reference=row[15],
-                    )
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                cursor = await conn.execute(
+                    "SELECT * FROM tasks WHERE status = ? "
+                    "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
+                    (status.value, limit, offset),
                 )
+                rows = await cursor.fetchall()
 
-            return tasks
+                tasks = []
+                for row in rows:
+                    tasks.append(
+                        TaskEntry(
+                            task_id=row[0],
+                            description=row[1],
+                            status=TaskStatus(row[2]),
+                            priority=Priority(row[3]),
+                            created_at=datetime.fromtimestamp(row[4]),
+                            updated_at=datetime.fromtimestamp(row[5]),
+                            completed_at=datetime.fromtimestamp(row[6]) if row[6] else None,
+                            assigned_agent=row[7],
+                            parent_task_id=row[8],
+                            tags=json.loads(row[9] or "[]"),
+                            metadata=json.loads(row[10] or "{}"),
+                            execution_log=json.loads(row[11] or "[]"),
+                            estimated_duration_minutes=row[12],
+                            actual_duration_minutes=row[13],
+                            dependencies=json.loads(row[14] or "[]"),
+                            markdown_reference=row[15],
+                        )
+                    )
+
+                return tasks
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get tasks by status: {e}")
+            raise RuntimeError(f"Failed to get tasks: {e}")
 
     async def get_execution_history(
         self, task_id: str, limit: int = 100
@@ -428,30 +452,34 @@ class AsyncEnhancedMemoryManager:
         """Get execution history for a task with async performance"""
         await self._init_database()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            cursor = await conn.execute(
-                "SELECT * FROM execution_records WHERE task_id = ? ORDER BY timestamp DESC LIMIT ?",
-                (task_id, limit),
-            )
-            rows = await cursor.fetchall()
-
-            records = []
-            for row in rows:
-                records.append(
-                    ExecutionRecord(
-                        record_id=row[0],
-                        task_id=row[1],
-                        timestamp=datetime.fromtimestamp(row[2]),
-                        action=row[3],
-                        result=row[4],
-                        duration_ms=row[5],
-                        success=bool(row[6]),
-                        error_message=row[7],
-                        agent_context=json.loads(row[8] or "{}"),
-                    )
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                cursor = await conn.execute(
+                    "SELECT * FROM execution_records WHERE task_id = ? ORDER BY timestamp DESC LIMIT ?",
+                    (task_id, limit),
                 )
+                rows = await cursor.fetchall()
 
-            return records
+                records = []
+                for row in rows:
+                    records.append(
+                        ExecutionRecord(
+                            record_id=row[0],
+                            task_id=row[1],
+                            timestamp=datetime.fromtimestamp(row[2]),
+                            action=row[3],
+                            result=row[4],
+                            duration_ms=row[5],
+                            success=bool(row[6]),
+                            error_message=row[7],
+                            agent_context=json.loads(row[8] or "{}"),
+                        )
+                    )
+
+                return records
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get execution history for {task_id}: {e}")
+            raise RuntimeError(f"Failed to get execution history: {e}")
 
     async def store_memory(
         self,
@@ -466,80 +494,88 @@ class AsyncEnhancedMemoryManager:
 
         content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            cursor = await conn.execute(
-                """
-                INSERT OR REPLACE INTO memory_entries
-                (category, content, content_hash, metadata, timestamp, embedding, reference_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    category,
-                    content,
-                    content_hash,
-                    json.dumps(metadata or {}),
-                    datetime.now().timestamp(),
-                    embedding,
-                    reference_path,
-                ),
-            )
-            memory_id = cursor.lastrowid
-            await conn.commit()
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                cursor = await conn.execute(
+                    """
+                    INSERT OR REPLACE INTO memory_entries
+                    (category, content, content_hash, metadata, timestamp, embedding, reference_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        category,
+                        content,
+                        content_hash,
+                        json.dumps(metadata or {}),
+                        datetime.now().timestamp(),
+                        embedding,
+                        reference_path,
+                    ),
+                )
+                memory_id = cursor.lastrowid
+                await conn.commit()
 
-        logger.debug(f"Stored memory entry {memory_id} in category {category}")
-        return memory_id
+            logger.debug(f"Stored memory entry {memory_id} in category {category}")
+            return memory_id
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to store memory entry: {e}")
+            raise RuntimeError(f"Failed to store memory: {e}")
 
     async def get_task_statistics(self) -> Dict[str, Any]:
         """Get comprehensive task statistics with async performance"""
         await self._init_database()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            stats = {}
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                stats = {}
 
-            # Task counts by status
-            cursor = await conn.execute(
-                "SELECT status, COUNT(*) FROM tasks GROUP BY status"
-            )
-            stats["tasks_by_status"] = dict(await cursor.fetchall())
+                # Task counts by status
+                cursor = await conn.execute(
+                    "SELECT status, COUNT(*) FROM tasks GROUP BY status"
+                )
+                stats["tasks_by_status"] = dict(await cursor.fetchall())
 
-            # Task counts by priority
-            cursor = await conn.execute(
-                "SELECT priority, COUNT(*) FROM tasks GROUP BY priority"
-            )
-            stats["tasks_by_priority"] = dict(await cursor.fetchall())
+                # Task counts by priority
+                cursor = await conn.execute(
+                    "SELECT priority, COUNT(*) FROM tasks GROUP BY priority"
+                )
+                stats["tasks_by_priority"] = dict(await cursor.fetchall())
 
-            # Average execution time
-            cursor = await conn.execute(
-                "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
-            )
-            result = await cursor.fetchone()
-            stats["avg_execution_time_ms"] = result[0] if result[0] else 0
+                # Average execution time
+                cursor = await conn.execute(
+                    "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
+                )
+                result = await cursor.fetchone()
+                stats["avg_execution_time_ms"] = result[0] if result[0] else 0
 
-            # Success rate
-            cursor = await conn.execute(
-                "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
-            )
-            success_data = dict(await cursor.fetchall())
-            total_executions = sum(success_data.values())
-            if total_executions > 0:
-                stats["success_rate"] = success_data.get(1, 0) / total_executions
-            else:
-                stats["success_rate"] = 0
+                # Success rate
+                cursor = await conn.execute(
+                    "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
+                )
+                success_data = dict(await cursor.fetchall())
+                total_executions = sum(success_data.values())
+                if total_executions > 0:
+                    stats["success_rate"] = success_data.get(1, 0) / total_executions
+                else:
+                    stats["success_rate"] = 0
 
-            # Recent activity (last 24 hours)
-            recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
-            cursor = await conn.execute(
-                "SELECT COUNT(*) FROM tasks WHERE created_at > ?", (recent_timestamp,)
-            )
-            stats["recent_tasks"] = (await cursor.fetchone())[0]
+                # Recent activity (last 24 hours)
+                recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
+                cursor = await conn.execute(
+                    "SELECT COUNT(*) FROM tasks WHERE created_at > ?", (recent_timestamp,)
+                )
+                stats["recent_tasks"] = (await cursor.fetchone())[0]
 
-            cursor = await conn.execute(
-                "SELECT COUNT(*) FROM execution_records WHERE timestamp > ?",
-                (recent_timestamp,),
-            )
-            stats["recent_executions"] = (await cursor.fetchone())[0]
+                cursor = await conn.execute(
+                    "SELECT COUNT(*) FROM execution_records WHERE timestamp > ?",
+                    (recent_timestamp,),
+                )
+                stats["recent_executions"] = (await cursor.fetchone())[0]
 
-            return stats
+                return stats
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to get task statistics: {e}")
+            raise RuntimeError(f"Failed to get task statistics: {e}")
 
     async def cleanup_old_data(self, retention_days: int = 90):
         """Clean up old data with async performance"""
@@ -547,32 +583,36 @@ class AsyncEnhancedMemoryManager:
 
         cutoff_timestamp = (datetime.now() - timedelta(days=retention_days)).timestamp()
 
-        async with aiosqlite.connect(self.db_path) as conn:
-            # Clean up old execution records
-            cursor = await conn.execute(
-                "DELETE FROM execution_records WHERE timestamp < ?", (cutoff_timestamp,)
-            )
-            deleted_executions = cursor.rowcount
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                # Clean up old execution records
+                cursor = await conn.execute(
+                    "DELETE FROM execution_records WHERE timestamp < ?", (cutoff_timestamp,)
+                )
+                deleted_executions = cursor.rowcount
 
-            # Clean up old completed tasks (keep failed ones for analysis)
-            cursor = await conn.execute(
-                "DELETE FROM tasks WHERE status = 'completed' AND completed_at < ?",
-                (cutoff_timestamp,),
-            )
-            deleted_tasks = cursor.rowcount
+                # Clean up old completed tasks (keep failed ones for analysis)
+                cursor = await conn.execute(
+                    "DELETE FROM tasks WHERE status = 'completed' AND completed_at < ?",
+                    (cutoff_timestamp,),
+                )
+                deleted_tasks = cursor.rowcount
 
-            # Clean up old memory entries
-            cursor = await conn.execute(
-                "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
-            )
-            deleted_memories = cursor.rowcount
+                # Clean up old memory entries
+                cursor = await conn.execute(
+                    "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
+                )
+                deleted_memories = cursor.rowcount
 
-            await conn.commit()
+                await conn.commit()
 
-            logger.info(
-                f"Cleanup completed: {deleted_executions} executions, "
-                f"{deleted_tasks} tasks, {deleted_memories} memories"
-            )
+                logger.info(
+                    f"Cleanup completed: {deleted_executions} executions, "
+                    f"{deleted_tasks} tasks, {deleted_memories} memories"
+                )
+        except aiosqlite.Error as e:
+            logger.error(f"Failed to cleanup old data: {e}")
+            raise RuntimeError(f"Failed to cleanup old data: {e}")
 
     async def close(self):
         """Close the async enhanced memory manager"""
