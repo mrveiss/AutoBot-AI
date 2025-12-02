@@ -407,12 +407,20 @@ class IncrementalKnowledgeSync:
             if file_path in self.file_metadata:
                 metadata = self.file_metadata[file_path]
 
-                # Remove facts
-                for fact_id in metadata.fact_ids:
-                    try:
-                        await self.kb.delete_fact(fact_id)
-                    except Exception as e:
-                        logger.warning(f"Failed to delete fact {fact_id}: {e}")
+                # Remove all facts in parallel - eliminates N+1 sequential deletions
+                if metadata.fact_ids:
+                    async def delete_fact_safe(fact_id: str) -> bool:
+                        try:
+                            await self.kb.delete_fact(fact_id)
+                            return True
+                        except Exception as e:
+                            logger.warning(f"Failed to delete fact {fact_id}: {e}")
+                            return False
+
+                    await asyncio.gather(
+                        *[delete_fact_safe(fid) for fid in metadata.fact_ids],
+                        return_exceptions=True
+                    )
 
                 # Remove from metadata
                 del self.file_metadata[file_path]

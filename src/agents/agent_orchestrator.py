@@ -254,23 +254,47 @@ class AgentOrchestrator:
         """Background health monitoring for distributed agents"""
         while self.is_running:
             try:
-                for agent_id, agent_info in list(self.distributed_agents.items()):
-                    try:
-                        health = await agent_info.agent.health_check()
-                        agent_info.health = health
-                        agent_info.last_health_check = datetime.now()
+                agents_snapshot = list(self.distributed_agents.items())
 
-                        if health.status.value != "healthy":
-                            logger.warning(
-                                f"Distributed agent {agent_id} health issue: "
-                                f"{health.status.value}"
+                if agents_snapshot:
+                    # Parallel health checks - eliminates N+1 sequential calls
+                    async def check_agent_health(agent_id: str, agent_info):
+                        try:
+                            health = await agent_info.agent.health_check()
+                            return (agent_id, health, None)
+                        except Exception as e:
+                            return (agent_id, None, e)
+
+                    results = await asyncio.gather(
+                        *[check_agent_health(aid, ainfo) for aid, ainfo in agents_snapshot],
+                        return_exceptions=True
+                    )
+
+                    # Process results
+                    for result in results:
+                        if isinstance(result, Exception):
+                            logger.error(f"Health check task failed: {result}")
+                            continue
+
+                        agent_id, health, error = result
+                        agent_info = self.distributed_agents.get(agent_id)
+                        if not agent_info:
+                            continue
+
+                        if error:
+                            logger.error(
+                                f"Health check failed for distributed agent "
+                                f"{agent_id}: {error}"
                             )
+                        elif health:
+                            agent_info.health = health
+                            agent_info.last_health_check = datetime.now()
 
-                    except Exception as e:
-                        logger.error(
-                            f"Health check failed for distributed agent "
-                            f"{agent_id}: {e}"
-                        )
+                            if health.status.value != "healthy":
+                                logger.warning(
+                                    f"Distributed agent {agent_id} health issue: "
+                                    f"{health.status.value}"
+                                )
 
                 await asyncio.sleep(self.health_check_interval)
 

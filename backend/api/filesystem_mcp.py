@@ -581,38 +581,48 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
 @router.post("/mcp/read_multiple_files")
 async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata:
     """Batch read multiple files with graceful error handling"""
-    results = []
-    errors = []
 
-    for path in request.paths:
+    async def read_single_file(path: str) -> dict:
+        """Read a single file and return result or error dict"""
         try:
             if not is_path_allowed(path):
-                errors.append({"path": path, "error": "Access denied"})
-                continue
+                return {"error": {"path": path, "error": "Access denied"}}
 
             path_exists = await asyncio.to_thread(os.path.exists, path)
             if not path_exists:
-                errors.append({"path": path, "error": "File not found"})
-                continue
+                return {"error": {"path": path, "error": "File not found"}}
 
             is_file = await asyncio.to_thread(os.path.isfile, path)
             if not is_file:
-                errors.append({"path": path, "error": "Not a file"})
-                continue
+                return {"error": {"path": path, "error": "Not a file"}}
 
             file_size = await asyncio.to_thread(os.path.getsize, path)
             if file_size > MAX_FILE_SIZE:
-                errors.append(
-                    {"path": path, "error": f"File too large ({file_size} bytes)"}
-                )
-                continue
+                return {"error": {"path": path, "error": f"File too large ({file_size} bytes)"}}
 
             async with aiofiles.open(path, "r", encoding="utf-8") as f:
                 content = await f.read()
 
-            results.append({"path": path, "content": content, "size_bytes": file_size})
+            return {"result": {"path": path, "content": content, "size_bytes": file_size}}
         except Exception as e:
-            errors.append({"path": path, "error": str(e)})
+            return {"error": {"path": path, "error": str(e)}}
+
+    # Read all files in parallel - eliminates N+1 sequential I/O
+    all_results = await asyncio.gather(
+        *[read_single_file(path) for path in request.paths],
+        return_exceptions=True
+    )
+
+    # Separate results and errors
+    results = []
+    errors = []
+    for item in all_results:
+        if isinstance(item, Exception):
+            errors.append({"path": "unknown", "error": str(item)})
+        elif "result" in item:
+            results.append(item["result"])
+        elif "error" in item:
+            errors.append(item["error"])
 
     return {
         "success": True,
@@ -771,11 +781,16 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Metadata:
         )
 
     try:
-        entries = []
         dir_contents = await asyncio.to_thread(os.listdir, request.path)
-        for name in dir_contents:
-            full_path = os.path.join(request.path, name)
-            entry_is_dir = await asyncio.to_thread(os.path.isdir, full_path)
+
+        # Check all entries in parallel - eliminates N+1 sequential I/O
+        full_paths = [os.path.join(request.path, name) for name in dir_contents]
+        is_dir_checks = await asyncio.gather(
+            *[asyncio.to_thread(os.path.isdir, fp) for fp in full_paths]
+        )
+
+        entries = []
+        for name, entry_is_dir in zip(dir_contents, is_dir_checks):
             prefix = "[DIR]" if entry_is_dir else "[FILE]"
             entries.append(f"{prefix} {name}")
 
@@ -821,13 +836,26 @@ async def list_directory_with_sizes_mcp(
         )
 
     try:
-        entries = []
         dir_contents = await asyncio.to_thread(os.listdir, request.path)
-        for name in dir_contents:
-            full_path = os.path.join(request.path, name)
-            entry_is_dir = await asyncio.to_thread(os.path.isdir, full_path)
-            size = 0 if entry_is_dir else await asyncio.to_thread(os.path.getsize, full_path)
+        full_paths = [os.path.join(request.path, name) for name in dir_contents]
 
+        # Batch check all entries in parallel - eliminates N+1 sequential I/O
+        is_dir_checks = await asyncio.gather(
+            *[asyncio.to_thread(os.path.isdir, fp) for fp in full_paths]
+        )
+
+        # Get sizes for files only (directories are 0)
+        async def get_size_if_file(path: str, is_dir: bool) -> int:
+            if is_dir:
+                return 0
+            return await asyncio.to_thread(os.path.getsize, path)
+
+        sizes = await asyncio.gather(
+            *[get_size_if_file(fp, is_d) for fp, is_d in zip(full_paths, is_dir_checks)]
+        )
+
+        entries = []
+        for name, full_path, entry_is_dir, size in zip(dir_contents, full_paths, is_dir_checks, sizes):
             entries.append(
                 {
                     "name": name,

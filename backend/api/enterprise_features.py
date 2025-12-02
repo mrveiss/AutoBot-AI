@@ -352,9 +352,23 @@ async def get_enterprise_health():
         critical_issues = 0
         warnings = 0
 
-        for name, feature in manager.features.items():
-            if feature.status == FeatureStatus.ENABLED:
-                feature_health = await manager._check_feature_health(name)
+        # Get enabled features for health check
+        enabled_features = [
+            (name, feature) for name, feature in manager.features.items()
+            if feature.status == FeatureStatus.ENABLED
+        ]
+
+        # Check health of all enabled features in parallel - eliminates N+1 sequential calls
+        if enabled_features:
+            health_results = await asyncio.gather(
+                *[manager._check_feature_health(name) for name, _ in enabled_features],
+                return_exceptions=True
+            )
+
+            for (name, _), feature_health in zip(enabled_features, health_results):
+                if isinstance(feature_health, Exception):
+                    feature_health = {"status": "critical", "message": str(feature_health)}
+
                 health_status["feature_health"][name] = feature_health
 
                 if feature_health.get("status") == "critical":
@@ -367,7 +381,10 @@ async def get_enterprise_health():
                     health_status["warnings"].append(
                         f"{name}: {feature_health.get('message', 'Warning')}"
                     )
-            elif feature.status == FeatureStatus.ERROR:
+
+        # Check for features in error state
+        for name, feature in manager.features.items():
+            if feature.status == FeatureStatus.ERROR:
                 critical_issues += 1
                 health_status["critical_issues"].append(
                     f"{name}: Feature in error state"

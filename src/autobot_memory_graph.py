@@ -468,11 +468,13 @@ class AutoBotMemoryGraph:
             entity_id = entity["id"]
             entity_key = f"memory:entity:{entity_id}"
 
-            # Append observations
-            for observation in observations:
-                await self.redis_client.json().arrappend(
-                    entity_key, "$.observations", observation
-                )
+            # Append all observations in parallel - eliminates N+1 sequential appends
+            await asyncio.gather(
+                *[
+                    self.redis_client.json().arrappend(entity_key, "$.observations", obs)
+                    for obs in observations
+                ]
+            )
 
             # Update timestamp
             await self.redis_client.json().set(
@@ -683,10 +685,20 @@ class AutoBotMemoryGraph:
                 # Get outgoing relations
                 if direction in ["outgoing", "both"]:
                     outgoing = await self._get_outgoing_relations(current_id)
-                    for rel in outgoing:
-                        if relation_type is None or rel["type"] == relation_type:
-                            related_entity = await self.get_entity(entity_id=rel["to"])
-                            if related_entity:
+                    # Filter by relation type first
+                    filtered_outgoing = [
+                        rel for rel in outgoing
+                        if relation_type is None or rel["type"] == relation_type
+                    ]
+                    # Batch fetch all related entities - eliminates N+1
+                    if filtered_outgoing:
+                        entity_ids = [rel["to"] for rel in filtered_outgoing]
+                        entities = await asyncio.gather(
+                            *[self.get_entity(entity_id=eid) for eid in entity_ids],
+                            return_exceptions=True
+                        )
+                        for rel, related_entity in zip(filtered_outgoing, entities):
+                            if related_entity and not isinstance(related_entity, Exception):
                                 related.append(
                                     {
                                         "entity": related_entity,
@@ -700,12 +712,20 @@ class AutoBotMemoryGraph:
                 # Get incoming relations
                 if direction in ["incoming", "both"]:
                     incoming = await self._get_incoming_relations(current_id)
-                    for rel in incoming:
-                        if relation_type is None or rel["type"] == relation_type:
-                            related_entity = await self.get_entity(
-                                entity_id=rel["from"]
-                            )
-                            if related_entity:
+                    # Filter by relation type first
+                    filtered_incoming = [
+                        rel for rel in incoming
+                        if relation_type is None or rel["type"] == relation_type
+                    ]
+                    # Batch fetch all related entities - eliminates N+1
+                    if filtered_incoming:
+                        entity_ids = [rel["from"] for rel in filtered_incoming]
+                        entities = await asyncio.gather(
+                            *[self.get_entity(entity_id=eid) for eid in entity_ids],
+                            return_exceptions=True
+                        )
+                        for rel, related_entity in zip(filtered_incoming, entities):
+                            if related_entity and not isinstance(related_entity, Exception):
                                 related.append(
                                     {
                                         "entity": related_entity,

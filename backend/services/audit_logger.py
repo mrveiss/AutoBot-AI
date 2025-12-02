@@ -579,15 +579,13 @@ class AuditLogger:
             key, start_time.timestamp(), end_time.timestamp(), withscores=False
         )
 
-        # Fetch full entries from primary log
-        entries = []
-        for entry_id in entry_ids[offset : offset + limit]:
-            # Find entry in daily logs
-            entry = await self._fetch_entry_by_id(
-                audit_db, entry_id, start_time, end_time
-            )
-            if entry:
-                entries.append(entry)
+        # Batch fetch full entries from primary log - eliminates N+1
+        paginated_ids = entry_ids[offset : offset + limit]
+        entry_map = await self._fetch_entries_by_ids_batch(
+            audit_db, paginated_ids, start_time, end_time
+        )
+        # Preserve order from original IDs
+        entries = [entry_map[eid] for eid in paginated_ids if eid in entry_map]
 
         return entries
 
@@ -601,7 +599,8 @@ class AuditLogger:
         offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific user"""
-        entries = []
+        # Collect all entry IDs first
+        all_entry_ids = []
 
         current_date = start_time.date()
         end_date = end_time.date()
@@ -611,15 +610,15 @@ class AuditLogger:
             key = f"audit:user:{user_id}:{date_str}"
 
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
-
-            for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(
-                    audit_db, entry_id, start_time, end_time
-                )
-                if entry:
-                    entries.append(entry)
+            all_entry_ids.extend(entry_ids)
 
             current_date += timedelta(days=1)
+
+        # Batch fetch all entries - eliminates N+1
+        entry_map = await self._fetch_entries_by_ids_batch(
+            audit_db, all_entry_ids, start_time, end_time
+        )
+        entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
         return entries[offset : offset + limit]
@@ -634,7 +633,8 @@ class AuditLogger:
         offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific operation type"""
-        entries = []
+        # Collect all entry IDs first
+        all_entry_ids = []
 
         current_date = start_time.date()
         end_date = end_time.date()
@@ -644,15 +644,15 @@ class AuditLogger:
             key = f"audit:op:{operation}:{date_str}"
 
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
-
-            for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(
-                    audit_db, entry_id, start_time, end_time
-                )
-                if entry:
-                    entries.append(entry)
+            all_entry_ids.extend(entry_ids)
 
             current_date += timedelta(days=1)
+
+        # Batch fetch all entries - eliminates N+1
+        entry_map = await self._fetch_entries_by_ids_batch(
+            audit_db, all_entry_ids, start_time, end_time
+        )
+        entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
         return entries[offset : offset + limit]
@@ -667,7 +667,8 @@ class AuditLogger:
         offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs for specific VM"""
-        entries = []
+        # Collect all entry IDs first
+        all_entry_ids = []
 
         current_date = start_time.date()
         end_date = end_time.date()
@@ -677,15 +678,15 @@ class AuditLogger:
             key = f"audit:vm:{vm_name}:{date_str}"
 
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
-
-            for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(
-                    audit_db, entry_id, start_time, end_time
-                )
-                if entry:
-                    entries.append(entry)
+            all_entry_ids.extend(entry_ids)
 
             current_date += timedelta(days=1)
+
+        # Batch fetch all entries - eliminates N+1
+        entry_map = await self._fetch_entries_by_ids_batch(
+            audit_db, all_entry_ids, start_time, end_time
+        )
+        entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
         return entries[offset : offset + limit]
@@ -700,7 +701,8 @@ class AuditLogger:
         offset: int,
     ) -> List[AuditEntry]:
         """Query audit logs by result (for security monitoring)"""
-        entries = []
+        # Collect all entry IDs first
+        all_entry_ids = []
 
         current_date = start_time.date()
         end_date = end_time.date()
@@ -710,15 +712,15 @@ class AuditLogger:
             key = f"audit:result:{result}:{date_str}"
 
             entry_ids = await audit_db.zrange(key, 0, -1, withscores=False)
-
-            for entry_id in entry_ids:
-                entry = await self._fetch_entry_by_id(
-                    audit_db, entry_id, start_time, end_time
-                )
-                if entry:
-                    entries.append(entry)
+            all_entry_ids.extend(entry_ids)
 
             current_date += timedelta(days=1)
+
+        # Batch fetch all entries - eliminates N+1
+        entry_map = await self._fetch_entries_by_ids_batch(
+            audit_db, all_entry_ids, start_time, end_time
+        )
+        entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
         return entries[offset : offset + limit]
@@ -751,25 +753,49 @@ class AuditLogger:
         end_time: datetime,
     ) -> Optional[AuditEntry]:
         """Fetch full audit entry from primary log by ID"""
-        # Search daily logs in time range
+        # Use batch method for single ID
+        entries = await self._fetch_entries_by_ids_batch(
+            audit_db, [entry_id], start_time, end_time
+        )
+        return entries.get(entry_id)
+
+    async def _fetch_entries_by_ids_batch(
+        self,
+        audit_db: async_redis.Redis,
+        entry_ids: List[str],
+        start_time: datetime,
+        end_time: datetime,
+    ) -> dict:
+        """Batch fetch multiple audit entries by IDs - eliminates N+1 queries"""
+        if not entry_ids:
+            return {}
+
+        entry_id_set = set(entry_ids)
+        results = {}
+
+        # Search daily logs in time range - one pass for all IDs
         current_date = start_time.date()
         end_date = end_time.date()
 
-        while current_date <= end_date:
+        while current_date <= end_date and entry_id_set:
             date_str = current_date.strftime("%Y-%m-%d")
             key = f"audit:log:{date_str}"
 
             # Get all entries for this day
-            results = await audit_db.zrange(key, 0, -1, withscores=False)
+            day_results = await audit_db.zrange(key, 0, -1, withscores=False)
 
-            for json_str in results:
+            for json_str in day_results:
                 entry = AuditEntry.from_json(json_str)
-                if entry.id == entry_id:
-                    return entry
+                if entry.id in entry_id_set:
+                    results[entry.id] = entry
+                    entry_id_set.discard(entry.id)
+                    # Early exit if we found all entries
+                    if not entry_id_set:
+                        break
 
             current_date += timedelta(days=1)
 
-        return None
+        return results
 
     async def get_statistics(self) -> Metadata:
         """Get audit logging statistics"""

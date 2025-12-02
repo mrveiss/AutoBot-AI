@@ -344,14 +344,25 @@ class LLMCostTracker:
 
             total_cost = sum(daily_costs.values())
 
-            # Get model breakdown
+            # Get model breakdown using pipeline (fix N+1 query)
             model_costs = {}
             model_keys = await redis.keys(f"{self.MODEL_TOTALS_KEY}:*")
-            for key in model_keys:
-                key_str = key if isinstance(key, str) else key.decode("utf-8")
-                model_name = key_str.split(":")[-1]
-                model_data = await redis.hgetall(key)
-                if model_data:
+
+            if model_keys:
+                # Batch fetch all model data
+                pipe = redis.pipeline()
+                for key in model_keys:
+                    pipe.hgetall(key)
+                model_data_list = await pipe.execute()
+
+                # Process results
+                for key, model_data in zip(model_keys, model_data_list):
+                    if not model_data:
+                        continue
+
+                    key_str = key if isinstance(key, str) else key.decode("utf-8")
+                    model_name = key_str.split(":")[-1]
+
                     model_costs[model_name] = {
                         "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
                         "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),

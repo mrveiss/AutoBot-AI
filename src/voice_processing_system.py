@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import aiofiles
 import numpy as np
 
 from src.enhanced_memory_manager import EnhancedMemoryManager
@@ -906,16 +907,16 @@ class TextToSpeechEngine:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_path = temp_file.name
 
-            # Generate speech to file
-            self.tts_engine.save_to_file(text, temp_path)
-            self.tts_engine.runAndWait()
+            # Generate speech to file (blocking TTS operation)
+            await asyncio.to_thread(self.tts_engine.save_to_file, text, temp_path)
+            await asyncio.to_thread(self.tts_engine.runAndWait)
 
-            # Read file content
-            with open(temp_path, "rb") as audio_file:
-                audio_data = audio_file.read()
+            # Read file content asynchronously
+            async with aiofiles.open(temp_path, "rb") as audio_file:
+                audio_data = await audio_file.read()
 
             # Clean up
-            os.unlink(temp_path)
+            await asyncio.to_thread(os.unlink, temp_path)
 
             return audio_data
 

@@ -385,13 +385,61 @@ class AgentAnalytics:
             pattern = f"{self.AGENT_METRICS_KEY}:*"
             keys = await redis.keys(pattern)
 
-            metrics_list = []
+            if not keys:
+                return []
+
+            # Batch fetch all metrics using pipeline (fix N+1 query)
+            pipe = redis.pipeline()
             for key in keys:
+                pipe.hgetall(key)
+            results = await pipe.execute()
+
+            # Process results
+            metrics_list = []
+            for key, data in zip(keys, results):
+                if not data:
+                    continue
+
                 key_str = key if isinstance(key, str) else key.decode("utf-8")
                 agent_id = key_str.split(":")[-1]
-                metrics = await self.get_agent_metrics(agent_id)
-                if metrics:
-                    metrics_list.append(metrics)
+
+                # Convert bytes to string if needed
+                metrics_data = {}
+                for k, v in data.items():
+                    dict_key = k if isinstance(k, str) else k.decode("utf-8")
+                    val = v if isinstance(v, str) else v.decode("utf-8")
+                    metrics_data[dict_key] = val
+
+                total_tasks = int(metrics_data.get("total_tasks", 0))
+                completed_tasks = int(metrics_data.get("completed_tasks", 0))
+                failed_tasks = int(metrics_data.get("failed_tasks", 0))
+                total_duration = float(metrics_data.get("total_duration_ms", 0))
+
+                # Calculate rates
+                if total_tasks > 0:
+                    error_rate = (failed_tasks / total_tasks) * 100
+                    success_rate = (completed_tasks / total_tasks) * 100
+                    avg_duration = total_duration / total_tasks
+                else:
+                    error_rate = 0
+                    success_rate = 0
+                    avg_duration = 0
+
+                metrics = AgentMetrics(
+                    agent_id=agent_id,
+                    agent_type=metrics_data.get("agent_type", "unknown"),
+                    total_tasks=total_tasks,
+                    completed_tasks=completed_tasks,
+                    failed_tasks=failed_tasks,
+                    cancelled_tasks=int(metrics_data.get("cancelled_tasks", 0)),
+                    timeout_tasks=int(metrics_data.get("timeout_tasks", 0)),
+                    avg_duration_ms=avg_duration,
+                    total_tokens_used=int(metrics_data.get("total_tokens_used", 0)),
+                    error_rate=error_rate,
+                    success_rate=success_rate,
+                    last_activity=metrics_data.get("last_activity"),
+                )
+                metrics_list.append(metrics)
 
             # Sort by total tasks descending
             metrics_list.sort(key=lambda x: x.total_tasks, reverse=True)

@@ -464,11 +464,16 @@ class LLMPatternAnalyzer:
             "by_category": {}
         }
 
-        for i in range(days):
-            date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-            stats_key = f"{self._stats_key}:{date}"
+        # Build date keys and fetch all at once using pipeline - eliminates N+1 queries
+        dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+        stats_keys = [f"{self._stats_key}:{date}" for date in dates]
 
-            day_stats = await redis.hgetall(stats_key)
+        async with redis.pipeline() as pipe:
+            for key in stats_keys:
+                await pipe.hgetall(key)
+            all_day_stats = await pipe.execute()
+
+        for date, day_stats in zip(dates, all_day_stats):
             if not day_stats:
                 continue
 
@@ -529,24 +534,26 @@ class LLMPatternAnalyzer:
                 count=100
             )
 
-            for key in keys:
-                data = await redis.get(key)
-                if not data:
-                    continue
+            # Batch fetch all keys using mget - eliminates N+1 queries
+            if keys:
+                all_data = await redis.mget(keys)
+                for key, data in zip(keys, all_data):
+                    if not data:
+                        continue
 
-                cache_info = json.loads(data)
-                if cache_info.get("count", 0) >= min_occurrences:
-                    opportunities.append({
-                        "prompt_hash": key.split(":")[-1],
-                        "prompt_preview": cache_info.get("preview", ""),
-                        "occurrence_count": cache_info["count"],
-                        "total_cost": round(cache_info.get("total_cost", 0), 4),
-                        "potential_savings": round(
-                            cache_info.get("total_cost", 0) * 0.9, 4
-                        ),  # 90% savings with cache
-                        "first_seen": cache_info.get("first_seen"),
-                        "last_seen": cache_info.get("last_seen")
-                    })
+                    cache_info = json.loads(data)
+                    if cache_info.get("count", 0) >= min_occurrences:
+                        opportunities.append({
+                            "prompt_hash": key.split(":")[-1],
+                            "prompt_preview": cache_info.get("preview", ""),
+                            "occurrence_count": cache_info["count"],
+                            "total_cost": round(cache_info.get("total_cost", 0), 4),
+                            "potential_savings": round(
+                                cache_info.get("total_cost", 0) * 0.9, 4
+                            ),  # 90% savings with cache
+                            "first_seen": cache_info.get("first_seen"),
+                            "last_seen": cache_info.get("last_seen")
+                        })
 
             if cursor == 0:
                 break
@@ -643,12 +650,16 @@ class LLMPatternAnalyzer:
 
         models = {}
 
-        # Aggregate data from last 7 days
-        for i in range(7):
-            date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-            usage_key = f"{self._usage_key}:{date}"
+        # Aggregate data from last 7 days - batch fetch all lists using pipeline
+        dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+        usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
-            records = await redis.lrange(usage_key, 0, -1)
+        async with redis.pipeline() as pipe:
+            for key in usage_keys:
+                await pipe.lrange(key, 0, -1)
+            all_records_lists = await pipe.execute()
+
+        for records in all_records_lists:
             for record_str in records:
                 try:
                     record = json.loads(record_str)
@@ -703,12 +714,16 @@ class LLMPatternAnalyzer:
 
         categories = defaultdict(lambda: {"count": 0, "cost": 0.0})
 
-        # Aggregate from last 7 days
-        for i in range(7):
-            date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-            usage_key = f"{self._usage_key}:{date}"
+        # Aggregate from last 7 days - batch fetch all lists using pipeline
+        dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+        usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
-            records = await redis.lrange(usage_key, 0, -1)
+        async with redis.pipeline() as pipe:
+            for key in usage_keys:
+                await pipe.lrange(key, 0, -1)
+            all_records_lists = await pipe.execute()
+
+        for records in all_records_lists:
             for record_str in records:
                 try:
                     record = json.loads(record_str)

@@ -422,11 +422,43 @@ class SecurityWorkflowManager:
         redis = await self._get_redis()
         assessment_ids = await redis.smembers(self.REDIS_ACTIVE_INDEX)
 
-        assessments = []
+        # Batch fetch assessments using pipeline (fix N+1 query)
+        if not assessment_ids:
+            return []
+
+        pipe = redis.pipeline()
         for aid in assessment_ids:
-            assessment = await self.get_assessment(aid)
-            if assessment:
-                assessments.append(assessment)
+            key = f"{self.REDIS_KEY_PREFIX}{aid}"
+            pipe.hgetall(key)
+
+        results = await pipe.execute()
+
+        # Parse results
+        assessments = []
+        for aid, data in zip(assessment_ids, results):
+            if data:
+                try:
+                    # Decode bytes if needed
+                    decoded = {}
+                    for k, v in data.items():
+                        key = k if isinstance(k, str) else k.decode("utf-8")
+                        val = v if isinstance(v, str) else v.decode("utf-8")
+                        decoded[key] = val
+
+                    assessment = SecurityAssessment(
+                        assessment_id=decoded["assessment_id"],
+                        session_id=decoded["session_id"],
+                        phase=decoded["phase"],
+                        status=decoded["status"],
+                        created_at=decoded["created_at"],
+                        updated_at=decoded["updated_at"],
+                        findings=eval(decoded.get("findings", "[]")),
+                        metadata=eval(decoded.get("metadata", "{}")),
+                    )
+                    assessments.append(assessment)
+                except Exception as e:
+                    logger.error(f"Error parsing assessment {aid}: {e}")
+                    continue
 
         return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
 

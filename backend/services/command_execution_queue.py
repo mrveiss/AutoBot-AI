@@ -193,12 +193,29 @@ class CommandExecutionQueue:
             session_key = self._get_session_commands_key(terminal_session_id)
             command_ids = self.redis_client.smembers(session_key)
 
+            if not command_ids:
+                return []
+
+            # Decode command IDs
+            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
+
+            # Batch fetch all commands using pipeline - eliminates N+1 queries
+            pipe = self.redis_client.pipeline()
+            for command_id in decoded_ids:
+                pipe.get(self._get_command_key(command_id))
+            results = pipe.execute()
+
+            # Process results
             commands = []
-            for command_id in command_ids:
-                cmd = await self.get_command(command_id.decode("utf-8"))
-                if cmd:
-                    if state_filter is None or cmd.state == state_filter:
-                        commands.append(cmd)
+            for command_data in results:
+                if command_data:
+                    try:
+                        data = json.loads(command_data)
+                        cmd = CommandExecution.from_dict(data)
+                        if state_filter is None or cmd.state == state_filter:
+                            commands.append(cmd)
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.debug(f"Failed to parse command data: {e}")
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
@@ -230,12 +247,29 @@ class CommandExecutionQueue:
             chat_key = self._get_chat_commands_key(chat_id)
             command_ids = self.redis_client.smembers(chat_key)
 
+            if not command_ids:
+                return []
+
+            # Decode command IDs
+            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
+
+            # Batch fetch all commands using pipeline - eliminates N+1 queries
+            pipe = self.redis_client.pipeline()
+            for command_id in decoded_ids:
+                pipe.get(self._get_command_key(command_id))
+            results = pipe.execute()
+
+            # Process results
             commands = []
-            for command_id in command_ids:
-                cmd = await self.get_command(command_id.decode("utf-8"))
-                if cmd:
-                    if state_filter is None or cmd.state == state_filter:
-                        commands.append(cmd)
+            for command_data in results:
+                if command_data:
+                    try:
+                        data = json.loads(command_data)
+                        cmd = CommandExecution.from_dict(data)
+                        if state_filter is None or cmd.state == state_filter:
+                            commands.append(cmd)
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.debug(f"Failed to parse command data: {e}")
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
@@ -259,11 +293,29 @@ class CommandExecutionQueue:
             pending_key = self._get_pending_approvals_key()
             command_ids = self.redis_client.smembers(pending_key)
 
+            if not command_ids:
+                return []
+
+            # Decode command IDs
+            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
+
+            # Batch fetch all commands using pipeline - eliminates N+1 queries
+            pipe = self.redis_client.pipeline()
+            for command_id in decoded_ids:
+                pipe.get(self._get_command_key(command_id))
+            results = pipe.execute()
+
+            # Process results
             commands = []
-            for command_id in command_ids:
-                cmd = await self.get_command(command_id.decode("utf-8"))
-                if cmd and cmd.is_pending():
-                    commands.append(cmd)
+            for command_data in results:
+                if command_data:
+                    try:
+                        data = json.loads(command_data)
+                        cmd = CommandExecution.from_dict(data)
+                        if cmd.is_pending():
+                            commands.append(cmd)
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.debug(f"Failed to parse command data: {e}")
 
             # Sort by requested_at (oldest first - FIFO)
             commands.sort(key=lambda c: c.requested_at)
