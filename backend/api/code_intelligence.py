@@ -822,8 +822,8 @@ async def security_analyze(request: SecurityAnalysisRequest):
                     for r in results
                     if severity_order.index(r.severity.value) >= min_idx
                 ]
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("Value parsing failed during severity filtering: %s", e)
 
         summary = analyzer.get_summary()
 
@@ -1157,8 +1157,8 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
                     for r in results
                     if severity_order.index(r.severity.value) >= min_idx
                 ]
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("Value parsing failed during severity filtering: %s", e)
 
         summary = analyzer.get_summary()
 

@@ -474,7 +474,8 @@ async def track_analytics_event(event: RealTimeEvent):
         for websocket in analytics_state["websocket_connections"]:
             try:
                 await websocket.send_json(broadcast_data)
-            except Exception:
+            except Exception as e:
+                logger.debug("WebSocket send failed: %s", e)
                 disconnected.add(websocket)
 
         # Clean up disconnected WebSockets
@@ -516,7 +517,8 @@ async def get_historical_trends(
                     call_time = datetime.fromisoformat(call_data["timestamp"])
                     if call_time > cutoff_time:
                         historical_calls.append(call_data)
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to parse historical call data: %s", e)
                     continue
 
             # Analyze historical patterns
@@ -936,10 +938,10 @@ async def websocket_live_analytics(websocket: WebSocket):
                                     "timestamp": datetime.now().isoformat(),
                                 }
                             )
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.debug("Invalid JSON in WebSocket message: %s", e)
                 except asyncio.TimeoutError:
-                    pass  # Continue with regular updates
+                    logger.debug("WebSocket receive timeout, continuing with updates")
 
             except WebSocketDisconnect:
                 break

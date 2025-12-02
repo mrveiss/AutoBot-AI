@@ -102,9 +102,9 @@ class SecurityScannerAgent:
             ip = ipaddress.ip_address(target)
             if ip.is_private:
                 return True
-        except ValueError:
+        except ValueError as e:
             # Not an IP address, could be hostname
-            pass
+            logger.debug("Not a valid IP address, treating as hostname: %s", e)
 
         # For production, you'd check against authorized domains here
         logger.warning(f"Target {target} not in authorized list")
@@ -318,8 +318,8 @@ class SecurityScannerAgent:
                                 "message": "Robots.txt file found",
                             }
                         )
-            except Exception:
-                pass  # HTTP request failed, robots.txt not accessible
+            except Exception as e:
+                logger.debug("robots.txt not accessible: %s", e)
 
             # Check common admin paths
             admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
@@ -337,8 +337,8 @@ class SecurityScannerAgent:
                                     ),
                                 }
                             )
-                except Exception:
-                    pass  # Path check failed, likely not accessible
+                except Exception as e:
+                    logger.debug("Path check failed for %s: %s", path, e)
 
             return {
                 "status": "success",
@@ -427,7 +427,8 @@ class SecurityScannerAgent:
         try:
             result = await run_agent_command(["which", tool_name], timeout=5)
             return result["status"] == "success"
-        except Exception:
+        except Exception as e:
+            logger.debug("Tool availability check failed for %s: %s", tool_name, e)
             return False
 
     async def _research_scanning_tools(self, scan_type: str) -> Dict[str, Any]:

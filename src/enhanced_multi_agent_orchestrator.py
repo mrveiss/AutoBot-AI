@@ -666,7 +666,7 @@ class EnhancedMultiAgentOrchestrator:
                 try:
                     caps_required.add(AgentCapability(cap_name))
                 except ValueError:
-                    pass
+                    logger.debug("Unknown capability %s, skipping", cap_name)
 
             task = AgentTask(
                 task_id=task_id,

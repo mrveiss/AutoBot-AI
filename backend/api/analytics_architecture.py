@@ -26,6 +26,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import aiofiles
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -570,8 +571,8 @@ class ArchitectureAnalyzer:
     ) -> Optional[FileAnalysis]:
         """Analyze a single Python file."""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = await f.read()
         except Exception:
             return None
 

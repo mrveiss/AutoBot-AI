@@ -323,7 +323,7 @@ class OperationIntegrationManager:
                         await websocket.send_json({"type": "ping"})
 
             except WebSocketDisconnect:
-                pass
+                logger.debug("WebSocket client disconnected from operation %s", operation_id)
             finally:
                 # Remove from connections (thread-safe)
                 async with self._ws_lock:
@@ -429,7 +429,6 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Starting test suite", 0, 1)
 
             # Simulate test execution
-            import subprocess
             from pathlib import Path
 
             test_files = []
@@ -444,21 +443,24 @@ class OperationIntegrationManager:
 
                 # Run actual test
                 try:
-                    result = subprocess.run(
-                        ["python", "-m", "pytest", str(test_file), "-v"],
-                        capture_output=True,
-                        text=True,
-                        timeout=300,
+                    process = await asyncio.create_subprocess_exec(
+                        "python", "-m", "pytest", str(test_file), "-v",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(),
+                        timeout=300
                     )
                     results.append(
                         {
                             "file": str(test_file),
-                            "exit_code": result.returncode,
-                            "output": result.stdout,
-                            "errors": result.stderr,
+                            "exit_code": process.returncode,
+                            "output": stdout.decode("utf-8"),
+                            "errors": stderr.decode("utf-8"),
                         }
                     )
-                except subprocess.TimeoutExpired:
+                except asyncio.TimeoutError:
                     results.append(
                         {
                             "file": str(test_file),

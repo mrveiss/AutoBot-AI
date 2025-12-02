@@ -16,6 +16,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
+import aiofiles
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
@@ -545,9 +546,9 @@ async def upload_file_to_chat(
             chat_knowledge_manager.storage_dir, f"{chat_id}_{file.filename}"
         )
 
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+        content = await file.read()
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
 
         # Associate with chat
         association = await chat_knowledge_manager.associate_file(

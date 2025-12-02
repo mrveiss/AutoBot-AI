@@ -6,6 +6,7 @@ Compliance Manager for Enterprise Security
 Handles SOC2, GDPR, ISO27001 audit logging and reporting requirements
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
@@ -540,8 +542,8 @@ class ComplianceManager:
                 "event_id": audit_event["event_id"],
             }
 
-            with open(storage_path, "a") as f:
-                f.write(json.dumps(encrypted_event) + "\n")
+            async with aiofiles.open(storage_path, "a") as f:
+                await f.write(json.dumps(encrypted_event) + "\n")
 
         except Exception as e:
             logger.error(f"Failed to store encrypted audit event: {e}")
@@ -549,8 +551,8 @@ class ComplianceManager:
     async def _store_plain_event(self, audit_event: Dict, storage_path: Path):
         """Store plain text audit event"""
         try:
-            with open(storage_path, "a") as f:
-                f.write(json.dumps(audit_event) + "\n")
+            async with aiofiles.open(storage_path, "a") as f:
+                await f.write(json.dumps(audit_event) + "\n")
         except Exception as e:
             logger.error(f"Failed to store audit event: {e}")
 
@@ -783,9 +785,11 @@ class ComplianceManager:
     async def _save_report(self, report: Dict, output_path: Path):
         """Save compliance report to file"""
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w") as f:
-                json.dump(report, f, indent=2)
+            await asyncio.to_thread(
+                output_path.parent.mkdir, parents=True, exist_ok=True
+            )
+            async with aiofiles.open(output_path, "w") as f:
+                await f.write(json.dumps(report, indent=2))
             logger.info(f"Compliance report saved to {output_path}")
         except Exception as e:
             logger.error(f"Failed to save compliance report: {e}")

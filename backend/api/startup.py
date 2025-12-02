@@ -96,7 +96,7 @@ def add_startup_message(
     except RuntimeError:
         # No running event loop - this is expected during module import
         # The message is still stored and will be sent when clients connect
-        pass
+        logger.debug("No running event loop, message queued for later broadcast")
 
 
 async def broadcast_startup_message(message: StartupMessage):

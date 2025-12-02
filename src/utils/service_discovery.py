@@ -266,7 +266,7 @@ class ServiceDiscovery:
             try:
                 await self._health_check_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Health check task cancelled during shutdown")
 
         # Session cleanup is handled by singleton HTTPClientManager
         logger.info("Stopped health monitoring")

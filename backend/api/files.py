@@ -620,9 +620,9 @@ async def view_file(request: Request, path: str):
             # PERFORMANCE FIX: Convert to async file I/O
             async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
                 content = await f.read()
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as e:
             # File is binary, don't include content
-            pass
+            logger.debug("File is binary, skipping content read: %s", e)
 
     return {
         "file_info": file_info,

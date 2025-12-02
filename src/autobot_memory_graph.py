@@ -795,7 +795,8 @@ class AutoBotMemoryGraph:
             out_key = f"memory:relations:out:{entity_id}"
             data = await self.redis_client.json().get(out_key)
             return data.get("relations", []) if data else []
-        except Exception:
+        except Exception as e:
+            logger.debug("Error getting outgoing relations for %s: %s", entity_id, e)
             return []
 
     async def _get_incoming_relations(self, entity_id: str) -> List[Dict[str, Any]]:
@@ -804,7 +805,8 @@ class AutoBotMemoryGraph:
             in_key = f"memory:relations:in:{entity_id}"
             data = await self.redis_client.json().get(in_key)
             return data.get("relations", []) if data else []
-        except Exception:
+        except Exception as e:
+            logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
 
     # ==================== SEARCH OPERATIONS ====================

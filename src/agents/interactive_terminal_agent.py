@@ -395,20 +395,20 @@ class InteractiveTerminalAgent:
                 await asyncio.sleep(0.1)
                 if self.process.returncode is None:
                     self.process.kill()
-            except Exception:
-                pass  # Best-effort process termination during cleanup
+            except Exception as e:
+                logger.debug("Process termination during cleanup: %s", e)
 
         if self.master_fd:
             try:
                 os.close(self.master_fd)
-            except Exception:
-                pass  # Best-effort fd cleanup - may already be closed
+            except Exception as e:
+                logger.debug("Master fd cleanup (may already be closed): %s", e)
 
         if self.slave_fd:
             try:
                 os.close(self.slave_fd)
-            except Exception:
-                pass  # Best-effort fd cleanup - may already be closed
+            except Exception as e:
+                logger.debug("Slave fd cleanup (may already be closed): %s", e)
 
         self.master_fd = None
         self.slave_fd = None

@@ -509,8 +509,8 @@ class ChatHistoryManager:
                                 current_group = []
 
                         last_streaming_ts = current_ts
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug("Timestamp parse error: %s", e)
 
                 current_group.append(msg)
             else:

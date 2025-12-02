@@ -18,6 +18,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+import aiofiles
+
 from src.utils.redis_client import get_redis_client
 from src.worker_node import WorkerNode
 
@@ -171,7 +173,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 )
         except RuntimeError:
             # Event loop not available yet, will initialize later
-            pass
+            logger.debug("Event loop not available, will initialize communication later")
 
         # Language-specific patterns
         self.language_patterns = {
@@ -356,8 +358,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _index_file(self, file_path: str, relative_path: str):
         """Index a single file"""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                content = await f.read()
 
             if not content.strip():
                 return  # Skip empty files
@@ -644,8 +648,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
                 # Load and search file content
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                    async with aiofiles.open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as f:
+                        content = await f.read()
 
                     lines = content.splitlines()
                     for i, line in enumerate(lines):
@@ -706,8 +712,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
                 # Load and search file content
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                    async with aiofiles.open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as f:
+                        content = await f.read()
 
                     lines = content.splitlines()
                     for i, line in enumerate(lines):
@@ -766,8 +774,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
                 # Load and search file content
                 try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                    async with aiofiles.open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as f:
+                        content = await f.read()
 
                     lines = content.splitlines()
                     for i, line in enumerate(lines):
@@ -818,8 +828,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
     ) -> List[str]:
         """Get context lines around a specific line number"""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                content = await f.read()
+                lines = content.splitlines(keepends=True)
 
             return self._get_context_lines(lines, line_number - 1, context_size)
 

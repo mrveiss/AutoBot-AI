@@ -289,7 +289,7 @@ class WorkflowScheduler:
             try:
                 await self._scheduler_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Scheduler task cancelled during shutdown")
 
         # Save state before stopping
         self._save_workflows()

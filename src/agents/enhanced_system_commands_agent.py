@@ -291,8 +291,8 @@ and suggest alternatives."""
                         "alternative": parsed.get("alternative", ""),
                         "is_structured": True,
                     }
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.debug("JSON decode failed, using fallback extraction: %s", e)
 
             # Fallback: try to extract command from text
             command = self._extract_command_from_text(content)

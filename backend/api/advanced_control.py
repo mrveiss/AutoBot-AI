@@ -457,8 +457,8 @@ async def monitoring_websocket(websocket: WebSocket):
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass  # Best-effort WebSocket cleanup on disconnect
+        except Exception as e:
+            logger.debug("WebSocket cleanup on disconnect: %s", e)
 
 
 # WebSocket handler for desktop streaming

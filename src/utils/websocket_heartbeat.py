@@ -79,7 +79,7 @@ class WebSocketManager:
             try:
                 await self.heartbeat_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Heartbeat task cancelled during shutdown")
         logger.info("🫀 WebSocket heartbeat monitor stopped")
 
     async def _heartbeat_loop(self):

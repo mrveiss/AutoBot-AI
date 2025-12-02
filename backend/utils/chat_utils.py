@@ -137,7 +137,7 @@ def validate_chat_session_id(session_id: str) -> bool:
         uuid.UUID(session_id)
         return True
     except ValueError:
-        pass
+        logger.debug("Session ID is not a valid UUID, checking other formats")
 
     # Accept if starts with UUID (with suffix like "uuid-imported-123")
     parts = session_id.split("-")
@@ -146,8 +146,8 @@ def validate_chat_session_id(session_id: str) -> bool:
             uuid_part = "-".join(parts[:5])
             uuid.UUID(uuid_part)
             return True
-        except ValueError:
-            pass
+        except ValueError as e:
+            logger.debug("Value parsing failed: %s", e)
 
     # Accept legacy/test session IDs (alphanumeric + underscore + hyphen)
     # This allows "test_conv" while rejecting malicious inputs

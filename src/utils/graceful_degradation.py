@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +183,9 @@ class CachedResponseStrategy(FallbackStrategy):
         try:
             for cache_file in self.cache_dir.glob("*.json"):
                 try:
-                    with open(cache_file, "r") as f:
-                        cached_data = json.load(f)
+                    async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
+                        content = await f.read()
+                        cached_data = json.loads(content)
 
                     # Check cache age
                     age = time.time() - cached_data.get("timestamp", 0)

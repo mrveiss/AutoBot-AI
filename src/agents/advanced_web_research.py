@@ -481,8 +481,8 @@ class AdvancedWebResearcher:
                 if accept_button:
                     await accept_button.click()
                     await page.wait_for_timeout(1000)
-            except Exception:
-                pass  # Cookie dialog not found or not clickable
+            except Exception as e:
+                logger.debug("Cookie dialog not found or not clickable: %s", e)
 
             # Perform search
             search_box = await page.query_selector('[name="q"], [title="Search"]')

@@ -8,6 +8,7 @@ Provides automated code review with pattern checking, security analysis,
 and AI-generated review comments. Learns from past reviews.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -362,14 +363,19 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
         else:
             cmd.append("HEAD~1..HEAD")
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            encoding="utf-8",
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
-        return result.stdout if result.returncode == 0 else ""
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            return stdout.decode("utf-8") if process.returncode == 0 else ""
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            logger.warning("Git diff timed out after 30 seconds")
+            return ""
     except Exception as e:
         logger.warning(f"Failed to get git diff: {e}")
         return ""

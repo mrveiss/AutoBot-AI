@@ -135,18 +135,28 @@ async def restart_vnc_server() -> Dict[str, str]:
     """
     try:
         # Kill existing VNC server
-        subprocess.run(
-            ["vncserver", "-kill", ":1"],
-            capture_output=True,
-            timeout=5,
+        process = await asyncio.create_subprocess_exec(
+            "vncserver", "-kill", ":1",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
+        try:
+            await asyncio.wait_for(process.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
 
         # Kill websockify
-        subprocess.run(
-            ["pkill", "-9", "websockify"],
-            capture_output=True,
-            timeout=5,
+        process = await asyncio.create_subprocess_exec(
+            "pkill", "-9", "websockify",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
+        try:
+            await asyncio.wait_for(process.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
 
         # Wait a moment for cleanup (async to not block event loop)
         await asyncio.sleep(1)

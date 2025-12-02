@@ -128,7 +128,7 @@ class KnowledgeSyncService:
             try:
                 await self.daemon_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Sync daemon task cancelled during shutdown")
 
         logger.info("Sync daemon stopped")
 

@@ -254,7 +254,7 @@ class ConsolidatedTerminalWebSocket:
 
                 self.output_queue.put_nowait({"type": "stop"})
             except queue.Full:
-                pass  # Queue full, sender will stop when it checks active flag
+                logger.debug("Output queue full during shutdown, sender will stop via active flag")
             except Exception as e:
                 logger.error(f"Error signaling output sender to stop: {e}")
 
@@ -264,7 +264,7 @@ class ConsolidatedTerminalWebSocket:
                 self.pty_output_task.cancel()
                 await asyncio.wait_for(self.pty_output_task, timeout=1.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass  # Expected during task cancellation - normal shutdown
+                logger.debug("Output task cancelled during normal shutdown")
             except Exception as e:
                 logger.error(f"Error cancelling output task: {e}")
 
@@ -274,7 +274,7 @@ class ConsolidatedTerminalWebSocket:
                 self._output_sender_task.cancel()
                 await asyncio.wait_for(self._output_sender_task, timeout=1.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass  # Expected during task cancellation - normal shutdown
+                logger.debug("Output sender task cancelled during normal shutdown")
             except Exception as e:
                 logger.error(f"Error cancelling output sender task: {e}")
 

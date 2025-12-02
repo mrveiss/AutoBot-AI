@@ -18,6 +18,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import aiofiles
+
 from scripts.phase_validation_system import PhaseValidator
 from src.phase_progression_manager import get_progression_manager
 from src.project_state_manager import ProjectStateManager
@@ -1098,12 +1100,12 @@ class EnhancedProjectStateTracker:
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         if format == "json":
-            with open(output_file, "w") as f:
-                json.dump(summary, f, indent=2, default=str)
+            async with aiofiles.open(output_file, "w") as f:
+                await f.write(json.dumps(summary, indent=2, default=str))
         elif format == "markdown":
             report = await self.generate_state_report()
-            with open(output_file, "w") as f:
-                f.write(report)
+            async with aiofiles.open(output_file, "w") as f:
+                await f.write(report)
         else:
             raise ValueError(f"Unsupported format: {format}")
 

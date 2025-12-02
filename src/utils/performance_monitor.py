@@ -1151,7 +1151,7 @@ class Phase9PerformanceMonitor:
             try:
                 await self.monitoring_task
             except asyncio.CancelledError:
-                pass
+                self.logger.debug("Monitoring task cancelled during shutdown")
 
         self.logger.info("Phase 9 performance monitoring stopped")
 

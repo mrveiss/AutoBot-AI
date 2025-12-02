@@ -3576,8 +3576,8 @@ return 0
                     if len(metadata_json) <= 50000:  # 50KB limit
                         try:
                             metadata = json.loads(metadata_json)
-                        except json.JSONDecodeError:
-                            pass
+                        except json.JSONDecodeError as e:
+                            logger.debug("Invalid metadata JSON for fact: %s", e)
 
                 # Apply category filter if specified
                 if category and metadata.get("category") != category:
@@ -3591,8 +3591,8 @@ return 0
                     if len(tags_json) <= 10000:
                         try:
                             fact_tags = json.loads(tags_json)
-                        except json.JSONDecodeError:
-                            pass
+                        except json.JSONDecodeError as e:
+                            logger.debug("Invalid tags JSON for fact: %s", e)
 
                 facts.append({
                     "fact_id": fact_id,

@@ -181,9 +181,9 @@ class ConversationAnalyzer:
                     else:
                         ts = timestamp
                     timestamps.append(ts)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
                     # Invalid timestamp format - skip for timing analysis
-                    pass
+                    logger.debug("Invalid timestamp format, skipping: %s", e)
 
             if role == "user":
                 intent_id, _ = self.detect_intent(content)
@@ -343,8 +343,8 @@ class ConversationAnalyzer:
                     if isinstance(ts_str, str):
                         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                         hourly_dist[ts.strftime("%H:00")] += 1
-                except (ValueError, TypeError, KeyError):
-                    pass
+                except (ValueError, TypeError, KeyError) as e:
+                    logger.debug("Failed to parse conversation timestamp: %s", e)
 
         # Calculate metrics
         n_convs = len(conversations)
@@ -693,8 +693,8 @@ async def get_hourly_distribution(
                             ts = ts_str
                         hourly[ts.strftime("%H:00")] += 1
                         daily[ts.strftime("%A")] += 1
-                    except (ValueError, TypeError):
-                        pass
+                    except (ValueError, TypeError) as e:
+                        logger.debug("Failed to parse message timestamp: %s", e)
 
         return {
             "hourly_distribution": dict(sorted(hourly.items())),

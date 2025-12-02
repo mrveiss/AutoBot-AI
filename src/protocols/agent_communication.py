@@ -285,7 +285,7 @@ class RedisCommunicationChannel(CommunicationChannel):
             try:
                 await self.listener_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Listener task cancelled for channel %s", self.channel_id)
         logger.info(f"Redis communication channel {self.channel_id} closed")
 
 

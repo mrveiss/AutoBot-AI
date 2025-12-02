@@ -137,8 +137,8 @@ def _identify_bottlenecks(dashboard: Metadata) -> List[str]:
             if slow_services:
                 bottlenecks.append(f"Slow services: {', '.join(slow_services)}")
 
-    except Exception:
-        pass  # Dashboard analysis error, return partial results
+    except Exception as e:
+        logger.debug("Dashboard analysis error: %s", e)
 
     return bottlenecks
 
@@ -158,8 +158,8 @@ def _analyze_resource_utilization(dashboard: Metadata) -> Dict[str, float]:
             utilization["cpu"] = dashboard["system"].get("cpu_usage_percent", 0)
             utilization["memory"] = dashboard["system"].get("memory_usage_percent", 0)
 
-    except Exception:
-        pass  # Metric extraction error, return partial results
+    except Exception as e:
+        logger.debug("Metric extraction error: %s", e)
 
     return utilization
 

@@ -463,8 +463,8 @@ class IDEIntegrationEngine:
                             },
                         )
                         diagnostics.append(diagnostic)
-                except re.error:
-                    pass  # Invalid regex, skip
+                except re.error as e:
+                    logger.debug("Invalid regex pattern skipped: %s", e)
 
         # Also check for AST-based patterns
         if request.language == "python":

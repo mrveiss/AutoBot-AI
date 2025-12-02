@@ -180,13 +180,13 @@ class TerminalWebSocketManager:
             if "master_fd" in locals():
                 try:
                     os.close(master_fd)
-                except OSError:
-                    pass
+                except OSError as close_err:
+                    logger.debug("Master fd close error: %s", close_err)
             if "slave_fd" in locals():
                 try:
                     os.close(slave_fd)
-                except OSError:
-                    pass
+                except OSError as close_err:
+                    logger.debug("Slave fd close error: %s", close_err)
             raise RuntimeError(f"PTY creation failed: {e}")
 
     async def _start_background_tasks(self):
@@ -291,7 +291,7 @@ class TerminalWebSocketManager:
                 self.output_queue.put_nowait(message)
                 logger.warning("Output queue overflow, dropped message")
             except queue.Empty:
-                pass
+                logger.debug("Queue empty during overflow handling")
 
     async def _output_sender_loop(self):
         """Async loop to send queued messages to WebSocket."""
@@ -399,7 +399,7 @@ class TerminalWebSocketManager:
             try:
                 await asyncio.wait_for(self.output_sender_task, timeout=2.0)
             except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
+                logger.debug("Output sender task cancelled or timed out during cleanup")
 
         # Wait for reader thread to finish
         if self.reader_thread and self.reader_thread.is_alive():
@@ -415,8 +415,8 @@ class TerminalWebSocketManager:
         if self.pty_fd:
             try:
                 os.close(self.pty_fd)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("PTY fd close error: %s", e)
             self.pty_fd = None
 
         # Clean up process

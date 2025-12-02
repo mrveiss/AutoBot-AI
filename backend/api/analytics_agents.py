@@ -305,8 +305,8 @@ async def get_agent_recommendations():
                         "message": "No activity in the last 7 days",
                         "suggestion": "Check if agent is properly configured and active",
                     })
-            except Exception:
-                pass  # Invalid date format, skip activity check
+            except Exception as e:
+                logger.debug("Invalid date format in activity check: %s", e)
 
         if agent_recommendations:
             recommendations.append({

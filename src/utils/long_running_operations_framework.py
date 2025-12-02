@@ -37,6 +37,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+import aiofiles
 import redis.asyncio as redis
 
 # Import existing timeout framework
@@ -350,8 +351,9 @@ class OperationCheckpointManager:
             f"checkpoint_{operation_id}_*.pkl"
         ):
             try:
-                with open(checkpoint_file, "rb") as f:
-                    checkpoint = pickle.load(f)
+                async with aiofiles.open(checkpoint_file, "rb") as f:
+                    data = await f.read()
+                    checkpoint = pickle.loads(data)
                     checkpoints.append(checkpoint)
             except Exception as e:
                 logger.warning(f"Failed to load checkpoint {checkpoint_file}: {e}")
@@ -490,7 +492,7 @@ class LongRunningOperationManager:
             try:
                 await self._background_processor_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Background processor task cancelled during shutdown")
             self._background_processor_task = None
 
     async def _background_processor(self):

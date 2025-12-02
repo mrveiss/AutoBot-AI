@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import aiofiles
+
 from src.constants.path_constants import PATH
 from src.knowledge_base_factory import get_knowledge_base
 
@@ -552,13 +554,13 @@ class CodebaseIndexingService:
         """Read file content with error handling"""
         try:
             # Try UTF-8 first
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                return await f.read()
         except UnicodeDecodeError:
             try:
                 # Try with latin-1 as fallback
-                with open(file_path, "r", encoding="latin-1") as f:
-                    return f.read()
+                async with aiofiles.open(file_path, "r", encoding="latin-1") as f:
+                    return await f.read()
             except Exception as e:
                 logger.warning(f"Could not read file {file_path}: {e}")
                 return None

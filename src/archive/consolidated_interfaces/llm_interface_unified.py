@@ -291,8 +291,8 @@ class OllamaProvider(LLMProvider):
                         return [
                             model["name"] for model in models_data.get("models", [])
                         ]
-        except (aiohttp.ClientError, asyncio.TimeoutError, Exception):
-            pass
+        except (aiohttp.ClientError, asyncio.TimeoutError, Exception) as e:
+            logger.debug("Failed to fetch models from Ollama: %s", e)
         return self.config.available_models
 
 

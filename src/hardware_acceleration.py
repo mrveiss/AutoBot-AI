@@ -112,8 +112,8 @@ class HardwareAccelerationManager:
                 if any(keyword in output for keyword in ["neural", "npu", "ai"]):
                     logger.info("NPU hardware detected via lspci")
                     return True
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.debug("lspci NPU detection unavailable: %s", e)
         return False
 
     def _check_npu_via_openvino(self) -> bool:
@@ -146,8 +146,8 @@ class HardwareAccelerationManager:
                 if result.returncode == 0 and result.stdout.strip():
                     logger.info("NVIDIA GPU detected")
                     return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug("nvidia-smi not available: %s", e)
 
             # Check for AMD GPU
             try:
@@ -160,8 +160,8 @@ class HardwareAccelerationManager:
                 if result.returncode == 0:
                     logger.info("AMD GPU detected")
                     return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug("rocm-smi not available: %s", e)
 
             # Check for Intel GPU
             try:
@@ -171,8 +171,8 @@ class HardwareAccelerationManager:
                 if result.returncode == 0:
                     logger.info("Intel GPU detected")
                     return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug("intel_gpu_top not available: %s", e)
 
             # Generic lspci check
             try:
@@ -185,8 +185,8 @@ class HardwareAccelerationManager:
                     if any(indicator in output for indicator in gpu_indicators):
                         logger.info("GPU hardware detected via lspci")
                         return True
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug("lspci GPU detection unavailable: %s", e)
 
             return False
 
@@ -255,8 +255,8 @@ class HardwareAccelerationManager:
                 info["devices"] = gpus
                 info["vendor"] = "NVIDIA"
                 return info
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.debug("nvidia-smi GPU info unavailable: %s", e)
 
         # Fallback generic GPU info
         info["devices"] = ["GPU (detected)"]
@@ -291,8 +291,8 @@ class HardwareAccelerationManager:
                             line for line in cpuinfo.split("\n") if "model name" in line
                         ][0]
                         cpu_info["model"] = model_line.split(":")[1].strip()
-            except (FileNotFoundError, IndexError):
-                pass
+            except (FileNotFoundError, IndexError) as e:
+                logger.debug("Detailed CPU info not available: %s", e)
 
             return cpu_info
 

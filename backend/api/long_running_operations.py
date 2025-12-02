@@ -605,7 +605,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
                 await websocket.send_json({"type": "ping"})
 
     except WebSocketDisconnect:
-        pass
+        logger.debug("WebSocket disconnected for operation %s", operation_id)
     finally:
         # Remove from connections
         if (

@@ -6,6 +6,7 @@ Research Browser API
 Handles browser automation for research tasks with user interaction support
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -309,7 +310,7 @@ async def get_browser_info(session_id: str):
                 get_vnc_direct_url()
             ),  # Intelligent VNC connection (5900 or 5901)
             "session_active": session.status == "active",
-            "environment": "container" if os.path.exists("/.dockerenv") else "host",
+            "environment": "container" if await asyncio.to_thread(os.path.exists, "/.dockerenv") else "host",
         }
     except Exception:
         docker_browser_info = {"available": False}
