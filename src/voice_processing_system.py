@@ -912,8 +912,12 @@ class TextToSpeechEngine:
             await asyncio.to_thread(self.tts_engine.runAndWait)
 
             # Read file content asynchronously
-            async with aiofiles.open(temp_path, "rb") as audio_file:
-                audio_data = await audio_file.read()
+            try:
+                async with aiofiles.open(temp_path, "rb") as audio_file:
+                    audio_data = await audio_file.read()
+            except OSError as e:
+                logger.error(f"Failed to read audio file {temp_path}: {e}")
+                return b""
 
             # Clean up
             await asyncio.to_thread(os.unlink, temp_path)
