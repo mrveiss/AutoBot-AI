@@ -9,9 +9,9 @@ where bugs are likely to occur. Provides risk scoring, prevention tips,
 and targeted testing suggestions.
 """
 
+import asyncio
 import json
 import logging
-import subprocess
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -192,31 +192,35 @@ def get_suggested_tests(file_path: str, factors: dict[str, float]) -> list[str]:
 async def get_git_bug_history() -> dict[str, Any]:
     """Analyze git history for bug fixes."""
     try:
-        # Get commits with bug-related keywords
-        result = subprocess.run(
-            [
-                "git",
-                "log",
-                "--oneline",
-                "--since=1 year ago",
-                "--grep=fix",
-                "--grep=bug",
-                "--grep=error",
-                "--grep=issue",
-                "--all-match",
-                "--name-only",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            encoding="utf-8",
+        # Get commits with bug-related keywords using async subprocess
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "log",
+            "--oneline",
+            "--since=1 year ago",
+            "--grep=fix",
+            "--grep=bug",
+            "--grep=error",
+            "--grep=issue",
+            "--all-match",
+            "--name-only",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        if result.returncode != 0:
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.warning("Git bug history command timed out")
+            return {}
+
+        if proc.returncode != 0:
             return {}
 
         # Parse output to count bug fixes per file
-        lines = result.stdout.strip().split("\n")
+        lines = stdout.decode("utf-8").strip().split("\n")
         file_bug_counts: dict[str, int] = {}
         current_files: list[str] = []
 
@@ -240,19 +244,29 @@ async def get_git_bug_history() -> dict[str, Any]:
 async def get_file_change_frequency() -> dict[str, int]:
     """Get change frequency for files in the last 90 days."""
     try:
-        result = subprocess.run(
-            ["git", "log", "--since=90 days ago", "--name-only", "--pretty=format:"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            encoding="utf-8",
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "log",
+            "--since=90 days ago",
+            "--name-only",
+            "--pretty=format:",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        if result.returncode != 0:
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.warning("Git change frequency command timed out")
+            return {}
+
+        if proc.returncode != 0:
             return {}
 
         change_counts: dict[str, int] = {}
-        for line in result.stdout.strip().split("\n"):
+        for line in stdout.decode("utf-8").strip().split("\n"):
             if line:
                 change_counts[line] = change_counts.get(line, 0) + 1
 

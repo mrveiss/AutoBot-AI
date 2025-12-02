@@ -2273,8 +2273,9 @@ async def get_dependencies():
                     "imports": [],
                 }
 
-            with open(py_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Use aiofiles for non-blocking file I/O
+            async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
+                content = await f.read()
 
             tree = ast.parse(content)
 
@@ -2452,8 +2453,9 @@ async def get_import_tree():
             rel_path = str(py_file.relative_to(project_root))
             file_imports[rel_path] = []
 
-            with open(py_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Use aiofiles for non-blocking file I/O
+            async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
+                content = await f.read()
 
             tree = ast.parse(content)
 
@@ -2704,8 +2706,9 @@ async def get_call_graph():
             rel_path = str(py_file.relative_to(project_root))
             module_path = rel_path.replace("/", ".").replace(".py", "")
 
-            with open(py_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Use aiofiles for non-blocking file I/O
+            async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
+                content = await f.read()
 
             tree = ast.parse(content)
             visitor = FunctionCallVisitor(rel_path, module_path)
