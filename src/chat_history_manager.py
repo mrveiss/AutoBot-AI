@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import fcntl
 import gc
 import json
@@ -352,19 +353,21 @@ class ChatHistoryManager:
         # Cleanup if needed
         self._cleanup_messages_if_needed()
 
-    def _cleanup_old_session_files(self):
+    async def _cleanup_old_session_files(self):
         """PERFORMANCE OPTIMIZATION: Clean up old session files"""
         try:
             chats_directory = self._get_chats_directory()
-            if not os.path.exists(chats_directory):
+            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            if not dir_exists:
                 return
 
             # Get all chat files sorted by modification time
             chat_files = []
-            for filename in os.listdir(chats_directory):
+            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            for filename in filenames:
                 if filename.startswith("chat_") and filename.endswith(".json"):
                     file_path = os.path.join(chats_directory, filename)
-                    mtime = os.path.getmtime(file_path)
+                    mtime = await asyncio.to_thread(os.path.getmtime, file_path)
                     chat_files.append((file_path, mtime, filename))
 
             # Sort by modification time (newest first)
@@ -375,7 +378,7 @@ class ChatHistoryManager:
                 files_to_remove = chat_files[self.max_session_files :]
                 for file_path, _, filename in files_to_remove:
                     try:
-                        os.remove(file_path)
+                        await asyncio.to_thread(os.remove, file_path)
                         logger.info(f"CLEANUP: Removed old session file: {filename}")
                     except Exception as e:
                         logger.error(f"Failed to remove session file {filename}: {e}")
@@ -798,7 +801,8 @@ class ChatHistoryManager:
             chat_file = f"{chats_directory}/{session_id}_chat.json"
 
             # Try new format first
-            if os.path.exists(chat_file):
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if file_exists:
                 async with aiofiles.open(chat_file, "r") as f:
                     file_content = await f.read()
                 chat_data = self._decrypt_data(file_content)
@@ -828,10 +832,12 @@ class ChatHistoryManager:
 
             # Try new format first
             chat_file = f"{chats_directory}/{session_id}_chat.json"
-            if not os.path.exists(chat_file):
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
                 # Try old format
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
-                if not os.path.exists(chat_file):
+                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                if not old_exists:
                     logging.warning(f"Session {session_id} not found for update")
                     return False
 
@@ -1061,15 +1067,17 @@ class ChatHistoryManager:
             chats_directory = self._get_chats_directory()
 
             # Ensure chats directory exists
-            if not os.path.exists(chats_directory):
-                os.makedirs(chats_directory, exist_ok=True)
+            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            if not dir_exists:
+                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
             # Clean up old session files if needed
-            self._cleanup_old_session_files()
+            await self._cleanup_old_session_files()
 
             # Look for chat files in the chats directory (both old and new formats)
-            for filename in os.listdir(chats_directory):
+            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            for filename in filenames:
                 # Support both formats: chat_{uuid}.json and {uuid}_chat.json
                 chat_id = None
                 if filename.startswith("chat_") and filename.endswith(".json"):
@@ -1116,20 +1124,22 @@ class ChatHistoryManager:
             logging.error(f"Error listing chat sessions: {str(e)}")
             return []
 
-    def list_sessions_fast(self) -> List[Dict[str, Any]]:
+    async def list_sessions_fast(self) -> List[Dict[str, Any]]:
         """Fast listing of chat sessions using file metadata only (no decryption)."""
         try:
             sessions = []
             chats_directory = self._get_chats_directory()
 
             # Ensure chats directory exists
-            if not os.path.exists(chats_directory):
-                os.makedirs(chats_directory, exist_ok=True)
+            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            if not dir_exists:
+                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
             # Use file system metadata for performance - avoid decryption
             # Support both formats: chat_{uuid}.json and {uuid}_chat.json
-            for filename in os.listdir(chats_directory):
+            filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            for filename in filenames:
                 chat_id = None
                 if filename.startswith("chat_") and filename.endswith(".json"):
                     # Old format: chat_{uuid}.json
@@ -1145,7 +1155,7 @@ class ChatHistoryManager:
 
                 try:
                     # Get file stats for metadata
-                    stat = os.stat(chat_path)
+                    stat = await asyncio.to_thread(os.stat, chat_path)
                     created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
                     last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
                     file_size = stat.st_size
@@ -1154,8 +1164,9 @@ class ChatHistoryManager:
                     chat_name = None
                     message_count = 0
                     try:
-                        with open(chat_path, "r", encoding="utf-8") as f:
-                            chat_data = json.load(f)
+                        async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                            content = await f.read()
+                            chat_data = json.loads(content)
                             chat_name = chat_data.get("name", "").strip()
                             messages = chat_data.get("messages", [])
                             message_count = (
@@ -1215,7 +1226,8 @@ class ChatHistoryManager:
 
             # Scan for orphaned terminal files
             orphaned_sessions_created = 0
-            for filename in os.listdir(chats_directory):
+            orphan_filenames = await asyncio.to_thread(os.listdir, chats_directory)
+            for filename in orphan_filenames:
                 session_id = None
 
                 # Check for terminal log files
@@ -1234,7 +1246,10 @@ class ChatHistoryManager:
                         )
 
                         # Only create if it doesn't already exist
-                        if not os.path.exists(chat_file):
+                        chat_file_exists = await asyncio.to_thread(
+                            os.path.exists, chat_file
+                        )
+                        if not chat_file_exists:
                             empty_chat = {
                                 "id": session_id,
                                 "name": f"Terminal Session {session_id[:8]}",
@@ -1247,15 +1262,19 @@ class ChatHistoryManager:
                                 },
                             }
 
-                            with open(chat_file, "w", encoding="utf-8") as f:
-                                json.dump(empty_chat, f, indent=2, ensure_ascii=False)
+                            async with aiofiles.open(
+                                chat_file, "w", encoding="utf-8"
+                            ) as f:
+                                await f.write(
+                                    json.dumps(empty_chat, indent=2, ensure_ascii=False)
+                                )
 
                             # Add to existing_chat_ids to prevent duplicates
                             existing_chat_ids.add(session_id)
                             orphaned_sessions_created += 1
 
                             # Get file stats for the newly created chat
-                            stat = os.stat(chat_file)
+                            stat = await asyncio.to_thread(os.stat, chat_file)
                             created_time = datetime.fromtimestamp(
                                 stat.st_ctime
                             ).isoformat()
@@ -1336,9 +1355,11 @@ class ChatHistoryManager:
             chat_file = f"{chats_directory}/{session_id}_chat.json"
 
             # Backward compatibility: try old naming convention if new doesn't exist
-            if not os.path.exists(chat_file):
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
                 chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-                if os.path.exists(chat_file_old):
+                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+                if old_file_exists:
                     chat_file = chat_file_old
                     logger.debug(f"Using legacy file format for session {session_id}")
                 else:
@@ -1402,13 +1423,13 @@ class ChatHistoryManager:
         dir_path = os.path.dirname(file_path)
 
         # Create temporary file in same directory (required for atomic rename)
-        fd, temp_path = tempfile.mkstemp(
-            dir=dir_path, prefix=".tmp_chat_", suffix=".json"
+        fd, temp_path = await asyncio.to_thread(
+            tempfile.mkstemp, dir=dir_path, prefix=".tmp_chat_", suffix=".json"
         )
 
         try:
             # Acquire exclusive lock on the file descriptor
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            await asyncio.to_thread(fcntl.flock, fd, fcntl.LOCK_EX)
 
             # Write content to temporary file using aiofiles for async I/O
             os.close(fd)  # Close fd so aiofiles can open it
@@ -1416,15 +1437,16 @@ class ChatHistoryManager:
                 await f.write(content)
 
             # Atomic rename (cross-platform atomic operation)
-            os.replace(temp_path, file_path)
+            await asyncio.to_thread(os.replace, temp_path, file_path)
 
             logger.debug(f"Atomic write completed: {file_path}")
 
         except Exception as e:
             # Cleanup temporary file on failure
             try:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
+                temp_exists = await asyncio.to_thread(os.path.exists, temp_path)
+                if temp_exists:
+                    await asyncio.to_thread(os.unlink, temp_path)
             except Exception as cleanup_error:
                 logger.warning(
                     f"Failed to cleanup temp file {temp_path}: {cleanup_error}"
@@ -1453,8 +1475,9 @@ class ChatHistoryManager:
         try:
             # Ensure chats directory exists
             chats_directory = self._get_chats_directory()
-            if not os.path.exists(chats_directory):
-                os.makedirs(chats_directory, exist_ok=True)
+            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            if not dir_exists:
+                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
 
             # Use new naming convention: {uuid}_chat.json
             chat_file = f"{chats_directory}/{session_id}_chat.json"
@@ -1477,7 +1500,8 @@ class ChatHistoryManager:
             chat_data = {}
 
             # Check new format first, then old format for backward compatibility
-            if os.path.exists(chat_file):
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if file_exists:
                 try:
                     async with aiofiles.open(chat_file, "r") as f:
                         file_content = await f.read()
@@ -1490,7 +1514,8 @@ class ChatHistoryManager:
             else:
                 # Try old format for backward compatibility
                 chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-                if os.path.exists(chat_file_old):
+                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+                if old_file_exists:
                     try:
                         async with aiofiles.open(chat_file_old, "r") as f:
                             file_content = await f.read()
@@ -1616,12 +1641,12 @@ class ChatHistoryManager:
                 should_cleanup = self._session_save_counter % 10 == 0
 
             if should_cleanup:  # Every 10th save
-                self._cleanup_old_session_files()
+                await self._cleanup_old_session_files()
 
         except Exception as e:
             logging.error(f"Error saving chat session {session_id}: {str(e)}")
 
-    def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str) -> bool:
         """
         Deletes a chat session and its companion files.
 
@@ -1637,28 +1662,32 @@ class ChatHistoryManager:
 
             # Delete new format file
             chat_file_new = f"{chats_directory}/{session_id}_chat.json"
-            if os.path.exists(chat_file_new):
-                os.remove(chat_file_new)
+            new_exists = await asyncio.to_thread(os.path.exists, chat_file_new)
+            if new_exists:
+                await asyncio.to_thread(os.remove, chat_file_new)
                 deleted = True
 
             # Delete old format file if exists
             chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-            if os.path.exists(chat_file_old):
-                os.remove(chat_file_old)
+            old_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+            if old_exists:
+                await asyncio.to_thread(os.remove, chat_file_old)
                 deleted = True
 
             # Delete companion files (terminal logs, transcripts, etc.)
             terminal_log = f"{chats_directory}/{session_id}_terminal.log"
-            if os.path.exists(terminal_log):
-                os.remove(terminal_log)
+            log_exists = await asyncio.to_thread(os.path.exists, terminal_log)
+            if log_exists:
+                await asyncio.to_thread(os.remove, terminal_log)
                 logger.debug(f"Deleted terminal log for session {session_id}")
 
             # Delete terminal transcript file
             terminal_transcript = (
                 f"{chats_directory}/{session_id}_terminal_transcript.txt"
             )
-            if os.path.exists(terminal_transcript):
-                os.remove(terminal_transcript)
+            transcript_exists = await asyncio.to_thread(os.path.exists, terminal_transcript)
+            if transcript_exists:
+                await asyncio.to_thread(os.remove, terminal_transcript)
                 logger.debug(f"Deleted terminal transcript for session {session_id}")
 
             # Clear Redis cache
@@ -1698,10 +1727,12 @@ class ChatHistoryManager:
 
             # Try new format first
             chat_file = f"{chats_directory}/{session_id}_chat.json"
-            if not os.path.exists(chat_file):
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
                 # Try old format
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
-                if not os.path.exists(chat_file):
+                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                if not old_exists:
                     logging.warning(
                         f"Chat session {session_id} not found for name update"
                     )
