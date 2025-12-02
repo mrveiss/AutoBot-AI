@@ -434,8 +434,13 @@ class AuditLogger:
             }
 
             # Append to JSONL file (one JSON object per line)
-            async with aiofiles.open(fallback_file, "a") as f:
-                await f.write(json.dumps(log_data, default=str) + "\n")
+            try:
+                async with aiofiles.open(
+                    fallback_file, "a", encoding="utf-8"
+                ) as f:
+                    await f.write(json.dumps(log_data, default=str) + "\n")
+            except OSError as e:
+                logger.error(f"Fallback log file write failed: {e}")
 
         except Exception as e:
             logger.error(f"Fallback logging also failed: {e}")

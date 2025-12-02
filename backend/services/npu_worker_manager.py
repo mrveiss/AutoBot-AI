@@ -108,8 +108,14 @@ class NPUWorkerManager:
             }
 
             # Write to file asynchronously
-            async with aiofiles.open(self.config_file, "w") as f:
-                await f.write(yaml.dump(data, default_flow_style=False))
+            try:
+                async with aiofiles.open(
+                    self.config_file, "w", encoding="utf-8"
+                ) as f:
+                    await f.write(yaml.dump(data, default_flow_style=False))
+            except OSError as e:
+                logger.error(f"Failed to write worker config file: {e}")
+                raise
 
             logger.info(f"Saved {len(self._workers)} worker configurations")
 
