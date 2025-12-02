@@ -368,8 +368,14 @@ class ConsolidatedTerminalWebSocket:
                 import aiofiles
 
                 transcript_path = Path("data/chats") / transcript_file
-                async with aiofiles.open(transcript_path, "a") as f:
+                async with aiofiles.open(
+                    transcript_path, "a", encoding="utf-8"
+                ) as f:
                     await f.write(text)
+            except OSError as e:
+                logger.error(
+                    f"Failed to write input to transcript (I/O error): {e}"
+                )
             except Exception as e:
                 logger.error(f"Failed to write input to transcript: {e}")
 
@@ -834,8 +840,14 @@ class ConsolidatedTerminalWebSocket:
                 import aiofiles
 
                 transcript_path = Path("data/chats") / transcript_file
-                async with aiofiles.open(transcript_path, "a") as f:
+                async with aiofiles.open(
+                    transcript_path, "a", encoding="utf-8"
+                ) as f:
                     await f.write(content)
+            except OSError as e:
+                logger.error(
+                    f"Failed to write terminal transcript (I/O error): {e}"
+                )
             except Exception as e:
                 logger.error(f"Failed to write terminal transcript: {e}")
 
