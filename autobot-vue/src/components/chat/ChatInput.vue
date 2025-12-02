@@ -435,8 +435,8 @@ const handleFileSelect = async (event: Event) => {
     return true
   })
 
-  // Process files with upload progress
-  for (const file of validFiles) {
+  // Create upload tracking objects for all files first
+  const uploads = validFiles.map(file => {
     const uploadId = generateId()
     const upload: {
       id: string;
@@ -445,7 +445,7 @@ const handleFileSelect = async (event: Event) => {
       status: string;
       current: number;
       total: number;
-      file: File;  // Store original file for retry
+      file: File;
       fileId?: string;
       uploadId?: string;
       error?: string;
@@ -457,20 +457,30 @@ const handleFileSelect = async (event: Event) => {
       status: 'Preparing...',
       current: 0,
       total: file.size,
-      file: file  // Store file reference for retry
+      file: file
     }
-
     uploadProgress.value.push(upload)
+    return { upload, file }
+  })
 
-    try {
-      // Real upload with progress tracking
+  // Upload all files in parallel - eliminates N+1 sequential uploads
+  const results = await Promise.allSettled(
+    uploads.map(async ({ upload, file }) => {
       await uploadFile(upload, file)
-      attachedFiles.value.push(file)
-    } catch (error) {
-      upload.error = error instanceof Error ? error.message : 'Upload failed'
+      return file
+    })
+  )
+
+  // Process results and track successful uploads
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      attachedFiles.value.push(result.value)
+    } else {
+      const upload = uploads[index].upload
+      upload.error = result.reason instanceof Error ? result.reason.message : 'Upload failed'
       upload.status = 'Failed'
     }
-  }
+  })
 
   // Clear input
   target.value = ''

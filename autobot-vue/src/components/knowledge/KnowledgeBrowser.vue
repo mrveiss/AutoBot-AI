@@ -874,13 +874,16 @@ const handleRetryFailed = async () => {
 
   if (failedDocs.length > 0) {
     isVectorizing.value = true
-    for (const docId of failedDocs) {
-      try {
-        await vectorizeDocument(docId)
-      } catch (error) {
-        logger.error(`Failed to retry vectorization for ${docId}:`, error)
+    // Retry all failed documents in parallel - eliminates N+1 sequential calls
+    const results = await Promise.allSettled(
+      failedDocs.map(docId => vectorizeDocument(docId))
+    )
+    // Log any failures
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        logger.error(`Failed to retry vectorization for ${failedDocs[index]}:`, result.reason)
       }
-    }
+    })
     isVectorizing.value = false
   }
 }
