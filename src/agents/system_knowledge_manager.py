@@ -134,6 +134,8 @@ class SystemKnowledgeManager:
                 relative_path = str(file_path.relative_to(self.system_knowledge_dir))
                 file_states[relative_path] = file_hash
 
+            except OSError as e:
+                logger.warning(f"Failed to read file {file_path}: {e}")
             except Exception as e:
                 logger.warning(f"Error processing file {file_path}: {e}")
 

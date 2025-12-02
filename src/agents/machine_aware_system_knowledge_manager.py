@@ -203,10 +203,13 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return None
 
         try:
-            async with aiofiles.open(profile_file, "r") as f:
+            async with aiofiles.open(profile_file, "r", encoding="utf-8") as f:
                 content = await f.read()
                 data = json.loads(content)
             return MachineProfile.from_dict(data)
+        except OSError as e:
+            logger.warning(f"Failed to read machine profile {profile_file}: {e}")
+            return None
         except Exception as e:
             logger.warning(f"Error loading machine profile {machine_id}: {e}")
             return None
@@ -529,10 +532,12 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             profile_files = await asyncio.to_thread(list, self.machine_profiles_dir.glob("*.json"))
             for profile_file in profile_files:
                 try:
-                    async with aiofiles.open(profile_file, "r") as f:
+                    async with aiofiles.open(profile_file, "r", encoding="utf-8") as f:
                         content = await f.read()
                         profile_data = json.loads(content)
                     machines.append(profile_data)
+                except OSError as e:
+                    logger.warning(f"Failed to read profile {profile_file}: {e}")
                 except Exception as e:
                     logger.warning(f"Error loading profile {profile_file}: {e}")
 
