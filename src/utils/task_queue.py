@@ -21,8 +21,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 
 try:
+    from redis.exceptions import RedisError
     from src.utils.redis_client import get_redis_client
 except ImportError:
+    RedisError = Exception  # Fallback if redis not available
     get_redis_client = None
 
 # Temporary implementations until proper modules are created
@@ -285,14 +287,18 @@ class TaskQueue:
         await self._store_task(task)
 
         # Add to appropriate queue
-        if scheduled_at and scheduled_at > datetime.utcnow():
-            # Scheduled task
-            score = scheduled_at.timestamp()
-            await self.redis.zadd(self.scheduled_key, {task_id: score})
-        else:
-            # Immediate task
-            priority_score = priority.value * 1000000 + int(time.time())
-            await self.redis.zadd(self.pending_key, {task_id: priority_score})
+        try:
+            if scheduled_at and scheduled_at > datetime.utcnow():
+                # Scheduled task
+                score = scheduled_at.timestamp()
+                await self.redis.zadd(self.scheduled_key, {task_id: score})
+            else:
+                # Immediate task
+                priority_score = priority.value * 1000000 + int(time.time())
+                await self.redis.zadd(self.pending_key, {task_id: priority_score})
+        except RedisError as e:
+            self.logger.error(f"Failed to enqueue task {task_id}: {e}")
+            raise RuntimeError(f"Failed to enqueue task: {e}")
 
         self.logger.info(f"Enqueued task {task_id}: {function_name}")
         return task_id
@@ -301,17 +307,25 @@ class TaskQueue:
         """Store task data in Redis."""
         if not self.redis:
             return
-        task_data = json.dumps(task.to_dict())
-        self.redis.hset(f"{self.queue_name}:tasks", task.id, task_data)
+        try:
+            task_data = json.dumps(task.to_dict())
+            await self.redis.hset(f"{self.queue_name}:tasks", task.id, task_data)
+        except RedisError as e:
+            self.logger.error(f"Failed to store task {task.id}: {e}")
+            raise RuntimeError(f"Failed to store task: {e}")
 
     async def _get_task(self, task_id: str) -> Optional[Task]:
         """Retrieve task data from Redis."""
         if not self.redis:
             return None
-        task_data = self.redis.hget(f"{self.queue_name}:tasks", task_id)
-        if task_data:
-            return Task.from_dict(json.loads(task_data))
-        return None
+        try:
+            task_data = await self.redis.hget(f"{self.queue_name}:tasks", task_id)
+            if task_data:
+                return Task.from_dict(json.loads(task_data))
+            return None
+        except RedisError as e:
+            self.logger.error(f"Failed to get task {task_id}: {e}")
+            raise RuntimeError(f"Failed to get task: {e}")
 
     async def start_workers(self) -> None:
         """Start worker processes (thread-safe)."""
@@ -418,18 +432,22 @@ class TaskQueue:
         if not self.redis:
             return None
 
-        # Get highest priority task
-        tasks = await self.redis.zrevrange(self.pending_key, 0, 0)
-        if not tasks:
-            return None
+        try:
+            # Get highest priority task
+            tasks = await self.redis.zrevrange(self.pending_key, 0, 0)
+            if not tasks:
+                return None
 
-        task_id = tasks[0]
+            task_id = tasks[0]
 
-        # Move to running queue
-        await self.redis.zrem(self.pending_key, task_id)
-        await self.redis.zadd(self.running_key, {task_id: time.time()})
+            # Move to running queue
+            await self.redis.zrem(self.pending_key, task_id)
+            await self.redis.zadd(self.running_key, {task_id: time.time()})
 
-        return task_id
+            return task_id
+        except RedisError as e:
+            self.logger.error(f"Failed to get next task from queue: {e}")
+            return None  # Return None to allow worker to continue
 
     async def _process_task(self, task_id: str, worker_name: str) -> None:
         """Process a single task."""
