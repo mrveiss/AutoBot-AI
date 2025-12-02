@@ -656,8 +656,10 @@ class BusinessIntelligenceDashboard:
         # Store in local file
         try:
             report_file = self.dashboard_data_path / f"bi_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            async with aiofiles.open(report_file, 'w') as f:
+            async with aiofiles.open(report_file, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(report, indent=2, default=str))
+        except OSError as e:
+            self.logger.error(f"Failed to write dashboard report to {report_file}: {e}")
         except Exception as e:
             self.logger.error(f"Error storing dashboard report to file: {e}")
 
@@ -797,10 +799,12 @@ class BusinessIntelligenceDashboard:
 
             # Save dashboard HTML
             dashboard_file = self.dashboard_data_path / f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-            async with aiofiles.open(dashboard_file, 'w') as f:
-                await f.write(dashboard_html)
-
-            self.logger.info(f"📊 Dashboard saved to: {dashboard_file}")
+            try:
+                async with aiofiles.open(dashboard_file, 'w', encoding='utf-8') as f:
+                    await f.write(dashboard_html)
+                self.logger.info(f"📊 Dashboard saved to: {dashboard_file}")
+            except OSError as e:
+                self.logger.error(f"Failed to save dashboard HTML to {dashboard_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error generating visual dashboard: {e}")
