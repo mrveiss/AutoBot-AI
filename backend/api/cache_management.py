@@ -50,12 +50,23 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
         else:
             global_stats = await advanced_cache.get_stats()
 
-            # Get individual data type stats
+            # Get individual data type stats (parallelized to avoid N+1)
             data_type_stats = {}
             if "configured_data_types" in global_stats:
-                for dt in global_stats["configured_data_types"]:
-                    dt_stats = await advanced_cache.get_stats(dt)
-                    data_type_stats[dt] = dt_stats
+                import asyncio
+                data_types = global_stats["configured_data_types"]
+                # Fetch all stats in parallel
+                stats_results = await asyncio.gather(
+                    *[advanced_cache.get_stats(dt) for dt in data_types],
+                    return_exceptions=True
+                )
+                # Build result dict, handling any exceptions
+                for dt, dt_stats in zip(data_types, stats_results):
+                    if isinstance(dt_stats, Exception):
+                        logger.error(f"Error getting stats for {dt}: {dt_stats}")
+                        data_type_stats[dt] = {"error": str(dt_stats)}
+                    else:
+                        data_type_stats[dt] = dt_stats
 
             global_stats["data_type_stats"] = data_type_stats
             return CacheStatsResponse(**global_stats)

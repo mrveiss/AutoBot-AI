@@ -500,14 +500,18 @@ class ArchitectureAnalyzer:
         python_files = await self._collect_python_files(paths)
         logger.info(f"Analyzing {len(python_files)} Python files")
 
-        # Analyze each file
-        for file_path in python_files:
-            try:
-                analysis = await self._analyze_file(file_path, target_patterns)
-                if analysis:
+        # Analyze all files in parallel - eliminates N+1 sequential analysis
+        if python_files:
+            analyses = await asyncio.gather(
+                *[self._analyze_file(fp, target_patterns) for fp in python_files],
+                return_exceptions=True
+            )
+
+            for file_path, analysis in zip(python_files, analyses):
+                if isinstance(analysis, Exception):
+                    logger.debug(f"Failed to analyze {file_path}: {analysis}")
+                elif analysis:
                     self.file_analyses[file_path] = analysis
-            except Exception as e:
-                logger.debug(f"Failed to analyze {file_path}: {e}")
 
         # Aggregate pattern matches
         all_matches = []

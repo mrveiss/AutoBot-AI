@@ -846,14 +846,19 @@ class EnhancedOrchestrator:
                         }
                     )
 
-            # Store extracted knowledge
-            for item in knowledge_items:
-                if hasattr(self.knowledge_base, "add_document"):
-                    await self.knowledge_base.add_document(
-                        content=f"Workflow Knowledge: {item['type']}",
-                        metadata=item,
-                        doc_type="workflow_knowledge",
-                    )
+            # Store extracted knowledge in parallel - eliminates N+1 sequential writes
+            if knowledge_items and hasattr(self.knowledge_base, "add_document"):
+                await asyncio.gather(
+                    *[
+                        self.knowledge_base.add_document(
+                            content=f"Workflow Knowledge: {item['type']}",
+                            metadata=item,
+                            doc_type="workflow_knowledge",
+                        )
+                        for item in knowledge_items
+                    ],
+                    return_exceptions=True,
+                )
 
             self.workflow_metrics["knowledge_extracted"] += len(knowledge_items)
 

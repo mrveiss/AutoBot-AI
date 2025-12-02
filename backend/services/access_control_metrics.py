@@ -169,14 +169,27 @@ class AccessControlMetrics:
                 "period_days": days,
             }
 
-            # Collect data from each day in the period
-            for day_offset in range(days):
-                date = (datetime.now() - timedelta(days=day_offset)).strftime(
-                    "%Y-%m-%d"
-                )
+            # Build list of dates to query
+            dates = [
+                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                for day_offset in range(days)
+            ]
 
-                # Get daily total
-                daily_data = await redis.hgetall(f"violations:daily:{date}")
+            # Batch fetch all data using pipeline - eliminates N+1 queries
+            async with redis.pipeline() as pipe:
+                for date in dates:
+                    await pipe.hgetall(f"violations:daily:{date}")
+                    await pipe.hgetall(f"violations:by_endpoint:{date}")
+                    await pipe.hgetall(f"violations:by_user:{date}")
+                results = await pipe.execute()
+
+            # Process results (3 results per date: daily, endpoint, user)
+            for i, date in enumerate(dates):
+                daily_data = results[i * 3]
+                endpoint_counts = results[i * 3 + 1]
+                user_counts = results[i * 3 + 2]
+
+                # Process daily total
                 if daily_data:
                     total_key = (
                         b"total"
@@ -187,8 +200,7 @@ class AccessControlMetrics:
                     stats["by_day"][date] = daily_total
                     stats["total_violations"] += daily_total
 
-                # Get endpoint breakdown
-                endpoint_counts = await redis.hgetall(f"violations:by_endpoint:{date}")
+                # Process endpoint breakdown
                 for endpoint, count in endpoint_counts.items():
                     if isinstance(endpoint, bytes):
                         endpoint = endpoint.decode("utf-8")
@@ -199,8 +211,7 @@ class AccessControlMetrics:
                         endpoint, 0
                     ) + int(count)
 
-                # Get user breakdown
-                user_counts = await redis.hgetall(f"violations:by_user:{date}")
+                # Process user breakdown
                 for user, count in user_counts.items():
                     if isinstance(user, bytes):
                         user = user.decode("utf-8")
@@ -242,38 +253,51 @@ class AccessControlMetrics:
         """
         try:
             redis = await self._get_redis()
-            violations = []
 
-            # Search last 7 days
-            for day_offset in range(min(7, self.retention_days)):
-                date = (datetime.now() - timedelta(days=day_offset)).strftime(
-                    "%Y-%m-%d"
-                )
+            # Build list of dates to query
+            dates = [
+                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                for day_offset in range(min(7, self.retention_days))
+            ]
 
-                # Get violation IDs from timeline (sorted by timestamp, newest first)
-                violation_ids = await redis.zrevrange(
-                    f"violations:timeline:{date}", 0, limit - len(violations)
-                )
+            # Batch fetch violation IDs from all days using pipeline
+            async with redis.pipeline() as pipe:
+                for date in dates:
+                    await pipe.zrevrange(f"violations:timeline:{date}", 0, limit - 1)
+                timeline_results = await pipe.execute()
 
-                # Fetch violation details
-                for vid in violation_ids:
+            # Collect all violation IDs (maintaining order by recency)
+            all_violation_ids = []
+            for vids in timeline_results:
+                for vid in vids:
                     if isinstance(vid, bytes):
                         vid = vid.decode("utf-8")
-
-                    violation_key = f"access_violation:{vid}"
-                    violation_data = await redis.get(violation_key)
-
-                    if violation_data:
-                        if isinstance(violation_data, bytes):
-                            violation_data = violation_data.decode("utf-8")
-
-                        try:
-                            violations.append(json.loads(violation_data))
-                        except (json.JSONDecodeError, ValueError) as e:
-                            logger.debug(f"Failed to parse violation data: {e}")
-
-                if len(violations) >= limit:
+                    all_violation_ids.append(vid)
+                    if len(all_violation_ids) >= limit:
+                        break
+                if len(all_violation_ids) >= limit:
                     break
+
+            if not all_violation_ids:
+                return []
+
+            # Batch fetch all violation details - eliminates N+1 queries
+            async with redis.pipeline() as pipe:
+                for vid in all_violation_ids:
+                    await pipe.get(f"access_violation:{vid}")
+                violation_data_results = await pipe.execute()
+
+            # Parse results
+            violations = []
+            for violation_data in violation_data_results:
+                if violation_data:
+                    if isinstance(violation_data, bytes):
+                        violation_data = violation_data.decode("utf-8")
+
+                    try:
+                        violations.append(json.loads(violation_data))
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.debug(f"Failed to parse violation data: {e}")
 
             return violations[:limit]
 
@@ -304,12 +328,20 @@ class AccessControlMetrics:
                 "period_days": days,
             }
 
-            for day_offset in range(days):
-                date = (datetime.now() - timedelta(days=day_offset)).strftime(
-                    "%Y-%m-%d"
-                )
+            # Build list of dates to query
+            dates = [
+                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                for day_offset in range(days)
+            ]
 
-                count = await redis.hget(f"violations:by_endpoint:{date}", endpoint)
+            # Batch fetch all endpoint counts using pipeline - eliminates N+1 queries
+            async with redis.pipeline() as pipe:
+                for date in dates:
+                    await pipe.hget(f"violations:by_endpoint:{date}", endpoint)
+                results = await pipe.execute()
+
+            # Process results
+            for date, count in zip(dates, results):
                 if count:
                     if isinstance(count, bytes):
                         count = count.decode("utf-8")
@@ -345,12 +377,20 @@ class AccessControlMetrics:
                 "period_days": days,
             }
 
-            for day_offset in range(days):
-                date = (datetime.now() - timedelta(days=day_offset)).strftime(
-                    "%Y-%m-%d"
-                )
+            # Build list of dates to query
+            dates = [
+                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                for day_offset in range(days)
+            ]
 
-                count = await redis.hget(f"violations:by_user:{date}", username)
+            # Batch fetch all user counts using pipeline - eliminates N+1 queries
+            async with redis.pipeline() as pipe:
+                for date in dates:
+                    await pipe.hget(f"violations:by_user:{date}", username)
+                results = await pipe.execute()
+
+            # Process results
+            for date, count in zip(dates, results):
                 if count:
                     if isinstance(count, bytes):
                         count = count.decode("utf-8")

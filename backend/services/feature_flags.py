@@ -279,16 +279,22 @@ class FeatureFlags:
                 if cursor == 0:
                     break
 
+            # Batch fetch endpoint overrides using pipeline (fix N+1 query)
             endpoint_overrides = {}
-            for key in endpoint_keys:
-                if isinstance(key, bytes):
-                    key = key.decode()
-                endpoint = key.replace("feature_flag:access_control:endpoint:", "")
-                mode_val = await redis.get(key)
-                if mode_val:
-                    if isinstance(mode_val, bytes):
-                        mode_val = mode_val.decode()
-                    endpoint_overrides[endpoint] = mode_val
+            if endpoint_keys:
+                pipe = redis.pipeline()
+                for key in endpoint_keys:
+                    pipe.get(key)
+                mode_values = await pipe.execute()
+
+                for key, mode_val in zip(endpoint_keys, mode_values):
+                    if mode_val:
+                        if isinstance(key, bytes):
+                            key = key.decode()
+                        endpoint = key.replace("feature_flag:access_control:endpoint:", "")
+                        if isinstance(mode_val, bytes):
+                            mode_val = mode_val.decode()
+                        endpoint_overrides[endpoint] = mode_val
 
             return {
                 "current_mode": mode.value,

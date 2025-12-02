@@ -346,13 +346,24 @@ class NPUWorkerManager:
 
     async def list_workers(self) -> List[NPUWorkerDetails]:
         """List all registered workers with their status"""
+        if not self._workers:
+            return []
+
+        # Get all worker IDs and configs
+        worker_items = list(self._workers.items())
+        worker_ids = [wid for wid, _ in worker_items]
+
+        # Batch fetch all worker statuses in parallel - eliminates N+1 queries
+        statuses = await asyncio.gather(
+            *[self._get_worker_status(wid) for wid in worker_ids],
+            return_exceptions=True
+        )
+
+        # Build worker details list
         workers = []
-
-        for worker_id, config in self._workers.items():
-            status = await self._get_worker_status(worker_id)
-            if not status:
+        for (worker_id, config), status in zip(worker_items, statuses):
+            if isinstance(status, Exception) or not status:
                 status = NPUWorkerStatus(id=worker_id, status=WorkerStatus.UNKNOWN)
-
             workers.append(NPUWorkerDetails(config=config, status=status))
 
         return workers

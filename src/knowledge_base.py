@@ -2117,26 +2117,37 @@ class KnowledgeBase:
             elif query:
                 # Search facts by content matching
                 all_fact_keys = self._scan_redis_keys("fact:*")
-                for fact_key in all_fact_keys:
-                    fact_data = self.redis_client.hgetall(fact_key)
-                    if fact_data:
-                        content = fact_data.get(b"content", b"").decode("utf-8")
-                        if query.lower() in content.lower():
-                            fact_id = fact_key.split(":")[1]
-                            facts.append(
-                                {
-                                    "id": fact_id,
-                                    "content": content,
-                                    "metadata": json.loads(
-                                        fact_data.get(b"metadata", b"{}").decode(
-                                            "utf-8"
-                                        )
-                                    ),
-                                    "timestamp": (
-                                        fact_data.get(b"timestamp", b"").decode("utf-8")
-                                    ),
-                                }
-                            )
+                if all_fact_keys:
+                    # Batch fetch all facts using pipeline - eliminates N+1 queries
+                    pipe = self.redis_client.pipeline()
+                    for key in all_fact_keys:
+                        pipe.hgetall(key)
+                    results = pipe.execute()
+
+                    # Filter by query match
+                    for fact_key, fact_data in zip(all_fact_keys, results):
+                        if fact_data:
+                            content = fact_data.get(b"content", b"").decode("utf-8")
+                            if query.lower() in content.lower():
+                                fact_id = (
+                                    fact_key.split(":")[1]
+                                    if isinstance(fact_key, str)
+                                    else fact_key.decode().split(":")[1]
+                                )
+                                facts.append(
+                                    {
+                                        "id": fact_id,
+                                        "content": content,
+                                        "metadata": json.loads(
+                                            fact_data.get(b"metadata", b"{}").decode(
+                                                "utf-8"
+                                            )
+                                        ),
+                                        "timestamp": (
+                                            fact_data.get(b"timestamp", b"").decode("utf-8")
+                                        ),
+                                    }
+                                )
             else:
                 # Get all facts (with limit for performance)
                 all_fact_keys = self._scan_redis_keys("fact:*")[
@@ -2293,18 +2304,23 @@ class KnowledgeBase:
                 except Exception as e:
                     logger.debug(f"Could not get Redis memory info: {e}")
 
-                # Extract categories from sampled facts
+                # Extract categories from sampled facts - batch fetch using pipeline
                 categories = set()
                 try:
-                    for key in fact_keys_sample:
-                        fact_data = await self.aioredis_client.hget(key, "metadata")
-                        if fact_data:
-                            try:
-                                metadata = json.loads(fact_data)
-                                if "category" in metadata:
-                                    categories.add(metadata["category"])
-                            except (json.JSONDecodeError, TypeError):
-                                continue
+                    if fact_keys_sample:
+                        async with self.aioredis_client.pipeline() as pipe:
+                            for key in fact_keys_sample:
+                                await pipe.hget(key, "metadata")
+                            all_metadata = await pipe.execute()
+
+                        for fact_data in all_metadata:
+                            if fact_data:
+                                try:
+                                    metadata = json.loads(fact_data)
+                                    if "category" in metadata:
+                                        categories.add(metadata["category"])
+                                except (json.JSONDecodeError, TypeError):
+                                    continue
 
                     stats["categories"] = list(categories)
                 except Exception as e:
@@ -2490,21 +2506,27 @@ class KnowledgeBase:
             all_facts = []
             fact_keys = await self._scan_redis_keys_async("fact:*")
 
-            for fact_key in fact_keys:
-                try:
-                    fact_data = await self.aioredis_client.hgetall(fact_key)
-                    if fact_data:
-                        all_facts.append(
-                            {
-                                "type": "fact",
-                                "id": fact_key.split(":")[-1],
-                                "content": fact_data.get("content", ""),
-                                "metadata": json.loads(fact_data.get("metadata", "{}")),
-                                "timestamp": fact_data.get("timestamp", ""),
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not export fact {fact_key}: {e}")
+            # Batch fetch all fact data using pipeline - eliminates N+1 queries
+            if fact_keys:
+                async with self.aioredis_client.pipeline() as pipe:
+                    for fact_key in fact_keys:
+                        await pipe.hgetall(fact_key)
+                    all_fact_data = await pipe.execute()
+
+                for fact_key, fact_data in zip(fact_keys, all_fact_data):
+                    try:
+                        if fact_data:
+                            all_facts.append(
+                                {
+                                    "type": "fact",
+                                    "id": fact_key.split(":")[-1],
+                                    "content": fact_data.get("content", ""),
+                                    "metadata": json.loads(fact_data.get("metadata", "{}")),
+                                    "timestamp": fact_data.get("timestamp", ""),
+                                }
+                            )
+                    except Exception as e:
+                        logger.warning(f"Could not export fact {fact_key}: {e}")
 
             logger.info(f"Exported {len(all_facts)} facts")
             return all_facts
@@ -3814,10 +3836,15 @@ return 0
             facts_to_export = []
 
             if fact_ids:
-                # Export specific facts
+                # Export specific facts - batch fetch using pipeline (eliminates N+1)
+                pipeline = self.aioredis_client.pipeline()
                 for fact_id in fact_ids:
-                    fact_data = await self._get_fact_data(fact_id)
-                    if fact_data:
+                    pipeline.hgetall(f"fact:{fact_id}")
+                results = await pipeline.execute()
+
+                for fact_id, data in zip(fact_ids, results):
+                    if data:
+                        fact_data = self._decode_fact_data(f"fact:{fact_id}".encode(), data)
                         facts_to_export.append(fact_data)
             else:
                 # Scan and filter facts
@@ -3850,13 +3877,35 @@ return 0
                     if cursor == b"0":
                         break
 
-            # Add tags if requested
-            if include_tags:
-                for fact in facts_to_export:
-                    fact_id = fact.get("fact_id")
-                    if fact_id:
-                        tags_result = await self.get_fact_tags(fact_id)
-                        fact["tags"] = tags_result.get("tags", [])
+            # Add tags if requested - batch fetch using pipeline (eliminates N+1)
+            if include_tags and facts_to_export:
+                # Collect fact IDs
+                fact_ids_to_fetch = [f.get("fact_id") for f in facts_to_export if f.get("fact_id")]
+
+                if fact_ids_to_fetch:
+                    # Batch fetch tags for all facts
+                    pipeline = self.aioredis_client.pipeline()
+                    for fact_id in fact_ids_to_fetch:
+                        pipeline.hget(f"fact:{fact_id}", "tags")
+                    tags_results = await pipeline.execute()
+
+                    # Map tags back to facts
+                    tags_map = {}
+                    for fact_id, tags_json in zip(fact_ids_to_fetch, tags_results):
+                        tags = []
+                        if tags_json:
+                            try:
+                                raw_tags = tags_json.decode("utf-8") if isinstance(tags_json, bytes) else tags_json
+                                tags = json.loads(raw_tags)
+                            except (json.JSONDecodeError, AttributeError):
+                                tags = []
+                        tags_map[fact_id] = sorted(tags) if tags else []
+
+                    # Update facts with tags
+                    for fact in facts_to_export:
+                        fact_id = fact.get("fact_id")
+                        if fact_id:
+                            fact["tags"] = tags_map.get(fact_id, [])
 
             # Format output
             if format == "json":
@@ -4430,31 +4479,49 @@ return 0
             not_found = 0
             errors = []
 
-            for fact_id in fact_ids:
-                try:
-                    # Check if exists
-                    exists = await self.aioredis_client.exists(f"fact:{fact_id}")
-                    if not exists:
-                        not_found += 1
-                        continue
+            # Batch check existence using pipeline - eliminates N+1 queries
+            fact_keys = [f"fact:{fact_id}" for fact_id in fact_ids]
+            async with self.aioredis_client.pipeline() as pipe:
+                for key in fact_keys:
+                    await pipe.exists(key)
+                exists_results = await pipe.execute()
 
-                    # Get tags before deletion
-                    tags_result = await self.get_fact_tags(fact_id)
-                    tags = tags_result.get("tags", [])
+            # Filter to only existing facts
+            existing_facts = [
+                (fact_id, key)
+                for fact_id, key, exists in zip(fact_ids, fact_keys, exists_results)
+                if exists
+            ]
+            not_found = len(fact_ids) - len(existing_facts)
 
-                    # Remove from tag indexes
-                    if tags:
+            # Batch fetch tags for all existing facts
+            if existing_facts:
+                async with self.aioredis_client.pipeline() as pipe:
+                    for fact_id, _ in existing_facts:
+                        await pipe.hget(f"fact:{fact_id}", "tags")
+                    all_tags_data = await pipe.execute()
+
+                # Process deletions
+                for (fact_id, fact_key), tags_data in zip(existing_facts, all_tags_data):
+                    try:
+                        # Parse tags
+                        tags = []
+                        if tags_data:
+                            try:
+                                tags = json.loads(tags_data) if isinstance(tags_data, str) else json.loads(tags_data.decode()) if tags_data else []
+                            except (json.JSONDecodeError, AttributeError):
+                                tags = []
+
+                        # Remove from tag indexes and delete fact in single pipeline
                         pipeline = self.aioredis_client.pipeline()
                         for tag in tags:
                             pipeline.srem(f"tag:{tag}", fact_id)
+                        pipeline.delete(fact_key)
                         await pipeline.execute()
+                        deleted += 1
 
-                    # Delete the fact
-                    await self.aioredis_client.delete(f"fact:{fact_id}")
-                    deleted += 1
-
-                except Exception as e:
-                    errors.append({"fact_id": fact_id, "error": str(e)})
+                    except Exception as e:
+                        errors.append({"fact_id": fact_id, "error": str(e)})
 
             return {
                 "success": True,

@@ -290,12 +290,14 @@ class PatternLearningEngine:
                 if cursor == 0:
                     break
 
-            for key in pattern_keys:
-                data = await self.redis_client.get(key)
-                if data:
-                    pattern_data = json.loads(data)
-                    pattern = PatternDefinition(**pattern_data)
-                    self.patterns[pattern.pattern_id] = pattern
+            # Batch fetch all patterns using mget - eliminates N+1
+            if pattern_keys:
+                all_data = await self.redis_client.mget(pattern_keys)
+                for data in all_data:
+                    if data:
+                        pattern_data = json.loads(data)
+                        pattern = PatternDefinition(**pattern_data)
+                        self.patterns[pattern.pattern_id] = pattern
 
             logger.info(f"Loaded {len(self.patterns)} patterns from Redis")
         except Exception as e:
@@ -317,28 +319,30 @@ class PatternLearningEngine:
                 if cursor == 0:
                     break
 
-            for key in stats_keys:
-                data = await self.redis_client.get(key)
-                if data:
-                    stats_data = json.loads(data)
-                    pattern_id = stats_data.get("pattern_id")
-                    if pattern_id:
-                        self.pattern_stats[pattern_id] = PatternStats(
-                            pattern_id=pattern_id,
-                            correct_count=stats_data.get("correct_count", 0),
-                            incorrect_count=stats_data.get("incorrect_count", 0),
-                            missed_count=stats_data.get("missed_count", 0),
-                            partial_count=stats_data.get("partial_count", 0),
-                            irrelevant_count=stats_data.get("irrelevant_count", 0),
-                            raw_score=stats_data.get("raw_score", 0.5),
-                            confidence_score=stats_data.get("confidence_score", 0.5),
-                            last_updated=datetime.fromisoformat(
-                                stats_data.get(
-                                    "last_updated", datetime.now().isoformat()
-                                )
-                            ),
-                            version=stats_data.get("version", 1),
-                        )
+            # Batch fetch all stats using mget - eliminates N+1
+            if stats_keys:
+                all_data = await self.redis_client.mget(stats_keys)
+                for data in all_data:
+                    if data:
+                        stats_data = json.loads(data)
+                        pattern_id = stats_data.get("pattern_id")
+                        if pattern_id:
+                            self.pattern_stats[pattern_id] = PatternStats(
+                                pattern_id=pattern_id,
+                                correct_count=stats_data.get("correct_count", 0),
+                                incorrect_count=stats_data.get("incorrect_count", 0),
+                                missed_count=stats_data.get("missed_count", 0),
+                                partial_count=stats_data.get("partial_count", 0),
+                                irrelevant_count=stats_data.get("irrelevant_count", 0),
+                                raw_score=stats_data.get("raw_score", 0.5),
+                                confidence_score=stats_data.get("confidence_score", 0.5),
+                                last_updated=datetime.fromisoformat(
+                                    stats_data.get(
+                                        "last_updated", datetime.now().isoformat()
+                                    )
+                                ),
+                                version=stats_data.get("version", 1),
+                            )
 
             logger.info(f"Loaded stats for {len(self.pattern_stats)} patterns")
         except Exception as e:

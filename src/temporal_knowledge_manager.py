@@ -285,20 +285,28 @@ class TemporalKnowledgeManager:
                 f"Processing invalidation job: {len(job.content_ids)} items (priority: {job.priority.value})"
             )
 
-            removed_count = 0
-            for content_id in job.content_ids:
+            # Delete all facts in parallel - eliminates N+1 sequential deletions
+            async def delete_content(content_id: str) -> bool:
                 try:
-                    # Remove from knowledge base (fact-based storage)
                     await kb_instance.delete_fact(content_id)
+                    return True
+                except Exception as e:
+                    logger.warning(f"Failed to invalidate content {content_id}: {e}")
+                    return False
 
+            results = await asyncio.gather(
+                *[delete_content(cid) for cid in job.content_ids],
+                return_exceptions=True
+            )
+
+            # Process results and update temporal tracking
+            removed_count = 0
+            for content_id, result in zip(job.content_ids, results):
+                if result is True:
                     # Remove from temporal tracking
                     if content_id in self.temporal_metadata:
                         del self.temporal_metadata[content_id]
-
                     removed_count += 1
-
-                except Exception as e:
-                    logger.warning(f"Failed to invalidate content {content_id}: {e}")
 
             # Update analytics
             self.temporal_analytics["total_invalidations"] += removed_count

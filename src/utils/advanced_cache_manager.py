@@ -321,10 +321,16 @@ class AdvancedCacheManager:
                 total_hits = 0
                 total_misses = 0
 
-                for stats_key in stats_keys:
-                    stats = await self.redis_client.hgetall(stats_key)
-                    total_hits += int(stats.get("hits", 0))
-                    total_misses += int(stats.get("misses", 0))
+                # Batch fetch all stats using pipeline - eliminates N+1
+                if stats_keys:
+                    async with self.redis_client.pipeline() as pipe:
+                        for stats_key in stats_keys:
+                            await pipe.hgetall(stats_key)
+                        all_stats = await pipe.execute()
+
+                    for stats in all_stats:
+                        total_hits += int(stats.get("hits", 0))
+                        total_misses += int(stats.get("misses", 0))
 
                 total_requests = total_hits + total_misses
                 global_hit_rate = (
@@ -452,16 +458,22 @@ class AdvancedCacheManager:
             pattern = f"{self.cache_prefix}{data_type}:*"
             keys_with_time = []
 
+            # Collect all keys first
+            all_keys = []
             async for key in self.redis_client.scan_iter(match=pattern):
-                # Get timestamp from cache entry
-                cached_data = await self.redis_client.get(key)
-                if cached_data:
-                    try:
-                        entry = json.loads(cached_data)
-                        timestamp = entry.get("timestamp", 0)
-                        keys_with_time.append((timestamp, key))
-                    except Exception:
-                        continue
+                all_keys.append(key)
+
+            # Batch fetch all cache entries using mget - eliminates N+1
+            if all_keys:
+                all_cached_data = await self.redis_client.mget(all_keys)
+                for key, cached_data in zip(all_keys, all_cached_data):
+                    if cached_data:
+                        try:
+                            entry = json.loads(cached_data)
+                            timestamp = entry.get("timestamp", 0)
+                            keys_with_time.append((timestamp, key))
+                        except Exception:
+                            continue
 
             # Check if we exceed max_size
             if len(keys_with_time) > config.max_size:

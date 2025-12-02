@@ -94,12 +94,22 @@ class EnhancedKBLibrarian:
             # Deduplicate tools
             unique_tools = self._deduplicate_tools(tools)
 
-            # Get detailed information for each tool
-            detailed_tools = []
-            for tool in unique_tools[:3]:  # Top 3 tools
-                tool_info = await self._get_detailed_tool_info(tool["name"])
-                if tool_info:
-                    detailed_tools.append({**tool, **tool_info})
+            # Get detailed information for top tools in parallel - eliminates N+1 sequential calls
+            top_tools = unique_tools[:3]  # Top 3 tools
+            if top_tools:
+                tool_infos = await asyncio.gather(
+                    *[self._get_detailed_tool_info(tool["name"]) for tool in top_tools],
+                    return_exceptions=True
+                )
+
+                detailed_tools = []
+                for tool, tool_info in zip(top_tools, tool_infos):
+                    if isinstance(tool_info, Exception):
+                        continue
+                    if tool_info:
+                        detailed_tools.append({**tool, **tool_info})
+            else:
+                detailed_tools = []
 
             # Cache results (thread-safe)
             async with self._cache_lock:

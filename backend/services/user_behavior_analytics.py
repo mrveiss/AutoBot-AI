@@ -188,11 +188,24 @@ class UserBehaviorAnalytics:
                     "settings",
                 ]
 
+            # Batch fetch feature stats using pipeline (fix N+1 query)
+            pipe = redis.pipeline()
             for feat in features:
                 feature_key = f"{self.FEATURE_STATS_KEY}:{feat}"
+                pipe.hgetall(feature_key)
+                pipe.scard(f"{feature_key}:users")
+                pipe.scard(f"{feature_key}:sessions")
 
-                # Get stats
-                stats = await redis.hgetall(feature_key)
+            # Execute pipeline - results come in order: [stats1, users1, sessions1, stats2, users2, sessions2, ...]
+            pipeline_results = await pipe.execute()
+
+            # Process results in groups of 3 (stats, users, sessions)
+            for i, feat in enumerate(features):
+                idx = i * 3
+                stats = pipeline_results[idx]
+                unique_users = pipeline_results[idx + 1]
+                unique_sessions = pipeline_results[idx + 2]
+
                 if not stats:
                     continue
 
@@ -202,10 +215,6 @@ class UserBehaviorAnalytics:
                     key = k if isinstance(k, str) else k.decode("utf-8")
                     val = v if isinstance(v, str) else v.decode("utf-8")
                     decoded_stats[key] = val
-
-                # Count unique users and sessions
-                unique_users = await redis.scard(f"{feature_key}:users")
-                unique_sessions = await redis.scard(f"{feature_key}:sessions")
 
                 total_views = int(decoded_stats.get("total_views", 0))
                 total_time = int(decoded_stats.get("total_time_ms", 0))

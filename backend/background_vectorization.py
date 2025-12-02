@@ -115,25 +115,37 @@ class BackgroundVectorizer:
                 batch_success_count = 0
                 batch_tokens = 0
 
-                for fact_key in batch:
-                    try:
-                        # Check vectorization status FIRST - O(1) field lookup
-                        # This avoids loading entire fact data for already-vectorized facts
-                        status_bytes = await kb.aioredis_client.hget(
-                            fact_key, "vectorization_status"
-                        )
-                        if status_bytes:
-                            status = (
-                                status_bytes.decode("utf-8")
-                                if isinstance(status_bytes, bytes)
-                                else str(status_bytes)
-                            )
-                            if status == "completed":
-                                skipped_count += 1
-                                continue  # Skip already-vectorized fact
+                # Batch check vectorization status using pipeline - eliminates N+1
+                async with kb.aioredis_client.pipeline() as pipe:
+                    for fact_key in batch:
+                        await pipe.hget(fact_key, "vectorization_status")
+                    all_status = await pipe.execute()
 
-                        # Get fact data only if vectorization needed
-                        fact_data = await kb.aioredis_client.hgetall(fact_key)
+                # Filter out already-vectorized facts
+                facts_to_process = []
+                for fact_key, status_bytes in zip(batch, all_status):
+                    if status_bytes:
+                        status = (
+                            status_bytes.decode("utf-8")
+                            if isinstance(status_bytes, bytes)
+                            else str(status_bytes)
+                        )
+                        if status == "completed":
+                            skipped_count += 1
+                            continue  # Skip already-vectorized fact
+                    facts_to_process.append(fact_key)
+
+                # Batch fetch all fact data for facts that need vectorization
+                all_fact_data = []
+                if facts_to_process:
+                    async with kb.aioredis_client.pipeline() as pipe:
+                        for fact_key in facts_to_process:
+                            await pipe.hgetall(fact_key)
+                        all_fact_data = await pipe.execute()
+
+                for fact_key, fact_data in zip(facts_to_process, all_fact_data):
+                    try:
+                        # fact_data already fetched via pipeline above
 
                         if not fact_data:
                             failed_count += 1

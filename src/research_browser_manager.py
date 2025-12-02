@@ -383,13 +383,19 @@ class ResearchBrowserSession:
             if hasattr(self, "playwright"):
                 await self.playwright.stop()
 
-            # Clean up MHTML files
-            for mhtml_file in self.mhtml_files:
+            # Clean up MHTML files in parallel - eliminates N+1 sequential I/O
+            async def cleanup_mhtml_file(mhtml_file: str) -> None:
                 try:
                     if await asyncio.to_thread(os.path.exists, mhtml_file):
                         await asyncio.to_thread(os.remove, mhtml_file)
                 except Exception as e:
                     logger.warning(f"Failed to clean up MHTML file {mhtml_file}: {e}")
+
+            if self.mhtml_files:
+                await asyncio.gather(
+                    *[cleanup_mhtml_file(f) for f in self.mhtml_files],
+                    return_exceptions=True,
+                )
 
             self.status = "closed"
             logger.info(f"Browser session {self.session_id} closed")

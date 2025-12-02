@@ -303,12 +303,16 @@ class EmbeddingPatternAnalyzer:
             total_batch_size = 0
             successful_ops = 0
 
-            # Aggregate daily stats
-            for i in range(days):
-                date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-                daily_key = f"{self._stats_key}:daily:{date}"
+            # Aggregate daily stats - batch fetch using pipeline to eliminate N+1
+            dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+            daily_keys = [f"{self._stats_key}:daily:{date}" for date in dates]
 
-                stats = await redis.hgetall(daily_key)
+            async with redis.pipeline() as pipe:
+                for key in daily_keys:
+                    await pipe.hgetall(key)
+                all_stats = await pipe.execute()
+
+            for stats in all_stats:
                 if stats:
                     total_ops += int(stats.get(b"total_operations", 0))
                     total_tokens += int(stats.get(b"total_tokens", 0))
@@ -364,27 +368,33 @@ class EmbeddingPatternAnalyzer:
                     cursor, match=f"{self._model_stats_key}:*", count=100
                 )
 
-                for key in keys:
-                    key_str = key.decode() if isinstance(key, bytes) else key
-                    model_name = key_str.split(":")[-1]
+                # Batch fetch all hashes using pipeline - eliminates N+1
+                if keys:
+                    async with redis.pipeline() as pipe:
+                        for key in keys:
+                            await pipe.hgetall(key)
+                        all_stats = await pipe.execute()
 
-                    stats = await redis.hgetall(key)
-                    if stats:
-                        total_ops = int(stats.get(b"total_operations", 0))
-                        total_tokens = int(stats.get(b"total_tokens", 0))
-                        total_cost = float(stats.get(b"total_cost", 0))
+                    for key, stats in zip(keys, all_stats):
+                        key_str = key.decode() if isinstance(key, bytes) else key
+                        model_name = key_str.split(":")[-1]
 
-                        models.append(
-                            {
-                                "model": model_name,
-                                "total_operations": total_ops,
-                                "total_tokens": total_tokens,
-                                "total_cost": round(total_cost, 6),
-                                "tokens_per_operation": (
-                                    total_tokens / total_ops if total_ops > 0 else 0
-                                ),
-                            }
-                        )
+                        if stats:
+                            total_ops = int(stats.get(b"total_operations", 0))
+                            total_tokens = int(stats.get(b"total_tokens", 0))
+                            total_cost = float(stats.get(b"total_cost", 0))
+
+                            models.append(
+                                {
+                                    "model": model_name,
+                                    "total_operations": total_ops,
+                                    "total_tokens": total_tokens,
+                                    "total_cost": round(total_cost, 6),
+                                    "tokens_per_operation": (
+                                        total_tokens / total_ops if total_ops > 0 else 0
+                                    ),
+                                }
+                            )
 
                 if cursor == 0:
                     break

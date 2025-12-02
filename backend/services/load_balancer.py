@@ -564,9 +564,12 @@ class NPULoadBalancer:
                 with self._workers_lock:
                     workers = list(self._workers.values())
 
-                # Check all workers
-                for worker in workers:
-                    await self._check_worker_health(worker)
+                if workers:
+                    # Check all workers in parallel - eliminates N+1 sequential calls
+                    await asyncio.gather(
+                        *[self._check_worker_health(worker) for worker in workers],
+                        return_exceptions=True
+                    )
 
             except asyncio.CancelledError:
                 logger.info("Health monitor loop cancelled")
