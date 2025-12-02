@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
+from redis.exceptions import RedisError
+
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -379,24 +381,28 @@ class SecurityWorkflowManager:
 
     async def _save_assessment(self, assessment: SecurityAssessment) -> None:
         """Save assessment to Redis."""
-        redis = await self._get_redis()
-        key = self._assessment_key(assessment.id)
+        try:
+            redis = await self._get_redis()
+            key = self._assessment_key(assessment.id)
 
-        # Update timestamp
-        assessment.updated_at = datetime.now(timezone.utc).isoformat()
+            # Update timestamp
+            assessment.updated_at = datetime.now(timezone.utc).isoformat()
 
-        # Save as JSON
-        await redis.set(
-            key,
-            json.dumps(assessment.to_dict(), ensure_ascii=False),
-            ex=self.REDIS_TTL_DAYS * 24 * 3600,
-        )
+            # Save as JSON
+            await redis.set(
+                key,
+                json.dumps(assessment.to_dict(), ensure_ascii=False),
+                ex=self.REDIS_TTL_DAYS * 24 * 3600,
+            )
 
-        # Add to active index if not complete
-        if assessment.phase != AssessmentPhase.COMPLETE:
-            await redis.sadd(self.REDIS_ACTIVE_INDEX, assessment.id)
-        else:
-            await redis.srem(self.REDIS_ACTIVE_INDEX, assessment.id)
+            # Add to active index if not complete
+            if assessment.phase != AssessmentPhase.COMPLETE:
+                await redis.sadd(self.REDIS_ACTIVE_INDEX, assessment.id)
+            else:
+                await redis.srem(self.REDIS_ACTIVE_INDEX, assessment.id)
+        except RedisError as e:
+            logger.error(f"Failed to save assessment {assessment.id}: {e}")
+            raise RuntimeError(f"Failed to save assessment: {e}")
 
     async def get_assessment(self, assessment_id: str) -> Optional[SecurityAssessment]:
         """
@@ -408,59 +414,67 @@ class SecurityWorkflowManager:
         Returns:
             SecurityAssessment or None if not found
         """
-        redis = await self._get_redis()
-        key = self._assessment_key(assessment_id)
+        try:
+            redis = await self._get_redis()
+            key = self._assessment_key(assessment_id)
 
-        data = await redis.get(key)
-        if not data:
-            return None
+            data = await redis.get(key)
+            if not data:
+                return None
 
-        return SecurityAssessment.from_dict(json.loads(data))
+            return SecurityAssessment.from_dict(json.loads(data))
+        except RedisError as e:
+            logger.error(f"Failed to get assessment {assessment_id}: {e}")
+            raise RuntimeError(f"Failed to get assessment: {e}")
 
     async def list_active_assessments(self) -> list[SecurityAssessment]:
         """List all active (non-complete) assessments."""
-        redis = await self._get_redis()
-        assessment_ids = await redis.smembers(self.REDIS_ACTIVE_INDEX)
+        try:
+            redis = await self._get_redis()
+            assessment_ids = await redis.smembers(self.REDIS_ACTIVE_INDEX)
 
-        # Batch fetch assessments using pipeline (fix N+1 query)
-        if not assessment_ids:
-            return []
+            # Batch fetch assessments using pipeline (fix N+1 query)
+            if not assessment_ids:
+                return []
 
-        pipe = redis.pipeline()
-        for aid in assessment_ids:
-            key = f"{self.REDIS_KEY_PREFIX}{aid}"
-            pipe.hgetall(key)
+            pipe = redis.pipeline()
+            for aid in assessment_ids:
+                key = f"{self.REDIS_KEY_PREFIX}{aid}"
+                pipe.hgetall(key)
 
-        results = await pipe.execute()
+            results = await pipe.execute()
 
-        # Parse results
-        assessments = []
-        for aid, data in zip(assessment_ids, results):
-            if data:
-                try:
-                    # Decode bytes if needed
-                    decoded = {}
-                    for k, v in data.items():
-                        key = k if isinstance(k, str) else k.decode("utf-8")
-                        val = v if isinstance(v, str) else v.decode("utf-8")
-                        decoded[key] = val
+            # Parse results
+            assessments = []
+            for aid, data in zip(assessment_ids, results):
+                if data:
+                    try:
+                        # Decode bytes if needed
+                        decoded = {}
+                        for k, v in data.items():
+                            key = k if isinstance(k, str) else k.decode("utf-8")
+                            val = v if isinstance(v, str) else v.decode("utf-8")
+                            decoded[key] = val
 
-                    assessment = SecurityAssessment(
-                        assessment_id=decoded["assessment_id"],
-                        session_id=decoded["session_id"],
-                        phase=decoded["phase"],
-                        status=decoded["status"],
-                        created_at=decoded["created_at"],
-                        updated_at=decoded["updated_at"],
-                        findings=eval(decoded.get("findings", "[]")),
-                        metadata=eval(decoded.get("metadata", "{}")),
-                    )
-                    assessments.append(assessment)
-                except Exception as e:
-                    logger.error(f"Error parsing assessment {aid}: {e}")
-                    continue
+                        assessment = SecurityAssessment(
+                            assessment_id=decoded["assessment_id"],
+                            session_id=decoded["session_id"],
+                            phase=decoded["phase"],
+                            status=decoded["status"],
+                            created_at=decoded["created_at"],
+                            updated_at=decoded["updated_at"],
+                            findings=eval(decoded.get("findings", "[]")),
+                            metadata=eval(decoded.get("metadata", "{}")),
+                        )
+                        assessments.append(assessment)
+                    except Exception as e:
+                        logger.error(f"Error parsing assessment {aid}: {e}")
+                        continue
 
-        return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
+            return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
+        except RedisError as e:
+            logger.error(f"Failed to list active assessments: {e}")
+            raise RuntimeError(f"Failed to list active assessments: {e}")
 
     async def advance_phase(
         self,
@@ -961,17 +975,21 @@ class SecurityWorkflowManager:
         Returns:
             True if deleted, False if not found
         """
-        redis = await self._get_redis()
-        key = self._assessment_key(assessment_id)
+        try:
+            redis = await self._get_redis()
+            key = self._assessment_key(assessment_id)
 
-        deleted = await redis.delete(key)
-        await redis.srem(self.REDIS_ACTIVE_INDEX, assessment_id)
+            deleted = await redis.delete(key)
+            await redis.srem(self.REDIS_ACTIVE_INDEX, assessment_id)
 
-        if deleted:
-            logger.info(f"Deleted assessment {assessment_id}")
-            return True
+            if deleted:
+                logger.info(f"Deleted assessment {assessment_id}")
+                return True
 
-        return False
+            return False
+        except RedisError as e:
+            logger.error(f"Failed to delete assessment {assessment_id}: {e}")
+            raise RuntimeError(f"Failed to delete assessment: {e}")
 
     async def get_assessment_summary(
         self,
