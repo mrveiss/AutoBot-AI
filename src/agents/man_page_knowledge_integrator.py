@@ -407,10 +407,14 @@ class ManPageKnowledgeIntegrator:
         }
 
         # Use aiofiles for non-blocking file I/O
-        async with aiofiles.open(cache_file, "w") as f:
-            await f.write(json.dumps(man_data, indent=2))
-
-        logger.info(f"Cached man page for {man_info.command} to {cache_file}")
+        try:
+            async with aiofiles.open(
+                cache_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(json.dumps(man_data, indent=2))
+            logger.info(f"Cached man page for {man_info.command} to {cache_file}")
+        except OSError as e:
+            logger.error(f"Failed to cache man page to {cache_file}: {e}")
         return cache_file
 
     async def load_cached_man_page(
@@ -580,10 +584,20 @@ class ManPageKnowledgeIntegrator:
 
         # Save as YAML using aiofiles for non-blocking I/O
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
-        async with aiofiles.open(yaml_file, "w") as f:
-            await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
-
-        logger.info(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
+        try:
+            async with aiofiles.open(
+                yaml_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    yaml.dump(knowledge_data, default_flow_style=False, indent=2)
+                )
+            logger.info(
+                f"Saved man page knowledge for {man_info.command} to {yaml_file}"
+            )
+        except OSError as e:
+            logger.error(
+                f"Failed to save man page knowledge to {yaml_file}: {e}"
+            )
 
     async def search_man_pages(self, query: str) -> List[ManPageInfo]:
         """Search cached man pages by query"""
