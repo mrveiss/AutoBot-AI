@@ -1099,17 +1099,25 @@ class EnhancedProjectStateTracker:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if format == "json":
-            async with aiofiles.open(output_file, "w") as f:
-                await f.write(json.dumps(summary, indent=2, default=str))
-        elif format == "markdown":
-            report = await self.generate_state_report()
-            async with aiofiles.open(output_file, "w") as f:
-                await f.write(report)
-        else:
-            raise ValueError(f"Unsupported format: {format}")
+        try:
+            if format == "json":
+                async with aiofiles.open(
+                    output_file, "w", encoding="utf-8"
+                ) as f:
+                    await f.write(json.dumps(summary, indent=2, default=str))
+            elif format == "markdown":
+                report = await self.generate_state_report()
+                async with aiofiles.open(
+                    output_file, "w", encoding="utf-8"
+                ) as f:
+                    await f.write(report)
+            else:
+                raise ValueError(f"Unsupported format: {format}")
 
-        logger.info(f"State data exported to {output_file}")
+            logger.info(f"State data exported to {output_file}")
+        except OSError as e:
+            logger.error(f"Failed to export state data to {output_file}: {e}")
+            raise
 
 
 # Global instance (thread-safe)
