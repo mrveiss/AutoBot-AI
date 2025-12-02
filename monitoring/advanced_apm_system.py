@@ -436,8 +436,11 @@ class AdvancedAPMSystem:
             # Store in daily file
             date_str = datetime.now().strftime('%Y%m%d')
             metrics_file = self.apm_data_path / f"api_metrics_{date_str}.jsonl"
-            async with aiofiles.open(metrics_file, 'a') as f:
-                await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            try:
+                async with aiofiles.open(metrics_file, 'a', encoding='utf-8') as f:
+                    await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            except OSError as e:
+                self.logger.error(f"Failed to write API metrics to {metrics_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing API metrics: {e}")
@@ -452,8 +455,11 @@ class AdvancedAPMSystem:
 
             date_str = datetime.now().strftime('%Y%m%d')
             metrics_file = self.apm_data_path / f"cache_metrics_{date_str}.jsonl"
-            async with aiofiles.open(metrics_file, 'a') as f:
-                await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            try:
+                async with aiofiles.open(metrics_file, 'a', encoding='utf-8') as f:
+                    await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            except OSError as e:
+                self.logger.error(f"Failed to write cache metrics to {metrics_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing cache metrics: {e}")
@@ -468,8 +474,11 @@ class AdvancedAPMSystem:
 
             date_str = datetime.now().strftime('%Y%m%d')
             metrics_file = self.apm_data_path / f"database_metrics_{date_str}.jsonl"
-            async with aiofiles.open(metrics_file, 'a') as f:
-                await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            try:
+                async with aiofiles.open(metrics_file, 'a', encoding='utf-8') as f:
+                    await f.write(json.dumps(asdict(metric), default=str) + '\n')
+            except OSError as e:
+                self.logger.error(f"Failed to write database metrics to {metrics_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing database metrics: {e}")
@@ -710,8 +719,11 @@ class AdvancedAPMSystem:
 
             # Store in file
             report_file = self.apm_data_path / f"apm_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            async with aiofiles.open(report_file, 'w') as f:
-                await f.write(json.dumps(report, indent=2, default=str))
+            try:
+                async with aiofiles.open(report_file, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(report, indent=2, default=str))
+            except OSError as e:
+                self.logger.error(f"Failed to write APM report to {report_file}: {e}")
 
         except Exception as e:
             self.logger.error(f"Error storing APM report: {e}")

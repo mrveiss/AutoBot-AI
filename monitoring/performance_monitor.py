@@ -473,8 +473,10 @@ class PerformanceMonitor:
         # Store in local file
         try:
             metrics_file = self.performance_data_path / f"metrics_{datetime.now().strftime('%Y%m%d')}.jsonl"
-            async with aiofiles.open(metrics_file, 'a') as f:
+            async with aiofiles.open(metrics_file, 'a', encoding='utf-8') as f:
                 await f.write(json.dumps({"timestamp": timestamp, "data": metrics}, default=str) + '\n')
+        except OSError as e:
+            self.logger.error(f"Failed to write metrics to file {metrics_file}: {e}")
         except Exception as e:
             self.logger.error(f"Error storing metrics to file: {e}")
 
