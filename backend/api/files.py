@@ -493,8 +493,15 @@ async def upload_file(
         )
 
     # Write file - PERFORMANCE FIX: Convert to async file I/O
-    async with aiofiles.open(target_file, "wb") as f:
-        await f.write(content)
+    try:
+        async with aiofiles.open(target_file, "wb") as f:
+            await f.write(content)
+    except OSError as e:
+        logger.error(f"Failed to write uploaded file {target_file}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write file: {e}",
+        )
 
     # Get file info for response
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))

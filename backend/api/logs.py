@@ -210,23 +210,27 @@ async def read_log(
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
-        async with aiofiles.open(file_path, "r") as f:
-            if tail:
-                # Read last N lines
-                content = await f.read()
-                all_lines = content.splitlines()
-                start_idx = max(0, len(all_lines) - lines - offset)
-                end_idx = len(all_lines) - offset
-                selected_lines = all_lines[start_idx:end_idx]
-            else:
-                # Read lines with offset
-                all_lines = []
-                async for line in f:
-                    all_lines.append(line.rstrip())
+        try:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                if tail:
+                    # Read last N lines
+                    content = await f.read()
+                    all_lines = content.splitlines()
+                    start_idx = max(0, len(all_lines) - lines - offset)
+                    end_idx = len(all_lines) - offset
+                    selected_lines = all_lines[start_idx:end_idx]
+                else:
+                    # Read lines with offset
+                    all_lines = []
+                    async for line in f:
+                        all_lines.append(line.rstrip())
 
-                start_idx = offset
-                end_idx = min(offset + lines, len(all_lines))
-                selected_lines = all_lines[start_idx:end_idx]
+                    start_idx = offset
+                    end_idx = min(offset + lines, len(all_lines))
+                    selected_lines = all_lines[start_idx:end_idx]
+        except OSError as e:
+            logger.error(f"Failed to read log file {file_path}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
 
         return {
             "filename": filename,
@@ -515,9 +519,14 @@ async def stream_log(filename: str):
             raise HTTPException(status_code=403, detail="Access denied")
 
         async def generate():
-            async with aiofiles.open(file_path, "r") as f:
-                async for line in f:
-                    yield line
+            try:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    async for line in f:
+                        yield line
+            except OSError as e:
+                logger.error(f"Failed to stream log file {file_path}: {e}")
+                # Yield error message to client and stop
+                return
 
         return StreamingResponse(generate(), media_type="text/plain")
 
@@ -556,21 +565,26 @@ async def tail_log(websocket: WebSocket, filename: str):
             return
 
         # Start tailing the file
-        async with aiofiles.open(file_path, "r") as f:
-            # Send last 50 lines initially
-            content = await f.read()
-            lines = content.splitlines()
-            for line in lines[-50:]:
-                await websocket.send_text(line)
+        try:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                # Send last 50 lines initially
+                content = await f.read()
+                lines = content.splitlines()
+                for line in lines[-50:]:
+                    await websocket.send_text(line)
 
-            # Continue watching for new lines
-            await f.seek(0, 2)  # Go to end of file
-            while True:
-                line = await f.readline()
-                if line:
-                    await websocket.send_text(line.rstrip())
-                else:
-                    await asyncio.sleep(0.1)
+                # Continue watching for new lines
+                await f.seek(0, 2)  # Go to end of file
+                while True:
+                    line = await f.readline()
+                    if line:
+                        await websocket.send_text(line.rstrip())
+                    else:
+                        await asyncio.sleep(0.1)
+        except OSError as e:
+            logger.error(f"Failed to tail log file {file_path}: {e}")
+            await websocket.send_json({"error": f"Failed to read log file: {e}"})
+            return
 
     except Exception as e:
         logger.error(f"WebSocket error for {filename}: {e}")
@@ -611,36 +625,40 @@ async def search_logs(
             files_to_search = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
 
         for file_path in files_to_search:
-            async with aiofiles.open(file_path, "r") as f:
-                line_num = 0
-                async for line in f:
-                    line_num += 1
-                    line_content = line.rstrip()
+            try:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    line_num = 0
+                    async for line in f:
+                        line_num += 1
+                        line_content = line.rstrip()
 
-                    # Check if line matches query
-                    if case_sensitive:
-                        if query in line_content:
-                            results.append(
-                                {
-                                    "file": file_path.name,
-                                    "line": line_num,
-                                    "content": line_content,
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                    else:
-                        if query.lower() in line_content.lower():
-                            results.append(
-                                {
-                                    "file": file_path.name,
-                                    "line": line_num,
-                                    "content": line_content,
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
+                        # Check if line matches query
+                        if case_sensitive:
+                            if query in line_content:
+                                results.append(
+                                    {
+                                        "file": file_path.name,
+                                        "line": line_num,
+                                        "content": line_content,
+                                        "timestamp": datetime.now().isoformat(),
+                                    }
+                                )
+                        else:
+                            if query.lower() in line_content.lower():
+                                results.append(
+                                    {
+                                        "file": file_path.name,
+                                        "line": line_num,
+                                        "content": line_content,
+                                        "timestamp": datetime.now().isoformat(),
+                                    }
+                                )
 
-                    if len(results) >= max_results:
-                        break
+                        if len(results) >= max_results:
+                            break
+            except OSError as e:
+                logger.error(f"Failed to search log file {file_path}: {e}")
+                continue
 
             if len(results) >= max_results:
                 break
