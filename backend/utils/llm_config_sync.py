@@ -279,9 +279,9 @@ if __name__ == "__main__":
     # Direct execution for testing/debugging
     async def main():
         result = await sync_llm_configuration()
-        print("Synchronization result:")
+        logger.info("Synchronization result:")
         import json
 
-        print(json.dumps(result, indent=2))
+        logger.info(json.dumps(result, indent=2))
 
     asyncio.run(main())

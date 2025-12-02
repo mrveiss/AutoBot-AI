@@ -775,7 +775,7 @@ if __name__ == "__main__":
             topic="Python Development",
             keywords=["python", "fastapi", "async"],
         )
-        print(f"Created context: {context}")
+        logger.info("Created context: %s", context)
 
         # Add temporary knowledge
         knowledge_id = await manager.add_temporary_knowledge(
@@ -789,7 +789,7 @@ if __name__ == "__main__":
 
         # Get pending decisions
         pending = await manager.get_knowledge_for_decision("test_chat_123")
-        print(f"Pending decisions: {pending}")
+        logger.info("Pending decisions: %s", pending)
 
         # Apply decision
         await manager.apply_knowledge_decision(
@@ -798,6 +798,6 @@ if __name__ == "__main__":
             decision=KnowledgeDecision.ADD_TO_KB,
         )
 
-        print("Demo completed!")
+        logger.info("Demo completed!")
 
     asyncio.run(demo())
