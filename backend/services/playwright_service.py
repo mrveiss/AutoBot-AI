@@ -368,6 +368,9 @@ class PlaywrightService:
                     logger.error(f"Screenshot failed: {response.status} - {error_text}")
                     raise RuntimeError(f"Screenshot failed: {response.status}")
 
+        except aiohttp.ClientError as e:
+            logger.error(f"Screenshot HTTP error: {e}")
+            return {"success": False, "error": f"Connection error: {str(e)}", "url": url}
         except Exception as e:
             logger.error(f"Screenshot error: {e}")
             return {"success": False, "error": str(e), "url": url}
@@ -413,6 +416,14 @@ class PlaywrightService:
 
             return status
 
+        except aiohttp.ClientError as e:
+            return {
+                "service": "playwright",
+                "status": "error",
+                "error": f"Connection error: {str(e)}",
+                "ready": False,
+                "integration_type": "embedded_docker",
+            }
         except Exception as e:
             return {
                 "service": "playwright",

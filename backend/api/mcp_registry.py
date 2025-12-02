@@ -334,6 +334,8 @@ async def _fetch_tools_from_bridges() -> Metadata:
                     logger.warning(
                         f"MCP bridge {bridge_name} returned status {response.status}"
                     )
+        except aiohttp.ClientError as e:
+            logger.error(f"HTTP error fetching tools from {bridge_name}: {e}")
         except Exception as e:
             logger.error(f"Failed to fetch tools from {bridge_name}: {e}")
 
@@ -380,6 +382,10 @@ async def _fetch_bridges_info() -> Metadata:
                 else:
                     bridge_info["status"] = "degraded"
                     bridge_info["error"] = f"HTTP {response.status}"
+        except aiohttp.ClientError as e:
+            bridge_info["status"] = "unavailable"
+            bridge_info["error"] = str(e)
+            logger.error(f"HTTP error during health check for {bridge_name}: {e}")
         except Exception as e:
             bridge_info["status"] = "unavailable"
             bridge_info["error"] = str(e)
@@ -622,6 +628,9 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
 
     except HTTPException:
         raise
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP error fetching tool details from {bridge_name}: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to MCP bridge: {str(e)}")
     except Exception as e:
         logger.error(f"Failed to get tool details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -672,6 +681,9 @@ async def get_mcp_registry_health() -> Metadata:
                 else:
                     check["status"] = "degraded"
                     check["error"] = f"HTTP {response.status}"
+        except aiohttp.ClientError as e:
+            check["status"] = "unavailable"
+            check["error"] = f"Connection error: {str(e)}"
         except Exception as e:
             check["status"] = "unavailable"
             check["error"] = str(e)

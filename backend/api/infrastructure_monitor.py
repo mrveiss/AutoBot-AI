@@ -184,6 +184,13 @@ class InfrastructureMonitor:
                 error="Connection timeout",
                 last_check=datetime.now(),
             )
+        except aiohttp.ClientError as e:
+            return ServiceInfo(
+                name=name,
+                status="error",
+                error=f"Connection error: {str(e)[:80]}",
+                last_check=datetime.now(),
+            )
         except Exception as e:
             return ServiceInfo(
                 name=name, status="error", error=str(e)[:100], last_check=datetime.now()
