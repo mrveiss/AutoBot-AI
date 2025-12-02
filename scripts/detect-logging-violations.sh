@@ -44,7 +44,7 @@ report_violation() {
     echo "   Pattern: ${pattern:0:100}..."  # Truncate long lines
     echo "   ${YELLOW}Suggestion: $suggestion${NC}"
     echo ""
-    ((VIOLATIONS_FOUND++))
+    VIOLATIONS_FOUND=$((VIOLATIONS_FOUND + 1))
 }
 
 # Get files to check
@@ -82,6 +82,8 @@ for file in $PY_FILES; do
             continue ;;
         *"service_registry_cli.py")  # CLI tools are allowed print()
             continue ;;
+        *"script_utils.py")  # Script formatting utilities with intentional print()
+            continue ;;
     esac
 
     # Check if file has if __name__ == "__main__"
@@ -102,8 +104,8 @@ for file in $PY_FILES; do
     while IFS=: read -r line_num line_content; do
         [[ -z "$line_num" ]] && continue
 
-        # Skip if in docstring (line starts with * or spaces + *)
-        if echo "$line_content" | grep -qE '^[[:space:]]*("""|\x27\x27\x27|#|\*|>>>)'; then
+        # Skip if in docstring or doctest (line starts with """, #, *, >>>, ...)
+        if echo "$line_content" | grep -qE '^[[:space:]]*("""|\x27\x27\x27|#|\*|>>>|\.\.\.)'; then
             continue
         fi
 
@@ -130,7 +132,9 @@ for file in $PY_FILES; do
         report_violation "$file" "$line_num" "$line_content" \
             "Use logger.info/debug/warning/error() instead of print()"
 
-    done < <(grep -n 'print(' "$file" 2>/dev/null || true)
+    # Match actual print() function calls - not 'fingerprint(', 'blueprint(', etc.
+    # Pattern: word boundary before print, or start of line/whitespace
+    done < <(grep -n -E '(^|[^a-zA-Z_])print\(' "$file" 2>/dev/null || true)
 done
 
 # ═══════════════════════════════════════════════════════════════════════════
