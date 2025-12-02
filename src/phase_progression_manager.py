@@ -553,8 +553,16 @@ class PhaseProgressionManager:
             }
 
             config_file = phase_dir / "phase_config.json"
-            async with aiofiles.open(config_file, "w") as f:
-                await f.write(json.dumps(phase_config, indent=2))
+            try:
+                async with aiofiles.open(
+                    config_file, "w", encoding="utf-8"
+                ) as f:
+                    await f.write(json.dumps(phase_config, indent=2))
+            except OSError as e:
+                logger.error(
+                    f"Failed to write phase config file {config_file}: {e}"
+                )
+                return False
 
             logger.info(f"📁 Created infrastructure for {phase_name}")
             return True

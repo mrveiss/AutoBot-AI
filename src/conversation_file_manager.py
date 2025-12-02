@@ -437,8 +437,14 @@ class ConversationFileManager:
 
                 # File doesn't exist, store it
                 # Write file to disk asynchronously
-                async with aiofiles.open(file_path, "wb") as f:
-                    await f.write(file_content)
+                try:
+                    async with aiofiles.open(file_path, "wb") as f:
+                        await f.write(file_content)
+                except OSError as e:
+                    logger.error(
+                        f"Failed to write file to disk {file_path}: {e}"
+                    )
+                    raise RuntimeError(f"Failed to write file to disk: {e}")
 
                 logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
 
