@@ -517,6 +517,8 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
         raise HTTPException(
             status_code=400, detail="File is not a text file (encoding error)"
         )
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
 
 
 @with_error_handling(
@@ -567,6 +569,10 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
             "base64_data": base64_data,
             "size_bytes": file_size,
         }
+    except OSError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read media file: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error reading media file: {str(e)}"
@@ -604,6 +610,8 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata
                 content = await f.read()
 
             return {"result": {"path": path, "content": content, "size_bytes": file_size}}
+        except OSError as e:
+            return {"error": {"path": path, "error": f"Failed to read file: {str(e)}"}}
         except Exception as e:
             return {"error": {"path": path, "error": str(e)}}
 
@@ -668,6 +676,8 @@ async def write_file_mcp(request: WriteFileRequest) -> Metadata:
             "size_bytes": file_size,
             "message": "File written successfully",
         }
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing file: {str(e)}")
 
@@ -724,6 +734,8 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
             "size_before": len(original_content),
             "size_after": len(content),
         }
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read/write file: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error editing file: {str(e)}")
 

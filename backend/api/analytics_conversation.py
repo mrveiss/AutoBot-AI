@@ -454,6 +454,8 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
                             sessions.append(session)  # Include if can't parse date
                     else:
                         sessions.append(session)
+            except OSError as e:
+                logger.debug(f"Failed to read session file {session_file}: {e}")
             except Exception as e:
                 logger.debug(f"Error loading session {session_file}: {e}")
 

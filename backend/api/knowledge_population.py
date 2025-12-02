@@ -735,6 +735,10 @@ Type: Documentation
                 items_skipped += 1
                 logger.warning(f"File not found: {doc_file}")
 
+        except OSError as e:
+            items_failed += 1
+            tracker.mark_failed(str(autobot_base_path / doc_file), f"File read error: {e}")
+            logger.error(f"Failed to read AutoBot doc {doc_file}: {e}")
         except Exception as e:
             items_failed += 1
             tracker.mark_failed(str(autobot_base_path / doc_file), str(e))

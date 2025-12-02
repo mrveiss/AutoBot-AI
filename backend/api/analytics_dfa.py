@@ -1059,6 +1059,8 @@ async def analyze_file(request: AnalyzeFileRequest):
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
     except SyntaxError as e:
         raise HTTPException(status_code=400, detail=f"Syntax error in file: {str(e)}")
     except Exception as e:

@@ -190,6 +190,9 @@ async def get_audit_log(request: Request, limit: int = 100):
 
         except FileNotFoundError:
             audit_entries = []
+        except OSError as e:
+            logger.error(f"Failed to read audit log file: {e}")
+            audit_entries = []
 
         return {
             "success": True,

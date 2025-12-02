@@ -251,6 +251,9 @@ async def save_prompt(prompt_id: str, request: dict):
             ),
             "content": content,
         }
+    except OSError as e:
+        logger.error(f"Failed to write prompt file {prompt_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save prompt file: {str(e)}")
     except Exception as e:
         logger.error(f"Error saving prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
@@ -303,6 +306,9 @@ async def revert_prompt(prompt_id: str):
             raise HTTPException(
                 status_code=404, detail=f"No default prompt found for {prompt_id}"
             )
+    except OSError as e:
+        logger.error(f"Failed to read/write prompt file during revert {prompt_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to access prompt file: {str(e)}")
     except Exception as e:
         logger.error(f"Error reverting prompt {prompt_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")
