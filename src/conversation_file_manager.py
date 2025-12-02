@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 import redis.asyncio as async_redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import (
@@ -435,9 +436,9 @@ class ConversationFileManager:
                     }
 
                 # File doesn't exist, store it
-                # Write file to disk
-                with open(file_path, "wb") as f:
-                    f.write(file_content)
+                # Write file to disk asynchronously
+                async with aiofiles.open(file_path, "wb") as f:
+                    await f.write(file_content)
 
                 logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
 

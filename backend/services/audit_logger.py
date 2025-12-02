@@ -39,6 +39,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Literal, Optional
 
+import aiofiles
+
 from backend.type_defs.common import Metadata
 
 import redis.asyncio as async_redis
@@ -432,8 +434,8 @@ class AuditLogger:
             }
 
             # Append to JSONL file (one JSON object per line)
-            with open(fallback_file, "a") as f:
-                f.write(json.dumps(log_data, default=str) + "\n")
+            async with aiofiles.open(fallback_file, "a") as f:
+                await f.write(json.dumps(log_data, default=str) + "\n")
 
         except Exception as e:
             logger.error(f"Fallback logging also failed: {e}")

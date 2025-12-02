@@ -17,6 +17,7 @@ import socket
 from datetime import datetime
 from typing import List, Optional
 
+import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -195,10 +196,10 @@ async def create_host(
             key_filename = f"{hostname}_{ip_address.replace('.', '_')}.pem"
             key_path = os.path.join(key_dir, key_filename)
 
-            # Save key file
-            with open(key_path, "wb") as f:
-                content = await key_file.read()
-                f.write(content)
+            # Save key file asynchronously
+            content = await key_file.read()
+            async with aiofiles.open(key_path, "wb") as f:
+                await f.write(content)
 
             # Set secure permissions
             os.chmod(key_path, 0o600)

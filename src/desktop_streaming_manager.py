@@ -457,43 +457,47 @@ class DesktopStreamingManager:
                 button = control_data.get("button", 1)
 
                 # Use xdotool to simulate mouse click
-                subprocess.run(
-                    [
-                        "xdotool",
-                        "mousemove",
-                        "--sync",
-                        str(x),
-                        str(y),
-                        "click",
-                        str(button),
-                    ],
-                    env={
-                        **config_manager.get("system.environment", os.environ),
-                        "DISPLAY": f":{display}",
-                    },
+                env = {
+                    **config_manager.get("system.environment", os.environ),
+                    "DISPLAY": f":{display}",
+                }
+                proc = await asyncio.create_subprocess_exec(
+                    "xdotool",
+                    "mousemove",
+                    "--sync",
+                    str(x),
+                    str(y),
+                    "click",
+                    str(button),
+                    env=env,
                 )
+                await proc.wait()
 
             elif control_type == "key_press":
                 key = control_data.get("key", "")
                 if key:
-                    subprocess.run(
-                        ["xdotool", "key", key],
-                        env={
-                            **config_manager.get("system.environment", os.environ),
-                            "DISPLAY": f":{display}",
-                        },
+                    env = {
+                        **config_manager.get("system.environment", os.environ),
+                        "DISPLAY": f":{display}",
+                    }
+                    proc = await asyncio.create_subprocess_exec(
+                        "xdotool", "key", key,
+                        env=env,
                     )
+                    await proc.wait()
 
             elif control_type == "type_text":
                 text = control_data.get("text", "")
                 if text:
-                    subprocess.run(
-                        ["xdotool", "type", text],
-                        env={
-                            **config_manager.get("system.environment", os.environ),
-                            "DISPLAY": f":{display}",
-                        },
+                    env = {
+                        **config_manager.get("system.environment", os.environ),
+                        "DISPLAY": f":{display}",
+                    }
+                    proc = await asyncio.create_subprocess_exec(
+                        "xdotool", "type", text,
+                        env=env,
                     )
+                    await proc.wait()
 
         except Exception as e:
             logger.error(f"Control request failed: {e}")
@@ -508,16 +512,18 @@ class DesktopStreamingManager:
             display = session_info["display_num"]
 
             # Use imagemagick to capture screenshot
-            result = subprocess.run(
-                ["import", "-window", "root", "-display", f":{display}", "png:-"],
-                capture_output=True,
+            proc = await asyncio.create_subprocess_exec(
+                "import", "-window", "root", "-display", f":{display}", "png:-",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout, _ = await proc.communicate()
 
-            if result.returncode == 0:
+            if proc.returncode == 0:
                 # Return base64 encoded PNG
                 import base64
 
-                return base64.b64encode(result.stdout).decode("utf-8")
+                return base64.b64encode(stdout).decode("utf-8")
 
         except Exception as e:
             logger.error(f"Screenshot capture failed: {e}")

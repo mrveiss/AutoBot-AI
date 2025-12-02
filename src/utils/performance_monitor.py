@@ -278,27 +278,34 @@ class Phase9PerformanceMonitor:
 
         try:
             # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
-                    "temperature.gpu,power.draw,clocks.current.graphics,"
-                    "clocks.current.memory,fan.speed,encoder.stats.utilization,"
-                    "decoder.stats.utilization,pstate,clocks_throttle_reasons.gpu_idle,"
-                    "clocks_throttle_reasons.applications_clocks_setting,"
-                    "clocks_throttle_reasons.sw_power_cap,"
-                    "clocks_throttle_reasons.hw_slowdown,"
-                    "clocks_throttle_reasons.hw_thermal_slowdown,"
-                    "clocks_throttle_reasons.hw_power_brake_slowdown",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            proc = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
+                "temperature.gpu,power.draw,clocks.current.graphics,"
+                "clocks.current.memory,fan.speed,encoder.stats.utilization,"
+                "decoder.stats.utilization,pstate,clocks_throttle_reasons.gpu_idle,"
+                "clocks_throttle_reasons.applications_clocks_setting,"
+                "clocks_throttle_reasons.sw_power_cap,"
+                "clocks_throttle_reasons.hw_slowdown,"
+                "clocks_throttle_reasons.hw_thermal_slowdown,"
+                "clocks_throttle_reasons.hw_power_brake_slowdown",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
-            if result.returncode == 0:
-                parts = [p.strip() for p in result.stdout.strip().split(",")]
+            try:
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+                result_stdout = stdout.decode("utf-8")
+                returncode = proc.returncode
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("nvidia-smi command timed out")
+                return None
+
+            if returncode == 0:
+                parts = [p.strip() for p in result_stdout.strip().split(",")]
                 if len(parts) >= 8:
                     memory_used = int(float(parts[1]))
                     memory_total = int(float(parts[2]))
