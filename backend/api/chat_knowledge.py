@@ -547,8 +547,12 @@ async def upload_file_to_chat(
         )
 
         content = await file.read()
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                await f.write(content)
+        except OSError as e:
+            logger.error(f"Failed to write uploaded file {file_path}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
         # Associate with chat
         association = await chat_knowledge_manager.associate_file(
