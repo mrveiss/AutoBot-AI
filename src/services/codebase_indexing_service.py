@@ -561,9 +561,15 @@ class CodebaseIndexingService:
                 # Try with latin-1 as fallback
                 async with aiofiles.open(file_path, "r", encoding="latin-1") as f:
                     return await f.read()
-            except Exception as e:
-                logger.warning(f"Could not read file {file_path}: {e}")
+            except OSError as e:
+                logger.warning(f"Failed to read file {file_path}: {e}")
                 return None
+            except Exception as e:
+                logger.warning(f"Could not decode file {file_path}: {e}")
+                return None
+        except OSError as e:
+            logger.warning(f"Failed to read file {file_path}: {e}")
+            return None
         except Exception as e:
             logger.warning(f"Error reading file {file_path}: {e}")
             return None

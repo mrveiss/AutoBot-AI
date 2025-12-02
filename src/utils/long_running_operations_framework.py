@@ -289,8 +289,10 @@ class OperationCheckpointManager:
             async with aiofiles.open(checkpoint_file, "wb") as f:
                 await f.write(pickle.dumps(checkpoint))
             logger.info(f"Checkpoint {checkpoint_id} saved to filesystem")
+        except OSError as e:
+            logger.error(f"Failed to save checkpoint to filesystem {checkpoint_file}: {e}")
         except Exception as e:
-            logger.error(f"Failed to save checkpoint to filesystem: {e}")
+            logger.error(f"Failed to serialize checkpoint {checkpoint_id}: {e}")
 
         # Add to operation checkpoints list
         operation.checkpoints.append(checkpoint)
@@ -323,8 +325,10 @@ class OperationCheckpointManager:
                     checkpoint = pickle.loads(data)
                 logger.info(f"Checkpoint {checkpoint_id} loaded from filesystem")
                 return checkpoint
+            except OSError as e:
+                logger.error(f"Failed to read checkpoint file {checkpoint_file}: {e}")
             except Exception as e:
-                logger.error(f"Failed to load checkpoint from filesystem: {e}")
+                logger.error(f"Failed to deserialize checkpoint {checkpoint_id}: {e}")
 
         return None
 
@@ -356,8 +360,10 @@ class OperationCheckpointManager:
                     data = await f.read()
                     checkpoint = pickle.loads(data)
                     checkpoints.append(checkpoint)
+            except OSError as e:
+                logger.warning(f"Failed to read checkpoint file {checkpoint_file}: {e}")
             except Exception as e:
-                logger.warning(f"Failed to load checkpoint {checkpoint_file}: {e}")
+                logger.warning(f"Failed to deserialize checkpoint {checkpoint_file}: {e}")
 
         # Sort by timestamp
         checkpoints.sort(key=lambda x: x.timestamp)

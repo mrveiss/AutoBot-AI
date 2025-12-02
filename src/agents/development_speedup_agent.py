@@ -231,6 +231,8 @@ class DevelopmentSpeedupAgent:
                 except SyntaxError as e:
                     self.logger.debug("Skipping file with syntax error: %s", e)
 
+            except OSError as e:
+                self.logger.debug(f"Failed to read file {file_path}: {e}")
             except Exception as e:
                 self.logger.error(f"Error analyzing {file_path}: {e}")
 
@@ -415,6 +417,9 @@ class DevelopmentSpeedupAgent:
                             }
                         )
 
+            except OSError as e:
+                self.logger.debug(f"Failed to read file {result.file_path}: {e}")
+                continue
             except Exception:
                 continue
 
@@ -640,6 +645,9 @@ class DevelopmentSpeedupAgent:
                                     )
                                 )
 
+            except OSError as e:
+                self.logger.debug(f"Failed to read file {file_path}: {e}")
+                continue
             except Exception:
                 continue
 

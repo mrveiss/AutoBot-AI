@@ -1255,8 +1255,11 @@ class UnifiedConfigManager:
                 else:
                     return json.loads(content)
 
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to read config file {file_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to parse config file {file_path}: {e}")
             raise
 
     @retry(
@@ -1275,8 +1278,11 @@ class UnifiedConfigManager:
                 else:
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
 
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to write config file {file_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to serialize config for {file_path}: {e}")
             raise
 
     async def load_config_async(

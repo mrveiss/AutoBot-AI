@@ -145,11 +145,13 @@ class CachedResponseStrategy(FallbackStrategy):
         }
 
         try:
-            async with aiofiles.open(cache_file, "w") as f:
+            async with aiofiles.open(cache_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(cache_data))
             logger.debug(f"Cached response for key: {cache_key}")
+        except OSError as e:
+            logger.warning(f"Failed to write cache file {cache_file}: {e}")
         except Exception as e:
-            logger.warning(f"Failed to cache response: {e}")
+            logger.warning(f"Failed to serialize cache response: {e}")
 
     async def _find_cached_response(self, request: str) -> Optional[Dict[str, Any]]:
         """Find a cached response for the request"""
@@ -159,7 +161,7 @@ class CachedResponseStrategy(FallbackStrategy):
         # Try exact match first
         if cache_file.exists():
             try:
-                async with aiofiles.open(cache_file, "r") as f:
+                async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     cached_data = json.loads(content)
 
@@ -167,8 +169,10 @@ class CachedResponseStrategy(FallbackStrategy):
                 age = time.time() - cached_data.get("timestamp", 0)
                 if age <= self.max_cache_age:
                     return cached_data
+            except OSError as e:
+                logger.warning(f"Failed to read cache file {cache_file}: {e}")
             except Exception as e:
-                logger.warning(f"Error reading cache file {cache_file}: {e}")
+                logger.warning(f"Error parsing cache file {cache_file}: {e}")
 
         # Try similarity-based matching
         return await self._find_similar_cached_response(request)
@@ -210,8 +214,10 @@ class CachedResponseStrategy(FallbackStrategy):
                         best_match = cached_data
                         best_match["confidence"] = similarity
 
+                except OSError as e:
+                    logger.warning(f"Failed to read cache file {cache_file}: {e}")
                 except Exception as e:
-                    logger.warning(f"Error processing cache file {cache_file}: {e}")
+                    logger.warning(f"Error parsing cache file {cache_file}: {e}")
 
         except Exception as e:
             logger.warning(f"Error scanning cache directory: {e}")
