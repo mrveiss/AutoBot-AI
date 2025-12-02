@@ -19,6 +19,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+import aiofiles
+
 from src.agents.npu_code_search_agent import get_npu_code_search
 from src.utils.redis_client import get_redis_client
 
@@ -194,8 +196,11 @@ class DevelopmentSpeedupAgent:
 
         for file_path in python_files:
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
+                # Use aiofiles for non-blocking file I/O
+                async with aiofiles.open(
+                    file_path, "r", encoding="utf-8", errors="ignore"
+                ) as f:
+                    content = await f.read()
 
                 # Analyze file-level duplicates
                 lines = content.splitlines()
@@ -391,10 +396,11 @@ class DevelopmentSpeedupAgent:
         # Find potential unused imports (simplified heuristic)
         for result in import_results:
             try:
-                with open(
+                # Use aiofiles for non-blocking file I/O
+                async with aiofiles.open(
                     result.file_path, "r", encoding="utf-8", errors="ignore"
                 ) as f:
-                    file_content = f.read()
+                    file_content = await f.read()
 
                 import_line = result.content.strip()
                 if import_line.startswith("import "):
