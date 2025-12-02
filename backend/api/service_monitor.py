@@ -83,16 +83,16 @@ class ServiceMonitor:
 
     async def check_backend_api(self) -> ServiceStatus:
         """Check backend API health"""
+        import aiohttp
+
+        start_time = time.time()
+        backend_url = config.get_service_url("backend", "/api/health")
+
         try:
-            import aiohttp
-
-            start_time = time.time()
-
             timeout = aiohttp.ClientTimeout(
                 total=config.get_timeout("http", "standard"),
                 connect=config.get_timeout("tcp", "connect"),
             )
-            backend_url = config.get_service_url("backend", "/api/health")
             async with await self._http_client.get(backend_url, timeout=timeout) as response:
                 response_time = int((time.time() - start_time) * 1000)
 
@@ -118,7 +118,38 @@ class ServiceMonitor:
                         icon="fas fa-server",
                         category="core",
                     )
+        except asyncio.TimeoutError:
+            logger.warning(f"Backend API health check timed out: {backend_url}")
+            return ServiceStatus(
+                name="Backend API",
+                status="error",
+                message="Connection timed out",
+                last_check=datetime.now(),
+                icon="fas fa-server",
+                category="core",
+            )
+        except aiohttp.ClientConnectorError as e:
+            logger.warning(f"Backend API connection refused: {backend_url} - {e}")
+            return ServiceStatus(
+                name="Backend API",
+                status="error",
+                message="Connection refused",
+                last_check=datetime.now(),
+                icon="fas fa-server",
+                category="core",
+            )
+        except aiohttp.ClientError as e:
+            logger.warning(f"Backend API HTTP error: {e}")
+            return ServiceStatus(
+                name="Backend API",
+                status="error",
+                message=f"HTTP error: {str(e)[:50]}",
+                last_check=datetime.now(),
+                icon="fas fa-server",
+                category="core",
+            )
         except Exception as e:
+            logger.error(f"Backend API check unexpected error: {e}", exc_info=True)
             return ServiceStatus(
                 name="Backend API",
                 status="error",
@@ -198,68 +229,90 @@ class ServiceMonitor:
 
     async def check_llm_services(self) -> List[ServiceStatus]:
         """Check LLM service availability"""
+        import aiohttp
+
         services = []
+        llm_url = config.get_service_url(
+            "backend", "/api/llm/status/comprehensive"
+        )
 
         try:
-            import aiohttp
+            start_time = time.time()
+            timeout = aiohttp.ClientTimeout(
+                total=config.get_timeout("http", "long"),
+                connect=config.get_timeout("tcp", "connect"),
+            )
+            async with await self._http_client.get(llm_url, timeout=timeout) as response:
+                response_time = int((time.time() - start_time) * 1000)
 
-            # Check LLM API status
-            try:
-                start_time = time.time()
-                timeout = aiohttp.ClientTimeout(
-                    total=config.get_timeout("http", "long"),
-                    connect=config.get_timeout("tcp", "connect"),
-                )
-                llm_url = config.get_service_url(
-                    "backend", "/api/llm/status/comprehensive"
-                )
-                async with await self._http_client.get(llm_url, timeout=timeout) as response:
-                    response_time = int((time.time() - start_time) * 1000)
-
-                    if response.status == 200:
-                        data = await response.json()
-
-                        services.append(
-                            ServiceStatus(
-                                name="LLM Manager",
-                                status="online",
-                                message=f"Response: {response_time}ms",
-                                response_time=response_time,
-                                last_check=datetime.now(),
-                                icon="fas fa-brain",
-                                category="ai",
-                                details=data,
-                            )
+                if response.status == 200:
+                    data = await response.json()
+                    services.append(
+                        ServiceStatus(
+                            name="LLM Manager",
+                            status="online",
+                            message=f"Response: {response_time}ms",
+                            response_time=response_time,
+                            last_check=datetime.now(),
+                            icon="fas fa-brain",
+                            category="ai",
+                            details=data,
                         )
-                    else:
-                        services.append(
-                            ServiceStatus(
-                                name="LLM Manager",
-                                status="warning",
-                                message=f"HTTP {response.status}",
-                                last_check=datetime.now(),
-                                icon="fas fa-brain",
-                                category="ai",
-                            )
-                        )
-            except Exception as e:
-                services.append(
-                    ServiceStatus(
-                        name="LLM Manager",
-                        status="error",
-                        message=str(e)[:50],
-                        last_check=datetime.now(),
-                        icon="fas fa-brain",
-                        category="ai",
                     )
-                )
-
-        except ImportError:
+                else:
+                    services.append(
+                        ServiceStatus(
+                            name="LLM Manager",
+                            status="warning",
+                            message=f"HTTP {response.status}",
+                            last_check=datetime.now(),
+                            icon="fas fa-brain",
+                            category="ai",
+                        )
+                    )
+        except asyncio.TimeoutError:
+            logger.warning(f"LLM service check timed out: {llm_url}")
             services.append(
                 ServiceStatus(
-                    name="LLM Services",
-                    status="warning",
-                    message="HTTP client unavailable",
+                    name="LLM Manager",
+                    status="error",
+                    message="Connection timed out",
+                    last_check=datetime.now(),
+                    icon="fas fa-brain",
+                    category="ai",
+                )
+            )
+        except aiohttp.ClientConnectorError as e:
+            logger.warning(f"LLM service connection refused: {llm_url} - {e}")
+            services.append(
+                ServiceStatus(
+                    name="LLM Manager",
+                    status="error",
+                    message="Connection refused",
+                    last_check=datetime.now(),
+                    icon="fas fa-brain",
+                    category="ai",
+                )
+            )
+        except aiohttp.ClientError as e:
+            logger.warning(f"LLM service HTTP error: {e}")
+            services.append(
+                ServiceStatus(
+                    name="LLM Manager",
+                    status="error",
+                    message=f"HTTP error: {str(e)[:50]}",
+                    last_check=datetime.now(),
+                    icon="fas fa-brain",
+                    category="ai",
+                )
+            )
+        except Exception as e:
+            logger.error(f"LLM service check unexpected error: {e}", exc_info=True)
+            services.append(
+                ServiceStatus(
+                    name="LLM Manager",
+                    status="error",
+                    message=str(e)[:50],
                     last_check=datetime.now(),
                     icon="fas fa-brain",
                     category="ai",
@@ -270,16 +323,14 @@ class ServiceMonitor:
 
     async def check_knowledge_base(self) -> ServiceStatus:
         """Check knowledge base status"""
+        import aiohttp
+
+        start_time = time.time()
+        kb_url = config.get_service_url(
+            "backend", "/api/knowledge_base/stats/basic"
+        )
+
         try:
-            import aiohttp
-
-            start_time = time.time()
-
-            # Use configuration system for knowledge base URL
-            kb_url = config.get_service_url(
-                "backend", "/api/knowledge_base/stats/basic"
-            )
-
             timeout = aiohttp.ClientTimeout(
                 total=config.get_timeout("knowledge_base", "search"),
                 connect=config.get_timeout("tcp", "connect"),
@@ -310,7 +361,38 @@ class ServiceMonitor:
                         icon="fas fa-database",
                         category="knowledge",
                     )
+        except asyncio.TimeoutError:
+            logger.warning(f"Knowledge base check timed out: {kb_url}")
+            return ServiceStatus(
+                name="Knowledge Base",
+                status="error",
+                message="Connection timed out",
+                last_check=datetime.now(),
+                icon="fas fa-database",
+                category="knowledge",
+            )
+        except aiohttp.ClientConnectorError as e:
+            logger.warning(f"Knowledge base connection refused: {kb_url} - {e}")
+            return ServiceStatus(
+                name="Knowledge Base",
+                status="error",
+                message="Connection refused",
+                last_check=datetime.now(),
+                icon="fas fa-database",
+                category="knowledge",
+            )
+        except aiohttp.ClientError as e:
+            logger.warning(f"Knowledge base HTTP error: {e}")
+            return ServiceStatus(
+                name="Knowledge Base",
+                status="error",
+                message=f"HTTP error: {str(e)[:50]}",
+                last_check=datetime.now(),
+                icon="fas fa-database",
+                category="knowledge",
+            )
         except Exception as e:
+            logger.error(f"Knowledge base check unexpected error: {e}", exc_info=True)
             return ServiceStatus(
                 name="Knowledge Base",
                 status="error",

@@ -12,8 +12,9 @@ import os
 import time
 from datetime import datetime
 
+import aiohttp
+
 from backend.type_defs.common import Metadata
-import requests
 
 from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
@@ -68,9 +69,11 @@ class ConnectionTester:
                     f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
                 )
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
-                response = requests.get(ollama_check_url, timeout=3)
-                if response.status_code == 200:
-                    ollama_status = "connected"
+                timeout = aiohttp.ClientTimeout(total=3)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(ollama_check_url) as response:
+                        if response.status == 200:
+                            ollama_status = "connected"
             except Exception as e:
                 logger.debug(f"Ollama health check failed: {e}")
 
@@ -153,58 +156,61 @@ class ConnectionTester:
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
-            response = requests.get(ollama_check_url, timeout=10)
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(ollama_check_url) as response:
+                    if response.status == 200:
+                        # Test a simple generation request
+                        test_payload = {
+                            "model": ollama_model,
+                            "prompt": "Test connection - respond with 'OK'",
+                            "stream": False,
+                        }
 
-            if response.status_code == 200:
-                # Test a simple generation request
-                test_payload = {
-                    "model": ollama_model,
-                    "prompt": "Test connection - respond with 'OK'",
-                    "stream": False,
-                }
-
-                test_response = requests.post(
-                    ollama_endpoint, json=test_payload, timeout=30
-                )
-
-                if test_response.status_code == 200:
-                    result = test_response.json()
-                    response_text = result.get("response", "No response text")
-                    test_response = (
-                        response_text[:100] + "..."
-                        if (response_text and response_text != "No response text")
-                        else "No response"
-                    )
-                    return {
-                        "status": "connected",
-                        "message": (
-                            "Successfully connected to Ollama with model "
-                            f"'{ollama_model}'"
-                        ),
-                        "endpoint": ollama_endpoint,
-                        "model": ollama_model,
-                        "current_model": ollama_model,
-                        "test_response": test_response,
-                    }
-                else:
-                    return {
-                        "status": "partial",
-                        "message": (
-                            f"Connected to Ollama but model '{ollama_model}' "
-                            "failed to respond"
-                        ),
-                        "endpoint": ollama_endpoint,
-                        "model": ollama_model,
-                        "current_model": ollama_model,
-                        "error": test_response.text,
-                    }
-            else:
-                return {
-                    "status": "disconnected",
-                    "message": f"Failed to connect to Ollama at {ollama_check_url}",
-                    "endpoint": ollama_endpoint,
-                    "status_code": response.status_code,
-                }
+                        gen_timeout = aiohttp.ClientTimeout(total=30)
+                        async with aiohttp.ClientSession(timeout=gen_timeout) as gen_session:
+                            async with gen_session.post(
+                                ollama_endpoint, json=test_payload
+                            ) as test_resp:
+                                if test_resp.status == 200:
+                                    result = await test_resp.json()
+                                    response_text = result.get("response", "No response text")
+                                    test_response_text = (
+                                        response_text[:100] + "..."
+                                        if (response_text and response_text != "No response text")
+                                        else "No response"
+                                    )
+                                    return {
+                                        "status": "connected",
+                                        "message": (
+                                            "Successfully connected to Ollama with model "
+                                            f"'{ollama_model}'"
+                                        ),
+                                        "endpoint": ollama_endpoint,
+                                        "model": ollama_model,
+                                        "current_model": ollama_model,
+                                        "test_response": test_response_text,
+                                    }
+                                else:
+                                    error_text = await test_resp.text()
+                                    return {
+                                        "status": "partial",
+                                        "message": (
+                                            f"Connected to Ollama but model '{ollama_model}' "
+                                            "failed to respond"
+                                        ),
+                                        "endpoint": ollama_endpoint,
+                                        "model": ollama_model,
+                                        "current_model": ollama_model,
+                                        "error": error_text,
+                                    }
+                    else:
+                        return {
+                            "status": "disconnected",
+                            "message": f"Failed to connect to Ollama at {ollama_check_url}",
+                            "endpoint": ollama_endpoint,
+                            "status_code": response.status,
+                        }
         except Exception as e:
             logger.error(f"Ollama connection test failed: {str(e)}")
             return {
@@ -343,32 +349,34 @@ class ConnectionTester:
 
                 # Check if model is available
                 tags_url = f"{ollama_host}/api/tags"
-                response = requests.get(tags_url, timeout=5)
+                timeout = aiohttp.ClientTimeout(total=5)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(tags_url) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            available_models = [
+                                model["name"] for model in data.get("models", [])
+                            ]
+                            model_available = (
+                                current_model in available_models if current_model else False
+                            )
 
-                if response.status_code == 200:
-                    available_models = [
-                        model["name"] for model in response.json().get("models", [])
-                    ]
-                    model_available = (
-                        current_model in available_models if current_model else False
-                    )
-
-                    return {
-                        "connected": True,
-                        "current_model": current_model,
-                        "model_available": model_available,
-                        "provider": provider,
-                        "message": (
-                            f"Embedding model '{current_model}' {'available' if model_available else 'not found'}"
-                        ),
-                    }
-                else:
-                    return {
-                        "connected": False,
-                        "current_model": current_model,
-                        "provider": provider,
-                        "message": f"Cannot connect to Ollama at {ollama_host}",
-                    }
+                            return {
+                                "connected": True,
+                                "current_model": current_model,
+                                "model_available": model_available,
+                                "provider": provider,
+                                "message": (
+                                    f"Embedding model '{current_model}' {'available' if model_available else 'not found'}"
+                                ),
+                            }
+                        else:
+                            return {
+                                "connected": False,
+                                "current_model": current_model,
+                                "provider": provider,
+                                "message": f"Cannot connect to Ollama at {ollama_host}",
+                            }
 
             elif provider == "openai":
                 # For OpenAI, just return configured status
@@ -487,27 +495,27 @@ class ModelManager:
             ollama_host = ollama_config.get("host", OLLAMA_URL)
             ollama_url = f"{ollama_host}/api/tags"
 
-            response = requests.get(ollama_url, timeout=10)
-            if response.status_code == 200:
-                ollama_data = response.json()
-                models = []
-                if "models" in ollama_data:
-                    for model in ollama_data["models"]:
-                        models.append(
-                            {
-                                "name": model.get("name", "Unknown"),
-                                "type": "ollama",
-                                "size": model.get("size", 0),
-                                "modified_at": model.get("modified_at", ""),
-                                "available": True,
-                            }
-                        )
-                return models
-            return []
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(ollama_url) as response:
+                    if response.status == 200:
+                        ollama_data = await response.json()
+                        models = []
+                        if "models" in ollama_data:
+                            for model in ollama_data["models"]:
+                                models.append(
+                                    {
+                                        "name": model.get("name", "Unknown"),
+                                        "type": "ollama",
+                                        "size": model.get("size", 0),
+                                        "modified_at": model.get("modified_at", ""),
+                                        "available": True,
+                                    }
+                                )
+                        return models
+                    return []
         except Exception as e:
             # Implement rate limiting to prevent log spam
-            import time
-
             current_time = time.time()
             if (
                 current_time - ModelManager._last_ollama_warning
