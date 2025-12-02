@@ -265,25 +265,33 @@ export function useChatInterface() {
     attachedFiles.value = []
 
     try {
-      // Upload files first if any
-      const uploadedFilePaths: string[] = []
-      for (const file of filesToUpload) {
-        try {
+      // Upload files in parallel - eliminates N+1 sequential uploads
+      const uploadResults = await Promise.allSettled(
+        filesToUpload.map(async (file) => {
           const result = (await apiClient.uploadFile(file)) as unknown as FileUploadResponse
           const filePath = result.path || result.filename || file.name
-          uploadedFilePaths.push(filePath)
           await associateFileWithChat(filePath, file.name)
-        } catch (uploadError) {
-          logger.error('File upload failed:', uploadError)
+          return filePath
+        })
+      )
+
+      // Process results and collect successful uploads
+      const uploadedFilePaths: string[] = []
+      uploadResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          uploadedFilePaths.push(result.value)
+        } else {
+          const file = filesToUpload[index]
+          logger.error('File upload failed:', result.reason)
           messages.value.push({
             id: generateChatId(),
             sender: 'system',
-            content: `📎 ❌ Failed to upload file "${file.name}": ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`,
+            content: `📎 ❌ Failed to upload file "${file.name}": ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
             timestamp: new Date().toISOString(),
             type: 'error'
           })
         }
-      }
+      })
 
       // Send message to backend using the new API
       const messageData = {
