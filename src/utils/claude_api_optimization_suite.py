@@ -819,6 +819,9 @@ class ClaudeAPIOptimizationSuite:
             logger.info(f"Optimization report exported to {file_path}")
             return True
 
+        except OSError as e:
+            logger.error(f"Failed to write optimization report to {file_path}: {e}")
+            return False
         except Exception as e:
             logger.error(f"Error exporting optimization report: {e}")
             return False
@@ -897,7 +900,7 @@ async def example_usage():
     # Start optimization
     success = await initialize_claude_api_optimization(config)
     if not success:
-        print("Failed to initialize optimization suite")
+        logger.error("Failed to initialize optimization suite")
         return
 
     # Get optimization suite
@@ -923,30 +926,30 @@ async def example_usage():
             },
         ]
     )
-    print("TodoWrite optimization result:", json.dumps(todowrite_result, indent=2))
+    logger.info(f"TodoWrite optimization result: {json.dumps(todowrite_result, indent=2)}")
 
     # Example: Optimize general request
     general_result = await optimize_claude_request(
         {"action": "read_file", "path": "/test/file.py"}, "read_operation"
     )
-    print("General request optimization result:", json.dumps(general_result, indent=2))
+    logger.info(f"General request optimization result: {json.dumps(general_result, indent=2)}")
 
     # Get optimization status
     status = suite.get_optimization_status()
-    print("Optimization status:", json.dumps(status, indent=2, default=str))
+    logger.info(f"Optimization status: {json.dumps(status, indent=2, default=str)}")
 
     # Force optimization analysis
     analysis = await suite.force_optimization_analysis()
-    print("Forced analysis result:", json.dumps(analysis, indent=2, default=str))
+    logger.info(f"Forced analysis result: {json.dumps(analysis, indent=2, default=str)}")
 
     # Export comprehensive report
     report_path = "/tmp/claude_optimization_report.json"
     exported = await suite.export_optimization_report(report_path)
-    print(f"Report exported: {exported} -> {report_path}")
+    logger.info(f"Report exported: {exported} -> {report_path}")
 
     # Shutdown
     await shutdown_claude_api_optimization()
-    print("Optimization suite shutdown complete")
+    logger.info("Optimization suite shutdown complete")
 
 
 if __name__ == "__main__":
