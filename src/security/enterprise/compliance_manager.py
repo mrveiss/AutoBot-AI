@@ -495,8 +495,10 @@ class ComplianceManager:
 
         try:
             # Use aiofiles for non-blocking file I/O
-            async with aiofiles.open(pii_log_path, "a") as f:
+            async with aiofiles.open(pii_log_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(pii_access_log) + "\n")
+        except OSError as e:
+            logger.error(f"Failed to write PII log to {pii_log_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to log PII access: {e}")
 
@@ -543,17 +545,21 @@ class ComplianceManager:
                 "event_id": audit_event["event_id"],
             }
 
-            async with aiofiles.open(storage_path, "a") as f:
+            async with aiofiles.open(storage_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(encrypted_event) + "\n")
 
+        except OSError as e:
+            logger.error(f"Failed to write encrypted audit event to {storage_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to store encrypted audit event: {e}")
 
     async def _store_plain_event(self, audit_event: Dict, storage_path: Path):
         """Store plain text audit event"""
         try:
-            async with aiofiles.open(storage_path, "a") as f:
+            async with aiofiles.open(storage_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(audit_event) + "\n")
+        except OSError as e:
+            logger.error(f"Failed to write audit event to {storage_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to store audit event: {e}")
 
@@ -674,8 +680,10 @@ class ComplianceManager:
 
         try:
             # Use aiofiles for non-blocking file I/O
-            async with aiofiles.open(violations_path, "a") as f:
+            async with aiofiles.open(violations_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(violation_event) + "\n")
+        except OSError as e:
+            logger.error(f"Failed to write violation record to {violations_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to store violation record: {e}")
 
@@ -790,9 +798,11 @@ class ComplianceManager:
             await asyncio.to_thread(
                 output_path.parent.mkdir, parents=True, exist_ok=True
             )
-            async with aiofiles.open(output_path, "w") as f:
+            async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2))
             logger.info(f"Compliance report saved to {output_path}")
+        except OSError as e:
+            logger.error(f"Failed to write compliance report to {output_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to save compliance report: {e}")
 
