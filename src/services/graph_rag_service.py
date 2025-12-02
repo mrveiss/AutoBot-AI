@@ -318,12 +318,20 @@ class GraphRAGService:
             if "session_id" in metadata:
                 entity_refs.append(f"Conversation {metadata['session_id'][:8]}")
 
-            # Query graph for each entity reference
-            for entity_ref in entity_refs:
-                try:
-                    entity = await self.graph.get_entity(
-                        entity_name=entity_ref, include_relations=False
-                    )
+            # Query graph for all entity references in parallel - eliminates N+1
+            if entity_refs:
+                entities = await asyncio.gather(
+                    *[
+                        self.graph.get_entity(entity_name=entity_ref, include_relations=False)
+                        for entity_ref in entity_refs
+                    ],
+                    return_exceptions=True
+                )
+
+                for entity_ref, entity in zip(entity_refs, entities):
+                    if isinstance(entity, Exception):
+                        logger.warning(f"Failed to query entity '{entity_ref}': {entity}")
+                        continue
 
                     if entity:
                         entity_matches.append(
@@ -337,10 +345,6 @@ class GraphRAGService:
                         logger.debug(
                             f"Matched entity: {entity_ref} (relevance={relevance:.2f})"
                         )
-
-                except Exception as e:
-                    logger.warning(f"Failed to query entity '{entity_ref}': {e}")
-                    continue
 
         return entity_matches
 
@@ -392,69 +396,74 @@ class GraphRAGService:
             f"Graph expansion from {len(start_points)} starting points (max_depth={max_depth})"
         )
 
-        # Traverse graph from each starting point
-        for entity_name, base_score in start_points:
-            try:
-                # Use existing graph traversal (REUSE)
-                related = await self.graph.get_related_entities(
+        # Traverse graph from all starting points in parallel - eliminates N+1
+        all_related_results = await asyncio.gather(
+            *[
+                self.graph.get_related_entities(
                     entity_name=entity_name,
                     relation_type=None,  # All relation types
                     direction="both",  # Bidirectional
                     max_depth=max_depth,
                 )
+                for entity_name, _ in start_points
+            ],
+            return_exceptions=True
+        )
 
-                logger.debug(
-                    f"Found {len(related)} related entities for '{entity_name}'"
+        for (entity_name, base_score), related in zip(start_points, all_related_results):
+            if isinstance(related, Exception):
+                logger.warning(f"Graph traversal failed for '{entity_name}': {related}")
+                continue
+
+            logger.debug(
+                f"Found {len(related)} related entities for '{entity_name}'"
+            )
+
+            # Convert related entities to SearchResult format
+            for item in related:
+                related_entity = item["entity"]
+                relation = item["relation"]
+                direction = item["direction"]
+
+                # Calculate graph proximity score
+                # Closer entities (fewer hops) get higher scores
+                # Relationship strength also factors in
+                relationship_strength = relation.get("metadata", {}).get(
+                    "strength", 1.0
                 )
+                proximity_score = base_score * relationship_strength
 
-                # Convert related entities to SearchResult format
-                for item in related:
-                    related_entity = item["entity"]
-                    relation = item["relation"]
-                    direction = item["direction"]
+                # Create SearchResult from entity observations
+                observations = related_entity.get("observations", [])
+                if observations:
+                    content = "\n".join(observations)
 
-                    # Calculate graph proximity score
-                    # Closer entities (fewer hops) get higher scores
-                    # Relationship strength also factors in
-                    relationship_strength = relation.get("metadata", {}).get(
-                        "strength", 1.0
+                    # Calculate hybrid score (base relevance + graph proximity)
+                    hybrid_score = (
+                        (1.0 - self.graph_weight) * base_score
+                        + self.graph_weight * proximity_score
                     )
-                    proximity_score = base_score * relationship_strength
 
-                    # Create SearchResult from entity observations
-                    observations = related_entity.get("observations", [])
-                    if observations:
-                        content = "\n".join(observations)
+                    result = SearchResult(
+                        content=content,
+                        metadata={
+                            "entity_id": related_entity.get("id"),
+                            "entity_type": related_entity.get("type"),
+                            "entity_name": related_entity.get("name"),
+                            "source": "graph_expansion",
+                            "relation_type": relation.get("type"),
+                            "direction": direction,
+                            "graph_distance": max_depth,  # Approximation
+                        },
+                        semantic_score=0.0,  # Not from semantic search
+                        keyword_score=0.0,  # Not from keyword search
+                        hybrid_score=hybrid_score,
+                        relevance_rank=0,  # Will be set later
+                        source_path=f"graph:{related_entity.get('name', 'unknown')}",
+                        chunk_index=0,
+                    )
 
-                        # Calculate hybrid score (base relevance + graph proximity)
-                        hybrid_score = (
-                            (1.0 - self.graph_weight) * base_score
-                            + self.graph_weight * proximity_score
-                        )
-
-                        result = SearchResult(
-                            content=content,
-                            metadata={
-                                "entity_id": related_entity.get("id"),
-                                "entity_type": related_entity.get("type"),
-                                "entity_name": related_entity.get("name"),
-                                "source": "graph_expansion",
-                                "relation_type": relation.get("type"),
-                                "direction": direction,
-                                "graph_distance": max_depth,  # Approximation
-                            },
-                            semantic_score=0.0,  # Not from semantic search
-                            keyword_score=0.0,  # Not from keyword search
-                            hybrid_score=hybrid_score,
-                            relevance_rank=0,  # Will be set later
-                            source_path=f"graph:{related_entity.get('name', 'unknown')}",
-                            chunk_index=0,
-                        )
-
-                        expanded_results.append(result)
-
-            except Exception as e:
-                logger.warning(f"Graph traversal failed for '{entity_name}': {e}")
+                    expanded_results.append(result)
                 continue
 
         logger.info(f"Graph expansion yielded {len(expanded_results)} results")
