@@ -406,6 +406,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     self.redis_client.lpush(element_key, json.dumps(element_data))
                     self.redis_client.expire(element_key, 86400)
 
+        except OSError as e:
+            raise OSError(f"Failed to read file {file_path}: {e}")
         except Exception as e:
             raise Exception(f"Failed to index file {file_path}: {e}")
 
@@ -675,8 +677,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                             if len(results) >= max_results:
                                 return results
 
+                except OSError as e:
+                    self.logger.error(f"Failed to read file {file_path}: {e}")
                 except Exception as e:
-                    self.logger.error(f"Error reading file {file_path}: {e}")
+                    self.logger.error(f"Error processing file {file_path}: {e}")
 
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
@@ -741,8 +745,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                             if len(results) >= max_results:
                                 return results
 
+                except OSError as e:
+                    self.logger.error(f"Failed to read file {file_path}: {e}")
                 except Exception as e:
-                    self.logger.error(f"Error reading file {file_path}: {e}")
+                    self.logger.error(f"Error processing file {file_path}: {e}")
 
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
@@ -807,8 +813,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                                 )
                                 results.append(result)
 
+                except OSError as e:
+                    self.logger.error(f"Failed to read file {file_path}: {e}")
                 except Exception as e:
-                    self.logger.error(f"Error reading file {file_path}: {e}")
+                    self.logger.error(f"Error processing file {file_path}: {e}")
 
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
@@ -836,6 +844,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
             return self._get_context_lines(lines, line_number - 1, context_size)
 
+        except OSError as e:
+            self.logger.error(f"Failed to read file {file_path}: {e}")
+            return []
         except Exception as e:
             self.logger.error(
                 f"Error getting context for {file_path}:{line_number}: {e}"
