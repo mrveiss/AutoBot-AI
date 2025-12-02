@@ -500,26 +500,33 @@ class LogAggregator:
         if config["type"] == LogSource.FILE:
             log_path = config["path"]
             if log_path.exists():
-                async with aiofiles.open(log_path, "r") as f:
-                    async for line in f:
-                        if re.search(pattern, line, regex_flags):
-                            parsed = self.parse_log_line(
-                                line, config.get("format", "text")
-                            )
-                            parsed["source"] = source_name
+                try:
+                    async with aiofiles.open(
+                        log_path, "r", encoding="utf-8"
+                    ) as f:
+                        async for line in f:
+                            if re.search(pattern, line, regex_flags):
+                                parsed = self.parse_log_line(
+                                    line, config.get("format", "text")
+                                )
+                                parsed["source"] = source_name
 
-                            # Check timestamp if available
-                            if parsed.get("timestamp"):
-                                try:
-                                    log_time = datetime.fromisoformat(
-                                        parsed["timestamp"]
-                                    )
-                                    if log_time < since_time:
-                                        continue
-                                except Exception:
-                                    pass  # Invalid timestamp, include log anyway
+                                # Check timestamp if available
+                                if parsed.get("timestamp"):
+                                    try:
+                                        log_time = datetime.fromisoformat(
+                                            parsed["timestamp"]
+                                        )
+                                        if log_time < since_time:
+                                            continue
+                                    except Exception:
+                                        pass  # Invalid timestamp, include log anyway
 
-                            results.append(parsed)
+                                results.append(parsed)
+                except OSError as e:
+                    self.print_step(
+                        f"Failed to read log file {log_path}: {e}", "error"
+                    )
 
         return results
 
