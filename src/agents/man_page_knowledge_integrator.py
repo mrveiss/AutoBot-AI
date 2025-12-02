@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import re
-import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -327,11 +326,21 @@ class ManPageKnowledgeIntegrator:
     async def check_man_page_exists(self, command: str) -> bool:
         """Check if man page exists for command"""
         try:
-            result = subprocess.run(
-                ["man", "-w", command], capture_output=True, text=True, timeout=5
+            proc = await asyncio.create_subprocess_exec(
+                "man",
+                "-w",
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=5)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                return False
+            return proc.returncode == 0
+        except FileNotFoundError:
             return False
 
     async def extract_man_page(
@@ -339,20 +348,31 @@ class ManPageKnowledgeIntegrator:
     ) -> Optional[ManPageInfo]:
         """Extract and parse man page for a command"""
         try:
-            # Get raw man page content
-            result = subprocess.run(
-                ["man", str(section), command],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            # Get raw man page content using async subprocess
+            proc = await asyncio.create_subprocess_exec(
+                "man",
+                str(section),
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
-            if result.returncode != 0:
+            try:
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning(f"Timeout extracting man page for {command}")
+                return None
+
+            if proc.returncode != 0:
                 logger.debug(f"Man page not found for {command}({section})")
                 return None
 
             # Parse the content
-            man_info = self.parser.parse_man_page(result.stdout, command, section)
+            man_info = self.parser.parse_man_page(
+                stdout.decode("utf-8"), command, section
+            )
 
             # Add machine context
             detector = await get_os_detector()
@@ -364,9 +384,6 @@ class ManPageKnowledgeIntegrator:
             logger.info(f"Extracted man page for {command}({section})")
             return man_info
 
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Timeout extracting man page for {command}")
-            return None
         except Exception as e:
             logger.error(f"Error extracting man page for {command}: {e}")
             return None
@@ -389,8 +406,9 @@ class ManPageKnowledgeIntegrator:
             "machine_id": man_info.machine_id,
         }
 
-        with open(cache_file, "w") as f:
-            json.dump(man_data, f, indent=2)
+        # Use aiofiles for non-blocking file I/O
+        async with aiofiles.open(cache_file, "w") as f:
+            await f.write(json.dumps(man_data, indent=2))
 
         logger.info(f"Cached man page for {man_info.command} to {cache_file}")
         return cache_file
@@ -560,10 +578,10 @@ class ManPageKnowledgeIntegrator:
         # Convert to knowledge format
         knowledge_data = self.convert_to_knowledge_yaml(man_info)
 
-        # Save as YAML
+        # Save as YAML using aiofiles for non-blocking I/O
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
-        with open(yaml_file, "w") as f:
-            yaml.dump(knowledge_data, f, default_flow_style=False, indent=2)
+        async with aiofiles.open(yaml_file, "w") as f:
+            await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
 
         logger.info(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
 

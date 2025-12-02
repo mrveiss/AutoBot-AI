@@ -494,8 +494,9 @@ class ComplianceManager:
         pii_log_path.parent.mkdir(exist_ok=True)
 
         try:
-            with open(pii_log_path, "a") as f:
-                f.write(json.dumps(pii_access_log) + "\n")
+            # Use aiofiles for non-blocking file I/O
+            async with aiofiles.open(pii_log_path, "a") as f:
+                await f.write(json.dumps(pii_access_log) + "\n")
         except Exception as e:
             logger.error(f"Failed to log PII access: {e}")
 
@@ -672,8 +673,9 @@ class ComplianceManager:
         violations_path.parent.mkdir(exist_ok=True)
 
         try:
-            with open(violations_path, "a") as f:
-                f.write(json.dumps(violation_event) + "\n")
+            # Use aiofiles for non-blocking file I/O
+            async with aiofiles.open(violations_path, "a") as f:
+                await f.write(json.dumps(violation_event) + "\n")
         except Exception as e:
             logger.error(f"Failed to store violation record: {e}")
 
