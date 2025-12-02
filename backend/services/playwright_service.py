@@ -6,6 +6,7 @@ Embedded Playwright Service
 Integrates Docker-based Playwright into the main AutoBot application
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -14,6 +15,10 @@ from typing import Optional
 import aiohttp
 
 from backend.type_defs.common import Metadata
+from backend.utils.chat_exceptions import (
+    ServiceTimeoutError,
+    ServiceUnavailableError,
+)
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.utils.http_client import get_http_client
@@ -75,8 +80,25 @@ class PlaywrightService:
                     self._healthy = False
                     return False
 
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Playwright health check timed out after {self.timeout}s "
+                f"at {self.base_url}"
+            )
+            self._healthy = False
+            return False
+        except aiohttp.ClientConnectorError as e:
+            logger.error(
+                f"Playwright service connection refused at {self.base_url}: {e}"
+            )
+            self._healthy = False
+            return False
+        except aiohttp.ClientError as e:
+            logger.error(f"Playwright health check HTTP error: {e}")
+            self._healthy = False
+            return False
         except Exception as e:
-            logger.error(f"Playwright health check error: {e}")
+            logger.error(f"Playwright health check unexpected error: {e}")
             self._healthy = False
             return False
 
@@ -102,7 +124,11 @@ class PlaywrightService:
         """
         try:
             if not await self.is_ready():
-                raise RuntimeError("Playwright service not available")
+                raise ServiceUnavailableError(
+                    "Playwright service not available",
+                    service="playwright",
+                    url=self.base_url,
+                )
 
             payload = {
                 "query": query,
@@ -125,6 +151,30 @@ class PlaywrightService:
                     logger.error(f"Search failed: {response.status} - {error_text}")
                     raise RuntimeError(f"Search failed: {response.status}")
 
+        except asyncio.TimeoutError:
+            logger.error(f"Web search timed out after {self.timeout}s: '{query}'")
+            return {
+                "success": False,
+                "error": f"Search timed out after {self.timeout}s",
+                "query": query,
+                "results": [],
+            }
+        except aiohttp.ClientConnectorError as e:
+            logger.error(f"Web search connection error: {e}")
+            return {
+                "success": False,
+                "error": "Playwright service connection failed",
+                "query": query,
+                "results": [],
+            }
+        except ServiceUnavailableError:
+            # Re-raise without wrapping
+            return {
+                "success": False,
+                "error": "Playwright service not available",
+                "query": query,
+                "results": [],
+            }
         except Exception as e:
             logger.error(f"Web search error: {e}")
             return {"success": False, "error": str(e), "query": query, "results": []}
@@ -143,7 +193,11 @@ class PlaywrightService:
         """
         try:
             if not await self.is_ready():
-                raise RuntimeError("Playwright service not available")
+                raise ServiceUnavailableError(
+                    "Playwright service not available",
+                    service="playwright",
+                    url=self.base_url,
+                )
 
             payload = {"frontend_url": frontend_url}
 
@@ -162,6 +216,29 @@ class PlaywrightService:
                     )
                     raise RuntimeError(f"Frontend test failed: {response.status}")
 
+        except asyncio.TimeoutError:
+            logger.error(f"Frontend test timed out after {self.timeout}s: {frontend_url}")
+            return {
+                "success": False,
+                "error": f"Frontend test timed out after {self.timeout}s",
+                "frontend_url": frontend_url,
+                "tests": [],
+            }
+        except aiohttp.ClientConnectorError as e:
+            logger.error(f"Frontend test connection error: {e}")
+            return {
+                "success": False,
+                "error": "Playwright service connection failed",
+                "frontend_url": frontend_url,
+                "tests": [],
+            }
+        except ServiceUnavailableError:
+            return {
+                "success": False,
+                "error": "Playwright service not available",
+                "frontend_url": frontend_url,
+                "tests": [],
+            }
         except Exception as e:
             import traceback
 
@@ -196,7 +273,11 @@ class PlaywrightService:
         """
         try:
             if not await self.is_ready():
-                raise RuntimeError("Playwright service not available")
+                raise ServiceUnavailableError(
+                    "Playwright service not available",
+                    service="playwright",
+                    url=self.base_url,
+                )
 
             payload = {"message": message, "frontend_url": frontend_url}
 
@@ -217,6 +298,29 @@ class PlaywrightService:
                     )
                     raise RuntimeError(f"Test message failed: {response.status}")
 
+        except asyncio.TimeoutError:
+            logger.error(f"Test message timed out after {self.timeout}s")
+            return {
+                "success": False,
+                "error": f"Test message timed out after {self.timeout}s",
+                "message": message,
+                "steps": [],
+            }
+        except aiohttp.ClientConnectorError as e:
+            logger.error(f"Test message connection error: {e}")
+            return {
+                "success": False,
+                "error": "Playwright service connection failed",
+                "message": message,
+                "steps": [],
+            }
+        except ServiceUnavailableError:
+            return {
+                "success": False,
+                "error": "Playwright service not available",
+                "message": message,
+                "steps": [],
+            }
         except Exception as e:
             logger.error(f"Test message error: {e}")
             return {"success": False, "error": str(e), "message": message, "steps": []}

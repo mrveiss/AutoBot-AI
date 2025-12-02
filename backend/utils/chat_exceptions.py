@@ -38,6 +38,99 @@ class ValidationError(AutoBotError):
     pass
 
 
+class NetworkError(AutoBotError):
+    """Base class for network-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        self.message = message
+        self.service = service
+        self.url = url
+        self.details = details or {}
+        super().__init__(message)
+
+
+class ServiceUnavailableError(NetworkError):
+    """Raised when an upstream service is unavailable or unreachable."""
+    pass
+
+
+class ServiceTimeoutError(NetworkError):
+    """Raised when a service request times out."""
+    pass
+
+
+class HTTPClientError(NetworkError):
+    """Raised for HTTP 4xx client errors from services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+
+
+class HTTPServerError(NetworkError):
+    """Raised for HTTP 5xx server errors from services."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        service: Optional[str] = None,
+        url: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(message, service, url, details)
+        self.status_code = status_code
+
+
+class SubprocessError(AutoBotError):
+    """Raised when a subprocess operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        command: Optional[str] = None,
+        return_code: Optional[int] = None,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
+    ):
+        self.message = message
+        self.command = command
+        self.return_code = return_code
+        self.stdout = stdout
+        self.stderr = stderr
+        super().__init__(message)
+
+
+class FileOperationError(AutoBotError):
+    """Raised when a file I/O operation fails."""
+
+    def __init__(
+        self,
+        message: str,
+        file_path: Optional[str] = None,
+        operation: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        self.message = message
+        self.file_path = file_path
+        self.operation = operation
+        self.details = details or {}
+        super().__init__(message)
+
+
 def get_error_code(error_type: str) -> str:
     """Get standardized error code for error type."""
     error_codes = {
@@ -68,6 +161,25 @@ def get_exceptions_lazy() -> Tuple[
         ValidationError,
         get_error_code,
     )
+
+
+# Export all exception types for convenience
+__all__ = [
+    "AutoBotError",
+    "InternalError",
+    "ResourceNotFoundError",
+    "ValidationError",
+    "NetworkError",
+    "ServiceUnavailableError",
+    "ServiceTimeoutError",
+    "HTTPClientError",
+    "HTTPServerError",
+    "SubprocessError",
+    "FileOperationError",
+    "get_error_code",
+    "get_exceptions_lazy",
+    "log_exception",
+]
 
 
 def log_exception(error: Exception, context: str = "chat") -> None:

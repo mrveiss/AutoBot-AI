@@ -227,24 +227,41 @@ class InfrastructureMonitor:
         """Get detailed local machine statistics using Linux system calls"""
         stats = MachineStats()
 
+        async def run_command(cmd: list, timeout: float = 2.0) -> tuple:
+            """Run a command asynchronously and return (returncode, stdout, stderr)"""
+            process = None
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=timeout
+                )
+                return process.returncode, stdout.decode(), stderr.decode()
+            except asyncio.TimeoutError:
+                if process is not None:
+                    process.kill()
+                    await process.wait()
+                return -1, "", "timeout"
+            except Exception as e:
+                return -1, "", str(e)
+
         try:
             # CPU load averages from /proc/loadavg
-            result = subprocess.run(
-                ["cat", "/proc/loadavg"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                load_values = result.stdout.strip().split()
+            returncode, stdout, _ = await run_command(["cat", "/proc/loadavg"])
+            if returncode == 0:
+                load_values = stdout.strip().split()
                 if len(load_values) >= 3:
                     stats.cpu_load_1m = float(load_values[0])
                     stats.cpu_load_5m = float(load_values[1])
                     stats.cpu_load_15m = float(load_values[2])
 
             # Current CPU usage from /proc/stat (snapshot method)
-            result = subprocess.run(
-                ["cat", "/proc/stat"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                lines = result.stdout.split("\n")
+            returncode, stdout, _ = await run_command(["cat", "/proc/stat"])
+            if returncode == 0:
+                lines = stdout.split("\n")
                 cpu_line = lines[0]  # First line is overall CPU
                 if cpu_line.startswith("cpu "):
                     # Format: cpu user nice system idle iowait irq softirq steal guest guest_nice
@@ -260,11 +277,9 @@ class InfrastructureMonitor:
                             )
 
             # Memory information from /proc/meminfo
-            result = subprocess.run(
-                ["cat", "/proc/meminfo"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                meminfo_lines = result.stdout.split("\n")
+            returncode, stdout, _ = await run_command(["cat", "/proc/meminfo"])
+            if returncode == 0:
+                meminfo_lines = stdout.split("\n")
                 mem_values = {}
 
                 for line in meminfo_lines:
@@ -300,11 +315,9 @@ class InfrastructureMonitor:
                     stats.memory_percent = round((mem_used / mem_total) * 100, 1)
 
             # Disk usage for root filesystem using df command
-            result = subprocess.run(
-                ["df", "-h", "/"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                lines = result.stdout.strip().split("\n")
+            returncode, stdout, _ = await run_command(["df", "-h", "/"])
+            if returncode == 0:
+                lines = stdout.strip().split("\n")
                 if len(lines) > 1:  # Skip header line
                     # Format: Filesystem Size Used Avail Use% Mounted on
                     parts = lines[1].split()
@@ -317,20 +330,16 @@ class InfrastructureMonitor:
                         )  # Use% (e.g., "53%")
 
             # System uptime
-            result = subprocess.run(
-                ["uptime", "-p"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
+            returncode, stdout, _ = await run_command(["uptime", "-p"])
+            if returncode == 0:
                 # Format: "up X days, Y hours, Z minutes" -> clean format
-                uptime_str = result.stdout.strip().replace("up ", "")
+                uptime_str = stdout.strip().replace("up ", "")
                 stats.uptime = uptime_str
             else:
                 # Fallback to /proc/uptime if uptime -p fails
-                result = subprocess.run(
-                    ["cat", "/proc/uptime"], capture_output=True, text=True, timeout=2
-                )
-                if result.returncode == 0:
-                    uptime_seconds = float(result.stdout.split()[0])
+                returncode, stdout, _ = await run_command(["cat", "/proc/uptime"])
+                if returncode == 0:
+                    uptime_seconds = float(stdout.split()[0])
                     days = int(uptime_seconds // 86400)
                     hours = int((uptime_seconds % 86400) // 3600)
                     minutes = int((uptime_seconds % 3600) // 60)
@@ -352,14 +361,12 @@ class InfrastructureMonitor:
                     )
 
             # Process count using ps
-            result = subprocess.run(
-                ["ps", "-e", "--no-headers"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                process_lines = result.stdout.strip().split("\n")
+            returncode, stdout, _ = await run_command(["ps", "-e", "--no-headers"])
+            if returncode == 0:
+                process_lines = stdout.strip().split("\n")
                 stats.processes = len([line for line in process_lines if line.strip()])
 
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             logger.warning("Timeout getting local system stats")
         except Exception as e:
             logger.error(f"Error collecting local machine stats: {e}")
@@ -454,13 +461,32 @@ class InfrastructureMonitor:
         """Get stats using system commands as fallback"""
         stats = MachineStats()
 
+        async def run_command(cmd: list, timeout: float = 2.0) -> tuple:
+            """Run a command asynchronously and return (returncode, stdout, stderr)"""
+            process = None
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=timeout
+                )
+                return process.returncode, stdout.decode(), stderr.decode()
+            except asyncio.TimeoutError:
+                if process is not None:
+                    process.kill()
+                    await process.wait()
+                return -1, "", "timeout"
+            except Exception as e:
+                return -1, "", str(e)
+
         try:
             # CPU usage
-            result = subprocess.run(
-                ["top", "-bn1"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
+            returncode, stdout, _ = await run_command(["top", "-bn1"])
+            if returncode == 0:
+                for line in stdout.split("\n"):
                     if "Cpu(s)" in line or "%Cpu" in line:
                         # Parse CPU idle and calculate usage
                         parts = line.split(",")
@@ -472,11 +498,9 @@ class InfrastructureMonitor:
                         break
 
             # Memory usage
-            result = subprocess.run(
-                ["free", "-m"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                lines = result.stdout.split("\n")
+            returncode, stdout, _ = await run_command(["free", "-m"])
+            if returncode == 0:
+                lines = stdout.split("\n")
                 for line in lines:
                     if line.startswith("Mem:"):
                         parts = line.split()
@@ -486,11 +510,9 @@ class InfrastructureMonitor:
                         break
 
             # Disk usage
-            result = subprocess.run(
-                ["df", "-h", "/"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                lines = result.stdout.split("\n")
+            returncode, stdout, _ = await run_command(["df", "-h", "/"])
+            if returncode == 0:
+                lines = stdout.split("\n")
                 if len(lines) > 1:
                     parts = lines[1].split()
                     if len(parts) > 4:
@@ -498,11 +520,9 @@ class InfrastructureMonitor:
                         stats.disk = float(usage_str)
 
             # Uptime
-            result = subprocess.run(
-                ["uptime", "-p"], capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0:
-                stats.uptime = result.stdout.strip().replace("up ", "")
+            returncode, stdout, _ = await run_command(["uptime", "-p"])
+            if returncode == 0:
+                stats.uptime = stdout.strip().replace("up ", "")
 
         except Exception as e:
             logger.error(f"Error getting stats via commands: {e}")
@@ -752,13 +772,23 @@ class InfrastructureMonitor:
 
         # Support services
         try:
-            result = subprocess.run(
-                ["git", "--version"], capture_output=True, timeout=1
+            process = await asyncio.create_subprocess_exec(
+                "git", "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            if result.returncode == 0:
-                services.support.append(
-                    ServiceInfo(name="Git", status="online", response_time="1ms")
-                )
+            try:
+                await asyncio.wait_for(process.communicate(), timeout=1.0)
+                if process.returncode == 0:
+                    services.support.append(
+                        ServiceInfo(name="Git", status="online", response_time="1ms")
+                    )
+                else:
+                    services.support.append(ServiceInfo(name="Git", status="offline"))
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                services.support.append(ServiceInfo(name="Git", status="offline"))
         except Exception:
             services.support.append(ServiceInfo(name="Git", status="offline"))
 

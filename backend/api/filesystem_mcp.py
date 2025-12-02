@@ -19,6 +19,7 @@ Security Model:
 - Comprehensive audit logging
 """
 
+import asyncio
 import base64
 import logging
 import mimetypes
@@ -26,6 +27,8 @@ import os
 import shutil
 from datetime import datetime
 from typing import Dict, List, Optional
+
+import aiofiles
 
 from backend.type_defs.common import JSONObject, Metadata
 
@@ -473,16 +476,18 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
-    if not os.path.isfile(request.path):
+    is_file = await asyncio.to_thread(os.path.isfile, request.path)
+    if not is_file:
         raise HTTPException(
             status_code=400, detail=f"Path is not a file: {request.path}"
         )
 
     # Check file size
-    file_size = os.path.getsize(request.path)
+    file_size = await asyncio.to_thread(os.path.getsize, request.path)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
@@ -490,8 +495,8 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
         )
 
     try:
-        with open(request.path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
+            lines = await f.readlines()
 
         # Apply head/tail filters
         if request.head is not None:
@@ -527,16 +532,18 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
-    if not os.path.isfile(request.path):
+    is_file = await asyncio.to_thread(os.path.isfile, request.path)
+    if not is_file:
         raise HTTPException(
             status_code=400, detail=f"Path is not a file: {request.path}"
         )
 
     # Check file size
-    file_size = os.path.getsize(request.path)
+    file_size = await asyncio.to_thread(os.path.getsize, request.path)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413, detail=f"File too large: {file_size} bytes"
@@ -548,8 +555,8 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
         mime_type = "application/octet-stream"
 
     try:
-        with open(request.path, "rb") as f:
-            file_data = f.read()
+        async with aiofiles.open(request.path, "rb") as f:
+            file_data = await f.read()
 
         base64_data = base64.b64encode(file_data).decode("utf-8")
 
@@ -583,23 +590,25 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata
                 errors.append({"path": path, "error": "Access denied"})
                 continue
 
-            if not os.path.exists(path):
+            path_exists = await asyncio.to_thread(os.path.exists, path)
+            if not path_exists:
                 errors.append({"path": path, "error": "File not found"})
                 continue
 
-            if not os.path.isfile(path):
+            is_file = await asyncio.to_thread(os.path.isfile, path)
+            if not is_file:
                 errors.append({"path": path, "error": "Not a file"})
                 continue
 
-            file_size = os.path.getsize(path)
+            file_size = await asyncio.to_thread(os.path.getsize, path)
             if file_size > MAX_FILE_SIZE:
                 errors.append(
                     {"path": path, "error": f"File too large ({file_size} bytes)"}
                 )
                 continue
 
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+            async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                content = await f.read()
 
             results.append({"path": path, "content": content, "size_bytes": file_size})
         except Exception as e:
@@ -629,18 +638,19 @@ async def write_file_mcp(request: WriteFileRequest) -> Metadata:
 
     # Create parent directories if needed
     parent_dir = os.path.dirname(request.path)
-    if parent_dir and not os.path.exists(parent_dir):
+    parent_exists = await asyncio.to_thread(os.path.exists, parent_dir) if parent_dir else True
+    if parent_dir and not parent_exists:
         if not is_path_allowed(parent_dir):
             raise HTTPException(
                 status_code=403, detail="Access denied: Parent directory not allowed"
             )
-        os.makedirs(parent_dir, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, parent_dir, exist_ok=True)
 
     try:
-        with open(request.path, "w", encoding="utf-8") as f:
-            f.write(request.content)
+        async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+            await f.write(request.content)
 
-        file_size = os.path.getsize(request.path)
+        file_size = await asyncio.to_thread(os.path.getsize, request.path)
 
         return {
             "success": True,
@@ -665,17 +675,19 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
-    if not os.path.isfile(request.path):
+    is_file = await asyncio.to_thread(os.path.isfile, request.path)
+    if not is_file:
         raise HTTPException(
             status_code=400, detail=f"Path is not a file: {request.path}"
         )
 
     try:
-        with open(request.path, "r", encoding="utf-8") as f:
-            content = f.read()
+        async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
+            content = await f.read()
 
         original_content = content
         edits_applied = []
@@ -690,8 +702,8 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
 
         # Write changes if not dry run
         if not request.dry_run:
-            with open(request.path, "w", encoding="utf-8") as f:
-                f.write(content)
+            async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+                await f.write(content)
 
         return {
             "success": True,
@@ -720,7 +732,7 @@ async def create_directory_mcp(request: CreateDirectoryRequest) -> Metadata:
         )
 
     try:
-        os.makedirs(request.path, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, request.path, exist_ok=True)
 
         return {
             "success": True,
@@ -746,22 +758,25 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
         )
 
     try:
         entries = []
-        for name in os.listdir(request.path):
+        dir_contents = await asyncio.to_thread(os.listdir, request.path)
+        for name in dir_contents:
             full_path = os.path.join(request.path, name)
-            is_dir = os.path.isdir(full_path)
-            prefix = "[DIR]" if is_dir else "[FILE]"
+            entry_is_dir = await asyncio.to_thread(os.path.isdir, full_path)
+            prefix = "[DIR]" if entry_is_dir else "[FILE]"
             entries.append(f"{prefix} {name}")
 
         entries.sort()
@@ -793,27 +808,30 @@ async def list_directory_with_sizes_mcp(
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
         )
 
     try:
         entries = []
-        for name in os.listdir(request.path):
+        dir_contents = await asyncio.to_thread(os.listdir, request.path)
+        for name in dir_contents:
             full_path = os.path.join(request.path, name)
-            is_dir = os.path.isdir(full_path)
-            size = 0 if is_dir else os.path.getsize(full_path)
+            entry_is_dir = await asyncio.to_thread(os.path.isdir, full_path)
+            size = 0 if entry_is_dir else await asyncio.to_thread(os.path.getsize, full_path)
 
             entries.append(
                 {
                     "name": name,
-                    "type": "directory" if is_dir else "file",
+                    "type": "directory" if entry_is_dir else "file",
                     "size_bytes": size,
                     "path": full_path,
                 }
@@ -858,18 +876,20 @@ async def move_file_mcp(request: MoveFileRequest) -> Metadata:
             detail="Access denied: Destination path not in allowed directories",
         )
 
-    if not os.path.exists(request.source):
+    source_exists = await asyncio.to_thread(os.path.exists, request.source)
+    if not source_exists:
         raise HTTPException(
             status_code=404, detail=f"Source not found: {request.source}"
         )
 
-    if os.path.exists(request.destination):
+    dest_exists = await asyncio.to_thread(os.path.exists, request.destination)
+    if dest_exists:
         raise HTTPException(
             status_code=409, detail=f"Destination already exists: {request.destination}"
         )
 
     try:
-        shutil.move(request.source, request.destination)
+        await asyncio.to_thread(shutil.move, request.source, request.destination)
 
         return {
             "success": True,
@@ -894,12 +914,14 @@ async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
         )
@@ -907,20 +929,25 @@ async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
     try:
         import fnmatch
 
-        matches = []
         exclude_patterns = request.exclude_patterns or []
 
-        for root, dirs, files in os.walk(request.path):
-            for filename in files:
-                # Check if matches pattern
-                if fnmatch.fnmatch(filename, request.pattern):
-                    # Check if excluded
-                    excluded = any(
-                        fnmatch.fnmatch(filename, pat) for pat in exclude_patterns
-                    )
-                    if not excluded:
-                        full_path = os.path.join(root, filename)
-                        matches.append(full_path)
+        def _search_files() -> list:
+            """Blocking file search wrapped for thread executor"""
+            matches = []
+            for root, dirs, files in os.walk(request.path):
+                for filename in files:
+                    # Check if matches pattern
+                    if fnmatch.fnmatch(filename, request.pattern):
+                        # Check if excluded
+                        excluded = any(
+                            fnmatch.fnmatch(filename, pat) for pat in exclude_patterns
+                        )
+                        if not excluded:
+                            full_path = os.path.join(root, filename)
+                            matches.append(full_path)
+            return matches
+
+        matches = await asyncio.to_thread(_search_files)
 
         return {
             "success": True,
@@ -946,18 +973,20 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
         )
 
     def build_tree(path):
-        """Recursively build directory tree"""
+        """Recursively build directory tree (blocking, runs in thread)"""
         tree = {
             "name": os.path.basename(path),
             "type": "directory",
@@ -980,7 +1009,7 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Metadata:
         return tree
 
     try:
-        tree = build_tree(request.path)
+        tree = await asyncio.to_thread(build_tree, request.path)
 
         return {"success": True, "root_path": request.path, "tree": tree}
     except Exception as e:
@@ -1002,16 +1031,19 @@ async def get_file_info_mcp(request: GetFileInfoRequest) -> Metadata:
             status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
 
     try:
-        stat_info = os.stat(request.path)
+        stat_info = await asyncio.to_thread(os.stat, request.path)
+        is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+        is_file = await asyncio.to_thread(os.path.isfile, request.path)
 
         info = {
             "path": request.path,
             "name": os.path.basename(request.path),
-            "type": "directory" if os.path.isdir(request.path) else "file",
+            "type": "directory" if is_dir else "file",
             "size_bytes": stat_info.st_size,
             "created": datetime.fromtimestamp(stat_info.st_ctime).isoformat(),
             "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
@@ -1020,7 +1052,7 @@ async def get_file_info_mcp(request: GetFileInfoRequest) -> Metadata:
         }
 
         # Add MIME type for files
-        if os.path.isfile(request.path):
+        if is_file:
             mime_type, _ = mimetypes.guess_type(request.path)
             info["mime_type"] = mime_type or "application/octet-stream"
 

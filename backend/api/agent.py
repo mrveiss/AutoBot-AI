@@ -1,14 +1,21 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import json
 import logging
 import time
+from typing import Optional
 
+import aiohttp
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from backend.utils.chat_exceptions import (
+    InternalError,
+    SubprocessError,
+)
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -73,17 +80,60 @@ async def receive_goal(request: Request, payload: GoalPayload):
         )
 
     logging.info(f"Received goal via API: {goal}")
-    await event_manager.publish("user_message", {"message": goal})
-    await event_manager.publish("goal_received", {"goal": goal, "use_phi2": use_phi2})
+
+    # Publish events with error handling (non-critical, log and continue)
+    try:
+        await event_manager.publish("user_message", {"message": goal})
+        await event_manager.publish("goal_received", {"goal": goal, "use_phi2": use_phi2})
+    except Exception as e:
+        logger.warning(f"Failed to publish goal events: {e}")
+        # Continue execution - event publishing is non-critical
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
     task_type = "goal_execution"
     agent_type = "orchestrator"
 
-    orchestrator_result = await orchestrator.execute_goal(
-        goal, [{"role": "user", "content": goal}]
-    )
+    try:
+        orchestrator_result = await orchestrator.execute_goal(
+            goal, [{"role": "user", "content": goal}]
+        )
+    except asyncio.TimeoutError as e:
+        logger.error(f"Goal execution timed out: {goal[:100]}...")
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="timeout",
+            duration=time.time() - task_start_time,
+        )
+        raise InternalError(
+            message="Goal execution timed out. Please try again.",
+            details={"goal": goal[:100], "error_type": "timeout"},
+        ) from e
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error during goal execution: {e}")
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="network_error",
+            duration=time.time() - task_start_time,
+        )
+        raise InternalError(
+            message="Network error during goal execution. Please try again.",
+            details={"error_type": "network", "error": str(e)},
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to execute goal: {e}", exc_info=True)
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="error",
+            duration=time.time() - task_start_time,
+        )
+        raise InternalError(
+            message=f"Goal execution failed: {str(e)}",
+            details={"goal": goal[:100], "error_type": type(e).__name__},
+        ) from e
 
     if isinstance(orchestrator_result, dict):
         result_dict = orchestrator_result
@@ -139,7 +189,11 @@ async def receive_goal(request: Request, payload: GoalPayload):
         tool_output_content = str(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        await event_manager.publish("tool_output", {"output": tool_output_content})
+        # Publish event (non-critical, log and continue)
+        try:
+            await event_manager.publish("tool_output", {"output": tool_output_content})
+        except Exception as e:
+            logger.warning(f"Failed to publish tool_output event: {e}")
 
     security_layer.audit_log(
         "submit_goal",
@@ -147,9 +201,13 @@ async def receive_goal(request: Request, payload: GoalPayload):
         "success",
         {"goal": goal, "result": response_message},
     )
-    await event_manager.publish(
-        "goal_completed", {"goal": goal, "result": response_message}
-    )
+    # Publish event (non-critical, log and continue)
+    try:
+        await event_manager.publish(
+            "goal_completed", {"goal": goal, "result": response_message}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to publish goal_completed event: {e}")
 
     # Record Prometheus task execution metric (success)
     duration = time.time() - task_start_time
@@ -188,9 +246,24 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
             status_code=403, content={"message": "Permission denied to pause agent."}
         )
 
-    await orchestrator.pause_agent()
+    try:
+        await orchestrator.pause_agent()
+    except Exception as e:
+        logger.error(f"Failed to pause agent: {e}", exc_info=True)
+        security_layer.audit_log(
+            "agent_pause", user_role, "failure", {"error": str(e)}
+        )
+        raise InternalError(
+            message=f"Failed to pause agent: {str(e)}",
+            details={"error_type": type(e).__name__},
+        ) from e
+
     security_layer.audit_log("agent_pause", user_role, "success", {})
-    await event_manager.publish("agent_paused", {"message": "Agent operation paused."})
+    # Publish event (non-critical)
+    try:
+        await event_manager.publish("agent_paused", {"message": "Agent operation paused."})
+    except Exception as e:
+        logger.warning(f"Failed to publish agent_paused event: {e}")
     return {"message": "Agent paused successfully."}
 
 
@@ -219,11 +292,26 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
             status_code=403, content={"message": "Permission denied to resume agent."}
         )
 
-    await orchestrator.resume_agent()
+    try:
+        await orchestrator.resume_agent()
+    except Exception as e:
+        logger.error(f"Failed to resume agent: {e}", exc_info=True)
+        security_layer.audit_log(
+            "agent_resume", user_role, "failure", {"error": str(e)}
+        )
+        raise InternalError(
+            message=f"Failed to resume agent: {str(e)}",
+            details={"error_type": type(e).__name__},
+        ) from e
+
     security_layer.audit_log("agent_resume", user_role, "success", {})
-    await event_manager.publish(
-        "agent_resumed", {"message": "Agent operation resumed."}
-    )
+    # Publish event (non-critical)
+    try:
+        await event_manager.publish(
+            "agent_resumed", {"message": "Agent operation resumed."}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to publish agent_resumed event: {e}")
     return {"message": "Agent resumed successfully."}
 
 
@@ -258,9 +346,22 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
 
     if main_redis_client:
         approval_message = {"task_id": task_id, "approved": approved}
-        main_redis_client.publish(
-            f"command_approval_{task_id}", json.dumps(approval_message)
-        )
+        try:
+            main_redis_client.publish(
+                f"command_approval_{task_id}", json.dumps(approval_message)
+            )
+        except Exception as e:
+            logger.error(f"Failed to publish command approval to Redis: {e}")
+            security_layer.audit_log(
+                "command_approval",
+                user_role,
+                "failure",
+                {"task_id": task_id, "approved": approved, "error": str(e)},
+            )
+            raise InternalError(
+                message="Failed to forward command approval. Please try again.",
+                details={"task_id": task_id, "error_type": "redis_publish_failed"},
+            ) from e
         logging.info(
             f"Published command approval for task {task_id}: Approved={approved}"
         )
@@ -299,8 +400,6 @@ async def execute_command(
                       a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
-    import asyncio
-
     from src.event_manager import event_manager
 
     security_layer = request.app.state.security_layer
@@ -333,16 +432,58 @@ async def execute_command(
             content={"message": "Permission denied to execute command."},
         )
 
-    await event_manager.publish("command_execution_start", {"command": command})
+    # Publish event with error handling (non-critical)
+    try:
+        await event_manager.publish("command_execution_start", {"command": command})
+    except Exception as e:
+        logger.warning(f"Failed to publish command_execution_start event: {e}")
+
     logging.info(f"Executing command: {command}")
 
-    process = await asyncio.create_subprocess_shell(
-        command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-    stdout, stderr = await process.communicate()
+    # Execute subprocess with proper error handling
+    process: Optional[asyncio.subprocess.Process] = None
+    try:
+        process = await asyncio.create_subprocess_shell(
+            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=300.0,  # 5 minute timeout for command execution
+        )
+    except asyncio.TimeoutError:
+        if process:
+            try:
+                process.kill()
+                await process.wait()
+            except ProcessLookupError:
+                pass  # Process already terminated
+        logger.error(f"Command timed out after 300s: {command[:100]}...")
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "timeout"},
+        )
+        raise SubprocessError(
+            message="Command execution timed out after 5 minutes",
+            command=command[:200],
+            return_code=None,
+        )
+    except OSError as e:
+        logger.error(f"Failed to create subprocess: {e}")
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "subprocess_creation_failed", "error": str(e)},
+        )
+        raise SubprocessError(
+            message=f"Failed to execute command: {e}",
+            command=command[:200],
+        ) from e
 
-    output = stdout.decode().strip()
-    error = stderr.decode().strip()
+    output = stdout.decode(errors="replace").strip()
+    error = stderr.decode(errors="replace").strip()
 
     if process.returncode == 0:
         message = f"Command executed successfully.\nOutput:\n{output}"
@@ -352,10 +493,14 @@ async def execute_command(
             "success",
             {"command": command, "output": output},
         )
-        await event_manager.publish(
-            "command_execution_end",
-            {"command": command, "status": "success", "output": output},
-        )
+        # Publish event (non-critical, log and continue)
+        try:
+            await event_manager.publish(
+                "command_execution_end",
+                {"command": command, "status": "success", "output": output},
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish command_execution_end event: {e}")
         logging.info(message)
         return {"message": message, "output": output, "status": "success"}
     else:
@@ -369,16 +514,20 @@ async def execute_command(
             "failure",
             {"command": command, "error": error, "returncode": process.returncode},
         )
-        await event_manager.publish(
-            "command_execution_end",
-            {
-                "command": command,
-                "status": "error",
-                "error": error,
-                "output": output,
-                "returncode": process.returncode,
-            },
-        )
+        # Publish event (non-critical, log and continue)
+        try:
+            await event_manager.publish(
+                "command_execution_end",
+                {
+                    "command": command,
+                    "status": "error",
+                    "error": error,
+                    "output": output,
+                    "returncode": process.returncode,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish command_execution_end event: {e}")
         logging.error(message)
         return JSONResponse(
             status_code=500,

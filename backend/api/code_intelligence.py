@@ -13,6 +13,7 @@ Part of Issue #221 - Anti-Pattern Detection System
 Parent Epic: #217 - Advanced Code Intelligence
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -84,13 +85,15 @@ async def analyze_codebase(request: AnalysisRequest):
     a comprehensive report of detected anti-patterns.
     """
     # Validate path exists
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {request.path}",
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400,
             detail=f"Path is not a directory: {request.path}",
@@ -98,7 +101,7 @@ async def analyze_codebase(request: AnalysisRequest):
 
     try:
         detector = AntiPatternDetector(exclude_dirs=request.exclude_dirs)
-        report = detector.analyze_directory(request.path)
+        report = await asyncio.to_thread(detector.analyze_directory, request.path)
 
         # Filter by severity if specified
         if request.min_severity:
@@ -144,7 +147,8 @@ async def quick_scan_file(request: QuickScanRequest):
     Faster than full codebase analysis when you only need
     to check one file.
     """
-    if not os.path.exists(request.file_path):
+    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    if not file_exists:
         raise HTTPException(
             status_code=400,
             detail=f"File does not exist: {request.file_path}",
@@ -158,7 +162,7 @@ async def quick_scan_file(request: QuickScanRequest):
 
     try:
         detector = AntiPatternDetector()
-        results = detector.analyze_file(request.file_path)
+        results = await asyncio.to_thread(detector.analyze_file, request.file_path)
 
         return JSONResponse(
             status_code=200,
@@ -198,7 +202,8 @@ async def get_codebase_health_score(
     Returns a score from 0-100 based on the number and severity
     of anti-patterns detected.
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -206,7 +211,7 @@ async def get_codebase_health_score(
 
     try:
         detector = AntiPatternDetector()
-        report = detector.analyze_directory(path)
+        report = await asyncio.to_thread(detector.analyze_directory, path)
 
         # Calculate health score
         # Start with 100 and subtract based on issues
@@ -436,7 +441,8 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
 
     Part of Issue #220 - Redis Operation Optimizer
     """
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {request.path}",
@@ -445,10 +451,12 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
     try:
         optimizer = RedisOptimizer(project_root=request.path)
 
-        if os.path.isfile(request.path):
-            results = optimizer.analyze_file(request.path)
+        is_file = await asyncio.to_thread(os.path.isfile, request.path)
+        if is_file:
+            results = await asyncio.to_thread(optimizer.analyze_file, request.path)
         else:
-            results = optimizer.analyze_directory(
+            results = await asyncio.to_thread(
+                optimizer.analyze_directory,
                 request.path,
                 exclude_patterns=request.exclude_patterns,
             )
@@ -502,7 +510,8 @@ async def scan_redis_file(request: RedisFileScanRequest):
     Faster than full codebase analysis when you only need
     to check one file's Redis usage.
     """
-    if not os.path.exists(request.file_path):
+    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    if not file_exists:
         raise HTTPException(
             status_code=400,
             detail=f"File does not exist: {request.file_path}",
@@ -516,7 +525,7 @@ async def scan_redis_file(request: RedisFileScanRequest):
 
     try:
         optimizer = RedisOptimizer()
-        results = optimizer.analyze_file(request.file_path)
+        results = await asyncio.to_thread(optimizer.analyze_file, request.file_path)
 
         return JSONResponse(
             status_code=200,
@@ -661,7 +670,8 @@ async def get_redis_usage_health_score(
     of optimization opportunities detected. Lower scores indicate
     more room for optimization.
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -669,7 +679,7 @@ async def get_redis_usage_health_score(
 
     try:
         optimizer = RedisOptimizer(project_root=path)
-        results = optimizer.analyze_directory(path)
+        results = await asyncio.to_thread(optimizer.analyze_directory, path)
 
         # Calculate health score
         # Start with 100 and subtract based on issues
@@ -781,13 +791,15 @@ async def security_analyze(request: SecurityAnalysisRequest):
     - Missing input validation
     - And more (OWASP Top 10 mapping)
     """
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {request.path}",
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400,
             detail=f"Path is not a directory: {request.path}",
@@ -798,7 +810,7 @@ async def security_analyze(request: SecurityAnalysisRequest):
             project_root=request.path,
             exclude_patterns=request.exclude_patterns,
         )
-        results = analyzer.analyze_directory()
+        results = await asyncio.to_thread(analyzer.analyze_directory)
 
         # Filter by severity if specified
         if request.min_severity:
@@ -847,7 +859,8 @@ async def security_scan_file(request: SecurityFileScanRequest):
 
     Quick scan of a single Python file for security issues.
     """
-    if not os.path.exists(request.file_path):
+    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    if not file_exists:
         raise HTTPException(
             status_code=400,
             detail=f"File does not exist: {request.file_path}",
@@ -861,7 +874,7 @@ async def security_scan_file(request: SecurityFileScanRequest):
 
     try:
         analyzer = SecurityAnalyzer()
-        results = analyzer.analyze_file(request.file_path)
+        results = await asyncio.to_thread(analyzer.analyze_file, request.file_path)
 
         # Group by vulnerability type
         by_type = {}
@@ -946,7 +959,8 @@ async def get_security_score(
     of security vulnerabilities detected. Higher scores indicate
     better security posture.
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -954,7 +968,7 @@ async def get_security_score(
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
-        analyzer.analyze_directory()
+        await asyncio.to_thread(analyzer.analyze_directory)
         summary = analyzer.get_summary()
 
         # Generate grade
