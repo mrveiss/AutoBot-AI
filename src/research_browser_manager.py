@@ -333,8 +333,12 @@ class ResearchBrowserSession:
             cdp_session = await self.page.context.new_cdp_session(self.page)
             result = await cdp_session.send("Page.captureSnapshot", {"format": "mhtml"})
 
-            async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
-                await f.write(result["data"])
+            try:
+                async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
+                    await f.write(result["data"])
+            except OSError as e:
+                logger.error(f"Failed to write MHTML file {filepath}: {e}")
+                return None
 
             self.mhtml_files.append(filepath)
             logger.info(f"Saved MHTML file: {filepath}")
