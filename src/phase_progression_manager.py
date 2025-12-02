@@ -14,6 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
 
+import aiofiles
+
 from scripts.phase_validation_system import PhaseValidator
 from src.project_state_manager import ProjectStateManager
 
@@ -551,8 +553,8 @@ class PhaseProgressionManager:
             }
 
             config_file = phase_dir / "phase_config.json"
-            with open(config_file, "w") as f:
-                json.dump(phase_config, f, indent=2)
+            async with aiofiles.open(config_file, "w") as f:
+                await f.write(json.dumps(phase_config, indent=2))
 
             logger.info(f"📁 Created infrastructure for {phase_name}")
             return True

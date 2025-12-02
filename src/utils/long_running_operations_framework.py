@@ -286,8 +286,8 @@ class OperationCheckpointManager:
         # Save to filesystem as backup
         checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.pkl"
         try:
-            with open(checkpoint_file, "wb") as f:
-                pickle.dump(checkpoint, f)
+            async with aiofiles.open(checkpoint_file, "wb") as f:
+                await f.write(pickle.dumps(checkpoint))
             logger.info(f"Checkpoint {checkpoint_id} saved to filesystem")
         except Exception as e:
             logger.error(f"Failed to save checkpoint to filesystem: {e}")
@@ -318,8 +318,9 @@ class OperationCheckpointManager:
         checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.pkl"
         if checkpoint_file.exists():
             try:
-                with open(checkpoint_file, "rb") as f:
-                    checkpoint = pickle.load(f)
+                async with aiofiles.open(checkpoint_file, "rb") as f:
+                    data = await f.read()
+                    checkpoint = pickle.loads(data)
                 logger.info(f"Checkpoint {checkpoint_id} loaded from filesystem")
                 return checkpoint
             except Exception as e:

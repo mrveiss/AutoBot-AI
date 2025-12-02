@@ -145,8 +145,8 @@ class CachedResponseStrategy(FallbackStrategy):
         }
 
         try:
-            with open(cache_file, "w") as f:
-                json.dump(cache_data, f)
+            async with aiofiles.open(cache_file, "w") as f:
+                await f.write(json.dumps(cache_data))
             logger.debug(f"Cached response for key: {cache_key}")
         except Exception as e:
             logger.warning(f"Failed to cache response: {e}")
@@ -159,8 +159,9 @@ class CachedResponseStrategy(FallbackStrategy):
         # Try exact match first
         if cache_file.exists():
             try:
-                with open(cache_file, "r") as f:
-                    cached_data = json.load(f)
+                async with aiofiles.open(cache_file, "r") as f:
+                    content = await f.read()
+                    cached_data = json.loads(content)
 
                 # Check if cache is still valid
                 age = time.time() - cached_data.get("timestamp", 0)

@@ -611,8 +611,10 @@ class DevelopmentSpeedupAgent:
 
         for file_path in python_files[:20]:  # Limit to prevent timeout
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
+                async with aiofiles.open(
+                    file_path, "r", encoding="utf-8", errors="ignore"
+                ) as f:
+                    content = await f.read()
 
                 tree = ast.parse(content)
                 for node in ast.walk(tree):

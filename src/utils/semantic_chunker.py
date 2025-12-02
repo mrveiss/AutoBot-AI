@@ -129,6 +129,7 @@ class AutoBotSemanticChunker:
                                 f"Model loading attempt {attempt + 1}/{max_retries} "
                                 f"after {retry_delay}s delay..."
                             )
+                            # time.sleep is correct here - running in thread pool
                             time.sleep(retry_delay)
                             retry_delay *= 2  # Exponential backoff
 

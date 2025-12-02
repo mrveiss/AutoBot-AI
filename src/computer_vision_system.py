@@ -301,16 +301,20 @@ class ScreenAnalyzer:
 
             # Fallback to system screenshot using X11
             try:
-                import subprocess
-
-                result = subprocess.run(
-                    ["import", "-window", "root", "png:-"],
-                    capture_output=True,
-                    timeout=10,
+                proc = await asyncio.create_subprocess_exec(
+                    "import", "-window", "root", "png:-",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                if result.returncode == 0:
-                    image = Image.open(io.BytesIO(result.stdout))
-                    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                try:
+                    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+                    if proc.returncode == 0:
+                        image = Image.open(io.BytesIO(stdout))
+                        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    logger.warning("X11 screenshot command timed out")
             except Exception as e:
                 logger.warning(f"X11 screenshot failed: {e}")
 
