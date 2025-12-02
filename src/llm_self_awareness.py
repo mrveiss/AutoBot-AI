@@ -516,10 +516,13 @@ You should be aware of your current capabilities and limitations based on the sy
         }
 
         # Write to file
-        async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(export_data, indent=2, default=str))
-
-        logger.info(f"System awareness data exported to {output_path}")
+        try:
+            async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(export_data, indent=2, default=str))
+            logger.info(f"System awareness data exported to {output_path}")
+        except OSError as e:
+            logger.error(f"Failed to export system awareness data to {output_path}: {e}")
+            raise
         return output_path
 
 
