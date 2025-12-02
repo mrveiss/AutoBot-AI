@@ -123,7 +123,7 @@ class ChatWorkflowManager:
             # CRITICAL: Access the global singleton instance directly
             # This ensures sessions created here are visible to the approval API
             if agent_terminal_api._agent_terminal_service_instance is None:
-                from backend.services.agent_terminal_service import AgentTerminalService
+                from backend.services.agent_terminal import AgentTerminalService
 
                 # Pass self to prevent circular initialization loop
                 agent_terminal_api._agent_terminal_service_instance = (
@@ -351,6 +351,16 @@ class ChatWorkflowManager:
                         "created_at": datetime.now().isoformat(),
                         "messages": [],
                     }
+                except OSError as os_err:
+                    logger.warning(
+                        f"Failed to read transcript file {transcript_path}: {os_err}, "
+                        f"creating new transcript"
+                    )
+                    transcript = {
+                        "session_id": session_id,
+                        "created_at": datetime.now().isoformat(),
+                        "messages": [],
+                    }
                 except json.JSONDecodeError as json_err:
                     # Handle corrupted JSON files - backup and create fresh
                     logger.warning(
@@ -411,6 +421,14 @@ class ChatWorkflowManager:
                 # Clean up temp file if it exists
                 if temp_path.exists():
                     temp_path.unlink()
+            except OSError as os_err:
+                logger.error(f"Failed to write transcript file {temp_path}: {os_err}")
+                # Clean up temp file if it exists
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
 
         except Exception as e:
             logger.error(f"Failed to append to transcript file: {e}")
@@ -441,6 +459,9 @@ class ChatWorkflowManager:
                 logger.warning(
                     f"File read timeout after 5s for {transcript_path}, returning empty history"
                 )
+                return []
+            except OSError as os_err:
+                logger.error(f"Failed to read transcript file {transcript_path}: {os_err}")
                 return []
 
         except Exception as e:
