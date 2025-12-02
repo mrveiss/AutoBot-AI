@@ -14,7 +14,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-import requests
+import httpx
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 # Import models from dedicated module (Issue #185 - split oversized files)
@@ -180,25 +180,30 @@ async def get_detailed_system_health():
         "redis": get_service_address("redis", NetworkConstants.REDIS_PORT),
     }
 
-    for service_name, service_url in services.items():
-        try:
-            if service_name == "redis":
-                # Redis check is already done above
-                detailed_health["service_connectivity"][
-                    service_name
-                ] = "checked_via_redis"
-            else:
-                response = requests.get(f"{service_url}/health", timeout=5)
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for service_name, service_url in services.items():
+            try:
+                if service_name == "redis":
+                    # Redis check is already done above
+                    detailed_health["service_connectivity"][
+                        service_name
+                    ] = "checked_via_redis"
+                else:
+                    start_time = time.time()
+                    response = await client.get(f"{service_url}/health")
+                    response_time = time.time() - start_time
+                    detailed_health["service_connectivity"][service_name] = {
+                        "status": (
+                            "healthy" if response.status_code == 200 else "unhealthy"
+                        ),
+                        "response_time": response_time,
+                        "status_code": response.status_code,
+                    }
+            except Exception as e:
                 detailed_health["service_connectivity"][service_name] = {
-                    "status": "healthy" if response.status_code == 200 else "unhealthy",
-                    "response_time": response.elapsed.total_seconds(),
-                    "status_code": response.status_code,
+                    "status": "unreachable",
+                    "error": str(e),
                 }
-        except Exception as e:
-            detailed_health["service_connectivity"][service_name] = {
-                "status": "unreachable",
-                "error": str(e),
-            }
 
     # Resource alerts
     system_resources = hardware_monitor.get_system_resources()

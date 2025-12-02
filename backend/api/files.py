@@ -8,6 +8,7 @@ This module provides secure file management endpoints with proper sandboxing,
 path traversal protection, and authentication/authorization.
 """
 
+import asyncio
 import logging
 import mimetypes
 import shutil
@@ -841,7 +842,8 @@ async def delete_file(request: Request, path: str):
             return {"message": f"Directory '{target_path.name}' deleted successfully"}
         except OSError:
             # Directory not empty, use recursive delete with caution
-            shutil.rmtree(target_path)
+            # Use asyncio.to_thread to avoid blocking the event loop
+            await asyncio.to_thread(shutil.rmtree, target_path)
             security_layer.audit_log(
                 "file_delete",
                 user_data.get("username", "unknown"),

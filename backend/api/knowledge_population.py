@@ -20,7 +20,6 @@ Related Issues: #185 (Split), #209 (Knowledge split)
 import asyncio
 import logging
 import re
-import subprocess
 from pathlib import Path as PathLib
 
 import aiofiles
@@ -380,17 +379,27 @@ async def _populate_man_pages_background(kb_to_use):
 
             for command in batch:
                 try:
-                    # Try to get the man page with reduced timeout
-                    result = subprocess.run(
-                        ["man", command],
-                        capture_output=True,
-                        text=True,
-                        timeout=3,  # Reduced from 10 to 3 seconds
+                    # Try to get the man page with async subprocess
+                    proc = await asyncio.create_subprocess_exec(
+                        "man",
+                        command,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
                     )
 
-                    if result.returncode == 0 and result.stdout.strip():
+                    try:
+                        stdout, _ = await asyncio.wait_for(
+                            proc.communicate(), timeout=3  # Reduced from 10 to 3 seconds
+                        )
+                    except asyncio.TimeoutError:
+                        proc.kill()
+                        await proc.wait()
+                        logger.warning(f"Timeout getting man page for: {command}")
+                        continue
+
+                    if proc.returncode == 0 and stdout.strip():
                         # Clean up the man page output
-                        man_content = result.stdout.strip()
+                        man_content = stdout.decode("utf-8").strip()
 
                         # Remove ANSI escape sequences if present
                         man_content = re.sub(r"\x1b\[[0-9;]*m", "", man_content)
@@ -438,8 +447,6 @@ Command: {command}
                     else:
                         logger.warning(f"No man page found for command: {command}")
 
-                except subprocess.TimeoutExpired:
-                    logger.warning(f"Timeout getting man page for: {command}")
                 except Exception as e:
                     logger.error(f"Error processing man page for {command}: {e}")
 
