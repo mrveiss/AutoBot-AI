@@ -865,29 +865,22 @@ class AuditLogger:
             current_date = cutoff_date.date()
             deleted_count = 0
 
-            # Go back 365 days to ensure we catch everything
+            # Collect all non-wildcard keys to delete - eliminates N+1 individual deletes
+            all_keys_to_delete = []
             for days_back in range(365):
                 check_date = current_date - timedelta(days=days_back)
                 date_str = check_date.strftime("%Y-%m-%d")
 
-                # Delete all indexes for this date
-                keys_to_delete = [
-                    f"audit:log:{date_str}",
-                    f"audit:op:*:{date_str}",
-                    f"audit:user:*:{date_str}",
-                    f"audit:vm:*:{date_str}",
-                    f"audit:result:*:{date_str}",
-                ]
+                # Only add non-wildcard keys (wildcard patterns need scan)
+                all_keys_to_delete.append(f"audit:log:{date_str}")
 
-                for key_pattern in keys_to_delete:
-                    if "*" in key_pattern:
-                        # Use scan for wildcard patterns
-                        # Note: This is simplified - production should use scan_iter
-                        pass
-                    else:
-                        deleted = await audit_db.delete(key_pattern)
-                        if deleted:
-                            deleted_count += deleted
+            # Batch delete all keys at once using pipeline
+            if all_keys_to_delete:
+                async with audit_db.pipeline() as pipe:
+                    for key in all_keys_to_delete:
+                        await pipe.delete(key)
+                    results = await pipe.execute()
+                deleted_count = sum(1 for r in results if r)
 
             logger.info(f"Audit cleanup complete: {deleted_count} keys deleted")
 

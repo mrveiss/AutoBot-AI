@@ -417,18 +417,21 @@ class AccessControlMetrics:
             deleted_count = 0
 
             # Clean up daily keys older than retention period
+            # Collect all keys to delete first - eliminates N+1 individual delete calls
+            all_keys_to_delete = []
             for days_back in range(self.retention_days, 365):  # Check up to 1 year back
                 date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
-                keys_to_delete = [
+                all_keys_to_delete.extend([
                     f"violations:daily:{date}",
                     f"violations:by_endpoint:{date}",
                     f"violations:by_user:{date}",
                     f"violations:timeline:{date}",
-                ]
+                ])
 
-                deleted = await redis.delete(*keys_to_delete)
-                deleted_count += deleted
+            # Batch delete all keys at once
+            if all_keys_to_delete:
+                deleted_count = await redis.delete(*all_keys_to_delete)
 
             logger.info(f"Cleaned up {deleted_count} old metric keys")
 
