@@ -182,6 +182,11 @@ def validate_message_content(content: str) -> bool:
 # Response Formatting Functions
 # =============================================================================
 
+# Import canonical create_error_response from response_helpers (Issue #292)
+from backend.utils.response_helpers import (
+    create_error_response as _canonical_create_error_response,
+)
+
 
 def create_success_response(
     data: Any,
@@ -232,10 +237,13 @@ def create_error_response(
     """
     Create a standardized error response.
 
+    This is a wrapper around response_helpers.create_error_response that
+    provides backward compatibility with the default request_id="unknown".
+
     Args:
         error_code: Error code identifier (default: "INTERNAL_ERROR")
         message: Human-readable error message
-        request_id: Request ID for error tracking
+        request_id: Request ID for error tracking (default: "unknown")
         status_code: HTTP status code (default: 500)
 
     Returns:
@@ -257,20 +265,16 @@ def create_error_response(
         ... )
         >>> response.status_code
         400
-    """
-    from datetime import datetime
 
-    return JSONResponse(
+    Note:
+        Consolidated from duplicate in response_helpers.py (Issue #292).
+        Uses canonical implementation from backend.utils.response_helpers.
+    """
+    return _canonical_create_error_response(
+        error_code=error_code,
+        message=message,
         status_code=status_code,
-        content={
-            "success": False,
-            "error": {
-                "code": error_code,
-                "message": message,
-                "request_id": request_id,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        },
+        request_id=request_id,
     )
 
 

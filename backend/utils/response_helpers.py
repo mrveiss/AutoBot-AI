@@ -54,27 +54,50 @@ def create_error_response(
     error_code: str = "INTERNAL_ERROR",
     message: str = "An error occurred",
     status_code: int = 500,
+    request_id: str = None,
 ) -> JSONResponse:
     """
     Create standardized error response.
 
     Args:
-        error_code: Machine-readable error code
+        error_code: Machine-readable error code (e.g., "INTERNAL_ERROR", "VALIDATION_ERROR")
         message: Human-readable error message
-        status_code: HTTP status code
+        status_code: HTTP status code (default: 500)
+        request_id: Optional request ID for error tracking
 
     Returns:
         JSONResponse with error details
+
+    Common Error Codes:
+        - INTERNAL_ERROR: Server-side error (500)
+        - VALIDATION_ERROR: Invalid input (400)
+        - NOT_FOUND: Resource not found (404)
+        - UNAUTHORIZED: Authentication required (401)
+        - FORBIDDEN: Insufficient permissions (403)
+
+    Example:
+        >>> response = create_error_response(
+        ...     error_code="VALIDATION_ERROR",
+        ...     message="Invalid session ID",
+        ...     request_id="abc-123",
+        ...     status_code=400
+        ... )
     """
+    error_content = {
+        "code": error_code,
+        "message": message,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+    # Include request_id if provided
+    if request_id is not None:
+        error_content["request_id"] = request_id
+
     return JSONResponse(
         status_code=status_code,
         content={
             "success": False,
-            "error": {
-                "code": error_code,
-                "message": message,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
+            "error": error_content,
         },
     )
 
