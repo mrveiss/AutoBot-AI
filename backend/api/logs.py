@@ -54,9 +54,11 @@ async def get_log_sources():
         sources = {"file_logs": [], "container_logs": [], "total_sources": 0}
 
         # List file logs
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                stat = file_path.stat()
+        log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+        if log_dir_exists:
+            log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
+            for file_path in log_files:
+                stat = await asyncio.to_thread(file_path.stat)
                 sources["file_logs"].append(
                     {
                         "name": file_path.name,
@@ -71,33 +73,35 @@ async def get_log_sources():
         for service, container_name in CONTAINER_LOGS.items():
             try:
                 # Check if container exists and is running
-                result = subprocess.run(
-                    [
-                        "docker",
-                        "ps",
-                        "-a",
-                        "--filter",
-                        f"name={container_name}",
-                        "--format",
-                        "{{.Names}}\t{{.Status}}",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
+                process = await asyncio.create_subprocess_exec(
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={container_name}",
+                    "--format",
+                    "{{.Names}}\t{{.Status}}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-
-                if result.returncode == 0 and container_name in result.stdout:
-                    status = "running" if "Up" in result.stdout else "stopped"
-                    sources["container_logs"].append(
-                        {
-                            "name": service,
-                            "container_name": container_name,
-                            "type": "container",
-                            "status": status,
-                        }
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), timeout=5
                     )
-            except subprocess.TimeoutExpired:
-                logger.warning(f"Timeout checking container {container_name}")
+                    stdout_str = stdout.decode()
+
+                    if process.returncode == 0 and container_name in stdout_str:
+                        status = "running" if "Up" in stdout_str else "stopped"
+                        sources["container_logs"].append(
+                            {
+                                "name": service,
+                                "container_name": container_name,
+                                "type": "container",
+                                "status": status,
+                            }
+                        )
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout checking container {container_name}")
             except Exception as e:
                 logger.error(f"Error checking container {container_name}: {e}")
 
@@ -128,21 +132,27 @@ async def get_recent_logs(limit: int = 100):
         recent_entries = []
 
         # Get the most recent log file
-        if os.path.exists(log_dir):
-            log_files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+        log_dir_exists = await asyncio.to_thread(os.path.exists, log_dir)
+        if log_dir_exists:
+            all_files = await asyncio.to_thread(os.listdir, log_dir)
+            log_files = [f for f in all_files if f.endswith(".log")]
             if log_files:
                 # Sort by modification time and get the most recent
-                log_files.sort(
-                    key=lambda f: os.path.getmtime(os.path.join(log_dir, f)),
-                    reverse=True,
-                ),
+                def get_mtime(f):
+                    return os.path.getmtime(os.path.join(log_dir, f))
+
+                mtimes = {}
+                for f in log_files:
+                    mtimes[f] = await asyncio.to_thread(get_mtime, f)
+                log_files.sort(key=lambda f: mtimes[f], reverse=True)
                 most_recent = log_files[0]
 
                 # Read the last N lines from the most recent log
                 log_path = os.path.join(log_dir, most_recent)
                 try:
-                    with open(log_path, "r") as f:
-                        lines = f.readlines()
+                    async with aiofiles.open(log_path, "r") as f:
+                        content = await f.read()
+                        lines = content.splitlines(keepends=True)
                         recent_entries = lines[-limit:] if len(lines) > limit else lines
                 except Exception as e:
                     logger.error(f"Error reading log file {most_recent}: {e}")
@@ -189,11 +199,15 @@ async def read_log(
     """Read log file content"""
     try:
         file_path = LOG_DIR / filename
-        if not file_path.exists() or not file_path.is_file():
+        file_exists = await asyncio.to_thread(file_path.exists)
+        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check - ensure file is within LOG_DIR
-        if not str(file_path.resolve()).startswith(str(LOG_DIR.resolve())):
+        resolved_path = await asyncio.to_thread(file_path.resolve)
+        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
         async with aiofiles.open(file_path, "r") as f:
@@ -261,17 +275,29 @@ async def read_container_logs(
         if since:
             cmd.extend(["--since", since])
 
-        # Execute command
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        # Execute command asynchronously
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=30
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            raise HTTPException(status_code=408, detail="Container log read timed out")
 
-        if result.returncode != 0:
+        if process.returncode != 0:
             raise HTTPException(
-                status_code=500, detail=f"Failed to get container logs: {result.stderr}"
+                status_code=500, detail=f"Failed to get container logs: {stderr.decode()}"
             )
 
         # Parse logs
         log_lines = []
-        for line in result.stdout.split("\n"):
+        for line in stdout.decode().split("\n"):
             if line.strip():
                 parsed_line = parse_docker_log_line(line, service)
                 log_lines.append(parsed_line)
@@ -287,9 +313,6 @@ async def read_container_logs(
             "count": len(log_lines),
             "source_type": "container",
         }
-
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="Container log read timed out")
     except HTTPException:
         raise
     except Exception as e:
@@ -367,16 +390,19 @@ async def get_unified_logs(
             source_filter = set(sources.split(","))
 
         # Get file logs
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
+        log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+        if log_dir_exists:
+            log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
+            for file_path in log_files:
                 file_name = file_path.stem  # Remove .log extension
                 if source_filter and file_name not in source_filter:
                     continue
 
                 try:
                     # Read last portion of file
-                    with open(file_path, "r") as f:
-                        file_lines = f.readlines()
+                    async with aiofiles.open(file_path, "r") as f:
+                        content = await f.read()
+                        file_lines = content.splitlines()
                         for line in file_lines[-50:]:  # Get recent lines from each file
                             if line.strip():
                                 parsed = parse_file_log_line(line.strip(), file_name)
@@ -396,23 +422,28 @@ async def get_unified_logs(
                 continue
 
             try:
-                result = subprocess.run(
-                    ["docker", "logs", container_name, "--timestamps", "--tail=50"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
+                process = await asyncio.create_subprocess_exec(
+                    "docker", "logs", container_name, "--timestamps", "--tail=50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                if result.returncode == 0:
-                    for line in result.stdout.split("\n"):
-                        if line.strip():
-                            parsed = parse_docker_log_line(line, service)
-                            if (
-                                level
-                                and parsed.get("level", "").upper() != level.upper()
-                            ):
-                                continue
-                            parsed["source_type"] = "container"
-                            all_logs.append(parsed)
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        process.communicate(), timeout=10
+                    )
+                    if process.returncode == 0:
+                        for line in stdout.decode().split("\n"):
+                            if line.strip():
+                                parsed = parse_docker_log_line(line, service)
+                                if (
+                                    level
+                                    and parsed.get("level", "").upper() != level.upper()
+                                ):
+                                    continue
+                                parsed["source_type"] = "container"
+                                all_logs.append(parsed)
+                except asyncio.TimeoutError:
+                    logger.debug(f"Timeout getting container logs for {service}")
             except Exception as e:
                 logger.debug(f"Error getting container logs for {service}: {e}")
 
@@ -472,11 +503,15 @@ async def stream_log(filename: str):
     """Stream log file content"""
     try:
         file_path = LOG_DIR / filename
-        if not file_path.exists() or not file_path.is_file():
+        file_exists = await asyncio.to_thread(file_path.exists)
+        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check
-        if not str(file_path.resolve()).startswith(str(LOG_DIR.resolve())):
+        resolved_path = await asyncio.to_thread(file_path.resolve)
+        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
         async def generate():
@@ -505,13 +540,17 @@ async def tail_log(websocket: WebSocket, filename: str):
 
     try:
         file_path = LOG_DIR / filename
-        if not file_path.exists() or not file_path.is_file():
+        file_exists = await asyncio.to_thread(file_path.exists)
+        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        if not file_exists or not is_file:
             await websocket.send_json({"error": "Log file not found"})
             await websocket.close()
             return
 
         # Security check
-        if not str(file_path.resolve()).startswith(str(LOG_DIR.resolve())):
+        resolved_path = await asyncio.to_thread(file_path.resolve)
+        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        if not str(resolved_path).startswith(str(resolved_log_dir)):
             await websocket.send_json({"error": "Access denied"})
             await websocket.close()
             return
@@ -565,10 +604,11 @@ async def search_logs(
 
         if filename:
             file_path = LOG_DIR / filename
-            if file_path.exists():
+            file_exists = await asyncio.to_thread(file_path.exists)
+            if file_exists:
                 files_to_search.append(file_path)
         else:
-            files_to_search = list(LOG_DIR.glob("*.log"))
+            files_to_search = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
 
         for file_path in files_to_search:
             async with aiofiles.open(file_path, "r") as f:
@@ -627,11 +667,15 @@ async def clear_log(filename: str):
     """Clear a log file (truncate to 0 bytes)"""
     try:
         file_path = LOG_DIR / filename
-        if not file_path.exists() or not file_path.is_file():
+        file_exists = await asyncio.to_thread(file_path.exists)
+        is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+        if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
         # Security check
-        if not str(file_path.resolve()).startswith(str(LOG_DIR.resolve())):
+        resolved_path = await asyncio.to_thread(file_path.resolve)
+        resolved_log_dir = await asyncio.to_thread(LOG_DIR.resolve)
+        if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
         # Don't delete critical logs
