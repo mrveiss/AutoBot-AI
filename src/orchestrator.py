@@ -27,6 +27,14 @@ from src.unified_config_manager import config_manager
 from src.unified_memory_manager import LongTermMemoryManager
 from src.utils.logging_manager import get_logger
 
+# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+from src.utils.agent_selection import (
+    find_best_agent_for_task as _find_best_agent,
+    update_agent_performance as _update_performance,
+    reserve_agent as _reserve_agent,
+    release_agent as _release_agent,
+)
+
 logger = get_logger("orchestrator")
 
 # Import KnowledgeBase for enhanced features
@@ -811,115 +819,42 @@ class ConsolidatedOrchestrator:
         self, task_type: str, required_capabilities: Set[AgentCapability] = None
     ) -> Optional[str]:
         """
-        Find the best agent for a specific task based on capabilities and current workload
+        Find the best agent for a specific task based on capabilities and current workload.
+
+        Uses shared utility from src.utils.agent_selection (Issue #292).
         """
-        required_capabilities = required_capabilities or set()
-
-        suitable_agents = []
-
-        for agent_id, agent in self.agent_registry.items():
-            # Check availability
-            if agent.availability_status != "available":
-                continue
-
-            # Check workload capacity
-            if agent.current_workload >= agent.max_concurrent_tasks:
-                continue
-
-            # Check capabilities
-            if required_capabilities and not required_capabilities.issubset(
-                agent.capabilities
-            ):
-                continue
-
-            # Check task type preference
-            task_match_score = 0
-            if task_type in agent.preferred_task_types:
-                task_match_score += 2
-            if any(spec in task_type for spec in agent.specializations):
-                task_match_score += 1
-
-            # Calculate overall suitability score
-            workload_factor = 1.0 - (
-                agent.current_workload / agent.max_concurrent_tasks
-            )
-            performance_factor = agent.success_rate
-
-            suitability_score = (
-                (task_match_score * 0.4)
-                + (workload_factor * 0.3)
-                + (performance_factor * 0.3)
-            )
-
-            suitable_agents.append((agent_id, suitability_score))
-
-        if not suitable_agents:
-            logger.warning(f"No suitable agent found for task type: {task_type}")
-            return None
-
-        # Return agent with highest suitability score
-        suitable_agents.sort(key=lambda x: x[1], reverse=True)
-        best_agent_id = suitable_agents[0][0]
-
-        logger.debug(
-            f"Selected agent {best_agent_id} for task {task_type} (score: {suitable_agents[0][1]:.2f})"
+        return _find_best_agent(
+            agent_registry=self.agent_registry,
+            task_type=task_type,
+            required_capabilities=required_capabilities,
         )
-        return best_agent_id
 
     def _reserve_agent(self, agent_id: str):
-        """Reserve an agent for task execution"""
-        if agent_id in self.agent_registry:
-            agent = self.agent_registry[agent_id]
-            agent.current_workload += 1
-            agent.availability_status = (
-                "busy"
-                if agent.current_workload >= agent.max_concurrent_tasks
-                else "available"
-            )
+        """Reserve an agent for task execution.
+
+        Uses shared utility from src.utils.agent_selection (Issue #292).
+        """
+        _reserve_agent(self.agent_registry, agent_id)
 
     def _release_agent(self, agent_id: str):
-        """Release an agent after task completion"""
-        if agent_id in self.agent_registry:
-            agent = self.agent_registry[agent_id]
-            agent.current_workload = max(0, agent.current_workload - 1)
-            agent.availability_status = (
-                "available"
-                if agent.current_workload < agent.max_concurrent_tasks
-                else "busy"
-            )
+        """Release an agent after task completion.
+
+        Uses shared utility from src.utils.agent_selection (Issue #292).
+        """
+        _release_agent(self.agent_registry, agent_id)
 
     def _update_agent_performance(
         self, agent_id: str, success: bool, execution_time: float
     ):
-        """Update agent performance metrics"""
-        if agent_id not in self.agent_registry:
-            return
+        """Update agent performance metrics.
 
-        agent = self.agent_registry[agent_id]
-
-        # Update success rate
-        current_attempts = agent.performance_metrics.get("total_attempts", 0)
-        current_successes = agent.performance_metrics.get("total_successes", 0)
-
-        new_attempts = current_attempts + 1
-        new_successes = current_successes + (1 if success else 0)
-
-        agent.success_rate = new_successes / new_attempts if new_attempts > 0 else 1.0
-        agent.performance_metrics["total_attempts"] = new_attempts
-        agent.performance_metrics["total_successes"] = new_successes
-
-        # Update average completion time
-        current_avg_time = agent.average_completion_time
-        if current_avg_time == 0:
-            agent.average_completion_time = execution_time
-        else:
-            # Weighted average (give more weight to recent performance)
-            agent.average_completion_time = (current_avg_time * 0.7) + (
-                execution_time * 0.3
-            )
-
-        logger.debug(
-            f"Updated agent {agent_id} performance: success_rate={agent.success_rate:.2f}, avg_time={agent.average_completion_time:.2f}s"
+        Uses shared utility from src.utils.agent_selection (Issue #292).
+        """
+        _update_performance(
+            agent_registry=self.agent_registry,
+            agent_id=agent_id,
+            success=success,
+            execution_time=execution_time,
         )
 
     def set_phi2_enabled(self, enabled: bool):
