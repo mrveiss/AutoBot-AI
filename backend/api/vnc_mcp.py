@@ -170,6 +170,15 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
                     f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"
                 ),
             }
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP error checking VNC status for {vnc_type}: {e}")
+        return {
+            "success": False,
+            "vnc_type": vnc_type,
+            "accessible": False,
+            "error": str(e),
+            "message": f"HTTP error checking VNC {vnc_type} status",
+        }
     except Exception as e:
         logger.error(f"Failed to check VNC status for {vnc_type}: {e}")
         return {
@@ -267,6 +276,9 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                         "browser_connected", False
                     ),
                 }
+    except aiohttp.ClientError as e:
+        logger.warning(f"HTTP error getting Playwright state: {e}")
+        context["playwright_state"] = {"error": str(e)}
     except Exception as e:
         logger.warning(f"Failed to get Playwright state: {e}")
         context["playwright_state"] = {"error": str(e)}
@@ -289,6 +301,9 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                     cache = vnc_observations.get("browser", {})
                     recent = list(cache.get("recent_activity", [])[-5:])
                 context["vnc_state"]["recent_observations"] = recent
+    except aiohttp.ClientError as e:
+        logger.warning(f"HTTP error getting VNC state: {e}")
+        context["vnc_state"] = {"error": str(e)}
     except Exception as e:
         logger.warning(f"Failed to get VNC state: {e}")
         context["vnc_state"] = {"error": str(e)}
