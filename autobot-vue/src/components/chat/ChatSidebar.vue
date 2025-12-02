@@ -528,10 +528,12 @@ const deleteSelectedSessions = async () => {
   const confirmed = confirm(`Delete ${selectedSessions.value.size} conversation(s)? This action cannot be undone.`)
   if (!confirmed) return
 
-  // Delete all selected sessions
-  for (const sessionId of selectedSessions.value) {
-    await controller.deleteChatSession(sessionId)
-  }
+  // Delete all selected sessions in parallel - eliminates N+1 sequential API calls
+  await Promise.allSettled(
+    Array.from(selectedSessions.value).map(sessionId =>
+      controller.deleteChatSession(sessionId)
+    )
+  )
 
   // Clear selection mode
   cancelSelection()

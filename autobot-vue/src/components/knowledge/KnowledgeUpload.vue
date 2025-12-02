@@ -409,23 +409,31 @@ const uploadFiles = async () => {
   try {
     const tags = parseTags(fileEntry.tagsInput)
 
+    // Upload files in parallel - eliminates N+1 sequential uploads
     let uploaded = 0
-    for (const file of selectedFiles.value) {
-      // Update progress with current file name
-      updateFileProgress(uploaded, selectedFiles.value.length, file.name)
+    const totalFiles = selectedFiles.value.length
 
+    const uploadPromises = selectedFiles.value.map(async (file) => {
       await controller.addFileDocument(
         file,
         fileEntry.category || 'Uploads',
         tags
       )
-
+      // Update progress as each upload completes
       uploaded++
-      // Update progress with uploaded count
-      updateFileProgress(uploaded, selectedFiles.value.length)
-    }
+      updateFileProgress(uploaded, totalFiles, uploaded === totalFiles ? undefined : file.name)
+      return file.name
+    })
 
-    successMessage.value = `Successfully uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}!`
+    const results = await Promise.allSettled(uploadPromises)
+    const succeeded = results.filter(r => r.status === 'fulfilled').length
+    const failed = results.filter(r => r.status === 'rejected').length
+
+    if (failed > 0) {
+      successMessage.value = `Uploaded ${succeeded} file${succeeded > 1 ? 's' : ''}, ${failed} failed`
+    } else {
+      successMessage.value = `Successfully uploaded ${succeeded} file${succeeded > 1 ? 's' : ''}!`
+    }
 
     // Reset
     selectedFiles.value = []

@@ -403,10 +403,12 @@ const applyAllDecisions = async () => {
       }
     });
     
-    // Apply decisions sequentially
-    for (const decision of decisions) {
-      await apiService.post('/api/chat_knowledge/knowledge/decide', decision);
-    }
+    // Apply decisions in parallel - eliminates N+1 sequential API calls
+    await Promise.all(
+      decisions.map(decision =>
+        apiService.post('/api/chat_knowledge/knowledge/decide', decision)
+      )
+    );
     
     showToast(`Applied ${decisions.length} knowledge decisions`, 'success');
     emit('decisions-applied', decisions);

@@ -300,22 +300,20 @@ export function useKnowledgeVectorization() {
       // Mark all as pending
       documentIds.forEach(id => setDocumentStatus(id, 'pending', 0))
 
-      // PLACEHOLDER - Replace with actual batch API call
-      // const response = await apiClient.post('/api/knowledge_base/vectorize_documents', {
-      //   document_ids: documentIds
-      // })
-      // const data = await response.json()
+      // Process documents in parallel using Promise.allSettled - eliminates N+1 sequential calls
+      const results = await Promise.allSettled(
+        documentIds.map(docId => vectorizeDocument(docId))
+      )
 
-
-      // Simulate batch processing
-      for (const docId of documentIds) {
-        const success = await vectorizeDocument(docId)
-        if (success) {
+      // Process results
+      results.forEach((result, index) => {
+        const docId = documentIds[index]
+        if (result.status === 'fulfilled' && result.value) {
           succeeded.push(docId)
         } else {
           failed.push(docId)
         }
-      }
+      })
 
       return { succeeded, failed }
     } catch (error) {

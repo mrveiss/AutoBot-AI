@@ -540,32 +540,40 @@ async function refreshGraph() {
 async function fetchRelations() {
   const allRelations: Relation[] = []
 
-  for (const entity of entities.value) {
-    try {
+  // Fetch relations for all entities in parallel - eliminates N+1 sequential API calls
+  const relationResults = await Promise.allSettled(
+    entities.value.map(async (entity) => {
       const response = await apiClient.get(`/api/memory/entities/${entity.id}/relations`)
       const parsedResponse = await parseApiResponse(response)
+      return { entity, parsedResponse }
+    })
+  )
 
-      // Handle standard API response format: { success: true, data: { related_entities: [...] } }
-      const responseData = parsedResponse?.data || parsedResponse
+  // Process results
+  for (const result of relationResults) {
+    if (result.status === 'rejected') {
+      continue // Skip failed requests
+    }
 
-      // Backend returns related_entities with relation metadata
-      if (responseData?.related_entities) {
-        // Transform related_entities into Relation objects
-        for (const relatedEntity of responseData.related_entities) {
-          allRelations.push({
-            from: entity.id,
-            to: relatedEntity.entity?.id || relatedEntity.id,
-            type: relatedEntity.relation_type || relatedEntity.type || 'relates_to',
-            strength: relatedEntity.strength || 1.0
-          })
-        }
-      } else if (responseData?.relations) {
-        // Fallback: backend might return relations directly
-        allRelations.push(...responseData.relations)
+    const { entity, parsedResponse } = result.value
+
+    // Handle standard API response format: { success: true, data: { related_entities: [...] } }
+    const responseData = parsedResponse?.data || parsedResponse
+
+    // Backend returns related_entities with relation metadata
+    if (responseData?.related_entities) {
+      // Transform related_entities into Relation objects
+      for (const relatedEntity of responseData.related_entities) {
+        allRelations.push({
+          from: entity.id,
+          to: relatedEntity.entity?.id || relatedEntity.id,
+          type: relatedEntity.relation_type || relatedEntity.type || 'relates_to',
+          strength: relatedEntity.strength || 1.0
+        })
       }
-    } catch {
-      // Silently skip entities without relations
-      logger.debug(`No relations for entity ${entity.id}`)
+    } else if (responseData?.relations) {
+      // Fallback: backend might return relations directly
+      allRelations.push(...responseData.relations)
     }
   }
 
