@@ -21,6 +21,12 @@ from backend.dependencies import get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
+# Import shared response utilities (Issue #292 - Eliminate duplicate code)
+from backend.utils.response_helpers import (
+    create_success_response,
+    handle_ai_stack_error,
+)
+
 logger = logging.getLogger(__name__)
 
 # ====================================================================
@@ -103,44 +109,10 @@ class ContentClassificationRequest(BaseModel):
 
 
 # ====================================================================
-# Utility Functions
+# Utility Functions (imported from backend.utils.response_helpers)
 # ====================================================================
-
-
-async def handle_ai_stack_error(
-    error: AIStackError, context: str = "AI Stack operation"
-):
-    """Handle AI Stack errors with proper HTTP responses."""
-    logger.error(f"{context} failed: {error.message}")
-
-    status_code = 503  # Service Unavailable by default
-    if error.status_code:
-        if error.status_code >= 400 and error.status_code < 500:
-            status_code = 400  # Bad Request for 4xx errors
-        elif error.status_code >= 500:
-            status_code = 503  # Service Unavailable for 5xx errors
-
-    raise HTTPException(
-        status_code=status_code,
-        detail={
-            "error": error.message,
-            "context": context,
-            "timestamp": datetime.utcnow().isoformat(),
-            "ai_stack_details": error.details,
-        },
-    )
-
-
-def create_success_response(
-    data: Any, message: str = "Operation completed successfully"
-) -> Metadata:
-    """Create standardized success response."""
-    return {
-        "success": True,
-        "data": data,
-        "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+# handle_ai_stack_error and create_success_response are imported from
+# backend.utils.response_helpers (Issue #292 - Eliminate duplicate code)
 
 
 # ====================================================================
