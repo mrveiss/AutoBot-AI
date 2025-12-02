@@ -1035,7 +1035,8 @@ async def get_security_report(
     - OWASP Top 10 mapping
     - Top recommendations
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -1043,8 +1044,8 @@ async def get_security_report(
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
-        analyzer.analyze_directory()
-        report = analyzer.generate_report(format=format)
+        await asyncio.to_thread(analyzer.analyze_directory)
+        report = await asyncio.to_thread(analyzer.generate_report, format=format)
 
         if format == "markdown":
             return JSONResponse(
@@ -1125,13 +1126,15 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
     - String concatenation in loops
     - Inefficient data structures
     """
-    if not os.path.exists(request.path):
+    path_exists = await asyncio.to_thread(os.path.exists, request.path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {request.path}",
         )
 
-    if not os.path.isdir(request.path):
+    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
+    if not is_dir:
         raise HTTPException(
             status_code=400,
             detail=f"Path is not a directory: {request.path}",
@@ -1142,7 +1145,7 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
             project_root=request.path,
             exclude_patterns=request.exclude_patterns,
         )
-        results = analyzer.analyze_directory()
+        results = await asyncio.to_thread(analyzer.analyze_directory)
 
         # Filter by severity if specified
         if request.min_severity:
@@ -1191,7 +1194,8 @@ async def performance_scan_file(request: PerformanceFileScanRequest):
 
     Quick scan of a single Python file for performance bottlenecks.
     """
-    if not os.path.exists(request.file_path):
+    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    if not file_exists:
         raise HTTPException(
             status_code=400,
             detail=f"File does not exist: {request.file_path}",
@@ -1205,7 +1209,7 @@ async def performance_scan_file(request: PerformanceFileScanRequest):
 
     try:
         analyzer = PerformanceAnalyzer()
-        results = analyzer.analyze_file(request.file_path)
+        results = await asyncio.to_thread(analyzer.analyze_file, request.file_path)
 
         # Group by issue type
         by_type = {}
@@ -1290,7 +1294,8 @@ async def get_performance_score(
     of performance issues detected. Higher scores indicate
     better performance.
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -1298,7 +1303,7 @@ async def get_performance_score(
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
-        analyzer.analyze_directory()
+        await asyncio.to_thread(analyzer.analyze_directory)
         summary = analyzer.get_summary()
 
         score = summary["performance_score"]
@@ -1360,7 +1365,8 @@ async def get_performance_report(
     - Complexity analysis
     - Top recommendations
     """
-    if not os.path.exists(path):
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Path does not exist: {path}",
@@ -1368,8 +1374,8 @@ async def get_performance_report(
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
-        analyzer.analyze_directory()
-        report = analyzer.generate_report(format=format)
+        await asyncio.to_thread(analyzer.analyze_directory)
+        report = await asyncio.to_thread(analyzer.generate_report, format=format)
 
         if format == "markdown":
             return JSONResponse(
