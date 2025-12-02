@@ -444,8 +444,14 @@ class ManPageKnowledgeIntegrator:
                 machine_id=data.get("machine_id"),
             )
 
+        except OSError as e:
+            logger.error(f"Failed to read cached man page {cache_file}: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse cached man page JSON {cache_file}: {e}")
+            return None
         except Exception as e:
-            logger.error(f"Error loading cached man page {cache_file}: {e}")
+            logger.error(f"Error processing cached man page {cache_file}: {e}")
             return None
 
     def convert_to_knowledge_yaml(self, man_info: ManPageInfo) -> Dict[str, Any]:
