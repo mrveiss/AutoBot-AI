@@ -134,13 +134,33 @@ class TerminalWebSocketManager:
     async def _create_pty(self):
         """Create PTY and start shell process."""
         try:
-            # Create PTY pair
-            master_fd, slave_fd = pty.openpty()
+            # Run blocking PTY creation in thread pool to avoid blocking event loop
+            # Issue #291: Convert blocking I/O to async
+            master_fd, _, process = await asyncio.to_thread(
+                self._sync_create_pty
+            )
             self.pty_fd = master_fd
+            self.process = process
 
+            logger.debug(f"PTY created: fd={master_fd}, pid={self.process.pid}")
+
+        except Exception as e:
+            logger.error(f"Failed to create PTY: {e}")
+            raise
+
+    def _sync_create_pty(self):
+        """Synchronous PTY creation - runs in thread pool.
+
+        This is separated from _create_pty to run blocking operations
+        (pty.openpty, termios, subprocess.Popen) in a thread pool.
+        """
+        import termios
+
+        # Create PTY pair
+        master_fd, slave_fd = pty.openpty()
+
+        try:
             # Configure PTY settings
-            import termios
-
             attrs = termios.tcgetattr(slave_fd)
             # Disable auto CR/LF and XON/XOFF
             attrs[0] &= ~(termios.ICRNL | termios.IXON)
@@ -156,7 +176,7 @@ class TerminalWebSocketManager:
                     # Log but don't fail - some environments don't support setsid
                     logger.warning(f"setsid failed in preexec_fn: {e}")
 
-            self.process = subprocess.Popen(
+            process = subprocess.Popen(
                 ["/bin/bash", "-i"],  # Interactive bash
                 stdin=slave_fd,
                 stdout=slave_fd,
@@ -171,10 +191,10 @@ class TerminalWebSocketManager:
             os.close(slave_fd)
 
             # Verify process started
-            if self.process.poll() is not None:
+            if process.poll() is not None:
                 raise RuntimeError("Shell process failed to start")
 
-            logger.debug(f"PTY created: fd={master_fd}, pid={self.process.pid}")
+            return master_fd, None, process  # slave_fd is closed after Popen
 
         except Exception as e:
             if "master_fd" in locals():

@@ -303,8 +303,10 @@ class VisionProcessor(BaseModalProcessor):
             elif isinstance(input_data.data, Image.Image):
                 image = input_data.data.convert("RGB")
             elif isinstance(input_data.data, str):
-                # Assume it's a file path
-                image = Image.open(input_data.data).convert("RGB")
+                # Assume it's a file path - read asynchronously (Issue #291)
+                image = await asyncio.to_thread(
+                    lambda p: Image.open(p).convert("RGB"), input_data.data
+                )
             else:
                 raise ValueError(
                     f"Unsupported image data type: {type(input_data.data)}"
