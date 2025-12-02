@@ -646,8 +646,10 @@ class ChatHistoryManager:
 
         # Save to file for persistence
         try:
-            async with aiofiles.open(self.history_file, "w") as f:
+            async with aiofiles.open(self.history_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(self.history, indent=2))
+        except OSError as e:
+            logging.error(f"Failed to write chat history file {self.history_file}: {e}")
         except Exception as e:
             logging.error(f"Error saving chat history to {self.history_file}: {str(e)}")
 
@@ -803,7 +805,7 @@ class ChatHistoryManager:
             # Try new format first
             file_exists = await asyncio.to_thread(os.path.exists, chat_file)
             if file_exists:
-                async with aiofiles.open(chat_file, "r") as f:
+                async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                     file_content = await f.read()
                 chat_data = self._decrypt_data(file_content)
 
@@ -811,6 +813,8 @@ class ChatHistoryManager:
                 metadata = chat_data.get("metadata", {})
                 return metadata.get("owner") or metadata.get("username")
 
+        except OSError as e:
+            logger.warning(f"Failed to read session file {chat_file}: {e}")
         except Exception as e:
             logger.warning(f"Failed to get session owner for {session_id}: {e}")
 
@@ -842,7 +846,7 @@ class ChatHistoryManager:
                     return False
 
             # Load existing data
-            async with aiofiles.open(chat_file, "r") as f:
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
             chat_data = self._decrypt_data(file_content)
 
@@ -853,7 +857,7 @@ class ChatHistoryManager:
             # Save updated data (always use new format)
             chat_file_new = f"{chats_directory}/{session_id}_chat.json"
             encrypted_data = self._encrypt_data(chat_data)
-            async with aiofiles.open(chat_file_new, "w") as f:
+            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
 
             # Update Redis cache
@@ -867,6 +871,9 @@ class ChatHistoryManager:
             logging.info(f"Session {session_id} updated successfully")
             return True
 
+        except OSError as e:
+            logging.error(f"Failed to read/write session file for {session_id}: {e}")
+            return False
         except Exception as e:
             logging.error(f"Error updating session {session_id}: {e}")
             return False

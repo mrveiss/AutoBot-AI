@@ -121,9 +121,16 @@ async def async_read_utf8_file(file_path: Union[str, Path]) -> str:
 
     Returns:
         File contents as UTF-8 string
+
+    Raises:
+        OSError: If file cannot be read
+        FileNotFoundError: If file doesn't exist
     """
-    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-        return await f.read()
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            return await f.read()
+    except OSError as e:
+        raise OSError(f"Failed to read file {file_path}: {e}") from e
 
 
 async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> None:
@@ -133,9 +140,15 @@ async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> No
     Args:
         file_path: Path to file
         content: Content to write (string)
+
+    Raises:
+        OSError: If file cannot be written
     """
-    async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-        await f.write(content)
+    try:
+        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+            await f.write(content)
+    except OSError as e:
+        raise OSError(f"Failed to write file {file_path}: {e}") from e
 
 
 def run_command_utf8(

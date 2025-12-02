@@ -69,6 +69,9 @@ class AsyncFileOperations:
         except FileNotFoundError:
             logger.warning(f"📁 File not found: {file_path}")
             return ""
+        except OSError as e:
+            logger.error(f"📖 Failed to read file {file_path}: {e}")
+            return ""
         except Exception as e:
             logger.error(f"📖 Error reading {file_path}: {e}")
             return ""
@@ -104,6 +107,9 @@ class AsyncFileOperations:
             logger.debug(f"📝 Wrote {len(content)} chars to {file_path}")
             return True
 
+        except OSError as e:
+            logger.error(f"📝 Failed to write to file {file_path}: {e}")
+            return False
         except Exception as e:
             logger.error(f"📝 Error writing to {file_path}: {e}")
             return False
@@ -259,6 +265,9 @@ class AsyncFileOperations:
             logger.debug(f"📋 Copied {src} to {dst}")
             return True
 
+        except OSError as e:
+            logger.error(f"📋 Failed to copy file {src} to {dst}: {e}")
+            return False
         except Exception as e:
             logger.error(f"📋 Error copying {src} to {dst}: {e}")
             return False
