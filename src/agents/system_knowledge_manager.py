@@ -210,13 +210,18 @@ class SystemKnowledgeManager:
     async def _mark_system_knowledge_imported(self):
         """Mark system knowledge as imported (legacy method)"""
         marker_file = self.runtime_knowledge_dir / ".imported"
-        async with aiofiles.open(marker_file, "w") as f:
-            await f.write(
-                json.dumps(
-                    {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
-                    indent=2,
+        try:
+            async with aiofiles.open(
+                marker_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    json.dumps(
+                        {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
+                        indent=2,
+                    )
                 )
-            )
+        except OSError as e:
+            logger.error(f"Failed to mark system knowledge as imported: {e}")
 
     async def _backup_current_knowledge(self):
         """Backup current system knowledge"""
@@ -378,8 +383,15 @@ class SystemKnowledgeManager:
 
         # Save steganography tools
         steg_file = self.system_knowledge_dir / "tools" / "steganography.yaml"
-        async with aiofiles.open(steg_file, "w") as f:
-            await f.write(yaml.dump(steganography_tools, default_flow_style=False, indent=2))
+        try:
+            async with aiofiles.open(
+                steg_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    yaml.dump(steganography_tools, default_flow_style=False, indent=2)
+                )
+        except OSError as e:
+            logger.error(f"Failed to save steganography tools to {steg_file}: {e}")
 
         # Create default image forensics workflow
         image_forensics_workflow = {
@@ -486,8 +498,15 @@ class SystemKnowledgeManager:
 
         # Save workflow
         workflow_file = self.system_knowledge_dir / "workflows" / "image_forensics.yaml"
-        async with aiofiles.open(workflow_file, "w") as f:
-            await f.write(yaml.dump(image_forensics_workflow, default_flow_style=False, indent=2))
+        try:
+            async with aiofiles.open(
+                workflow_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    yaml.dump(image_forensics_workflow, default_flow_style=False, indent=2)
+                )
+        except OSError as e:
+            logger.error(f"Failed to save workflow to {workflow_file}: {e}")
 
         logger.info("Default system knowledge templates created")
 
@@ -502,9 +521,15 @@ class SystemKnowledgeManager:
         for yaml_file in yaml_files:
             logger.info(f"Importing tools from {yaml_file}")
 
-            async with aiofiles.open(yaml_file, "r") as f:
-                content = await f.read()
-                tools_data = yaml.safe_load(content)
+            try:
+                async with aiofiles.open(
+                    yaml_file, "r", encoding="utf-8"
+                ) as f:
+                    content = await f.read()
+                    tools_data = yaml.safe_load(content)
+            except OSError as e:
+                logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                continue
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
@@ -592,9 +617,15 @@ class SystemKnowledgeManager:
         for yaml_file in yaml_files:
             logger.info(f"Importing workflow from {yaml_file}")
 
-            async with aiofiles.open(yaml_file, "r") as f:
-                content = await f.read()
-                workflow_data = yaml.safe_load(content)
+            try:
+                async with aiofiles.open(
+                    yaml_file, "r", encoding="utf-8"
+                ) as f:
+                    content = await f.read()
+                    workflow_data = yaml.safe_load(content)
+            except OSError as e:
+                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                continue
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
@@ -653,9 +684,15 @@ class SystemKnowledgeManager:
         for yaml_file in yaml_files:
             logger.info(f"Importing procedure from {yaml_file}")
 
-            async with aiofiles.open(yaml_file, "r") as f:
-                content = await f.read()
-                procedure_data = yaml.safe_load(content)
+            try:
+                async with aiofiles.open(
+                    yaml_file, "r", encoding="utf-8"
+                ) as f:
+                    content = await f.read()
+                    procedure_data = yaml.safe_load(content)
+            except OSError as e:
+                logger.error(f"Failed to read procedure file {yaml_file}: {e}")
+                continue
 
             # Copy to runtime directory
             runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
@@ -722,9 +759,15 @@ class SystemKnowledgeManager:
         if tools_dir_exists:
             yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
             for yaml_file in yaml_files:
-                async with aiofiles.open(yaml_file, "r") as f:
-                    content = await f.read()
-                    tools_data = yaml.safe_load(content)
+                try:
+                    async with aiofiles.open(
+                        yaml_file, "r", encoding="utf-8"
+                    ) as f:
+                        content = await f.read()
+                        tools_data = yaml.safe_load(content)
+                except OSError as e:
+                    logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                    continue
 
                 for tool_data in tools_data.get("tools", []):
                     await self._import_single_tool(tool_data)
@@ -735,9 +778,15 @@ class SystemKnowledgeManager:
         if workflows_dir_exists:
             yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
             for yaml_file in yaml_files:
-                async with aiofiles.open(yaml_file, "r") as f:
-                    content = await f.read()
-                    workflow_data = yaml.safe_load(content)
+                try:
+                    async with aiofiles.open(
+                        yaml_file, "r", encoding="utf-8"
+                    ) as f:
+                        content = await f.read()
+                        workflow_data = yaml.safe_load(content)
+                except OSError as e:
+                    logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                    continue
 
                 await self._import_single_workflow(workflow_data)
 
@@ -747,9 +796,15 @@ class SystemKnowledgeManager:
         if procedures_dir_exists:
             yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
             for yaml_file in yaml_files:
-                async with aiofiles.open(yaml_file, "r") as f:
-                    content = await f.read()
-                    procedure_data = yaml.safe_load(content)
+                try:
+                    async with aiofiles.open(
+                        yaml_file, "r", encoding="utf-8"
+                    ) as f:
+                        content = await f.read()
+                        procedure_data = yaml.safe_load(content)
+                except OSError as e:
+                    logger.error(f"Failed to read procedure file {yaml_file}: {e}")
+                    continue
 
                 await self._import_single_procedure(procedure_data)
 
