@@ -471,6 +471,49 @@ clean_text = strip_ansi_codes(terminal_output)
 
 ---
 
+## 📊 LOGGING STANDARDS (MANDATORY)
+
+**⚠️ MANDATORY RULE: USE STRUCTURED LOGGING, NOT console.*/print()**
+
+### Quick Reference
+
+**Frontend (Vue/TypeScript):**
+```typescript
+import { createLogger } from '@/utils/debugUtils'
+const logger = createLogger('ComponentName')
+
+logger.debug('Detailed info', data)   // Dev only
+logger.info('Normal operation')       // Normal events
+logger.warn('Warning', context)       // Recovered issues
+logger.error('Error occurred', error) // Failures
+```
+
+**Backend (Python):**
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+logger.debug("Detailed: %s", data)           # Dev only
+logger.info("Normal operation")               # Normal events
+logger.warning("Warning: %s", context)        # Recovered issues
+logger.error("Error: %s", e, exc_info=True)   # Failures with stack trace
+```
+
+### Pre-commit Enforcement
+
+A pre-commit hook blocks new console.*/print() statements. Bypass with `--no-verify` (NOT recommended).
+
+### Acceptable Exceptions
+
+- `if __name__ == "__main__":` blocks (test/demo code)
+- CLI tools with intentional user output
+- Logger implementation itself (debugUtils.ts)
+- RUM/monitoring tools that need console output
+
+👉 **Full guide**: [`docs/developer/LOGGING_STANDARDS.md`](docs/developer/LOGGING_STANDARDS.md)
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 ### Setup (Required First Time)
