@@ -6,9 +6,12 @@ Add Phase 9 monitoring router to the registry
 """
 
 # Read the registry file and add the Phase 9 monitoring entry
+import logging
 import re
 
 from src.constants.path_constants import PATH
+
+logger = logging.getLogger(__name__)
 
 
 def add_monitoring_to_registry():
@@ -44,7 +47,7 @@ def add_monitoring_to_registry():
     with open(registry_file, "w") as f:
         f.write(updated_content)
 
-    print("Phase 9 monitoring router added to registry successfully!")
+    logger.info("Phase 9 monitoring router added to registry successfully!")
 
 
 if __name__ == "__main__":

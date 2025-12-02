@@ -1371,10 +1371,10 @@ if __name__ == "__main__":
 
         intelligence = orchestrator.workflow_intelligence[workflow_id]
 
-        print(f"Generated intelligent workflow: {workflow_id}")
-        print(f"Confidence: {intelligence.confidence_score:.2f}")
-        print(f"Estimated time: {intelligence.estimated_completion_time:.1f} seconds")
-        print(f"Optimizations: {len(intelligence.optimization_suggestions)}")
+        logger.info("Generated intelligent workflow: %s", workflow_id)
+        logger.info("Confidence: %.2f", intelligence.confidence_score)
+        logger.info("Estimated time: %.1f seconds", intelligence.estimated_completion_time)
+        logger.info("Optimizations: %d", len(intelligence.optimization_suggestions))
 
     #     import asyncio
 
