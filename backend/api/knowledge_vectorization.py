@@ -14,6 +14,7 @@ from typing import List
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from redis.exceptions import RedisError
 
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
@@ -300,21 +301,26 @@ async def vectorize_existing_facts(
             f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
         )
 
-        # Batch fetch all fact data using pipeline - eliminates N+1 queries
-        async with kb.aioredis_client.pipeline() as pipe:
-            for fact_key in batch:
-                await pipe.hgetall(fact_key)
-            all_fact_data = await pipe.execute()
-
-        # If skip_existing, also batch check vector existence
-        fact_ids = [fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch]
-        vector_exists = {}
-        if skip_existing:
+        try:
+            # Batch fetch all fact data using pipeline - eliminates N+1 queries
             async with kb.aioredis_client.pipeline() as pipe:
-                for fact_id in fact_ids:
-                    await pipe.exists(f"llama_index/vector_{fact_id}")
-                exists_results = await pipe.execute()
-                vector_exists = dict(zip(fact_ids, exists_results))
+                for fact_key in batch:
+                    await pipe.hgetall(fact_key)
+                all_fact_data = await pipe.execute()
+
+            # If skip_existing, also batch check vector existence
+            fact_ids = [fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch]
+            vector_exists = {}
+            if skip_existing:
+                async with kb.aioredis_client.pipeline() as pipe:
+                    for fact_id in fact_ids:
+                        await pipe.exists(f"llama_index/vector_{fact_id}")
+                    exists_results = await pipe.execute()
+                    vector_exists = dict(zip(fact_ids, exists_results))
+        except RedisError as e:
+            logger.error(f"Redis error in batch {batch_num + 1}: {e}")
+            failed_count += len(batch)
+            continue
 
         for fact_key, fact_data, fact_id in zip(batch, all_fact_data, fact_ids):
             try:
