@@ -212,8 +212,11 @@ class DocumentExtractor:
         except UnicodeDecodeError as e:
             logger.error(f"Encoding error reading {file_path} with {encoding}: {e}")
             raise
-        except Exception as e:
+        except OSError as e:
             logger.error(f"Failed to read text file {file_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error reading text file {file_path}: {e}")
             raise
 
     @staticmethod

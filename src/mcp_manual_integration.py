@@ -882,8 +882,12 @@ class MCPManualService:
                                 query, content, file_path
                             )
                             results.extend(matches)
+                    except OSError as e:
+                        logger.debug(f"Failed to read file {file_path}: {e}")
                     except Exception as e:
                         logger.debug(f"Skipping unreadable file {file_path}: {e}")
+                except OSError as e:
+                    logger.debug(f"Failed to read file {file_path}: {e}")
 
         except Exception as e:
             logger.warning(f"Failed to search file {file_path}: {e}")

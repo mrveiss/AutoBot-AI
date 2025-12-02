@@ -154,7 +154,7 @@ class OSDetector:
                 os.path.exists, "/etc/os-release"
             )
             if os_release_exists:
-                async with aiofiles.open("/etc/os-release", "r") as f:
+                async with aiofiles.open("/etc/os-release", "r", encoding="utf-8") as f:
                     content = (await f.read()).lower()
 
                     if "ubuntu" in content:
@@ -211,9 +211,11 @@ class OSDetector:
                 os.path.exists, "/proc/version"
             )
             if proc_version_exists:
-                async with aiofiles.open("/proc/version", "r") as f:
+                async with aiofiles.open("/proc/version", "r", encoding="utf-8") as f:
                     content = (await f.read()).lower()
                     return "microsoft" in content or "wsl" in content
+        except OSError as e:
+            logger.debug(f"Failed to read /proc/version: {e}")
         except Exception:
             pass  # File read error, assume not WSL
 
