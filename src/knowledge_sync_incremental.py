@@ -168,7 +168,9 @@ class IncrementalKnowledgeSync:
         """Load existing file metadata and sync state."""
         try:
             if self.file_metadata_path.exists():
-                async with aiofiles.open(self.file_metadata_path, "r") as f:
+                async with aiofiles.open(
+                    self.file_metadata_path, "r", encoding="utf-8"
+                ) as f:
                     content = await f.read()
                     data = json.loads(content)
 
@@ -180,6 +182,9 @@ class IncrementalKnowledgeSync:
             else:
                 logger.info("No existing sync state found")
 
+        except OSError as e:
+            logger.warning(f"Failed to read sync state file {self.file_metadata_path}: {e}")
+            self.file_metadata = {}
         except Exception as e:
             logger.warning(f"Failed to load sync state: {e}")
             self.file_metadata = {}
@@ -195,11 +200,15 @@ class IncrementalKnowledgeSync:
             for path, metadata in self.file_metadata.items():
                 data[path] = asdict(metadata)
 
-            async with aiofiles.open(self.file_metadata_path, "w") as f:
+            async with aiofiles.open(
+                self.file_metadata_path, "w", encoding="utf-8"
+            ) as f:
                 await f.write(json.dumps(data, indent=2))
 
             logger.info(f"Saved metadata for {len(self.file_metadata)} files")
 
+        except OSError as e:
+            logger.error(f"Failed to write sync state file {self.file_metadata_path}: {e}")
         except Exception as e:
             logger.error(f"Failed to save sync state: {e}")
 
@@ -274,6 +283,8 @@ class IncrementalKnowledgeSync:
                     new_files.append(file_path)
                     logger.debug(f"New file: {relative_path}")
 
+            except OSError as e:
+                logger.warning(f"Failed to read file {file_path}: {e}")
             except Exception as e:
                 logger.warning(f"Failed to analyze {file_path}: {e}")
 
@@ -372,6 +383,9 @@ class IncrementalKnowledgeSync:
             )
             return metadata
 
+        except OSError as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return None
         except Exception as e:
             logger.error(f"Failed to process {file_path}: {e}")
             return None
@@ -555,9 +569,11 @@ class IncrementalKnowledgeSync:
             summary_path = self.project_root / "data" / "last_sync_summary.json"
             summary_path.parent.mkdir(parents=True, exist_ok=True)
 
-            async with aiofiles.open(summary_path, "w") as f:
+            async with aiofiles.open(summary_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(summary, indent=2))
 
+        except OSError as e:
+            logger.warning(f"Failed to write sync summary to {summary_path}: {e}")
         except Exception as e:
             logger.warning(f"Failed to save sync summary: {e}")
 
