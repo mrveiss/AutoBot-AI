@@ -510,6 +510,8 @@ async def mine_log_patterns(
                                 continue
 
                             log_lines.append((line.strip(), file_name, ""))
+                except OSError as e:
+                    logger.warning(f"Failed to read log file {file_path}: {e}")
                 except Exception as e:
                     logger.warning(f"Error reading log file {file_path}: {e}")
 
@@ -604,6 +606,8 @@ async def get_pattern_details(
                             pid, _ = pattern_miner.categorize_pattern(normalized)
                             if pid == pattern_id:
                                 log_lines.append((line.strip(), file_path.stem, ""))
+                except OSError as e:
+                    logger.warning(f"Failed to read {file_path}: {e}")
                 except Exception as e:
                     logger.warning(f"Error reading {file_path}: {e}")
 
@@ -683,6 +687,8 @@ async def get_error_hotspots(
                                         hourly_errors[hour_key]["samples"].append(
                                             line[:200]
                                         )
+                except OSError as e:
+                    logger.warning(f"Failed to read {file_path}: {e}")
                 except Exception as e:
                     logger.warning(f"Error reading {file_path}: {e}")
 
@@ -754,6 +760,8 @@ async def get_log_stats(
                                 stats["by_source"][file_path.stem] += 1
                                 stats["by_hour"][ts.strftime("%H:00")] += 1
                                 timestamps.append(ts)
+                except OSError as e:
+                    logger.warning(f"Failed to read {file_path}: {e}")
                 except Exception as e:
                     logger.warning(f"Error reading {file_path}: {e}")
 
@@ -810,6 +818,8 @@ async def get_realtime_summary():
                                         "message": line[:200],
                                     }
                                 )
+                except OSError as e:
+                    logger.debug(f"Failed to read {file_path}: {e}")
                 except Exception as e:
                     logger.debug(f"Error reading {file_path}: {e}")
 

@@ -610,7 +610,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
                     preview_content = await f.read(10240)
                     preview_type = "text"
                     preview_available = True
-            except (UnicodeDecodeError, IOError) as e:
+            except (UnicodeDecodeError, OSError, IOError) as e:
                 # File is binary or unreadable
                 logger.debug("File is binary or unreadable, skipping preview: %s", e)
         elif file_info.mime_type and file_info.mime_type.startswith("image/"):

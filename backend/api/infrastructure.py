@@ -197,15 +197,19 @@ async def create_host(
             key_path = os.path.join(key_dir, key_filename)
 
             # Save key file asynchronously
-            content = await key_file.read()
-            async with aiofiles.open(key_path, "wb") as f:
-                await f.write(content)
+            try:
+                content = await key_file.read()
+                async with aiofiles.open(key_path, "wb") as f:
+                    await f.write(content)
 
-            # Set secure permissions
-            os.chmod(key_path, 0o600)
+                # Set secure permissions
+                os.chmod(key_path, 0o600)
 
-            host_data["ssh_key_path"] = key_path
-            key_content = content.decode("utf-8")
+                host_data["ssh_key_path"] = key_path
+                key_content = content.decode("utf-8")
+            except OSError as e:
+                logger.error(f"Failed to save SSH key file {key_path}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to save SSH key file: {str(e)}")
 
         # Create host FIRST (CRITICAL: Must exist before credential storage)
         host = db.create_host(host_data)

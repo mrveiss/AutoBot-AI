@@ -577,6 +577,8 @@ class ArchitectureAnalyzer:
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
+        except OSError:
+            return None
         except Exception:
             return None
 
