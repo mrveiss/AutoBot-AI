@@ -5,6 +5,7 @@
 FastAPI router endpoints for codebase analytics API
 """
 
+import ast
 import asyncio
 import json
 import logging
@@ -12,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import aiofiles
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
