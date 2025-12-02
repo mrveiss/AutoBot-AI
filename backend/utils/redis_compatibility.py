@@ -11,6 +11,8 @@ import threading
 import warnings
 from typing import Optional, Union
 
+from redis.exceptions import RedisError
+
 from src.utils.logging_manager import get_logger
 
 from .async_redis_manager import get_redis_manager
@@ -72,8 +74,12 @@ class RedisCompatibilityWrapper:
 
     async def aget(self, key: str) -> Optional[str]:
         """Async get value by key"""
-        db = await self._get_async_db()
-        return await db.get(key)
+        try:
+            db = await self._get_async_db()
+            return await db.get(key)
+        except RedisError as e:
+            logger.error(f"Redis aget failed for key '{key}': {e}")
+            raise
 
     async def aset(
         self,
@@ -85,56 +91,96 @@ class RedisCompatibilityWrapper:
         xx: bool = False,
     ) -> bool:
         """Async set key-value pair"""
-        db = await self._get_async_db()
-        return await db.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
+        try:
+            db = await self._get_async_db()
+            return await db.set(key, value, ex=ex, px=px, nx=nx, xx=xx)
+        except RedisError as e:
+            logger.error(f"Redis aset failed for key '{key}': {e}")
+            raise
 
     async def adelete(self, *keys: str) -> int:
         """Async delete keys"""
-        db = await self._get_async_db()
-        return await db.delete(*keys)
+        try:
+            db = await self._get_async_db()
+            return await db.delete(*keys)
+        except RedisError as e:
+            logger.error(f"Redis adelete failed for keys {keys}: {e}")
+            raise
 
     async def aexists(self, *keys: str) -> int:
         """Async check if keys exist"""
-        db = await self._get_async_db()
-        return await db.exists(*keys)
+        try:
+            db = await self._get_async_db()
+            return await db.exists(*keys)
+        except RedisError as e:
+            logger.error(f"Redis aexists failed for keys {keys}: {e}")
+            raise
 
     async def aexpire(self, key: str, seconds: int) -> bool:
         """Async set key expiration"""
-        db = await self._get_async_db()
-        return await db.expire(key, seconds)
+        try:
+            db = await self._get_async_db()
+            return await db.expire(key, seconds)
+        except RedisError as e:
+            logger.error(f"Redis aexpire failed for key '{key}': {e}")
+            raise
 
     async def attl(self, key: str) -> int:
         """Async get key time to live"""
-        db = await self._get_async_db()
-        return await db.ttl(key)
+        try:
+            db = await self._get_async_db()
+            return await db.ttl(key)
+        except RedisError as e:
+            logger.error(f"Redis attl failed for key '{key}': {e}")
+            raise
 
     async def ahget(self, name: str, key: str) -> Optional[str]:
         """Async get hash field value"""
-        db = await self._get_async_db()
-        return await db.hget(name, key)
+        try:
+            db = await self._get_async_db()
+            return await db.hget(name, key)
+        except RedisError as e:
+            logger.error(f"Redis ahget failed for hash '{name}', key '{key}': {e}")
+            raise
 
     async def ahset(
         self, name: str, key: str, value: Union[str, bytes, int, float]
     ) -> int:
         """Async set hash field value"""
-        db = await self._get_async_db()
-        return await db.hset(name, key, value)
+        try:
+            db = await self._get_async_db()
+            return await db.hset(name, key, value)
+        except RedisError as e:
+            logger.error(f"Redis ahset failed for hash '{name}', key '{key}': {e}")
+            raise
 
     async def ahgetall(self, name: str) -> dict:
         """Async get all hash fields and values"""
-        db = await self._get_async_db()
-        return await db.hgetall(name)
+        try:
+            db = await self._get_async_db()
+            return await db.hgetall(name)
+        except RedisError as e:
+            logger.error(f"Redis ahgetall failed for hash '{name}': {e}")
+            raise
 
     async def alrange(self, name: str, start: int, end: int) -> list:
         """Async get list range"""
-        async_db = await self._get_async_db()
-        # Use the underlying Redis client for operations not wrapped
-        return await async_db._redis.lrange(name, start, end)
+        try:
+            async_db = await self._get_async_db()
+            # Use the underlying Redis client for operations not wrapped
+            return await async_db._redis.lrange(name, start, end)
+        except RedisError as e:
+            logger.error(f"Redis alrange failed for list '{name}': {e}")
+            raise
 
     async def aping(self) -> bool:
         """Async ping Redis server"""
-        db = await self._get_async_db()
-        return await db.ping()
+        try:
+            db = await self._get_async_db()
+            return await db.ping()
+        except RedisError as e:
+            logger.error(f"Redis aping failed: {e}")
+            return False
 
     # Sync methods (deprecated but supported for compatibility)
 
