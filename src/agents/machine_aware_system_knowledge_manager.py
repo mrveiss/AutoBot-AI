@@ -183,10 +183,16 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             / f"{self.current_machine_profile.machine_id}.json"
         )
 
-        async with aiofiles.open(profile_file, "w") as f:
-            await f.write(json.dumps(self.current_machine_profile.to_dict(), indent=2))
-
-        logger.info(f"Machine profile saved: {profile_file}")
+        try:
+            async with aiofiles.open(
+                profile_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    json.dumps(self.current_machine_profile.to_dict(), indent=2)
+                )
+            logger.info(f"Machine profile saved: {profile_file}")
+        except OSError as e:
+            logger.error(f"Failed to save machine profile to {profile_file}: {e}")
 
     async def _load_machine_profile(self, machine_id: str) -> Optional[MachineProfile]:
         """Load machine profile from disk"""
@@ -265,17 +271,32 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         for yaml_file in yaml_files:
             logger.info(f"Adapting tools from {yaml_file}")
 
-            async with aiofiles.open(yaml_file, "r") as f:
-                content = await f.read()
-                tools_data = yaml.safe_load(content)
+            try:
+                async with aiofiles.open(
+                    yaml_file, "r", encoding="utf-8"
+                ) as f:
+                    content = await f.read()
+                    tools_data = yaml.safe_load(content)
+            except OSError as e:
+                logger.error(f"Failed to read tools file {yaml_file}: {e}")
+                continue
 
             # Filter and adapt tools for this machine
             adapted_tools = self._filter_tools_for_machine(tools_data)
 
             if adapted_tools["tools"]:  # Only save if there are applicable tools
                 machine_file = machine_tools_dir / yaml_file.name
-                async with aiofiles.open(machine_file, "w") as f:
-                    await f.write(yaml.dump(adapted_tools, default_flow_style=False, indent=2))
+                try:
+                    async with aiofiles.open(
+                        machine_file, "w", encoding="utf-8"
+                    ) as f:
+                        await f.write(
+                            yaml.dump(adapted_tools, default_flow_style=False, indent=2)
+                        )
+                except OSError as e:
+                    logger.error(
+                        f"Failed to write adapted tools to {machine_file}: {e}"
+                    )
 
     def _filter_tools_for_machine(self, tools_data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter tools based on current machine capabilities"""
@@ -368,17 +389,32 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         for yaml_file in yaml_files:
             logger.info(f"Adapting workflow from {yaml_file}")
 
-            async with aiofiles.open(yaml_file, "r") as f:
-                content = await f.read()
-                workflow_data = yaml.safe_load(content)
+            try:
+                async with aiofiles.open(
+                    yaml_file, "r", encoding="utf-8"
+                ) as f:
+                    content = await f.read()
+                    workflow_data = yaml.safe_load(content)
+            except OSError as e:
+                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
+                continue
 
             # Adapt workflow for machine capabilities
             adapted_workflow = self._adapt_workflow_for_machine(workflow_data)
 
             if adapted_workflow:  # Only save if workflow is applicable
                 machine_file = machine_workflows_dir / yaml_file.name
-                async with aiofiles.open(machine_file, "w") as f:
-                    await f.write(yaml.dump(adapted_workflow, default_flow_style=False, indent=2))
+                try:
+                    async with aiofiles.open(
+                        machine_file, "w", encoding="utf-8"
+                    ) as f:
+                        await f.write(
+                            yaml.dump(adapted_workflow, default_flow_style=False, indent=2)
+                        )
+                except OSError as e:
+                    logger.error(
+                        f"Failed to write adapted workflow to {machine_file}: {e}"
+                    )
 
     def _adapt_workflow_for_machine(
         self, workflow_data: Dict[str, Any]
@@ -655,10 +691,18 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Save as YAML
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
-        async with aiofiles.open(yaml_file, "w") as f:
-            await f.write(yaml.dump(knowledge_data, default_flow_style=False, indent=2))
-
-        logger.debug(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
+        try:
+            async with aiofiles.open(
+                yaml_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    yaml.dump(knowledge_data, default_flow_style=False, indent=2)
+                )
+            logger.debug(
+                f"Saved man page knowledge for {man_info.command} to {yaml_file}"
+            )
+        except OSError as e:
+            logger.error(f"Failed to save man page knowledge to {yaml_file}: {e}")
 
     async def _save_man_page_integration_summary(self, results: Dict[str, Any]):
         """Save man page integration summary"""
@@ -678,10 +722,16 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             ),
         }
 
-        async with aiofiles.open(summary_file, "w") as f:
-            await f.write(json.dumps(summary_data, indent=2))
-
-        logger.info(f"Saved man page integration summary to {summary_file}")
+        try:
+            async with aiofiles.open(
+                summary_file, "w", encoding="utf-8"
+            ) as f:
+                await f.write(json.dumps(summary_data, indent=2))
+            logger.info(f"Saved man page integration summary to {summary_file}")
+        except OSError as e:
+            logger.error(
+                f"Failed to save man page integration summary to {summary_file}: {e}"
+            )
 
     async def get_man_page_summary(self) -> Dict[str, Any]:
         """Get summary of integrated man pages for current machine"""
