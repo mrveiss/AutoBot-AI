@@ -66,6 +66,54 @@ class SecureWebResearch:
         """Async context manager exit"""
         await self.domain_security.__aexit__(exc_type, exc_val, exc_tb)
 
+    async def _validate_result_security(
+        self, result: Dict[str, Any], research_result: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Validate security of a single research result (Issue #298 - extracted helper).
+
+        Returns the result with security metadata if safe, None if blocked.
+        """
+        result_url = result.get("url", "")
+
+        # Domain validation
+        if result_url and self.enable_domain_validation:
+            domain_validation = await self.domain_security.validate_domain_safety(result_url)
+
+            self.security_stats["domains_checked"] += 1
+            research_result["security"]["domain_checks"].append({
+                "url": result_url,
+                "safe": domain_validation["safe"],
+                "reason": domain_validation["reason"],
+                "reputation_score": domain_validation["reputation_score"],
+            })
+
+            if not domain_validation["safe"]:
+                logger.warning(f"Domain blocked: {result_url} - {domain_validation['reason']}")
+                self.security_stats["domains_blocked"] += 1
+                self.security_stats["threats_detected"] += len(domain_validation["threats_detected"])
+                return None
+
+        # Content filtering
+        if self.enable_content_filtering and result.get("content"):
+            content_validation = self.input_validator.sanitize_web_content(
+                result["content"], result.get("content_type", "text/html")
+            )
+
+            if content_validation["threats_detected"]:
+                self.security_stats["content_filtered"] += 1
+                research_result["security"]["content_filtered"] = True
+                result["content"] = content_validation["sanitized_content"]
+                result["security_warnings"] = content_validation["warnings"]
+                result["threats_removed"] = content_validation["threats_detected"]
+
+        # Add security metadata
+        result["security"] = {
+            "domain_validated": self.enable_domain_validation,
+            "content_filtered": self.enable_content_filtering,
+            "safe": True,
+        }
+        return result
+
     async def conduct_secure_research(
         self,
         query: str,
@@ -178,79 +226,18 @@ class SecureWebResearch:
                 timeout=timeout,
             )
 
-            # Step 3: Domain and Content Security Validation
+            # Step 3: Domain and Content Security Validation (Issue #298 - uses helper)
             if raw_results.get("status") == "success" and raw_results.get("results"):
                 secure_results = []
 
                 for idx, result in enumerate(raw_results["results"]):
                     try:
-                        # Validate each result URL
-                        result_url = result.get("url", "")
-                        if result_url and self.enable_domain_validation:
-                            domain_validation = (
-                                await self.domain_security.validate_domain_safety(
-                                    result_url
-                                )
-                            )
-
-                            self.security_stats["domains_checked"] += 1
-                            research_result["security"]["domain_checks"].append(
-                                {
-                                    "url": result_url,
-                                    "safe": domain_validation["safe"],
-                                    "reason": domain_validation["reason"],
-                                    "reputation_score": domain_validation[
-                                        "reputation_score"
-                                    ],
-                                }
-                            )
-
-                            if not domain_validation["safe"]:
-                                logger.warning(
-                                    f"Domain blocked: {result_url} - {domain_validation['reason']}"
-                                )
-                                self.security_stats["domains_blocked"] += 1
-                                self.security_stats["threats_detected"] += len(
-                                    domain_validation["threats_detected"]
-                                )
-                                continue  # Skip this result
-
-                        # Content filtering if available
-                        if self.enable_content_filtering and result.get("content"):
-                            content_validation = (
-                                self.input_validator.sanitize_web_content(
-                                    result["content"],
-                                    result.get("content_type", "text/html"),
-                                )
-                            )
-
-                            if content_validation["threats_detected"]:
-                                self.security_stats["content_filtered"] += 1
-                                research_result["security"]["content_filtered"] = True
-
-                                # Use sanitized content
-                                result["content"] = content_validation[
-                                    "sanitized_content"
-                                ]
-                                result["security_warnings"] = content_validation[
-                                    "warnings"
-                                ]
-                                result["threats_removed"] = content_validation[
-                                    "threats_detected"
-                                ]
-
-                        # Add security metadata to result
-                        result["security"] = {
-                            "domain_validated": self.enable_domain_validation,
-                            "content_filtered": self.enable_content_filtering,
-                            "safe": True,
-                        }
-
-                        secure_results.append(result)
-
+                        validated = await self._validate_result_security(result, research_result)
+                        if validated:
+                            secure_results.append(validated)
                     except Exception as e:
                         logger.error(f"Error validating result {idx}: {e}")
-                        continue  # Skip problematic results
+                        continue
 
                 # Update research result with secure results
                 research_result.update(
