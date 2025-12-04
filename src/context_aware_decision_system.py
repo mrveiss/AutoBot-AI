@@ -453,6 +453,32 @@ class ContextCollector:
             logger.debug(f"Environmental context collection failed: {e}")
             return []
 
+    def _check_resource_constraints(
+        self, resource_info: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Check resource-based constraints (Issue #298 - extracted helper)."""
+        constraints = []
+
+        cpu_percent = resource_info.get("cpu_percent", 0)
+        if cpu_percent > 80:
+            constraints.append({
+                "type": "high_cpu_usage",
+                "description": f"CPU usage at {cpu_percent}%",
+                "severity": "medium",
+                "affects": ["resource_intensive_tasks"],
+            })
+
+        memory_percent = resource_info.get("memory_percent", 0)
+        if memory_percent > 85:
+            constraints.append({
+                "type": "high_memory_usage",
+                "description": f"Memory usage at {memory_percent}%",
+                "severity": "high",
+                "affects": ["memory_intensive_operations"],
+            })
+
+        return constraints
+
     async def _identify_constraints(
         self, decision_type: DecisionType, context_elements: List[ContextElement]
     ) -> List[Dict[str, Any]]:
@@ -466,42 +492,19 @@ class ContextCollector:
             if ce.metadata.get("type") == "active_takeovers"
         ]
         if active_takeovers:
-            constraints.append(
-                {
-                    "type": "human_takeover_active",
-                    "description": "Human operator has taken control",
-                    "severity": "high",
-                    "affects": ["automation_action", "navigation_choice"],
-                }
-            )
+            constraints.append({
+                "type": "human_takeover_active",
+                "description": "Human operator has taken control",
+                "severity": "high",
+                "affects": ["automation_action", "navigation_choice"],
+            })
 
-        # Check system resources (constraint on resource-intensive actions)
+        # Check system resources (Issue #298 - uses extracted helper)
         resource_contexts = [
             ce for ce in context_elements if ce.metadata.get("type") == "resource_usage"
         ]
         for resource_context in resource_contexts:
-            resource_info = resource_context.content
-            if resource_info.get("cpu_percent", 0) > 80:
-                constraints.append(
-                    {
-                        "type": "high_cpu_usage",
-                        "description": f"CPU usage at {resource_info['cpu_percent']}%",
-                        "severity": "medium",
-                        "affects": ["resource_intensive_tasks"],
-                    }
-                )
-
-            if resource_info.get("memory_percent", 0) > 85:
-                constraints.append(
-                    {
-                        "type": "high_memory_usage",
-                        "description": (
-                            f"Memory usage at {resource_info['memory_percent']}%"
-                        ),
-                        "severity": "high",
-                        "affects": ["memory_intensive_operations"],
-                    }
-                )
+            constraints.extend(self._check_resource_constraints(resource_context.content))
 
         # Time-based constraints
         temporal_contexts = [
@@ -512,16 +515,56 @@ class ContextCollector:
         for temporal_context in temporal_contexts:
             temporal_info = temporal_context.content
             if not temporal_info.get("is_business_hours", True):
-                constraints.append(
-                    {
-                        "type": "outside_business_hours",
-                        "description": "Current time is outside business hours",
-                        "severity": "low",
-                        "affects": ["external_communications", "user_interactions"],
-                    }
-                )
+                constraints.append({
+                    "type": "outside_business_hours",
+                    "description": "Current time is outside business hours",
+                    "severity": "low",
+                    "affects": ["external_communications", "user_interactions"],
+                })
 
         return constraints
+
+    def _get_automation_actions(
+        self, context_elements: List[ContextElement]
+    ) -> List[Dict[str, Any]]:
+        """Get automation actions from context (Issue #298 - extracted helper)."""
+        actions = []
+        automation_contexts = [
+            ce for ce in context_elements
+            if ce.metadata.get("type") == "automation_opportunities"
+        ]
+        for auto_context in automation_contexts:
+            for opportunity in auto_context.content:
+                actions.append({
+                    "action_type": "automation",
+                    "action": opportunity.get("automation_action", "unknown"),
+                    "target": opportunity.get("element_id"),
+                    "confidence": opportunity.get("confidence", 0.5),
+                    "description": opportunity.get("description", ""),
+                })
+        return actions
+
+    def _get_navigation_actions(
+        self, context_elements: List[ContextElement]
+    ) -> List[Dict[str, Any]]:
+        """Get navigation actions from context (Issue #298 - extracted helper)."""
+        actions = []
+        ui_contexts = [
+            ce for ce in context_elements
+            if ce.metadata.get("type") == "ui_elements"
+        ]
+        for ui_context in ui_contexts:
+            for element in ui_context.content:
+                if "click" not in element.get("interactions", []):
+                    continue
+                actions.append({
+                    "action_type": "navigation",
+                    "action": "click_element",
+                    "target": element.get("id"),
+                    "confidence": element.get("confidence", 0.5),
+                    "description": f"Click {element.get('text', 'element')}",
+                })
+        return actions
 
     async def _identify_available_actions(
         self, decision_type: DecisionType, context_elements: List[ContextElement]
@@ -529,85 +572,45 @@ class ContextCollector:
         """Identify actions available based on current context"""
         available_actions = []
 
+        # Route to appropriate action identifier (Issue #298 - uses helpers)
         if decision_type == DecisionType.AUTOMATION_ACTION:
-            # Check for automation opportunities
-            automation_contexts = [
-                ce
-                for ce in context_elements
-                if ce.metadata.get("type") == "automation_opportunities"
-            ]
-            for auto_context in automation_contexts:
-                opportunities = auto_context.content
-                for opportunity in opportunities:
-                    available_actions.append(
-                        {
-                            "action_type": "automation",
-                            "action": opportunity.get("automation_action", "unknown"),
-                            "target": opportunity.get("element_id"),
-                            "confidence": opportunity.get("confidence", 0.5),
-                            "description": opportunity.get("description", ""),
-                        }
-                    )
+            available_actions.extend(self._get_automation_actions(context_elements))
 
         elif decision_type == DecisionType.NAVIGATION_CHOICE:
-            # Check for navigation options
-            ui_contexts = [
-                ce
-                for ce in context_elements
-                if ce.metadata.get("type") == "ui_elements"
-            ]
-            for ui_context in ui_contexts:
-                ui_elements = ui_context.content
-                for element in ui_elements:
-                    if "click" in element.get("interactions", []):
-                        available_actions.append(
-                            {
-                                "action_type": "navigation",
-                                "action": "click_element",
-                                "target": element.get("id"),
-                                "confidence": element.get("confidence", 0.5),
-                                "description": (
-                                    f"Click {element.get('text', 'element')}"
-                                ),
-                            }
-                        )
+            available_actions.extend(self._get_navigation_actions(context_elements))
 
         elif decision_type == DecisionType.HUMAN_ESCALATION:
-            available_actions.extend(
-                [
-                    {
-                        "action_type": "escalation",
-                        "action": "request_takeover",
-                        "trigger": "manual_request",
-                        "confidence": 1.0,
-                        "description": "Request human takeover",
-                    },
-                    {
-                        "action_type": "escalation",
-                        "action": "pause_operations",
-                        "confidence": 1.0,
-                        "description": "Pause autonomous operations",
-                    },
-                ]
-            )
+            available_actions.extend([
+                {
+                    "action_type": "escalation",
+                    "action": "request_takeover",
+                    "trigger": "manual_request",
+                    "confidence": 1.0,
+                    "description": "Request human takeover",
+                },
+                {
+                    "action_type": "escalation",
+                    "action": "pause_operations",
+                    "confidence": 1.0,
+                    "description": "Pause autonomous operations",
+                },
+            ])
 
         # Always available: monitoring and logging actions
-        available_actions.extend(
-            [
-                {
-                    "action_type": "monitoring",
-                    "action": "continue_monitoring",
-                    "confidence": 1.0,
-                    "description": "Continue monitoring current state",
-                },
-                {
-                    "action_type": "logging",
-                    "action": "log_decision",
-                    "confidence": 1.0,
-                    "description": "Log decision and context",
-                },
-            ]
-        )
+        available_actions.extend([
+            {
+                "action_type": "monitoring",
+                "action": "continue_monitoring",
+                "confidence": 1.0,
+                "description": "Continue monitoring current state",
+            },
+            {
+                "action_type": "logging",
+                "action": "log_decision",
+                "confidence": 1.0,
+                "description": "Log decision and context",
+            },
+        ])
 
         return available_actions
 

@@ -264,79 +264,77 @@ class SpeechRecognitionEngine:
             logger.debug(f"Noise level calculation failed: {e}")
             return 0.5
 
+    def _try_google_recognition(
+        self, audio_data
+    ) -> List[Dict[str, Any]]:
+        """Try Google speech recognition (Issue #298 - extracted helper)."""
+        results = []
+        try:
+            result = self.recognizer.recognize_google(audio_data, show_all=True)
+            if not result or "alternative" not in result:
+                return results
+            for alt in result["alternative"]:
+                results.append({
+                    "text": alt.get("transcript", ""),
+                    "confidence": alt.get("confidence", 0.0),
+                    "engine": "google",
+                })
+        except Exception as e:
+            logger.debug(f"Google Speech Recognition failed: {e}")
+        return results
+
+    def _try_sphinx_recognition(self, audio_data) -> List[Dict[str, Any]]:
+        """Try Sphinx offline recognition (Issue #298 - extracted helper)."""
+        try:
+            text = self.recognizer.recognize_sphinx(audio_data)
+            return [{
+                "text": text,
+                "confidence": 0.7,  # Sphinx doesn't provide confidence
+                "engine": "sphinx",
+            }]
+        except Exception as e:
+            logger.debug(f"Sphinx Recognition failed: {e}")
+            return []
+
     async def _perform_speech_recognition(
         self, audio_input: AudioInput
     ) -> Dict[str, Any]:
         """Perform actual speech recognition"""
-        try:
-            if self.recognizer is None:
-                return {
-                    "transcription": "",
-                    "confidence": 0.0,
-                    "alternatives": [],
-                    "language": "unknown",
-                }
+        empty_result = {
+            "transcription": "",
+            "confidence": 0.0,
+            "alternatives": [],
+            "language": "unknown",
+        }
 
+        if self.recognizer is None:
+            return empty_result
+
+        try:
             # Convert audio data to AudioData format
             audio_data = self._convert_to_audio_data(audio_input)
 
-            # Perform recognition with multiple engines
-            transcription_results = []
+            # Try recognition engines (Issue #298 - uses helpers)
+            transcription_results = self._try_google_recognition(audio_data)
 
-            # Try Google Speech Recognition (requires internet)
-            try:
-                result = self.recognizer.recognize_google(audio_data, show_all=True)
-                if result and "alternative" in result:
-                    for alt in result["alternative"]:
-                        transcription_results.append(
-                            {
-                                "text": alt.get("transcript", ""),
-                                "confidence": alt.get("confidence", 0.0),
-                                "engine": "google",
-                            }
-                        )
-            except Exception as e:
-                logger.debug(f"Google Speech Recognition failed: {e}")
-
-            # Try Sphinx (offline) as fallback
             if not transcription_results:
-                try:
-                    text = self.recognizer.recognize_sphinx(audio_data)
-                    transcription_results.append(
-                        {
-                            "text": text,
-                            "confidence": 0.7,  # Sphinx doesn't provide confidence
-                            "engine": "sphinx",
-                        }
-                    )
-                except Exception as e:
-                    logger.debug(f"Sphinx Recognition failed: {e}")
+                transcription_results = self._try_sphinx_recognition(audio_data)
 
             # Process results
-            if transcription_results:
-                best_result = max(transcription_results, key=lambda x: x["confidence"])
-                return {
-                    "transcription": best_result["text"],
-                    "confidence": best_result["confidence"],
-                    "alternatives": transcription_results[1:],  # Other alternatives
-                    "language": "en",  # Would detect language in real implementation
-                }
-            else:
-                return {
-                    "transcription": "",
-                    "confidence": 0.0,
-                    "alternatives": [],
-                    "language": "unknown",
-                }
+            if not transcription_results:
+                return empty_result
+
+            best_result = max(transcription_results, key=lambda x: x["confidence"])
+            return {
+                "transcription": best_result["text"],
+                "confidence": best_result["confidence"],
+                "alternatives": transcription_results[1:],
+                "language": "en",
+            }
 
         except Exception as e:
             logger.error(f"Speech recognition processing failed: {e}")
-            return {
-                "transcription": "",
-                "confidence": 0.0,
-                "alternatives": [],
-                "language": "unknown",
-            }
+            return empty_result
 
     def _convert_to_audio_data(self, audio_input: AudioInput):
         """Convert audio input to speech_recognition AudioData format"""
