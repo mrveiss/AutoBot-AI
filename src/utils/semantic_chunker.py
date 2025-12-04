@@ -85,6 +85,106 @@ class AutoBotSemanticChunker:
 
         logger.info(f"SemanticChunker initialized with model: {embedding_model}")
 
+    def _detect_device(self):
+        """Detect best available device for model loading (Issue #333 - extracted helper)."""
+        import torch
+
+        if torch.cuda.is_available():
+            gpu_count = torch.cuda.device_count()
+            gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
+            logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
+            return "cuda"
+
+        logger.info("CUDA not available, using CPU for embeddings")
+        return "cpu"
+
+    def _apply_gpu_precision(self, model, device: str):
+        """Apply GPU precision optimization to model (Issue #333 - extracted helper)."""
+        import torch
+
+        if device != "cuda":
+            return model
+
+        try:
+            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            if param_count == 0:
+                logger.warning("Model parameters not properly loaded, skipping precision conversion")
+                return model
+
+            has_meta_tensors = any(p.device.type == "meta" for p in model.parameters())
+
+            if has_meta_tensors:
+                model = model.to_empty(device=device, dtype=torch.float16)
+                logger.info("Converted meta tensors to FP16 on GPU")
+            else:
+                model = model.to(device, dtype=torch.float16)
+                logger.info("Enabled FP16 mixed precision for GPU inference")
+
+            return model
+
+        except Exception as tensor_error:
+            logger.warning(f"FP16 conversion failed: {tensor_error}, trying FP32")
+            try:
+                return model.to(device, dtype=torch.float32)
+            except Exception as precision_error:
+                logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                return model.to(device)
+
+    def _load_model_with_retry(self, device: str):
+        """Load model with retry logic for rate limiting (Issue #333 - extracted helper)."""
+        import time
+
+        from sentence_transformers import SentenceTransformer
+
+        max_retries = 3
+        retry_delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    logger.info(
+                        f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay..."
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+
+                return SentenceTransformer(self.embedding_model_name, device=device)
+
+            except Exception as load_error:
+                error_str = str(load_error).lower()
+                is_rate_limit = "429" in error_str or "rate limit" in error_str or "http error" in error_str
+
+                if not is_rate_limit:
+                    raise
+
+                if attempt >= max_retries - 1:
+                    logger.error(f"Max retries exceeded for HuggingFace rate limiting: {load_error}")
+                    raise
+
+                logger.warning(f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s...")
+
+        raise RuntimeError("Model loading failed after retries")
+
+    def _optimize_loaded_model(self, model, device: str):
+        """Optimize loaded model for device (Issue #333 - extracted helper)."""
+        from sentence_transformers import SentenceTransformer
+
+        try:
+            actual_device = next(model.parameters()).device
+            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+
+            model = self._apply_gpu_precision(model, device)
+            return model
+
+        except Exception as model_load_error:
+            logger.warning(f"Failed to optimize model '{self.embedding_model_name}' on {device}: {model_load_error}")
+
+            if device != "cpu":
+                logger.info("Attempting fallback to CPU...")
+                return SentenceTransformer(self.embedding_model_name, device="cpu")
+
+            raise
+
     async def _initialize_model(self):
         """Lazy initialize the sentence transformer model on first use with GPU acceleration."""
         if self._embedding_model is not None:
@@ -94,179 +194,58 @@ class AutoBotSemanticChunker:
             import asyncio
             import concurrent.futures
 
-            # Run model loading in thread pool to avoid blocking event loop
             def load_model():
-                # Import only when needed to avoid startup delay
-                import time
+                device = self._detect_device()
+                model = self._load_model_with_retry(device)
+                return self._optimize_loaded_model(model, device)
 
-                import torch
-                from sentence_transformers import SentenceTransformer
-
-                # Detect best available device
-                device = "cpu"  # Default fallback
-
-                if torch.cuda.is_available():
-                    device = "cuda"
-                    gpu_count = torch.cuda.device_count()
-                    gpu_name = (
-                        torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
-                    )
-                    logger.info(
-                        f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})"
-                    )
-                else:
-                    logger.info("CUDA not available, using CPU for embeddings")
-
-                # Initialize model with device optimization and retry logic for
-                # HuggingFace rate limiting
-                max_retries = 3
-                retry_delay = 2  # seconds
-
-                for attempt in range(max_retries):
-                    try:
-                        if attempt > 0:
-                            logger.info(
-                                f"Model loading attempt {attempt + 1}/{max_retries} "
-                                f"after {retry_delay}s delay..."
-                            )
-                            # time.sleep is correct here - running in thread pool
-                            time.sleep(retry_delay)
-                            retry_delay *= 2  # Exponential backoff
-
-                        # Try to load model (this may hit HuggingFace rate limits)
-                        model = SentenceTransformer(
-                            self.embedding_model_name, device=device
-                        )
-                        break  # Success - exit retry loop
-
-                    except Exception as load_error:
-                        error_str = str(load_error).lower()
-                        if (
-                            "429" in error_str
-                            or "rate limit" in error_str
-                            or "http error" in error_str
-                        ):
-                            if attempt < max_retries - 1:
-                                logger.warning(
-                                    f"HuggingFace rate limit hit (attempt {attempt + 1}), "
-                                    f"retrying in {retry_delay}s..."
-                                )
-                                continue
-                            else:
-                                logger.error(
-                                    f"Max retries exceeded for HuggingFace rate limiting: "
-                                    f"{load_error}"
-                                )
-                                raise
-                        else:
-                            # Non-rate-limit error, don't retry
-                            raise
-
-                # After successful model loading, try to optimize for GPU
-                try:
-                    # Log device and model info
-                    actual_device = next(model.parameters()).device
-                    logger.info(
-                        f"Embedding model '{self.embedding_model_name}' loaded "
-                        f"on device: {actual_device}"
-                    )
-
-                    # Enable mixed precision for GPU if available (with proper error handling)
-                    if device == "cuda":
-                        try:
-                            # Check if model parameters are properly loaded before precision
-                            # conversion
-                            param_count = sum(
-                                p.numel() for p in model.parameters() if p.requires_grad
-                            )
-                            if param_count > 0:
-                                # Use safe tensor conversion for meta tensors
-                                try:
-                                    # First check if any parameters are on meta device
-                                    has_meta_tensors = any(
-                                        p.device.type == "meta"
-                                        for p in model.parameters()
-                                    )
-                                    if has_meta_tensors:
-                                        # Use to_empty() for meta tensors
-                                        model = model.to_empty(
-                                            device=device, dtype=torch.float16
-                                        )
-                                        logger.info(
-                                            "Converted meta tensors to FP16 on GPU"
-                                        )
-                                    else:
-                                        # Use regular to() for normal tensors
-                                        model = model.to(device, dtype=torch.float16)
-                                        logger.info(
-                                            "Enabled FP16 mixed precision for GPU inference"
-                                        )
-                                except Exception as tensor_error:
-                                    logger.warning(
-                                        f"FP16 conversion failed: {tensor_error}, trying FP32"
-                                    ),
-                                    model = model.to(device, dtype=torch.float32)
-                            else:
-                                logger.warning(
-                                    "Model parameters not properly loaded, "
-                                    "skipping precision conversion"
-                                )
-                        except Exception as precision_error:
-                            logger.warning(
-                                f"Could not enable FP16: {precision_error}, using FP32"
-                            )
-                            # Ensure model is on correct device even if precision fails
-                            model = model.to(device)
-
-                except Exception as model_load_error:
-                    logger.warning(
-                        f"Failed to load model '{self.embedding_model_name}' "
-                        f"on {device}: {model_load_error}"
-                    )
-                    # Fallback to CPU with basic loading
-                    if device != "cpu":
-                        logger.info("Attempting fallback to CPU...")
-                        model = SentenceTransformer(
-                            self.embedding_model_name, device="cpu"
-                        )
-                    else:
-                        raise  # Re-raise if CPU also fails
-
-                return model
-
-            # Load model in background thread
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                logger.info(
-                    f"Loading embedding model '{self.embedding_model_name}' in background thread..."
-                )
+                logger.info(f"Loading embedding model '{self.embedding_model_name}' in background thread...")
                 self._embedding_model = await loop.run_in_executor(executor, load_model)
                 logger.info("Embedding model loading completed")
 
         except Exception as e:
-            logger.error(
-                f"Failed to load embedding model {self.embedding_model_name}: {e}"
-            )
-            # Fallback to a more basic model with safer loading
-            try:
-                from sentence_transformers import SentenceTransformer
+            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
+            await self._try_fallback_models()
 
-                # Use CPU only for fallback to avoid device/tensor issues
-                logger.info(
-                    "Attempting fallback model loading on CPU to avoid tensor issues..."
-                )
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
-                logger.warning("Fallback to all-mpnet-base-v2 embedding model on CPU")
+    async def _try_fallback_models(self):
+        """Try loading fallback models (Issue #333 - extracted helper)."""
+        from sentence_transformers import SentenceTransformer
+
+        fallback_models = ["all-mpnet-base-v2", "all-MiniLM-L12-v2"]
+
+        for model_name in fallback_models:
+            try:
+                logger.info(f"Attempting fallback model loading on CPU: {model_name}")
+                self._embedding_model = SentenceTransformer(model_name)
+                logger.warning(f"Fallback to {model_name} embedding model on CPU")
+                return
             except Exception as fallback_error:
-                logger.error(f"Failed to load fallback model: {fallback_error}")
-                # Try one more fallback with a very simple model
-                try:
-                    # Use the simplest possible model with CPU only
-                    self._embedding_model = SentenceTransformer("all-MiniLM-L12-v2")
-                    logger.warning("Using basic CPU-only model as final fallback")
-                except Exception as final_error:
-                    logger.error(f"All model loading attempts failed: {final_error}")
-                    raise RuntimeError("Could not initialize any embedding model")
+                logger.error(f"Failed to load fallback model {model_name}: {fallback_error}")
+
+        raise RuntimeError("Could not initialize any embedding model")
+
+    def _sync_try_fallback_models(self, device: str):
+        """Try loading fallback models synchronously (Issue #333 - extracted helper)."""
+        from sentence_transformers import SentenceTransformer
+
+        self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
+
+        if device == "cuda":
+            try:
+                has_meta_tensors = any(
+                    p.device.type == "meta" for p in self._embedding_model.parameters()
+                )
+                if has_meta_tensors:
+                    self._embedding_model = self._embedding_model.to_empty(device=device)
+                else:
+                    self._embedding_model = self._embedding_model.to(device)
+            except Exception as device_error:
+                logger.warning(f"Failed to move model to GPU: {device_error}, using CPU")
+                device = "cpu"
+
+        logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
 
     def _sync_initialize_model(self):
         """Synchronous model initialization for fallback cases (blocking)."""
@@ -274,94 +253,22 @@ class AutoBotSemanticChunker:
             return
 
         try:
-            # Import only when needed to avoid startup delay
-            import torch
             from sentence_transformers import SentenceTransformer
 
-            # Detect best available device
-            device = "cpu"  # Default fallback
+            device = self._detect_device()
+            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
 
-            if torch.cuda.is_available():
-                device = "cuda"
-                gpu_count = torch.cuda.device_count()
-                gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
-                logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
-            else:
-                logger.info("CUDA not available, using CPU for embeddings")
-
-            # Initialize model with device optimization
-            self._embedding_model = SentenceTransformer(
-                self.embedding_model_name, device=device
-            )
-
-            # Log device and model info
             actual_device = next(self._embedding_model.parameters()).device
-            logger.info(
-                f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}"
-            )
+            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
 
-            # Enable mixed precision for GPU if available
-            if device == "cuda":
-                try:
-                    # Safe tensor conversion for mixed precision
-                    has_meta_tensors = any(
-                        p.device.type == "meta"
-                        for p in self._embedding_model.parameters()
-                    )
-                    if has_meta_tensors:
-                        # Use to_empty() for meta tensors
-                        self._embedding_model = self._embedding_model.to_empty(
-                            device=device, dtype=torch.float16
-                        )
-                        logger.info("Converted meta tensors to FP16 on GPU")
-                    else:
-                        # Use regular to() for normal tensors
-                        self._embedding_model = self._embedding_model.to(
-                            device, dtype=torch.float16
-                        )
-                        logger.info("Enabled FP16 mixed precision for GPU inference")
-                except Exception as precision_error:
-                    logger.warning(
-                        f"Could not enable FP16: {precision_error}, using FP32"
-                    )
-                    # Ensure model is on correct device
-                    self._embedding_model = self._embedding_model.to(
-                        device, dtype=torch.float32
-                    )
+            self._embedding_model = self._apply_gpu_precision(self._embedding_model, device)
 
         except Exception as e:
-            logger.error(
-                f"Failed to load embedding model {self.embedding_model_name}: {e}"
-            )
-            # Fallback to a more basic model
+            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
             try:
                 import torch
-                from sentence_transformers import SentenceTransformer
-
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-                # Load model without specifying device to avoid meta tensor issues
-                self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
-                # Then manually move to device with proper handling
-                if device == "cuda":
-                    try:
-                        has_meta_tensors = any(
-                            p.device.type == "meta"
-                            for p in self._embedding_model.parameters()
-                        )
-                        if has_meta_tensors:
-                            self._embedding_model = self._embedding_model.to_empty(
-                                device=device
-                            )
-                        else:
-                            self._embedding_model = self._embedding_model.to(device)
-                    except Exception as device_error:
-                        logger.warning(
-                            f"Failed to move model to GPU: {device_error}, using CPU"
-                        ),
-                        device = "cpu"
-                logger.warning(
-                    f"Fallback to all-mpnet-base-v2 embedding model on {device}"
-                )
+                self._sync_try_fallback_models(device)
             except Exception as fallback_error:
                 logger.error(f"Failed to load fallback model: {fallback_error}")
                 raise RuntimeError("Could not initialize any embedding model")
