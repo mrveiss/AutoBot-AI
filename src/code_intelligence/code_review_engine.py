@@ -503,6 +503,30 @@ class CodeReviewEngine:
 
         return comments
 
+    def _get_changed_lines_from_diff(self, diff_file: DiffFile) -> set:
+        """Extract changed line numbers from a diff file (Issue #335 - extracted helper)."""
+        changed_lines = set()
+        for hunk in diff_file.hunks:
+            line = hunk.new_start
+            for diff_line in hunk.lines:
+                if diff_line["type"] == "add":
+                    changed_lines.add(line)
+                if diff_line["type"] in ("add", "context"):
+                    line += 1
+        return changed_lines
+
+    def _filter_comments_by_changed_lines(
+        self, comments: List[ReviewComment], changed_lines: set
+    ) -> List[ReviewComment]:
+        """Filter comments to those near changed lines (Issue #335 - extracted helper)."""
+        filtered = []
+        for comment in comments:
+            for changed_line in changed_lines:
+                if abs(comment.line_number - changed_line) <= 3:
+                    filtered.append(comment)
+                    break
+        return filtered
+
     def review_diff(self, diff_content: str) -> ReviewResult:
         """
         Review a git diff for issues.
@@ -529,25 +553,14 @@ class CodeReviewEngine:
 
             # Get full file content
             file_path = self.project_root / diff_file.path
-            if file_path.exists() and file_path.suffix in [".py", ".vue", ".ts", ".js"]:
-                comments = self.review_file(str(file_path))
+            supported_suffixes = [".py", ".vue", ".ts", ".js"]
+            if not file_path.exists() or file_path.suffix not in supported_suffixes:
+                continue
 
-                # Filter to only comments on changed lines
-                changed_lines = set()
-                for hunk in diff_file.hunks:
-                    line = hunk.new_start
-                    for diff_line in hunk.lines:
-                        if diff_line["type"] in ("add", "context"):
-                            if diff_line["type"] == "add":
-                                changed_lines.add(line)
-                            line += 1
-
-                # Include comments on or near changed lines
-                for comment in comments:
-                    for changed_line in changed_lines:
-                        if abs(comment.line_number - changed_line) <= 3:
-                            all_comments.append(comment)
-                            break
+            comments = self.review_file(str(file_path))
+            changed_lines = self._get_changed_lines_from_diff(diff_file)
+            filtered = self._filter_comments_by_changed_lines(comments, changed_lines)
+            all_comments.extend(filtered)
 
         # Calculate score and summary
         score = self._calculate_score(all_comments)
@@ -640,74 +653,80 @@ class CodeReviewEngine:
     # Private Methods
     # =========================================================================
 
+    def _finalize_current_file(
+        self, current_file: Optional[DiffFile], current_hunk: Optional[DiffHunk], files: list
+    ) -> None:
+        """Finalize current file and add to files list (Issue #335 - extracted helper)."""
+        if not current_file:
+            return
+        if current_hunk:
+            current_file.hunks.append(current_hunk)
+        files.append(current_file)
+
+    def _parse_diff_git_line(self, line: str) -> DiffFile:
+        """Parse diff --git line (Issue #335 - extracted helper)."""
+        parts = line.split(" b/")
+        file_path = parts[-1] if len(parts) > 1 else "unknown"
+        old_path_match = re.search(r"a/(\S+)", line)
+        old_path = old_path_match.group(1) if old_path_match else None
+        return DiffFile(path=file_path, old_path=old_path)
+
+    def _parse_hunk_header(self, line: str) -> Optional[DiffHunk]:
+        """Parse hunk header line (Issue #335 - extracted helper)."""
+        match = re.match(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@", line)
+        if not match:
+            return None
+        return DiffHunk(
+            old_start=int(match.group(1)),
+            old_count=int(match.group(2)) if match.group(2) else 1,
+            new_start=int(match.group(3)),
+            new_count=int(match.group(4)) if match.group(4) else 1,
+            lines=[],
+        )
+
+    def _parse_hunk_line(
+        self, line: str, current_hunk: DiffHunk, current_file: Optional[DiffFile]
+    ) -> None:
+        """Parse a hunk content line (Issue #335 - extracted helper)."""
+        if line.startswith("+") and not line.startswith("+++"):
+            current_hunk.lines.append({"type": "add", "content": line[1:]})
+            if current_file:
+                current_file.additions += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            current_hunk.lines.append({"type": "delete", "content": line[1:]})
+            if current_file:
+                current_file.deletions += 1
+        elif line.startswith(" ") or line == "":
+            current_hunk.lines.append({
+                "type": "context",
+                "content": line[1:] if line.startswith(" ") else "",
+            })
+
     def _parse_diff(self, diff_content: str) -> list[DiffFile]:
         """Parse unified diff format into structured data."""
-        files = []
-        current_file = None
-        current_hunk = None
+        files: list[DiffFile] = []
+        current_file: Optional[DiffFile] = None
+        current_hunk: Optional[DiffHunk] = None
 
         for line in diff_content.split("\n"):
             if line.startswith("diff --git"):
-                if current_file:
-                    if current_hunk:
-                        current_file.hunks.append(current_hunk)
-                    files.append(current_file)
-
-                # Extract file paths
-                parts = line.split(" b/")
-                file_path = parts[-1] if len(parts) > 1 else "unknown"
-                old_path_match = re.search(r"a/(\S+)", line)
-                old_path = old_path_match.group(1) if old_path_match else None
-
-                current_file = DiffFile(path=file_path, old_path=old_path)
+                self._finalize_current_file(current_file, current_hunk, files)
+                current_file = self._parse_diff_git_line(line)
                 current_hunk = None
-
-            elif line.startswith("new file"):
-                if current_file:
-                    current_file.is_new = True
-
-            elif line.startswith("deleted file"):
-                if current_file:
-                    current_file.is_deleted = True
-
-            elif line.startswith("rename from"):
-                if current_file:
-                    current_file.is_renamed = True
-
+            elif line.startswith("new file") and current_file:
+                current_file.is_new = True
+            elif line.startswith("deleted file") and current_file:
+                current_file.is_deleted = True
+            elif line.startswith("rename from") and current_file:
+                current_file.is_renamed = True
             elif line.startswith("@@"):
                 if current_file and current_hunk:
                     current_file.hunks.append(current_hunk)
-
-                match = re.match(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@", line)
-                if match:
-                    current_hunk = DiffHunk(
-                        old_start=int(match.group(1)),
-                        old_count=int(match.group(2)) if match.group(2) else 1,
-                        new_start=int(match.group(3)),
-                        new_count=int(match.group(4)) if match.group(4) else 1,
-                        lines=[],
-                    )
-
+                current_hunk = self._parse_hunk_header(line)
             elif current_hunk is not None:
-                if line.startswith("+") and not line.startswith("+++"):
-                    current_hunk.lines.append({"type": "add", "content": line[1:]})
-                    if current_file:
-                        current_file.additions += 1
-                elif line.startswith("-") and not line.startswith("---"):
-                    current_hunk.lines.append({"type": "delete", "content": line[1:]})
-                    if current_file:
-                        current_file.deletions += 1
-                elif line.startswith(" ") or line == "":
-                    current_hunk.lines.append({
-                        "type": "context",
-                        "content": line[1:] if line.startswith(" ") else "",
-                    })
+                self._parse_hunk_line(line, current_hunk, current_file)
 
-        if current_file:
-            if current_hunk:
-                current_file.hunks.append(current_hunk)
-            files.append(current_file)
-
+        self._finalize_current_file(current_file, current_hunk, files)
         return files
 
     def _get_git_diff(self, args: str) -> str:
@@ -727,6 +746,24 @@ class CodeReviewEngine:
             logger.warning(f"Failed to get git diff: {e}")
             return ""
 
+    def _find_function_end(self, lines: list[str], start: int, indent: int) -> int:
+        """Find the end line of a function (Issue #335 - extracted helper)."""
+        func_end = start
+        for j in range(start, len(lines)):
+            line = lines[j]
+            if not line.strip():
+                func_end = j + 1
+                continue
+            if line.startswith(" " * (indent + 1)):
+                func_end = j + 1
+                continue
+            if line.strip().startswith(("#", '"""', "'''")):
+                func_end = j + 1
+                continue
+            # Found line with less or equal indent - function ends
+            return j
+        return func_end
+
     def _check_function_length(
         self, file_path: str, lines: list[str]
     ) -> list[ReviewComment]:
@@ -737,34 +774,29 @@ class CodeReviewEngine:
         i = 0
         while i < len(lines):
             match = func_pattern.match(lines[i])
-            if match:
-                indent = len(match.group(1))
-                func_name = match.group(3)
-                func_start = i + 1
+            if not match:
+                i += 1
+                continue
 
-                # Find function end
-                func_end = func_start
-                for j in range(i + 1, len(lines)):
-                    line = lines[j]
-                    if line.strip() and not line.startswith(" " * (indent + 1)):
-                        if not line.strip().startswith(("#", '"""', "'''")):
-                            func_end = j
-                            break
-                    func_end = j + 1
+            indent = len(match.group(1))
+            func_name = match.group(3)
+            func_start = i + 1
 
-                func_length = func_end - func_start
-                if func_length > self.max_function_lines:
-                    comments.append(ReviewComment(
-                        id=f"STYLE002-{func_start}",
-                        file_path=str(file_path),
-                        line_number=func_start,
-                        severity=ReviewSeverity.WARNING,
-                        category=ReviewCategory.MAINTAINABILITY,
-                        message=f"Function '{func_name}' is {func_length} lines. "
-                                f"Consider refactoring (max: {self.max_function_lines}).",
-                        suggestion="Break into smaller, focused functions.",
-                        pattern_id="STYLE002",
-                    ))
+            func_end = self._find_function_end(lines, i + 1, indent)
+            func_length = func_end - func_start
+
+            if func_length > self.max_function_lines:
+                comments.append(ReviewComment(
+                    id=f"STYLE002-{func_start}",
+                    file_path=str(file_path),
+                    line_number=func_start,
+                    severity=ReviewSeverity.WARNING,
+                    category=ReviewCategory.MAINTAINABILITY,
+                    message=f"Function '{func_name}' is {func_length} lines. "
+                            f"Consider refactoring (max: {self.max_function_lines}).",
+                    suggestion="Break into smaller, focused functions.",
+                    pattern_id="STYLE002",
+                ))
             i += 1
 
         return comments

@@ -1239,6 +1239,28 @@ class CloneDetector:
 
         return sorted(python_files)
 
+    def _create_fragment_from_node(
+        self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str
+    ) -> Optional[CodeFragment]:
+        """Create a CodeFragment from an AST node (Issue #335 - extracted helper)."""
+        start_line = node.lineno
+        end_line = getattr(node, "end_lineno", start_line)
+        line_count = end_line - start_line + 1
+
+        if line_count < self.min_fragment_lines:
+            return None
+
+        fragment_source = "\n".join(lines[start_line - 1 : end_line])
+        return CodeFragment(
+            file_path=file_path,
+            start_line=start_line,
+            end_line=end_line,
+            source_code=fragment_source,
+            ast_node=node,
+            fragment_type=fragment_type,
+            entity_name=node.name,
+        )
+
     def _extract_fragments(self, file_path: str) -> List[CodeFragment]:
         """Extract code fragments (functions, classes) from a file."""
         fragments: List[CodeFragment] = []
@@ -1253,43 +1275,19 @@ class CloneDetector:
             for node in ast.walk(tree):
                 # Extract functions
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    start_line = node.lineno
-                    end_line = getattr(node, "end_lineno", start_line)
-                    line_count = end_line - start_line + 1
-
-                    if line_count >= self.min_fragment_lines:
-                        fragment_source = "\n".join(lines[start_line - 1 : end_line])
-                        fragments.append(
-                            CodeFragment(
-                                file_path=file_path,
-                                start_line=start_line,
-                                end_line=end_line,
-                                source_code=fragment_source,
-                                ast_node=node,
-                                fragment_type="function",
-                                entity_name=node.name,
-                            )
-                        )
+                    fragment = self._create_fragment_from_node(
+                        node, file_path, lines, "function"
+                    )
+                    if fragment:
+                        fragments.append(fragment)
 
                 # Extract classes
                 elif isinstance(node, ast.ClassDef):
-                    start_line = node.lineno
-                    end_line = getattr(node, "end_lineno", start_line)
-                    line_count = end_line - start_line + 1
-
-                    if line_count >= self.min_fragment_lines:
-                        fragment_source = "\n".join(lines[start_line - 1 : end_line])
-                        fragments.append(
-                            CodeFragment(
-                                file_path=file_path,
-                                start_line=start_line,
-                                end_line=end_line,
-                                source_code=fragment_source,
-                                ast_node=node,
-                                fragment_type="class",
-                                entity_name=node.name,
-                            )
-                        )
+                    fragment = self._create_fragment_from_node(
+                        node, file_path, lines, "class"
+                    )
+                    if fragment:
+                        fragments.append(fragment)
 
         except SyntaxError as e:
             logger.warning(f"Syntax error in {file_path}: {e}")

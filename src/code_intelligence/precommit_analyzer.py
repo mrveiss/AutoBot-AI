@@ -517,30 +517,39 @@ class PrecommitAnalyzer:
 
         return active
 
+    def _analyze_files_parallel(self, files: List[str]) -> List[CheckResult]:
+        """Analyze files in parallel (Issue #335 - extracted helper)."""
+        all_results = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.max_workers
+        ) as executor:
+            future_to_file = {
+                executor.submit(self.analyze_file, f): f for f in files
+            }
+            for future in concurrent.futures.as_completed(future_to_file):
+                try:
+                    results = future.result()
+                    all_results.extend(results)
+                except Exception as e:
+                    logger.error(f"Error analyzing file: {e}")
+        return all_results
+
+    def _analyze_files_sequential(self, files: List[str]) -> List[CheckResult]:
+        """Analyze files sequentially (Issue #335 - extracted helper)."""
+        all_results = []
+        for filepath in files:
+            results = self.analyze_file(filepath)
+            all_results.extend(results)
+        return all_results
+
     def analyze_files(self, files: List[str]) -> CommitCheckResult:
         """Analyze multiple files for pre-commit issues."""
         start_time = time.time()
-        all_results = []
 
         if self.parallel and len(files) > 1:
-            # Parallel processing for multiple files
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=self.max_workers
-            ) as executor:
-                future_to_file = {
-                    executor.submit(self.analyze_file, f): f for f in files
-                }
-                for future in concurrent.futures.as_completed(future_to_file):
-                    try:
-                        results = future.result()
-                        all_results.extend(results)
-                    except Exception as e:
-                        logger.error(f"Error analyzing file: {e}")
+            all_results = self._analyze_files_parallel(files)
         else:
-            # Sequential processing
-            for filepath in files:
-                results = self.analyze_file(filepath)
-                all_results.extend(results)
+            all_results = self._analyze_files_sequential(files)
 
         self.results = all_results
         duration_ms = (time.time() - start_time) * 1000
