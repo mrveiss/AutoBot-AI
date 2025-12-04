@@ -75,6 +75,122 @@ class BackgroundVectorizer:
         except Exception as e:
             logger.debug(f"Embedding usage tracking failed (non-critical): {e}")
 
+    def _decode_bytes(self, value: bytes, default: str = "") -> str:
+        """Decode bytes to string (Issue #336 - extracted helper)."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return str(value) if value else default
+
+    async def _get_vectorization_status(self, kb, batch: list) -> list:
+        """Get vectorization status for a batch (Issue #336 - extracted helper)."""
+        async with kb.aioredis_client.pipeline() as pipe:
+            for fact_key in batch:
+                await pipe.hget(fact_key, "vectorization_status")
+            return await pipe.execute()
+
+    def _filter_pending_facts(self, batch: list, all_status: list) -> tuple:
+        """Filter out completed facts (Issue #336 - extracted helper)."""
+        facts_to_process = []
+        skipped = 0
+        for fact_key, status_bytes in zip(batch, all_status):
+            if status_bytes:
+                status = self._decode_bytes(status_bytes)
+                if status == "completed":
+                    skipped += 1
+                    continue
+            facts_to_process.append(fact_key)
+        return facts_to_process, skipped
+
+    async def _fetch_fact_data(self, kb, facts_to_process: list) -> list:
+        """Batch fetch fact data (Issue #336 - extracted helper)."""
+        if not facts_to_process:
+            return []
+        async with kb.aioredis_client.pipeline() as pipe:
+            for fact_key in facts_to_process:
+                await pipe.hgetall(fact_key)
+            return await pipe.execute()
+
+    def _extract_fact_content(self, fact_data: dict) -> tuple:
+        """Extract content and metadata from fact data (Issue #336 - extracted helper)."""
+        import json
+        content_bytes = fact_data.get(b"content", b"")
+        content = self._decode_bytes(content_bytes)
+        metadata_str = fact_data.get(b"metadata", b"{}")
+        metadata = json.loads(self._decode_bytes(metadata_str, "{}"))
+        return content, metadata
+
+    async def _mark_vectorization_complete(self, kb, fact_key: str) -> None:
+        """Mark fact as vectorized (Issue #336 - extracted helper)."""
+        try:
+            await kb.aioredis_client.hset(
+                fact_key,
+                mapping={
+                    "vectorization_status": "completed",
+                    "vectorized_at": datetime.now().isoformat(),
+                },
+            )
+        except Exception as e:
+            logger.debug("Status update failed (non-critical): %s", e)
+
+    async def _vectorize_single_fact(self, kb, fact_key: str, fact_data: dict) -> dict:
+        """Vectorize a single fact (Issue #336 - extracted helper)."""
+        result = {"success": False, "skipped": False, "tokens": 0}
+
+        if not fact_data:
+            return result
+
+        content, metadata = self._extract_fact_content(fact_data)
+        fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
+
+        if not kb.vector_index:
+            logger.warning("Vector index not available")
+            return result
+
+        try:
+            from llama_index.core import Document
+            document = Document(text=content, metadata=metadata, doc_id=fact_id)
+            await asyncio.to_thread(kb.vector_index.insert, document)
+            result["success"] = True
+            result["tokens"] = int(len(content.split()) * 1.3)
+            logger.debug(f"Vectorized fact {fact_id}")
+            await self._mark_vectorization_complete(kb, fact_key)
+        except Exception as doc_error:
+            if "already exists" in str(doc_error).lower():
+                result["skipped"] = True
+                await self._mark_vectorization_complete(kb, fact_key)
+            else:
+                logger.error(f"Failed to vectorize {fact_id}: {doc_error}")
+
+        return result
+
+    async def _process_batch(self, kb, batch: list) -> dict:
+        """Process a batch of facts (Issue #336 - extracted helper)."""
+        batch_start_time = time.time()
+        stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
+
+        all_status = await self._get_vectorization_status(kb, batch)
+        facts_to_process, already_skipped = self._filter_pending_facts(batch, all_status)
+        stats["skipped"] += already_skipped
+
+        all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
+
+        for fact_key, fact_data in zip(facts_to_process, all_fact_data):
+            try:
+                result = await self._vectorize_single_fact(kb, fact_key, fact_data)
+                if result["success"]:
+                    stats["success"] += 1
+                    stats["tokens"] += result["tokens"]
+                elif result["skipped"]:
+                    stats["skipped"] += 1
+                else:
+                    stats["failed"] += 1
+            except Exception as e:
+                stats["failed"] += 1
+                logger.error(f"Error vectorizing fact {fact_key}: {e}")
+
+        stats["processing_time"] = time.time() - batch_start_time
+        return stats
+
     async def vectorize_pending_facts(self, kb):
         """Background task to vectorize all pending facts"""
         if self.is_running:
@@ -87,178 +203,43 @@ class BackgroundVectorizer:
 
             logger.info("Starting background vectorization...")
 
-            # Get all fact keys
             fact_keys = await kb._scan_redis_keys_async("fact:*")
-
             if not fact_keys:
                 logger.info("No facts found for vectorization")
                 return
 
-            success_count = 0
-            skipped_count = 0
-            failed_count = 0
-
             total_batches = (len(fact_keys) + self.batch_size - 1) // self.batch_size
-
             logger.info(f"Processing {len(fact_keys)} facts in {total_batches} batches")
 
-            # Track total tokens for analytics
-            total_tokens_processed = 0
+            total_stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
-            # Process in batches
             for batch_num in range(total_batches):
                 start_idx = batch_num * self.batch_size
                 end_idx = min(start_idx + self.batch_size, len(fact_keys))
                 batch = fact_keys[start_idx:end_idx]
 
-                batch_start_time = time.time()
-                batch_success_count = 0
-                batch_tokens = 0
+                batch_stats = await self._process_batch(kb, batch)
+                total_stats["success"] += batch_stats["success"]
+                total_stats["skipped"] += batch_stats["skipped"]
+                total_stats["failed"] += batch_stats["failed"]
+                total_stats["tokens"] += batch_stats["tokens"]
 
-                # Batch check vectorization status using pipeline - eliminates N+1
-                async with kb.aioredis_client.pipeline() as pipe:
-                    for fact_key in batch:
-                        await pipe.hget(fact_key, "vectorization_status")
-                    all_status = await pipe.execute()
-
-                # Filter out already-vectorized facts
-                facts_to_process = []
-                for fact_key, status_bytes in zip(batch, all_status):
-                    if status_bytes:
-                        status = (
-                            status_bytes.decode("utf-8")
-                            if isinstance(status_bytes, bytes)
-                            else str(status_bytes)
-                        )
-                        if status == "completed":
-                            skipped_count += 1
-                            continue  # Skip already-vectorized fact
-                    facts_to_process.append(fact_key)
-
-                # Batch fetch all fact data for facts that need vectorization
-                all_fact_data = []
-                if facts_to_process:
-                    async with kb.aioredis_client.pipeline() as pipe:
-                        for fact_key in facts_to_process:
-                            await pipe.hgetall(fact_key)
-                        all_fact_data = await pipe.execute()
-
-                for fact_key, fact_data in zip(facts_to_process, all_fact_data):
-                    try:
-                        # fact_data already fetched via pipeline above
-
-                        if not fact_data:
-                            failed_count += 1
-                            continue
-
-                        # Extract content and metadata
-                        content_bytes = fact_data.get(b"content", b"")
-                        content = (
-                            content_bytes.decode("utf-8")
-                            if isinstance(content_bytes, bytes)
-                            else str(content_bytes)
-                        )
-
-                        metadata_str = fact_data.get(b"metadata", b"{}")
-                        import json
-
-                        metadata = json.loads(
-                            metadata_str.decode("utf-8")
-                            if isinstance(metadata_str, bytes)
-                            else metadata_str
-                        )
-
-                        # Extract fact ID
-                        fact_id = (
-                            fact_key.split(":")[-1] if ":" in fact_key else fact_key
-                        )
-
-                        # Check if already indexed in vector store
-                        # Try to query the vector index for this fact_id
-                        try:
-                            # Check if this fact is already in vector index
-                            if kb.vector_index:
-                                # Use LlamaIndex to check if document exists
-                                from llama_index.core import Document
-
-                                # Create document for vectorization
-                                document = Document(
-                                    text=content, metadata=metadata, doc_id=fact_id
-                                )
-
-                                # Insert into vector index
-                                await asyncio.to_thread(
-                                    kb.vector_index.insert, document
-                                )
-                                success_count += 1
-                                batch_success_count += 1
-                                # Estimate tokens (roughly 1.3 tokens per word)
-                                batch_tokens += int(len(content.split()) * 1.3)
-                                logger.debug(f"Vectorized fact {fact_id}")
-
-                                # Persist vectorization status to Redis
-                                try:
-                                    await kb.aioredis_client.hset(
-                                        fact_key,
-                                        mapping={
-                                            "vectorization_status": "completed",
-                                            "vectorized_at": datetime.now().isoformat(),
-                                        },
-                                    )
-                                except Exception as status_error:
-                                    # Don't let status persistence failure mask successful vectorization
-                                    logger.warning(
-                                        f"Failed to persist vectorization status for {fact_id}: {status_error}"
-                                    )
-                            else:
-                                logger.warning("Vector index not available")
-                                failed_count += 1
-                        except Exception as doc_error:
-                            # If document already exists or other error, skip
-                            if "already exists" in str(doc_error).lower():
-                                skipped_count += 1
-                                # Mark as completed so we skip on future runs
-                                try:
-                                    await kb.aioredis_client.hset(
-                                        fact_key,
-                                        mapping={
-                                            "vectorization_status": "completed",
-                                            "vectorized_at": datetime.now().isoformat(),
-                                        },
-                                    )
-                                except Exception as e:
-                                    logger.debug("Status update failed (non-critical): %s", e)
-                            else:
-                                failed_count += 1
-                                logger.error(
-                                    f"Failed to vectorize {fact_id}: {doc_error}"
-                                )
-
-                    except Exception as e:
-                        failed_count += 1
-                        logger.error(f"Error vectorizing fact {fact_key}: {e}")
-
-                # Track batch embedding usage (Issue #285)
-                batch_processing_time = time.time() - batch_start_time
-                total_tokens_processed += batch_tokens
-
-                if batch_success_count > 0:
+                if batch_stats["success"] > 0:
                     await self._track_embedding_usage(
-                        document_count=batch_success_count,
-                        token_count=batch_tokens,
-                        processing_time=batch_processing_time,
+                        document_count=batch_stats["success"],
+                        token_count=batch_stats["tokens"],
+                        processing_time=batch_stats["processing_time"],
                         success=True,
                         batch_size=len(batch),
                     )
 
-                # Delay between batches
                 if batch_num < total_batches - 1:
                     await asyncio.sleep(self.batch_delay)
 
             logger.info(
-                f"Background vectorization complete: {success_count} vectorized, "
-                f"{skipped_count} skipped, {failed_count} failed, "
-                f"{total_tokens_processed} tokens processed"
+                f"Background vectorization complete: {total_stats['success']} vectorized, "
+                f"{total_stats['skipped']} skipped, {total_stats['failed']} failed, "
+                f"{total_stats['tokens']} tokens processed"
             )
 
         except Exception as e:
