@@ -315,22 +315,31 @@ class InteractiveTerminalAgent:
             size = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, size)
 
+    def _get_signal_map(self) -> Dict[str, int]:
+        """Get signal type to signal number mapping (Issue #334 - extracted helper)."""
+        return {
+            "interrupt": 2,   # SIGINT (Ctrl+C)
+            "quit": 3,        # SIGQUIT (Ctrl+\)
+            "suspend": 20,    # SIGTSTP (Ctrl+Z)
+        }
+
     async def send_signal(self, signal_type: str):
         """Send signal to the process"""
-        if self.process and self.session_active:
-            try:
-                if signal_type == "interrupt":
-                    self.process.send_signal(2)  # SIGINT (Ctrl+C)
-                elif signal_type == "quit":
-                    self.process.send_signal(3)  # SIGQUIT (Ctrl+\)
-                elif signal_type == "suspend":
-                    self.process.send_signal(20)  # SIGTSTP (Ctrl+Z)
-                elif signal_type == "kill":
-                    self.process.kill()
+        if not self.process or not self.session_active:
+            return
 
-                await self._send_to_chat(f"\n[Signal {signal_type} sent]\n")
-            except Exception as e:
-                logger.error(f"Error sending signal: {e}")
+        try:
+            if signal_type == "kill":
+                self.process.kill()
+            else:
+                signal_map = self._get_signal_map()
+                signal_num = signal_map.get(signal_type)
+                if signal_num:
+                    self.process.send_signal(signal_num)
+
+            await self._send_to_chat(f"\n[Signal {signal_type} sent]\n")
+        except Exception as e:
+            logger.error(f"Error sending signal: {e}")
 
     async def _handle_session_end(self):
         """Handle terminal session end (thread-safe)"""

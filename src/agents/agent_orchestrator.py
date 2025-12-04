@@ -250,52 +250,58 @@ class AgentOrchestrator:
             logger.error(f"Failed to unregister distributed agent {agent_id}: {e}")
             return False
 
+    async def _check_single_agent_health(self, agent_id: str, agent_info) -> tuple:
+        """Check health of single agent (Issue #334 - extracted helper)."""
+        try:
+            health = await agent_info.agent.health_check()
+            return (agent_id, health, None)
+        except Exception as e:
+            return (agent_id, None, e)
+
+    def _process_health_result(self, result, agent_id: str, health, error) -> None:
+        """Process a single health check result (Issue #334 - extracted helper)."""
+        agent_info = self.distributed_agents.get(agent_id)
+        if not agent_info:
+            return
+
+        if error:
+            logger.error(
+                f"Health check failed for distributed agent {agent_id}: {error}"
+            )
+            return
+
+        if not health:
+            return
+
+        agent_info.health = health
+        agent_info.last_health_check = datetime.now()
+
+        if health.status.value != "healthy":
+            logger.warning(
+                f"Distributed agent {agent_id} health issue: {health.status.value}"
+            )
+
+    async def _run_health_checks(self, agents_snapshot: list) -> None:
+        """Run parallel health checks on agents (Issue #334 - extracted helper)."""
+        results = await asyncio.gather(
+            *[self._check_single_agent_health(aid, ainfo) for aid, ainfo in agents_snapshot],
+            return_exceptions=True
+        )
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Health check task failed: {result}")
+                continue
+            agent_id, health, error = result
+            self._process_health_result(result, agent_id, health, error)
+
     async def _health_monitor_loop(self):
         """Background health monitoring for distributed agents"""
         while self.is_running:
             try:
                 agents_snapshot = list(self.distributed_agents.items())
-
                 if agents_snapshot:
-                    # Parallel health checks - eliminates N+1 sequential calls
-                    async def check_agent_health(agent_id: str, agent_info):
-                        try:
-                            health = await agent_info.agent.health_check()
-                            return (agent_id, health, None)
-                        except Exception as e:
-                            return (agent_id, None, e)
-
-                    results = await asyncio.gather(
-                        *[check_agent_health(aid, ainfo) for aid, ainfo in agents_snapshot],
-                        return_exceptions=True
-                    )
-
-                    # Process results
-                    for result in results:
-                        if isinstance(result, Exception):
-                            logger.error(f"Health check task failed: {result}")
-                            continue
-
-                        agent_id, health, error = result
-                        agent_info = self.distributed_agents.get(agent_id)
-                        if not agent_info:
-                            continue
-
-                        if error:
-                            logger.error(
-                                f"Health check failed for distributed agent "
-                                f"{agent_id}: {error}"
-                            )
-                        elif health:
-                            agent_info.health = health
-                            agent_info.last_health_check = datetime.now()
-
-                            if health.status.value != "healthy":
-                                logger.warning(
-                                    f"Distributed agent {agent_id} health issue: "
-                                    f"{health.status.value}"
-                                )
-
+                    await self._run_health_checks(agents_snapshot)
                 await asyncio.sleep(self.health_check_interval)
 
             except asyncio.CancelledError:
@@ -720,6 +726,31 @@ class AgentOrchestrator:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
+    async def _execute_chat_agent(
+        self, request: str, context: Optional[Dict], chat_history: Optional[List]
+    ) -> Dict[str, Any]:
+        """Execute chat agent (Issue #334 - extracted helper)."""
+        agent = self._get_chat_agent()
+        return await agent.process_chat_message(request, context, chat_history)
+
+    async def _execute_system_commands_agent(
+        self, request: str, context: Optional[Dict]
+    ) -> Dict[str, Any]:
+        """Execute system commands agent (Issue #334 - extracted helper)."""
+        agent = self._get_system_commands_agent()
+        return await agent.process_command_request(request, context)
+
+    async def _execute_rag_agent(
+        self, request: str, context: Optional[Dict]
+    ) -> Dict[str, Any]:
+        """Execute RAG agent with document retrieval (Issue #334 - extracted helper)."""
+        kb_agent = self._get_kb_librarian()
+        kb_result = await kb_agent.process_query(request)
+        documents = kb_result.get("documents", [])
+
+        agent = self._get_rag_agent()
+        return await agent.process_document_query(request, documents, context)
+
     async def _execute_single_agent(
         self,
         agent_type: AgentType,
@@ -729,37 +760,19 @@ class AgentOrchestrator:
     ) -> Dict[str, Any]:
         """Execute request using a single specialized agent."""
         try:
-            if agent_type == AgentType.CHAT:
-                agent = self._get_chat_agent()
-                result = await agent.process_chat_message(
-                    request, context, chat_history
-                )
+            agent_handlers = {
+                AgentType.CHAT: lambda: self._execute_chat_agent(request, context, chat_history),
+                AgentType.SYSTEM_COMMANDS: lambda: self._execute_system_commands_agent(request, context),
+                AgentType.RAG: lambda: self._execute_rag_agent(request, context),
+                AgentType.KNOWLEDGE_RETRIEVAL: lambda: self._get_kb_librarian().process_query(request),
+                AgentType.RESEARCH: lambda: self._get_research_agent().research_query(request),
+            }
 
-            elif agent_type == AgentType.SYSTEM_COMMANDS:
-                agent = self._get_system_commands_agent()
-                result = await agent.process_command_request(request, context)
-
-            elif agent_type == AgentType.RAG:
-                # RAG needs documents first
-                kb_agent = self._get_kb_librarian()
-                kb_result = await kb_agent.process_query(request)
-                documents = kb_result.get("documents", [])
-
-                agent = self._get_rag_agent()
-                result = await agent.process_document_query(request, documents, context)
-
-            elif agent_type == AgentType.KNOWLEDGE_RETRIEVAL:
-                agent = self._get_kb_librarian()
-                result = await agent.process_query(request)
-
-            elif agent_type == AgentType.RESEARCH:
-                agent = self._get_research_agent()
-                result = await agent.research_query(request)
-
-            else:
+            handler = agent_handlers.get(agent_type)
+            if handler is None:
                 raise ValueError(f"Unknown agent type: {agent_type}")
 
-            # Add routing metadata
+            result = await handler()
             result["routing_strategy"] = "single_agent"
             result["primary_agent"] = agent_type.value
 
@@ -1006,20 +1019,35 @@ Consider:
             logger.error(f"Error synthesizing multi-agent results: {e}")
             return primary_result  # Fallback to primary result
 
+    def _try_extract_message_content(self, response: dict) -> str | None:
+        """Try to extract content from message dict (Issue #334 - extracted helper)."""
+        if "message" not in response or not isinstance(response["message"], dict):
+            return None
+        content = response["message"].get("content")
+        return content.strip() if content else None
+
+    def _try_extract_choices_content(self, response: dict) -> str | None:
+        """Try to extract content from choices list (Issue #334 - extracted helper)."""
+        if "choices" not in response or not isinstance(response["choices"], list):
+            return None
+        if len(response["choices"]) == 0:
+            return None
+        choice = response["choices"][0]
+        if "message" in choice and "content" in choice["message"]:
+            return choice["message"]["content"].strip()
+        return None
+
     def _extract_response_content(self, response: Any) -> str:
         """Extract text content from LLM response."""
         try:
             if isinstance(response, dict):
-                if "message" in response and isinstance(response["message"], dict):
-                    content = response["message"].get("content")
-                    if content:
-                        return content.strip()
+                content = self._try_extract_message_content(response)
+                if content:
+                    return content
 
-                if "choices" in response and isinstance(response["choices"], list):
-                    if len(response["choices"]) > 0:
-                        choice = response["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            return choice["message"]["content"].strip()
+                content = self._try_extract_choices_content(response)
+                if content:
+                    return content
 
                 if "content" in response:
                     return response["content"].strip()

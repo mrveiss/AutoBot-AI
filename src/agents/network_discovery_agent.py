@@ -39,28 +39,28 @@ class NetworkDiscoveryAgent:
             "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
         )
 
+    def _get_task_handlers(self) -> Dict[str, Any]:
+        """Get task type to handler mapping (Issue #334 - extracted helper)."""
+        return {
+            "network_scan": self._network_scan,
+            "host_discovery": self._host_discovery,
+            "arp_scan": self._arp_scan,
+            "traceroute": self._traceroute,
+            "network_map": self._create_network_map,
+            "asset_inventory": self._asset_inventory,
+        }
+
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a network discovery task"""
         try:
             task_type = context.get("task_type", "network_scan")
+            handlers = self._get_task_handlers()
+            handler = handlers.get(task_type)
 
-            if task_type == "network_scan":
-                return await self._network_scan(context)
-            elif task_type == "host_discovery":
-                return await self._host_discovery(context)
-            elif task_type == "arp_scan":
-                return await self._arp_scan(context)
-            elif task_type == "traceroute":
-                return await self._traceroute(context)
-            elif task_type == "network_map":
-                return await self._create_network_map(context)
-            elif task_type == "asset_inventory":
-                return await self._asset_inventory(context)
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Unsupported task type: {task_type}",
-                }
+            if handler is None:
+                return {"status": "error", "message": f"Unsupported task type: {task_type}"}
+
+            return await handler(context)
 
         except Exception as e:
             logger.error(f"Network discovery failed: {e}")
@@ -274,53 +274,65 @@ class NetworkDiscoveryAgent:
             logger.error(f"Network mapping failed: {e}")
             return {"status": "error", "message": f"Network mapping failed: {str(e)}"}
 
+    def _resolve_hostname(self, ip: str) -> str | None:
+        """Resolve IP to hostname (Issue #334 - extracted helper)."""
+        import socket
+
+        try:
+            return socket.gethostbyaddr(ip)[0]
+        except Exception:
+            return None
+
+    async def _gather_host_info(self, host: Dict[str, Any]) -> Dict[str, Any]:
+        """Gather detailed info for a single host (Issue #334 - extracted helper)."""
+        asset = {
+            "ip": host["ip"],
+            "mac": host.get("mac", "unknown"),
+            "vendor": host.get("vendor", "unknown"),
+            "hostname": self._resolve_hostname(host["ip"]),
+            "open_ports": [],
+            "services": [],
+            "os_guess": None,
+        }
+
+        # Quick port scan for common ports
+        common_ports = "22,80,443,445,3389"
+        port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
+        port_result = await run_agent_command(port_cmd, timeout=30)
+
+        if port_result["status"] == "success":
+            open_ports = self._parse_nmap_output(port_result["output"])
+            asset["open_ports"] = [p["port"] for p in open_ports]
+            asset["services"] = [p["service"] for p in open_ports]
+
+        return asset
+
+    def _categorize_asset(self, asset: Dict[str, Any]) -> str:
+        """Determine asset category (Issue #334 - extracted helper)."""
+        if any(port in asset["open_ports"] for port in ["22", "80", "443"]):
+            return "servers"
+        if "3389" in asset["open_ports"] or "445" in asset["open_ports"]:
+            return "workstations"
+        if asset["ip"].endswith(".1"):
+            return "network_devices"
+        return "unknown"
+
     async def _asset_inventory(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Create asset inventory"""
         try:
             network = context.get("network", self.default_network)
 
-            # Discover hosts
             discovery_result = await self._host_discovery(
                 {"network": network, "methods": ["ping", "arp"]}
             )
-
             if discovery_result["status"] != "success":
                 return discovery_result
 
-            assets = []
-
-            # For each discovered host, gather more info
-            for host in discovery_result["hosts"]:
-                asset = {
-                    "ip": host["ip"],
-                    "mac": host.get("mac", "unknown"),
-                    "vendor": host.get("vendor", "unknown"),
-                    "hostname": None,
-                    "open_ports": [],
-                    "services": [],
-                    "os_guess": None,
-                }
-
-                # Try to get hostname
-                try:
-                    import socket
-
-                    hostname = socket.gethostbyaddr(host["ip"])[0]
-                    asset["hostname"] = hostname
-                except Exception:
-                    pass  # Reverse DNS lookup failed, hostname unavailable
-
-                # Quick port scan for common ports
-                common_ports = "22,80,443,445,3389"
-                port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
-                port_result = await run_agent_command(port_cmd, timeout=30)
-
-                if port_result["status"] == "success":
-                    open_ports = self._parse_nmap_output(port_result["output"])
-                    asset["open_ports"] = [p["port"] for p in open_ports]
-                    asset["services"] = [p["service"] for p in open_ports]
-
-                assets.append(asset)
+            # Gather detailed info for each host
+            assets = [
+                await self._gather_host_info(host)
+                for host in discovery_result["hosts"]
+            ]
 
             # Categorize assets
             categories = {
@@ -330,16 +342,9 @@ class NetworkDiscoveryAgent:
                 "iot_devices": [],
                 "unknown": [],
             }
-
             for asset in assets:
-                if any(port in asset["open_ports"] for port in ["22", "80", "443"]):
-                    categories["servers"].append(asset)
-                elif "3389" in asset["open_ports"] or "445" in asset["open_ports"]:
-                    categories["workstations"].append(asset)
-                elif asset["ip"].endswith(".1"):
-                    categories["network_devices"].append(asset)
-                else:
-                    categories["unknown"].append(asset)
+                category = self._categorize_asset(asset)
+                categories[category].append(asset)
 
             return {
                 "status": "success",
@@ -378,29 +383,34 @@ class NetworkDiscoveryAgent:
     # _run_command moved to src/utils/agent_command_helpers.py (Issue #292)
     # Use run_agent_command() directly
 
+    def _parse_scan_report_line(self, line: str) -> Dict[str, Any]:
+        """Parse Nmap scan report line (Issue #334 - extracted helper)."""
+        parts = line.split()
+        ip = parts[-1].strip("()")
+        hostname = parts[4] if len(parts) > 5 else None
+        return {"ip": ip, "hostname": hostname, "status": "up"}
+
+    def _parse_mac_line(self, line: str, current_host: Dict[str, Any]) -> None:
+        """Parse MAC Address line (Issue #334 - extracted helper)."""
+        parts = line.split()
+        if len(parts) < 3:
+            return
+        current_host["mac"] = parts[2]
+        if len(parts) > 3:
+            current_host["vendor"] = " ".join(parts[3:]).strip("()")
+
     def _parse_host_discovery(self, output: str) -> List[Dict[str, Any]]:
         """Parse host discovery output"""
         hosts = []
-        lines = output.split("\n")
-
         current_host = None
-        for line in lines:
+
+        for line in output.split("\n"):
             if "Nmap scan report for" in line:
                 if current_host:
                     hosts.append(current_host)
-
-                # Extract IP
-                parts = line.split()
-                ip = parts[-1].strip("()")
-                hostname = parts[4] if len(parts) > 5 else None
-
-                current_host = {"ip": ip, "hostname": hostname, "status": "up"}
+                current_host = self._parse_scan_report_line(line)
             elif "MAC Address:" in line and current_host:
-                parts = line.split()
-                if len(parts) >= 3:
-                    current_host["mac"] = parts[2]
-                    if len(parts) > 3:
-                        current_host["vendor"] = " ".join(parts[3:]).strip("()")
+                self._parse_mac_line(line, current_host)
 
         if current_host:
             hosts.append(current_host)
