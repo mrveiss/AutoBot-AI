@@ -19,7 +19,7 @@ import logging
 import sys
 import os
 import json
-from typing import Dict
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
 # Add project root to path
@@ -35,6 +35,81 @@ config = UnifiedConfigManager()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Issue #338: Helper functions extracted to reduce nesting depth
+
+
+def _extract_vector_dim_from_attr(attr: List) -> Optional[int]:
+    """Extract dimension from a vector attribute (Issue #338 - extracted helper)."""
+    if not isinstance(attr, list) or len(attr) == 0:
+        return None
+    if attr[1] != b'VECTOR':
+        return None
+    for k, val in enumerate(attr):
+        if val == b'DIM' and k + 1 < len(attr):
+            return int(attr[k + 1])
+    return None
+
+
+def _find_vector_dimension_in_index(index_info: List) -> Optional[int]:
+    """Find vector dimension from FT.INFO response (Issue #338 - extracted helper)."""
+    for i, field in enumerate(index_info):
+        if field != b'attributes':
+            continue
+        attrs = index_info[i + 1]
+        for attr in attrs:
+            dim = _extract_vector_dim_from_attr(attr)
+            if dim is not None:
+                return dim
+    return None
+
+
+def _verify_redis_vector_dimension(
+    redis_client: Any, expected_dimension: int
+) -> Tuple[bool, Optional[str]]:
+    """Verify Redis vector schema dimension (Issue #338 - extracted helper)."""
+    if not redis_client:
+        return True, None  # Skip if no client
+
+    try:
+        index_info = redis_client.execute_command('FT.INFO', 'llama_index')
+        actual_dim = _find_vector_dimension_in_index(index_info)
+
+        if actual_dim is None:
+            logger.info("Redis vector index dimension not found in schema")
+            return True, None
+
+        if actual_dim != expected_dimension:
+            return False, f"Redis vector dimension mismatch: {actual_dim} vs {expected_dimension}"
+
+        logger.info(f"✅ Redis vector dimension correct: {actual_dim}")
+        return True, None
+
+    except Exception as e:
+        logger.info(f"Redis vector index not found (may be empty): {e}")
+        return True, None
+
+
+def _verify_embedding_dimension(expected_dimension: int) -> Tuple[bool, Optional[str]]:
+    """Verify actual embedding dimension (Issue #338 - extracted helper)."""
+    try:
+        kb = KnowledgeBase()
+        if not hasattr(kb, 'embed_model'):
+            return True, None
+
+        test_embedding = kb.embed_model.get_text_embedding("test dimension verification")
+        actual_dim = len(test_embedding)
+
+        if actual_dim != expected_dimension:
+            return False, f"Actual embedding dimension mismatch: {actual_dim} vs {expected_dimension}"
+
+        logger.info(f"✅ Actual embedding dimension correct: {actual_dim}")
+        return True, None
+
+    except Exception as e:
+        logger.warning(f"Could not test actual embedding dimensions: {e}")
+        return True, None
 
 
 class KnowledgeConsistencyVerifier:
@@ -91,54 +166,25 @@ class KnowledgeConsistencyVerifier:
 
     def verify_vector_dimensions(self) -> bool:
         """CRITICAL: Ensure vector dimensions match across all storage systems"""
+        # Issue #338: Refactored to use extracted helpers, reducing depth from 11 to 2
         logger.info("🔍 CRITICAL CHECK: Verifying vector dimension consistency...")
 
         try:
-            # Expected dimension for nomic-embed-text
-            expected_dimension = 768
+            expected_dimension = 768  # Dimension for nomic-embed-text
 
-            # 1. Check Redis vector schema
-            if self.redis_client:
-                try:
-                    # Check if Redis vector index exists
-                    index_info = self.redis_client.execute_command('FT.INFO', 'llama_index')
+            # 1. Check Redis vector schema using helper
+            redis_ok, redis_error = _verify_redis_vector_dimension(
+                self.redis_client, expected_dimension
+            )
+            if not redis_ok:
+                self.critical_errors.append(f"CRITICAL: {redis_error}")
+                return False
 
-                    # Parse dimension from index info
-                    for i, field in enumerate(index_info):
-                        if field == b'attributes':
-                            attrs = index_info[i + 1]
-                            for j, attr in enumerate(attrs):
-                                if isinstance(attr, list) and len(attr) > 0:
-                                    if attr[1] == b'VECTOR':
-                                        # Find dimension in vector attributes
-                                        for k, val in enumerate(attr):
-                                            if val == b'DIM' and k + 1 < len(attr):
-                                                actual_dim = int(attr[k + 1])
-                                                if actual_dim != expected_dimension:
-                                                    self.critical_errors.append(
-                                                        f"CRITICAL: Redis vector dimension mismatch: {actual_dim} vs {expected_dimension}"
-                                                    )
-                                                    return False
-                                                logger.info(f"✅ Redis vector dimension correct: {actual_dim}")
-                                                break
-                except Exception as e:
-                    # Index might not exist yet - not critical
-                    logger.info(f"Redis vector index not found (may be empty): {e}")
-
-            # 2. Test actual embedding dimension
-            try:
-                kb = KnowledgeBase()
-                if hasattr(kb, 'embed_model'):
-                    test_embedding = kb.embed_model.get_text_embedding("test dimension verification")
-                    actual_dim = len(test_embedding)
-                    if actual_dim != expected_dimension:
-                        self.critical_errors.append(
-                            f"CRITICAL: Actual embedding dimension mismatch: {actual_dim} vs {expected_dimension}"
-                        )
-                        return False
-                    logger.info(f"✅ Actual embedding dimension correct: {actual_dim}")
-            except Exception as e:
-                logger.warning(f"Could not test actual embedding dimensions: {e}")
+            # 2. Test actual embedding dimension using helper
+            embed_ok, embed_error = _verify_embedding_dimension(expected_dimension)
+            if not embed_ok:
+                self.critical_errors.append(f"CRITICAL: {embed_error}")
+                return False
 
             logger.info("✅ VECTOR DIMENSION CONSISTENCY: VERIFIED")
             return True
