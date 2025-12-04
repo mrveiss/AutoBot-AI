@@ -257,6 +257,39 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Return list of capabilities this agent supports"""
         return self.capabilities
 
+    def _is_ignored_dir(self, dirname: str) -> bool:
+        """Check if directory should be ignored (Issue #334 - extracted helper)."""
+        if dirname.startswith("."):
+            return True
+        ignored_dirs = {"node_modules", "__pycache__", ".git", "dist", "build", "target"}
+        return dirname in ignored_dirs
+
+    def _is_supported_file(self, filename: str) -> bool:
+        """Check if file has supported extension (Issue #334 - extracted helper)."""
+        return any(filename.endswith(ext) for ext in self.supported_extensions)
+
+    async def _index_directory_files(
+        self, root: str, files: list, root_path: str, errors: list
+    ) -> tuple:
+        """Index files in a directory (Issue #334 - extracted helper)."""
+        indexed = 0
+        skipped = 0
+        for file in files:
+            if not self._is_supported_file(file):
+                skipped += 1
+                continue
+            file_path = os.path.join(root, file)
+            relative_path = os.path.relpath(file_path, root_path)
+            try:
+                await self._index_file(file_path, relative_path)
+                indexed += 1
+                if indexed % 100 == 0:
+                    self.logger.info(f"Indexed {indexed} files...")
+            except Exception as e:
+                errors.append(f"{relative_path}: {str(e)}")
+                self.logger.error(f"Failed to index {file_path}: {e}")
+        return indexed, skipped
+
     async def index_codebase(
         self, root_path: str, force_reindex: bool = False
     ) -> Dict[str, Any]:
@@ -278,7 +311,6 @@ class NPUCodeSearchAgent(StandardizedAgent):
         try:
             self.logger.info(f"Starting codebase indexing: {root_path}")
 
-            # Check if already indexed
             index_key = (
                 f"{self.index_prefix}meta:{hashlib.md5(root_path.encode()).hexdigest()}"
             )
@@ -288,54 +320,21 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 )
                 return {"status": "already_indexed", "index_key": index_key}
 
-            # Walk through directory
             for root, dirs, files in os.walk(root_path):
-                # Skip common ignore directories
-                dirs[:] = [
-                    d
-                    for d in dirs
-                    if not d.startswith(".")
-                    and d
-                    not in {
-                        "node_modules",
-                        "__pycache__",
-                        ".git",
-                        "dist",
-                        "build",
-                        "target",
-                    }
-                ]
+                dirs[:] = [d for d in dirs if not self._is_ignored_dir(d)]
+                indexed, skipped = await self._index_directory_files(
+                    root, files, root_path, errors
+                )
+                indexed_files += indexed
+                skipped_files += skipped
 
-                for file in files:
-                    if not any(file.endswith(ext) for ext in self.supported_extensions):
-                        skipped_files += 1
-                        continue
-
-                    file_path = os.path.join(root, file)
-                    relative_path = os.path.relpath(file_path, root_path)
-
-                    try:
-                        await self._index_file(file_path, relative_path)
-                        indexed_files += 1
-
-                        # Progress logging
-                        if indexed_files % 100 == 0:
-                            self.logger.info(f"Indexed {indexed_files} files...")
-
-                    except Exception as e:
-                        errors.append(f"{relative_path}: {str(e)}")
-                        self.logger.error(f"Failed to index {file_path}: {e}")
-
-            # Store indexing metadata
             metadata = {
                 "root_path": root_path,
                 "indexed_files": indexed_files,
                 "timestamp": time.time(),
                 "npu_available": self.npu_available,
             }
-            self.redis_client.setex(
-                index_key, 86400, json.dumps(metadata)
-            )  # 24h expiry
+            self.redis_client.setex(index_key, 86400, json.dumps(metadata))
 
             execution_time = time.time() - start_time
             self.logger.info(
@@ -346,7 +345,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 "status": "success",
                 "indexed_files": indexed_files,
                 "skipped_files": skipped_files,
-                "errors": errors[:10],  # Limit error list
+                "errors": errors[:10],
                 "execution_time": execution_time,
                 "index_key": index_key,
             }

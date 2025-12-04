@@ -390,68 +390,75 @@ class DevelopmentSpeedupAgent:
             ),
         }
 
+    def _extract_module_name(self, import_line: str) -> Optional[str]:
+        """Extract module name from import statement (Issue #334 - extracted helper)."""
+        if not import_line.startswith(("import ", "from ")):
+            return None
+        if "import" not in import_line:
+            return None
+        parts = import_line.split()
+        if len(parts) < 2:
+            return None
+        return parts[1].split(".")[0]
+
+    def _count_import_modules(self, import_results) -> Dict[str, int]:
+        """Count module usage from import results (Issue #334 - extracted helper)."""
+        import_stats = defaultdict(int)
+        for result in import_results:
+            try:
+                import_line = result.content.strip()
+                module = self._extract_module_name(import_line)
+                if module:
+                    import_stats[module] += 1
+            except Exception as e:
+                self.logger.error(f"Error analyzing import {result.content}: {e}")
+        return import_stats
+
+    async def _check_unused_import(self, result) -> Optional[Dict[str, Any]]:
+        """Check if import is unused (Issue #334 - extracted helper)."""
+        import_line = result.content.strip()
+        if not import_line.startswith("import "):
+            return None
+        module = import_line.split()[1].split(".")[0]
+        try:
+            async with aiofiles.open(
+                result.file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                file_content = await f.read()
+            if file_content.count(module) == 1:
+                return {
+                    "file": result.file_path,
+                    "line": result.line_number,
+                    "import": import_line,
+                }
+        except OSError as e:
+            self.logger.debug(f"Failed to read file {result.file_path}: {e}")
+        except Exception:
+            pass
+        return None
+
     async def analyze_imports_and_dependencies(self, root_path: str) -> Dict[str, Any]:
         """Analyze import patterns and suggest optimizations"""
         self.logger.info("Analyzing imports and dependencies...")
 
-        # Search for import statements
         import_results = await self.npu_code_search.search_code(
             query="import", search_type="exact", language="python", max_results=1000
         )
 
-        # Analyze import patterns
-        import_stats = defaultdict(int)
+        import_stats = self._count_import_modules(import_results)
+
         unused_imports = []
-
         for result in import_results:
-            try:
-                # Extract import statement
-                import_line = result.content.strip()
-                if import_line.startswith(("import ", "from ")):
-                    # Simple import counting
-                    if "import" in import_line:
-                        parts = import_line.split()
-                        if len(parts) >= 2:
-                            module = parts[1].split(".")[0]
-                            import_stats[module] += 1
-
-            except Exception as e:
-                self.logger.error(f"Error analyzing import {result.content}: {e}")
-
-        # Find potential unused imports (simplified heuristic)
-        for result in import_results:
-            try:
-                # Use aiofiles for non-blocking file I/O
-                async with aiofiles.open(
-                    result.file_path, "r", encoding="utf-8", errors="ignore"
-                ) as f:
-                    file_content = await f.read()
-
-                import_line = result.content.strip()
-                if import_line.startswith("import "):
-                    module = import_line.split()[1].split(".")[0]
-                    # Simple check: if module name appears only in import line
-                    if file_content.count(module) == 1:
-                        unused_imports.append(
-                            {
-                                "file": result.file_path,
-                                "line": result.line_number,
-                                "import": import_line,
-                            }
-                        )
-
-            except OSError as e:
-                self.logger.debug(f"Failed to read file {result.file_path}: {e}")
-                continue
-            except Exception:
-                continue
+            unused = await self._check_unused_import(result)
+            if unused:
+                unused_imports.append(unused)
 
         return {
             "import_statistics": dict(import_stats),
             "most_used_modules": sorted(
                 import_stats.items(), key=lambda x: x[1], reverse=True
             )[:10],
-            "potential_unused_imports": unused_imports[:20],  # Limit output
+            "potential_unused_imports": unused_imports[:20],
             "optimization_suggestions": [
                 "Consider using relative imports for internal modules",
                 "Group imports by type (standard library, third-party, local)",

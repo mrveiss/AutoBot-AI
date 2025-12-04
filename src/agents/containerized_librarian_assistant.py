@@ -328,6 +328,49 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             logger.error(f"Error storing content in knowledge base: {e}")
             return False
 
+    def _should_store_content(
+        self, assessment: Dict[str, Any], store_enabled: bool
+    ) -> bool:
+        """Check if content should be stored (Issue #334 - extracted helper)."""
+        if not store_enabled:
+            return False
+        if assessment.get("score", 0) < self.quality_threshold:
+            return False
+        return assessment.get("recommendation") == "store"
+
+    async def _process_single_search_result(
+        self,
+        result: Dict[str, Any],
+        store_quality_content: bool,
+        stored_list: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Process single search result (Issue #334 - extracted helper)."""
+        content = await self.extract_content(result["url"])
+        if not content:
+            return None
+        assessment = await self.assess_content_quality(content)
+        content["quality_assessment"] = assessment
+
+        if self._should_store_content(assessment, store_quality_content):
+            stored = await self.store_in_knowledge_base(content, assessment)
+            if stored:
+                stored_list.append({
+                    "url": content["url"],
+                    "title": content["title"],
+                    "quality_score": assessment.get("score", 0),
+                })
+        return content
+
+    def _build_source_entry(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """Build source entry from content (Issue #334 - extracted helper)."""
+        return {
+            "title": content["title"],
+            "url": content["url"],
+            "domain": content["domain"],
+            "is_trusted": content["is_trusted"],
+            "quality_score": content.get("quality_assessment", {}).get("score", 0),
+        }
+
     async def research_query(
         self, query: str, store_quality_content: bool = None
     ) -> Dict[str, Any]:
@@ -360,12 +403,10 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         }
 
         try:
-            # Check if Playwright service is available
             if not await self._check_playwright_service():
                 research_results["error"] = "Playwright service not available"
                 return research_results
 
-            # Step 1: Search for relevant URLs
             logger.info(f"Researching query: {query}")
             search_results = await self.search_web(query)
             research_results["search_results"] = search_results
@@ -374,57 +415,24 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 research_results["summary"] = "No search results found for the query."
                 return research_results
 
-            # Step 2: Extract content from top results
+            # Extract content from top 3 results
             extracted_content = []
-            for result in search_results[
-                :3
-            ]:  # Limit to top 3 results for detailed extraction
-                content = await self.extract_content(result["url"])
+            for result in search_results[:3]:
+                content = await self._process_single_search_result(
+                    result, store_quality_content, research_results["stored_in_kb"]
+                )
                 if content:
-                    # Assess content quality
-                    assessment = await self.assess_content_quality(content)
-                    content["quality_assessment"] = assessment
-
                     extracted_content.append(content)
-
-                    # Store high-quality content if enabled
-                    if (
-                        store_quality_content
-                        and assessment.get("score", 0) >= self.quality_threshold
-                        and assessment.get("recommendation") == "store"
-                    ):
-                        stored = await self.store_in_knowledge_base(content, assessment)
-                        if stored:
-                            research_results["stored_in_kb"].append(
-                                {
-                                    "url": content["url"],
-                                    "title": content["title"],
-                                    "quality_score": assessment.get("score", 0),
-                                }
-                            )
 
             research_results["content_extracted"] = extracted_content
 
-            # Step 3: Create summary with sources
             if extracted_content:
-                summary = await self._create_research_summary(query, extracted_content)
-                research_results["summary"] = summary
-
-                # Collect sources
-                sources = []
-                for content in extracted_content:
-                    sources.append(
-                        {
-                            "title": content["title"],
-                            "url": content["url"],
-                            "domain": content["domain"],
-                            "is_trusted": content["is_trusted"],
-                            "quality_score": (
-                                content.get("quality_assessment", {}).get("score", 0)
-                            ),
-                        }
-                    )
-                research_results["sources"] = sources
+                research_results["summary"] = await self._create_research_summary(
+                    query, extracted_content
+                )
+                research_results["sources"] = [
+                    self._build_source_entry(c) for c in extracted_content
+                ]
 
             logger.info(
                 f"Research completed: {len(extracted_content)} sources analyzed, "
