@@ -90,18 +90,7 @@ class ChatAgent(StandardizedAgent):
 
             # Add recent chat history if available (limit to last 6 messages for 1B model)
             if chat_history:
-                recent_history = (
-                    chat_history[-6:] if len(chat_history) > 6 else chat_history
-                )
-                for msg in recent_history:
-                    if msg.get("sender") == "user":
-                        messages.append(
-                            {"role": "user", "content": msg.get("text", "")}
-                        )
-                    elif msg.get("sender") == "bot":
-                        messages.append(
-                            {"role": "assistant", "content": msg.get("text", "")}
-                        )
+                messages.extend(self._build_history_messages(chat_history))
 
             # Add current message
             messages.append({"role": "user", "content": message})
@@ -164,29 +153,62 @@ You specialize in:
 For complex technical tasks, analysis, or system commands, you should "
         "indicate that specialized agents can handle those better."""
 
+    def _build_history_messages(
+        self, chat_history: List[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
+        """Build message list from chat history (Issue #334 - extracted helper)."""
+        messages = []
+        recent_history = chat_history[-6:] if len(chat_history) > 6 else chat_history
+        role_map = {"user": "user", "bot": "assistant"}
+
+        for msg in recent_history:
+            sender = msg.get("sender")
+            role = role_map.get(sender)
+            if role:
+                messages.append({"role": role, "content": msg.get("text", "")})
+
+        return messages
+
+    def _try_extract_message_content(self, response: Dict) -> Optional[str]:
+        """Try to extract content from message dict (Issue #334 - extracted helper)."""
+        if "message" not in response:
+            return None
+        message = response["message"]
+        if not isinstance(message, dict):
+            return None
+        content = message.get("content")
+        return content.strip() if content else None
+
+    def _try_extract_choices_content(self, response: Dict) -> Optional[str]:
+        """Try to extract content from choices list (Issue #334 - extracted helper)."""
+        if "choices" not in response:
+            return None
+        choices = response["choices"]
+        if not isinstance(choices, list) or not choices:
+            return None
+        choice = choices[0]
+        if "message" not in choice or "content" not in choice["message"]:
+            return None
+        return choice["message"]["content"].strip()
+
     def _extract_response_content(self, response: Any) -> str:
         """Extract the actual text content from LLM response."""
         try:
-            # Handle different response formats from LLM interface
             if isinstance(response, dict):
-                # Check for message content
-                if "message" in response and isinstance(response["message"], dict):
-                    content = response["message"].get("content")
-                    if content:
-                        return content.strip()
+                # Try message content first
+                content = self._try_extract_message_content(response)
+                if content:
+                    return content
 
-                # Check for choices format
-                if "choices" in response and isinstance(response["choices"], list):
-                    if len(response["choices"]) > 0:
-                        choice = response["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            return choice["message"]["content"].strip()
+                # Try choices format
+                content = self._try_extract_choices_content(response)
+                if content:
+                    return content
 
                 # Check for direct content
                 if "content" in response:
                     return response["content"].strip()
 
-            # Fallback to string conversion
             if isinstance(response, str):
                 return response.strip()
 

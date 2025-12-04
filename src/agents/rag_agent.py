@@ -440,25 +440,37 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
                 "search_strategy": "Error in extraction",
             }
 
+    def _try_extract_from_message(self, response: Dict) -> Optional[str]:
+        """Try to extract content from message dict (Issue #334 - extracted helper)."""
+        if "message" not in response or not isinstance(response["message"], dict):
+            return None
+        content = response["message"].get("content")
+        return content.strip() if content else None
+
+    def _try_extract_from_choices(self, response: Dict) -> Optional[str]:
+        """Try to extract content from choices list (Issue #334 - extracted helper)."""
+        if "choices" not in response or not isinstance(response["choices"], list):
+            return None
+        if not response["choices"]:
+            return None
+        choice = response["choices"][0]
+        if "message" not in choice or "content" not in choice["message"]:
+            return None
+        return choice["message"]["content"].strip()
+
     def _extract_response_content(self, response: Any) -> str:
         """Extract text content from LLM response."""
         try:
             if isinstance(response, dict):
-                if "message" in response and isinstance(response["message"], dict):
-                    content = response["message"].get("content")
-                    if content:
-                        return content.strip()
-
-                if "choices" in response and isinstance(response["choices"], list):
-                    if len(response["choices"]) > 0:
-                        choice = response["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            return choice["message"]["content"].strip()
-
+                content = self._try_extract_from_message(response)
+                if content:
+                    return content
+                content = self._try_extract_from_choices(response)
+                if content:
+                    return content
                 if "content" in response:
                     return response["content"].strip()
 
-            # Handle LLMResponse object
             if hasattr(response, "content"):
                 return response.content.strip()
 
