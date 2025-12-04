@@ -106,111 +106,108 @@ class ConnectionTester:
             }
 
     @staticmethod
+    def _get_ollama_config_from_new_structure() -> tuple:
+        """Get Ollama config from new structure (Issue #336 - extracted helper)."""
+        endpoint = None
+        model = None
+        llm_config = global_config_manager.get("backend", {}).get("llm", {})
+        is_local_ollama = (
+            llm_config.get("provider_type") == "local"
+            and llm_config.get("local", {}).get("provider") == "ollama"
+        )
+        if is_local_ollama:
+            ollama_providers = llm_config.get("local", {}).get("providers", {})
+            ollama_config = ollama_providers.get("ollama", {})
+            endpoint = ollama_config.get("endpoint")
+            model = ollama_config.get("selected_model")
+        return endpoint, model
+
+    @staticmethod
+    def _get_ollama_config_fallback(endpoint: str, model: str) -> tuple:
+        """Get Ollama config from legacy/env (Issue #336 - extracted helper)."""
+        if not endpoint:
+            endpoint = global_config_manager.get_nested(
+                "backend.ollama_endpoint",
+                os.getenv(
+                    "AUTOBOT_OLLAMA_HOST",
+                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
+                ),
+            )
+        if not model:
+            model = global_config_manager.get_nested(
+                "backend.ollama_model",
+                os.getenv(
+                    "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+                ),
+            )
+        # Final fallbacks
+        if not endpoint:
+            from src.unified_config_manager import OLLAMA_URL
+            endpoint = f"{OLLAMA_URL}/api/generate"
+        if not model:
+            model = os.getenv(
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+            )
+        return endpoint, model
+
+    @staticmethod
+    async def _test_ollama_model(endpoint: str, model: str) -> Metadata:
+        """Test Ollama model generation (Issue #336 - extracted helper)."""
+        test_payload = {
+            "model": model,
+            "prompt": "Test connection - respond with 'OK'",
+            "stream": False,
+        }
+        gen_timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=gen_timeout) as session:
+            async with session.post(endpoint, json=test_payload) as resp:
+                if resp.status == 200:
+                    result = await resp.json()
+                    response_text = result.get("response", "No response text")
+                    test_response = (
+                        response_text[:100] + "..."
+                        if response_text and response_text != "No response text"
+                        else "No response"
+                    )
+                    return {
+                        "status": "connected",
+                        "message": f"Successfully connected to Ollama with model '{model}'",
+                        "endpoint": endpoint,
+                        "model": model,
+                        "current_model": model,
+                        "test_response": test_response,
+                    }
+                error_text = await resp.text()
+                return {
+                    "status": "partial",
+                    "message": f"Connected to Ollama but model '{model}' failed to respond",
+                    "endpoint": endpoint,
+                    "model": model,
+                    "current_model": model,
+                    "error": error_text,
+                }
+
+    @staticmethod
     async def test_ollama_connection() -> Metadata:
         """Test Ollama LLM connection with current configuration"""
         try:
-            # Get Ollama configuration from the correct paths
-            # First try the new structure, then fall back to legacy structure
-            ollama_endpoint = None
-            ollama_model = None
+            endpoint, model = ConnectionUtils._get_ollama_config_from_new_structure()
+            endpoint, model = ConnectionUtils._get_ollama_config_fallback(endpoint, model)
 
-            # Try new structure first
-            llm_config = global_config_manager.get("backend", {}).get("llm", {})
-            if (
-                llm_config.get("provider_type") == "local"
-                and llm_config.get("local", {}).get("provider") == "ollama"
-            ):
-                ollama_providers = llm_config.get("local", {}).get("providers", {})
-                ollama_config = ollama_providers.get("ollama", {})
-                if ollama_config.get("endpoint"):
-                    ollama_endpoint = ollama_config["endpoint"]
-                if ollama_config.get("selected_model"):
-                    ollama_model = ollama_config["selected_model"]
-
-            # Fall back to legacy structure if new structure doesn't have the values
-            if not ollama_endpoint:
-                ollama_endpoint = global_config_manager.get_nested(
-                    "backend.ollama_endpoint",
-                    os.getenv(
-                        "AUTOBOT_OLLAMA_HOST",
-                        f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
-                    ),
-                )
-            if not ollama_model:
-                ollama_model = global_config_manager.get_nested(
-                    "backend.ollama_model",
-                    os.getenv(
-                        "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-                    ),
-                )
-
-            # Default fallbacks with environment variable support
-            if not ollama_endpoint:
-                from src.unified_config_manager import OLLAMA_URL
-
-                ollama_endpoint = f"{OLLAMA_URL}/api/generate"
-            if not ollama_model:
-                ollama_model = os.getenv(
-                    "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-                )
-
-            # Test Ollama connection
-            ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
+            check_url = endpoint.replace("/api/generate", "/api/tags")
             timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(ollama_check_url) as response:
-                    if response.status == 200:
-                        # Test a simple generation request
-                        test_payload = {
-                            "model": ollama_model,
-                            "prompt": "Test connection - respond with 'OK'",
-                            "stream": False,
-                        }
 
-                        gen_timeout = aiohttp.ClientTimeout(total=30)
-                        async with aiohttp.ClientSession(timeout=gen_timeout) as gen_session:
-                            async with gen_session.post(
-                                ollama_endpoint, json=test_payload
-                            ) as test_resp:
-                                if test_resp.status == 200:
-                                    result = await test_resp.json()
-                                    response_text = result.get("response", "No response text")
-                                    test_response_text = (
-                                        response_text[:100] + "..."
-                                        if (response_text and response_text != "No response text")
-                                        else "No response"
-                                    )
-                                    return {
-                                        "status": "connected",
-                                        "message": (
-                                            "Successfully connected to Ollama with model "
-                                            f"'{ollama_model}'"
-                                        ),
-                                        "endpoint": ollama_endpoint,
-                                        "model": ollama_model,
-                                        "current_model": ollama_model,
-                                        "test_response": test_response_text,
-                                    }
-                                else:
-                                    error_text = await test_resp.text()
-                                    return {
-                                        "status": "partial",
-                                        "message": (
-                                            f"Connected to Ollama but model '{ollama_model}' "
-                                            "failed to respond"
-                                        ),
-                                        "endpoint": ollama_endpoint,
-                                        "model": ollama_model,
-                                        "current_model": ollama_model,
-                                        "error": error_text,
-                                    }
-                    else:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(check_url) as response:
+                    if response.status != 200:
                         return {
                             "status": "disconnected",
-                            "message": f"Failed to connect to Ollama at {ollama_check_url}",
-                            "endpoint": ollama_endpoint,
+                            "message": f"Failed to connect to Ollama at {check_url}",
+                            "endpoint": endpoint,
                             "status_code": response.status,
                         }
+                    return await ConnectionUtils._test_ollama_model(endpoint, model)
+
         except Exception as e:
             logger.error(f"Ollama connection test failed: {str(e)}")
             return {
