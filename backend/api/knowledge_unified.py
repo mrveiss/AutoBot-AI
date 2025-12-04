@@ -18,7 +18,7 @@ Endpoints:
 """
 
 import logging
-from typing import List
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -27,6 +27,66 @@ from backend.knowledge_factory import get_or_create_knowledge_base
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
+
+
+# Issue #336: Extracted helper for processing relation results
+def _process_outgoing_relation(
+    rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]
+) -> None:
+    """Process a single outgoing relation (Issue #336 - extracted helper)."""
+    if rel.get("target_fact"):
+        target = rel["target_fact"]
+        target["source"] = "graph_relation"
+        target["relation_type"] = rel.get("relation_type")
+        target["from_fact"] = fact_id
+        if rel.get("target_id") not in related_ids:
+            results.append(target)
+            related_ids.add(rel.get("target_id"))
+
+
+def _process_incoming_relation(
+    rel: Dict[str, Any], fact_id: str, related_ids: Set[str], results: List[Dict]
+) -> None:
+    """Process a single incoming relation (Issue #336 - extracted helper)."""
+    if rel.get("source_fact"):
+        source = rel["source_fact"]
+        source["source"] = "graph_relation"
+        source["relation_type"] = rel.get("relation_type")
+        source["to_fact"] = fact_id
+        if rel.get("source_id") not in related_ids:
+            results.append(source)
+            related_ids.add(rel.get("source_id"))
+
+
+async def _expand_fact_relations(
+    kb: Any, fact_id: str, related_ids: Set[str], results: List[Dict]
+) -> None:
+    """Expand relations for a single fact (Issue #336 - extracted helper)."""
+    if not fact_id:
+        return
+    relations = await kb.get_fact_relations(
+        fact_id, direction="both", include_fact_details=True
+    )
+    if relations.get("success"):
+        for rel in relations.get("outgoing", []):
+            _process_outgoing_relation(rel, fact_id, related_ids, results)
+        for rel in relations.get("incoming", []):
+            _process_incoming_relation(rel, fact_id, related_ids, results)
+
+
+def _build_relation_context(
+    rel: Dict[str, Any], total_length: int, max_length: int, context_parts: List[str]
+) -> int:
+    """Build context string from a single relation (Issue #336 - extracted helper)."""
+    if not rel.get("target_fact"):
+        return total_length
+    content = rel["target_fact"].get("content", "")[:300]
+    if total_length + len(content) > max_length:
+        return total_length
+    rel_type = rel.get("relation_type", "relates_to")
+    context_parts.append(f"- [{rel_type}] {content}\n")
+    return total_length + len(content)
+
 
 router = APIRouter(prefix="/unified", tags=["knowledge-unified"])
 
@@ -155,36 +215,14 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     # Expand with relations if enabled
     if "relations" in body.include_sources and body.expand_relations and kb is not None:
         try:
-            # Get related facts for each fact result
-            related_ids = set()
+            # Issue #336: Use extracted helpers for relation expansion
+            related_ids: Set[str] = set()
             fact_ids = [f.get("id") or f.get("fact_id") for f in result["facts"]]
 
             for fact_id in fact_ids[:5]:  # Limit to top 5 to avoid too many queries
-                if not fact_id:
-                    continue
-                relations = await kb.get_fact_relations(
-                    fact_id, direction="both", include_fact_details=True
+                await _expand_fact_relations(
+                    kb, fact_id, related_ids, result["related_facts"]
                 )
-                if relations.get("success"):
-                    for rel in relations.get("outgoing", []):
-                        if rel.get("target_fact"):
-                            target = rel["target_fact"]
-                            target["source"] = "graph_relation"
-                            target["relation_type"] = rel.get("relation_type")
-                            target["from_fact"] = fact_id
-                            if rel.get("target_id") not in related_ids:
-                                result["related_facts"].append(target)
-                                related_ids.add(rel.get("target_id"))
-
-                    for rel in relations.get("incoming", []):
-                        if rel.get("source_fact"):
-                            source = rel["source_fact"]
-                            source["source"] = "graph_relation"
-                            source["relation_type"] = rel.get("relation_type")
-                            source["to_fact"] = fact_id
-                            if rel.get("source_id") not in related_ids:
-                                result["related_facts"].append(source)
-                                related_ids.add(rel.get("source_id"))
 
             result["sources_searched"].append("relations")
         except Exception as e:
@@ -334,7 +372,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
         except Exception as e:
             logger.warning(f"Fact context failed: {e}")
 
-    # Get related facts
+    # Get related facts (Issue #336: Use extracted helper)
     if body.include_relations and kb is not None and citations:
         try:
             for citation in citations[:2]:
@@ -350,13 +388,9 @@ async def get_llm_context(req: Request, body: ContextRequest):
                 if relations.get("success") and relations.get("outgoing"):
                     context_parts.append("## Related Information\n")
                     for rel in relations["outgoing"][:2]:
-                        if rel.get("target_fact"):
-                            content = rel["target_fact"].get("content", "")[:300]
-                            if total_length + len(content) > body.max_context_length:
-                                break
-                            rel_type = rel.get("relation_type", "relates_to")
-                            context_parts.append(f"- [{rel_type}] {content}\n")
-                            total_length += len(content)
+                        total_length = _build_relation_context(
+                            rel, total_length, body.max_context_length, context_parts
+                        )
                     context_parts.append("\n")
         except Exception as e:
             logger.warning(f"Relation context failed: {e}")
