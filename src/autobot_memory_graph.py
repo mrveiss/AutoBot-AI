@@ -667,11 +667,10 @@ class AutoBotMemoryGraph:
                 return []
 
             entity_id = entity["id"]
-
             related = []
             visited = set()
 
-            # BFS traversal
+            # BFS traversal (Issue #298 - uses extracted helper for reduced nesting)
             queue = [(entity_id, 0)]
 
             while queue:
@@ -679,62 +678,23 @@ class AutoBotMemoryGraph:
 
                 if current_id in visited or depth > max_depth:
                     continue
-
                 visited.add(current_id)
 
-                # Get outgoing relations
+                # Process outgoing relations
                 if direction in ["outgoing", "both"]:
                     outgoing = await self._get_outgoing_relations(current_id)
-                    # Filter by relation type first
-                    filtered_outgoing = [
-                        rel for rel in outgoing
-                        if relation_type is None or rel["type"] == relation_type
-                    ]
-                    # Batch fetch all related entities - eliminates N+1
-                    if filtered_outgoing:
-                        entity_ids = [rel["to"] for rel in filtered_outgoing]
-                        entities = await asyncio.gather(
-                            *[self.get_entity(entity_id=eid) for eid in entity_ids],
-                            return_exceptions=True
-                        )
-                        for rel, related_entity in zip(filtered_outgoing, entities):
-                            if related_entity and not isinstance(related_entity, Exception):
-                                related.append(
-                                    {
-                                        "entity": related_entity,
-                                        "relation": rel,
-                                        "direction": "outgoing",
-                                    }
-                                )
-                                if depth + 1 <= max_depth:
-                                    queue.append((rel["to"], depth + 1))
+                    outgoing_related = await self._process_direction_relations(
+                        outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+                    )
+                    related.extend(outgoing_related)
 
-                # Get incoming relations
+                # Process incoming relations
                 if direction in ["incoming", "both"]:
                     incoming = await self._get_incoming_relations(current_id)
-                    # Filter by relation type first
-                    filtered_incoming = [
-                        rel for rel in incoming
-                        if relation_type is None or rel["type"] == relation_type
-                    ]
-                    # Batch fetch all related entities - eliminates N+1
-                    if filtered_incoming:
-                        entity_ids = [rel["from"] for rel in filtered_incoming]
-                        entities = await asyncio.gather(
-                            *[self.get_entity(entity_id=eid) for eid in entity_ids],
-                            return_exceptions=True
-                        )
-                        for rel, related_entity in zip(filtered_incoming, entities):
-                            if related_entity and not isinstance(related_entity, Exception):
-                                related.append(
-                                    {
-                                        "entity": related_entity,
-                                        "relation": rel,
-                                        "direction": "incoming",
-                                    }
-                                )
-                                if depth + 1 <= max_depth:
-                                    queue.append((rel["from"], depth + 1))
+                    incoming_related = await self._process_direction_relations(
+                        incoming, relation_type, "incoming", "from", depth, max_depth, queue
+                    )
+                    related.extend(incoming_related)
 
             return related
 
@@ -828,6 +788,58 @@ class AutoBotMemoryGraph:
         except Exception as e:
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
+
+    async def _process_direction_relations(
+        self,
+        relations: List[Dict[str, Any]],
+        relation_type: Optional[str],
+        direction: str,
+        id_field: str,
+        depth: int,
+        max_depth: int,
+        queue: List,
+    ) -> List[Dict[str, Any]]:
+        """Process relations in a single direction (Issue #298 - extracted helper).
+
+        Args:
+            relations: Raw relations from Redis
+            relation_type: Optional filter for relation type
+            direction: "outgoing" or "incoming"
+            id_field: Field name for entity ID ("to" or "from")
+            depth: Current traversal depth
+            max_depth: Maximum traversal depth
+            queue: BFS queue to append to
+
+        Returns:
+            List of related entity dicts with relation metadata
+        """
+        # Filter by relation type
+        filtered = [
+            rel for rel in relations
+            if relation_type is None or rel["type"] == relation_type
+        ]
+        if not filtered:
+            return []
+
+        # Batch fetch all related entities
+        entity_ids = [rel[id_field] for rel in filtered]
+        entities = await asyncio.gather(
+            *[self.get_entity(entity_id=eid) for eid in entity_ids],
+            return_exceptions=True
+        )
+
+        related = []
+        for rel, related_entity in zip(filtered, entities):
+            if related_entity and not isinstance(related_entity, Exception):
+                related.append({
+                    "entity": related_entity,
+                    "relation": rel,
+                    "direction": direction,
+                })
+                if depth + 1 <= max_depth:
+                    queue.append((rel[id_field], depth + 1))
+
+        return related
 
     # ==================== SEARCH OPERATIONS ====================
 
