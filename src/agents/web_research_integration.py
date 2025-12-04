@@ -583,27 +583,38 @@ _global_research_integration = None
 _global_research_integration_lock = threading.Lock()
 
 
+def _load_web_research_config() -> Dict[str, Any]:
+    """Load web research config from config manager (Issue #334 - extracted helper)."""
+    try:
+        from src.unified_config_manager import config_manager
+        return config_manager.get_nested("web_research", {})
+    except Exception as e:
+        logger.warning(f"Could not load web research config: {e}")
+        return {}
+
+
+def _create_research_integration(
+    config: Optional[Dict[str, Any]]
+) -> WebResearchIntegration:
+    """Create research integration instance (Issue #334 - extracted helper)."""
+    if config is None:
+        config = _load_web_research_config()
+    return WebResearchIntegration(config)
+
+
 def get_web_research_integration(
     config: Optional[Dict[str, Any]] = None,
 ) -> WebResearchIntegration:
     """Get or create global web research integration instance (thread-safe)."""
     global _global_research_integration
 
-    if _global_research_integration is None:
-        with _global_research_integration_lock:
-            # Double-check after acquiring lock
-            if _global_research_integration is None:
-                # Load config from config manager if not provided
-                if config is None:
-                    try:
-                        from src.unified_config_manager import config_manager
+    if _global_research_integration is not None:
+        return _global_research_integration
 
-                        config = config_manager.get_nested("web_research", {})
-                    except Exception as e:
-                        logger.warning(f"Could not load web research config: {e}")
-                        config = {}
-
-                _global_research_integration = WebResearchIntegration(config)
+    with _global_research_integration_lock:
+        # Double-check after acquiring lock
+        if _global_research_integration is None:
+            _global_research_integration = _create_research_integration(config)
 
     return _global_research_integration
 

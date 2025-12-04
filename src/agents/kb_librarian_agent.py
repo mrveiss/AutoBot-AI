@@ -122,13 +122,29 @@ class KBLibrarianAgent:
                 "error": str(e),
             }
 
+    def _get_learning_extensions(self) -> tuple:
+        """Get file extensions for auto-learning (Issue #334 - extracted helper)."""
+        return (".md", ".txt", ".py", ".yaml", ".yml")
+
+    async def _scan_directory_for_docs(self, docs_dir: str) -> None:
+        """Scan directory for documents to import (Issue #334 - extracted helper)."""
+        import os
+
+        if not os.path.exists(docs_dir):
+            return
+
+        extensions = self._get_learning_extensions()
+        for root, dirs, files in os.walk(docs_dir):
+            for file in files:
+                if not file.endswith(extensions):
+                    continue
+                file_path = os.path.join(root, file)
+                await self._import_document(file_path)
+
     async def _trigger_auto_learning(self, question: str):
         """Trigger auto-learning process for missing knowledge."""
         try:
             logger.info(f"AUTO-LEARNING: Triggered for question: {question}")
-
-            # Try to find relevant documentation files
-            import os
 
             docs_dirs = [
                 f"{PATH.PROJECT_ROOT}/docs",
@@ -138,14 +154,8 @@ class KBLibrarianAgent:
             ]
 
             for docs_dir in docs_dirs:
-                if os.path.exists(docs_dir):
-                    for root, dirs, files in os.walk(docs_dir):
-                        for file in files:
-                            if file.endswith((".md", ".txt", ".py", ".yaml", ".yml")):
-                                file_path = os.path.join(root, file)
-                                await self._import_document(file_path)
+                await self._scan_directory_for_docs(docs_dir)
 
-            # Also try to populate knowledge base if it hasn't been done recently
             await self.knowledge_base.populate_knowledge_base()
 
         except Exception as e:

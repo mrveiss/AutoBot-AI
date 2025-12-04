@@ -183,11 +183,87 @@ class DevelopmentSpeedupAgent:
 
         return report
 
+    def _analyze_block_duplicates(
+        self, content: str, file_path: str, file_hashes: Dict[str, list]
+    ) -> None:
+        """Analyze file content for duplicate code blocks (Issue #334 - extracted helper)."""
+        lines = content.splitlines()
+        for i in range(len(lines) - self.min_duplicate_lines + 1):
+            block = "\n".join(lines[i : i + self.min_duplicate_lines])
+            block_normalized = self._normalize_code(block)
+
+            if len(block_normalized.strip()) <= 50:  # Skip trivial blocks
+                continue
+
+            block_hash = hashlib.sha256(block_normalized.encode()).hexdigest()
+            file_hashes[block_hash].append((file_path, i + 1, block))
+
+    def _analyze_function_duplicates(
+        self, content: str, file_path: str, function_hashes: Dict[str, list]
+    ) -> None:
+        """Analyze AST for duplicate functions (Issue #334 - extracted helper)."""
+        try:
+            tree = ast.parse(content)
+        except SyntaxError as e:
+            self.logger.debug("Skipping file with syntax error: %s", e)
+            return
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            func_source = ast.get_source_segment(content, node)
+            if not func_source:
+                continue
+            func_normalized = self._normalize_code(func_source)
+            func_hash = hashlib.sha256(func_normalized.encode()).hexdigest()
+            function_hashes[func_hash].append(
+                (file_path, node.lineno, func_source, node.name)
+            )
+
+    def _process_block_duplicates(
+        self, file_hashes: Dict[str, list]
+    ) -> List["DuplicateCode"]:
+        """Process file-level duplicate hashes into results (Issue #334 - extracted helper)."""
+        duplicates = []
+        for block_hash, locations in file_hashes.items():
+            if len(locations) <= 1:
+                continue
+            content = locations[0][2]
+            duplicate = DuplicateCode(
+                content=content,
+                locations=[(loc[0], loc[1]) for loc in locations],
+                similarity_score=1.0,  # Exact match
+                size_lines=len(content.splitlines()),
+                hash_signature=block_hash,
+            )
+            duplicates.append(duplicate)
+        return duplicates
+
+    def _process_function_duplicates(
+        self, function_hashes: Dict[str, list]
+    ) -> List["DuplicateCode"]:
+        """Process function-level duplicate hashes into results (Issue #334 - extracted helper)."""
+        function_duplicates = []
+        for func_hash, locations in function_hashes.items():
+            if len(locations) <= 1:
+                continue
+            content = locations[0][2]
+            func_names = [loc[3] for loc in locations]
+            duplicate = DuplicateCode(
+                content=content,
+                locations=[(loc[0], loc[1]) for loc in locations],
+                similarity_score=1.0,
+                size_lines=len(content.splitlines()),
+                hash_signature=f"func_{func_hash}",
+            )
+            duplicate.function_names = func_names
+            function_duplicates.append(duplicate)
+        return function_duplicates
+
     async def find_duplicate_code(self, root_path: str) -> Dict[str, Any]:
         """Find duplicate code blocks using content hashing and similarity analysis"""
         self.logger.info("Analyzing duplicate code...")
 
-        duplicates = []
         file_hashes = defaultdict(list)
         function_hashes = defaultdict(list)
 
@@ -196,74 +272,21 @@ class DevelopmentSpeedupAgent:
 
         for file_path in python_files:
             try:
-                # Use aiofiles for non-blocking file I/O
                 async with aiofiles.open(
                     file_path, "r", encoding="utf-8", errors="ignore"
                 ) as f:
                     content = await f.read()
 
-                # Analyze file-level duplicates
-                lines = content.splitlines()
-                for i in range(len(lines) - self.min_duplicate_lines + 1):
-                    block = "\n".join(lines[i : i + self.min_duplicate_lines])
-                    block_normalized = self._normalize_code(block)
-
-                    if len(block_normalized.strip()) > 50:  # Skip trivial blocks
-                        block_hash = hashlib.sha256(
-                            block_normalized.encode()
-                        ).hexdigest()
-                        file_hashes[block_hash].append((file_path, i + 1, block))
-
-                # Analyze function-level duplicates
-                try:
-                    tree = ast.parse(content)
-                    for node in ast.walk(tree):
-                        if isinstance(node, ast.FunctionDef):
-                            func_source = ast.get_source_segment(content, node)
-                            if func_source:
-                                func_normalized = self._normalize_code(func_source)
-                                func_hash = hashlib.sha256(
-                                    func_normalized.encode()
-                                ).hexdigest()
-                                function_hashes[func_hash].append(
-                                    (file_path, node.lineno, func_source, node.name)
-                                )
-                except SyntaxError as e:
-                    self.logger.debug("Skipping file with syntax error: %s", e)
+                self._analyze_block_duplicates(content, file_path, file_hashes)
+                self._analyze_function_duplicates(content, file_path, function_hashes)
 
             except OSError as e:
                 self.logger.debug(f"Failed to read file {file_path}: {e}")
             except Exception as e:
                 self.logger.error(f"Error analyzing {file_path}: {e}")
 
-        # Process file-level duplicates
-        for block_hash, locations in file_hashes.items():
-            if len(locations) > 1:
-                content = locations[0][2]
-                duplicate = DuplicateCode(
-                    content=content,
-                    locations=[(loc[0], loc[1]) for loc in locations],
-                    similarity_score=1.0,  # Exact match
-                    size_lines=len(content.splitlines()),
-                    hash_signature=block_hash,
-                )
-                duplicates.append(duplicate)
-
-        # Process function-level duplicates
-        function_duplicates = []
-        for func_hash, locations in function_hashes.items():
-            if len(locations) > 1:
-                content = locations[0][2]
-                func_names = [loc[3] for loc in locations]
-                duplicate = DuplicateCode(
-                    content=content,
-                    locations=[(loc[0], loc[1]) for loc in locations],
-                    similarity_score=1.0,
-                    size_lines=len(content.splitlines()),
-                    hash_signature=f"func_{func_hash}",
-                )
-                duplicate.function_names = func_names
-                function_duplicates.append(duplicate)
+        duplicates = self._process_block_duplicates(file_hashes)
+        function_duplicates = self._process_function_duplicates(function_hashes)
 
         return {
             "total_duplicates": len(duplicates) + len(function_duplicates),
@@ -607,6 +630,43 @@ class DevelopmentSpeedupAgent:
 
         return patterns
 
+    def _check_function_length(
+        self, node: ast.FunctionDef, file_path: str
+    ) -> Optional["RefactoringOpportunity"]:
+        """Check if function is too long (Issue #334 - extracted helper)."""
+        if not hasattr(node, "end_lineno") or not node.end_lineno:
+            return None
+        func_length = node.end_lineno - node.lineno
+        if func_length <= 50:
+            return None
+        return RefactoringOpportunity(
+            opportunity_type="Long Function",
+            file_path=file_path,
+            line_range=(node.lineno, node.end_lineno),
+            description=f"Function '{node.name}' is {func_length} lines long",
+            complexity_score=min(func_length / 10, 10),
+            potential_benefit="Extract smaller functions for better readability and testability",
+        )
+
+    def _analyze_file_for_long_functions(
+        self, content: str, file_path: str
+    ) -> List["RefactoringOpportunity"]:
+        """Analyze single file for long functions (Issue #334 - extracted helper)."""
+        opportunities = []
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return opportunities
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            opportunity = self._check_function_length(node, file_path)
+            if opportunity:
+                opportunities.append(opportunity)
+
+        return opportunities
+
     async def _find_long_functions(
         self, root_path: str
     ) -> List[RefactoringOpportunity]:
@@ -621,35 +681,14 @@ class DevelopmentSpeedupAgent:
                 ) as f:
                     content = await f.read()
 
-                tree = ast.parse(content)
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.FunctionDef):
-                        # Calculate function length
-                        if hasattr(node, "end_lineno") and node.end_lineno:
-                            func_length = node.end_lineno - node.lineno
-                            if func_length > 50:  # Functions longer than 50 lines
-                                opportunities.append(
-                                    RefactoringOpportunity(
-                                        opportunity_type="Long Function",
-                                        file_path=file_path,
-                                        line_range=(node.lineno, node.end_lineno),
-                                        description=(
-                                            f"Function '{node.name}' is {func_length} lines"
-                                            f"long"
-                                        ),
-                                        complexity_score=min(func_length / 10, 10),
-                                        potential_benefit=(
-                                            "Extract smaller functions for"
-                                            "better readability and testability"
-                                        )
-                                    )
-                                )
+                opportunities.extend(
+                    self._analyze_file_for_long_functions(content, file_path)
+                )
 
             except OSError as e:
                 self.logger.debug(f"Failed to read file {file_path}: {e}")
-                continue
             except Exception:
-                continue
+                pass
 
         return opportunities
 

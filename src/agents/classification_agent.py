@@ -429,54 +429,63 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    def show_history(agent):
+        """Show classification history (Issue #334 - extracted helper)."""
+        history = agent.get_classification_history()
+        print("📊 Classification History:")
+        for entry in history:
+            print(f"   Message: {entry['user_message']}")
+            classification = entry['classification']
+            confidence = entry['confidence']
+            print(f"   Classification: {classification} (confidence: {confidence})")
+            print(f"   Reasoning: {entry['reasoning']}")
+            print()
+
+    async def run_interactive(agent):
+        """Run interactive classification mode (Issue #334 - extracted helper)."""
+        print("🤖 Interactive Classification Agent")
+        print("Enter messages to classify (Ctrl+C to exit)")
+
+        while True:
+            try:
+                from src.utils.terminal_input_handler import safe_input
+
+                message = safe_input("\n> ", timeout=10.0, default="exit").strip()
+                if not message or message == "exit":
+                    print("Exiting interactive mode...")
+                    break
+
+                result = await agent.classify_request(message)
+                print(f"\nClassification: {result.complexity.value}")
+                print(f"Confidence: {result.confidence:.2f}")
+                print(f"Reasoning: {result.reasoning}")
+                print(f"Suggested agents: {', '.join(result.suggested_agents)}")
+                print(f"Estimated steps: {result.estimated_steps}")
+                if result.context_analysis.get("domain"):
+                    print(f"Domain: {result.context_analysis['domain']}")
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+
+    async def classify_single(agent, message):
+        """Classify a single message (Issue #334 - extracted helper)."""
+        result = await agent.classify_request(message)
+        print(f"Message: {message}")
+        print(f"Classification: {result.complexity.value}")
+        print(f"Confidence: {result.confidence:.2f}")
+        print(f"Reasoning: {result.reasoning}")
+        print(f"Suggested agents: {', '.join(result.suggested_agents)}")
+        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
+
     async def main():
         agent = ClassificationAgent()
 
         if args.history:
-            history = agent.get_classification_history()
-            print("📊 Classification History:")
-            for entry in history:
-                print(f"   Message: {entry['user_message']}")
-                classification = entry['classification']
-                confidence = entry['confidence']
-                print(f"   Classification: {classification} (confidence: {confidence})")
-                print(f"   Reasoning: {entry['reasoning']}")
-                print()
-
+            show_history(agent)
         elif args.interactive:
-            print("🤖 Interactive Classification Agent")
-            print("Enter messages to classify (Ctrl+C to exit)")
-
-            while True:
-                try:
-                    from src.utils.terminal_input_handler import safe_input
-
-                    message = safe_input("\n> ", timeout=10.0, default="exit").strip()
-                    if message and message != "exit":
-                        result = await agent.classify_request(message)
-                        print(f"\nClassification: {result.complexity.value}")
-                        print(f"Confidence: {result.confidence:.2f}")
-                        print(f"Reasoning: {result.reasoning}")
-                        print(f"Suggested agents: {', '.join(result.suggested_agents)}")
-                        print(f"Estimated steps: {result.estimated_steps}")
-                        if result.context_analysis.get("domain"):
-                            print(f"Domain: {result.context_analysis['domain']}")
-                    else:
-                        print("Exiting interactive mode...")
-                        break
-                except KeyboardInterrupt:
-                    print("\n👋 Goodbye!")
-                    break
-
+            await run_interactive(agent)
         elif args.message:
-            result = await agent.classify_request(args.message)
-            print(f"Message: {args.message}")
-            print(f"Classification: {result.complexity.value}")
-            print(f"Confidence: {result.confidence:.2f}")
-            print(f"Reasoning: {result.reasoning}")
-            print(f"Suggested agents: {', '.join(result.suggested_agents)}")
-            print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
-
+            await classify_single(agent, args.message)
         else:
             print("Usage: python3 classification_agent.py 'message' or --interactive")
 
