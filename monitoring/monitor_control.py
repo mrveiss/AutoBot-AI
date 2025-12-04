@@ -19,6 +19,132 @@ from performance_monitor import PerformanceMonitor
 from performance_optimizer import PerformanceOptimizer
 from performance_benchmark import PerformanceBenchmark
 
+logger = logging.getLogger(__name__)
+
+
+# Issue #339: Command handler functions extracted from main()
+async def _handle_status_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --status command (Issue #339 - extracted handler)."""
+    logger.info("Getting AutoBot monitoring status...")
+    status = await monitor_control.get_current_status()
+
+    logger.info("\n" + "="*60)
+    logger.info("AutoBot Monitoring Status")
+    logger.info("="*60)
+
+    monitoring = status['monitoring']
+    logger.info(f"Monitoring Running: {'Yes' if monitoring['running'] else 'No'}")
+    logger.info(f"Dashboard: {'Enabled' if monitoring['dashboard_enabled'] else 'Disabled'}")
+    if monitoring['dashboard_enabled']:
+        logger.info(f"Dashboard Port: {monitoring['dashboard_port']}")
+    logger.info(f"Auto-Optimization: {'Enabled' if monitoring['optimization_enabled'] else 'Disabled'}")
+
+    health = status['system_health']
+    logger.info(f"\nSystem Health Score: {health['overall_score']}/100")
+    logger.info(f"Healthy Services: {health['healthy_services']}/{health['total_services']}")
+    logger.info(f"Active Alerts: {health['active_alerts']}")
+
+    perf = status['performance_metrics']
+    logger.info("\nCurrent Performance:")
+    logger.info(f"  CPU Usage: {perf['cpu_percent']:.1f}%")
+    logger.info(f"  Memory Usage: {perf['memory_percent']:.1f}%")
+    logger.info(f"  Disk Usage: {perf['disk_percent']:.1f}%")
+    if perf['gpu_utilization'] is not None:
+        logger.info(f"  GPU Utilization: {perf['gpu_utilization']:.1f}%")
+
+    recs = status['recommendations']
+    if recs['total_count'] > 0:
+        logger.info(f"\nOptimization Opportunities: {recs['total_count']}")
+        logger.info(f"  Critical: {recs['critical']}")
+        logger.info(f"  High Priority: {recs['high']}")
+        logger.info(f"  Auto-Applicable: {recs['auto_applicable']}")
+
+
+async def _handle_benchmark_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --benchmark command (Issue #339 - extracted handler)."""
+    results = await monitor_control.run_single_benchmark(
+        test_type=args.benchmark,
+        duration=args.benchmark_duration
+    )
+
+    logger.info(f"\n📈 {args.benchmark.title()} Benchmark Complete")
+
+    if args.benchmark == "comprehensive":
+        summary = results['summary']
+        logger.info(f"Overall Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})")
+        logger.info(f"Total Tests: {summary['total_tests']}")
+    else:
+        logger.info("Results saved to logs/benchmarks/")
+
+
+async def _handle_optimize_once_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --optimize-once command (Issue #339 - extracted handler)."""
+    logger.info("Running single optimization cycle...")
+    await monitor_control.optimizer.run_optimization_cycle()
+    logger.info("Optimization cycle complete")
+
+
+async def _run_with_interrupt_handler(monitor_control: 'MonitorControl', coro) -> None:
+    """Run coroutine with KeyboardInterrupt handling (Issue #339 - extracted helper)."""
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await monitor_control.stop_all() if hasattr(coro, '__self__') else await coro
+
+
+async def _handle_dashboard_only_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --dashboard-only command (Issue #339 - extracted handler)."""
+    logger.info("Starting performance dashboard only...")
+    await monitor_control.start_dashboard()
+    logger.info("Dashboard running. Press Ctrl+C to stop.")
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await monitor_control.stop_dashboard()
+
+
+async def _handle_monitor_only_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --monitor-only command (Issue #339 - extracted handler)."""
+    logger.info("Starting monitoring only (no optimization)...")
+    monitor_control.config.auto_optimization_enabled = False
+    monitor_control.config.dashboard_enabled = False
+    await monitor_control.start_all()
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await monitor_control.stop_all()
+
+
+async def _handle_stop_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --stop command (Issue #339 - extracted handler)."""
+    await monitor_control.stop_all()
+
+
+async def _handle_restart_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --restart command (Issue #339 - extracted handler)."""
+    await monitor_control.stop_all()
+    await asyncio.sleep(2)
+    await monitor_control.start_all()
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await monitor_control.stop_all()
+
+
+async def _handle_start_command(monitor_control: 'MonitorControl', args) -> None:
+    """Handle --start command (Issue #339 - extracted handler)."""
+    await monitor_control.start_all()
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await monitor_control.stop_all()
+
+
 @dataclass
 class MonitoringConfig:
     """Monitoring system configuration."""
@@ -79,7 +205,7 @@ class MonitorControl:
                     loaded_config = yaml.safe_load(f)
                     default_config.update(loaded_config)
             except Exception as e:
-                print(f"Error loading config: {e}, using defaults")
+                logger.warning(f"Error loading config: {e}, using defaults")
         else:
             # Create default config file
             with open(config_path, 'w') as f:
@@ -400,61 +526,61 @@ class MonitorControl:
 
     async def _print_startup_summary(self):
         """Print startup summary information."""
-        print("\n" + "="*80)
-        print("🤖 AutoBot Performance Monitoring System - ACTIVE")
-        print("="*80)
+        logger.info("\n" + "="*80)
+        logger.info("🤖 AutoBot Performance Monitoring System - ACTIVE")
+        logger.info("="*80)
 
-        print(f"📊 Dashboard: {'Enabled' if self.config.dashboard_enabled else 'Disabled'}")
+        logger.info(f"📊 Dashboard: {'Enabled' if self.config.dashboard_enabled else 'Disabled'}")
         if self.config.dashboard_enabled:
-            print(f"   URL: http://localhost:{self.config.dashboard_port}")
+            logger.info(f"   URL: http://localhost:{self.config.dashboard_port}")
 
-        print(f"🔍 Monitoring: Every {self.config.monitoring_interval}s")
-        print(f"🔧 Optimization: {'Enabled' if self.config.auto_optimization_enabled else 'Disabled'}")
+        logger.info(f"🔍 Monitoring: Every {self.config.monitoring_interval}s")
+        logger.info(f"🔧 Optimization: {'Enabled' if self.config.auto_optimization_enabled else 'Disabled'}")
         if self.config.auto_optimization_enabled:
-            print(f"   Cycle: Every {self.config.optimization_interval//60} minutes")
+            logger.info(f"   Cycle: Every {self.config.optimization_interval//60} minutes")
 
-        print(f"📈 Benchmarks: {self.config.benchmark_schedule}")
+        logger.info(f"📈 Benchmarks: {self.config.benchmark_schedule}")
 
         # Get and display current system status
         status = await self.get_current_status()
         health_score = status['system_health']['overall_score']
 
-        print(f"\n📋 Current System Health: {health_score}/100")
+        logger.info(f"\n📋 Current System Health: {health_score}/100")
 
         perf = status['performance_metrics']
-        print(f"   CPU: {perf['cpu_percent']:.1f}%")
-        print(f"   Memory: {perf['memory_percent']:.1f}%")
-        print(f"   Disk: {perf['disk_percent']:.1f}%")
+        logger.info(f"   CPU: {perf['cpu_percent']:.1f}%")
+        logger.info(f"   Memory: {perf['memory_percent']:.1f}%")
+        logger.info(f"   Disk: {perf['disk_percent']:.1f}%")
         if perf['gpu_utilization'] is not None:
-            print(f"   GPU: {perf['gpu_utilization']:.1f}%")
+            logger.info(f"   GPU: {perf['gpu_utilization']:.1f}%")
 
         services = status['system_health']
-        print(f"   Services: {services['healthy_services']}/{services['total_services']} healthy")
+        logger.info(f"   Services: {services['healthy_services']}/{services['total_services']} healthy")
 
         if status['system_health']['active_alerts'] > 0:
-            print(f"   🚨 Active Alerts: {status['system_health']['active_alerts']}")
+            logger.info(f"   🚨 Active Alerts: {status['system_health']['active_alerts']}")
 
         recs = status['recommendations']
         if recs['total_count'] > 0:
-            print(f"   📋 Optimization Opportunities: {recs['total_count']} (Critical: {recs['critical']}, High: {recs['high']})")
+            logger.info(f"   📋 Optimization Opportunities: {recs['total_count']} (Critical: {recs['critical']}, High: {recs['high']})")
 
-        print("\n🎯 Monitoring AutoBot distributed system:")
-        print(f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API")
-        print(f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface")
-        print(f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration")
-        print(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
-        print(f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing")
-        print(f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation")
+        logger.info("\n🎯 Monitoring AutoBot distributed system:")
+        logger.info(f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API")
+        logger.info(f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface")
+        logger.info(f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration")
+        logger.info(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
+        logger.info(f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing")
+        logger.info(f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation")
 
-        print(f"\n💾 Logs: /home/kali/Desktop/AutoBot/logs/")
-        print(f"📊 Results: /home/kali/Desktop/AutoBot/logs/benchmarks/")
+        logger.info("\n💾 Logs: /home/kali/Desktop/AutoBot/logs/")
+        logger.info("📊 Results: /home/kali/Desktop/AutoBot/logs/benchmarks/")
 
-        print("\n🔧 Control Commands:")
-        print("   • Press Ctrl+C to stop monitoring")
-        print("   • Use --status to check current state")
-        print("   • Use --benchmark to run performance tests")
+        logger.info("\n🔧 Control Commands:")
+        logger.info("   • Press Ctrl+C to stop monitoring")
+        logger.info("   • Use --status to check current state")
+        logger.info("   • Use --benchmark to run performance tests")
 
-        print("="*80)
+        logger.info("="*80)
 
 async def main():
     """Main function for monitor control."""
@@ -487,124 +613,32 @@ async def main():
     # Initialize monitor control
     monitor_control = MonitorControl(config_path=args.config)
 
+    # Issue #339: Refactored to use extracted command handlers, reducing depth from 11 to 3
     try:
         if args.status:
-            # Show current status
-            print("🔍 Getting AutoBot monitoring status...")
-            status = await monitor_control.get_current_status()
-
-            print("\n" + "="*60)
-            print("AutoBot Monitoring Status")
-            print("="*60)
-
-            monitoring = status['monitoring']
-            print(f"Monitoring Running: {'Yes' if monitoring['running'] else 'No'}")
-            print(f"Dashboard: {'Enabled' if monitoring['dashboard_enabled'] else 'Disabled'}")
-            if monitoring['dashboard_enabled']:
-                print(f"Dashboard Port: {monitoring['dashboard_port']}")
-            print(f"Auto-Optimization: {'Enabled' if monitoring['optimization_enabled'] else 'Disabled'}")
-
-            health = status['system_health']
-            print(f"\nSystem Health Score: {health['overall_score']}/100")
-            print(f"Healthy Services: {health['healthy_services']}/{health['total_services']}")
-            print(f"Active Alerts: {health['active_alerts']}")
-
-            perf = status['performance_metrics']
-            print(f"\nCurrent Performance:")
-            print(f"  CPU Usage: {perf['cpu_percent']:.1f}%")
-            print(f"  Memory Usage: {perf['memory_percent']:.1f}%")
-            print(f"  Disk Usage: {perf['disk_percent']:.1f}%")
-            if perf['gpu_utilization'] is not None:
-                print(f"  GPU Utilization: {perf['gpu_utilization']:.1f}%")
-
-            recs = status['recommendations']
-            if recs['total_count'] > 0:
-                print(f"\nOptimization Opportunities: {recs['total_count']}")
-                print(f"  Critical: {recs['critical']}")
-                print(f"  High Priority: {recs['high']}")
-                print(f"  Auto-Applicable: {recs['auto_applicable']}")
-
+            await _handle_status_command(monitor_control, args)
         elif args.benchmark:
-            # Run benchmark
-            results = await monitor_control.run_single_benchmark(
-                test_type=args.benchmark,
-                duration=args.benchmark_duration
-            )
-
-            print(f"\n📈 {args.benchmark.title()} Benchmark Complete")
-
-            if args.benchmark == "comprehensive":
-                summary = results['summary']
-                print(f"Overall Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})")
-                print(f"Total Tests: {summary['total_tests']}")
-            else:
-                print(f"Results saved to logs/benchmarks/")
-
+            await _handle_benchmark_command(monitor_control, args)
         elif args.optimize_once:
-            # Run single optimization cycle
-            print("🔧 Running single optimization cycle...")
-            await monitor_control.optimizer.run_optimization_cycle()
-            print("✅ Optimization cycle complete")
-
+            await _handle_optimize_once_command(monitor_control, args)
         elif args.dashboard_only:
-            # Start only dashboard
-            print("📊 Starting performance dashboard only...")
-            await monitor_control.start_dashboard()
-            print("Dashboard running. Press Ctrl+C to stop.")
-
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                await monitor_control.stop_dashboard()
-
+            await _handle_dashboard_only_command(monitor_control, args)
         elif args.monitor_only:
-            # Start only monitoring
-            print("🔍 Starting monitoring only (no optimization)...")
-            monitor_control.config.auto_optimization_enabled = False
-            monitor_control.config.dashboard_enabled = False
-            await monitor_control.start_all()
-
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                await monitor_control.stop_all()
-
+            await _handle_monitor_only_command(monitor_control, args)
         elif args.stop:
-            # Stop all components
-            await monitor_control.stop_all()
-
+            await _handle_stop_command(monitor_control, args)
         elif args.restart:
-            # Restart all components
-            await monitor_control.stop_all()
-            await asyncio.sleep(2)
-            await monitor_control.start_all()
-
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                await monitor_control.stop_all()
-
+            await _handle_restart_command(monitor_control, args)
         elif args.start or len(sys.argv) == 1:
-            # Start all monitoring (default action)
-            await monitor_control.start_all()
-
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                await monitor_control.stop_all()
-
+            await _handle_start_command(monitor_control, args)
         else:
             parser.print_help()
 
     except KeyboardInterrupt:
-        print("\n🛑 Monitoring stopped by user")
+        logger.info("Monitoring stopped by user")
         await monitor_control.stop_all()
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"Error: {e}")
         await monitor_control.stop_all()
         sys.exit(1)
 

@@ -25,6 +25,28 @@ from performance_monitor import VMS
 from src.constants.network_constants import NetworkConstants
 from src.constants.model_constants import ModelConstants
 
+logger = logging.getLogger(__name__)
+
+
+# Issue #339: Extracted helper for HTTP request execution
+async def _execute_http_request(
+    session: aiohttp.ClientSession,
+    method: str,
+    url: str,
+    data: Dict
+) -> bool:
+    """Execute HTTP request and return success status (Issue #339 - extracted helper)."""
+    if method == "GET":
+        async with session.get(url) as response:
+            await response.text()
+            return response.status < 400
+    elif method == "POST":
+        async with session.post(url, json=data) as response:
+            await response.text()
+            return response.status < 400
+    return False
+
+
 @dataclass
 class BenchmarkResult:
     """Result of a performance benchmark test."""
@@ -92,6 +114,7 @@ class PerformanceBenchmark:
 
     async def _benchmark_endpoint(self, name: str, method: str, url: str, data: Dict, duration_seconds: int) -> BenchmarkResult:
         """Benchmark a specific API endpoint."""
+        # Issue #339: Refactored to use extracted helper, reducing depth from 7 to 4
         latencies = []
         success_count = 0
         error_count = 0
@@ -104,21 +127,11 @@ class PerformanceBenchmark:
                 request_start = time.time()
 
                 try:
-                    if method == "GET":
-                        async with session.get(url) as response:
-                            await response.text()
-                            if response.status < 400:
-                                success_count += 1
-                            else:
-                                error_count += 1
-                    elif method == "POST":
-                        async with session.post(url, json=data) as response:
-                            await response.text()
-                            if response.status < 400:
-                                success_count += 1
-                            else:
-                                error_count += 1
-
+                    success = await _execute_http_request(session, method, url, data)
+                    if success:
+                        success_count += 1
+                    else:
+                        error_count += 1
                     request_time = (time.time() - request_start) * 1000  # Convert to ms
                     latencies.append(request_time)
 
@@ -757,22 +770,22 @@ class PerformanceBenchmark:
 
         return round(overall_score, 1)
 
+    # Issue #339: Grade thresholds as lookup table
+    _GRADE_THRESHOLDS = [
+        (90, "A+"),
+        (80, "A"),
+        (70, "B+"),
+        (60, "B"),
+        (50, "C+"),
+        (40, "C"),
+    ]
+
     def _get_performance_grade(self, score: float) -> str:
-        """Get performance grade based on score."""
-        if score >= 90:
-            return "A+"
-        elif score >= 80:
-            return "A"
-        elif score >= 70:
-            return "B+"
-        elif score >= 60:
-            return "B"
-        elif score >= 50:
-            return "C+"
-        elif score >= 40:
-            return "C"
-        else:
-            return "D"
+        """Get performance grade based on score (Issue #339 - refactored with lookup table)."""
+        for threshold, grade in self._GRADE_THRESHOLDS:
+            if score >= threshold:
+                return grade
+        return "D"
 
     async def _save_benchmark_results(self, results: List[BenchmarkResult], system_benchmark: SystemBenchmark, summary: Dict[str, Any]):
         """Save benchmark results to files."""
@@ -879,70 +892,70 @@ async def main():
 
     benchmark = PerformanceBenchmark(output_dir=args.output_dir)
 
-    print("🚀 AutoBot Performance Benchmark Suite")
-    print("="*60)
+    logger.info("🚀 AutoBot Performance Benchmark Suite")
+    logger.info("="*60)
 
     if args.test == 'comprehensive':
         results = await benchmark.run_comprehensive_benchmark()
 
-        print("\n📊 Comprehensive Benchmark Results:")
-        print("="*60)
+        logger.info("\n📊 Comprehensive Benchmark Results:")
+        logger.info("="*60)
 
         summary = results['summary']
-        print(f"Overall System Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})")
-        print(f"Total Tests: {summary['total_tests']}")
-        print()
+        logger.info(f"Overall System Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})")
+        logger.info(f"Total Tests: {summary['total_tests']}")
+        logger.info("")
 
-        print("Category Performance:")
+        logger.info("Category Performance:")
         for category, stats in summary['category_summaries'].items():
-            print(f"  {category.title()}:")
-            print(f"    Avg Ops/Sec: {stats['average_ops_per_second']:.1f}")
-            print(f"    Avg Latency: {stats['average_latency_ms']:.1f}ms")
-            print(f"    Success Rate: {stats['average_success_rate']:.1f}%")
-            print(f"    Errors: {stats['total_errors']}")
-            print()
+            logger.info(f"  {category.title()}:")
+            logger.info(f"    Avg Ops/Sec: {stats['average_ops_per_second']:.1f}")
+            logger.info(f"    Avg Latency: {stats['average_latency_ms']:.1f}ms")
+            logger.info(f"    Success Rate: {stats['average_success_rate']:.1f}%")
+            logger.info(f"    Errors: {stats['total_errors']}")
+            logger.info("")
 
-        print("Hardware Performance:")
+        logger.info("Hardware Performance:")
         hw = summary['system_hardware']
-        print(f"  CPU Score: {hw['cpu_score']:.1f}")
-        print(f"  Memory Bandwidth: {hw['memory_bandwidth_mbps']:.1f} MB/s")
-        print(f"  Disk I/O: {hw['disk_io_mbps']:.1f} MB/s")
-        print(f"  Network Throughput: {hw['network_throughput_mbps']:.1f} MB/s")
-        print(f"  GPU Available: {'Yes' if hw['gpu_available'] else 'No'}")
-        print(f"  NPU Available: {'Yes' if hw['npu_available'] else 'No'}")
+        logger.info(f"  CPU Score: {hw['cpu_score']:.1f}")
+        logger.info(f"  Memory Bandwidth: {hw['memory_bandwidth_mbps']:.1f} MB/s")
+        logger.info(f"  Disk I/O: {hw['disk_io_mbps']:.1f} MB/s")
+        logger.info(f"  Network Throughput: {hw['network_throughput_mbps']:.1f} MB/s")
+        logger.info(f"  GPU Available: {'Yes' if hw['gpu_available'] else 'No'}")
+        logger.info(f"  NPU Available: {'Yes' if hw['npu_available'] else 'No'}")
 
     elif args.test == 'api':
         results = await benchmark.run_api_benchmark(duration_seconds=args.duration)
-        print(f"\n📡 API Benchmark Results ({len(results)} tests):")
+        logger.info(f"\n📡 API Benchmark Results ({len(results)} tests):")
         for result in results:
-            print(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
-                  f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
+            logger.info(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
+                        f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
 
     elif args.test == 'database':
         results = await benchmark.run_database_benchmark(duration_seconds=args.duration)
-        print(f"\n🗄️ Database Benchmark Results ({len(results)} tests):")
+        logger.info(f"\n🗄️ Database Benchmark Results ({len(results)} tests):")
         for result in results:
-            print(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
-                  f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
+            logger.info(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
+                        f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
 
     elif args.test == 'network':
         results = await benchmark.run_network_benchmark(duration_seconds=args.duration)
-        print(f"\n🔗 Network Benchmark Results ({len(results)} tests):")
+        logger.info(f"\n🔗 Network Benchmark Results ({len(results)} tests):")
         for result in results:
-            print(f"  {result.test_name}: {result.average_latency_ms:.1f}ms avg, "
-                  f"{result.success_rate:.1f}% success")
+            logger.info(f"  {result.test_name}: {result.average_latency_ms:.1f}ms avg, "
+                        f"{result.success_rate:.1f}% success")
 
     elif args.test == 'system':
         result = await benchmark.run_system_benchmark()
-        print(f"\n🖥️ System Benchmark Results:")
-        print(f"  CPU Score: {result.cpu_benchmark_score:.1f}")
-        print(f"  Memory Bandwidth: {result.memory_bandwidth_mbps:.1f} MB/s")
-        print(f"  Disk I/O: {result.disk_io_mbps:.1f} MB/s")
-        print(f"  Network Throughput: {result.network_throughput_mbps:.1f} MB/s")
+        logger.info("\n🖥️ System Benchmark Results:")
+        logger.info(f"  CPU Score: {result.cpu_benchmark_score:.1f}")
+        logger.info(f"  Memory Bandwidth: {result.memory_bandwidth_mbps:.1f} MB/s")
+        logger.info(f"  Disk I/O: {result.disk_io_mbps:.1f} MB/s")
+        logger.info(f"  Network Throughput: {result.network_throughput_mbps:.1f} MB/s")
         if result.gpu_compute_score:
-            print(f"  GPU Score: {result.gpu_compute_score:.1f}")
+            logger.info(f"  GPU Score: {result.gpu_compute_score:.1f}")
         if result.npu_inference_score:
-            print(f"  NPU Score: {result.npu_inference_score:.1f}")
+            logger.info(f"  NPU Score: {result.npu_inference_score:.1f}")
 
 if __name__ == "__main__":
     asyncio.run(main())
