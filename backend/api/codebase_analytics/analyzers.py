@@ -10,7 +10,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Set
 
 import aiofiles
 from backend.type_defs.common import Metadata
@@ -36,6 +36,730 @@ except ImportError as e:
     _anti_pattern_detector = None
     _performance_analyzer = None
     _bug_predictor = None
+
+
+# =============================================================================
+# Race Condition Detection Helper Functions (Issue #298 - Reduce Deep Nesting)
+# =============================================================================
+
+
+def _check_lock_imports(node: ast.AST) -> Tuple[bool, bool]:
+    """
+    Check if an AST node imports async or threading locks.
+
+    Args:
+        node: AST node to check
+
+    Returns:
+        Tuple of (has_async_lock, has_threading_lock)
+    """
+    has_async = False
+    has_threading = False
+
+    if isinstance(node, ast.ImportFrom):
+        if node.module == "asyncio":
+            for alias in node.names:
+                if alias.name in ("Lock", "Semaphore", "Event", "Condition"):
+                    has_async = True
+        elif node.module == "threading":
+            for alias in node.names:
+                if alias.name in ("Lock", "RLock", "Semaphore", "Event", "Condition"):
+                    has_threading = True
+    elif isinstance(node, ast.Import):
+        for alias in node.names:
+            if alias.name in ("asyncio", "threading"):
+                has_async = True
+                has_threading = True
+
+    return has_async, has_threading
+
+
+def _is_mutable_constructor(value: ast.AST) -> bool:
+    """
+    Check if an AST value node creates a mutable type (dict, list, set).
+
+    Args:
+        value: AST node representing the assigned value
+
+    Returns:
+        True if the value creates a mutable type
+    """
+    if isinstance(value, (ast.Dict, ast.List, ast.Set)):
+        return True
+
+    if not isinstance(value, ast.Call):
+        return False
+
+    func_name = ""
+    if isinstance(value.func, ast.Name):
+        func_name = value.func.id
+    elif isinstance(value.func, ast.Attribute):
+        func_name = value.func.attr
+
+    mutable_constructors = (
+        "dict", "list", "set", "defaultdict", "OrderedDict", "Counter", "deque"
+    )
+    return func_name in mutable_constructors
+
+
+def _extract_global_state(tree: ast.AST) -> Tuple[Dict[str, int], Set[str]]:
+    """
+    Extract global variables and identify which are mutable from module-level assignments.
+
+    Args:
+        tree: Parsed AST tree
+
+    Returns:
+        Tuple of (global_vars dict mapping name to line number, set of mutable var names)
+    """
+    global_vars: Dict[str, int] = {}
+    global_mutables: Set[str] = set()
+
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                var_name = target.id
+                global_vars[var_name] = node.lineno
+                if _is_mutable_constructor(node.value):
+                    global_mutables.add(var_name)
+
+        elif isinstance(node, ast.AnnAssign) and node.target:
+            if not isinstance(node.target, ast.Name):
+                continue
+            var_name = node.target.id
+            global_vars[var_name] = node.lineno
+
+            # Check annotation for Dict, List, Set types
+            if node.annotation:
+                ann_str = ast.unparse(node.annotation) if hasattr(ast, "unparse") else ""
+                if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
+                    global_mutables.add(var_name)
+
+            if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
+                global_mutables.add(var_name)
+
+    return global_vars, global_mutables
+
+
+def _create_race_condition_problem(
+    lineno: int,
+    description: str,
+    suggestion: str,
+    severity: str = "high",
+) -> Dict:
+    """Create a standardized race condition problem dictionary."""
+    return {
+        "type": "race_condition",
+        "severity": severity,
+        "line": lineno,
+        "description": description,
+        "suggestion": suggestion,
+    }
+
+
+def _check_subscript_modification(
+    stmt: ast.Assign,
+    global_mutables: Set[str],
+    global_declarations: Set[str],
+    lock_protected_vars: Set[str],
+    is_async: bool,
+    func_name: str,
+) -> Optional[Dict]:
+    """
+    Check for unprotected subscript assignments to global mutables.
+
+    Example: global_dict[key] = value (without lock protection)
+    """
+    for target in stmt.targets:
+        if not isinstance(target, ast.Subscript):
+            continue
+        if not isinstance(target.value, ast.Name):
+            continue
+
+        var_name = target.value.id
+        is_global = var_name in global_mutables or var_name in global_declarations
+        if not is_global or var_name in lock_protected_vars:
+            continue
+
+        lock_type = "asyncio.Lock()" if is_async else "threading.Lock()"
+        async_prefix = "async " if is_async else ""
+        return _create_race_condition_problem(
+            lineno=stmt.lineno,
+            description=(
+                f"Unprotected modification of global '{var_name}' "
+                f"in {async_prefix}function '{func_name}'"
+            ),
+            suggestion=f"Use {lock_type} to protect concurrent access to '{var_name}'",
+        )
+    return None
+
+
+def _check_mutating_method_call(
+    stmt: ast.Expr,
+    global_mutables: Set[str],
+    global_declarations: Set[str],
+    lock_protected_vars: Set[str],
+    is_async: bool,
+    func_name: str,
+) -> Optional[Dict]:
+    """
+    Check for unprotected mutating method calls on global mutables.
+
+    Example: global_list.append(item) (without lock protection)
+    """
+    if not isinstance(stmt.value, ast.Call):
+        return None
+
+    call = stmt.value
+    if not isinstance(call.func, ast.Attribute):
+        return None
+    if not isinstance(call.func.value, ast.Name):
+        return None
+
+    var_name = call.func.value.id
+    method_name = call.func.attr
+
+    mutating_methods = {
+        "append", "extend", "insert", "remove", "pop", "clear",
+        "update", "setdefault", "add", "discard", "difference_update",
+        "intersection_update", "symmetric_difference_update"
+    }
+
+    is_global = var_name in global_mutables or var_name in global_declarations
+    if not is_global or method_name not in mutating_methods:
+        return None
+    if var_name in lock_protected_vars:
+        return None
+
+    lock_type = "asyncio.Lock()" if is_async else "threading.Lock()"
+    async_prefix = "async " if is_async else ""
+    return _create_race_condition_problem(
+        lineno=stmt.lineno,
+        description=(
+            f"Unprotected '{method_name}()' on global '{var_name}' "
+            f"in {async_prefix}function '{func_name}'"
+        ),
+        suggestion=f"Use {lock_type} to protect concurrent modifications",
+    )
+
+
+def _check_lazy_init_pattern(
+    stmt: ast.If,
+    global_vars: Dict[str, int],
+) -> Optional[Dict]:
+    """
+    Check for thread-unsafe lazy initialization patterns.
+
+    Example: if _instance is None: _instance = SomeClass()
+    """
+    if not isinstance(stmt.test, ast.Compare):
+        return None
+    if len(stmt.test.ops) != 1 or not isinstance(stmt.test.ops[0], ast.Is):
+        return None
+    if not isinstance(stmt.test.left, ast.Name):
+        return None
+
+    var_name = stmt.test.left.id
+    if not var_name.startswith("_") or var_name not in global_vars:
+        return None
+
+    # Check if body assigns to this variable
+    for body_stmt in stmt.body:
+        if not isinstance(body_stmt, ast.Assign):
+            continue
+        for target in body_stmt.targets:
+            if isinstance(target, ast.Name) and target.id == var_name:
+                return _create_race_condition_problem(
+                    lineno=stmt.lineno,
+                    description=(
+                        f"Thread-unsafe lazy initialization of '{var_name}' - "
+                        f"multiple threads may create multiple instances"
+                    ),
+                    suggestion="Use a lock or implement proper double-checked locking pattern",
+                )
+    return None
+
+
+def _check_file_write_without_lock(stmt: ast.With) -> Optional[Dict]:
+    """
+    Check for file writes without explicit locking.
+
+    Example: with open(path, 'w') as f: ... (without file lock)
+    """
+    for item in stmt.items:
+        if not isinstance(item.context_expr, ast.Call):
+            continue
+
+        call = item.context_expr
+        if not isinstance(call.func, ast.Name) or call.func.id != "open":
+            continue
+        if len(call.args) < 2:
+            continue
+
+        mode_arg = call.args[1]
+        if not isinstance(mode_arg, ast.Constant):
+            continue
+        if "w" not in str(mode_arg.value):
+            continue
+
+        return _create_race_condition_problem(
+            lineno=stmt.lineno,
+            description=(
+                "File opened for writing without explicit locking - "
+                "concurrent writes may corrupt data"
+            ),
+            suggestion="Use file locking (fcntl.flock) or a separate lock for file access",
+            severity="medium",
+        )
+    return None
+
+
+def _detect_global_state_modifications(
+    func_node: ast.AST,
+    global_vars: Dict[str, int],
+    global_mutables: Set[str],
+    lock_protected_vars: Set[str],
+) -> List[Dict]:
+    """
+    Detect modifications to global state within a function.
+
+    Args:
+        func_node: Function AST node (FunctionDef or AsyncFunctionDef)
+        global_vars: Dict of global variable names to line numbers
+        global_mutables: Set of global mutable variable names
+        lock_protected_vars: Set of variables protected by locks
+
+    Returns:
+        List of race condition problems found
+    """
+    problems = []
+    is_async = isinstance(func_node, ast.AsyncFunctionDef)
+    func_name = func_node.name
+
+    # Find 'global' keyword declarations
+    global_declarations: Set[str] = set()
+    for stmt in ast.walk(func_node):
+        if isinstance(stmt, ast.Global):
+            global_declarations.update(stmt.names)
+
+    # Check each statement in function
+    for stmt in ast.walk(func_node):
+        # Check for subscript assignment (dict[key] = value, list[i] = value)
+        if isinstance(stmt, ast.Assign):
+            problem = _check_subscript_modification(
+                stmt, global_mutables, global_declarations,
+                lock_protected_vars, is_async, func_name
+            )
+            if problem:
+                problems.append(problem)
+
+        # Check for method calls on global mutables (.append, .update, etc.)
+        if isinstance(stmt, ast.Expr):
+            problem = _check_mutating_method_call(
+                stmt, global_mutables, global_declarations,
+                lock_protected_vars, is_async, func_name
+            )
+            if problem:
+                problems.append(problem)
+
+    return problems
+
+
+def _detect_singleton_patterns(
+    func_node: ast.AST,
+    global_vars: Dict[str, int],
+) -> List[Dict]:
+    """
+    Detect thread-unsafe singleton/lazy initialization patterns.
+
+    Args:
+        func_node: Function AST node
+        global_vars: Dict of global variable names to line numbers
+
+    Returns:
+        List of race condition problems found
+    """
+    problems = []
+    for stmt in ast.walk(func_node):
+        if isinstance(stmt, ast.If):
+            problem = _check_lazy_init_pattern(stmt, global_vars)
+            if problem:
+                problems.append(problem)
+    return problems
+
+
+def _detect_augmented_assignment_issues(
+    func_node: ast.AST,
+    global_vars: Dict[str, int],
+) -> List[Dict]:
+    """
+    Detect read-modify-write patterns on global variables.
+
+    Example: counter += 1 (not atomic)
+    """
+    problems = []
+
+    for stmt in ast.walk(func_node):
+        if not isinstance(stmt, ast.AugAssign):
+            continue
+
+        target = stmt.target
+        var_name = None
+
+        if isinstance(target, ast.Name):
+            var_name = target.id
+        elif isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+            var_name = target.value.id
+
+        if var_name and var_name in global_vars:
+            problems.append(_create_race_condition_problem(
+                lineno=stmt.lineno,
+                description=(
+                    f"Read-modify-write on global '{var_name}' is not atomic - "
+                    f"can cause lost updates under concurrency"
+                ),
+                suggestion="Use atomic operations or protect with a lock",
+            ))
+
+    return problems
+
+
+def _detect_file_handle_issues(func_node: ast.AST) -> List[Dict]:
+    """Detect shared file handles without locks."""
+    problems = []
+    for stmt in ast.walk(func_node):
+        if isinstance(stmt, ast.With):
+            problem = _check_file_write_without_lock(stmt)
+            if problem:
+                problems.append(problem)
+    return problems
+
+
+# =============================================================================
+# End of Race Condition Helper Functions
+# =============================================================================
+
+
+# =============================================================================
+# Python File Analysis Helper Functions (Issue #298 - Reduce Deep Nesting)
+# =============================================================================
+
+
+def _extract_function_info(node: ast.FunctionDef) -> Dict:
+    """Extract function information from AST node."""
+    return {
+        "name": node.name,
+        "line": node.lineno,
+        "args": [arg.arg for arg in node.args.args],
+        "docstring": ast.get_docstring(node),
+        "is_async": isinstance(node, ast.AsyncFunctionDef),
+    }
+
+
+def _check_long_function(node: ast.FunctionDef) -> Optional[Dict]:
+    """Check if function exceeds 50 lines and return problem if so."""
+    if not hasattr(node, "end_lineno") or not node.end_lineno:
+        return None
+
+    func_length = node.end_lineno - node.lineno
+    if func_length <= 50:
+        return None
+
+    return {
+        "type": "long_function",
+        "severity": "medium",
+        "line": node.lineno,
+        "description": f"Function '{node.name}' is {func_length} lines long",
+        "suggestion": "Consider breaking into smaller functions",
+    }
+
+
+def _extract_class_info(node: ast.ClassDef) -> Dict:
+    """Extract class information from AST node."""
+    return {
+        "name": node.name,
+        "line": node.lineno,
+        "methods": [n.name for n in node.body if isinstance(n, ast.FunctionDef)],
+        "docstring": ast.get_docstring(node),
+    }
+
+
+def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[Dict]:
+    """Check if IP address is a known infrastructure IP."""
+    if not (
+        ip.startswith(NetworkConstants.VM_IP_PREFIX)
+        or ip.startswith("127.0.0.")
+        or ip.startswith("192.168.")
+    ):
+        return None
+
+    return {"type": "ip", "value": ip, "line": line_num, "context": line_content.strip()}
+
+
+def _check_hardcoded_port(port: str, line_num: int, line_content: str) -> Optional[Dict]:
+    """Check if port is a known infrastructure port."""
+    known_ports = [
+        str(NetworkConstants.BACKEND_PORT),
+        str(NetworkConstants.AI_STACK_PORT),
+        str(NetworkConstants.REDIS_PORT),
+        str(NetworkConstants.OLLAMA_PORT),
+        str(NetworkConstants.FRONTEND_PORT),
+        str(NetworkConstants.BROWSER_SERVICE_PORT),
+    ]
+
+    if port not in known_ports:
+        return None
+
+    return {"type": "port", "value": port, "line": line_num, "context": line_content.strip()}
+
+
+def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
+    """Detect hardcoded values in a single line of code."""
+    hardcodes = []
+
+    # Check for IP addresses
+    ip_matches = re.findall(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", line)
+    for ip in ip_matches:
+        result = _check_hardcoded_ip(ip, line_num, line)
+        if result:
+            hardcodes.append(result)
+
+    # Check for URLs
+    url_matches = re.findall(r'[\'"`](https?://[^\'"` ]+)[\'"`]', line)
+    for url in url_matches:
+        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": line.strip()})
+
+    # Check for ports
+    port_matches = re.findall(r"\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b", line)
+    for port in port_matches:
+        result = _check_hardcoded_port(port, line_num, line)
+        if result:
+            hardcodes.append(result)
+
+    return hardcodes
+
+
+def _detect_technical_debt_in_line(
+    line_num: int, line: str, file_path: str
+) -> Tuple[List[Dict], List[Dict]]:
+    """Detect technical debt markers in a line. Returns (debt_items, problem_items)."""
+    debt_patterns = [
+        (r"#\s*TODO[:\s](.+)$", "todo", "low"),
+        (r"#\s*FIXME[:\s](.+)$", "fixme", "medium"),
+        (r"#\s*HACK[:\s](.+)$", "hack", "high"),
+        (r"#\s*XXX[:\s](.+)$", "xxx", "medium"),
+        (r"#\s*BUG[:\s](.+)$", "bug", "high"),
+        (r"#\s*DEPRECATED[:\s](.+)$", "deprecated", "medium"),
+    ]
+
+    debt_items = []
+    problem_items = []
+
+    for pattern, debt_type, severity in debt_patterns:
+        match = re.search(pattern, line, re.IGNORECASE)
+        if not match:
+            continue
+
+        description = match.group(1).strip() if match.group(1) else ""
+
+        debt_items.append({
+            "type": debt_type,
+            "severity": severity,
+            "line": line_num,
+            "description": description[:200],
+            "file_path": file_path,
+        })
+
+        problem_items.append({
+            "type": f"technical_debt_{debt_type}",
+            "severity": severity,
+            "line": line_num,
+            "description": f"{debt_type.upper()}: {description[:100]}",
+            "suggestion": f"Address this {debt_type.upper()} comment",
+        })
+
+    return debt_items, problem_items
+
+
+def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
+    """Run code intelligence analyzers and return problems found."""
+    global _anti_pattern_detector, _performance_analyzer, _bug_predictor
+
+    if not _analyzers_available:
+        return []
+
+    problems = []
+
+    # Anti-pattern detection
+    try:
+        if _anti_pattern_detector is None:
+            _anti_pattern_detector = AntiPatternDetector()
+        result = _anti_pattern_detector.analyze_file(file_path)
+        for pattern in result.get("patterns", []):
+            problems.append({
+                "type": f"code_smell_{pattern.pattern_type.value}",
+                "severity": pattern.severity.value,
+                "line": pattern.line_number,
+                "description": pattern.description,
+                "suggestion": pattern.suggestion,
+            })
+    except Exception as e:
+        logger.debug(f"Anti-pattern detection skipped for {file_path}: {e}")
+
+    # Performance analysis
+    try:
+        if _performance_analyzer is None:
+            _performance_analyzer = PerformanceAnalyzer()
+        perf_issues = _performance_analyzer.analyze_file(file_path)
+        for issue in perf_issues:
+            problems.append({
+                "type": f"performance_{issue.issue_type.value}",
+                "severity": issue.severity.value,
+                "line": issue.line_start,
+                "description": issue.description,
+                "suggestion": issue.recommendation,
+            })
+    except Exception as e:
+        logger.debug(f"Performance analysis skipped for {file_path}: {e}")
+
+    # Bug prediction
+    try:
+        if _bug_predictor is None:
+            project_root = Path(file_path).parent
+            while project_root.parent != project_root:
+                if (project_root / ".git").exists():
+                    break
+                project_root = project_root.parent
+            _bug_predictor = BugPredictor(str(project_root))
+
+        risk_assessment = _bug_predictor.analyze_file(file_path)
+        if risk_assessment.overall_risk >= 70:
+            severity = "high" if risk_assessment.overall_risk >= 85 else "medium"
+            suggestion = (
+                "; ".join(risk_assessment.recommendations[:3])
+                if risk_assessment.recommendations
+                else "Review code complexity"
+            )
+            problems.append({
+                "type": "bug_prediction_high_risk",
+                "severity": severity,
+                "line": 1,
+                "description": (
+                    f"High bug risk score: {risk_assessment.overall_risk:.0f}/100. "
+                    f"Risk level: {risk_assessment.risk_level.value}"
+                ),
+                "suggestion": suggestion,
+            })
+    except Exception as e:
+        logger.debug(f"Bug prediction skipped for {file_path}: {e}")
+
+    return problems
+
+
+def _create_empty_analysis_result() -> Metadata:
+    """Create an empty analysis result for error cases."""
+    return {
+        "functions": [],
+        "classes": [],
+        "imports": [],
+        "hardcodes": [],
+        "problems": [],
+        "technical_debt": [],
+        "line_count": 0,
+    }
+
+
+async def _merge_llm_results(
+    hardcodes: List[Dict],
+    technical_debt: List[Dict],
+    content: str,
+    file_path: str,
+) -> None:
+    """Merge LLM analysis results into existing hardcodes and technical debt lists."""
+    try:
+        llm_results = await detect_hardcodes_and_debt_with_llm(
+            content, file_path, language="python"
+        )
+
+        # Merge LLM hardcodes (avoid duplicates)
+        existing_values = {h.get("value") for h in hardcodes}
+        for llm_hardcode in llm_results.get("hardcodes", []):
+            if llm_hardcode.get("value") not in existing_values:
+                hardcodes.append(llm_hardcode)
+
+        # Add technical debt from LLM
+        technical_debt.extend(llm_results.get("technical_debt", []))
+
+    except Exception as e:
+        logger.debug(f"LLM analysis skipped for {file_path}: {e}")
+
+
+def _extract_imports_from_node(node: ast.AST) -> List[str]:
+    """Extract import names from an import AST node."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    elif isinstance(node, ast.ImportFrom):
+        return [node.module or ""]
+    return []
+
+
+def _analyze_ast_nodes(tree: ast.AST) -> Tuple[List[Dict], List[Dict], List[str], List[Dict]]:
+    """
+    Walk AST and extract functions, classes, imports, and long function problems.
+
+    Returns:
+        Tuple of (functions, classes, imports, problems)
+    """
+    functions = []
+    classes = []
+    imports = []
+    problems = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            functions.append(_extract_function_info(node))
+            long_func_problem = _check_long_function(node)
+            if long_func_problem:
+                problems.append(long_func_problem)
+
+        elif isinstance(node, ast.ClassDef):
+            classes.append(_extract_class_info(node))
+
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            imports.extend(_extract_imports_from_node(node))
+
+    return functions, classes, imports, problems
+
+
+def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+    """
+    Analyze content line-by-line for hardcodes and technical debt.
+
+    Returns:
+        Tuple of (hardcodes, technical_debt, problems)
+    """
+    hardcodes = []
+    technical_debt = []
+    problems = []
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines, 1):
+        # Detect hardcoded values
+        hardcodes.extend(_detect_hardcodes_in_line(i, line))
+
+        # Detect technical debt
+        debt_items, problem_items = _detect_technical_debt_in_line(i, line, file_path)
+        technical_debt.extend(debt_items)
+        problems.extend(problem_items)
+
+    return hardcodes, technical_debt, problems
+
+
+# =============================================================================
+# End of Python File Analysis Helper Functions
+# =============================================================================
 
 
 async def detect_hardcodes_and_debt_with_llm(
@@ -134,475 +858,95 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
     3. Thread-unsafe singleton patterns
     4. Unprotected shared dictionary/list access
     5. Missing async locks for shared resources
+
+    Refactored for Issue #298 - reduced nesting from 15 to 4 levels max.
     """
-    problems = []
-    lines = content.split("\n")
-
-    # Track global variables and their types
-    global_vars = {}
-    global_mutables = set()  # Global mutable objects (dict, list, set)
-    lock_protected_vars = set()  # Variables protected by locks
+    problems: List[Dict] = []
+    lock_protected_vars: Set[str] = set()
     has_async_lock_import = False
-    has_threading_lock_import = False
 
-    # First pass: identify imports and global state
+    # Pass 1: Check for lock imports
     for node in ast.walk(tree):
-        # Check for lock imports
-        if isinstance(node, ast.ImportFrom):
-            if node.module == "asyncio":
-                for alias in node.names:
-                    if alias.name in ("Lock", "Semaphore", "Event", "Condition"):
-                        has_async_lock_import = True
-            elif node.module == "threading":
-                for alias in node.names:
-                    if alias.name in ("Lock", "RLock", "Semaphore", "Event", "Condition"):
-                        has_threading_lock_import = True
+        async_lock, _ = _check_lock_imports(node)
+        has_async_lock_import = has_async_lock_import or async_lock
 
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name in ("asyncio", "threading"):
-                    has_async_lock_import = True
-                    has_threading_lock_import = True
+    # Pass 2: Extract global state
+    global_vars, global_mutables = _extract_global_state(tree)
 
-    # Second pass: find global assignments at module level
-    for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    var_name = target.id
-                    global_vars[var_name] = node.lineno
-
-                    # Check if it's a mutable type
-                    if isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
-                        global_mutables.add(var_name)
-                    elif isinstance(node.value, ast.Call):
-                        # Check for dict(), list(), set(), defaultdict(), etc.
-                        func_name = ""
-                        if isinstance(node.value.func, ast.Name):
-                            func_name = node.value.func.id
-                        elif isinstance(node.value.func, ast.Attribute):
-                            func_name = node.value.func.attr
-
-                        if func_name in ("dict", "list", "set", "defaultdict", "OrderedDict",
-                                        "Counter", "deque"):
-                            global_mutables.add(var_name)
-
-        elif isinstance(node, ast.AnnAssign) and node.target:
-            if isinstance(node.target, ast.Name):
-                var_name = node.target.id
-                global_vars[var_name] = node.lineno
-
-                # Check annotation for Dict, List, Set types
-                if node.annotation:
-                    ann_str = ast.unparse(node.annotation) if hasattr(ast, 'unparse') else ""
-                    if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
-                        global_mutables.add(var_name)
-
-                if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
-                    global_mutables.add(var_name)
-
-    # Third pass: find modifications to global state in functions
+    # Pass 3-7: Analyze functions for race conditions
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            is_async = isinstance(node, ast.AsyncFunctionDef)
-            func_name = node.name
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
 
-            # Check for 'global' keyword usage
-            global_declarations = set()
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.Global):
-                    global_declarations.update(stmt.names)
+        # Check for global state modifications (Pass 3)
+        problems.extend(_detect_global_state_modifications(
+            node, global_vars, global_mutables, lock_protected_vars
+        ))
 
-            # Check if function modifies global mutable state
-            for stmt in ast.walk(node):
-                # Check for subscript assignment (dict[key] = value, list[i] = value)
-                if isinstance(stmt, ast.Assign):
-                    for target in stmt.targets:
-                        if isinstance(target, ast.Subscript):
-                            if isinstance(target.value, ast.Name):
-                                var_name = target.value.id
-                                if var_name in global_mutables or var_name in global_declarations:
-                                    # Check if this is inside a lock context
-                                    if var_name not in lock_protected_vars:
-                                        problems.append({
-                                            "type": "race_condition",
-                                            "severity": "high",
-                                            "line": stmt.lineno,
-                                            "description": (
-                                                f"Unprotected modification of global '{var_name}' "
-                                                f"in {'async ' if is_async else ''}function '{func_name}'"
-                                            ),
-                                            "suggestion": (
-                                                f"Use {'asyncio.Lock()' if is_async else 'threading.Lock()'} "
-                                                f"to protect concurrent access to '{var_name}'"
-                                            ),
-                                        })
+        # Check for thread-unsafe singleton patterns (Pass 4)
+        problems.extend(_detect_singleton_patterns(node, global_vars))
 
-                # Check for method calls on global mutables (.append, .update, .pop, etc.)
-                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                    call = stmt.value
-                    if isinstance(call.func, ast.Attribute):
-                        if isinstance(call.func.value, ast.Name):
-                            var_name = call.func.value.id
-                            method_name = call.func.attr
-                            mutating_methods = {
-                                "append", "extend", "insert", "remove", "pop", "clear",
-                                "update", "setdefault", "add", "discard", "difference_update",
-                                "intersection_update", "symmetric_difference_update"
-                            }
-                            if (var_name in global_mutables or var_name in global_declarations) \
-                                    and method_name in mutating_methods:
-                                if var_name not in lock_protected_vars:
-                                    problems.append({
-                                        "type": "race_condition",
-                                        "severity": "high",
-                                        "line": stmt.lineno,
-                                        "description": (
-                                            f"Unprotected '{method_name}()' on global '{var_name}' "
-                                            f"in {'async ' if is_async else ''}function '{func_name}'"
-                                        ),
-                                        "suggestion": (
-                                            f"Use {'asyncio.Lock()' if is_async else 'threading.Lock()'} "
-                                            f"to protect concurrent modifications"
-                                        ),
-                                    })
-
-    # Fourth pass: detect thread-unsafe singleton patterns
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Look for lazy initialization pattern without locks
-            # Example: if _instance is None: _instance = SomeClass()
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.If):
-                    # Check for "if var is None" pattern
-                    if isinstance(stmt.test, ast.Compare):
-                        if len(stmt.test.ops) == 1 and isinstance(stmt.test.ops[0], ast.Is):
-                            if isinstance(stmt.test.left, ast.Name):
-                                var_name = stmt.test.left.id
-                                if var_name.startswith("_") and var_name in global_vars:
-                                    # Check if body assigns to this variable
-                                    for body_stmt in stmt.body:
-                                        if isinstance(body_stmt, ast.Assign):
-                                            for target in body_stmt.targets:
-                                                if isinstance(target, ast.Name) and target.id == var_name:
-                                                    problems.append({
-                                                        "type": "race_condition",
-                                                        "severity": "high",
-                                                        "line": stmt.lineno,
-                                                        "description": (
-                                                            f"Thread-unsafe lazy initialization of '{var_name}' - "
-                                                            f"multiple threads may create multiple instances"
-                                                        ),
-                                                        "suggestion": (
-                                                            "Use a lock or implement proper double-checked locking pattern"
-                                                        ),
-                                                    })
-
-    # Fifth pass: detect async functions modifying shared state without await
-    for node in ast.walk(tree):
+        # Check for async functions modifying shared state (Pass 5)
         if isinstance(node, ast.AsyncFunctionDef):
-            # Check for shared state modifications that should use async primitives
-            uses_global = False
-            has_await_in_critical = False
-
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.Global):
-                    uses_global = True
-
+            uses_global = any(
+                isinstance(stmt, ast.Global) for stmt in ast.walk(node)
+            )
             if uses_global and not has_async_lock_import:
-                problems.append({
-                    "type": "race_condition",
-                    "severity": "medium",
-                    "line": node.lineno,
-                    "description": (
-                        f"Async function '{node.name}' uses global state but no asyncio.Lock imported"
+                problems.append(_create_race_condition_problem(
+                    lineno=node.lineno,
+                    description=(
+                        f"Async function '{node.name}' uses global state "
+                        f"but no asyncio.Lock imported"
                     ),
-                    "suggestion": (
+                    suggestion=(
                         "Consider using asyncio.Lock() to protect shared state in async context"
                     ),
-                })
+                    severity="medium",
+                ))
 
-    # Sixth pass: detect read-modify-write patterns
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            is_async = isinstance(node, ast.AsyncFunctionDef)
+        # Check for read-modify-write patterns (Pass 6)
+        problems.extend(_detect_augmented_assignment_issues(node, global_vars))
 
-            for stmt in ast.walk(node):
-                # Check for augmented assignment on globals (x += 1, dict[k] += 1)
-                if isinstance(stmt, ast.AugAssign):
-                    target = stmt.target
-                    var_name = None
-
-                    if isinstance(target, ast.Name):
-                        var_name = target.id
-                    elif isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
-                        var_name = target.value.id
-
-                    if var_name and var_name in global_vars:
-                        problems.append({
-                            "type": "race_condition",
-                            "severity": "high",
-                            "line": stmt.lineno,
-                            "description": (
-                                f"Read-modify-write on global '{var_name}' is not atomic - "
-                                f"can cause lost updates under concurrency"
-                            ),
-                            "suggestion": (
-                                "Use atomic operations or protect with a lock"
-                            ),
-                        })
-
-    # Seventh pass: detect shared file handles without locks
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.With):
-                    for item in stmt.items:
-                        if isinstance(item.context_expr, ast.Call):
-                            call = item.context_expr
-                            if isinstance(call.func, ast.Name) and call.func.id == "open":
-                                # Check if writing to a file that might be shared
-                                if len(call.args) >= 2:
-                                    mode_arg = call.args[1]
-                                    if isinstance(mode_arg, ast.Constant) and "w" in str(mode_arg.value):
-                                        problems.append({
-                                            "type": "race_condition",
-                                            "severity": "medium",
-                                            "line": stmt.lineno,
-                                            "description": (
-                                                "File opened for writing without explicit locking - "
-                                                "concurrent writes may corrupt data"
-                                            ),
-                                            "suggestion": (
-                                                "Use file locking (fcntl.flock) or a separate lock for file access"
-                                            ),
-                                        })
+        # Check for shared file handles (Pass 7)
+        problems.extend(_detect_file_handle_issues(node))
 
     return problems
 
 
 async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata:
-    """Analyze a Python file for functions, classes, and potential issues"""
+    """
+    Analyze a Python file for functions, classes, and potential issues.
+
+    Refactored for Issue #298 - reduced nesting from 9 to 3 levels max.
+    Uses helper functions for each analysis phase.
+    """
     try:
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             content = await f.read()
 
         tree = ast.parse(content)
 
-        functions = []
-        classes = []
-        imports = []
-        hardcodes = []
-        problems = []
-        technical_debt = []
+        # Phase 1: AST analysis (functions, classes, imports, long function problems)
+        functions, classes, imports, problems = _analyze_ast_nodes(tree)
 
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                functions.append(
-                    {
-                        "name": node.name,
-                        "line": node.lineno,
-                        "args": [arg.arg for arg in node.args.args],
-                        "docstring": ast.get_docstring(node),
-                        "is_async": isinstance(node, ast.AsyncFunctionDef),
-                    }
-                )
+        # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
+        hardcodes, technical_debt, line_problems = _analyze_content_lines(content, file_path)
+        problems.extend(line_problems)
 
-                # Check for long functions
-                if hasattr(node, "end_lineno") and node.end_lineno:
-                    func_length = node.end_lineno - node.lineno
-                    if func_length > 50:
-                        problems.append(
-                            {
-                                "type": "long_function",
-                                "severity": "medium",
-                                "line": node.lineno,
-                                "description": (
-                                    f"Function '{node.name}' is {func_length} lines long"
-                                ),
-                                "suggestion": (
-                                    "Consider breaking into smaller functions"
-                                ),
-                            }
-                        )
-
-            elif isinstance(node, ast.ClassDef):
-                classes.append(
-                    {
-                        "name": node.name,
-                        "line": node.lineno,
-                        "methods": [
-                            n.name for n in node.body if isinstance(n, ast.FunctionDef)
-                        ],
-                        "docstring": ast.get_docstring(node),
-                    }
-                )
-
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                if isinstance(node, ast.Import):
-                    imports.extend([alias.name for alias in node.names])
-                else:
-                    imports.append(node.module or "")
-
-        # Check content for hardcoded values using regex (more reliable than AST for this)
-        lines = content.split("\n")
-        for i, line in enumerate(lines, 1):
-            # Look for IP addresses
-            ip_matches = re.findall(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", line)
-            for ip in ip_matches:
-                if (
-                    ip.startswith(NetworkConstants.VM_IP_PREFIX)
-                    or ip.startswith("127.0.0.")
-                    or ip.startswith("192.168.")
-                ):
-                    hardcodes.append(
-                        {"type": "ip", "value": ip, "line": i, "context": line.strip()}
-                    )
-
-            # Look for URLs
-            url_matches = re.findall(r'[\'"`](https?://[^\'"` ]+)[\'"`]', line)
-            for url in url_matches:
-                hardcodes.append(
-                    {"type": "url", "value": url, "line": i, "context": line.strip()}
-                )
-
-            # Look for port numbers
-            port_matches = re.findall(r"\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b", line)
-            for port in port_matches:
-                if port in [
-                    str(NetworkConstants.BACKEND_PORT),
-                    str(NetworkConstants.AI_STACK_PORT),
-                    str(NetworkConstants.REDIS_PORT),
-                    str(NetworkConstants.OLLAMA_PORT),
-                    str(NetworkConstants.FRONTEND_PORT),
-                    str(NetworkConstants.BROWSER_SERVICE_PORT),
-                ]:
-                    hardcodes.append(
-                        {
-                            "type": "port",
-                            "value": port,
-                            "line": i,
-                            "context": line.strip(),
-                        }
-                    )
-
-            # Issue #272: Detect technical debt markers (TODO, FIXME, HACK, XXX)
-            debt_patterns = [
-                (r"#\s*TODO[:\s](.+)$", "todo", "low"),
-                (r"#\s*FIXME[:\s](.+)$", "fixme", "medium"),
-                (r"#\s*HACK[:\s](.+)$", "hack", "high"),
-                (r"#\s*XXX[:\s](.+)$", "xxx", "medium"),
-                (r"#\s*BUG[:\s](.+)$", "bug", "high"),
-                (r"#\s*DEPRECATED[:\s](.+)$", "deprecated", "medium"),
-            ]
-            for pattern, debt_type, severity in debt_patterns:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if match:
-                    description = match.group(1).strip() if match.group(1) else ""
-                    technical_debt.append({
-                        "type": debt_type,
-                        "severity": severity,
-                        "line": i,
-                        "description": description[:200],  # Limit description length
-                        "file_path": file_path,
-                    })
-                    # Also add to problems for visibility in reports
-                    problems.append({
-                        "type": f"technical_debt_{debt_type}",
-                        "severity": severity,
-                        "line": i,
-                        "description": f"{debt_type.upper()}: {description[:100]}",
-                        "suggestion": f"Address this {debt_type.upper()} comment",
-                    })
-
-        # Use LLM for semantic analysis if enabled
+        # Phase 3: LLM semantic analysis (optional)
         if use_llm:
-            try:
-                llm_results = await detect_hardcodes_and_debt_with_llm(
-                    content, file_path, language="python"
-                )
+            await _merge_llm_results(hardcodes, technical_debt, content, file_path)
 
-                # Merge LLM hardcodes with regex hardcodes (avoid duplicates)
-                existing_hardcode_values = {h.get("value") for h in hardcodes}
-                for llm_hardcode in llm_results.get("hardcodes", []):
-                    if llm_hardcode.get("value") not in existing_hardcode_values:
-                        hardcodes.append(llm_hardcode)
-
-                # Add technical debt from LLM
-                technical_debt.extend(llm_results.get("technical_debt", []))
-
-            except Exception as e:
-                logger.debug(f"LLM analysis skipped for {file_path}: {e}")
-
-        # Detect race conditions and concurrency issues
+        # Phase 4: Race condition detection
         try:
-            race_condition_problems = detect_race_conditions(tree, content, file_path)
-            problems.extend(race_condition_problems)
+            race_problems = detect_race_conditions(tree, content, file_path)
+            problems.extend(race_problems)
         except Exception as e:
             logger.debug(f"Race condition detection skipped for {file_path}: {e}")
 
-        # Issue #268: Integrated code intelligence analyzers
-        if _analyzers_available:
-            # Anti-pattern detection (Issue #269)
-            try:
-                global _anti_pattern_detector
-                if _anti_pattern_detector is None:
-                    _anti_pattern_detector = AntiPatternDetector()
-                anti_pattern_result = _anti_pattern_detector.analyze_file(file_path)
-                for pattern in anti_pattern_result.get("patterns", []):
-                    problems.append({
-                        "type": f"code_smell_{pattern.pattern_type.value}",
-                        "severity": pattern.severity.value,
-                        "line": pattern.line_number,
-                        "description": pattern.description,
-                        "suggestion": pattern.suggestion,
-                    })
-            except Exception as e:
-                logger.debug(f"Anti-pattern detection skipped for {file_path}: {e}")
-
-            # Performance analysis (Issue #270)
-            try:
-                global _performance_analyzer
-                if _performance_analyzer is None:
-                    _performance_analyzer = PerformanceAnalyzer()
-                perf_issues = _performance_analyzer.analyze_file(file_path)
-                for issue in perf_issues:
-                    problems.append({
-                        "type": f"performance_{issue.issue_type.value}",
-                        "severity": issue.severity.value,
-                        "line": issue.line_start,
-                        "description": issue.description,
-                        "suggestion": issue.recommendation,
-                    })
-            except Exception as e:
-                logger.debug(f"Performance analysis skipped for {file_path}: {e}")
-
-            # Bug prediction (Issue #273)
-            try:
-                global _bug_predictor
-                if _bug_predictor is None:
-                    project_root = Path(file_path).parent
-                    while project_root.parent != project_root:
-                        if (project_root / ".git").exists():
-                            break
-                        project_root = project_root.parent
-                    _bug_predictor = BugPredictor(str(project_root))
-
-                risk_assessment = _bug_predictor.analyze_file(file_path)
-                if risk_assessment.overall_risk >= 70:  # High risk threshold
-                    problems.append({
-                        "type": "bug_prediction_high_risk",
-                        "severity": "high" if risk_assessment.overall_risk >= 85 else "medium",
-                        "line": 1,
-                        "description": (
-                            f"High bug risk score: {risk_assessment.overall_risk:.0f}/100. "
-                            f"Risk level: {risk_assessment.risk_level.value}"
-                        ),
-                        "suggestion": "; ".join(risk_assessment.recommendations[:3])
-                            if risk_assessment.recommendations else "Review code complexity",
-                    })
-            except Exception as e:
-                logger.debug(f"Bug prediction skipped for {file_path}: {e}")
+        # Phase 5: Code intelligence analyzers
+        code_intel_problems = _run_code_intelligence_analyzers(file_path)
+        problems.extend(code_intel_problems)
 
         return {
             "functions": functions,
@@ -616,34 +960,21 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
 
     except OSError as e:
         logger.error(f"Failed to read Python file {file_path}: {e}")
-        return {
-            "functions": [],
-            "classes": [],
-            "imports": [],
-            "hardcodes": [],
-            "problems": [],
-            "technical_debt": [],
-            "line_count": 0,
-        }
+        return _create_empty_analysis_result()
+
     except Exception as e:
         logger.error(f"Error analyzing Python file {file_path}: {e}")
-        return {
-            "functions": [],
-            "classes": [],
-            "imports": [],
-            "hardcodes": [],
-            "problems": [
-                {
-                    "type": "parse_error",
-                    "severity": "high",
-                    "line": 1,
-                    "description": f"Failed to parse file: {str(e)}",
-                    "suggestion": "Check syntax errors",
-                }
-            ],
-            "technical_debt": [],
-            "line_count": 0,
-        }
+        result = _create_empty_analysis_result()
+        result["problems"] = [
+            {
+                "type": "parse_error",
+                "severity": "high",
+                "line": 1,
+                "description": f"Failed to parse file: {str(e)}",
+                "suggestion": "Check syntax errors",
+            }
+        ]
+        return result
 
 
 def analyze_javascript_vue_file(file_path: str) -> Metadata:

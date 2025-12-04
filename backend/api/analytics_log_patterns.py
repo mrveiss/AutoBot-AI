@@ -453,6 +453,89 @@ class LogPatternMiner:
 pattern_miner = LogPatternMiner()
 
 
+# =============================================================================
+# Log Processing Helpers (Issue #298 - Reduce Deep Nesting)
+# =============================================================================
+
+
+async def _read_log_lines(
+    file_path: Path,
+    cutoff_time: Optional[datetime] = None,
+    max_lines: Optional[int] = None,
+) -> List[Tuple[str, datetime]]:
+    """
+    Read log lines from a file, filtering by timestamp.
+
+    Returns list of (line, timestamp) tuples.
+    """
+    result = []
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+            lines = content.splitlines()
+            if max_lines:
+                lines = lines[-max_lines:]
+
+            for line in lines:
+                if not line.strip():
+                    continue
+
+                ts = pattern_miner.extract_timestamp(line)
+                if cutoff_time and ts and ts < cutoff_time:
+                    continue
+
+                if ts:
+                    result.append((line.strip(), ts))
+
+    except OSError as e:
+        logger.warning(f"Failed to read {file_path}: {e}")
+    except Exception as e:
+        logger.warning(f"Error reading {file_path}: {e}")
+
+    return result
+
+
+def _process_error_hotspot_line(
+    line: str,
+    ts: datetime,
+    hourly_errors: Dict[str, Dict],
+) -> None:
+    """Process a single log line for error hotspot analysis."""
+    hour_key = ts.strftime("%Y-%m-%d %H:00")
+    hourly_errors[hour_key]["total"] += 1
+
+    level = pattern_miner.extract_log_level(line)
+    if level in ["ERROR", "CRITICAL"]:
+        hourly_errors[hour_key]["errors"] += 1
+        if len(hourly_errors[hour_key]["samples"]) < 5:
+            hourly_errors[hour_key]["samples"].append(line[:200])
+
+
+def _build_recent_log_entry(line: str, ts: datetime, source: str) -> Dict:
+    """Build a recent log entry dictionary."""
+    return {
+        "timestamp": ts.isoformat(),
+        "level": pattern_miner.extract_log_level(line),
+        "source": source,
+        "message": line[:200],
+    }
+
+
+async def _collect_log_files(
+    log_dir: Path,
+    pattern: str = "*.log",
+) -> List[Path]:
+    """Collect log file paths from directory."""
+    if not log_dir.exists():
+        return []
+    return list(log_dir.glob(pattern))
+
+
+# =============================================================================
+# End of Log Processing Helpers
+# =============================================================================
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -666,31 +749,11 @@ async def get_error_hotspots(
         )
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        for line in content.splitlines():
-                            if not line.strip():
-                                continue
-
-                            ts = pattern_miner.extract_timestamp(line)
-                            if ts and ts >= cutoff_time:
-                                hour_key = ts.strftime("%Y-%m-%d %H:00")
-                                hourly_errors[hour_key]["total"] += 1
-
-                                level = pattern_miner.extract_log_level(line)
-                                if level in ["ERROR", "CRITICAL"]:
-                                    hourly_errors[hour_key]["errors"] += 1
-                                    if len(hourly_errors[hour_key]["samples"]) < 5:
-                                        hourly_errors[hour_key]["samples"].append(
-                                            line[:200]
-                                        )
-                except OSError as e:
-                    logger.warning(f"Failed to read {file_path}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error reading {file_path}: {e}")
+        log_files = await _collect_log_files(LOG_DIR)
+        for file_path in log_files:
+            log_lines = await _read_log_lines(file_path, cutoff_time)
+            for line, ts in log_lines:
+                _process_error_hotspot_line(line, ts, hourly_errors)
 
         # Calculate error rates and find hotspots
         hotspots = []
@@ -799,29 +862,11 @@ async def get_realtime_summary():
         cutoff = datetime.now() - timedelta(minutes=5)
         recent_logs = []
 
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        for line in content.splitlines()[-500:]:  # Check last 500 lines
-                            if not line.strip():
-                                continue
-
-                            ts = pattern_miner.extract_timestamp(line)
-                            if ts and ts >= cutoff:
-                                recent_logs.append(
-                                    {
-                                        "timestamp": ts.isoformat(),
-                                        "level": pattern_miner.extract_log_level(line),
-                                        "source": file_path.stem,
-                                        "message": line[:200],
-                                    }
-                                )
-                except OSError as e:
-                    logger.debug(f"Failed to read {file_path}: {e}")
-                except Exception as e:
-                    logger.debug(f"Error reading {file_path}: {e}")
+        log_files = await _collect_log_files(LOG_DIR)
+        for file_path in log_files:
+            log_lines = await _read_log_lines(file_path, cutoff, max_lines=500)
+            for line, ts in log_lines:
+                recent_logs.append(_build_recent_log_entry(line, ts, file_path.stem))
 
         # Sort by timestamp
         recent_logs.sort(key=lambda x: x["timestamp"], reverse=True)
