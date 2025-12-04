@@ -8,7 +8,7 @@ Advanced code analysis endpoints for development acceleration using NPU and Redi
 """
 
 import logging
-from typing import Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -23,6 +23,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Type alias for analysis handlers (Issue #336)
+AnalysisHandler = Callable[[str], Awaitable[Any]]
 
 # Lazy initialization for development speedup agent (thread-safe)
 import threading
@@ -40,6 +43,57 @@ def _get_dev_speedup_agent():
             if _development_speedup_instance is None:
                 _development_speedup_instance = get_development_speedup_agent()
     return _development_speedup_instance
+
+
+# Issue #336: Analysis type handlers extracted from elif chain
+async def _analyze_comprehensive(root_path: str) -> Any:
+    """Run comprehensive analysis (Issue #336 - extracted handler)."""
+    return await analyze_codebase(root_path)
+
+
+async def _analyze_duplicates(root_path: str) -> Any:
+    """Run duplicate code analysis (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().find_duplicate_code(root_path)
+
+
+async def _analyze_patterns(root_path: str) -> Any:
+    """Run pattern analysis (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().identify_code_patterns(root_path)
+
+
+async def _analyze_imports(root_path: str) -> Any:
+    """Run import analysis (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().analyze_imports_and_dependencies(root_path)
+
+
+async def _analyze_dead_code(root_path: str) -> Any:
+    """Run dead code detection (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().detect_dead_code(root_path)
+
+
+async def _analyze_refactoring(root_path: str) -> Any:
+    """Run refactoring opportunities analysis (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().find_refactoring_opportunities(root_path)
+
+
+async def _analyze_quality(root_path: str) -> Any:
+    """Run code quality analysis (Issue #336 - extracted handler)."""
+    return await _get_dev_speedup_agent().analyze_code_quality_consistency(root_path)
+
+
+# Issue #336: Dispatch table for analysis type routing
+ANALYSIS_TYPE_HANDLERS: Dict[str, AnalysisHandler] = {
+    "comprehensive": _analyze_comprehensive,
+    "duplicates": _analyze_duplicates,
+    "patterns": _analyze_patterns,
+    "imports": _analyze_imports,
+    "dead_code": _analyze_dead_code,
+    "refactoring": _analyze_refactoring,
+    "quality": _analyze_quality,
+}
+
+# Valid analysis types for error messages
+VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
 class AnalysisRequest(BaseModel):
@@ -71,38 +125,15 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     try:
         logger.info(f"Starting {request.analysis_type} analysis: {request.root_path}")
 
-        if request.analysis_type == "comprehensive":
-            result = await analyze_codebase(request.root_path)
-        elif request.analysis_type == "duplicates":
-            result = await _get_dev_speedup_agent().find_duplicate_code(
-                request.root_path
-            )
-        elif request.analysis_type == "patterns":
-            result = await _get_dev_speedup_agent().identify_code_patterns(
-                request.root_path
-            )
-        elif request.analysis_type == "imports":
-            result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(
-                request.root_path
-            )
-        elif request.analysis_type == "dead_code":
-            result = await _get_dev_speedup_agent().detect_dead_code(request.root_path)
-        elif request.analysis_type == "refactoring":
-            result = await _get_dev_speedup_agent().find_refactoring_opportunities(
-                request.root_path
-            )
-        elif request.analysis_type == "quality":
-            result = await _get_dev_speedup_agent().analyze_code_quality_consistency(
-                request.root_path
-            )
-        else:
+        # Issue #336: Dispatch table lookup replaces elif chain
+        handler = ANALYSIS_TYPE_HANDLERS.get(request.analysis_type)
+        if handler is None:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Invalid analysis_type. Must be one of: comprehensive, duplicates, patterns, imports,"
-                    "dead_code, refactoring, quality"
-                )
+                detail=f"Invalid analysis_type. Must be one of: {VALID_ANALYSIS_TYPES}",
             )
+
+        result = await handler(request.root_path)
 
         return JSONResponse(
             status_code=200,
