@@ -11,6 +11,7 @@ between the backend and frontend clients.
 import asyncio
 import json
 import logging
+from typing import Callable, Dict, Optional, Tuple
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -20,6 +21,267 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# Issue #336: Message type to text/sender mapping functions (extracted from elif chain)
+def _format_goal_received(raw_data: dict) -> Tuple[str, str]:
+    """Format goal_received event."""
+    return f"Goal received: \"{raw_data.get('goal', 'N/A')}\"", "system"
+
+
+def _format_plan_ready(raw_data: dict) -> Tuple[str, str]:
+    """Format plan_ready event."""
+    plan_text = raw_data.get("llm_response", "No plan text available.")
+    return f"Here is the plan:\n{plan_text}", "bot"
+
+
+def _format_goal_completed(raw_data: dict) -> Tuple[str, str]:
+    """Format goal_completed event."""
+    results = json.dumps(raw_data.get("results", {}), indent=2)
+    return f"Goal completed. Result: {results}", "system"
+
+
+def _format_command_execution_start(raw_data: dict) -> Tuple[str, str]:
+    """Format command_execution_start event."""
+    return f"Executing command: {raw_data.get('command', 'N/A')}", "system"
+
+
+def _format_command_execution_end(raw_data: dict) -> Tuple[str, str]:
+    """Format command_execution_end event."""
+    status = raw_data.get("status", "N/A")
+    output = raw_data.get("output", "")
+    error = raw_data.get("error", "")
+    return f"Command finished ({status}). Output: {output or error}", "system"
+
+
+def _format_error(raw_data: dict) -> Tuple[str, str]:
+    """Format error event."""
+    return f"Error: {raw_data.get('message', 'Unknown error')}", "error"
+
+
+def _format_progress(raw_data: dict) -> Tuple[str, str]:
+    """Format progress event."""
+    return f"Progress: {raw_data.get('message', 'N/A')}", "system"
+
+
+def _format_llm_response(raw_data: dict) -> Tuple[str, str]:
+    """Format llm_response event."""
+    return raw_data.get("response", "N/A"), "bot"
+
+
+def _format_user_message(raw_data: dict) -> Tuple[str, str]:
+    """Format user_message event."""
+    return raw_data.get("message", "N/A"), "user"
+
+
+def _format_thought(raw_data: dict) -> Tuple[str, str]:
+    """Format thought event."""
+    return json.dumps(raw_data.get("thought", {}), indent=2), "thought"
+
+
+def _format_tool_code(raw_data: dict) -> Tuple[str, str]:
+    """Format tool_code event."""
+    return raw_data.get("code", "N/A"), "tool-code"
+
+
+def _format_tool_output(raw_data: dict) -> Tuple[str, str]:
+    """Format tool_output event."""
+    return raw_data.get("output", "N/A"), "tool-output"
+
+
+def _format_settings_updated(raw_data: dict) -> Tuple[str, str]:
+    """Format settings_updated event."""
+    return "Settings updated successfully.", "system"
+
+
+def _format_file_uploaded(raw_data: dict) -> Tuple[str, str]:
+    """Format file_uploaded event."""
+    return f"File uploaded: {raw_data.get('filename', 'N/A')}", "system"
+
+
+def _format_knowledge_base_update(raw_data: dict) -> Tuple[str, str]:
+    """Format knowledge_base_update event."""
+    return f"Knowledge Base updated: {raw_data.get('type', 'N/A')}", "system"
+
+
+def _format_llm_status(raw_data: dict) -> Tuple[str, str]:
+    """Format llm_status event."""
+    status = raw_data.get("status", "N/A")
+    model = raw_data.get("model", "N/A")
+    message = raw_data.get("message", "")
+    sender = "error" if status == "disconnected" else "system"
+    return f"LLM ({model}) connection {status}. {message}", sender
+
+
+def _format_diagnostics_report(raw_data: dict) -> Tuple[str, str]:
+    """Format diagnostics_report event."""
+    return f"Diagnostics Report: {json.dumps(raw_data, indent=2)}", "system"
+
+
+def _format_user_permission_request(raw_data: dict) -> Tuple[str, str]:
+    """Format user_permission_request event."""
+    return f"User Permission Request: {json.dumps(raw_data, indent=2)}", "system"
+
+
+def _format_workflow_step_started(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_step_started event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    step_desc = raw_data.get("description", "N/A")
+    return f"🔄 Workflow {workflow_id}: Started step - {step_desc}", "workflow"
+
+
+def _format_workflow_step_completed(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_step_completed event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    step_desc = raw_data.get("description", "N/A")
+    result = raw_data.get("result", "Completed")
+    text = f"✅ Workflow {workflow_id}: Completed step - {step_desc}. Result: {result}"
+    return text, "workflow"
+
+
+def _format_workflow_approval_required(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_approval_required event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    step_desc = raw_data.get("description", "N/A")
+    return f"⏸️ Workflow {workflow_id}: Approval required for - {step_desc}", "workflow"
+
+
+def _format_workflow_completed(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_completed event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    total_steps = raw_data.get("total_steps", 0)
+    text = f"🎉 Workflow {workflow_id}: Completed successfully with {total_steps} steps"
+    return text, "workflow"
+
+
+def _format_workflow_failed(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_failed event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    error = raw_data.get("error", "Unknown error")
+    return f"❌ Workflow {workflow_id}: Failed - {error}", "workflow-error"
+
+
+def _format_workflow_cancelled(raw_data: dict) -> Tuple[str, str]:
+    """Format workflow_cancelled event."""
+    workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+    return f"🛑 Workflow {workflow_id}: Cancelled by user", "workflow"
+
+
+# Issue #336: Dispatch table for message type formatting
+MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
+    "goal_received": _format_goal_received,
+    "plan_ready": _format_plan_ready,
+    "goal_completed": _format_goal_completed,
+    "command_execution_start": _format_command_execution_start,
+    "command_execution_end": _format_command_execution_end,
+    "error": _format_error,
+    "progress": _format_progress,
+    "llm_response": _format_llm_response,
+    "user_message": _format_user_message,
+    "thought": _format_thought,
+    "tool_code": _format_tool_code,
+    "tool_output": _format_tool_output,
+    "settings_updated": _format_settings_updated,
+    "file_uploaded": _format_file_uploaded,
+    "knowledge_base_update": _format_knowledge_base_update,
+    "llm_status": _format_llm_status,
+    "diagnostics_report": _format_diagnostics_report,
+    "user_permission_request": _format_user_permission_request,
+    "workflow_step_started": _format_workflow_step_started,
+    "workflow_step_completed": _format_workflow_step_completed,
+    "workflow_approval_required": _format_workflow_approval_required,
+    "workflow_completed": _format_workflow_completed,
+    "workflow_failed": _format_workflow_failed,
+    "workflow_cancelled": _format_workflow_cancelled,
+}
+
+
+def _format_event_for_chat(
+    message_type: str, raw_data: dict
+) -> Tuple[Optional[str], str]:
+    """Format event data for chat history (Issue #336 - extracted dispatch helper).
+
+    Args:
+        message_type: The event type
+        raw_data: The event payload
+
+    Returns:
+        Tuple of (formatted_text, sender) or (None, "system") if no formatter
+    """
+    formatter = MESSAGE_TYPE_FORMATTERS.get(message_type)
+    if formatter:
+        return formatter(raw_data)
+    return None, "system"
+
+
+async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
+    """Handle command approval message from frontend (Issue #336 - extracted helper).
+
+    Args:
+        websocket: The WebSocket connection
+        data: The command approval data
+    """
+    logger.info(f"Received command approval via WebSocket: {data}")
+
+    terminal_session_id = data.get("terminal_session_id")
+    if not terminal_session_id:
+        logger.warning("Received approval message without terminal_session_id")
+        return
+
+    approved = data.get("approved", False)
+    user_id = data.get("user_id", "web_user")
+
+    try:
+        from backend.services.agent_terminal import AgentTerminalService
+
+        service = AgentTerminalService()
+        result = await service.approve_command(
+            session_id=terminal_session_id,
+            approved=approved,
+            user_id=user_id,
+        )
+
+        logger.info(f"Command approval result: {result.get('status')}")
+
+        await websocket.send_json(
+            {
+                "type": "approval_processed",
+                "payload": {
+                    "terminal_session_id": terminal_session_id,
+                    "approved": approved,
+                    "result": result,
+                },
+            }
+        )
+    except Exception as approval_error:
+        logger.error(f"Error processing approval: {approval_error}", exc_info=True)
+        await websocket.send_json(
+            {
+                "type": "approval_error",
+                "payload": {"error": str(approval_error)},
+            }
+        )
+
+
+async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
+    """Handle incoming WebSocket message (Issue #336 - extracted helper).
+
+    Args:
+        websocket: The WebSocket connection
+        message: The raw message string
+    """
+    try:
+        data = json.loads(message)
+        msg_type = data.get("type")
+
+        if msg_type == "user_message":
+            logger.debug(f"Received user message via WebSocket: {data}")
+        elif msg_type == "pong":
+            logger.debug("Received pong from client")
+        elif msg_type == "command_approval":
+            await _handle_command_approval(websocket, data)
+    except json.JSONDecodeError:
+        logger.warning(f"Received invalid JSON via WebSocket: {message}")
 
 # Connected WebSocket clients for NPU workers
 _npu_worker_ws_clients: list[WebSocket] = []
@@ -123,101 +385,11 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json(event_data)
 
             # Add event to chat history manager
-            sender = "system"
-            text = ""
             message_type = event_data.get("type", "default")
             raw_data = event_data.get("payload", {})
 
-            # Map event types to human-readable chat messages
-            if message_type == "goal_received":
-                text = "Goal received: \"{raw_data.get('goal', 'N/A')}\""
-            elif message_type == "plan_ready":
-                plan_text = raw_data.get("llm_response", "No plan text available.")
-                text = f"Here is the plan:\n{plan_text}"
-                sender = "bot"
-            elif message_type == "goal_completed":
-                results = json.dumps(raw_data.get("results", {}), indent=2)
-                text = f"Goal completed. Result: {results}"
-            elif message_type == "command_execution_start":
-                text = f"Executing command: {raw_data.get('command', 'N/A')}"
-            elif message_type == "command_execution_end":
-                status = raw_data.get("status", "N/A")
-                output = raw_data.get("output", "")
-                error = raw_data.get("error", "")
-                text = f"Command finished ({status}). Output: {output or error}"
-            elif message_type == "error":
-                text = f"Error: {raw_data.get('message', 'Unknown error')}"
-                sender = "error"
-            elif message_type == "progress":
-                text = f"Progress: {raw_data.get('message', 'N/A')}"
-            elif message_type == "llm_response":
-                text = raw_data.get("response", "N/A")
-                sender = "bot"
-            elif message_type == "user_message":
-                text = raw_data.get("message", "N/A")
-                sender = "user"
-            elif message_type == "thought":
-                text = json.dumps(raw_data.get("thought", {}), indent=2)
-                sender = "thought"
-            elif message_type == "tool_code":
-                text = raw_data.get("code", "N/A")
-                sender = "tool-code"
-            elif message_type == "tool_output":
-                text = raw_data.get("output", "N/A")
-                sender = "tool-output"
-            elif message_type == "settings_updated":
-                text = "Settings updated successfully."
-            elif message_type == "file_uploaded":
-                text = f"File uploaded: {raw_data.get('filename', 'N/A')}"
-            elif message_type == "knowledge_base_update":
-                text = f"Knowledge Base updated: {raw_data.get('type', 'N/A')}"
-            elif message_type == "llm_status":
-                status = raw_data.get("status", "N/A")
-                model = raw_data.get("model", "N/A")
-                message = raw_data.get("message", "")
-                text = f"LLM ({model}) connection {status}. {message}"
-                if status == "disconnected":
-                    sender = "error"
-            elif message_type == "diagnostics_report":
-                text = f"Diagnostics Report: {json.dumps(raw_data, indent=2)}"
-            elif message_type == "user_permission_request":
-                text = f"User Permission Request: {json.dumps(raw_data, indent=2)}"
-            elif message_type == "workflow_step_started":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
-                text = f"🔄 Workflow {workflow_id}: Started step - {step_desc}"
-                sender = "workflow"
-            elif message_type == "workflow_step_completed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
-                result = raw_data.get("result", "Completed")
-                text = (
-                    f"✅ Workflow {workflow_id}: Completed step - {step_desc}. "
-                    f"Result: {result}"
-                )
-                sender = "workflow"
-            elif message_type == "workflow_approval_required":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
-                text = f"⏸️ Workflow {workflow_id}: Approval required for - {step_desc}"
-                sender = "workflow"
-            elif message_type == "workflow_completed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                total_steps = raw_data.get("total_steps", 0)
-                text = (
-                    f"🎉 Workflow {workflow_id}: Completed successfully with "
-                    f"{total_steps} steps"
-                )
-                sender = "workflow"
-            elif message_type == "workflow_failed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                error = raw_data.get("error", "Unknown error")
-                text = f"❌ Workflow {workflow_id}: Failed - {error}"
-                sender = "workflow-error"
-            elif message_type == "workflow_cancelled":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                text = f"🛑 Workflow {workflow_id}: Cancelled by user"
-                sender = "workflow"
+            # Issue #336: Use dispatch table instead of elif chain
+            text, sender = _format_event_for_chat(message_type, raw_data)
 
             # Add to chat history if we have meaningful text and chat_history_manager is available
             # CRITICAL FIX: Skip streaming responses to prevent duplicate messages
@@ -282,69 +454,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Other errors, continue trying
                     continue
 
-            try:
-                data = json.loads(message)
-                if data.get("type") == "user_message":
-                    # Handle user messages if needed
-                    # For now, just log them
-                    logger.debug(f"Received user message via WebSocket: {data}")
-                elif data.get("type") == "pong":
-                    # Client responded to ping
-                    logger.debug("Received pong from client")
-                elif data.get("type") == "command_approval":
-                    # Handle command approval from frontend
-                    logger.info(f"Received command approval via WebSocket: {data}")
-
-                    terminal_session_id = data.get("terminal_session_id")
-                    approved = data.get("approved", False)
-                    user_id = data.get("user_id", "web_user")
-
-                    if terminal_session_id:
-                        try:
-                            # Call the approval API
-                            from backend.services.agent_terminal_service import (
-                                AgentTerminalService,
-                            )
-
-                            service = AgentTerminalService()
-                            result = await service.approve_command(
-                                session_id=terminal_session_id,
-                                approved=approved,
-                                user_id=user_id,
-                            )
-
-                            logger.info(
-                                f"Command approval result: {result.get('status')}"
-                            )
-
-                            # Send confirmation back to frontend
-                            await websocket.send_json(
-                                {
-                                    "type": "approval_processed",
-                                    "payload": {
-                                        "terminal_session_id": terminal_session_id,
-                                        "approved": approved,
-                                        "result": result,
-                                    },
-                                }
-                            )
-                        except Exception as approval_error:
-                            logger.error(
-                                f"Error processing approval: {approval_error}",
-                                exc_info=True,
-                            )
-                            await websocket.send_json(
-                                {
-                                    "type": "approval_error",
-                                    "payload": {"error": str(approval_error)},
-                                }
-                            )
-                    else:
-                        logger.warning(
-                            "Received approval message without terminal_session_id"
-                        )
-            except json.JSONDecodeError:
-                logger.warning(f"Received invalid JSON via WebSocket: {message}")
+            # Issue #336: Use extracted helper for message handling
+            await _handle_websocket_message(websocket, message)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")

@@ -12,7 +12,7 @@ import socket
 import subprocess
 import time
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
@@ -32,6 +32,72 @@ router = APIRouter()
 
 # Create singleton config instance
 config = UnifiedConfigManager()
+
+
+def _get_machine_monitor_dispatch(monitor: Any) -> Dict[str, Callable[[], Awaitable[Any]]]:
+    """Get dispatch table for machine monitoring (Issue #336 - extracted helper).
+
+    Args:
+        monitor: The InfrastructureMonitor instance
+
+    Returns:
+        Dict mapping machine IDs to their monitor functions
+    """
+    return {
+        "vm0": monitor.monitor_vm0,
+        "vm1": monitor.monitor_vm1,
+        "vm2": monitor.monitor_vm2,
+        "vm3": monitor.monitor_vm3,
+        "vm4": monitor.monitor_vm4,
+        "vm5": monitor.monitor_vm5,
+        "localhost": monitor.monitor_localhost,
+    }
+
+
+def _calculate_service_health(machines: List[Any]) -> Dict[str, Any]:
+    """Calculate overall service health from machines (Issue #336 - extracted helper).
+
+    Args:
+        machines: List of MachineInfo objects
+
+    Returns:
+        Dict with service counts and overall status
+    """
+    total_services = 0
+    online_services = 0
+    error_services = 0
+    warning_services = 0
+
+    for machine in machines:
+        categories = [
+            machine.services.core,
+            machine.services.database,
+            machine.services.application,
+            machine.services.support,
+        ]
+        for category in categories:
+            for service in category:
+                total_services += 1
+                if service.status == "online":
+                    online_services += 1
+                elif service.status == "error":
+                    error_services += 1
+                elif service.status == "warning":
+                    warning_services += 1
+
+    overall_status = "healthy"
+    if error_services > 0:
+        overall_status = "error"
+    elif warning_services > 0:
+        overall_status = "warning"
+
+    return {
+        "overall_status": overall_status,
+        "total_services": total_services,
+        "online_services": online_services,
+        "error_services": error_services,
+        "warning_services": warning_services,
+    }
 
 
 @with_error_handling(
@@ -1140,43 +1206,18 @@ async def get_infrastructure_status():
     try:
         machines = await monitor.get_infrastructure_status()
 
-        # Calculate overall health
-        total_services = 0
-        online_services = 0
-        error_services = 0
-        warning_services = 0
-
-        for machine in machines:
-            for category in [
-                machine.services.core,
-                machine.services.database,
-                machine.services.application,
-                machine.services.support,
-            ]:
-                for service in category:
-                    total_services += 1
-                    if service.status == "online":
-                        online_services += 1
-                    elif service.status == "error":
-                        error_services += 1
-                    elif service.status == "warning":
-                        warning_services += 1
-
-        overall_status = "healthy"
-        if error_services > 0:
-            overall_status = "error"
-        elif warning_services > 0:
-            overall_status = "warning"
+        # Issue #336: Use extracted helper for health calculation
+        health = _calculate_service_health(machines)
 
         return {
             "status": "success",
-            "overall_status": overall_status,
+            "overall_status": health["overall_status"],
             "summary": {
                 "total_machines": len(machines),
-                "total_services": total_services,
-                "online_services": online_services,
-                "error_services": error_services,
-                "warning_services": warning_services,
+                "total_services": health["total_services"],
+                "online_services": health["online_services"],
+                "error_services": health["error_services"],
+                "warning_services": health["warning_services"],
             },
             "machines": [machine.dict() for machine in machines],
             "timestamp": datetime.now().isoformat(),
@@ -1196,22 +1237,14 @@ async def get_infrastructure_status():
 async def get_machine_status(machine_id: str):
     """Get status for a specific machine"""
     try:
-        if machine_id == "vm0":
-            machine = await monitor.monitor_vm0()
-        elif machine_id == "vm1":
-            machine = await monitor.monitor_vm1()
-        elif machine_id == "vm2":
-            machine = await monitor.monitor_vm2()
-        elif machine_id == "vm3":
-            machine = await monitor.monitor_vm3()
-        elif machine_id == "vm4":
-            machine = await monitor.monitor_vm4()
-        elif machine_id == "vm5":
-            machine = await monitor.monitor_vm5()
-        elif machine_id == "localhost":
-            machine = await monitor.monitor_localhost()
-        else:
+        # Issue #336: Use dispatch table instead of elif chain
+        dispatch = _get_machine_monitor_dispatch(monitor)
+        monitor_func = dispatch.get(machine_id)
+
+        if not monitor_func:
             raise HTTPException(status_code=404, detail="Machine not found")
+
+        machine = await monitor_func()
 
         return {
             "status": "success",

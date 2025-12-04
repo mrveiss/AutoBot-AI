@@ -10,7 +10,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from backend.type_defs.common import Metadata
 
@@ -27,6 +27,186 @@ router = APIRouter()
 
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()
+
+
+# Issue #336: Agent step handlers extracted from elif chain
+async def _handle_librarian_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle librarian agent step (Issue #336 - extracted handler)."""
+    from src.agents.kb_librarian_agent import KBLibrarianAgent
+
+    kb_agent = KBLibrarianAgent()
+    search_query = action.replace("Search Knowledge Base", "").strip()
+    if not search_query:
+        search_query = "network security scanning tools"
+
+    result = await kb_agent.process_query(search_query)
+    response = result.get("response", "Search completed")
+    step["result"] = f"Knowledge base search completed: {response}"
+
+
+async def _handle_research_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle research agent step (Issue #336 - extracted handler)."""
+    from src.agents.research_agent import ResearchAgent, ResearchRequest
+
+    research_agent = ResearchAgent()
+    action_lower = action.lower()
+
+    if "research tools" in action_lower:
+        request = ResearchRequest(query="network security scanning tools", focus="tools")
+        result = await research_agent.research_specific_tools(request)
+        step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
+    elif "installation guide" in action_lower:
+        result = await research_agent.get_tool_installation_guide("nmap")
+        guide = result.get("installation_guide", "Guide obtained")
+        step["result"] = f"Installation guide retrieved: {guide}"
+    else:
+        request = ResearchRequest(query=action, focus="general")
+        result = await research_agent.perform_research(request)
+        step["result"] = f"Research completed: {result.summary}"
+
+
+async def _handle_orchestrator_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle orchestrator agent step (Issue #336 - extracted handler)."""
+    action_lower = action.lower()
+
+    if "present tool options" in action_lower:
+        options = (
+            "Tool options: nmap (network discovery), "
+            "masscan (fast port scanner), zmap (internet scanner). "
+            "Please select which tool to install."
+        )
+        step["result"] = options
+    elif "create install plan" in action_lower:
+        plan = (
+            "Installation plan: 1) Update package manager, "
+            "2) Install selected tool, 3) Configure tool, "
+            "4) Run verification test"
+        )
+        step["result"] = plan
+    else:
+        result = await orchestrator.execute_goal(action)
+        response = result.get("response", "Task coordinated")
+        step["result"] = f"Orchestration completed: {response}"
+
+
+async def _handle_knowledge_manager_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle knowledge manager agent step (Issue #336 - extracted handler)."""
+    from src.knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase()
+    content = f"Workflow step result: {step.get('result', action)}"
+    metadata = {
+        "workflow_id": workflow_id,
+        "step_id": step["step_id"],
+        "agent_type": "knowledge_manager",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    await kb.add_document(content, metadata)
+    step["result"] = "Information stored in knowledge base for future reference"
+
+
+async def _handle_security_scanner_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle security scanner agent step (Issue #336 - extracted handler)."""
+    from src.agents.security_scanner_agent import security_scanner_agent
+
+    scan_context = step.get("inputs", {})
+    action_lower = action.lower()
+
+    if "port scan" in action_lower:
+        scan_context["scan_type"] = "port_scan"
+    elif "vulnerability" in action_lower:
+        scan_context["scan_type"] = "vulnerability_scan"
+    elif "ssl" in action_lower:
+        scan_context["scan_type"] = "ssl_scan"
+    elif "service" in action_lower:
+        scan_context["scan_type"] = "service_detection"
+
+    result = await security_scanner_agent.execute(action, scan_context)
+    status = result.get("status")
+    message = result.get("message", "Scan results available")
+    step["result"] = f"Security scan completed: {status} - {message}"
+    step["scan_results"] = result
+
+
+async def _handle_network_discovery_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle network discovery agent step (Issue #336 - extracted handler)."""
+    from src.agents.network_discovery_agent import network_discovery_agent
+
+    discovery_context = step.get("inputs", {})
+    action_lower = action.lower()
+
+    if "network scan" in action_lower:
+        discovery_context["task_type"] = "network_scan"
+    elif "host discovery" in action_lower:
+        discovery_context["task_type"] = "host_discovery"
+    elif "arp" in action_lower:
+        discovery_context["task_type"] = "arp_scan"
+    elif "asset inventory" in action_lower:
+        discovery_context["task_type"] = "asset_inventory"
+    elif "network map" in action_lower:
+        discovery_context["task_type"] = "network_map"
+
+    result = await network_discovery_agent.execute(action, discovery_context)
+    status = result.get("status")
+    hosts_found = result.get("hosts_found", 0)
+    step["result"] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
+    step["discovery_results"] = result
+
+
+async def _handle_system_commands_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any
+) -> None:
+    """Handle system commands agent step (Issue #336 - extracted handler)."""
+    from src.agents.enhanced_system_commands_agent import EnhancedSystemCommandsAgent
+
+    cmd_agent = EnhancedSystemCommandsAgent()
+    action_lower = action.lower()
+
+    if "install tool" in action_lower:
+        tool_info = {"name": "nmap", "package_name": "nmap"}
+        result = await cmd_agent.install_tool(tool_info, workflow_id)
+        step["result"] = f"Installation result: {result.get('response', 'Tool installed')}"
+    elif "verify installation" in action_lower:
+        result = await cmd_agent.execute_command_with_output("nmap --version", workflow_id)
+        step["result"] = f"Verification result: {result.get('output', 'Tool verified')}"
+    else:
+        result = await cmd_agent.execute_command_with_output(action, workflow_id)
+        step["result"] = f"Command executed: {result.get('output', 'Command completed')}"
+
+
+async def _handle_fallback_step(
+    step: Metadata, action: str, workflow_id: str, orchestrator: Any, agent_type: str
+) -> None:
+    """Handle unknown agent type with fallback (Issue #336 - extracted handler)."""
+    result = await orchestrator.execute_goal(f"{agent_type}: {action}")
+    step["result"] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+
+
+# Issue #336: Dispatch table for agent step handlers
+AgentStepHandler = Callable[[Metadata, str, str, Any], Awaitable[None]]
+
+AGENT_STEP_HANDLERS: Dict[str, AgentStepHandler] = {
+    "librarian": _handle_librarian_step,
+    "research": _handle_research_step,
+    "orchestrator": _handle_orchestrator_step,
+    "knowledge_manager": _handle_knowledge_manager_step,
+    "security_scanner": _handle_security_scanner_step,
+    "network_discovery": _handle_network_discovery_step,
+    "system_commands": _handle_system_commands_step,
+}
 
 
 # Workflow models
@@ -588,165 +768,13 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     workflow_metrics.record_resource_usage(workflow_id, step_resources)
 
     try:
-        if agent_type == "librarian":
-            # Real knowledge base search
-            from src.agents.kb_librarian_agent import KBLibrarianAgent
-
-            kb_agent = KBLibrarianAgent()
-
-            # Extract search query from action
-            search_query = action.replace("Search Knowledge Base", "").strip()
-            if not search_query:
-                # Default based on workflow context
-                search_query = "network security scanning tools"
-
-            result = await kb_agent.process_query(search_query)
-            response = result.get("response", "Search completed")
-            step["result"] = f"Knowledge base search completed: {response}"
-
-        elif agent_type == "research":
-            # Real web research
-            from src.agents.research_agent import ResearchAgent, ResearchRequest
-
-            research_agent = ResearchAgent()
-
-            if "research tools" in action.lower():
-                request = ResearchRequest(
-                    query="network security scanning tools", focus="tools"
-                )
-                result = await research_agent.research_specific_tools(request)
-                step["result"] = (
-                    f"Research completed: {result.get('summary', 'Tools researched')}"
-                )
-            elif "installation guide" in action.lower():
-                result = await research_agent.get_tool_installation_guide("nmap")
-                guide = result.get("installation_guide", "Guide obtained")
-                step["result"] = f"Installation guide retrieved: {guide}"
-            else:
-                request = ResearchRequest(query=action, focus="general")
-                result = await research_agent.perform_research(request)
-                step["result"] = f"Research completed: {result.summary}"
-
-        elif agent_type == "orchestrator":
-            # Orchestrator coordination
-            if "present tool options" in action.lower():
-                options = (
-                    "Tool options: nmap (network discovery), "
-                    "masscan (fast port scanner), zmap (internet scanner). "
-                    "Please select which tool to install."
-                )
-                step["result"] = options
-            elif "create install plan" in action.lower():
-                plan = (
-                    "Installation plan: 1) Update package manager, "
-                    "2) Install selected tool, 3) Configure tool, "
-                    "4) Run verification test"
-                )
-                step["result"] = plan
-            else:
-                result = await orchestrator.execute_goal(action)
-                response = result.get("response", "Task coordinated")
-                step["result"] = f"Orchestration completed: {response}"
-
-        elif agent_type == "knowledge_manager":
-            # Store information in knowledge base
-            from src.knowledge_base import KnowledgeBase
-
-            kb = KnowledgeBase()
-
-            content = f"Workflow step result: {step.get('result', action)}"
-            metadata = {
-                "workflow_id": workflow_id,
-                "step_id": step["step_id"],
-                "agent_type": agent_type,
-                "timestamp": datetime.now().isoformat(),
-            }
-
-            await kb.add_document(content, metadata)
-            step["result"] = "Information stored in knowledge base for future reference"
-
-        elif agent_type == "security_scanner":
-            # Security scanning agent
-            from src.agents.security_scanner_agent import security_scanner_agent
-
-            # Extract scan parameters from action
-            scan_context = step.get("inputs", {})
-            if "port scan" in action.lower():
-                scan_context["scan_type"] = "port_scan"
-            elif "vulnerability" in action.lower():
-                scan_context["scan_type"] = "vulnerability_scan"
-            elif "ssl" in action.lower():
-                scan_context["scan_type"] = "ssl_scan"
-            elif "service" in action.lower():
-                scan_context["scan_type"] = "service_detection"
-
-            result = await security_scanner_agent.execute(action, scan_context)
-            status = result.get("status")
-            message = result.get("message", "Scan results available")
-            step["result"] = f"Security scan completed: {status} - {message}"
-            step["scan_results"] = result
-
-        elif agent_type == "network_discovery":
-            # Network discovery agent
-            from src.agents.network_discovery_agent import network_discovery_agent
-
-            # Extract discovery parameters
-            discovery_context = step.get("inputs", {})
-            if "network scan" in action.lower():
-                discovery_context["task_type"] = "network_scan"
-            elif "host discovery" in action.lower():
-                discovery_context["task_type"] = "host_discovery"
-            elif "arp" in action.lower():
-                discovery_context["task_type"] = "arp_scan"
-            elif "asset inventory" in action.lower():
-                discovery_context["task_type"] = "asset_inventory"
-            elif "network map" in action.lower():
-                discovery_context["task_type"] = "network_map"
-
-            result = await network_discovery_agent.execute(action, discovery_context)
-            status = result.get("status")
-            hosts_found = result.get("hosts_found", 0)
-            step["result"] = (
-                f"Network discovery completed: {status} - " f"Found {hosts_found} hosts"
-            )
-            step["discovery_results"] = result
-
-        elif agent_type == "system_commands":
-            # Real system command execution
-            from src.agents.enhanced_system_commands_agent import (
-                EnhancedSystemCommandsAgent,
-            )
-
-            cmd_agent = EnhancedSystemCommandsAgent()
-
-            if "install tool" in action.lower():
-                # Use the agent's install_tool method
-                tool_info = {"name": "nmap", "package_name": "nmap"}
-                result = await cmd_agent.install_tool(tool_info, workflow_id)
-                step["result"] = (
-                    f"Installation result: {result.get('response', 'Tool installed')}"
-                )
-            elif "verify installation" in action.lower():
-                result = await cmd_agent.execute_command_with_output(
-                    "nmap --version", workflow_id
-                )
-                step["result"] = (
-                    f"Verification result: {result.get('output', 'Tool verified')}"
-                )
-            else:
-                result = await cmd_agent.execute_command_with_output(
-                    action, workflow_id
-                )
-                step["result"] = (
-                    f"Command executed: {result.get('output', 'Command completed')}"
-                )
-
+        # Issue #336: Use dispatch table instead of elif chain
+        handler = AGENT_STEP_HANDLERS.get(agent_type)
+        if handler:
+            await handler(step, action, workflow_id, orchestrator)
         else:
             # Fallback to orchestrator for unknown agent types
-            result = await orchestrator.execute_goal(f"{agent_type}: {action}")
-            step["result"] = (
-                f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
-            )
+            await _handle_fallback_step(step, action, workflow_id, orchestrator, agent_type)
 
     except Exception as e:
         step["result"] = f"Error executing step: {str(e)}"
