@@ -188,128 +188,117 @@ class LibrarianAssistantAgent:
 
         return results
 
+    async def _extract_single_ddg_result(self, element) -> Optional[Dict[str, Any]]:
+        """Extract single DuckDuckGo result (Issue #334 - extracted helper)."""
+        title_element = await element.query_selector("h2 a, h3 a")
+        if not title_element:
+            return None
+        title = await title_element.inner_text()
+        url = await title_element.get_attribute("hre")
+        if not url or not title:
+            return None
+        snippet_element = await element.query_selector('[data-result="snippet"]')
+        snippet = await snippet_element.inner_text() if snippet_element else ""
+        return {
+            "title": title.strip(),
+            "url": url,
+            "snippet": snippet.strip(),
+            "source": "DuckDuckGo",
+        }
+
     async def _extract_duckduckgo_results(self, page: Page) -> List[Dict[str, Any]]:
         """Extract search results from DuckDuckGo."""
         results = []
         try:
-            # Wait for results to load
             await page.wait_for_selector('[data-testid="result"]', timeout=5000)
-
-            # Extract result elements
             result_elements = await page.query_selector_all('[data-testid="result"]')
 
             for element in result_elements:
                 try:
-                    # Get title and URL
-                    title_element = await element.query_selector("h2 a, h3 a")
-                    if title_element:
-                        title = await title_element.inner_text()
-                        url = await title_element.get_attribute("hre")
-
-                        # Get snippet
-                        snippet_element = await element.query_selector(
-                            '[data-result="snippet"]'
-                        )
-                        snippet = (
-                            await snippet_element.inner_text()
-                            if snippet_element
-                            else ""
-                        )
-
-                        if url and title:
-                            results.append(
-                                {
-                                    "title": title.strip(),
-                                    "url": url,
-                                    "snippet": snippet.strip(),
-                                    "source": "DuckDuckGo",
-                                }
-                            )
+                    result = await self._extract_single_ddg_result(element)
+                    if result:
+                        results.append(result)
                 except Exception as e:
                     logger.debug(f"Error extracting DuckDuckGo result: {e}")
-                    continue
 
         except Exception as e:
             logger.error(f"Error extracting DuckDuckGo results: {e}")
 
         return results
 
+    async def _extract_single_bing_result(self, element) -> Optional[Dict[str, Any]]:
+        """Extract single Bing result (Issue #334 - extracted helper)."""
+        title_element = await element.query_selector("h2 a")
+        if not title_element:
+            return None
+        title = await title_element.inner_text()
+        url = await title_element.get_attribute("hre")
+        if not url or not title:
+            return None
+        snippet_element = await element.query_selector(".b_caption p")
+        snippet = await snippet_element.inner_text() if snippet_element else ""
+        return {
+            "title": title.strip(),
+            "url": url,
+            "snippet": snippet.strip(),
+            "source": "Bing",
+        }
+
     async def _extract_bing_results(self, page: Page) -> List[Dict[str, Any]]:
         """Extract search results from Bing."""
         results = []
         try:
-            # Wait for results
             await page.wait_for_selector(".b_algo", timeout=5000)
             result_elements = await page.query_selector_all(".b_algo")
 
             for element in result_elements:
                 try:
-                    title_element = await element.query_selector("h2 a")
-                    if title_element:
-                        title = await title_element.inner_text()
-                        url = await title_element.get_attribute("hre")
-
-                        snippet_element = await element.query_selector(".b_caption p")
-                        snippet = (
-                            await snippet_element.inner_text()
-                            if snippet_element
-                            else ""
-                        )
-
-                        if url and title:
-                            results.append(
-                                {
-                                    "title": title.strip(),
-                                    "url": url,
-                                    "snippet": snippet.strip(),
-                                    "source": "Bing",
-                                }
-                            )
+                    result = await self._extract_single_bing_result(element)
+                    if result:
+                        results.append(result)
                 except Exception as e:
                     logger.debug(f"Error extracting Bing result: {e}")
-                    continue
 
         except Exception as e:
             logger.error(f"Error extracting Bing results: {e}")
 
         return results
 
+    async def _extract_single_google_result(self, element) -> Optional[Dict[str, Any]]:
+        """Extract single Google result (Issue #334 - extracted helper)."""
+        title_element = await element.query_selector("h3")
+        link_element = await element.query_selector("a")
+        if not title_element or not link_element:
+            return None
+        title = await title_element.inner_text()
+        url = await link_element.get_attribute("hre")
+        if not url or not title or not url.startswith("http"):
+            return None
+        snippet_elements = await element.query_selector_all(".VwiC3b, .s3v9rd")
+        snippet = ""
+        if snippet_elements:
+            snippet = await snippet_elements[0].inner_text()
+        return {
+            "title": title.strip(),
+            "url": url,
+            "snippet": snippet.strip(),
+            "source": "Google",
+        }
+
     async def _extract_google_results(self, page: Page) -> List[Dict[str, Any]]:
         """Extract search results from Google."""
         results = []
         try:
-            # Wait for results
             await page.wait_for_selector(".g", timeout=5000)
             result_elements = await page.query_selector_all(".g")
 
             for element in result_elements:
                 try:
-                    title_element = await element.query_selector("h3")
-                    link_element = await element.query_selector("a")
-
-                    if title_element and link_element:
-                        title = await title_element.inner_text()
-                        url = await link_element.get_attribute("hre")
-
-                        snippet_elements = await element.query_selector_all(
-                            ".VwiC3b, .s3v9rd"
-                        )
-                        snippet = ""
-                        if snippet_elements:
-                            snippet = await snippet_elements[0].inner_text()
-
-                        if url and title and url.startswith("http"):
-                            results.append(
-                                {
-                                    "title": title.strip(),
-                                    "url": url,
-                                    "snippet": snippet.strip(),
-                                    "source": "Google",
-                                }
-                            )
+                    result = await self._extract_single_google_result(element)
+                    if result:
+                        results.append(result)
                 except Exception as e:
                     logger.debug(f"Error extracting Google result: {e}")
-                    continue
 
         except Exception as e:
             logger.error(f"Error extracting Google results: {e}")
@@ -593,6 +582,49 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             logger.error(f"Error storing content in knowledge base: {e}")
             return False
 
+    def _should_store_content(
+        self, assessment: Dict[str, Any], store_enabled: bool
+    ) -> bool:
+        """Check if content should be stored (Issue #334 - extracted helper)."""
+        if not store_enabled:
+            return False
+        if assessment.get("score", 0) < self.quality_threshold:
+            return False
+        return assessment.get("recommendation") == "store"
+
+    async def _process_single_search_result(
+        self,
+        result: Dict[str, Any],
+        store_quality_content: bool,
+        stored_list: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Process single search result (Issue #334 - extracted helper)."""
+        content = await self.extract_content(result["url"])
+        if not content:
+            return None
+        assessment = await self.assess_content_quality(content)
+        content["quality_assessment"] = assessment
+
+        if self._should_store_content(assessment, store_quality_content):
+            stored = await self.store_in_knowledge_base(content, assessment)
+            if stored:
+                stored_list.append({
+                    "url": content["url"],
+                    "title": content["title"],
+                    "quality_score": assessment.get("score", 0),
+                })
+        return content
+
+    def _build_source_entry(self, content: Dict[str, Any]) -> Dict[str, Any]:
+        """Build source entry from content (Issue #334 - extracted helper)."""
+        return {
+            "title": content["title"],
+            "url": content["url"],
+            "domain": content["domain"],
+            "is_trusted": content["is_trusted"],
+            "quality_score": content.get("quality_assessment", {}).get("score", 0),
+        }
+
     async def research_query(
         self, query: str, store_quality_content: bool = None
     ) -> Dict[str, Any]:
@@ -622,7 +654,6 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         }
 
         try:
-            # Step 1: Search for relevant URLs
             logger.info(f"Researching query: {query}")
             search_results = await self.search_web(query)
             research_results["search_results"] = search_results
@@ -631,57 +662,24 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 research_results["summary"] = "No search results found for the query."
                 return research_results
 
-            # Step 2: Extract content from top results
+            # Extract content from top 3 results
             extracted_content = []
-            for result in search_results[
-                :3
-            ]:  # Limit to top 3 results for detailed extraction
-                content = await self.extract_content(result["url"])
+            for result in search_results[:3]:
+                content = await self._process_single_search_result(
+                    result, store_quality_content, research_results["stored_in_kb"]
+                )
                 if content:
-                    # Assess content quality
-                    assessment = await self.assess_content_quality(content)
-                    content["quality_assessment"] = assessment
-
                     extracted_content.append(content)
-
-                    # Store high-quality content if enabled
-                    if (
-                        store_quality_content
-                        and assessment.get("score", 0) >= self.quality_threshold
-                        and assessment.get("recommendation") == "store"
-                    ):
-                        stored = await self.store_in_knowledge_base(content, assessment)
-                        if stored:
-                            research_results["stored_in_kb"].append(
-                                {
-                                    "url": content["url"],
-                                    "title": content["title"],
-                                    "quality_score": assessment.get("score", 0),
-                                }
-                            )
 
             research_results["content_extracted"] = extracted_content
 
-            # Step 3: Create summary with sources
             if extracted_content:
-                summary = await self._create_research_summary(query, extracted_content)
-                research_results["summary"] = summary
-
-                # Collect sources
-                sources = []
-                for content in extracted_content:
-                    sources.append(
-                        {
-                            "title": content["title"],
-                            "url": content["url"],
-                            "domain": content["domain"],
-                            "is_trusted": content["is_trusted"],
-                            "quality_score": (
-                                content.get("quality_assessment", {}).get("score", 0)
-                            ),
-                        }
-                    )
-                research_results["sources"] = sources
+                research_results["summary"] = await self._create_research_summary(
+                    query, extracted_content
+                )
+                research_results["sources"] = [
+                    self._build_source_entry(c) for c in extracted_content
+                ]
 
             logger.info(
                 f"Research completed: {len(extracted_content)} sources analyzed, "
@@ -692,7 +690,6 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             logger.error(f"Error during research: {e}")
             research_results["error"] = str(e)
         finally:
-            # Clean up Playwright resources
             await self._cleanup_playwright()
 
         return research_results

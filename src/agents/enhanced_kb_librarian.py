@@ -402,6 +402,19 @@ METADATA:
 
         return "\n".join(syntax_lines) if syntax_lines else "See man page for syntax"
 
+    def _is_command_line(self, line: str) -> bool:
+        """Check if line is a command (Issue #334 - extracted helper)."""
+        return line.startswith("$") or line.startswith("#")
+
+    def _update_example_metadata(
+        self, example: Dict[str, str], line: str
+    ) -> None:
+        """Update example with description or output (Issue #334 - extracted helper)."""
+        if not example["description"]:
+            example["description"] = line
+        elif line.startswith("Output:") or "output" in line.lower():
+            example["expected_output"] = line
+
     def _extract_detailed_examples(self, text: str) -> List[Dict[str, str]]:
         """Extract detailed command examples with descriptions"""
         examples = []
@@ -410,7 +423,7 @@ METADATA:
         current_example = None
         for line in lines:
             line = line.strip()
-            if line.startswith("$") or line.startswith("#"):
+            if self._is_command_line(line):
                 if current_example:
                     examples.append(current_example)
                 current_example = {
@@ -418,17 +431,8 @@ METADATA:
                     "description": "",
                     "expected_output": "",
                 }
-            elif (
-                current_example
-                and line
-                and not line.startswith("$")
-                and not line.startswith("#")
-            ):
-                # This might be description or output
-                if not current_example["description"]:
-                    current_example["description"] = line
-                elif line.startswith("Output:") or "output" in line.lower():
-                    current_example["expected_output"] = line
+            elif current_example and line and not self._is_command_line(line):
+                self._update_example_metadata(current_example, line)
 
         if current_example:
             examples.append(current_example)

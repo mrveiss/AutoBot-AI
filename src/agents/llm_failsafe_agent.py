@@ -549,6 +549,19 @@ class LLMFailsafeAgent:
             # Fall back to emergency
             return await self._try_emergency_response(prompt, context, start_time)
 
+    def _get_emergency_response_type(self, prompt_lower: str) -> str:
+        """Determine emergency response type (Issue #334 - extracted helper)."""
+        response_patterns = {
+            "greeting": ["hello", "hi", "hey", "greetings"],
+            "help": ["help", "assist", "support"],
+            "status": ["status", "health", "working"],
+            "error": ["error", "problem", "issue"],
+        }
+        for resp_type, keywords in response_patterns.items():
+            if any(word in prompt_lower for word in keywords):
+                return resp_type
+        return "default"
+
     async def _try_emergency_response(
         self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
     ) -> LLMResponse:
@@ -557,20 +570,8 @@ class LLMFailsafeAgent:
 
         try:
             prompt_lower = prompt.lower().strip()
-
-            # Determine response type
-            if any(
-                word in prompt_lower for word in ["hello", "hi", "hey", "greetings"]
-            ):
-                response = self.emergency_responses["greeting"]
-            elif any(word in prompt_lower for word in ["help", "assist", "support"]):
-                response = self.emergency_responses["help"]
-            elif any(word in prompt_lower for word in ["status", "health", "working"]):
-                response = self.emergency_responses["status"]
-            elif any(word in prompt_lower for word in ["error", "problem", "issue"]):
-                response = self.emergency_responses["error"]
-            else:
-                response = self.emergency_responses["default"]
+            response_type = self._get_emergency_response_type(prompt_lower)
+            response = self.emergency_responses[response_type]
 
             response_time = time.time() - start_time
             self._update_tier_stats(LLMTier.EMERGENCY, response_time, success=True)
@@ -587,7 +588,6 @@ class LLMFailsafeAgent:
             )
 
         except Exception as e:
-            # This should never happen, but just in case
             self.logger.critical(f"Emergency response tier failed: {e}")
             return self._create_emergency_response(
                 prompt, start_time, f"Emergency tier failure: {e}"
@@ -697,34 +697,27 @@ class LLMFailsafeAgent:
             },
         }
 
+    async def _test_tier(self, tier: LLMTier, test_prompt: str) -> LLMResponse:
+        """Test a specific tier (Issue #334 - extracted helper)."""
+        tier_handlers = {
+            LLMTier.PRIMARY: self._try_primary_llm,
+            LLMTier.SECONDARY: self._try_secondary_llm,
+            LLMTier.BASIC: self._try_basic_response,
+            LLMTier.EMERGENCY: self._try_emergency_response,
+        }
+        handler = tier_handlers[tier]
+        return await handler(test_prompt, None, time.time())
+
     async def health_check(self) -> Dict[LLMTier, bool]:
         """Perform health check on all tiers"""
         self.logger.info("Performing comprehensive LLM tier health check")
 
-        # Test each tier with a simple prompt
         test_prompt = "Hello, please respond with 'OK' to confirm you're working."
 
         for tier in LLMTier:
             try:
-                if tier == LLMTier.PRIMARY:
-                    response = await self._try_primary_llm(
-                        test_prompt, None, time.time()
-                    )
-                elif tier == LLMTier.SECONDARY:
-                    response = await self._try_secondary_llm(
-                        test_prompt, None, time.time()
-                    )
-                elif tier == LLMTier.BASIC:
-                    response = await self._try_basic_response(
-                        test_prompt, None, time.time()
-                    )
-                else:  # EMERGENCY
-                    response = await self._try_emergency_response(
-                        test_prompt, None, time.time()
-                    )
-
+                response = await self._test_tier(tier, test_prompt)
                 self.tier_health[tier] = response.success
-
             except Exception as e:
                 self.logger.error(f"Health check failed for {tier.value}: {e}")
                 self.tier_health[tier] = False
