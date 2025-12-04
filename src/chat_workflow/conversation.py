@@ -29,40 +29,52 @@ class ConversationHandlerMixin:
         """Generate Redis key for conversation history."""
         return f"chat:conversation:{session_id}"
 
+    async def _try_redis_history(self, session_id: str) -> List[Dict[str, str]] | None:
+        """Try to load conversation history from Redis (Issue #332 - extracted helper).
+
+        Returns:
+            History list if found, None if not found or error
+        """
+        if self.redis_client is None:
+            return None
+
+        key = self._get_conversation_key(session_id)
+        try:
+            history_json = await asyncio.wait_for(
+                self.redis_client.get(key), timeout=2.0
+            )
+            if history_json:
+                logger.debug(
+                    f"Loaded conversation history from Redis for session {session_id}"
+                )
+                return json.loads(history_json)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Redis get timeout after 2s for session {session_id}, falling back to file"
+            )
+        return None
+
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
         """Load conversation history from Redis (short-term) or file (long-term)."""
         try:
-            # Try Redis first (fast access for recent conversations) with 2s timeout
-            if self.redis_client is not None:
-                key = self._get_conversation_key(session_id)
-                try:
-                    history_json = await asyncio.wait_for(
-                        self.redis_client.get(key), timeout=2.0
-                    )
-
-                    if history_json:
-                        logger.debug(
-                            f"Loaded conversation history from Redis for session {session_id}"
-                        )
-                        return json.loads(history_json)
-
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        f"Redis get timeout after 2s for session {session_id}, falling back to file"
-                    )
-                    # Fall through to file-based fallback
+            # Try Redis first (fast access for recent conversations)
+            redis_history = await self._try_redis_history(session_id)
+            if redis_history is not None:
+                return redis_history
 
             # Fall back to file-based transcript (long-term storage)
             history = await self._load_transcript(session_id)
-            if history:
-                logger.debug(
-                    f"Loaded conversation history from file for session {session_id}"
+            if not history:
+                return history
+
+            logger.debug(
+                f"Loaded conversation history from file for session {session_id}"
+            )
+            # Repopulate Redis cache (non-blocking, fire-and-forget)
+            if self.redis_client is not None:
+                asyncio.create_task(
+                    self._save_conversation_history(session_id, history)
                 )
-                # Repopulate Redis cache (non-blocking, fire-and-forget)
-                if self.redis_client is not None:
-                    asyncio.create_task(
-                        self._save_conversation_history(session_id, history)
-                    )
 
             return history
 
@@ -104,6 +116,72 @@ class ConversationHandlerMixin:
         """Get file path for conversation transcript."""
         return Path(self.transcript_dir) / f"{session_id}.json"
 
+    def _create_empty_transcript(self, session_id: str) -> Dict:
+        """Create an empty transcript structure (Issue #332 - extracted helper)."""
+        return {
+            "session_id": session_id,
+            "created_at": datetime.now().isoformat(),
+            "messages": [],
+        }
+
+    async def _load_existing_transcript(
+        self, transcript_path: Path, session_id: str
+    ) -> Dict:
+        """Load existing transcript or create new on error (Issue #332 - extracted helper)."""
+        try:
+            async with aiofiles.open(transcript_path, "r", encoding="utf-8") as f:
+                content = await asyncio.wait_for(f.read(), timeout=5.0)
+                return json.loads(content)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"File read timeout after 5s for {transcript_path}, creating new transcript"
+            )
+        except OSError as os_err:
+            logger.warning(
+                f"Failed to read transcript file {transcript_path}: {os_err}, "
+                f"creating new transcript"
+            )
+        except json.JSONDecodeError as json_err:
+            logger.warning(
+                f"Corrupted transcript file {transcript_path}: {json_err}, "
+                f"creating fresh transcript"
+            )
+            await self._backup_corrupted_file(transcript_path)
+
+        return self._create_empty_transcript(session_id)
+
+    async def _backup_corrupted_file(self, transcript_path: Path) -> None:
+        """Backup corrupted transcript file (Issue #332 - extracted helper)."""
+        backup_path = transcript_path.with_suffix(".json.corrupted")
+        try:
+            await asyncio.to_thread(transcript_path.rename, backup_path)
+            logger.info(f"Backed up corrupted file to {backup_path}")
+        except Exception as backup_err:
+            logger.warning(f"Could not backup corrupted file: {backup_err}")
+
+    async def _write_transcript_atomic(
+        self, transcript_path: Path, transcript: Dict, session_id: str
+    ) -> None:
+        """Write transcript atomically via temp file (Issue #332 - extracted helper)."""
+        temp_path = transcript_path.with_suffix(".tmp")
+        try:
+            async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+                await asyncio.wait_for(
+                    f.write(json.dumps(transcript, indent=2, ensure_ascii=False)),
+                    timeout=5.0,
+                )
+            await asyncio.to_thread(temp_path.rename, transcript_path)
+            logger.debug(
+                f"Appended to transcript for session {session_id} "
+                f"({transcript['message_count']} total messages)"
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"File write timeout after 5s for {transcript_path}")
+            if temp_path.exists():
+                temp_path.unlink()
+        except OSError as os_err:
+            logger.error(f"Failed to write transcript file {transcript_path}: {os_err}")
+
     async def _append_to_transcript(
         self, session_id: str, user_message: str, assistant_message: str
     ):
@@ -115,58 +193,11 @@ class ConversationHandlerMixin:
 
             transcript_path = self._get_transcript_path(session_id)
 
-            # Load existing transcript or create new (async read with timeout)
+            # Load existing transcript or create new
             if transcript_path.exists():
-                try:
-                    # Open file first, then apply timeout to read operation
-                    async with aiofiles.open(
-                        transcript_path, "r", encoding="utf-8"
-                    ) as f:
-                        content = await asyncio.wait_for(f.read(), timeout=5.0)
-                        transcript = json.loads(content)
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        f"File read timeout after 5s for {transcript_path}, creating new transcript"
-                    )
-                    transcript = {
-                        "session_id": session_id,
-                        "created_at": datetime.now().isoformat(),
-                        "messages": [],
-                    }
-                except OSError as os_err:
-                    logger.warning(
-                        f"Failed to read transcript file {transcript_path}: {os_err}, "
-                        f"creating new transcript"
-                    )
-                    transcript = {
-                        "session_id": session_id,
-                        "created_at": datetime.now().isoformat(),
-                        "messages": [],
-                    }
-                except json.JSONDecodeError as json_err:
-                    # Handle corrupted JSON files - backup and create fresh
-                    logger.warning(
-                        f"Corrupted transcript file {transcript_path}: {json_err}, "
-                        f"creating fresh transcript"
-                    )
-                    # Backup corrupted file for debugging
-                    backup_path = transcript_path.with_suffix(".json.corrupted")
-                    try:
-                        await asyncio.to_thread(transcript_path.rename, backup_path)
-                        logger.info(f"Backed up corrupted file to {backup_path}")
-                    except Exception as backup_err:
-                        logger.warning(f"Could not backup corrupted file: {backup_err}")
-                    transcript = {
-                        "session_id": session_id,
-                        "created_at": datetime.now().isoformat(),
-                        "messages": [],
-                    }
+                transcript = await self._load_existing_transcript(transcript_path, session_id)
             else:
-                transcript = {
-                    "session_id": session_id,
-                    "created_at": datetime.now().isoformat(),
-                    "messages": [],
-                }
+                transcript = self._create_empty_transcript(session_id)
 
             # Append new exchange
             transcript["messages"].append(
@@ -176,35 +207,11 @@ class ConversationHandlerMixin:
                     "assistant": assistant_message,
                 }
             )
-
             transcript["updated_at"] = datetime.now().isoformat()
             transcript["message_count"] = len(transcript["messages"])
 
-            # Atomic write pattern: write to temp file then rename (with timeout)
-            temp_path = transcript_path.with_suffix(".tmp")
-            try:
-                # Open file first, then apply timeout to write operation
-                async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
-                    await asyncio.wait_for(
-                        f.write(json.dumps(transcript, indent=2, ensure_ascii=False)),
-                        timeout=5.0,
-                    )
-
-                # Atomic rename (sync operation, very fast)
-                await asyncio.to_thread(temp_path.rename, transcript_path)
-
-                logger.debug(
-                    f"Appended to transcript for session {session_id} "
-                    f"({transcript['message_count']} total messages)"
-                )
-
-            except asyncio.TimeoutError:
-                logger.warning(f"File write timeout after 5s for {transcript_path}")
-                # Clean up temp file if it exists
-                if temp_path.exists():
-                    temp_path.unlink()
-            except OSError as os_err:
-                logger.error(f"Failed to write transcript file {transcript_path}: {os_err}")
+            # Write atomically
+            await self._write_transcript_atomic(transcript_path, transcript, session_id)
 
         except Exception as e:
             logger.error(f"Failed to append to transcript file: {e}")
