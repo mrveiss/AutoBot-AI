@@ -304,67 +304,11 @@ class Phase9PerformanceMonitor:
                 logger.warning("nvidia-smi command timed out")
                 return None
 
-            if returncode == 0:
-                parts = [p.strip() for p in result_stdout.strip().split(",")]
-                if len(parts) >= 8:
-                    memory_used = int(float(parts[1]))
-                    memory_total = int(float(parts[2]))
-                    memory_free = memory_total - memory_used
+            if returncode != 0:
+                return None
 
-                    # Parse throttling reasons
-                    thermal_throttling = False
-                    power_throttling = False
-                    if len(parts) > 16:
-                        thermal_throttling = parts[16] == "Active"
-                        power_throttling = (
-                            parts[15] == "Active" or parts[17] == "Active"
-                        )
-
-                    return GPUMetrics(
-                        timestamp=time.time(),
-                        name=parts[0],
-                        utilization_percent=float(parts[3]),
-                        memory_used_mb=memory_used,
-                        memory_total_mb=memory_total,
-                        memory_free_mb=memory_free,
-                        memory_utilization_percent=round(
-                            (memory_used / memory_total) * 100, 1
-                        ),
-                        temperature_celsius=int(float(parts[4])),
-                        power_draw_watts=(
-                            float(parts[5]) if parts[5] != "[Not Supported]" else 0.0
-                        ),
-                        gpu_clock_mhz=(
-                            int(float(parts[6])) if parts[6] != "[Not Supported]" else 0
-                        ),
-                        memory_clock_mhz=(
-                            int(float(parts[7])) if parts[7] != "[Not Supported]" else 0
-                        ),
-                        fan_speed_percent=(
-                            int(float(parts[8]))
-                            if len(parts) > 8 and parts[8] != "[Not Supported]"
-                            else None
-                        ),
-                        encoder_utilization=(
-                            int(float(parts[9]))
-                            if len(parts) > 9 and parts[9] != "[Not Supported]"
-                            else None
-                        ),
-                        decoder_utilization=(
-                            int(float(parts[10]))
-                            if len(parts) > 10 and parts[10] != "[Not Supported]"
-                            else None
-                        ),
-                        performance_state=(
-                            parts[11]
-                            if len(parts) > 11 and parts[11] != "[Not Supported]"
-                            else None
-                        ),
-                        thermal_throttling=thermal_throttling,
-                        power_throttling=power_throttling,
-                    )
-
-            return None
+            parts = [p.strip() for p in result_stdout.strip().split(",")]
+            return self._build_gpu_metrics(parts)
 
         except Exception as e:
             self.logger.error(f"Error collecting GPU metrics: {e}")
@@ -428,6 +372,175 @@ class Phase9PerformanceMonitor:
                 return "WSL" in version_info or "Microsoft" in version_info
         except Exception:
             return False
+
+    def _parse_gpu_metric_value(
+        self, parts: List[str], index: int, as_int: bool = False
+    ) -> Optional[Any]:
+        """Parse GPU metric value from nvidia-smi output (Issue #333 - extracted helper)."""
+        if index >= len(parts):
+            return None
+        value = parts[index]
+        if value == "[Not Supported]":
+            return None
+        try:
+            return int(float(value)) if as_int else float(value)
+        except (ValueError, TypeError):
+            return None
+
+    def _parse_gpu_throttling(self, parts: List[str]) -> tuple:
+        """Parse GPU throttling status (Issue #333 - extracted helper).
+
+        Returns:
+            Tuple of (thermal_throttling, power_throttling)
+        """
+        if len(parts) <= 16:
+            return False, False
+        thermal_throttling = parts[16] == "Active"
+        power_throttling = (parts[15] == "Active" or parts[17] == "Active") if len(parts) > 17 else False
+        return thermal_throttling, power_throttling
+
+    def _build_gpu_metrics(self, parts: List[str]) -> Optional[GPUMetrics]:
+        """Build GPUMetrics from parsed nvidia-smi output (Issue #333 - extracted helper)."""
+        if len(parts) < 8:
+            return None
+
+        memory_used = int(float(parts[1]))
+        memory_total = int(float(parts[2]))
+        memory_free = memory_total - memory_used
+        thermal_throttling, power_throttling = self._parse_gpu_throttling(parts)
+
+        return GPUMetrics(
+            timestamp=time.time(),
+            name=parts[0],
+            utilization_percent=float(parts[3]),
+            memory_used_mb=memory_used,
+            memory_total_mb=memory_total,
+            memory_free_mb=memory_free,
+            memory_utilization_percent=round((memory_used / memory_total) * 100, 1),
+            temperature_celsius=int(float(parts[4])),
+            power_draw_watts=self._parse_gpu_metric_value(parts, 5) or 0.0,
+            gpu_clock_mhz=self._parse_gpu_metric_value(parts, 6, as_int=True) or 0,
+            memory_clock_mhz=self._parse_gpu_metric_value(parts, 7, as_int=True) or 0,
+            fan_speed_percent=self._parse_gpu_metric_value(parts, 8, as_int=True),
+            encoder_utilization=self._parse_gpu_metric_value(parts, 9, as_int=True),
+            decoder_utilization=self._parse_gpu_metric_value(parts, 10, as_int=True),
+            performance_state=parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None,
+            thermal_throttling=thermal_throttling,
+            power_throttling=power_throttling,
+        )
+
+    def _try_add_autobot_process(
+        self, proc_info: Dict, autobot_processes: List[Dict]
+    ) -> None:
+        """Try to add process to AutoBot processes list (Issue #333 - extracted helper)."""
+        cmdline = " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
+
+        autobot_keywords = [
+            "autobot", "fast_app_factory", "run_autobot", "npu-worker",
+            "ai-stack", "browser-service", "redis-stack",
+        ]
+        if not any(keyword in cmdline.lower() for keyword in autobot_keywords):
+            return
+
+        memory_mb = (
+            proc_info["memory_info"].rss / (1024 * 1024)
+            if proc_info["memory_info"] else 0
+        )
+
+        autobot_processes.append({
+            "pid": proc_info["pid"],
+            "name": proc_info["name"],
+            "cmdline": cmdline[:100] + "..." if len(cmdline) > 100 else cmdline,
+            "cpu_percent": proc_info["cpu_percent"] or 0,
+            "memory_mb": round(memory_mb, 2),
+            "create_time": datetime.fromtimestamp(proc_info["create_time"]).isoformat(),
+            "running_time_minutes": round((time.time() - proc_info["create_time"]) / 60, 1),
+        })
+
+    def _calculate_health_score(self, status: str, response_time_ms: float) -> float:
+        """Calculate service health score (Issue #333 - extracted helper)."""
+        if status == "critical":
+            return 0.0
+        if status == "degraded":
+            return 60.0
+        if response_time_ms > 1000:
+            return 40.0
+        if response_time_ms > 500:
+            return 70.0
+        return 100.0
+
+    def _analyze_gpu_alerts(self, gpu: Dict, alerts: List[Dict]) -> None:
+        """Analyze GPU metrics and generate alerts (Issue #333 - extracted helper)."""
+        if gpu["utilization_percent"] < self.performance_baselines["gpu_utilization_target"]:
+            alerts.append({
+                "category": "gpu", "severity": "warning",
+                "message": (
+                    f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < "
+                    f"{self.performance_baselines['gpu_utilization_target']}%"
+                ),
+                "recommendation": "Verify AI workloads are GPU-accelerated",
+                "timestamp": time.time(),
+            })
+
+        if gpu["thermal_throttling"]:
+            alerts.append({
+                "category": "gpu", "severity": "critical",
+                "message": f"GPU thermal throttling active at {gpu['temperature_celsius']}°C",
+                "recommendation": "Check cooling and reduce workload",
+                "timestamp": time.time(),
+            })
+
+    def _analyze_npu_alerts(self, npu: Dict, alerts: List[Dict]) -> None:
+        """Analyze NPU metrics and generate alerts (Issue #333 - extracted helper)."""
+        if npu["acceleration_ratio"] < self.performance_baselines["npu_acceleration_target"]:
+            alerts.append({
+                "category": "npu", "severity": "warning",
+                "message": (
+                    f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < "
+                    f"{self.performance_baselines['npu_acceleration_target']}x"
+                ),
+                "recommendation": "Optimize NPU utilization or check driver status",
+                "timestamp": time.time(),
+            })
+
+    def _analyze_system_alerts(self, system: Dict, alerts: List[Dict]) -> None:
+        """Analyze system metrics and generate alerts (Issue #333 - extracted helper)."""
+        if system["memory_usage_percent"] > self.performance_baselines["memory_usage_warning"]:
+            alerts.append({
+                "category": "memory", "severity": "warning",
+                "message": f"High memory usage: {system['memory_usage_percent']:.1f}%",
+                "recommendation": "Enable aggressive cleanup or check for memory leaks",
+                "timestamp": time.time(),
+            })
+
+        if system["cpu_load_1m"] > self.performance_baselines["cpu_load_warning"]:
+            alerts.append({
+                "category": "cpu", "severity": "warning",
+                "message": (
+                    f"High CPU load: {system['cpu_load_1m']:.1f} "
+                    f"on {system['cpu_cores_logical']}-core system"
+                ),
+                "recommendation": "Check for CPU-intensive processes",
+                "timestamp": time.time(),
+            })
+
+    def _analyze_service_alerts(self, service: Dict, alerts: List[Dict]) -> None:
+        """Analyze service metrics and generate alerts (Issue #333 - extracted helper)."""
+        if service["status"] in ["critical", "offline"]:
+            alerts.append({
+                "category": "service", "severity": "critical",
+                "message": f"Service {service['service_name']} is {service['status']}",
+                "recommendation": "Check service health and restart if necessary",
+                "timestamp": time.time(),
+            })
+
+        if service["response_time_ms"] > self.performance_baselines["api_response_time_threshold"]:
+            alerts.append({
+                "category": "performance", "severity": "warning",
+                "message": f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms",
+                "recommendation": "Investigate service performance bottlenecks",
+                "timestamp": time.time(),
+            })
 
     async def collect_multimodal_metrics(self) -> Optional[MultiModalMetrics]:
         """Collect multi-modal AI processing performance metrics"""
@@ -578,51 +691,7 @@ class Phase9PerformanceMonitor:
                 ["pid", "name", "cmdline", "cpu_percent", "memory_info", "create_time"]
             ):
                 try:
-                    proc_info = proc.info
-                    cmdline = (
-                        " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
-                    )
-
-                    # Look for AutoBot-related processes
-                    if any(
-                        keyword in cmdline.lower()
-                        for keyword in [
-                            "autobot",
-                            "fast_app_factory",
-                            "run_autobot",
-                            "npu-worker",
-                            "ai-stack",
-                            "browser-service",
-                            "redis-stack",
-                        ]
-                    ):
-                        memory_mb = (
-                            proc_info["memory_info"].rss / (1024 * 1024)
-                            if proc_info["memory_info"]
-                            else 0
-                        )
-
-                        autobot_processes.append(
-                            {
-                                "pid": proc_info["pid"],
-                                "name": proc_info["name"],
-                                "cmdline": (
-                                    cmdline[:100] + "..."
-                                    if len(cmdline) > 100
-                                    else cmdline
-                                ),
-                                "cpu_percent": proc_info["cpu_percent"] or 0,
-                                "memory_mb": round(memory_mb, 2),
-                                "create_time": (
-                                    datetime.fromtimestamp(
-                                        proc_info["create_time"]
-                                    ).isoformat()
-                                ),
-                                "running_time_minutes": round(
-                                    (time.time() - proc_info["create_time"]) / 60, 1
-                                ),
-                            }
-                        )
+                    self._try_add_autobot_process(proc.info, autobot_processes)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
 
@@ -710,6 +779,32 @@ class Phase9PerformanceMonitor:
 
         return services
 
+    async def _check_redis_health(self) -> str:
+        """Check Redis service health (Issue #333 - extracted helper)."""
+        if not self.redis_client:
+            return "offline"
+        try:
+            self.redis_client.ping()
+            return "healthy"
+        except Exception:
+            return "critical"
+
+    async def _check_http_health(self, host: str, port: int, path: str) -> str:
+        """Check HTTP service health (Issue #333 - extracted helper)."""
+        try:
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"http://{host}:{port}{path}",
+                timeout=aiohttp.ClientTimeout(total=5.0),
+            ) as response:
+                if response.status == 200:
+                    return "healthy"
+                if 200 <= response.status < 400:
+                    return "degraded"
+                return "critical"
+        except Exception:
+            return "offline"
+
     async def _collect_single_service_metrics(
         self, service_config: Dict[str, Any]
     ) -> Optional[ServicePerformanceMetrics]:
@@ -720,53 +815,16 @@ class Phase9PerformanceMonitor:
             port = service_config["port"]
             path = service_config.get("path")
 
-            # Measure response time and check health
+            # Measure response time and check health (uses helpers)
             start_time = time.time()
-            status = "offline"
-
             if service_name == "Redis":
-                # Special handling for Redis
-                if self.redis_client:
-                    try:
-                        self.redis_client.ping()
-                        status = "healthy"
-                    except Exception:
-                        status = "critical"
+                status = await self._check_redis_health()
+            elif path:
+                status = await self._check_http_health(host, port, path)
             else:
-                # HTTP health check
-                if path:
-                    # Use singleton HTTP client for connection pooling
-                    http_client = get_http_client()
-                    async with await http_client.get(
-                        f"http://{host}:{port}{path}",
-                        timeout=aiohttp.ClientTimeout(total=5.0),
-                    ) as response:
-                        if response.status == 200:
-                            status = "healthy"
-                        elif 200 <= response.status < 400:
-                            status = "degraded"
-                        else:
-                            status = "critical"
+                status = "offline"
 
             response_time_ms = round((time.time() - start_time) * 1000, 1)
-
-            # Calculate additional metrics (would need service-specific implementation)
-            throughput = 0.0  # Requests per second
-            error_rate = 0.0  # Error percentage
-            uptime_hours = 24.0  # Placeholder
-            memory_usage_mb = 0.0  # Service-specific memory usage
-            cpu_usage_percent = 0.0  # Service-specific CPU usage
-
-            # Health score calculation
-            health_score = 100.0
-            if status == "critical":
-                health_score = 0.0
-            elif status == "degraded":
-                health_score = 60.0
-            elif response_time_ms > 1000:
-                health_score = 40.0
-            elif response_time_ms > 500:
-                health_score = 70.0
 
             return ServicePerformanceMetrics(
                 timestamp=time.time(),
@@ -775,12 +833,12 @@ class Phase9PerformanceMonitor:
                 port=port,
                 status=status,
                 response_time_ms=response_time_ms,
-                throughput_requests_per_second=throughput,
-                error_rate_percent=error_rate,
-                uptime_hours=uptime_hours,
-                memory_usage_mb=memory_usage_mb,
-                cpu_usage_percent=cpu_usage_percent,
-                health_score=health_score,
+                throughput_requests_per_second=0.0,
+                error_rate_percent=0.0,
+                uptime_hours=24.0,
+                memory_usage_mb=0.0,
+                cpu_usage_percent=0.0,
+                health_score=self._calculate_health_score(status, response_time_ms),
             )
 
         except Exception as e:
@@ -953,155 +1011,34 @@ class Phase9PerformanceMonitor:
         try:
             alerts = []
 
-            # GPU performance analysis
+            # GPU performance analysis (uses helper)
             if metrics.get("gpu"):
-                gpu = metrics["gpu"]
+                self._analyze_gpu_alerts(metrics["gpu"], alerts)
 
-                if (
-                    gpu["utilization_percent"]
-                    < self.performance_baselines["gpu_utilization_target"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "gpu",
-                            "severity": "warning",
-                            "message": (
-                                f"GPU utilization below target: "
-                                f"{gpu['utilization_percent']:.1f}% < "
-                                f"{self.performance_baselines['gpu_utilization_target']}%"
-                            ),
-                            "recommendation": "Verify AI workloads are GPU-accelerated",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-                if gpu["thermal_throttling"]:
-                    alerts.append(
-                        {
-                            "category": "gpu",
-                            "severity": "critical",
-                            "message": (
-                                f"GPU thermal throttling active at {gpu['temperature_celsius']}°C"
-                            ),
-                            "recommendation": "Check cooling and reduce workload",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # NPU performance analysis
+            # NPU performance analysis (uses helper)
             if metrics.get("npu"):
-                npu = metrics["npu"]
+                self._analyze_npu_alerts(metrics["npu"], alerts)
 
-                if (
-                    npu["acceleration_ratio"]
-                    < self.performance_baselines["npu_acceleration_target"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "npu",
-                            "severity": "warning",
-                            "message": (
-                                f"NPU acceleration ratio below target: "
-                                f"{npu['acceleration_ratio']:.1f}x < "
-                                f"{self.performance_baselines['npu_acceleration_target']}x"
-                            ),
-                            "recommendation": (
-                                "Optimize NPU utilization or check driver status"
-                            ),
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # System performance analysis
+            # System performance analysis (uses helper)
             if metrics.get("system"):
-                system = metrics["system"]
+                self._analyze_system_alerts(metrics["system"], alerts)
 
-                if (
-                    system["memory_usage_percent"]
-                    > self.performance_baselines["memory_usage_warning"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "memory",
-                            "severity": "warning",
-                            "message": (
-                                f"High memory usage: {system['memory_usage_percent']:.1f}%"
-                            ),
-                            "recommendation": (
-                                "Enable aggressive cleanup or check for memory leaks"
-                            ),
-                            "timestamp": time.time(),
-                        }
-                    )
-
-                if (
-                    system["cpu_load_1m"]
-                    > self.performance_baselines["cpu_load_warning"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "cpu",
-                            "severity": "warning",
-                            "message": (
-                                f"High CPU load: {system['cpu_load_1m']:.1f} "
-                                f"on {system['cpu_cores_logical']}-core system"
-                            ),
-                            "recommendation": "Check for CPU-intensive processes",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # Service performance analysis
-            if metrics.get("services"):
-                for service in metrics["services"]:
-                    if service["status"] in ["critical", "offline"]:
-                        alerts.append(
-                            {
-                                "category": "service",
-                                "severity": "critical",
-                                "message": (
-                                    f"Service {service['service_name']} is {service['status']}"
-                                ),
-                                "recommendation": (
-                                    "Check service health and restart if necessary"
-                                ),
-                                "timestamp": time.time(),
-                            }
-                        )
-
-                    if (
-                        service["response_time_ms"]
-                        > self.performance_baselines["api_response_time_threshold"]
-                    ):
-                        alerts.append(
-                            {
-                                "category": "performance",
-                                "severity": "warning",
-                                "message": (
-                                    f"{service['service_name']} slow response: "
-                                    f"{service['response_time_ms']:.0f}ms"
-                                ),
-                                "recommendation": (
-                                    "Investigate service performance bottlenecks"
-                                ),
-                                "timestamp": time.time(),
-                            }
-                        )
+            # Service performance analysis (uses helper)
+            for service in metrics.get("services", []):
+                self._analyze_service_alerts(service, alerts)
 
             # Store alerts and get callbacks under lock
             async with self._lock:
                 for alert in alerts:
                     self.performance_alerts.append(alert)
-                # Copy callbacks to avoid race during iteration
                 callbacks = list(self.alert_callbacks)
 
             # Trigger alert callbacks outside lock
-            if alerts:
-                for callback in callbacks:
-                    try:
-                        await callback(alerts)
-                    except Exception as e:
-                        self.logger.error(f"Error in alert callback: {e}")
+            for callback in callbacks:
+                try:
+                    await callback(alerts)
+                except Exception as e:
+                    self.logger.error(f"Error in alert callback: {e}")
 
         except Exception as e:
             self.logger.error(f"Error analyzing performance: {e}")
@@ -1408,6 +1345,32 @@ async def add_phase9_alert_callback(callback):
 
 
 # Performance monitoring decorator for functions
+def _store_performance_in_redis(
+    category: str, func_name: str, execution_time: float, args_count: int, kwargs_count: int
+) -> None:
+    """Store performance metrics in Redis (Issue #333 - extracted helper)."""
+    if not phase9_monitor.redis_client:
+        return
+    try:
+        key = f"function_performance:{category}:{func_name}"
+        phase9_monitor.redis_client.zadd(
+            key,
+            {
+                json.dumps(
+                    {
+                        "execution_time_ms": execution_time * 1000,
+                        "timestamp": time.time(),
+                        "args_count": args_count,
+                        "kwargs_count": kwargs_count,
+                    }
+                ): time.time()
+            },
+        )
+        phase9_monitor.redis_client.expire(key, 3600)  # 1 hour retention
+    except Exception:
+        pass  # Non-critical: Redis metrics storage failure
+
+
 def monitor_performance(category: str = "general"):
     """Decorator to monitor function performance"""
 
@@ -1419,33 +1382,12 @@ def monitor_performance(category: str = "general"):
                 result = await func(*args, **kwargs)
                 execution_time = time.time() - start_time
 
-                # Log performance
                 logger.info(
                     f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
                 )
-
-                # Store in Redis if available
-                if phase9_monitor.redis_client:
-                    try:
-                        key = f"function_performance:{category}:{func.__name__}"
-                        phase9_monitor.redis_client.zadd(
-                            key,
-                            {
-                                json.dumps(
-                                    {
-                                        "execution_time_ms": execution_time * 1000,
-                                        "timestamp": time.time(),
-                                        "args_count": len(args),
-                                        "kwargs_count": len(kwargs),
-                                    }
-                                ): time.time()
-                            },
-                        )
-                        phase9_monitor.redis_client.expire(
-                            key, 3600
-                        )  # 1 hour retention
-                    except Exception:
-                        pass  # Non-critical: Redis metrics storage failure
+                _store_performance_in_redis(
+                    category, func.__name__, execution_time, len(args), len(kwargs)
+                )
 
                 return result
             except Exception as e:
@@ -1463,7 +1405,6 @@ def monitor_performance(category: str = "general"):
                 result = func(*args, **kwargs)
                 execution_time = time.time() - start_time
 
-                # Log performance
                 logger.info(
                     f"PERFORMANCE [{category}]: {func.__name__} "
                     f"executed in {execution_time:.3f}s"
