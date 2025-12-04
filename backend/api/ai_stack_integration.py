@@ -10,7 +10,7 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 
 import logging
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +28,9 @@ from backend.utils.response_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Type alias for agent handlers (Issue #336)
+AgentQueryHandler = Callable[[Any, str], Awaitable[Dict[str, Any]]]
 
 # ====================================================================
 # Router Configuration
@@ -488,6 +491,50 @@ async def classify_content(request: ContentClassificationRequest):
 
 
 # ====================================================================
+# Multi-Agent Orchestration Helpers (Issue #336)
+# ====================================================================
+
+
+async def _query_rag_agent(ai_client: Any, query: str) -> Dict[str, Any]:
+    """Query RAG agent (Issue #336 - extracted handler)."""
+    return await ai_client.rag_query(query=query, max_results=5)
+
+
+async def _query_research_agent(ai_client: Any, query: str) -> Dict[str, Any]:
+    """Query research agent (Issue #336 - extracted handler)."""
+    return await ai_client.research_query(query=query)
+
+
+async def _query_classification_agent(ai_client: Any, query: str) -> Dict[str, Any]:
+    """Query classification agent (Issue #336 - extracted handler)."""
+    return await ai_client.classify_content(content=query)
+
+
+async def _query_chat_agent(ai_client: Any, query: str) -> Dict[str, Any]:
+    """Query chat agent (Issue #336 - extracted handler)."""
+    return await ai_client.chat_message(message=query)
+
+
+# Issue #336: Dispatch table for agent query handlers
+AGENT_QUERY_HANDLERS: Dict[str, AgentQueryHandler] = {
+    "rag": _query_rag_agent,
+    "research": _query_research_agent,
+    "classification": _query_classification_agent,
+    "chat": _query_chat_agent,
+}
+
+
+async def _execute_agent_query(
+    ai_client: Any, agent: str, query: str
+) -> Dict[str, Any]:
+    """Execute agent query with dispatch table (Issue #336 - extracted helper)."""
+    handler = AGENT_QUERY_HANDLERS.get(agent)
+    if handler:
+        return await handler(ai_client, query)
+    return {"error": f"Unknown agent: {agent}"}
+
+
+# ====================================================================
 # Multi-Agent Orchestration Endpoints
 # ====================================================================
 
@@ -510,38 +557,18 @@ async def multi_agent_query(
         coordination_mode: How to coordinate agents (parallel, sequential)
     """
     ai_client = await get_ai_stack_client()
-    results = {}
+    results: Dict[str, Any] = {}
 
+    # Issue #336: Use dispatch table for agent queries
     if coordination_mode == "parallel":
         # Note: Currently runs sequentially with error handling per agent
         # True parallel execution would use asyncio.gather() with agent_tasks
-        if "rag" in agents:
-            try:
-                rag_result = await ai_client.rag_query(query=query, max_results=5)
-                results["rag"] = rag_result
-            except Exception as e:
-                results["rag"] = {"error": str(e)}
-
-        if "research" in agents:
-            try:
-                research_result = await ai_client.research_query(query=query)
-                results["research"] = research_result
-            except Exception as e:
-                results["research"] = {"error": str(e)}
-
-        if "classification" in agents:
-            try:
-                classification_result = await ai_client.classify_content(content=query)
-                results["classification"] = classification_result
-            except Exception as e:
-                results["classification"] = {"error": str(e)}
-
-        if "chat" in agents:
-            try:
-                chat_result = await ai_client.chat_message(message=query)
-                results["chat"] = chat_result
-            except Exception as e:
-                results["chat"] = {"error": str(e)}
+        for agent in agents:
+            if agent in AGENT_QUERY_HANDLERS:
+                try:
+                    results[agent] = await _execute_agent_query(ai_client, agent, query)
+                except Exception as e:
+                    results[agent] = {"error": str(e)}
 
     else:  # sequential mode
         # Run agents sequentially, each building on previous results
@@ -549,17 +576,7 @@ async def multi_agent_query(
 
         for agent in agents:
             try:
-                if agent == "rag":
-                    result = await ai_client.rag_query(query=context, max_results=5)
-                elif agent == "research":
-                    result = await ai_client.research_query(query=context)
-                elif agent == "classification":
-                    result = await ai_client.classify_content(content=context)
-                elif agent == "chat":
-                    result = await ai_client.chat_message(message=context)
-                else:
-                    result = {"error": f"Unknown agent: {agent}"}
-
+                result = await _execute_agent_query(ai_client, agent, context)
                 results[agent] = result
 
                 # Update context for next agent
