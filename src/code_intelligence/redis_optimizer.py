@@ -286,35 +286,51 @@ class RedisASTVisitor(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return None
 
+    def _check_self_redis_attr(self, func_value: ast.Attribute) -> bool:
+        """Check if attribute is self.redis-like (Issue #335 - extracted helper)."""
+        if not isinstance(func_value.value, ast.Name):
+            return False
+        if func_value.value.id != "self":
+            return False
+        return "redis" in func_value.attr.lower()
+
     def _is_redis_call(self, node: ast.Call) -> bool:
         """Check if this call is on a Redis client."""
-        if isinstance(node.func, ast.Attribute):
-            # Check the base object
-            if isinstance(node.func.value, ast.Name):
-                name = node.func.value.id.lower()
-                return "redis" in name or node.func.value.id in self.redis_var_names
-            elif isinstance(node.func.value, ast.Attribute):
-                # Check for self.redis, etc.
-                if isinstance(node.func.value.value, ast.Name):
-                    if node.func.value.value.id == "self":
-                        return "redis" in node.func.value.attr.lower()
+        if not isinstance(node.func, ast.Attribute):
+            return False
+
+        # Check the base object
+        if isinstance(node.func.value, ast.Name):
+            name = node.func.value.id.lower()
+            return "redis" in name or node.func.value.id in self.redis_var_names
+
+        if isinstance(node.func.value, ast.Attribute):
+            return self._check_self_redis_attr(node.func.value)
+
         return False
+
+    def _extract_fstring_pattern(self, fstring: ast.JoinedStr) -> str:
+        """Extract pattern from f-string (Issue #335 - extracted helper)."""
+        parts = []
+        for value in fstring.values:
+            if isinstance(value, ast.Constant):
+                parts.append(str(value.value))
+            else:
+                parts.append("{...}")
+        return "".join(parts)
 
     def _extract_key_pattern(self, node: ast.Call) -> Optional[str]:
         """Extract the key pattern from a Redis call."""
-        if node.args:
-            first_arg = node.args[0]
-            if isinstance(first_arg, ast.Constant):
-                return str(first_arg.value)
-            elif isinstance(first_arg, ast.JoinedStr):
-                # f-string - extract pattern
-                parts = []
-                for value in first_arg.values:
-                    if isinstance(value, ast.Constant):
-                        parts.append(str(value.value))
-                    else:
-                        parts.append("{...}")
-                return "".join(parts)
+        if not node.args:
+            return None
+
+        first_arg = node.args[0]
+        if isinstance(first_arg, ast.Constant):
+            return str(first_arg.value)
+
+        if isinstance(first_arg, ast.JoinedStr):
+            return self._extract_fstring_pattern(first_arg)
+
         return None
 
     def _get_context(self, line_number: int, context_lines: int = 2) -> str:
@@ -590,6 +606,49 @@ class RedisOptimizer:
 
         return results
 
+    def _find_following_write_op(
+        self, operations: List[RedisOperation], start_idx: int, read_op: RedisOperation
+    ) -> Optional[RedisOperation]:
+        """Find a write operation following a read (Issue #335 - extracted helper)."""
+        for j in range(start_idx + 1, min(start_idx + 5, len(operations))):
+            next_op = operations[j]
+            if next_op.operation not in ("set", "hset"):
+                continue
+            if next_op.line_number - read_op.line_number <= 10:
+                return next_op
+        return None
+
+    def _create_lua_candidate_result(
+        self,
+        file_path: str,
+        read_op: RedisOperation,
+        write_op: RedisOperation,
+        source_lines: List[str],
+    ) -> OptimizationResult:
+        """Create optimization result for Lua candidate (Issue #335 - extracted helper)."""
+        return OptimizationResult(
+            optimization_type=OptimizationType.READ_MODIFY_WRITE,
+            severity=OptimizationSeverity.MEDIUM,
+            file_path=file_path,
+            line_start=read_op.line_number,
+            line_end=write_op.line_number,
+            description="Read-modify-write pattern detected (GET followed by SET)",
+            suggestion=(
+                "Consider using Lua script for atomic operation, or "
+                "WATCH/MULTI/EXEC transaction, or built-in atomic commands "
+                "like INCR, GETSET"
+            ),
+            estimated_improvement="Eliminates race condition window, atomic operation",
+            current_code=self._get_code_range(
+                source_lines,
+                read_op.line_number,
+                write_op.line_number,
+            ),
+            optimized_code=self._generate_lua_example(read_op, write_op),
+            operations_affected=[read_op, write_op],
+            metrics={"race_window_lines": write_op.line_number - read_op.line_number},
+        )
+
     def _detect_lua_script_candidates(
         self,
         file_path: str,
@@ -601,42 +660,16 @@ class RedisOptimizer:
 
         # Look for read-modify-write patterns
         for i, op in enumerate(operations):
-            if op.operation in ("get", "hget"):
-                # Check if followed by set within 10 lines
-                for j in range(i + 1, min(i + 5, len(operations))):
-                    next_op = operations[j]
-                    if next_op.operation in ("set", "hset"):
-                        if next_op.line_number - op.line_number <= 10:
-                            results.append(
-                                OptimizationResult(
-                                    optimization_type=OptimizationType.READ_MODIFY_WRITE,
-                                    severity=OptimizationSeverity.MEDIUM,
-                                    file_path=file_path,
-                                    line_start=op.line_number,
-                                    line_end=next_op.line_number,
-                                    description="Read-modify-write pattern detected (GET followed by SET)",
-                                    suggestion=(
-                                        "Consider using Lua script for atomic operation, or "
-                                        "WATCH/MULTI/EXEC transaction, or built-in atomic commands "
-                                        "like INCR, GETSET"
-                                    ),
-                                    estimated_improvement="Eliminates race condition window, atomic operation",
-                                    current_code=self._get_code_range(
-                                        source_lines,
-                                        op.line_number,
-                                        next_op.line_number,
-                                    ),
-                                    optimized_code=self._generate_lua_example(
-                                        op, next_op
-                                    ),
-                                    operations_affected=[op, next_op],
-                                    metrics={
-                                        "race_window_lines": next_op.line_number
-                                        - op.line_number
-                                    },
-                                )
-                            )
-                            break
+            if op.operation not in ("get", "hget"):
+                continue
+
+            write_op = self._find_following_write_op(operations, i, op)
+            if write_op:
+                results.append(
+                    self._create_lua_candidate_result(
+                        file_path, op, write_op, source_lines
+                    )
+                )
 
         return results
 
@@ -790,6 +823,54 @@ class RedisOptimizer:
 
         return results
 
+    def _is_stampede_risk(self, context: str) -> bool:
+        """Check if context shows cache stampede risk (Issue #335 - extracted helper)."""
+        context_lower = context.lower()
+        # Has lock protection
+        if "lock" in context_lower or "mutex" in context_lower:
+            return False
+        # Has cache miss pattern
+        return "none" in context_lower or "if not" in context_lower
+
+    def _check_get_set_stampede(
+        self,
+        file_path: str,
+        get_op: RedisOperation,
+        set_op: RedisOperation,
+        source_lines: List[str],
+    ) -> Optional[OptimizationResult]:
+        """Check GET/SET pair for stampede risk (Issue #335 - extracted helper)."""
+        line_diff = set_op.line_number - get_op.line_number
+        if not (0 < line_diff <= 20):
+            return None
+
+        context = self._get_code_range(
+            source_lines, get_op.line_number, set_op.line_number
+        )
+        if not self._is_stampede_risk(context):
+            return None
+
+        return OptimizationResult(
+            optimization_type=OptimizationType.CACHE_STAMPEDE_RISK,
+            severity=OptimizationSeverity.MEDIUM,
+            file_path=file_path,
+            line_start=get_op.line_number,
+            line_end=set_op.line_number,
+            description=(
+                "Potential cache stampede pattern: "
+                "GET miss -> compute -> SET without lock"
+            ),
+            suggestion=(
+                "Use distributed lock (SETNX) or probabilistic early expiration. "
+                "Consider redis-py's lock() context manager."
+            ),
+            estimated_improvement="Prevents thundering herd on cache miss",
+            current_code=context,
+            optimized_code=self._generate_stampede_protection(get_op),
+            operations_affected=[get_op, set_op],
+            metrics={"risk_type": "cache_stampede"},
+        )
+
     def _detect_cache_patterns(
         self,
         file_path: str,
@@ -805,39 +886,12 @@ class RedisOptimizer:
 
         for get_op in gets:
             for set_op in sets:
-                if 0 < set_op.line_number - get_op.line_number <= 20:
-                    # Check for lock/mutex in between
-                    context = self._get_code_range(
-                        source_lines, get_op.line_number, set_op.line_number
-                    )
-                    if "lock" not in context.lower() and "mutex" not in context.lower():
-                        # Check for None check pattern (cache miss)
-                        if "none" in context.lower() or "if not" in context.lower():
-                            results.append(
-                                OptimizationResult(
-                                    optimization_type=OptimizationType.CACHE_STAMPEDE_RISK,
-                                    severity=OptimizationSeverity.MEDIUM,
-                                    file_path=file_path,
-                                    line_start=get_op.line_number,
-                                    line_end=set_op.line_number,
-                                    description=(
-                                        "Potential cache stampede pattern: "
-                                        "GET miss -> compute -> SET without lock"
-                                    ),
-                                    suggestion=(
-                                        "Use distributed lock (SETNX) or probabilistic early expiration. "
-                                        "Consider redis-py's lock() context manager."
-                                    ),
-                                    estimated_improvement="Prevents thundering herd on cache miss",
-                                    current_code=context,
-                                    optimized_code=self._generate_stampede_protection(
-                                        get_op
-                                    ),
-                                    operations_affected=[get_op, set_op],
-                                    metrics={"risk_type": "cache_stampede"},
-                                )
-                            )
-                            break
+                result = self._check_get_set_stampede(
+                    file_path, get_op, set_op, source_lines
+                )
+                if result:
+                    results.append(result)
+                    break
 
         return results
 

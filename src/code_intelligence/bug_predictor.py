@@ -696,6 +696,23 @@ class BugPredictor:
 
         return {"count": count, "score": score, "last_date": last_date}
 
+    def _parse_commit_line(self, line: str) -> Optional[dict]:
+        """Parse a commit info line (Issue #335 - extracted helper)."""
+        if "|" not in line:
+            return None
+        parts = line.split("|", 2)
+        return {
+            "hash": parts[0],
+            "date": parts[1].strip() if len(parts) > 1 else "",
+            "message": parts[2] if len(parts) > 2 else "",
+        }
+
+    def _add_file_to_bug_cache(self, file_path: str, commit: dict) -> None:
+        """Add a file entry to bug history cache (Issue #335 - extracted helper)."""
+        if file_path not in self._bug_history_cache:
+            self._bug_history_cache[file_path] = []
+        self._bug_history_cache[file_path].append(commit.copy())
+
     def _build_bug_history_cache(self) -> None:
         """Build cache of bug history from git."""
         self._bug_history_cache = {}
@@ -723,20 +740,16 @@ class BugPredictor:
                 cwd=self.project_root,
             )
 
-            if result.returncode == 0:
-                current_commit = None
-                for line in result.stdout.strip().split("\n"):
-                    if "|" in line:
-                        parts = line.split("|", 2)
-                        current_commit = {
-                            "hash": parts[0],
-                            "date": parts[1].strip() if len(parts) > 1 else "",
-                            "message": parts[2] if len(parts) > 2 else "",
-                        }
-                    elif line and current_commit:
-                        if line not in self._bug_history_cache:
-                            self._bug_history_cache[line] = []
-                        self._bug_history_cache[line].append(current_commit.copy())
+            if result.returncode != 0:
+                return
+
+            current_commit = None
+            for line in result.stdout.strip().split("\n"):
+                parsed = self._parse_commit_line(line)
+                if parsed:
+                    current_commit = parsed
+                elif line and current_commit:
+                    self._add_file_to_bug_cache(line, current_commit)
 
         except Exception as e:
             logger.warning(f"Failed to get bug history: {e}")

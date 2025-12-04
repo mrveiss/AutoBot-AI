@@ -358,26 +358,28 @@ class SecurityASTVisitor(ast.NodeVisitor):
                     return True
         return False
 
+    def _has_validation_call(self, node) -> bool:
+        """Check if node has validation call patterns (Issue #335 - extracted helper)."""
+        validation_funcs = {"validate", "Validator", "Schema"}
+        validation_attrs = {"validate", "parse_obj", "model_validate"}
+
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if isinstance(func, ast.Name) and func.id in validation_funcs:
+                return True
+            if isinstance(func, ast.Attribute) and func.attr in validation_attrs:
+                return True
+        return False
+
+    def _has_type_annotations(self, node) -> bool:
+        """Check if function has type annotations (Issue #335 - extracted helper)."""
+        return any(arg.annotation for arg in node.args.args)
+
     def _check_input_validation(self, node) -> None:
         """Check if web handler validates input."""
-        # Look for validation patterns in function body
-        has_validation = False
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                func = child.func
-                # Check for Pydantic, marshmallow, etc.
-                if isinstance(func, ast.Name):
-                    if func.id in ("validate", "Validator", "Schema"):
-                        has_validation = True
-                elif isinstance(func, ast.Attribute):
-                    if func.attr in ("validate", "parse_obj", "model_validate"):
-                        has_validation = True
-
-        # Check for type hints (Pydantic models)
-        for arg in node.args.args:
-            if arg.annotation:
-                has_validation = True
-                break
+        has_validation = self._has_validation_call(node) or self._has_type_annotations(node)
 
         if not has_validation:
             code = self._get_source_segment(node.lineno, node.end_lineno or node.lineno)

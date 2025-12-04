@@ -467,6 +467,17 @@ class AntiPatternDetector:
 
         return patterns
 
+    def _extract_imports_from_tree(self, tree: ast.AST) -> set:
+        """Extract imported module names from AST (Issue #335 - extracted helper)."""
+        imports = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.add(alias.name)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.add(node.module)
+        return imports
+
     def _collect_imports(self, file_path: str) -> None:
         """Collect import statements for circular dependency detection."""
         try:
@@ -480,13 +491,7 @@ class AntiPatternDetector:
                 self._import_graph[module_name] = set()
                 self._module_to_file[module_name] = file_path
 
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        self._import_graph[module_name].add(alias.name)
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        self._import_graph[module_name].add(node.module)
+            self._import_graph[module_name].update(self._extract_imports_from_tree(tree))
 
         except Exception as e:
             logger.debug(f"Failed to collect imports from {file_path}: {e}")
@@ -658,37 +663,45 @@ class AntiPatternDetector:
 
     # ========== NEW CODE SMELL DETECTIONS ==========
 
+    def _classify_function_name(
+        self, child, snake_case: List[str], camel_case: List[str]
+    ) -> None:
+        """Classify function name by convention (Issue #335 - extracted helper)."""
+        name = child.name
+        if name.startswith("_"):
+            return
+        if self._is_snake_case(name):
+            snake_case.append(name)
+        elif self._is_camel_case(name):
+            camel_case.append(name)
+
+    def _check_single_letter_var(
+        self, child, single_letter_vars: List[Tuple[str, int]]
+    ) -> None:
+        """Check for single letter variable (Issue #335 - extracted helper)."""
+        if not isinstance(child.ctx, ast.Store):
+            return
+        name = child.id
+        if len(name) == 1 and name not in "ijknxyz_":
+            single_letter_vars.append((name, getattr(child, "lineno", 0)))
+
     def _detect_naming_issues(
         self, node: ast.AST, file_path: str
     ) -> List[AntiPatternResult]:
         """Detect naming convention issues."""
         patterns: List[AntiPatternResult] = []
-
-        # Collect all names with their styles
         snake_case_names: List[str] = []
         camel_case_names: List[str] = []
         single_letter_vars: List[Tuple[str, int]] = []
 
         for child in ast.walk(node):
-            # Check function names
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                name = child.name
-                if not name.startswith("_"):  # Skip dunder/private
-                    if self._is_snake_case(name):
-                        snake_case_names.append(name)
-                    elif self._is_camel_case(name):
-                        camel_case_names.append(name)
-
-            # Check variable assignments for single-letter names
-            if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
-                name = child.id
-                # Allow common loop variables: i, j, k, n, x, y, z
-                if len(name) == 1 and name not in "ijknxyz_":
-                    single_letter_vars.append((name, getattr(child, "lineno", 0)))
+                self._classify_function_name(child, snake_case_names, camel_case_names)
+            if isinstance(child, ast.Name):
+                self._check_single_letter_var(child, single_letter_vars)
 
         # Check for mixed naming conventions
         if snake_case_names and camel_case_names:
-            # Only flag if significant mixing (>20% of either style)
             total = len(snake_case_names) + len(camel_case_names)
             if min(len(snake_case_names), len(camel_case_names)) / total > 0.2:
                 patterns.append(
@@ -708,7 +721,6 @@ class AntiPatternDetector:
                     )
                 )
 
-        # Flag single-letter variables (except common loop vars)
         for var_name, line_num in single_letter_vars:
             patterns.append(
                 AntiPatternResult(
@@ -858,6 +870,48 @@ class AntiPatternDetector:
                 count += 1
         return count
 
+    def _check_function_docstring(
+        self, child: ast.AST, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check if public function lacks docstring (Issue #335 - extracted helper)."""
+        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return None
+        if child.name.startswith("_"):
+            return None
+        if ast.get_docstring(child):
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.MISSING_DOCSTRING,
+            severity=AntiPatternSeverity.INFO,
+            file_path=file_path,
+            line_number=child.lineno,
+            entity_name=child.name,
+            description=f"Public function '{child.name}' lacks docstring",
+            suggestion="Add a docstring explaining purpose and parameters",
+            metrics={"type": "function"},
+        )
+
+    def _check_class_docstring(
+        self, child: ast.AST, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check if public class lacks docstring (Issue #335 - extracted helper)."""
+        if not isinstance(child, ast.ClassDef):
+            return None
+        if child.name.startswith("_"):
+            return None
+        if ast.get_docstring(child):
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.MISSING_DOCSTRING,
+            severity=AntiPatternSeverity.LOW,
+            file_path=file_path,
+            line_number=child.lineno,
+            entity_name=child.name,
+            description=f"Public class '{child.name}' lacks docstring",
+            suggestion="Add a docstring explaining class purpose",
+            metrics={"type": "class"},
+        )
+
     def _detect_missing_docstrings(
         self, node: ast.AST, file_path: str
     ) -> List[AntiPatternResult]:
@@ -866,38 +920,15 @@ class AntiPatternDetector:
 
         for child in ast.walk(node):
             # Check functions
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if not child.name.startswith("_"):  # Public function
-                    if not ast.get_docstring(child):
-                        patterns.append(
-                            AntiPatternResult(
-                                pattern_type=AntiPatternType.MISSING_DOCSTRING,
-                                severity=AntiPatternSeverity.INFO,
-                                file_path=file_path,
-                                line_number=child.lineno,
-                                entity_name=child.name,
-                                description=f"Public function '{child.name}' lacks docstring",
-                                suggestion="Add a docstring explaining purpose and parameters",
-                                metrics={"type": "function"},
-                            )
-                        )
+            result = self._check_function_docstring(child, file_path)
+            if result:
+                patterns.append(result)
+                continue
 
             # Check classes
-            elif isinstance(child, ast.ClassDef):
-                if not child.name.startswith("_"):  # Public class
-                    if not ast.get_docstring(child):
-                        patterns.append(
-                            AntiPatternResult(
-                                pattern_type=AntiPatternType.MISSING_DOCSTRING,
-                                severity=AntiPatternSeverity.LOW,
-                                file_path=file_path,
-                                line_number=child.lineno,
-                                entity_name=child.name,
-                                description=f"Public class '{child.name}' lacks docstring",
-                                suggestion="Add a docstring explaining class purpose",
-                                metrics={"type": "class"},
-                            )
-                        )
+            result = self._check_class_docstring(child, file_path)
+            if result:
+                patterns.append(result)
 
         return patterns
 
@@ -1044,6 +1075,53 @@ class AntiPatternDetector:
 
         return patterns
 
+    def _is_docstring_or_pass(self, stmt: ast.stmt) -> bool:
+        """Check if statement is pass or docstring (Issue #335 - extracted helper)."""
+        if isinstance(stmt, ast.Pass):
+            return True
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+            return True
+        return False
+
+    def _check_unreachable_after_return(
+        self, node, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check for unreachable code after return (Issue #335 - extracted helper)."""
+        for i, stmt in enumerate(node.body[:-1]):
+            if not isinstance(stmt, (ast.Return, ast.Raise)):
+                continue
+            next_stmt = node.body[i + 1]
+            if self._is_docstring_or_pass(next_stmt):
+                continue
+            return AntiPatternResult(
+                pattern_type=AntiPatternType.DEAD_CODE,
+                severity=AntiPatternSeverity.MEDIUM,
+                file_path=file_path,
+                line_number=getattr(next_stmt, "lineno", node.lineno),
+                entity_name=node.name,
+                description="Unreachable code after return/raise",
+                suggestion="Remove unreachable statements",
+                metrics={"type": "unreachable_after_return"},
+            )
+        return None
+
+    def _check_empty_except(
+        self, node: ast.ExceptHandler, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check for empty except block (Issue #335 - extracted helper)."""
+        if len(node.body) != 1 or not isinstance(node.body[0], ast.Pass):
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.DEAD_CODE,
+            severity=AntiPatternSeverity.MEDIUM,
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name="except_handler",
+            description="Empty except block silently ignores errors",
+            suggestion="Log the exception or handle it explicitly",
+            metrics={"type": "empty_except"},
+        )
+
     def _detect_dead_code(
         self, tree: ast.AST, file_path: str
     ) -> List[AntiPatternResult]:
@@ -1058,48 +1136,14 @@ class AntiPatternDetector:
         patterns: List[AntiPatternResult] = []
 
         for node in ast.walk(tree):
-            # Check for unreachable code after control flow statements
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for i, stmt in enumerate(node.body[:-1]):  # All but last
-                    if isinstance(stmt, (ast.Return, ast.Raise)):
-                        # Check if there's more code after return/raise
-                        next_stmt = node.body[i + 1]
-                        # Skip if next is just a pass or docstring
-                        if not isinstance(next_stmt, ast.Pass):
-                            if not (
-                                isinstance(next_stmt, ast.Expr)
-                                and isinstance(next_stmt.value, ast.Constant)
-                            ):
-                                patterns.append(
-                                    AntiPatternResult(
-                                        pattern_type=AntiPatternType.DEAD_CODE,
-                                        severity=AntiPatternSeverity.MEDIUM,
-                                        file_path=file_path,
-                                        line_number=getattr(
-                                            next_stmt, "lineno", node.lineno
-                                        ),
-                                        entity_name=node.name,
-                                        description="Unreachable code after return/raise",
-                                        suggestion="Remove unreachable statements",
-                                        metrics={"type": "unreachable_after_return"},
-                                    )
-                                )
-
-            # Check for empty except blocks
+                result = self._check_unreachable_after_return(node, file_path)
+                if result:
+                    patterns.append(result)
             if isinstance(node, ast.ExceptHandler):
-                if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
-                    patterns.append(
-                        AntiPatternResult(
-                            pattern_type=AntiPatternType.DEAD_CODE,
-                            severity=AntiPatternSeverity.MEDIUM,
-                            file_path=file_path,
-                            line_number=node.lineno,
-                            entity_name="except_handler",
-                            description="Empty except block silently ignores errors",
-                            suggestion="Log the exception or handle it explicitly",
-                            metrics={"type": "empty_except"},
-                        )
-                    )
+                result = self._check_empty_except(node, file_path)
+                if result:
+                    patterns.append(result)
 
         return patterns
 

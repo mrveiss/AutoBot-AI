@@ -778,6 +778,52 @@ class BatchingAnalyzer:
     together for improved efficiency.
     """
 
+    @staticmethod
+    def _group_patterns_by_file(
+        patterns: List[UsagePattern],
+    ) -> Dict[str, List[UsagePattern]]:
+        """Group patterns by file path (Issue #335 - extracted helper)."""
+        file_patterns: Dict[str, List[UsagePattern]] = {}
+        for pattern in patterns:
+            if pattern.file_path not in file_patterns:
+                file_patterns[pattern.file_path] = []
+            file_patterns[pattern.file_path].append(pattern)
+        return file_patterns
+
+    @staticmethod
+    def _group_by_pattern_type(
+        patterns: List[UsagePattern],
+    ) -> Dict[UsagePatternType, List[UsagePattern]]:
+        """Group patterns by type (Issue #335 - extracted helper)."""
+        type_groups: Dict[UsagePatternType, List[UsagePattern]] = {}
+        for pat in patterns:
+            if pat.pattern_type not in type_groups:
+                type_groups[pat.pattern_type] = []
+            type_groups[pat.pattern_type].append(pat)
+        return type_groups
+
+    @staticmethod
+    def _find_close_pair_opportunity(
+        file_path: str, sorted_pats: List[UsagePattern]
+    ) -> Optional[BatchingOpportunity]:
+        """Find batching opportunity from close patterns (Issue #335 - extracted helper)."""
+        for i in range(len(sorted_pats) - 1):
+            line_diff = sorted_pats[i + 1].line_number - sorted_pats[i].line_number
+            if line_diff >= 50:
+                continue
+            return BatchingOpportunity(
+                opportunity_id=f"batch_{hash(file_path)%10000:04d}",
+                file_path=file_path,
+                related_calls=[
+                    (p.line_number, p.code_snippet[:50])
+                    for p in sorted_pats[i : i + 2]
+                ],
+                estimated_speedup=1.5,
+                estimated_token_savings=100,
+                priority=OptimizationPriority.MEDIUM,
+            )
+        return None
+
     @classmethod
     def find_opportunities(
         cls,
@@ -793,46 +839,22 @@ class BatchingAnalyzer:
             List of batching opportunities
         """
         opportunities = []
+        file_patterns = cls._group_patterns_by_file(patterns)
 
-        # Group patterns by file and type
-        file_patterns: Dict[str, List[UsagePattern]] = {}
-        for pattern in patterns:
-            if pattern.file_path not in file_patterns:
-                file_patterns[pattern.file_path] = []
-            file_patterns[pattern.file_path].append(pattern)
-
-        # Find files with multiple similar calls
         for file_path, file_pats in file_patterns.items():
             if len(file_pats) < 2:
                 continue
 
-            # Group by pattern type
-            type_groups: Dict[UsagePatternType, List[UsagePattern]] = {}
-            for pat in file_pats:
-                if pat.pattern_type not in type_groups:
-                    type_groups[pat.pattern_type] = []
-                type_groups[pat.pattern_type].append(pat)
+            type_groups = cls._group_by_pattern_type(file_pats)
 
-            # Check for batching opportunities in each type
             for pat_type, group_patterns in type_groups.items():
-                if len(group_patterns) >= 2:
-                    # Check if calls are close together (within 50 lines)
-                    sorted_pats = sorted(group_patterns, key=lambda p: p.line_number)
-                    for i in range(len(sorted_pats) - 1):
-                        if sorted_pats[i + 1].line_number - sorted_pats[i].line_number < 50:
-                            opportunity = BatchingOpportunity(
-                                opportunity_id=f"batch_{hash(file_path)%10000:04d}",
-                                file_path=file_path,
-                                related_calls=[
-                                    (p.line_number, p.code_snippet[:50])
-                                    for p in sorted_pats[i : i + 2]
-                                ],
-                                estimated_speedup=1.5,
-                                estimated_token_savings=100,
-                                priority=OptimizationPriority.MEDIUM,
-                            )
-                            opportunities.append(opportunity)
-                            break
+                if len(group_patterns) < 2:
+                    continue
+
+                sorted_pats = sorted(group_patterns, key=lambda p: p.line_number)
+                opportunity = cls._find_close_pair_opportunity(file_path, sorted_pats)
+                if opportunity:
+                    opportunities.append(opportunity)
 
         return opportunities
 
