@@ -34,6 +34,17 @@ class SecurityScannerAgent:
             "web_scan",
         ]
 
+    def _get_scan_handlers(self) -> Dict[str, Any]:
+        """Get scan type to handler mapping (Issue #334 - extracted helper)."""
+        return {
+            "port_scan": self._port_scan,
+            "service_detection": self._service_detection,
+            "vulnerability_scan": self._vulnerability_scan,
+            "ssl_scan": self._ssl_scan,
+            "dns_enum": self._dns_enumeration,
+            "web_scan": self._web_scan,
+        }
+
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a security scanning task"""
         try:
@@ -41,38 +52,21 @@ class SecurityScannerAgent:
             target = context.get("target", "")
 
             if not target:
-                return {
-                    "status": "error",
-                    "message": "No target specified for security scan",
-                }
+                return {"status": "error", "message": "No target specified for security scan"}
 
-            # Validate target is appropriate (localhost, private network, or authorized)
             if not self._validate_target(target):
                 return {
                     "status": "error",
-                    "message": (
-                        "Target validation failed. Only authorized targets allowed."
-                    ),
+                    "message": "Target validation failed. Only authorized targets allowed.",
                 }
 
-            # Execute appropriate scan based on type
-            if scan_type == "port_scan":
-                return await self._port_scan(target, context)
-            elif scan_type == "service_detection":
-                return await self._service_detection(target, context)
-            elif scan_type == "vulnerability_scan":
-                return await self._vulnerability_scan(target, context)
-            elif scan_type == "ssl_scan":
-                return await self._ssl_scan(target, context)
-            elif scan_type == "dns_enum":
-                return await self._dns_enumeration(target, context)
-            elif scan_type == "web_scan":
-                return await self._web_scan(target, context)
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Unsupported scan type: {scan_type}",
-                }
+            handlers = self._get_scan_handlers()
+            handler = handlers.get(scan_type)
+
+            if handler is None:
+                return {"status": "error", "message": f"Unsupported scan type: {scan_type}"}
+
+            return await handler(target, context)
 
         except Exception as e:
             logger.error(f"Security scan failed: {e}")
@@ -294,51 +288,48 @@ class SecurityScannerAgent:
             logger.error(f"DNS enumeration failed: {e}")
             return {"status": "error", "message": f"DNS enumeration failed: {str(e)}"}
 
+    async def _check_robots_txt(
+        self, http_client, target: str, findings: List[Dict]
+    ) -> None:
+        """Check for robots.txt (Issue #334 - extracted helper)."""
+        try:
+            async with await http_client.get(f"{target}/robots.txt") as response:
+                if response.status == 200:
+                    findings.append({
+                        "type": "info",
+                        "path": "/robots.txt",
+                        "message": "Robots.txt file found",
+                    })
+        except Exception as e:
+            logger.debug("robots.txt not accessible: %s", e)
+
+    async def _check_admin_path(
+        self, http_client, target: str, path: str, findings: List[Dict]
+    ) -> None:
+        """Check single admin path (Issue #334 - extracted helper)."""
+        try:
+            async with await http_client.get(f"{target}{path}") as response:
+                if response.status in [200, 301, 302]:
+                    findings.append({
+                        "type": "warning",
+                        "path": path,
+                        "status": response.status,
+                        "message": "Potentially sensitive path accessible",
+                    })
+        except Exception as e:
+            logger.debug("Path check failed for %s: %s", path, e)
+
     async def _web_scan(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform basic web application scanning"""
         try:
-            # In production, might use:
-            # - Nikto
-            # - OWASP ZAP API
-            # - Nuclei
-            # - Custom web checks
-
-            # Basic example checking common paths
             results = {"url": target, "findings": []}
-
-            # Check robots.txt
             http_client = get_http_client()
-            try:
-                async with await http_client.get(f"{target}/robots.txt") as response:
-                    if response.status == 200:
-                        results["findings"].append(
-                            {
-                                "type": "info",
-                                "path": "/robots.txt",
-                                "message": "Robots.txt file found",
-                            }
-                        )
-            except Exception as e:
-                logger.debug("robots.txt not accessible: %s", e)
 
-            # Check common admin paths
+            await self._check_robots_txt(http_client, target, results["findings"])
+
             admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
             for path in admin_paths:
-                try:
-                    async with await http_client.get(f"{target}{path}") as response:
-                        if response.status in [200, 301, 302]:
-                            results["findings"].append(
-                                {
-                                    "type": "warning",
-                                    "path": path,
-                                    "status": response.status,
-                                    "message": (
-                                        "Potentially sensitive path accessible"
-                                    ),
-                                }
-                            )
-                except Exception as e:
-                    logger.debug("Path check failed for %s: %s", path, e)
+                await self._check_admin_path(http_client, target, path, results["findings"])
 
             return {
                 "status": "success",
@@ -553,18 +544,20 @@ class SecurityScannerAgent:
         """Detect package manager from installation guide"""
         guide_lower = guide_text.lower()
 
-        if "apt install" in guide_lower or "apt-get install" in guide_lower:
-            return "apt"
-        elif "yum install" in guide_lower:
-            return "yum"
-        elif "dnf install" in guide_lower:
-            return "dn"
-        elif "pacman -S" in guide_lower:
-            return "pacman"
-        elif "brew install" in guide_lower:
-            return "brew"
-        else:
-            return "apt"  # Default for Kali/Ubuntu
+        # Package manager detection patterns
+        patterns = [
+            (["apt install", "apt-get install"], "apt"),
+            (["yum install"], "yum"),
+            (["dnf install"], "dn"),
+            (["pacman -S"], "pacman"),
+            (["brew install"], "brew"),
+        ]
+
+        for keywords, pkg_manager in patterns:
+            if any(kw in guide_lower for kw in keywords):
+                return pkg_manager
+
+        return "apt"  # Default for Kali/Ubuntu
 
     def _extract_install_commands(self, guide_text: str) -> List[str]:
         """Extract installation commands from guide text"""

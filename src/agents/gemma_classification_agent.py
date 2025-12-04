@@ -149,66 +149,66 @@ Respond with valid JSON:
             ) * 1000
             return final_result
 
+    async def _read_streaming_response(self, response) -> str:
+        """Read streaming response from Ollama (Issue #334 - extracted helper)."""
+        full_response = ""
+        async for line in response.content:
+            if not line:
+                continue
+            try:
+                chunk_data = json.loads(line.decode("utf-8"))
+                if "response" in chunk_data:
+                    full_response += chunk_data["response"]
+                if chunk_data.get("done", False):
+                    break
+            except json.JSONDecodeError:
+                continue
+        return full_response.strip()
+
+    async def _try_model_classify(
+        self, model: str, prompt: str, available_models: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Try classification with single model (Issue #334 - extracted helper)."""
+        if model not in available_models:
+            return None
+
+        http_client = get_http_client()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        async with await http_client.post(
+            f"{self.ollama_host}/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {
+                    "temperature": 0.3,
+                    "top_p": 0.9,
+                    "num_predict": 200,
+                },
+            },
+            timeout=timeout,
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Gemma model {model} returned status {response.status}")
+                return None
+
+            response_text = await self._read_streaming_response(response)
+            parsed_result = self._parse_json_response(response_text)
+            if parsed_result:
+                parsed_result["_model_used"] = model
+            return parsed_result
+
     async def _gemma_classify(self, user_message: str) -> Optional[Dict[str, Any]]:
         """Use Gemma models for classification."""
+        available_models = await self._get_available_models()
+        prompt = self.classification_prompt.format(user_message=user_message)
 
         for model in self.preferred_models:
             try:
-                # Check if model is available
-                available_models = await self._get_available_models()
-                if model not in available_models:
-                    continue
-
-                # Format prompt
-                prompt = self.classification_prompt.format(user_message=user_message)
-
-                # Call Ollama API with async HTTP
-                http_client = get_http_client()
-                timeout = aiohttp.ClientTimeout(
-                    total=10
-                )  # Fast timeout for lightweight models
-                async with await http_client.post(
-                    f"{self.ollama_host}/api/generate",
-                    json={
-                        "model": model,
-                        "prompt": prompt,
-                        "stream": True,
-                        "options": {
-                            "temperature": (
-                                0.3
-                            ),  # Low temperature for consistent classification
-                            "top_p": 0.9,
-                            "num_predict": 200,  # Limit response length
-                        },
-                    },
-                    timeout=timeout,
-                ) as response:
-                    if response.status == 200:
-                        # Handle streaming response
-                        full_response = ""
-                        async for line in response.content:
-                            if line:
-                                try:
-                                    chunk_data = json.loads(line.decode("utf-8"))
-                                    if "response" in chunk_data:
-                                        full_response += chunk_data["response"]
-                                    if chunk_data.get("done", False):
-                                        break
-                                except json.JSONDecodeError:
-                                    continue
-
-                        response_text = full_response.strip()
-
-                        # Parse JSON response
-                        parsed_result = self._parse_json_response(response_text)
-                        if parsed_result:
-                            parsed_result["_model_used"] = model
-                            return parsed_result
-                    else:
-                        logger.warning(
-                            f"Gemma model {model} returned status {response.status}"
-                        )
-
+                result = await self._try_model_classify(model, prompt, available_models)
+                if result:
+                    return result
             except Exception as e:
                 logger.warning(f"Failed to use Gemma model {model}: {e}")
                 continue
@@ -389,71 +389,77 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    async def run_benchmark(agent):
+        """Run benchmark mode (Issue #334 - extracted helper)."""
+        print("🚀 Running Gemma Classification Benchmark")
+        test_cases = [
+            "whats new on tvnet.lv",
+            "what is docker",
+            "install nginx on ubuntu",
+            "hello there",
+            "current updates on github.com",
+            "define machine learning",
+        ]
+
+        total_time = 0
+        for i, test_case in enumerate(test_cases, 1):
+            print(f"\n{i}. Testing: '{test_case}'")
+            result = await agent.classify_request(test_case)
+            response_time = result.context_analysis.get("response_time_ms", 0)
+            model_used = result.context_analysis.get("model_used", "unknown")
+            total_time += response_time
+            print(
+                f"   Result: {result.complexity.value} ({result.confidence:.2f}) - {response_time:.1f}ms"
+            )
+            print(f"   Model: {model_used}")
+
+        avg_time = total_time / len(test_cases)
+        print(f"\n📊 Average response time: {avg_time:.1f}ms")
+
+    async def run_interactive(agent):
+        """Run interactive mode (Issue #334 - extracted helper)."""
+        print("🤖 Interactive Gemma Classification Agent")
+        print("Enter messages to classify (Ctrl+C to exit)")
+
+        while True:
+            try:
+                message = input("\n> ").strip()
+                if not message:
+                    continue
+                result = await agent.classify_request(message)
+                print(f"\nClassification: {result.complexity.value}")
+                print(f"Confidence: {result.confidence:.2f}")
+                model_used = result.context_analysis.get("model_used", "unknown")
+                response_time = result.context_analysis.get("response_time_ms", 0)
+                print(f"Model: {model_used}")
+                print(f"Response Time: {response_time:.1f}ms")
+                print(f"Reasoning: {result.reasoning}")
+            except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
+                break
+
+    async def run_single_message(agent, message):
+        """Run single message mode (Issue #334 - extracted helper)."""
+        result = await agent.classify_request(message)
+        print(f"Message: {message}")
+        print(f"Classification: {result.complexity.value}")
+        print(f"Confidence: {result.confidence:.2f}")
+        model_used = result.context_analysis.get("model_used", "unknown")
+        response_time = result.context_analysis.get("response_time_ms", 0)
+        print(f"Model: {model_used}")
+        print(f"Response Time: {response_time:.1f}ms")
+        print(f"Reasoning: {result.reasoning}")
+        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
+
     async def main():
         agent = GemmaClassificationAgent()
 
         if args.benchmark:
-            print("🚀 Running Gemma Classification Benchmark")
-            test_cases = [
-                "whats new on tvnet.lv",
-                "what is docker",
-                "install nginx on ubuntu",
-                "hello there",
-                "current updates on github.com",
-                "define machine learning",
-            ]
-
-            total_time = 0
-            for i, test_case in enumerate(test_cases, 1):
-                print(f"\n{i}. Testing: '{test_case}'")
-                result = await agent.classify_request(test_case)
-                response_time = result.context_analysis.get("response_time_ms", 0)
-                model_used = result.context_analysis.get("model_used", "unknown")
-                total_time += response_time
-                print(
-                    f"   Result: {result.complexity.value} ({result.confidence:.2f}) - {response_time:.1f}ms"
-                )
-                print(f"   Model: {model_used}")
-
-            avg_time = total_time / len(test_cases)
-            print(f"\n📊 Average response time: {avg_time:.1f}ms")
-
+            await run_benchmark(agent)
         elif args.interactive:
-            print("🤖 Interactive Gemma Classification Agent")
-            print("Enter messages to classify (Ctrl+C to exit)")
-
-            while True:
-                try:
-                    message = input("\n> ").strip()
-                    if message:
-                        result = await agent.classify_request(message)
-                        print(f"\nClassification: {result.complexity.value}")
-                        print(f"Confidence: {result.confidence:.2f}")
-                        model_used = result.context_analysis.get(
-                            "model_used", "unknown"
-                        )
-                        response_time = result.context_analysis.get(
-                            "response_time_ms", 0
-                        )
-                        print(f"Model: {model_used}")
-                        print(f"Response Time: {response_time:.1f}ms")
-                        print(f"Reasoning: {result.reasoning}")
-                except KeyboardInterrupt:
-                    print("\n👋 Goodbye!")
-                    break
-
+            await run_interactive(agent)
         elif args.message:
-            result = await agent.classify_request(args.message)
-            print(f"Message: {args.message}")
-            print(f"Classification: {result.complexity.value}")
-            print(f"Confidence: {result.confidence:.2f}")
-            model_used = result.context_analysis.get("model_used", "unknown")
-            response_time = result.context_analysis.get("response_time_ms", 0)
-            print(f"Model: {model_used}")
-            print(f"Response Time: {response_time:.1f}ms")
-            print(f"Reasoning: {result.reasoning}")
-            print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
-
+            await run_single_message(agent, args.message)
         else:
             print(
                 "Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark"
