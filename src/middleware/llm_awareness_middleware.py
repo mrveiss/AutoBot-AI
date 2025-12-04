@@ -10,7 +10,7 @@ Automatically injects system awareness context into LLM requests
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,6 +18,40 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from src.llm_self_awareness import get_llm_self_awareness
 
 logger = logging.getLogger(__name__)
+
+# Issue #337: Message fields that can contain LLM prompts
+MESSAGE_FIELDS = ["message", "prompt", "user_message", "query", "input"]
+
+
+def _parse_request_body(body: bytes) -> Optional[Dict[str, Any]]:
+    """Parse request body as JSON (Issue #337 - extracted helper)."""
+    if not body:
+        return None
+    try:
+        data = json.loads(body)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _find_message_field(request_data: Dict[str, Any]) -> Optional[str]:
+    """Find first message field in request data (Issue #337 - extracted helper)."""
+    for field in MESSAGE_FIELDS:
+        if field in request_data and isinstance(request_data[field], str):
+            return field
+    return None
+
+
+def _update_request_headers(request: Request, modified_body: bytes) -> None:
+    """Update request headers with new content length (Issue #337 - extracted helper)."""
+    request.headers.__dict__["_list"] = [
+        (
+            (k.encode(), v.encode())
+            if k.lower() != "content-length"
+            else (k.encode(), str(len(modified_body)).encode())
+        )
+        for k, v in request.headers.items()
+    ]
 
 
 class LLMAwarenessMiddleware(BaseHTTPMiddleware):
@@ -36,96 +70,71 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
         self.cache_timestamp = None
         self.cache_ttl = 300  # 5 minutes
 
-    async def dispatch(self, request: Request, call_next):
-        """Process request and inject awareness context if needed"""
-
-        # Check if this is an LLM-related request
-        should_inject_context = any(
+    def _should_inject_context(self, request: Request) -> bool:
+        """Check if request should have awareness context injected (Issue #337)."""
+        if request.method != "POST":
+            return False
+        return any(
             request.url.path.startswith(path) for path in self.enable_for_paths
         )
 
-        if should_inject_context and request.method == "POST":
-            # Initialize awareness module if needed
-            if self.awareness is None:
-                try:
-                    self.awareness = get_llm_self_awareness()
-                    logger.info("LLM awareness middleware initialized")
-                except Exception as e:
-                    logger.error(f"Failed to initialize LLM awareness: {e}")
-                    self.awareness = None
+    async def _ensure_awareness_initialized(self) -> bool:
+        """Initialize awareness module if needed (Issue #337 - extracted helper)."""
+        if self.awareness is not None:
+            return True
+        try:
+            self.awareness = get_llm_self_awareness()
+            logger.info("LLM awareness middleware initialized")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM awareness: {e}")
+            return False
 
-            # Inject context if awareness is available
-            if self.awareness:
-                try:
-                    # Read and modify request body
-                    body = await request.body()
-                    if body:
-                        # Parse request body
-                        try:
-                            request_data = json.loads(body)
-                        except json.JSONDecodeError:
-                            # If not JSON, proceed without modification
-                            request_data = None
+    async def _inject_awareness_into_field(
+        self, request_data: Dict[str, Any], field: str
+    ) -> bytes:
+        """Inject awareness context into a message field (Issue #337 - extracted helper)."""
+        context_level = request_data.get("context_level", "basic")
+        enhanced_message = await self.awareness.inject_awareness_context(
+            request_data[field], context_level=context_level
+        )
+        request_data[field] = enhanced_message
+        request_data["_awareness_injected"] = True
+        request_data["_awareness_timestamp"] = datetime.now().isoformat()
+        return json.dumps(request_data).encode()
 
-                        if request_data and isinstance(request_data, dict):
-                            # Check for message/prompt fields
-                            message_fields = [
-                                "message",
-                                "prompt",
-                                "user_message",
-                                "query",
-                                "input",
-                            ]
+    async def _try_inject_awareness(self, request: Request) -> None:
+        """Try to inject awareness context into request (Issue #337 - extracted helper)."""
+        if not await self._ensure_awareness_initialized():
+            return
+        if not self.awareness:
+            return
 
-                            for field in message_fields:
-                                if field in request_data and isinstance(
-                                    request_data[field], str
-                                ):
-                                    # Get awareness context level from request or use default
-                                    context_level = request_data.get(
-                                        "context_level", "basic"
-                                    )
+        try:
+            body = await request.body()
+            request_data = _parse_request_body(body)
+            if not request_data:
+                return
 
-                                    # Inject awareness context
-                                    enhanced_message = (
-                                        await self.awareness.inject_awareness_context(
-                                            request_data[field],
-                                            context_level=context_level,
-                                        )
-                                    )
+            field = _find_message_field(request_data)
+            if not field:
+                return
 
-                                    # Update the request
-                                    request_data[field] = enhanced_message
-                                    request_data["_awareness_injected"] = True
-                                    request_data["_awareness_timestamp"] = (
-                                        datetime.now().isoformat()
-                                    )
+            modified_body = await self._inject_awareness_into_field(request_data, field)
+            request._body = modified_body
+            _update_request_headers(request, modified_body)
+            logger.debug(f"Injected awareness context for {field} in {request.url.path}")
 
-                                    # Create new request with modified body
-                                    modified_body = json.dumps(request_data).encode()
+        except Exception as e:
+            logger.error(f"Error injecting awareness context: {e}")
 
-                                    # Replace the request body
-                                    request._body = modified_body
-                                    request.headers.__dict__["_list"] = [
-                                        (
-                                            (k.encode(), v.encode())
-                                            if k.lower() != "content-length"
-                                            else (
-                                                k.encode(),
-                                                str(len(modified_body)).encode(),
-                                            )
-                                        )
-                                        for k, v in request.headers.items()
-                                    ]
+    async def dispatch(self, request: Request, call_next):
+        """Process request and inject awareness context if needed"""
+        # Issue #337: Refactored to use extracted helpers for reduced nesting
+        should_inject_context = self._should_inject_context(request)
 
-                                    logger.debug(
-                                        f"Injected awareness context for {field} in {request.url.path}"
-                                    )
-                                    break
-
-                except Exception as e:
-                    logger.error(f"Error injecting awareness context: {e}")
-                    # Continue with original request if injection fails
+        if should_inject_context:
+            await self._try_inject_awareness(request)
 
         # Continue with the request
         response = await call_next(request)
