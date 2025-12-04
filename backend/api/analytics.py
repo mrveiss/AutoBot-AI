@@ -594,59 +594,13 @@ async def websocket_realtime_analytics(websocket: WebSocket):
                     message = await asyncio.wait_for(
                         websocket.receive_text(), timeout=10.0
                     )
-
-                    # Handle client commands
-                    try:
-                        command = json.loads(message)
-                        if command.get("type") == "subscribe":
-                            # Client subscribing to specific metrics
-                            await websocket.send_json(
-                                {
-                                    "type": "subscription_confirmed",
-                                    "subscribed_to": command.get("metrics", "all"),
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                        elif command.get("type") == "get_current":
-                            # Client requesting current snapshot
-                            current_data = await get_realtime_metrics()
-                            await websocket.send_json(
-                                {
-                                    "type": "current_snapshot",
-                                    "data": current_data,
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                    except json.JSONDecodeError:
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "message": "Invalid JSON in client message",
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
+                    await _handle_realtime_client_command(websocket, message)
 
                 except asyncio.TimeoutError:
                     # Periodic update - send current metrics
                     try:
                         current_data = await get_realtime_metrics()
-                        await websocket.send_json(
-                            {
-                                "type": "periodic_update",
-                                "data": {
-                                    "performance_snapshot": current_data[
-                                        "performance_snapshot"
-                                    ],
-                                    "active_connections": current_data[
-                                        "active_connections"
-                                    ],
-                                    "recent_api_calls": current_data[
-                                        "recent_api_calls"
-                                    ],
-                                },
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
+                        await websocket.send_json(_build_periodic_update(current_data))
                     except Exception as e:
                         logger.error(f"Failed to send periodic update: {e}")
                         break
@@ -657,13 +611,7 @@ async def websocket_realtime_analytics(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Error in analytics WebSocket: {e}")
                 try:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": str(e),
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
+                    await websocket.send_json(_build_error_message(e))
                 except Exception:
                     break
 
@@ -808,6 +756,142 @@ async def get_analytics_status():
 # ============================================================================
 
 
+# =============================================================================
+# WebSocket Message Builders (Issue #298 - Reduce Deep Nesting)
+# =============================================================================
+
+
+def _build_performance_message(performance_data: dict) -> dict:
+    """Build performance update WebSocket message."""
+    sys_perf = performance_data.get("system_performance", {})
+    hw_perf = performance_data.get("hardware_performance", {})
+
+    return {
+        "type": "performance_update",
+        "data": {
+            "cpu_percent": sys_perf.get("cpu_percent", 0),
+            "memory_percent": sys_perf.get("memory_percent", 0),
+            "gpu_utilization": hw_perf.get("gpu_utilization", 0),
+            "active_connections": len(analytics_state["websocket_connections"]),
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _build_api_activity_message(recent_calls: list) -> dict:
+    """Build API activity WebSocket message."""
+    return {
+        "type": "api_activity",
+        "data": {
+            "recent_calls_count": len(recent_calls),
+            "recent_calls": recent_calls[-5:],
+            "total_api_calls": sum(analytics_controller.api_frequencies.values()),
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _build_health_message(alerts: list, critical_alerts: list) -> dict:
+    """Build system health WebSocket message."""
+    return {
+        "type": "system_health",
+        "data": {
+            "alerts_count": len(alerts),
+            "critical_alerts_count": len(critical_alerts),
+            "critical_alerts": critical_alerts,
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _build_error_message(error: Exception) -> dict:
+    """Build error WebSocket message."""
+    return {
+        "type": "error",
+        "message": str(error),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _build_snapshot_response(snapshot_data: dict) -> dict:
+    """Build snapshot response WebSocket message."""
+    return {
+        "type": "snapshot_response",
+        "data": snapshot_data,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def _get_recent_api_calls(cutoff_seconds: int = 10) -> list:
+    """Get recent API calls within cutoff period."""
+    cutoff = datetime.now() - timedelta(seconds=cutoff_seconds)
+    return [
+        call
+        for call in analytics_state["api_call_patterns"]
+        if datetime.fromisoformat(call["timestamp"]) > cutoff
+    ]
+
+
+async def _handle_websocket_command(websocket: WebSocket, message: str) -> None:
+    """Handle incoming WebSocket command messages."""
+    try:
+        command = json.loads(message)
+        if command.get("type") != "request_snapshot":
+            return
+
+        snapshot_data = await get_realtime_metrics()
+        await websocket.send_json(_build_snapshot_response(snapshot_data))
+
+    except json.JSONDecodeError as e:
+        logger.debug("Invalid JSON in WebSocket message: %s", e)
+
+
+async def _handle_realtime_client_command(websocket: WebSocket, message: str) -> None:
+    """Handle client commands for realtime analytics WebSocket."""
+    try:
+        command = json.loads(message)
+        cmd_type = command.get("type")
+
+        if cmd_type == "subscribe":
+            await websocket.send_json({
+                "type": "subscription_confirmed",
+                "subscribed_to": command.get("metrics", "all"),
+                "timestamp": datetime.now().isoformat(),
+            })
+        elif cmd_type == "get_current":
+            current_data = await get_realtime_metrics()
+            await websocket.send_json({
+                "type": "current_snapshot",
+                "data": current_data,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    except json.JSONDecodeError:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Invalid JSON in client message",
+            "timestamp": datetime.now().isoformat(),
+        })
+
+
+def _build_periodic_update(current_data: dict) -> dict:
+    """Build periodic update message for realtime analytics."""
+    return {
+        "type": "periodic_update",
+        "data": {
+            "performance_snapshot": current_data.get("performance_snapshot", {}),
+            "active_connections": current_data.get("active_connections", 0),
+            "recent_api_calls": current_data.get("recent_api_calls", []),
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+# =============================================================================
+# End of WebSocket Message Builders
+# =============================================================================
+
+
 @router.websocket("/ws/analytics/live")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -843,35 +927,8 @@ async def websocket_live_analytics(websocket: WebSocket):
                 # Performance updates (every 5 seconds)
                 if current_time - last_performance_update > 5:
                     try:
-                        performance_data = (
-                            await analytics_controller.collect_performance_metrics()
-                        )
-                        await websocket.send_json(
-                            {
-                                "type": "performance_update",
-                                "data": {
-                                    "cpu_percent": (
-                                        performance_data.get(
-                                            "system_performance", {}
-                                        ).get("cpu_percent", 0)
-                                    ),
-                                    "memory_percent": (
-                                        performance_data.get(
-                                            "system_performance", {}
-                                        ).get("memory_percent", 0)
-                                    ),
-                                    "gpu_utilization": (
-                                        performance_data.get(
-                                            "hardware_performance", {}
-                                        ).get("gpu_utilization", 0)
-                                    ),
-                                    "active_connections": len(
-                                        analytics_state["websocket_connections"]
-                                    ),
-                                },
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        ),
+                        perf_data = await analytics_controller.collect_performance_metrics()
+                        await websocket.send_json(_build_performance_message(perf_data))
                         last_performance_update = current_time
                     except Exception as e:
                         logger.error(f"Performance update error: {e}")
@@ -879,26 +936,8 @@ async def websocket_live_analytics(websocket: WebSocket):
                 # API activity updates (every 2 seconds)
                 if current_time - last_api_update > 2:
                     try:
-                        recent_calls = [
-                            call
-                            for call in analytics_state["api_call_patterns"]
-                            if datetime.fromisoformat(call["timestamp"])
-                            > datetime.now() - timedelta(seconds=10)
-                        ]
-
-                        await websocket.send_json(
-                            {
-                                "type": "api_activity",
-                                "data": {
-                                    "recent_calls_count": len(recent_calls),
-                                    "recent_calls": recent_calls[-5:],  # Last 5 calls
-                                    "total_api_calls": sum(
-                                        analytics_controller.api_frequencies.values()
-                                    ),
-                                },
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        ),
+                        recent_calls = _get_recent_api_calls(cutoff_seconds=10)
+                        await websocket.send_json(_build_api_activity_message(recent_calls))
                         last_api_update = current_time
                     except Exception as e:
                         logger.error(f"API activity update error: {e}")
@@ -907,21 +946,8 @@ async def websocket_live_analytics(websocket: WebSocket):
                 if current_time - last_health_update > 10:
                     try:
                         alerts = await analytics_monitoring.get_phase9_alerts()
-                        critical_alerts = [
-                            a for a in alerts if a.get("severity") == "critical"
-                        ]
-
-                        await websocket.send_json(
-                            {
-                                "type": "system_health",
-                                "data": {
-                                    "alerts_count": len(alerts),
-                                    "critical_alerts_count": len(critical_alerts),
-                                    "critical_alerts": critical_alerts,
-                                },
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        ),
+                        critical = [a for a in alerts if a.get("severity") == "critical"]
+                        await websocket.send_json(_build_health_message(alerts, critical))
                         last_health_update = current_time
                     except Exception as e:
                         logger.error(f"System health update error: {e}")
@@ -931,35 +957,16 @@ async def websocket_live_analytics(websocket: WebSocket):
                     message = await asyncio.wait_for(
                         websocket.receive_text(), timeout=1.0
                     )
-                    try:
-                        command = json.loads(message)
-                        if command.get("type") == "request_snapshot":
-                            # Send immediate snapshot
-                            snapshot_data = await get_realtime_metrics()
-                            await websocket.send_json(
-                                {
-                                    "type": "snapshot_response",
-                                    "data": snapshot_data,
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
-                    except json.JSONDecodeError as e:
-                        logger.debug("Invalid JSON in WebSocket message: %s", e)
+                    await _handle_websocket_command(websocket, message)
                 except asyncio.TimeoutError:
-                    logger.debug("WebSocket receive timeout, continuing with updates")
+                    pass  # Continue with periodic updates
 
             except WebSocketDisconnect:
                 break
             except Exception as e:
                 logger.error(f"Error in live analytics WebSocket: {e}")
                 try:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": str(e),
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
+                    await websocket.send_json(_build_error_message(e))
                 except Exception:
                     break
 
