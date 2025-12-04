@@ -629,63 +629,119 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         return results[:max_results]
 
+    def _search_lines_for_query(
+        self, lines: List[str], query: str, file_path: str, language: str
+    ) -> List[CodeSearchResult]:
+        """Search lines for exact query match (Issue #334 - extracted helper)."""
+        results = []
+        for i, line in enumerate(lines):
+            if query not in line:
+                continue
+            context_lines = self._get_context_lines(lines, i, 2)
+            result = CodeSearchResult(
+                file_path=file_path,
+                content=line.strip(),
+                line_number=i + 1,
+                confidence=1.0,
+                context_lines=context_lines,
+                metadata={"search_type": "exact", "query": query, "language": language},
+            )
+            results.append(result)
+        return results
+
+    async def _search_file_exact(
+        self, file_data: Dict[str, Any], query: str, language: Optional[str]
+    ) -> List[CodeSearchResult]:
+        """Search single file for exact matches (Issue #334 - extracted helper)."""
+        file_path = file_data["file_path"]
+        file_language = file_data["language"]
+
+        if language and file_language != language:
+            return []
+
+        try:
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                content = await f.read()
+            lines = content.splitlines()
+            return self._search_lines_for_query(lines, query, file_path, file_language)
+        except OSError as e:
+            self.logger.error(f"Failed to read file {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}")
+        return []
+
     async def _search_exact(
         self, query: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
         """Perform exact string search"""
         results = []
-
-        # Get all indexed files
         pattern = f"{self.index_prefix}file:*"
         file_keys = self.redis_client.keys(pattern)
 
         for file_key in file_keys:
             try:
                 file_data = json.loads(self.redis_client.get(file_key))
-                file_path = file_data["file_path"]
-
-                # Language filter
-                if language and file_data["language"] != language:
-                    continue
-
-                # Load and search file content
-                try:
-                    async with aiofiles.open(
-                        file_path, "r", encoding="utf-8", errors="ignore"
-                    ) as f:
-                        content = await f.read()
-
-                    lines = content.splitlines()
-                    for i, line in enumerate(lines):
-                        if query in line:
-                            context_lines = self._get_context_lines(lines, i, 2)
-
-                            result = CodeSearchResult(
-                                file_path=file_path,
-                                content=line.strip(),
-                                line_number=i + 1,
-                                confidence=1.0,
-                                context_lines=context_lines,
-                                metadata={
-                                    "search_type": "exact",
-                                    "query": query,
-                                    "language": file_data["language"],
-                                },
-                            )
-                            results.append(result)
-
-                            if len(results) >= max_results:
-                                return results
-
-                except OSError as e:
-                    self.logger.error(f"Failed to read file {file_path}: {e}")
-                except Exception as e:
-                    self.logger.error(f"Error processing file {file_path}: {e}")
-
+                file_results = await self._search_file_exact(file_data, query, language)
+                results.extend(file_results)
+                if len(results) >= max_results:
+                    return results[:max_results]
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
 
         return results
+
+    def _search_lines_regex(
+        self, lines: List[str], pattern, query: str, file_path: str, language: str
+    ) -> List[CodeSearchResult]:
+        """Search lines with regex pattern (Issue #334 - extracted helper)."""
+        results = []
+        for i, line in enumerate(lines):
+            matches = list(pattern.finditer(line))
+            if not matches:
+                continue
+            context_lines = self._get_context_lines(lines, i, 2)
+            # Create one result per match
+            for match in matches:
+                result = CodeSearchResult(
+                    file_path=file_path,
+                    content=line.strip(),
+                    line_number=i + 1,
+                    confidence=0.9,
+                    context_lines=context_lines,
+                    metadata={
+                        "search_type": "regex",
+                        "query": query,
+                        "match": match.group(),
+                        "language": language,
+                    },
+                )
+                results.append(result)
+        return results
+
+    async def _search_file_regex(
+        self, file_data: Dict[str, Any], pattern, query: str, language: Optional[str]
+    ) -> List[CodeSearchResult]:
+        """Search single file with regex (Issue #334 - extracted helper)."""
+        file_path = file_data["file_path"]
+        file_language = file_data["language"]
+
+        if language and file_language != language:
+            return []
+
+        try:
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                content = await f.read()
+            lines = content.splitlines()
+            return self._search_lines_regex(lines, pattern, query, file_path, file_language)
+        except OSError as e:
+            self.logger.error(f"Failed to read file {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}")
+        return []
 
     async def _search_regex(
         self, query: str, language: Optional[str], max_results: int
@@ -700,60 +756,89 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         results = []
-
-        # Get all indexed files
         file_pattern = f"{self.index_prefix}file:*"
         file_keys = self.redis_client.keys(file_pattern)
 
         for file_key in file_keys:
             try:
                 file_data = json.loads(self.redis_client.get(file_key))
-                file_path = file_data["file_path"]
-
-                # Language filter
-                if language and file_data["language"] != language:
-                    continue
-
-                # Load and search file content
-                try:
-                    async with aiofiles.open(
-                        file_path, "r", encoding="utf-8", errors="ignore"
-                    ) as f:
-                        content = await f.read()
-
-                    lines = content.splitlines()
-                    for i, line in enumerate(lines):
-                        matches = pattern.finditer(line)
-                        for match in matches:
-                            context_lines = self._get_context_lines(lines, i, 2)
-
-                            result = CodeSearchResult(
-                                file_path=file_path,
-                                content=line.strip(),
-                                line_number=i + 1,
-                                confidence=0.9,
-                                context_lines=context_lines,
-                                metadata={
-                                    "search_type": "regex",
-                                    "query": query,
-                                    "match": match.group(),
-                                    "language": file_data["language"],
-                                },
-                            )
-                            results.append(result)
-
-                            if len(results) >= max_results:
-                                return results
-
-                except OSError as e:
-                    self.logger.error(f"Failed to read file {file_path}: {e}")
-                except Exception as e:
-                    self.logger.error(f"Error processing file {file_path}: {e}")
-
+                file_results = await self._search_file_regex(
+                    file_data, pattern, query, language
+                )
+                results.extend(file_results)
+                if len(results) >= max_results:
+                    return results[:max_results]
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
 
         return results
+
+    def _calculate_semantic_match(
+        self, line: str, query_words: List[str]
+    ) -> Optional[tuple]:
+        """Calculate semantic match score for a line (Issue #334 - extracted helper)."""
+        line_lower = line.lower()
+        matches = sum(1 for word in query_words if word in line_lower)
+        if matches == 0:
+            return None
+        confidence = matches / len(query_words)
+        if confidence < 0.3:
+            return None
+        return (matches, confidence)
+
+    def _search_lines_semantic(
+        self, lines: List[str], query: str, query_words: List[str],
+        file_path: str, language: str
+    ) -> List[CodeSearchResult]:
+        """Search lines with semantic matching (Issue #334 - extracted helper)."""
+        results = []
+        for i, line in enumerate(lines):
+            match_info = self._calculate_semantic_match(line, query_words)
+            if not match_info:
+                continue
+            matches, confidence = match_info
+            context_lines = self._get_context_lines(lines, i, 2)
+            result = CodeSearchResult(
+                file_path=file_path,
+                content=line.strip(),
+                line_number=i + 1,
+                confidence=confidence,
+                context_lines=context_lines,
+                metadata={
+                    "search_type": "semantic",
+                    "query": query,
+                    "matches": matches,
+                    "language": language,
+                },
+            )
+            results.append(result)
+        return results
+
+    async def _search_file_semantic(
+        self, file_data: Dict[str, Any], query: str, query_words: List[str],
+        language: Optional[str]
+    ) -> List[CodeSearchResult]:
+        """Search single file semantically (Issue #334 - extracted helper)."""
+        file_path = file_data["file_path"]
+        file_language = file_data["language"]
+
+        if language and file_language != language:
+            return []
+
+        try:
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                content = await f.read()
+            lines = content.splitlines()
+            return self._search_lines_semantic(
+                lines, query, query_words, file_path, file_language
+            )
+        except OSError as e:
+            self.logger.error(f"Failed to read file {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}")
+        return []
 
     async def _search_semantic(
         self, query: str, language: Optional[str], max_results: int
@@ -764,60 +849,16 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         results = []
         query_words = query.lower().split()
-
-        # Get all indexed files
         pattern = f"{self.index_prefix}file:*"
         file_keys = self.redis_client.keys(pattern)
 
         for file_key in file_keys:
             try:
                 file_data = json.loads(self.redis_client.get(file_key))
-                file_path = file_data["file_path"]
-
-                # Language filter
-                if language and file_data["language"] != language:
-                    continue
-
-                # Load and search file content
-                try:
-                    async with aiofiles.open(
-                        file_path, "r", encoding="utf-8", errors="ignore"
-                    ) as f:
-                        content = await f.read()
-
-                    lines = content.splitlines()
-                    for i, line in enumerate(lines):
-                        line_lower = line.lower()
-
-                        # Calculate semantic similarity (simple word matching for now)
-                        matches = sum(1 for word in query_words if word in line_lower)
-                        if matches > 0:
-                            confidence = matches / len(query_words)
-
-                            # Only include results with reasonable confidence
-                            if confidence >= 0.3:
-                                context_lines = self._get_context_lines(lines, i, 2)
-
-                                result = CodeSearchResult(
-                                    file_path=file_path,
-                                    content=line.strip(),
-                                    line_number=i + 1,
-                                    confidence=confidence,
-                                    context_lines=context_lines,
-                                    metadata={
-                                        "search_type": "semantic",
-                                        "query": query,
-                                        "matches": matches,
-                                        "language": file_data["language"],
-                                    },
-                                )
-                                results.append(result)
-
-                except OSError as e:
-                    self.logger.error(f"Failed to read file {file_path}: {e}")
-                except Exception as e:
-                    self.logger.error(f"Error processing file {file_path}: {e}")
-
+                file_results = await self._search_file_semantic(
+                    file_data, query, query_words, language
+                )
+                results.extend(file_results)
             except Exception as e:
                 self.logger.error(f"Error processing file key {file_key}: {e}")
 

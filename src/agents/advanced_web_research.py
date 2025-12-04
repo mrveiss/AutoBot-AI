@@ -456,6 +456,41 @@ class AdvancedWebResearcher:
 
         return results
 
+    async def _accept_cookies(self, page) -> None:
+        """Accept cookies dialog if present (Issue #334 - extracted helper)."""
+        try:
+            accept_button = await page.query_selector(
+                'button[id*="accept"], button[id*="agree"]'
+            )
+            if accept_button:
+                await accept_button.click()
+                await page.wait_for_timeout(1000)
+        except Exception as e:
+            logger.debug("Cookie dialog not found or not clickable: %s", e)
+
+    async def _extract_google_result(self, element) -> Dict[str, Any] | None:
+        """Extract single Google search result (Issue #334 - extracted helper)."""
+        parent = await element.evaluate('el => el.closest("div[data-ved]")')
+        if not parent:
+            return None
+
+        title_el = await parent.query_selector("h3")
+        link_el = await parent.query_selector("a[href]")
+        if not title_el or not link_el:
+            return None
+
+        snippet_el = await parent.query_selector('[data-content-feature="1"]')
+        title = await title_el.inner_text()
+        url = await link_el.get_attribute("href")
+        snippet = await snippet_el.inner_text() if snippet_el else ""
+
+        return {
+            "title": title.strip(),
+            "url": url,
+            "snippet": snippet.strip(),
+            "domain": urlparse(url).netloc if url else "",
+        }
+
     async def _search_google(
         self, query: str, max_results: int
     ) -> List[Dict[str, Any]]:
@@ -466,65 +501,30 @@ class AdvancedWebResearcher:
         try:
             await page.goto("https://www.google.com/", wait_until="networkidle")
 
-            # Handle potential CAPTCHA (Google is more aggressive)
             if await self._detect_captcha(page):
                 captcha_solved = await self._handle_captcha(page)
                 if not captcha_solved:
                     logger.warning("CAPTCHA not solved, skipping Google")
                     return results
 
-            # Accept cookies if prompted
-            try:
-                accept_button = await page.query_selector(
-                    'button[id*="accept"], button[id*="agree"]'
-                )
-                if accept_button:
-                    await accept_button.click()
-                    await page.wait_for_timeout(1000)
-            except Exception as e:
-                logger.debug("Cookie dialog not found or not clickable: %s", e)
+            await self._accept_cookies(page)
 
-            # Perform search
             search_box = await page.query_selector('[name="q"], [title="Search"]')
-            if search_box:
-                await search_box.fill(query)
-                await search_box.press("Enter")
-                await page.wait_for_load_state("networkidle")
+            if not search_box:
+                return results
 
-                # Extract results
-                result_elements = await page.query_selector_all("[data-ved] h3")
+            await search_box.fill(query)
+            await search_box.press("Enter")
+            await page.wait_for_load_state("networkidle")
 
-                for element in result_elements[:max_results]:
-                    try:
-                        parent = await element.evaluate(
-                            'el => el.closest("div[data-ved]")'
-                        )
-                        if parent:
-                            title_el = await parent.query_selector("h3")
-                            link_el = await parent.query_selector("a[href]")
-                            snippet_el = await parent.query_selector(
-                                '[data-content-feature="1"]'
-                            )
-
-                            if title_el and link_el:
-                                title = await title_el.inner_text()
-                                url = await link_el.get_attribute("hre")
-                                snippet = (
-                                    await snippet_el.inner_text() if snippet_el else ""
-                                )
-
-                                results.append(
-                                    {
-                                        "title": title.strip(),
-                                        "url": url,
-                                        "snippet": snippet.strip(),
-                                        "domain": urlparse(url).netloc if url else "",
-                                    }
-                                )
-
-                    except Exception as e:
-                        logger.error(f"Error extracting Google result: {str(e)}")
-                        continue
+            result_elements = await page.query_selector_all("[data-ved] h3")
+            for element in result_elements[:max_results]:
+                try:
+                    result = await self._extract_google_result(element)
+                    if result:
+                        results.append(result)
+                except Exception as e:
+                    logger.error(f"Error extracting Google result: {str(e)}")
 
         finally:
             await page.close()

@@ -98,6 +98,24 @@ class InteractiveTerminalAgent:
             await self._send_error(f"Failed to start terminal: {str(e)}")
             raise
 
+    async def _read_terminal_data(self) -> Optional[bytes]:
+        """Read data from terminal (Issue #334 - extracted helper).
+
+        Returns:
+            bytes if data available, empty bytes for EOF, None to continue waiting
+        """
+        if not await self._data_available():
+            await asyncio.sleep(0.01)
+            return None
+
+        try:
+            data = os.read(self.master_fd, 4096)
+            return data if data else b""  # Empty bytes signals EOF
+        except OSError as e:
+            if e.errno == 5:  # I/O error - treat as EOF
+                return b""
+            raise
+
     async def _stream_output(self):
         """Stream terminal output to chat in real-time"""
         while self.session_active and self.process:
@@ -108,27 +126,16 @@ class InteractiveTerminalAgent:
                     await self._handle_session_end()
                     break
 
-                # Check if data available
-                if await self._data_available():
-                    try:
-                        data = os.read(self.master_fd, 4096)
-                        if data:
-                            # Process the output
-                            await self._process_output(data)
-                        else:
-                            # EOF reached
-                            self.session_active = False
-                            await self._handle_session_end()
-                            break
-                    except OSError as e:
-                        if e.errno == 5:  # I/O error
-                            self.session_active = False
-                            await self._handle_session_end()
-                            break
-                        else:
-                            raise
-                else:
-                    await asyncio.sleep(0.01)
+                data = await self._read_terminal_data()
+                if data is None:
+                    continue  # No data yet, keep waiting
+
+                if not data:  # EOF reached
+                    self.session_active = False
+                    await self._handle_session_end()
+                    break
+
+                await self._process_output(data)
 
             except Exception as e:
                 logger.error(f"Error in output streaming: {e}")

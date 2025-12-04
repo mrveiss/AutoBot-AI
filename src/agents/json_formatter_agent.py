@@ -125,6 +125,16 @@ class JSONFormatterAgent:
 
         return fallback_result
 
+    def _try_parse_json_match(self, match: str) -> Optional[Dict[str, Any]]:
+        """Try to parse a potential JSON match (Issue #334 - extracted helper)."""
+        try:
+            parsed = json.loads(match)
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        return None
+
     def _extract_json_from_text(self, text: str) -> JSONParseResult:
         """Extract JSON from text that may contain other content"""
         warnings = []
@@ -138,27 +148,26 @@ class JSONFormatterAgent:
         for pattern in json_patterns:
             matches = re.findall(pattern, text, re.DOTALL)
             for match in matches:
-                try:
-                    parsed = json.loads(match)
-                    if isinstance(parsed, dict) and parsed:  # Valid non-empty dict
-                        with self._stats_lock:
-                            self.successful_parses += 1
-                        confidence = 0.9 if len(matches) == 1 else 0.7
-                        if len(matches) > 1:
-                            warnings.append(
-                                "Multiple JSON objects found, using first valid one"
-                            )
-
-                        return JSONParseResult(
-                            success=True,
-                            data=parsed,
-                            original_text=text,
-                            method_used="text_extraction",
-                            confidence=confidence,
-                            warnings=warnings,
-                        )
-                except json.JSONDecodeError:
+                parsed = self._try_parse_json_match(match)
+                if parsed is None:
                     continue
+
+                with self._stats_lock:
+                    self.successful_parses += 1
+                confidence = 0.9 if len(matches) == 1 else 0.7
+                if len(matches) > 1:
+                    warnings.append(
+                        "Multiple JSON objects found, using first valid one"
+                    )
+
+                return JSONParseResult(
+                    success=True,
+                    data=parsed,
+                    original_text=text,
+                    method_used="text_extraction",
+                    confidence=confidence,
+                    warnings=warnings,
+                )
 
         return JSONParseResult(
             success=False,
@@ -249,6 +258,38 @@ class JSONFormatterAgent:
             warnings=warnings,
         )
 
+    def _find_empty_key_matches(self, text: str) -> list:
+        """Find empty key pattern matches in text (Issue #334 - extracted helper)."""
+        empty_key_pattern = r'"\s*":\s*"([^"]*)"'
+        matches = re.findall(empty_key_pattern, text)
+        if matches:
+            return matches
+        # Try with non-string values
+        empty_key_pattern = r'"\s*":\s*([^,}]+)'
+        return re.findall(empty_key_pattern, text)
+
+    def _reconstruct_values_from_matches(
+        self, matches: list, expected_schema: Dict[str, Any], warnings: list
+    ) -> Dict[str, Any]:
+        """Reconstruct values from pattern matches (Issue #334 - extracted helper)."""
+        field_names = list(expected_schema.keys())
+        reconstructed = {}
+
+        for i, value in enumerate(matches):
+            if i >= len(field_names):
+                break
+            field_name = field_names[i]
+            expected_type = expected_schema[field_name]
+
+            try:
+                typed_value = self._convert_to_type(value.strip('"'), expected_type)
+                reconstructed[field_name] = typed_value
+            except Exception as e:
+                warnings.append(f"Failed to convert {field_name}: {e}")
+                reconstructed[field_name] = value.strip('"')
+
+        return reconstructed
+
     def _reconstruct_from_patterns(
         self, text: str, expected_schema: Optional[Dict[str, Any]] = None
     ) -> JSONParseResult:
@@ -265,61 +306,62 @@ class JSONFormatterAgent:
                 warnings=["No schema provided for reconstruction"],
             )
 
-        # Look for empty key patterns like {"":"value1","":"value2",...}
-        empty_key_pattern = r'"\s*":\s*"([^"]*)"'
-        matches = re.findall(empty_key_pattern, text)
+        matches = self._find_empty_key_matches(text)
 
-        if not matches:
-            # Try with non-string values
-            empty_key_pattern = r'"\s*":\s*([^,}]+)'
-            matches = re.findall(empty_key_pattern, text)
+        # Need at least 2 matches and not more than schema fields
+        if len(matches) < 2 or len(matches) > len(expected_schema):
+            return JSONParseResult(
+                success=False,
+                data={},
+                original_text=text,
+                method_used="pattern_reconstruction_failed",
+                confidence=0.0,
+                warnings=["Could not reconstruct from patterns"],
+            )
 
-        if matches and len(matches) >= 2:
-            # Get field names from schema
-            field_names = list(expected_schema.keys())
+        reconstructed = self._reconstruct_values_from_matches(
+            matches, expected_schema, warnings
+        )
 
-            if len(matches) <= len(field_names):
-                reconstructed = {}
+        if not reconstructed:
+            return JSONParseResult(
+                success=False,
+                data={},
+                original_text=text,
+                method_used="pattern_reconstruction_failed",
+                confidence=0.0,
+                warnings=["Could not reconstruct from patterns"],
+            )
 
-                for i, value in enumerate(matches):
-                    if i < len(field_names):
-                        field_name = field_names[i]
-                        expected_type = expected_schema[field_name]
-
-                        # Convert value to expected type
-                        try:
-                            typed_value = self._convert_to_type(
-                                value.strip('"'), expected_type
-                            )
-                            reconstructed[field_name] = typed_value
-                        except Exception as e:
-                            warnings.append(f"Failed to convert {field_name}: {e}")
-                            reconstructed[field_name] = value.strip('"')
-
-                if reconstructed:
-                    with self._stats_lock:
-                        self.successful_parses += 1
-                    warnings.append(
-                        f"Reconstructed from {len(matches)} empty key patterns"
-                    )
-
-                    return JSONParseResult(
-                        success=True,
-                        data=reconstructed,
-                        original_text=text,
-                        method_used="pattern_reconstruction",
-                        confidence=0.6,
-                        warnings=warnings,
-                    )
+        with self._stats_lock:
+            self.successful_parses += 1
+        warnings.append(f"Reconstructed from {len(matches)} empty key patterns")
 
         return JSONParseResult(
-            success=False,
-            data={},
+            success=True,
+            data=reconstructed,
             original_text=text,
-            method_used="pattern_reconstruction_failed",
-            confidence=0.0,
-            warnings=["Could not reconstruct from patterns"],
+            method_used="pattern_reconstruction",
+            confidence=0.6,
+            warnings=warnings,
         )
+
+    def _extract_field_value_from_text(
+        self, text: str, field: str, expected_type: type, warnings: list
+    ) -> Optional[Any]:
+        """Extract field value from text (Issue #334 - extracted helper)."""
+        pattern = rf'{field}["\s]*:\s*["\s]*([^",}}]+)'
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            value = match.group(1).strip('"')
+            typed_value = self._convert_to_type(value, expected_type)
+            warnings.append(f"Extracted {field} from text")
+            return typed_value
+        except Exception as e:
+            logger.debug("Type conversion failed for field %s: %s", field, e)
+            return None
 
     def _create_fallback_json(
         self, text: str, expected_schema: Optional[Dict[str, Any]] = None
@@ -327,33 +369,32 @@ class JSONFormatterAgent:
         """Create a minimal valid JSON as last resort"""
         warnings = ["Using fallback JSON creation"]
 
-        if expected_schema:
-            # Create JSON with default values based on schema
-            fallback = {}
-            for field, expected_type in expected_schema.items():
-                fallback[field] = self._get_default_value(expected_type)
-
-            # Try to extract any meaningful values from the text
-            for field in expected_schema.keys():
-                # Look for field mentions in text
-                pattern = rf'{field}["\s]*:\s*["\s]*([^",}}]+)'
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    try:
-                        value = match.group(1).strip('"')
-                        typed_value = self._convert_to_type(
-                            value, expected_schema[field]
-                        )
-                        fallback[field] = typed_value
-                        warnings.append(f"Extracted {field} from text")
-                    except Exception as e:
-                        logger.debug("Type conversion failed for field %s: %s", field, e)
-        else:
-            # Create minimal JSON
+        if not expected_schema:
             fallback = {"error": "failed_to_parse", "original_text": text[:100]}
+            return JSONParseResult(
+                success=True,
+                data=fallback,
+                original_text=text,
+                method_used="fallback_creation",
+                confidence=0.2,
+                warnings=warnings,
+            )
+
+        # Create JSON with default values based on schema
+        fallback = {}
+        for field, expected_type in expected_schema.items():
+            fallback[field] = self._get_default_value(expected_type)
+
+        # Try to extract any meaningful values from the text
+        for field, expected_type in expected_schema.items():
+            extracted = self._extract_field_value_from_text(
+                text, field, expected_type, warnings
+            )
+            if extracted is not None:
+                fallback[field] = extracted
 
         return JSONParseResult(
-            success=True,  # Consider this a success with low confidence
+            success=True,
             data=fallback,
             original_text=text,
             method_used="fallback_creation",
@@ -361,28 +402,36 @@ class JSONFormatterAgent:
             warnings=warnings,
         )
 
+    def _convert_int(self, value: str) -> int:
+        """Convert string to int (Issue #334 - extracted helper)."""
+        return int(float(value)) if value.replace(".", "").isdigit() else 0
+
+    def _convert_float(self, value: str) -> float:
+        """Convert string to float (Issue #334 - extracted helper)."""
+        return float(value) if value.replace(".", "").replace("-", "").isdigit() else 0.0
+
+    def _convert_list(self, value: str) -> list:
+        """Convert string to list (Issue #334 - extracted helper)."""
+        if not value.startswith("["):
+            return [value]
+        try:
+            return json.loads(value)
+        except Exception:
+            return [value]
+
     def _convert_to_type(self, value: str, expected_type: type) -> Any:
         """Convert string value to expected type"""
-        if expected_type == str:
-            return value
-        elif expected_type == int:
-            return int(float(value)) if value.replace(".", "").isdigit() else 0
-        elif expected_type == float:
-            return (
-                float(value)
-                if value.replace(".", "").replace("-", "").isdigit()
-                else 0.0
-            )
-        elif expected_type == bool:
-            return value.lower() in ("true", "1", "yes", "on")
-        elif expected_type == list:
-            # Try to parse as list or create single-item list
-            try:
-                return json.loads(value) if value.startswith("[") else [value]
-            except Exception:
-                return [value]
-        else:
-            return value
+        converters = {
+            str: lambda v: v,
+            int: self._convert_int,
+            float: self._convert_float,
+            bool: lambda v: v.lower() in ("true", "1", "yes", "on"),
+            list: self._convert_list,
+        }
+        converter = converters.get(expected_type)
+        if converter:
+            return converter(value)
+        return value
 
     def _get_default_value(self, expected_type: type) -> Any:
         """Get default value for a type"""
