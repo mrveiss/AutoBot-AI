@@ -740,70 +740,66 @@ class MCPManualService:
         sources.extend(autobot_docs)
         return sources
 
+    async def _collect_doc_files_from_dir(
+        self, dir_path: str, max_depth: int = 2, max_files_per_dir: int = 20
+    ) -> List[str]:
+        """Collect documentation files from a directory (Issue #298 - extracted helper)."""
+        files = []
+        walk_results = await asyncio.to_thread(lambda: list(os.walk(dir_path)))
+
+        for root, dirs, filenames in walk_results:
+            # Limit depth to avoid excessive scanning
+            if root.count(os.sep) - dir_path.count(os.sep) > max_depth:
+                continue
+
+            for filename in filenames[:max_files_per_dir]:
+                file_path = os.path.join(root, filename)
+                if self._is_documentation_file(file_path):
+                    files.append(file_path)
+
+        return files
+
+    async def _search_directory_docs(
+        self, query: str, dir_path: str, max_files: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Search documentation files in a directory (Issue #298 - extracted helper)."""
+        results = []
+        try:
+            files = await self._collect_doc_files_from_dir(dir_path)
+            for file_path in files[:max_files]:
+                file_results = await self._search_file_content(query, file_path)
+                results.extend(file_results)
+        except Exception as e:
+            logger.warning(f"Failed to search directory {dir_path}: {e}")
+        return results
+
     async def _search_documentation_source(
         self, query: str, source: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Search a specific documentation source."""
+        """Search a specific documentation source (Issue #298 - reduced nesting)."""
         results = []
 
         try:
-            if source["type"] == "directory" and self.mcp_available:
-                # Search files in directory using direct filesystem access
-                try:
-                    files = []
-                    walk_results = await asyncio.to_thread(
-                        lambda: list(os.walk(source["name"]))
-                    )
-                    for root, dirs, filenames in walk_results:
-                        # Limit depth to avoid excessive scanning
-                        if root.count(os.sep) - source["name"].count(os.sep) > 2:
-                            continue
+            source_type = source["type"]
+            source_name = source["name"]
 
-                        for filename in filenames[:20]:  # Limit files per directory
-                            file_path = os.path.join(root, filename)
-                            if self._is_documentation_file(file_path):
-                                files.append(file_path)
+            # Directory search
+            if source_type == "directory" and self.mcp_available:
+                return await self._search_directory_docs(query, source_name)
 
-                    # Search files
-                    for file_path in files[:20]:  # Limit total files searched
-                        file_results = await self._search_file_content(query, file_path)
-                        results.extend(file_results)
+            # AutoBot docs or readme
+            if source_type not in ["autobot_docs", "readme"] or not self.mcp_available:
+                return results
 
-                except Exception as e:
-                    logger.warning(f"Failed to search directory {source['name']}: {e}")
+            is_dir = await asyncio.to_thread(os.path.isdir, source_name)
+            if is_dir:
+                return await self._search_directory_docs(query, source_name)
 
-            elif source["type"] in ["autobot_docs", "readme"] and self.mcp_available:
-                # Search specific AutoBot documentation
-                is_dir = await asyncio.to_thread(os.path.isdir, source["name"])
-                if is_dir:
-                    # If it's a directory, search recursively
-                    try:
-                        walk_results = await asyncio.to_thread(
-                            lambda: list(os.walk(source["name"]))
-                        )
-                        for root, dirs, filenames in walk_results:
-                            for filename in filenames:
-                                file_path = os.path.join(root, filename)
-                                if self._is_documentation_file(file_path):
-                                    file_results = await self._search_file_content(
-                                        query, file_path
-                                    )
-                                    results.extend(file_results)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to search docs directory {source['name']}: {e}"
-                        )
-                else:
-                    # Single file
-                    file_results = await self._search_file_content(
-                        query, source["name"]
-                    )
-                    results.extend(file_results)
+            # Single file
+            return await self._search_file_content(query, source_name)
 
         except Exception as e:
-            logger.warning(
-                f"Failed to search documentation source {source['name']}: {e}"
-            )
+            logger.warning(f"Failed to search documentation source {source['name']}: {e}")
 
         return results
 

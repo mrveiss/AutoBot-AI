@@ -900,69 +900,116 @@ Please interpret this output for the user in a clear, helpful way.
 Explain what it means and answer their original question."""
 
         interpretation = ""
-
         http_client = get_http_client()
-        if streaming:
-            import aiohttp
-            async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
-                json={
-                    "model": selected_model,
-                    "prompt": interpretation_prompt,
-                    "stream": True,
-                    "options": {
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "num_ctx": 2048,
-                    },
-                },
-                timeout=aiohttp.ClientTimeout(total=60.0),
-            ) as interp_response:
-                async for line in interp_response.content:
-                    line_str = line.decode("utf-8").strip()
-                    if line_str:
-                        try:
-                            data = json.loads(line_str)
-                            chunk = data.get("response", "")
-                            if chunk:
-                                interpretation += chunk
-                                yield WorkflowMessage(
-                                    type="stream",
-                                    content=chunk,
-                                    metadata={
-                                        "message_type": "command_interpretation",
-                                        "streaming": True,
-                                    },
-                                )
-                            if data.get("done"):
-                                break
-                        except json.JSONDecodeError:
-                            continue
-        else:
+
+        # Non-streaming path - get interpretation and yield (Issue #298 - reduced nesting)
+        if not streaming:
             response_data = await http_client.post_json(
                 f"{ollama_endpoint}/api/generate",
                 json_data={
                     "model": selected_model,
                     "prompt": interpretation_prompt,
                     "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "top_p": 0.9,
-                        "num_ctx": 2048,
-                    },
+                    "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
                 },
             )
             interpretation = response_data.get("response", "")
+            if interpretation:
+                yield WorkflowMessage(
+                    type="response",
+                    content=interpretation,
+                    metadata={"message_type": "command_interpretation", "streaming": False},
+                )
+            return
 
-        # For non-streaming, yield the complete interpretation at once
-        if not streaming and interpretation:
-            yield WorkflowMessage(
-                type="response",
-                content=interpretation,
-                metadata={
-                    "message_type": "command_interpretation",
-                    "streaming": False,
-                },
+        # Streaming path - reduced nesting via continue/break guards (Issue #298)
+        import aiohttp
+
+        async with await http_client.post(
+            f"{ollama_endpoint}/api/generate",
+            json={
+                "model": selected_model,
+                "prompt": interpretation_prompt,
+                "stream": True,
+                "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
+            },
+            timeout=aiohttp.ClientTimeout(total=60.0),
+        ) as interp_response:
+            async for line in interp_response.content:
+                line_str = line.decode("utf-8").strip()
+                if not line_str:
+                    continue
+
+                try:
+                    data = json.loads(line_str)
+                except json.JSONDecodeError:
+                    continue
+
+                chunk = data.get("response", "")
+                if chunk:
+                    interpretation += chunk
+                    yield WorkflowMessage(
+                        type="stream",
+                        content=chunk,
+                        metadata={"message_type": "command_interpretation", "streaming": True},
+                    )
+
+                if data.get("done"):
+                    break
+
+    async def _persist_terminal_interpretation(
+        self, session_id: str, interpretation: str
+    ) -> None:
+        """Persist terminal interpretation to conversation history for LLM context (Issue #298)."""
+        try:
+            session = await self.get_or_create_session(session_id)
+            if self.redis_client is None:
+                return
+
+            session_key = f"chat:session:{session_id}"
+            try:
+                session_data_json = await asyncio.wait_for(
+                    self.redis_client.get(session_key), timeout=2.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"[interpret_terminal_command] Redis timeout getting session data for {session_id}"
+                )
+                return
+
+            if not session_data_json:
+                return
+
+            session_data = json.loads(session_data_json)
+            messages = session_data.get("messages", [])
+
+            # Find the most recent user message
+            last_user_message = next(
+                (msg.get("text", "") for msg in reversed(messages) if msg.get("sender") == "user"),
+                None,
+            )
+
+            if not last_user_message:
+                logger.warning(
+                    f"[interpret_terminal_command] No user message found in session {session_id}"
+                )
+                return
+
+            await self._persist_conversation(
+                session_id=session_id,
+                session=session,
+                message=last_user_message,
+                llm_response=interpretation,
+            )
+            logger.info(
+                f"✅ [interpret_terminal_command] Persisted user message + interpretation "
+                f"to conversation history (session={session_id})"
+            )
+
+        except Exception as persist_error:
+            logger.error(
+                f"[interpret_terminal_command] Failed to persist to conversation history: {persist_error}",
+                exc_info=True,
             )
 
     async def interpret_terminal_command(
@@ -1039,61 +1086,8 @@ Explain what it means and answer their original question."""
                         f"[interpret_terminal_command] Failed to save interpretation: {e}"
                     )
 
-                # CRITICAL FIX: Persist to conversation history (chat:conversation) for LLM context
-                # This fixes the bug where terminal interpretations weren't being tracked in LLM
-                # context
-                try:
-                    # Get the session to access conversation_history
-                    session = await self.get_or_create_session(session_id)
-
-                    # Get the last user message from chat:session (most recent context)
-                    if self.redis_client is not None:
-                        session_key = f"chat:session:{session_id}"
-                        try:
-                            session_data_json = await asyncio.wait_for(
-                                self.redis_client.get(session_key),
-                                timeout=2.0
-                            )
-                            if session_data_json:
-                                session_data = json.loads(session_data_json)
-                                messages = session_data.get("messages", [])
-
-                                # Find the most recent user message
-                                last_user_message = None
-                                for msg in reversed(messages):
-                                    if msg.get("sender") == "user":
-                                        last_user_message = msg.get("text", "")
-                                        break
-
-                                if last_user_message:
-                                    # Persist the exchange to conversation history
-                                    await self._persist_conversation(
-                                        session_id=session_id,
-                                        session=session,
-                                        message=last_user_message,
-                                        llm_response=interpretation
-                                    )
-                                    logger.info(
-                                        f"✅ [interpret_terminal_command] Persisted user message + "
-                                        f"interpretation to conversation history for LLM context "
-                                        f"(session={session_id})"
-                                    )
-                                else:
-                                    logger.warning(
-                                        f"[interpret_terminal_command] No user message found in "
-                                        f"session {session_id} - skipping conversation persistence"
-                                    )
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                f"[interpret_terminal_command] Redis timeout getting session "
-                                f"data for {session_id}"
-                            )
-                except Exception as persist_error:
-                    logger.error(
-                        f"[interpret_terminal_command] Failed to persist to conversation "
-                        f"history: {persist_error}",
-                        exc_info=True
-                    )
+                # CRITICAL FIX: Persist to conversation history for LLM context (Issue #298 - helper)
+                await self._persist_terminal_interpretation(session_id, interpretation)
 
             return interpretation
 
@@ -1511,6 +1505,153 @@ Explain what it means and answer their original question."""
         # Can't use return in generator - caller will aggregate chunks instead
         # Return value would be: additional_response
 
+    # =========================================================================
+    # Helper methods for process_message_stream (Issue #298 - reduce nesting)
+    # =========================================================================
+
+    def _normalize_tool_call_text(self, text: str) -> str:
+        """Normalize TOOL_CALL spacing in LLM response text."""
+        text = re.sub(r"<TOOL_\s+CALL", "<TOOL_CALL", text)
+        text = re.sub(r"</TOOL_\s+CALL>", "</TOOL_CALL>", text)
+        return text
+
+    def _build_chunk_message(
+        self,
+        chunk_text: str,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict],
+    ) -> WorkflowMessage:
+        """Build a WorkflowMessage for a streaming chunk."""
+        return WorkflowMessage(
+            type="response",
+            content=chunk_text,
+            metadata={
+                "message_type": "llm_response_chunk",
+                "model": selected_model,
+                "streaming": True,
+                "terminal_session_id": terminal_session_id,
+                "used_knowledge": used_knowledge,
+                "citations": rag_citations if used_knowledge else [],
+            },
+        )
+
+    async def _persist_workflow_messages(
+        self,
+        workflow_messages: List[WorkflowMessage],
+        llm_response: str,
+        session_id: str,
+    ) -> None:
+        """Persist WorkflowMessages and assistant response to chat history."""
+        from src.chat_history_manager import ChatHistoryManager
+
+        chat_mgr = ChatHistoryManager()
+
+        for wf_msg in workflow_messages:
+            message_type = wf_msg.type
+            sender = "system" if message_type == "terminal_output" else "assistant"
+
+            await chat_mgr.add_message(
+                sender=sender,
+                text=wf_msg.content,
+                message_type=message_type,
+                raw_data=wf_msg.metadata,
+                session_id=session_id,
+            )
+            logger.debug(
+                f"Persisted WorkflowMessage to chat history: "
+                f"type={message_type}, session={session_id}"
+            )
+
+        # Persist final assistant response
+        await chat_mgr.add_message(
+            sender="assistant",
+            text=llm_response,
+            message_type="llm_response",
+            session_id=session_id,
+        )
+        logger.info(
+            f"✅ Persisted complete conversation to chat history: "
+            f"session={session_id}, workflow_messages={len(workflow_messages)}"
+        )
+
+    async def _stream_llm_response(
+        self,
+        ollama_endpoint: str,
+        selected_model: str,
+        full_prompt: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict],
+    ):
+        """
+        Stream LLM response chunks from Ollama.
+
+        Yields (chunk_msg, llm_response_so_far) tuples.
+        Final yield has done=True in metadata.
+        """
+        import aiohttp
+
+        http_client = get_http_client()
+        async with await http_client.post(
+            ollama_endpoint,
+            json={
+                "model": selected_model,
+                "prompt": full_prompt,
+                "stream": True,
+                "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
+            },
+            timeout=aiohttp.ClientTimeout(total=60.0),
+        ) as response:
+            logger.info(f"[ChatWorkflowManager] Ollama response status: {response.status}")
+
+            if response.status != 200:
+                logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status}")
+                error_msg = WorkflowMessage(
+                    type="error",
+                    content=f"LLM service error: {response.status}",
+                    metadata={"error": True},
+                )
+                yield error_msg, "", True
+                return
+
+            llm_response = ""
+            async for line in response.content:
+                line_str = line.decode("utf-8").strip()
+                if not line_str:
+                    continue
+
+                try:
+                    chunk_data = json.loads(line_str)
+                    chunk_text = chunk_data.get("response", "")
+
+                    if chunk_text:
+                        chunk_text = self._normalize_tool_call_text(chunk_text)
+                        llm_response += chunk_text
+
+                        chunk_msg = self._build_chunk_message(
+                            chunk_text,
+                            selected_model,
+                            terminal_session_id,
+                            used_knowledge,
+                            rag_citations,
+                        )
+                        yield chunk_msg, llm_response, False
+
+                    if chunk_data.get("done", False):
+                        break
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse stream chunk: {e}")
+                    continue
+
+            logger.info(
+                f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters"
+            )
+            # Signal completion with final response
+            yield None, llm_response, True
+
     async def process_message_stream(
         self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ):
@@ -1644,201 +1785,33 @@ Explain what it means and answer their original question."""
                 f"Prompt length={len(full_prompt)} characters"
             )
 
-            # Stage 3: Stream LLM response and handle tool calls
+            # Stage 3: Stream LLM response using helper (Issue #298 - reduced nesting)
+            llm_response = ""
+            stream_error = False
+
             try:
-                import aiohttp
-
-                http_client = get_http_client()
-                async with await http_client.post(
+                async for chunk_msg, current_response, is_done in self._stream_llm_response(
                     ollama_endpoint,
-                    json={
-                        "model": selected_model,
-                        "prompt": full_prompt,
-                        "stream": True,
-                        "options": {
-                            "temperature": 0.7,
-                            "top_p": 0.9,
-                            "num_ctx": 2048,
-                        },
-                    },
-                    timeout=aiohttp.ClientTimeout(total=60.0),
-                ) as response:
-                    logger.info(
-                        f"[ChatWorkflowManager] Ollama response status: {response.status}"
-                    )
-                    if response.status == 200:
-                        llm_response = ""
+                    selected_model,
+                    full_prompt,
+                    terminal_session_id,
+                    used_knowledge,
+                    rag_citations,
+                ):
+                    if chunk_msg is not None:
+                        if chunk_msg.type == "error":
+                            workflow_messages.append(chunk_msg)
+                            yield chunk_msg
+                            stream_error = True
+                            break
+                        yield chunk_msg
 
-                        # Stream response chunks
-                        async for line in response.content:
-                            line_str = line.decode("utf-8").strip()
-                            if line_str:
-                                try:
-                                    chunk_data = json.loads(line_str)
-                                    chunk_text = chunk_data.get("response", "")
-
-                                    if chunk_text:
-                                        # Normalize TOOL_CALL spacing
-                                        chunk_text = re.sub(
-                                            r"<TOOL_\s+CALL",
-                                            "<TOOL_CALL",
-                                            chunk_text,
-                                        )
-                                        chunk_text = re.sub(
-                                            r"</TOOL_\s+CALL>",
-                                            "</TOOL_CALL>",
-                                            chunk_text,
-                                        )
-
-                                        llm_response += chunk_text
-
-                                        chunk_msg = WorkflowMessage(
-                                            type="response",
-                                            content=chunk_text,
-                                            metadata={
-                                                "message_type": (
-                                                    "llm_response_chunk"
-                                                ),
-                                                "model": selected_model,
-                                                "streaming": True,
-                                                "terminal_session_id": (
-                                                    terminal_session_id
-                                                ),
-                                                # Issue #249: RAG metadata
-                                                "used_knowledge": used_knowledge,
-                                                "citations": (
-                                                    rag_citations if used_knowledge else []
-                                                ),
-                                            },
-                                        )
-                                        # Don't collect streaming chunks -
-                                        # only collect complete messages
-                                        yield chunk_msg
-
-                                    if chunk_data.get("done", False):
-                                        break
-
-                                except json.JSONDecodeError as e:
-                                    logger.error(
-                                        f"Failed to parse stream chunk: {e}"
-                                    )
-                                    continue
-
-                            logger.info(
-                                f"[ChatWorkflowManager] Full LLM response length: "
-                                f"{len(llm_response)} characters"
-                            )
-
-                            # Stage 4: Process tool calls if present
-                            tool_calls = self._parse_tool_calls(llm_response)
-                            logger.info(
-                                f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls "
-                                f"from response"
-                            )
-
-                            if tool_calls:
-                                # Delegate all tool call processing to helper method
-                                async for tool_msg in self._process_tool_calls(
-                                    tool_calls,
-                                    session_id,
-                                    terminal_session_id,
-                                    ollama_endpoint,
-                                    selected_model,
-                                ):
-                                    # Collect important WorkflowMessages for persistence
-                                    # NOTE: command_approval_request is persisted immediately,
-                                    # don't collect it here
-                                    # Collect terminal commands, terminal output,
-                                    # and errors for end-of-stream persistence
-                                    if tool_msg.type in [
-                                        "terminal_command",
-                                        "terminal_output",
-                                        "error",
-                                    ]:
-                                        workflow_messages.append(tool_msg)
-                                        logger.debug(
-                                            f"Collected WorkflowMessage for persistence: "
-                                            f"type={tool_msg.type}"
-                                        )
-
-                                    yield tool_msg
-
-                            # Stage 5: Persist conversation (OLD METHOD -
-                            # keeps for conversation_history)
-                            await self._persist_conversation(
-                                session_id, session, message, llm_response
-                            )
-
-                            # Stage 6: NEW - Persist WorkflowMessages and assistant response to chat
-                            # history
-                            # (User message already persisted immediately at start)
-                            try:
-                                chat_mgr = ChatHistoryManager()
-
-                                # Persist all collected WorkflowMessages
-                                for wf_msg in workflow_messages:
-                                    # Map WorkflowMessage type to chat message type
-                                    message_type = (
-                                        wf_msg.type
-                                    )  # e.g., "command_approval_request", "terminal_command"
-
-                                    # Determine sender based on message type
-                                    sender = (
-                                        "assistant"  # Most messages are from assistant
-                                    )
-                                    if message_type == "terminal_output":
-                                        sender = "system"
-
-                                    await chat_mgr.add_message(
-                                        sender=sender,
-                                        text=wf_msg.content,
-                                        message_type=message_type,
-                                        raw_data=wf_msg.metadata,  # Include metadata as rawData
-                                        session_id=session_id,
-                                    )
-                                    logger.debug(
-                                        f"Persisted WorkflowMessage to chat history: "
-                                        f"type={message_type}, session={session_id}"
-                                    )
-
-                                # Persist final assistant response
-                                await chat_mgr.add_message(
-                                    sender="assistant",
-                                    text=llm_response,
-                                    message_type="llm_response",
-                                    session_id=session_id,
-                                )
-                                logger.info(
-                                    f"✅ Persisted complete conversation to chat history: "
-                                    f"session={session_id}, "
-                                    f"workflow_messages={len(workflow_messages)}"
-                                )
-
-                            except Exception as persist_error:
-                                logger.error(
-                                    f"Failed to persist WorkflowMessages to chat history: "
-                                    f"{persist_error}",
-                                    exc_info=True,
-                                )
-                    else:
-                        logger.error(
-                            f"[ChatWorkflowManager] Ollama request failed: "
-                            f"{response.status}"
-                        )
-
-                        error_msg = WorkflowMessage(
-                            type="error",
-                            content=f"LLM service error: {response.status}",
-                            metadata={"error": True},
-                        )
-                        workflow_messages.append(error_msg)
-                        yield error_msg
+                    if is_done:
+                        llm_response = current_response
+                        break
 
             except Exception as llm_error:
-                logger.error(
-                    f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}"
-                )
-
+                logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}")
                 error_msg = WorkflowMessage(
                     type="error",
                     content=f"Failed to connect to LLM: {str(llm_error)}",
@@ -1846,6 +1819,45 @@ Explain what it means and answer their original question."""
                 )
                 workflow_messages.append(error_msg)
                 yield error_msg
+                stream_error = True
+
+            # Stage 4-6: Post-streaming processing (only if streaming succeeded)
+            if not stream_error and llm_response:
+                # Stage 4: Process tool calls if present
+                tool_calls = self._parse_tool_calls(llm_response)
+                logger.info(
+                    f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response"
+                )
+
+                if tool_calls:
+                    async for tool_msg in self._process_tool_calls(
+                        tool_calls,
+                        session_id,
+                        terminal_session_id,
+                        ollama_endpoint,
+                        selected_model,
+                    ):
+                        # Collect important WorkflowMessages for persistence
+                        if tool_msg.type in ["terminal_command", "terminal_output", "error"]:
+                            workflow_messages.append(tool_msg)
+                            logger.debug(
+                                f"Collected WorkflowMessage for persistence: type={tool_msg.type}"
+                            )
+                        yield tool_msg
+
+                # Stage 5: Persist conversation (OLD METHOD - keeps for conversation_history)
+                await self._persist_conversation(session_id, session, message, llm_response)
+
+                # Stage 6: Persist WorkflowMessages using helper (Issue #298)
+                try:
+                    await self._persist_workflow_messages(
+                        workflow_messages, llm_response, session_id
+                    )
+                except Exception as persist_error:
+                    logger.error(
+                        f"Failed to persist WorkflowMessages to chat history: {persist_error}",
+                        exc_info=True,
+                    )
 
         except Exception as e:
             logger.error(
