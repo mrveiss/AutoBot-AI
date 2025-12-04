@@ -19,7 +19,7 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import WebSocket
 
@@ -36,6 +36,9 @@ from src.chat_history_manager import ChatHistoryManager
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
+
+# Performance optimization: O(1) lookup for shell operators (Issue #326)
+SHELL_OPERATORS = {">", ">>", "|", "&&", "||"}
 
 
 class ConsolidatedTerminalWebSocket:
@@ -289,6 +292,21 @@ class ConsolidatedTerminalWebSocket:
             except Exception as e:
                 logger.error(f"Error closing PTY session: {e}")
 
+    def _get_message_handlers(self) -> Dict[str, Callable[[dict], Awaitable[None]]]:
+        """Get dispatch table for message type handlers (Issue #336 - extracted helper)."""
+        return {
+            "input": self._handle_input_message,
+            "terminal_stdin": self._handle_terminal_stdin,  # Issue #33
+            "workflow_control": self._handle_workflow_control,
+            "ping": self._handle_ping_message,
+            "resize": self._handle_resize,
+            "signal": self._handle_signal_message,
+        }
+
+    async def _handle_ping_message(self, message: dict) -> None:
+        """Handle ping message (Issue #336 - extracted handler)."""
+        await self.send_message({"type": "pong", "timestamp": time.time()})
+
     async def handle_message(self, message: dict):
         """Enhanced message handling with security and workflow features"""
         try:
@@ -308,18 +326,11 @@ class ConsolidatedTerminalWebSocket:
                     },
                 )
 
-            if message_type == "input":
-                await self._handle_input_message(message)
-            elif message_type == "terminal_stdin":  # Issue #33 - Interactive stdin
-                await self._handle_terminal_stdin(message)
-            elif message_type == "workflow_control":
-                await self._handle_workflow_control(message)
-            elif message_type == "ping":
-                await self.send_message({"type": "pong", "timestamp": time.time()})
-            elif message_type == "resize":
-                await self._handle_resize(message)
-            elif message_type == "signal":
-                await self._handle_signal_message(message)
+            # Issue #336: Dispatch table lookup replaces elif chain
+            handlers = self._get_message_handlers()
+            handler = handlers.get(message_type)
+            if handler:
+                await handler(message)
             else:
                 logger.warning(f"Unknown message type: {message_type}")
 
@@ -757,8 +768,8 @@ class ConsolidatedTerminalWebSocket:
             if pattern in command_lower:
                 return CommandRiskLevel.MODERATE
 
-        # Special checks for high-risk operations
-        if any(x in command_lower for x in [">", ">>", "|", "&&", "||"]):
+        # Special checks for high-risk operations (Issue #326: O(1) lookups)
+        if any(x in command_lower for x in SHELL_OPERATORS):
             return CommandRiskLevel.HIGH
 
         return CommandRiskLevel.SAFE

@@ -19,12 +19,15 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+# Issue #336: Keyword heuristics dispatch table for intent classification
+KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
 
 router = APIRouter(prefix="/nl-search", tags=["natural-language-search", "code-search"])
 
@@ -293,6 +296,43 @@ QUESTION_TYPES = {
     "show": ["show", "display", "list", "find", "get"],
 }
 
+# Issue #336: Keyword heuristics dispatch table for intent classification fallback
+# Maps (keyword1, keyword2, ...) tuples to QueryIntent
+KEYWORD_INTENT_FALLBACKS = {
+    ("define", "declaration"): QueryIntent.FIND_DEFINITION,
+    ("use", "call"): QueryIntent.FIND_USAGE,
+    ("implement", "work"): QueryIntent.FIND_IMPLEMENTATION,
+    ("error", "exception"): QueryIntent.FIND_ERROR_HANDLING,
+    ("test",): QueryIntent.FIND_TESTS,
+    ("config", "setting"): QueryIntent.FIND_CONFIGURATION,
+}
+
+
+def _match_keyword_fallback(query: str) -> Tuple[QueryIntent, float]:
+    """Match query against keyword fallback patterns (Issue #336 - extracted helper)."""
+    for keywords, intent in KEYWORD_INTENT_FALLBACKS.items():
+        if any(kw in query for kw in keywords):
+            return intent, 0.6
+    return QueryIntent.GENERAL_SEARCH, 0.5
+
+
+# Issue #336: Intent-based query generator dispatch table
+INTENT_QUERY_TEMPLATES: Dict[QueryIntent, str] = {
+    QueryIntent.FIND_USAGE: "Where is {} used?",
+    QueryIntent.FIND_DEFINITION: "Where is {} defined?",
+    QueryIntent.FIND_TESTS: "What tests exist for {}?",
+    QueryIntent.FIND_IMPLEMENTATION: "How is {} implemented?",
+    QueryIntent.FIND_ERROR_HANDLING: "How are errors handled in {}?",
+}
+
+
+def _generate_intent_query(intent: QueryIntent, entity: str) -> Optional[str]:
+    """Generate query for intent using dispatch table (Issue #336 - extracted helper)."""
+    template = INTENT_QUERY_TEMPLATES.get(intent)
+    if template:
+        return template.format(entity)
+    return None
+
 
 # =============================================================================
 # Query Parser
@@ -431,22 +471,9 @@ class NaturalLanguageQueryParser:
                         best_intent = intent
                         best_confidence = confidence
 
-        # If no pattern matched, use keyword heuristics
+        # Issue #336: Use dispatch table for keyword heuristics fallback
         if best_confidence < 0.5:
-            if "define" in query or "declaration" in query:
-                return QueryIntent.FIND_DEFINITION, 0.6
-            elif "use" in query or "call" in query:
-                return QueryIntent.FIND_USAGE, 0.6
-            elif "implement" in query or "work" in query:
-                return QueryIntent.FIND_IMPLEMENTATION, 0.6
-            elif "error" in query or "exception" in query:
-                return QueryIntent.FIND_ERROR_HANDLING, 0.6
-            elif "test" in query:
-                return QueryIntent.FIND_TESTS, 0.6
-            elif "config" in query or "setting" in query:
-                return QueryIntent.FIND_CONFIGURATION, 0.6
-            else:
-                return QueryIntent.GENERAL_SEARCH, 0.5
+            return _match_keyword_fallback(query)
 
         return best_intent, best_confidence
 
@@ -598,20 +625,11 @@ class QuerySuggestionGenerator:
 
         if parsed.intent in intent_relations:
             for related_intent, reason in intent_relations[parsed.intent]:
-                # Generate query for related intent
+                # Issue #336: Use dispatch table for query generation
                 if parsed.entities:
                     entity = parsed.entities[0]
-                    if related_intent == QueryIntent.FIND_USAGE:
-                        query = f"Where is {entity} used?"
-                    elif related_intent == QueryIntent.FIND_DEFINITION:
-                        query = f"Where is {entity} defined?"
-                    elif related_intent == QueryIntent.FIND_TESTS:
-                        query = f"What tests exist for {entity}?"
-                    elif related_intent == QueryIntent.FIND_IMPLEMENTATION:
-                        query = f"How is {entity} implemented?"
-                    elif related_intent == QueryIntent.FIND_ERROR_HANDLING:
-                        query = f"How are errors handled in {entity}?"
-                    else:
+                    query = _generate_intent_query(related_intent, entity)
+                    if query is None:
                         continue
 
                     suggestions.append(
