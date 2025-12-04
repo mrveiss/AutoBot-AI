@@ -18,6 +18,79 @@ import yaml
 from performance_monitor import PerformanceMonitor
 from src.constants.path_constants import PATH
 
+logger = logging.getLogger(__name__)
+
+
+# Issue #339: Command handler functions extracted from main()
+async def _handle_analyze_command(optimizer: 'PerformanceOptimizer') -> None:
+    """Handle --analyze command (Issue #339 - extracted handler)."""
+    logger.info("Analyzing AutoBot performance...")
+    metrics = await optimizer.monitor.generate_performance_report()
+    recommendations = await optimizer.analyze_performance_metrics(metrics)
+
+    if recommendations:
+        logger.info(f"\n📋 Found {len(recommendations)} optimization opportunities:")
+        logger.info("="*80)
+
+        for i, rec in enumerate(recommendations, 1):
+            severity_emoji = {"critical": "🚨", "high": "⚠️", "medium": "📊", "low": "💡"}.get(rec.severity, "")
+            auto_indicator = "🤖 Auto" if rec.auto_applicable else "👤 Manual"
+
+            logger.info(f"{i}. {severity_emoji} [{rec.severity.upper()}] {rec.description}")
+            logger.info(f"   Category: {rec.category}")
+            logger.info(f"   Impact: {rec.impact_estimate}")
+            logger.info(f"   Application: {auto_indicator}")
+            if rec.affected_services:
+                logger.info(f"   Affected: {', '.join(rec.affected_services)}")
+            logger.info("")
+    else:
+        logger.info("✅ No optimization opportunities found - system performing optimally!")
+
+
+async def _handle_report_command(optimizer: 'PerformanceOptimizer') -> None:
+    """Handle --report command (Issue #339 - extracted handler)."""
+    logger.info("Generating optimization report...")
+    report = await optimizer.generate_optimization_report()
+
+    logger.info("\n" + "="*80)
+    logger.info("AutoBot Performance Optimization Report")
+    logger.info("="*80)
+
+    status = report["system_status"]
+    logger.info(f"📋 Total Recommendations: {status['total_recommendations']}")
+    logger.info(f"🚨 Critical Issues: {status['critical_issues']}")
+    logger.info(f"⚠️  High Priority: {status['high_priority']}")
+    logger.info(f"🤖 Auto-Applicable: {status['auto_applicable']}")
+
+    logger.info("\n📊 Recommendations by Category:")
+    for category, recs in report["recommendations_by_category"].items():
+        logger.info(f"  {category.title()}: {len(recs)} recommendations")
+
+    logger.info("\n🔧 Recent Optimizations:")
+    recent = report["recent_optimizations"]
+    if recent:
+        for opt in recent[-5:]:  # Show last 5
+            status_icon = "✅" if opt["success"] else "❌"
+            improvement = f" (+{opt['improvement']:.1f}%)" if opt["improvement"] else ""
+            logger.info(f"  {status_icon} {opt['description']}{improvement}")
+    else:
+        logger.info("  No recent optimizations")
+
+
+async def _handle_continuous_command(optimizer: 'PerformanceOptimizer') -> None:
+    """Handle --continuous command (Issue #339 - extracted handler)."""
+    logger.info("🔄 Starting continuous performance optimization...")
+    logger.info("   Optimization cycle: every 30 minutes")
+    logger.info("   Press Ctrl+C to stop")
+
+    try:
+        while True:
+            await optimizer.run_optimization_cycle()
+            await asyncio.sleep(30 * 60)
+    except KeyboardInterrupt:
+        logger.info("\n🛑 Continuous optimization stopped")
+
+
 @dataclass
 class OptimizationRecommendation:
     """Performance optimization recommendation."""
@@ -591,78 +664,15 @@ async def main():
 
     optimizer = PerformanceOptimizer()
 
+    # Issue #339: Refactored to use extracted command handlers, reducing depth from 6 to 2
     if args.analyze:
-        # Analyze and show recommendations
-        print("🔍 Analyzing AutoBot performance...")
-        metrics = await optimizer.monitor.generate_performance_report()
-        recommendations = await optimizer.analyze_performance_metrics(metrics)
-
-        if recommendations:
-            print(f"\n📋 Found {len(recommendations)} optimization opportunities:")
-            print("="*80)
-
-            for i, rec in enumerate(recommendations, 1):
-                severity_emoji = {"critical": "🚨", "high": "⚠️", "medium": "📊", "low": "💡"}.get(rec.severity, "")
-                auto_indicator = "🤖 Auto" if rec.auto_applicable else "👤 Manual"
-
-                print(f"{i}. {severity_emoji} [{rec.severity.upper()}] {rec.description}")
-                print(f"   Category: {rec.category}")
-                print(f"   Impact: {rec.impact_estimate}")
-                print(f"   Application: {auto_indicator}")
-                if rec.affected_services:
-                    print(f"   Affected: {', '.join(rec.affected_services)}")
-                print()
-        else:
-            print("✅ No optimization opportunities found - system performing optimally!")
-
+        await _handle_analyze_command(optimizer)
     elif args.optimize:
-        # Run single optimization cycle
         await optimizer.run_optimization_cycle()
-
     elif args.report:
-        # Generate optimization report
-        print("📊 Generating optimization report...")
-        report = await optimizer.generate_optimization_report()
-
-        print("\n" + "="*80)
-        print("AutoBot Performance Optimization Report")
-        print("="*80)
-
-        status = report["system_status"]
-        print(f"📋 Total Recommendations: {status['total_recommendations']}")
-        print(f"🚨 Critical Issues: {status['critical_issues']}")
-        print(f"⚠️  High Priority: {status['high_priority']}")
-        print(f"🤖 Auto-Applicable: {status['auto_applicable']}")
-
-        print("\n📊 Recommendations by Category:")
-        for category, recs in report["recommendations_by_category"].items():
-            print(f"  {category.title()}: {len(recs)} recommendations")
-
-        print("\n🔧 Recent Optimizations:")
-        recent = report["recent_optimizations"]
-        if recent:
-            for opt in recent[-5:]:  # Show last 5
-                status_icon = "✅" if opt["success"] else "❌"
-                improvement = f" (+{opt['improvement']:.1f}%)" if opt["improvement"] else ""
-                print(f"  {status_icon} {opt['description']}{improvement}")
-        else:
-            print("  No recent optimizations")
-
+        await _handle_report_command(optimizer)
     elif args.continuous:
-        # Run continuous optimization
-        print("🔄 Starting continuous performance optimization...")
-        print("   Optimization cycle: every 30 minutes")
-        print("   Press Ctrl+C to stop")
-
-        try:
-            while True:
-                await optimizer.run_optimization_cycle()
-
-                # Wait 30 minutes before next cycle
-                await asyncio.sleep(30 * 60)
-        except KeyboardInterrupt:
-            print("\n🛑 Continuous optimization stopped")
-
+        await _handle_continuous_command(optimizer)
     else:
         parser.print_help()
 
