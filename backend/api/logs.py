@@ -13,7 +13,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from backend.type_defs.common import Metadata
 
@@ -40,6 +40,103 @@ CONTAINER_LOGS = {
     "ai-stack": "autobot-ai-stack",
     "npu-worker": "autobot-npu-worker",
 }
+
+
+# Forward declaration for parse functions (defined later in file)
+def _parse_file_log_line_for_unified(line: str, source: str) -> Metadata:
+    """Forward declaration - actual implementation uses parse_file_log_line."""
+    pass  # Replaced at module load
+
+
+def _parse_docker_log_line_for_unified(line: str, service: str) -> Metadata:
+    """Forward declaration - actual implementation uses parse_docker_log_line."""
+    pass  # Replaced at module load
+
+
+async def _collect_file_logs(
+    source_filter: Set[str], level: Optional[str]
+) -> List[Metadata]:
+    """Collect logs from file sources (Issue #336 - extracted helper).
+
+    Args:
+        source_filter: Set of source names to include (empty = all)
+        level: Optional log level filter
+
+    Returns:
+        List of parsed log entries
+    """
+    logs = []
+
+    log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+    if not log_dir_exists:
+        return logs
+
+    log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
+    for file_path in log_files:
+        file_name = file_path.stem
+        if source_filter and file_name not in source_filter:
+            continue
+
+        try:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                content = await f.read()
+                for line in content.splitlines()[-50:]:
+                    if not line.strip():
+                        continue
+                    parsed = parse_file_log_line(line.strip(), file_name)
+                    if level and parsed.get("level", "").upper() != level.upper():
+                        continue
+                    parsed["source_type"] = "file"
+                    logs.append(parsed)
+        except OSError as e:
+            logger.debug(f"Error reading file log {file_path}: {e}")
+
+    return logs
+
+
+async def _collect_container_logs(
+    source_filter: Set[str], level: Optional[str]
+) -> List[Metadata]:
+    """Collect logs from Docker containers (Issue #336 - extracted helper).
+
+    Args:
+        source_filter: Set of source names to include (empty = all)
+        level: Optional log level filter
+
+    Returns:
+        List of parsed log entries
+    """
+    logs = []
+
+    for service, container_name in CONTAINER_LOGS.items():
+        if source_filter and service not in source_filter:
+            continue
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "docker", "logs", container_name, "--timestamps", "--tail=50",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+                if process.returncode != 0:
+                    continue
+
+                for line in stdout.decode().split("\n"):
+                    if not line.strip():
+                        continue
+                    parsed = parse_docker_log_line(line, service)
+                    if level and parsed.get("level", "").upper() != level.upper():
+                        continue
+                    parsed["source_type"] = "container"
+                    logs.append(parsed)
+            except asyncio.TimeoutError:
+                logger.debug(f"Timeout getting container logs for {service}")
+        except OSError as e:
+            logger.debug(f"Error getting container logs for {service}: {e}")
+
+    return logs
 
 
 @with_error_handling(
@@ -386,70 +483,16 @@ async def get_unified_logs(
 ):
     """Get unified logs from all sources, merged by timestamp"""
     try:
-        all_logs = []
-
         # Parse sources filter
-        source_filter = set()
+        source_filter: Set[str] = set()
         if sources:
             source_filter = set(sources.split(","))
 
-        # Get file logs
-        log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
-        if log_dir_exists:
-            log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
-            for file_path in log_files:
-                file_name = file_path.stem  # Remove .log extension
-                if source_filter and file_name not in source_filter:
-                    continue
+        # Issue #336: Use extracted helpers for log collection
+        file_logs = await _collect_file_logs(source_filter, level)
+        container_logs = await _collect_container_logs(source_filter, level)
 
-                try:
-                    # Read last portion of file
-                    async with aiofiles.open(file_path, "r") as f:
-                        content = await f.read()
-                        file_lines = content.splitlines()
-                        for line in file_lines[-50:]:  # Get recent lines from each file
-                            if line.strip():
-                                parsed = parse_file_log_line(line.strip(), file_name)
-                                if (
-                                    level
-                                    and parsed.get("level", "").upper() != level.upper()
-                                ):
-                                    continue
-                                parsed["source_type"] = "file"
-                                all_logs.append(parsed)
-                except Exception as e:
-                    logger.debug(f"Error reading file log {file_path}: {e}")
-
-        # Get container logs
-        for service, container_name in CONTAINER_LOGS.items():
-            if source_filter and service not in source_filter:
-                continue
-
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    "docker", "logs", container_name, "--timestamps", "--tail=50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=10
-                    )
-                    if process.returncode == 0:
-                        for line in stdout.decode().split("\n"):
-                            if line.strip():
-                                parsed = parse_docker_log_line(line, service)
-                                if (
-                                    level
-                                    and parsed.get("level", "").upper() != level.upper()
-                                ):
-                                    continue
-                                parsed["source_type"] = "container"
-                                all_logs.append(parsed)
-                except asyncio.TimeoutError:
-                    logger.debug(f"Timeout getting container logs for {service}")
-            except Exception as e:
-                logger.debug(f"Error getting container logs for {service}: {e}")
+        all_logs = file_logs + container_logs
 
         # Sort by timestamp (newest first) and limit
         all_logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
