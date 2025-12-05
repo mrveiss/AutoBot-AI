@@ -22,7 +22,7 @@
     </div>
 
     <!-- Grafana Dashboard View -->
-    <div v-if="viewMode === 'grafana'" class="grafana-view">
+    <div v-show="viewMode === 'grafana'" class="grafana-view">
       <!-- Dashboard Tabs -->
       <div class="dashboard-tabs">
         <button
@@ -36,18 +36,22 @@
         </button>
       </div>
 
-      <!-- Embedded Grafana Dashboard -->
+      <!-- Embedded Grafana Dashboards - preload all, show active -->
       <div class="dashboard-container">
         <iframe
-          :src="getDashboardUrl(activeDashboard)"
+          v-for="dashboard in dashboards"
+          :key="dashboard.uid"
+          v-show="activeDashboard === dashboard.uid"
+          :src="getDashboardUrl(dashboard.uid)"
           frameborder="0"
           class="grafana-iframe"
+          loading="lazy"
         ></iframe>
       </div>
     </div>
 
     <!-- Legacy SystemMonitor View -->
-    <div v-else class="legacy-view">
+    <div v-show="viewMode === 'legacy'" class="legacy-view">
       <SystemMonitor />
     </div>
   </div>
@@ -116,7 +120,8 @@ const getDashboardUrl = (uid: string) => {
   if (!dashboard) return ''
 
   // Grafana embed URL with kiosk mode (removes UI chrome)
-  return `http://172.16.168.23:3000${dashboard.path}?orgId=1&kiosk=tv&theme=light&from=now-1h&to=now&refresh=5s`
+  // Removed refresh=5s to prevent flickering - Grafana handles its own refresh
+  return `http://172.16.168.23:3000${dashboard.path}?orgId=1&kiosk=tv&theme=light&from=now-1h&to=now`
 }
 </script>
 
