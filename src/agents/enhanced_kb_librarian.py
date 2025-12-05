@@ -107,16 +107,23 @@ class EnhancedKBLibrarian:
             tools = []
             sources = web_results.get("sources", [])
 
-            # Extract tool mentions from search results
-            for source in sources[:5]:  # Top 5 results
+            # Extract tool mentions from search results in parallel
+            async def extract_from_source(source: Dict[str, Any]) -> List[Dict[str, Any]]:
                 content = source.get("content", "")
                 title = source.get("title", "")
+                return await self._extract_tools_from_content(content, title, tool_type)
 
-                # Look for tool names and descriptions
-                extracted_tools = await self._extract_tools_from_content(
-                    content, title, tool_type
-                )
-                tools.extend(extracted_tools)
+            # Process top 5 sources in parallel
+            extraction_results = await asyncio.gather(
+                *[extract_from_source(source) for source in sources[:5]],
+                return_exceptions=True
+            )
+
+            # Collect all extracted tools
+            for result in extraction_results:
+                if isinstance(result, Exception):
+                    continue
+                tools.extend(result)
 
             # Deduplicate tools
             unique_tools = self._deduplicate_tools(tools)
@@ -281,14 +288,31 @@ METADATA:
             "security": f"{tool_name} security considerations best practices",
         }
 
-        results = {}
-        for query_type, query in research_queries.items():
+        # Execute all research queries in parallel for better performance
+        async def execute_query(query_type: str, query: str) -> tuple:
             try:
                 result = await self.web_assistant.research_query(query)
                 if result.get("status") == "success":
-                    results[query_type] = result
+                    return (query_type, result)
+                return (query_type, None)
             except Exception as e:
                 logger.debug(f"Research query failed for {query_type}: {e}")
+                return (query_type, None)
+
+        # Run all queries in parallel
+        query_results = await asyncio.gather(
+            *[execute_query(qt, q) for qt, q in research_queries.items()],
+            return_exceptions=True
+        )
+
+        # Collect successful results
+        results = {}
+        for item in query_results:
+            if isinstance(item, Exception):
+                continue
+            query_type, result = item
+            if result is not None:
+                results[query_type] = result
 
         if not results:
             return None

@@ -9,9 +9,10 @@ including RAG (Retrieval-Augmented Generation), knowledge extraction, and
 intelligent content analysis using the AI Stack VM.
 """
 
+import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
@@ -342,7 +343,7 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
             extraction_mode=request_data.extraction_mode,
         )
 
-        # Optionally store extracted knowledge in local knowledge base
+        # Optionally store extracted knowledge in local knowledge base using parallel processing
         stored_facts = []
         if request_data.auto_store:
             try:
@@ -350,26 +351,41 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
                     req.app, force_refresh=False
                 )
                 if kb_to_use and extraction_result.get("extracted_facts"):
-                    for fact in extraction_result["extracted_facts"]:
-                        try:
-                            store_result = await kb_to_use.store_fact(
-                                content=fact.get("content", ""),
-                                metadata={
-                                    "title": (
-                                        request_data.title
-                                        or fact.get("title", "Extracted Knowledge")
-                                    ),
-                                    "source": request_data.source,
-                                    "category": request_data.category,
-                                    "extraction_confidence": fact.get(
-                                        "confidence", 0.5
-                                    ),
-                                    "extracted_at": datetime.utcnow().isoformat(),
-                                },
-                            )
-                            stored_facts.append(store_result)
-                        except Exception as e:
-                            logger.warning(f"Failed to store extracted fact: {e}")
+                    # Use asyncio.gather for parallel fact storage with bounded concurrency
+                    semaphore = asyncio.Semaphore(50)
+
+                    async def store_single_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
+                        async with semaphore:
+                            try:
+                                return await kb_to_use.store_fact(
+                                    content=fact.get("content", ""),
+                                    metadata={
+                                        "title": (
+                                            request_data.title
+                                            or fact.get("title", "Extracted Knowledge")
+                                        ),
+                                        "source": request_data.source,
+                                        "category": request_data.category,
+                                        "extraction_confidence": fact.get(
+                                            "confidence", 0.5
+                                        ),
+                                        "extracted_at": datetime.utcnow().isoformat(),
+                                    },
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to store extracted fact: {e}")
+                                return {"status": "error", "message": str(e)}
+
+                    # Store all facts in parallel
+                    results = await asyncio.gather(
+                        *[store_single_fact(fact) for fact in extraction_result["extracted_facts"]],
+                        return_exceptions=True
+                    )
+
+                    # Filter successful results
+                    for result in results:
+                        if isinstance(result, dict) and result.get("status") != "error":
+                            stored_facts.append(result)
 
                     logger.info(
                         f"Stored {len(stored_facts)} extracted facts in knowledge base"

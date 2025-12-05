@@ -187,14 +187,31 @@ class DocumentsMixin:
             files = list(dir_path_obj.glob(pattern))
             logger.info(f"Found {len(files)} files matching pattern '{pattern}'")
 
-            # Process each file
+            # Process files in parallel with bounded concurrency
+            semaphore = asyncio.Semaphore(10)  # Limit concurrent file operations
+
+            async def process_file(file_path: Path) -> Dict[str, Any]:
+                async with semaphore:
+                    try:
+                        return await self.add_document_from_file(
+                            str(file_path), category=category
+                        )
+                    except Exception as e:
+                        return {"status": "error", "message": str(e)}
+
+            # Process all files in parallel
+            results = await asyncio.gather(
+                *[process_file(file_path) for file_path in files],
+                return_exceptions=True
+            )
+
+            # Count results
             success_count = 0
             error_count = 0
-            for file_path in files:
-                result = await self.add_document_from_file(
-                    str(file_path), category=category
-                )
-                if result.get("status") == "success":
+            for result in results:
+                if isinstance(result, Exception):
+                    error_count += 1
+                elif result.get("status") == "success":
                     success_count += 1
                 else:
                     error_count += 1
