@@ -89,12 +89,16 @@ class ErrorMetricsCollector:
     """
     Collects and aggregates error metrics
 
+    Phase 5 (Issue #348): Refactored to use Prometheus as the primary metrics store.
+    Redis persistence has been removed. In-memory buffers are kept for real-time
+    statistics (timeline, breakdown, top errors) as these provide useful aggregations.
+
     Features:
     - Real-time error tracking
     - Time-series aggregation
     - Component-level statistics
     - Alerting threshold detection
-    - Redis-backed persistence
+    - Prometheus metrics integration
     """
 
     def __init__(self, redis_client=None):
@@ -102,9 +106,14 @@ class ErrorMetricsCollector:
         Initialize error metrics collector
 
         Args:
-            redis_client: Optional Redis client for persistence
+            redis_client: DEPRECATED - no longer used (kept for API compatibility)
         """
-        self._redis = redis_client
+        # Phase 5 (Issue #348): Redis persistence removed, arg kept for API compat
+        if redis_client is not None:
+            logger.warning(
+                "redis_client parameter is deprecated and ignored. "
+                "Prometheus is now the primary metrics store."
+            )
         self._metrics: List[ErrorMetric] = []
         self._stats: Dict[str, ErrorStats] = defaultdict(self._create_stats)
         self._alert_thresholds: Dict[str, int] = {}
@@ -202,7 +211,7 @@ class ErrorMetricsCollector:
             recent_count = sum(1 for m in self._metrics if m.timestamp > one_hour_ago)
             stats.error_rate = recent_count / 60.0
 
-        # Phase 2 (Issue #345): Push to Prometheus
+        # Phase 5 (Issue #348): Push to Prometheus (primary store)
         if self.prometheus:
             self.prometheus.record_error(
                 category.value,
@@ -212,35 +221,12 @@ class ErrorMetricsCollector:
             # Also update error rate gauge
             self.prometheus.update_error_rate(component, "1m", stats.error_rate)
 
-        # Persist to Redis if available
-        if self._redis:
-            await self._persist_metric(metric)
-
         # Check alert thresholds
         await self._check_alerts(component, error_code, stats)
 
         logger.debug(
             f"Recorded error metric: {component}/{error_code or category.value}"
         )
-
-    async def _persist_metric(self, metric: ErrorMetric) -> None:
-        """Persist metric to Redis"""
-        try:
-            if not self._redis:
-                return
-
-            # Store in Redis sorted set (by timestamp)
-            key = f"error_metrics:{metric.component}"
-            score = metric.timestamp
-            value = json.dumps(metric.to_dict())
-
-            await self._redis.zadd(key, {value: score})
-
-            # Set expiration
-            await self._redis.expire(key, self._retention_seconds)
-
-        except Exception as e:
-            logger.warning(f"Failed to persist metric to Redis: {e}")
 
     async def _check_alerts(
         self, component: str, error_code: Optional[str], stats: ErrorStats
@@ -365,38 +351,6 @@ class ErrorMetricsCollector:
             ]
         else:
             return list(self._stats.values())
-
-    def get_recent_errors(
-        self, limit: int = 100, component: Optional[str] = None
-    ) -> List[ErrorMetric]:
-        """
-        Get recent error metrics
-
-        DEPRECATED (Phase 2, Issue #345): This method will be removed in Phase 5.
-        Query Prometheus directly at /api/monitoring/metrics for error metrics.
-
-        Args:
-            limit: Maximum number of metrics to return
-            component: Optional component filter
-
-        Returns:
-            List of recent ErrorMetric objects
-        """
-        import warnings
-        warnings.warn(
-            "get_recent_errors() is deprecated and will be removed in Phase 5. "
-            "Query Prometheus directly at /api/monitoring/metrics instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-        metrics = self._metrics
-
-        if component:
-            metrics = [m for m in metrics if m.component == component]
-
-        # Return most recent first
-        return sorted(metrics, key=lambda m: m.timestamp, reverse=True)[:limit]
 
     def get_error_timeline(
         self, hours: int = 24, component: Optional[str] = None

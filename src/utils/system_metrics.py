@@ -7,12 +7,10 @@ Provides real-time metrics for AutoBot system components.
 """
 
 import asyncio
-import json
 import logging
 import time
-from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 import psutil
@@ -38,21 +36,23 @@ class SystemMetric:
 
 
 class SystemMetricsCollector:
-    """Collects and aggregates system metrics in real-time"""
+    """
+    Collects and aggregates system metrics in real-time.
+
+    Phase 5 (Issue #348): Refactored to use Prometheus as the primary metrics store.
+    Legacy in-memory buffers and Redis persistence have been removed.
+    All metrics are now pushed directly to Prometheus.
+    """
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        # REFACTORED: Centralized Redis client management
-        # Don't cache clients - always use get_redis_client() for proper connection pooling
-        self._metrics_buffer = deque(maxlen=100)  # Reduced from 1000 to 100 (Phase 2 migration)
         self._collection_interval = config.get(
             "monitoring.metrics.collection_interval", 5
         )
-        self._retention_hours = config.get("monitoring.metrics.retention_hours", 24)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged
 
-        # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
+        # Phase 5 (Issue #348): Prometheus is now the primary metrics store
         try:
             from src.monitoring.prometheus_metrics import get_metrics_manager
             self.prometheus = get_metrics_manager()
@@ -68,28 +68,6 @@ class SystemMetricsCollector:
             "knowledge_base": ["search_queries", "cache_hits", "vector_count"],
             "llm": ["ollama_requests", "model_switches", "token_usage"],
         }
-
-    async def _get_redis_client(self, database: str = "metrics"):
-        """
-        Get Redis client for specified database using centralized client management.
-
-        REFACTORED: Always use get_redis_client() for proper connection pooling.
-        Do not cache clients - let the centralized manager handle that.
-
-        Args:
-            database: Redis database name ("metrics", "knowledge", etc.)
-
-        Returns:
-            Redis client or None if unavailable
-        """
-        try:
-            client = get_redis_client(database=database, async_client=True)
-            if asyncio.iscoroutine(client):
-                client = await client
-            return client
-        except Exception as e:
-            self.logger.error(f"Failed to get {database} Redis client: {e}")
-            return None
 
     async def collect_system_metrics(self) -> Dict[str, SystemMetric]:
         """Collect system-level metrics (CPU, memory, disk, network)"""
@@ -201,22 +179,20 @@ class SystemMetricsCollector:
         for service_name, url in services.items():
             try:
                 if service_name == "redis":
-                    # Special Redis health check
-                    redis_client = await self._get_redis_client()
-                    if redis_client:
-                        # Handle both sync and async Redis clients
-                        try:
-                            if hasattr(redis_client, "ping"):
-                                ping_result = redis_client.ping()
-                                if asyncio.iscoroutine(ping_result):
-                                    await ping_result
-                                health_value = 1.0
-                            else:
-                                health_value = 0.0
-                        except Exception as ping_error:
-                            self.logger.warning(f"Redis ping failed: {ping_error}")
+                    # Special Redis health check using centralized client
+                    try:
+                        redis_client = get_redis_client(database="main", async_client=True)
+                        if asyncio.iscoroutine(redis_client):
+                            redis_client = await redis_client
+                        if redis_client and hasattr(redis_client, "ping"):
+                            ping_result = redis_client.ping()
+                            if asyncio.iscoroutine(ping_result):
+                                await ping_result
+                            health_value = 1.0
+                        else:
                             health_value = 0.0
-                    else:
+                    except Exception as ping_error:
+                        self.logger.warning(f"Redis ping failed: {ping_error}")
                         health_value = 0.0
 
                     metrics[f"{service_name}_health"] = SystemMetric(
@@ -227,7 +203,7 @@ class SystemMetricsCollector:
                         category="services",
                     )
 
-                    # Phase 2 (Issue #345): Push to Prometheus
+                    # Push to Prometheus
                     if self.prometheus:
                         status = "online" if health_value == 1.0 else "offline"
                         self.prometheus.update_service_status(service_name, status)
@@ -255,12 +231,10 @@ class SystemMetricsCollector:
                             category="services",
                         )
 
-                        # Phase 2 (Issue #345): Push to Prometheus
+                        # Push to Prometheus
                         if self.prometheus:
-                            # Convert health value (0.0 or 1.0) to status string
                             status = "online" if health_value == 1.0 else "offline"
                             self.prometheus.update_service_status(service_name, status)
-                            # Also record response time
                             if f"{service_name}_response_time" in metrics:
                                 self.prometheus.record_service_response_time(
                                     service_name, response_time
@@ -277,7 +251,7 @@ class SystemMetricsCollector:
                     metadata={"error": str(e)},
                 )
 
-                # Phase 2 (Issue #345): Push to Prometheus (error case)
+                # Push to Prometheus (error case)
                 if self.prometheus:
                     self.prometheus.update_service_status(service_name, "offline")
 
@@ -289,9 +263,11 @@ class SystemMetricsCollector:
         timestamp = time.time()
 
         try:
-            # REFACTORED: Use centralized client management for "knowledge" database
+            # Phase 5 (Issue #348): Use centralized client directly
             # Knowledge base data (doc:*, kb_cache:*) is stored in the "knowledge" Redis database
-            kb_redis_client = await self._get_redis_client(database="knowledge")
+            kb_redis_client = get_redis_client(database="knowledge", async_client=True)
+            if asyncio.iscoroutine(kb_redis_client):
+                kb_redis_client = await kb_redis_client
 
             if not kb_redis_client:
                 self.logger.debug(
@@ -382,92 +358,6 @@ class SystemMetricsCollector:
 
         return all_metrics
 
-    async def store_metrics(self, metrics: Dict[str, SystemMetric]) -> bool:
-        """Store metrics in Redis for historical tracking"""
-        try:
-            redis_client = await self._get_redis_client()
-            if not redis_client:
-                return False
-
-            # Use pipeline for efficient bulk operations
-            async with redis_client.pipeline() as pipe:
-                for metric in metrics.values():
-                    # Store metric in time series format
-                    key = f"metrics:{metric.category}:{metric.name}"
-
-                    # Store as sorted set with timestamp as score
-                    metric_data = {
-                        "value": metric.value,
-                        "unit": metric.unit,
-                        "metadata": json.dumps(metric.metadata or {}),
-                    }
-
-                    pipe.zadd(key, {json.dumps(metric_data): metric.timestamp})
-
-                    # Set expiration for automatic cleanup
-                    expire_seconds = self._retention_hours * 3600
-                    pipe.expire(key, expire_seconds)
-
-                # Execute all commands
-                await pipe.execute()
-
-            # Also store in buffer for real-time access
-            for metric in metrics.values():
-                self._metrics_buffer.append(metric)
-
-            return True
-
-        except Exception as e:
-            # CRITICAL FIX: Don't spam logs with authentication errors - log once and skip
-            error_msg = str(e)
-            if "Authentication required" in error_msg or "NOAUTH" in error_msg:
-                if not self._auth_error_logged:
-                    self.logger.warning(
-                        "Metrics storage skipped: Redis authentication required. "
-                        "Metrics will be buffered in memory only until authentication is configured."
-                    )
-                    self._auth_error_logged = True
-            else:
-                self.logger.error(f"Error storing metrics: {e}")
-            return False
-
-    async def get_recent_metrics(
-        self, category: str = None, minutes: int = 10
-    ) -> List[SystemMetric]:
-        """Get recent metrics from the buffer or Redis
-
-        DEPRECATED (Phase 2, Issue #345): This method will be removed in Phase 5.
-        Use Prometheus queries instead: http://172.16.168.20:8001/api/monitoring/metrics
-        """
-        import warnings
-        warnings.warn(
-            "get_recent_metrics() is deprecated and will be removed in Phase 5. "
-            "Query Prometheus directly at /api/monitoring/metrics instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-        try:
-            if category:
-                # Filter by category from buffer
-                cutoff_time = time.time() - (minutes * 60)
-                return [
-                    metric
-                    for metric in self._metrics_buffer
-                    if metric.category == category and metric.timestamp >= cutoff_time
-                ]
-            else:
-                # Return all recent metrics
-                cutoff_time = time.time() - (minutes * 60)
-                return [
-                    metric
-                    for metric in self._metrics_buffer
-                    if metric.timestamp >= cutoff_time
-                ]
-        except Exception as e:
-            self.logger.error(f"Error getting recent metrics: {e}")
-            return []
-
     async def get_metric_summary(self) -> Dict[str, Any]:
         """Get summary of current system status"""
         try:
@@ -528,13 +418,12 @@ class SystemMetricsCollector:
 
         while self._is_collecting:
             try:
-                # Collect metrics
+                # Phase 5 (Issue #348): Collect and push to Prometheus only
+                # Redis storage and in-memory buffers have been removed
                 metrics = await self.collect_all_metrics()
 
-                # Store metrics
                 if metrics:
-                    await self.store_metrics(metrics)
-                    self.logger.debug(f"Collected and stored {len(metrics)} metrics")
+                    self.logger.debug(f"Collected {len(metrics)} metrics (pushed to Prometheus)")
 
                 # Wait for next collection
                 await asyncio.sleep(self._collection_interval)
