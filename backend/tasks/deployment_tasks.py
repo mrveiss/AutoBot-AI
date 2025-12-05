@@ -95,7 +95,7 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
         )
 
         # Log important events
-        if event_type in ["runner_on_ok", "runner_on_failed", "runner_on_unreachable"]:
+        if event_type in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable"}:
             logger.info(f"Deployment event [{ip_address}]: {event_type}")
 
     # Generate Ansible inventory

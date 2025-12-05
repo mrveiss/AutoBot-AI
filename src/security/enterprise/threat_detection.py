@@ -464,10 +464,10 @@ class ThreatDetectionEngine:
                     max_severity = "critical"
                 elif pattern_info["severity"] == "high" and max_severity != "critical":
                     max_severity = "high"
-                elif pattern_info["severity"] == "medium" and max_severity not in [
+                elif pattern_info["severity"] == "medium" and max_severity not in {
                     "critical",
                     "high",
-                ]:
+                }:
                     max_severity = "medium"
 
         if detected_patterns:
@@ -535,7 +535,7 @@ class ThreatDetectionEngine:
 
         # Check file access patterns
         resource = event.get("resource", "")
-        if resource and action in ["file_read", "file_write", "file_delete"]:
+        if resource and action in {"file_read", "file_write", "file_delete"}:
             normal_access = profile.file_access_patterns.get(resource, 0)
             if normal_access == 0:  # Never accessed this file before
                 anomalies.append("unusual_file_access")
@@ -629,7 +629,7 @@ class ThreatDetectionEngine:
 
     async def _detect_malicious_file(self, event: Dict) -> Optional[ThreatEvent]:
         """Detect malicious file uploads"""
-        if event.get("action") not in ["file_upload", "file_write"]:
+        if event.get("action") not in {"file_upload", "file_write"}:
             return None
 
         details = event.get("details", {})
@@ -999,7 +999,7 @@ class ThreatDetectionEngine:
             profile.typical_ips.add(source_ip)
 
         # Update file access patterns
-        if action in ["file_read", "file_write", "file_delete"]:
+        if action in {"file_read", "file_write", "file_delete"}:
             resource = event.get("resource", "")
             if resource:
                 profile.file_access_patterns[resource] = (

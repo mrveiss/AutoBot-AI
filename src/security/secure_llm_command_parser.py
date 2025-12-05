@@ -253,10 +253,10 @@ class SecureLLMCommandParser:
                 explanation, context="command_explanation"
             )
 
-            if explanation_validation.risk_level in [
+            if explanation_validation.risk_level in {
                 InjectionRisk.HIGH,
                 InjectionRisk.CRITICAL,
-            ]:
+            }:
                 logger.warning(
                     f"⚠️ Suspicious explanation detected for command: {command}"
                 )

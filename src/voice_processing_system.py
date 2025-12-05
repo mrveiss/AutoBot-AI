@@ -1124,7 +1124,7 @@ class VoiceProcessingSystem:
             if "target_element" not in command_analysis.parameters:
                 required_context.append("target_element_identification")
 
-            if command_analysis.intent in ["click_element", "type_text"]:
+            if command_analysis.intent in {"click_element", "type_text"}:
                 required_context.append("current_screen_state")
 
         if command_analysis.command_type == VoiceCommand.NAVIGATION:

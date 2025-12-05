@@ -233,7 +233,7 @@ class ComplianceManager:
 
         # Ensure compliance with framework requirements
         for framework in self.config.get("enabled_frameworks", []):
-            if framework in ["soc2", "gdpr", "iso27001"]:
+            if framework in {"soc2", "gdpr", "iso27001"}:
                 framework_enum = ComplianceFramework(framework)
                 requirements = self.compliance_requirements.get(framework_enum, {})
                 min_retention = requirements.get("retention_days", 365)
@@ -287,10 +287,10 @@ class ComplianceManager:
         await self._enrich_compliance_data(audit_event)
 
         # Check for PII and handle accordingly
-        if data_classification in [
+        if data_classification in {
             DataClassification.PII,
             DataClassification.SENSITIVE_PII,
-        ]:
+        }:
             await self._handle_pii_event(audit_event)
 
         # Store audit event
@@ -369,9 +369,9 @@ class ComplianceManager:
         # This would typically involve business logic to determine basis
         action = audit_event["action"]
 
-        if action in ["login", "authentication"]:
+        if action in {"login", "authentication"}:
             return "contract"  # Performance of contract
-        elif action in ["monitoring", "security_scan"]:
+        elif action in {"monitoring", "security_scan"}:
             return "legitimate_interests"  # Legitimate interests
         elif "consent" in audit_event.get("details", {}):
             return "consent"  # Explicit consent
@@ -383,13 +383,13 @@ class ComplianceManager:
         rights = []
 
         action = audit_event["action"]
-        if action in ["data_access", "data_export"]:
+        if action in {"data_access", "data_export"}:
             rights.append("right_of_access")
-        if action in ["data_modification", "data_update"]:
+        if action in {"data_modification", "data_update"}:
             rights.append("right_to_rectification")
-        if action in ["data_deletion", "account_deletion"]:
+        if action in {"data_deletion", "account_deletion"}:
             rights.append("right_to_erasure")
-        if action in ["data_export", "data_portability"]:
+        if action in {"data_export", "data_portability"}:
             rights.append("right_to_data_portability")
 
         return rights
@@ -452,7 +452,7 @@ class ComplianceManager:
         }
 
         # Log PII access for GDPR compliance
-        if audit_event["action"] in ["data_access", "data_export"]:
+        if audit_event["action"] in {"data_access", "data_export"}:
             await self._log_pii_access(audit_event)
 
     async def _verify_consent(self, audit_event: Dict) -> bool:
@@ -518,10 +518,10 @@ class ComplianceManager:
             AuditEventType.SECURITY_INCIDENT.value,
         ]
 
-        if event_type in sensitive_events or audit_event["data_classification"] in [
+        if event_type in sensitive_events or audit_event["data_classification"] in {
             "pii",
             "sensitive_pii",
-        ]:
+        }:
             await self._store_encrypted_event(audit_event, storage_path)
         else:
             await self._store_plain_event(audit_event, storage_path)
@@ -630,10 +630,10 @@ class ComplianceManager:
         violations = []
 
         # Example: Check for PII access without consent
-        if audit_event["data_classification"] in [
+        if audit_event["data_classification"] in {
             "pii",
             "sensitive_pii",
-        ] and not audit_event.get("pii_handling", {}).get("consent_verified", True):
+        } and not audit_event.get("pii_handling", {}).get("consent_verified", True):
 
             violations.append(
                 {
@@ -666,7 +666,7 @@ class ComplianceManager:
             await self._store_violation_record(violation_event)
 
             # Send alerts for high severity violations
-            if violation["severity"] in ["high", "critical"]:
+            if violation["severity"] in {"high", "critical"}:
                 await self._send_compliance_alert(violation_event)
 
     async def _store_violation_record(self, violation_event: Dict):

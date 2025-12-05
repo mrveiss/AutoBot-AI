@@ -25,6 +25,14 @@ from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("temporal_knowledge_manager")
 
+# Performance optimization: O(1) lookup for priority classification (Issue #326)
+CRITICAL_CATEGORY_KEYWORDS = {"security", "system", "critical"}
+CRITICAL_PATH_KEYWORDS = {"security", "auth", "claude.md"}
+HIGH_CATEGORY_KEYWORDS = {"api", "user-guide", "architecture"}
+HIGH_PATH_KEYWORDS = {"api", "guide", "readme"}
+MEDIUM_CATEGORY_KEYWORDS = {"developer", "documentation"}
+LOW_CATEGORY_KEYWORDS = {"reports", "logs", "archive"}
+
 
 class KnowledgePriority(Enum):
     """Priority levels for knowledge content."""
@@ -141,26 +149,26 @@ class TemporalKnowledgeManager:
         category = metadata.get("category", "").lower()
         source_path = metadata.get("relative_path", "").lower()
 
-        # Critical content
-        if any(keyword in category for keyword in ["security", "system", "critical"]):
+        # Critical content (Issue #326: O(1) lookups)
+        if any(keyword in category for keyword in CRITICAL_CATEGORY_KEYWORDS):
             return KnowledgePriority.CRITICAL
-        if any(keyword in source_path for keyword in ["security", "auth", "claude.md"]):
+        if any(keyword in source_path for keyword in CRITICAL_PATH_KEYWORDS):
             return KnowledgePriority.CRITICAL
 
-        # High priority content
+        # High priority content (Issue #326: O(1) lookups)
         if any(
-            keyword in category for keyword in ["api", "user-guide", "architecture"]
+            keyword in category for keyword in HIGH_CATEGORY_KEYWORDS
         ):
             return KnowledgePriority.HIGH
-        if any(keyword in source_path for keyword in ["api", "guide", "readme"]):
+        if any(keyword in source_path for keyword in HIGH_PATH_KEYWORDS):
             return KnowledgePriority.HIGH
 
-        # Medium priority content
-        if any(keyword in category for keyword in ["developer", "documentation"]):
+        # Medium priority content (Issue #326: O(1) lookups)
+        if any(keyword in category for keyword in MEDIUM_CATEGORY_KEYWORDS):
             return KnowledgePriority.MEDIUM
 
-        # Low priority (reports, logs, etc.)
-        if any(keyword in category for keyword in ["reports", "logs", "archive"]):
+        # Low priority (reports, logs, etc.) (Issue #326: O(1) lookups)
+        if any(keyword in category for keyword in LOW_CATEGORY_KEYWORDS):
             return KnowledgePriority.LOW
 
         return KnowledgePriority.MEDIUM  # Default
@@ -326,10 +334,10 @@ class TemporalKnowledgeManager:
             status = meta.get_freshness_status()
 
             # Schedule refresh for stale high-priority content
-            if status == FreshnessStatus.STALE and meta.priority in [
+            if status == FreshnessStatus.STALE and meta.priority in {
                 KnowledgePriority.CRITICAL,
                 KnowledgePriority.HIGH,
-            ]:
+            }:
                 refresh_candidates.append(content_id)
 
             # Schedule refresh for frequently accessed aging content

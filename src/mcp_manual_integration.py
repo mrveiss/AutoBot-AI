@@ -135,7 +135,7 @@ class MCPManualService:
             if match:
                 command = match.group(1)
                 # Filter out common non-command words
-                if command not in [
+                if command not in {
                     "how",
                     "to",
                     "use",
@@ -148,7 +148,7 @@ class MCPManualService:
                     "will",
                     "help",
                     "with",
-                ]:
+                }:
                     return command
 
         return None

@@ -32,6 +32,9 @@ from src.secure_command_executor import CommandRisk
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for subcommand patterns (Issue #326)
+SUBCOMMAND_TOOLS = {"git", "docker", "kubectl", "npm", "yarn"}
+
 
 class AgentRole(Enum):
     """Agent roles with different privilege levels"""
@@ -182,7 +185,7 @@ class CommandApprovalManager:
                 command_risk=CommandRisk.HIGH
             )
             if not allowed:
-                print(f"Permission denied: {reason}")
+                logger.warning(f"Permission denied: {reason}")
         """
         # Use provided permissions or defaults
         perms_dict = permissions or CommandApprovalManager.DEFAULT_PERMISSIONS
@@ -258,7 +261,7 @@ class CommandApprovalManager:
                 agent_role=AgentRole.CHAT_AGENT,
                 command_risk=CommandRisk.MODERATE
             ):
-                print("User approval required")
+                logger.info("User approval required")
         """
         # Use provided permissions or defaults
         perms_dict = permissions or CommandApprovalManager.DEFAULT_PERMISSIONS
@@ -271,11 +274,11 @@ class CommandApprovalManager:
         supervised_mode = perms.supervised_mode
 
         # In supervised mode, HIGH/CRITICAL/FORBIDDEN always need approval
-        if supervised_mode and command_risk in [
+        if supervised_mode and command_risk in {
             CommandRisk.HIGH,
             CommandRisk.CRITICAL,
             CommandRisk.FORBIDDEN,
-        ]:
+        }:
             return True
 
         # SAFE commands can be auto-approved if permitted
@@ -309,7 +312,7 @@ class CommandApprovalManager:
         Example:
             manager = CommandApprovalManager()
             if await manager.check_auto_approve_rules("user123", "ls -la", "safe"):
-                print("Auto-approved by rule")
+                logger.info("Auto-approved by rule")
         """
         try:
             if user_id not in self.auto_approve_rules:
@@ -407,8 +410,8 @@ class CommandApprovalManager:
 
         # If there are arguments, use wildcard pattern
         if len(parts) > 1:
-            # For commands with subcommands (like git status), preserve them
-            if base_cmd in ["git", "docker", "kubectl", "npm", "yarn"]:
+            # For commands with subcommands (like git status), preserve them (Issue #326)
+            if base_cmd in SUBCOMMAND_TOOLS:
                 if len(parts) >= 2:
                     return f"{base_cmd} {parts[1]} *"
             # For simple commands, use wildcard

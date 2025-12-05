@@ -315,7 +315,7 @@ class SSHManager:
             }
 
             # Block forbidden and high-risk commands
-            if risk_level in [CommandRisk.FORBIDDEN, CommandRisk.HIGH]:
+            if risk_level in {CommandRisk.FORBIDDEN, CommandRisk.HIGH}:
                 security_info["blocked"] = True
                 security_info["reason"] = f"Command blocked: {'; '.join(reasons)}"
 
