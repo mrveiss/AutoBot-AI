@@ -18,6 +18,9 @@ from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for datetime field keys (Issue #326)
+DATETIME_FIELD_KEYS = {"started_at", "ended_at"}
+
 
 class TakeoverTrigger(Enum):
     """Types of takeover triggers"""
@@ -568,7 +571,7 @@ class TakeoverManager:
         for session in self.active_sessions.values():
             session_dict = asdict(session)
             # Convert datetime objects to ISO strings
-            for key in ["started_at", "ended_at"]:
+            for key in DATETIME_FIELD_KEYS:
                 if session_dict[key]:
                     session_dict[key] = session_dict[key].isoformat()
             sessions.append(session_dict)
