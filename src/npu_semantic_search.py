@@ -25,6 +25,7 @@ from src.ai_hardware_accelerator import (
 )
 
 # Import existing AutoBot components
+from src.knowledge.embedding_cache import get_embedding_cache
 from src.knowledge_base import KnowledgeBase
 from src.unified_config_manager import cfg
 from src.utils.chromadb_client import get_chromadb_client
@@ -93,7 +94,9 @@ class NPUSemanticSearch:
     def __init__(self):
         self.knowledge_base = None
         self.ai_accelerator = None
-        self.search_cache = {}  # Simple LRU cache for repeated queries
+        # Use Issue #65 P0 optimized EmbeddingCache (60-80% improvement for repeated queries)
+        self.embedding_cache = get_embedding_cache()
+        self.search_results_cache = {}  # Cache for complete search results
         self.cache_max_size = 100
         self.cache_ttl_seconds = 300  # 5 minutes
 
@@ -316,16 +319,26 @@ class NPUSemanticSearch:
     async def _generate_optimized_embedding(
         self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
     ) -> Tuple[np.ndarray, str]:
-        """Generate embedding using optimal hardware."""
+        """
+        Generate embedding using optimal hardware with caching.
+
+        Uses EmbeddingCache from Issue #65 P0 optimization for 60-80% improvement.
+        """
+        # Check embedding cache first (Issue #65 P0 optimization)
+        cached_embedding = await self.embedding_cache.get(text)
+        if cached_embedding is not None:
+            logger.debug(f"✅ Using cached embedding for query: {text[:50]}...")
+            return np.array(cached_embedding), "cached"
+
         try:
-            # Use AI accelerator for optimal embedding generation
+            # Generate new embedding using AI accelerator
             if force_device:
                 embedding = await accelerated_embedding_generation(text, force_device)
-                return embedding, force_device.value
+                device_name = force_device.value
             elif enable_npu:
                 # Let the accelerator choose optimal device
                 embedding = await accelerated_embedding_generation(text)
-                return embedding, "auto_selected"
+                device_name = "auto_selected"
             else:
                 # Use GPU/CPU fallback through semantic chunker
                 from src.utils.semantic_chunker import get_semantic_chunker
@@ -334,7 +347,12 @@ class NPUSemanticSearch:
                 await chunker._initialize_model()
 
                 embeddings = await chunker._compute_sentence_embeddings_async([text])
-                return embeddings[0], "gpu_fallback"
+                embedding = embeddings[0]
+                device_name = "gpu_fallback"
+
+            # Cache the new embedding
+            await self.embedding_cache.put(text, embedding.tolist())
+            return embedding, device_name
 
         except Exception as e:
             logger.warning(
@@ -348,7 +366,11 @@ class NPUSemanticSearch:
 
             # Use sync method as final fallback
             embeddings = chunker._compute_sentence_embeddings([text])
-            return embeddings[0], "cpu_final_fallback"
+            embedding = embeddings[0]
+
+            # Cache even fallback embeddings
+            await self.embedding_cache.put(text, embedding.tolist())
+            return embedding, "cpu_final_fallback"
 
     async def _vector_similarity_search(
         self,
@@ -430,14 +452,14 @@ class NPUSemanticSearch:
         self, cache_key: str
     ) -> Optional[Tuple[List[SearchResult], SearchMetrics]]:
         """Get cached search result if available and not expired."""
-        if cache_key in self.search_cache:
-            cached_data, timestamp = self.search_cache[cache_key]
+        if cache_key in self.search_results_cache:
+            cached_data, timestamp = self.search_results_cache[cache_key]
 
             if time.time() - timestamp < self.cache_ttl_seconds:
                 return cached_data
             else:
                 # Remove expired cache entry
-                del self.search_cache[cache_key]
+                del self.search_results_cache[cache_key]
 
         return None
 
@@ -446,14 +468,80 @@ class NPUSemanticSearch:
     ):
         """Cache search result with TTL."""
         # Implement simple LRU eviction
-        if len(self.search_cache) >= self.cache_max_size:
+        if len(self.search_results_cache) >= self.cache_max_size:
             # Remove oldest entry
             oldest_key = min(
-                self.search_cache.keys(), key=lambda k: self.search_cache[k][1]
+                self.search_results_cache.keys(),
+                key=lambda k: self.search_results_cache[k][1],
             )
-            del self.search_cache[oldest_key]
+            del self.search_results_cache[oldest_key]
 
-        self.search_cache[cache_key] = (result, time.time())
+        self.search_results_cache[cache_key] = (result, time.time())
+
+    async def batch_search(
+        self,
+        queries: List[str],
+        similarity_top_k: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+        enable_npu_acceleration: bool = True,
+    ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
+        """
+        Perform batch semantic search for multiple queries with NPU acceleration.
+
+        Args:
+            queries: List of search query strings
+            similarity_top_k: Number of results per query
+            filters: Optional metadata filters
+            enable_npu_acceleration: Whether to use NPU acceleration
+
+        Returns:
+            List of tuples (search_results, metrics) for each query
+        """
+        if not queries:
+            return []
+
+        logger.info(f"🔍 Batch search: {len(queries)} queries (top_k={similarity_top_k})")
+
+        # Process all queries in parallel with controlled concurrency
+        semaphore = asyncio.Semaphore(10)  # Limit concurrent searches
+
+        async def _search_with_semaphore(query: str):
+            async with semaphore:
+                return await self.enhanced_search(
+                    query=query,
+                    similarity_top_k=similarity_top_k,
+                    filters=filters,
+                    enable_npu_acceleration=enable_npu_acceleration,
+                )
+
+        results = await asyncio.gather(
+            *[_search_with_semaphore(q) for q in queries], return_exceptions=True
+        )
+
+        # Handle any exceptions
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"Batch search failed for query {i}: {result}")
+                # Return empty result for failed query
+                processed_results.append(
+                    (
+                        [],
+                        SearchMetrics(
+                            total_documents_searched=0,
+                            embedding_generation_time_ms=0,
+                            similarity_computation_time_ms=0,
+                            total_search_time_ms=0,
+                            device_used="error",
+                            hardware_utilization={},
+                        ),
+                    )
+                )
+            else:
+                processed_results.append(result)
+
+        logger.info(f"✅ Batch search completed: {len(processed_results)} results")
+        return processed_results
 
     async def benchmark_search_performance(
         self, test_queries: List[str], iterations: int = 3
@@ -548,10 +636,13 @@ class NPUSemanticSearch:
         return results
 
     async def get_search_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive search engine statistics."""
+        """Get comprehensive search engine statistics including embedding cache."""
+        embedding_stats = self.embedding_cache.get_stats()
+
         return {
-            "cache_stats": {
-                "cache_size": len(self.search_cache),
+            "embedding_cache_stats": embedding_stats,  # Issue #65 P0 metrics
+            "search_results_cache_stats": {
+                "cache_size": len(self.search_results_cache),
                 "cache_max_size": self.cache_max_size,
                 "cache_ttl_seconds": self.cache_ttl_seconds,
             },

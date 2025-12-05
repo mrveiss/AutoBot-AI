@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import APIRouter, Query
 
+from src.utils.http_client import get_http_client
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/metrics", tags=["metrics-compat"])
@@ -44,11 +46,14 @@ async def query_prometheus_instant(query: str) -> Optional[float]:
         Float value or None if no data
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            params = {"query": query}
-            async with session.get(
-                f"{PROMETHEUS_URL}/api/v1/query", params=params, timeout=10
-            ) as response:
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        params = {"query": query}
+        async with await http_client.get(
+            f"{PROMETHEUS_URL}/api/v1/query",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
                 if response.status != 200:
                     logger.warning(f"Prometheus query failed: {response.status}")
                     return None
@@ -88,15 +93,18 @@ async def query_prometheus_range(
         List of data points with timestamp and value
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            params = {
-                "query": query,
-                "start": start.isoformat() + "Z",
-                "end": end.isoformat() + "Z",
-                "step": step,
-            }
-            async with session.get(
-                f"{PROMETHEUS_URL}/api/v1/query_range", params=params, timeout=30
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        params = {
+            "query": query,
+            "start": start.isoformat() + "Z",
+            "end": end.isoformat() + "Z",
+            "step": step,
+        }
+        async with await http_client.get(
+            f"{PROMETHEUS_URL}/api/v1/query_range",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
                 if response.status != 200:
                     logger.warning(f"Prometheus range query failed: {response.status}")
