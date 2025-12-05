@@ -8,6 +8,7 @@ Provides efficient aiohttp client session management to prevent resource exhaust
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -43,6 +44,14 @@ class HTTPClientManager:
             self._error_count = 0
             self._counter_lock = asyncio.Lock()  # Lock for thread-safe counter access
 
+            # Dynamic pool sizing configuration
+            self._pool_min = 20  # Minimum pool size
+            self._pool_max = 200  # Maximum pool size
+            self._current_pool_size = 100  # Start at default
+            self._pool_adjustment_interval = 60  # Adjust every 60s
+            self._last_adjustment_time = 0
+            self._active_requests = 0  # Track concurrent requests
+
     async def get_session(self) -> ClientSession:
         """
         Get or create the singleton aiohttp ClientSession.
@@ -67,10 +76,10 @@ class HTTPClientManager:
         if self._session and not self._session.closed:
             await self._session.close()
 
-        # Create connector with connection pooling
+        # Create connector with dynamic connection pooling
         self._connector = TCPConnector(
-            limit=100,  # Total connection pool size
-            limit_per_host=30,  # Per-host connection limit
+            limit=self._current_pool_size,  # Dynamic pool size
+            limit_per_host=min(30, self._current_pool_size // 3),  # 1/3 of total pool
             ttl_dns_cache=300,  # DNS cache timeout
             enable_cleanup_closed=True,
         )
@@ -88,7 +97,72 @@ class HTTPClientManager:
             headers={"User-Agent": "AutoBot/1.0"},
         )
 
-        logger.info("Created new aiohttp ClientSession with connection pooling")
+        logger.info(
+            f"Created new aiohttp ClientSession with pool size: {self._current_pool_size}"
+        )
+
+    async def _adjust_pool_size(self):
+        """
+        Dynamically adjust connection pool size based on usage patterns.
+
+        Increases pool size if:
+        - Utilization > 70% (approaching saturation)
+        - Error rate > 5% (possible connection exhaustion)
+
+        Decreases pool size if:
+        - Utilization < 20% (over-provisioned)
+        - No errors and low usage
+        """
+        current_time = time.time()
+
+        # Only adjust at specified intervals
+        if current_time - self._last_adjustment_time < self._pool_adjustment_interval:
+            return
+
+        async with self._counter_lock:
+            # Calculate utilization
+            utilization = (
+                self._active_requests / self._current_pool_size
+                if self._current_pool_size > 0
+                else 0
+            )
+            error_rate = (
+                self._error_count / self._request_count if self._request_count > 0 else 0
+            )
+
+            old_size = self._current_pool_size
+            adjusted = False
+
+            # Increase pool if under pressure
+            if (utilization > 0.7 or error_rate > 0.05) and self._current_pool_size < self._pool_max:
+                # Increase by 25%
+                self._current_pool_size = min(
+                    int(self._current_pool_size * 1.25), self._pool_max
+                )
+                adjusted = True
+                logger.info(
+                    f"Increased connection pool: {old_size} → {self._current_pool_size} "
+                    f"(utilization: {utilization:.1%}, error_rate: {error_rate:.1%})"
+                )
+
+            # Decrease pool if over-provisioned
+            elif utilization < 0.2 and error_rate < 0.01 and self._current_pool_size > self._pool_min:
+                # Decrease by 15%
+                self._current_pool_size = max(
+                    int(self._current_pool_size * 0.85), self._pool_min
+                )
+                adjusted = True
+                logger.info(
+                    f"Decreased connection pool: {old_size} → {self._current_pool_size} "
+                    f"(utilization: {utilization:.1%})"
+                )
+
+            self._last_adjustment_time = current_time
+
+            # Recreate session if pool size changed
+            if adjusted and self._session and not self._session.closed:
+                logger.info("Recreating session with new pool size")
+                await self._create_session()
 
     async def request(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
         """
@@ -102,11 +176,17 @@ class HTTPClientManager:
         Returns:
             ClientResponse: The response object
         """
+        # Check if pool adjustment needed (non-blocking)
+        asyncio.create_task(self._adjust_pool_size())
+
         session = await self.get_session()
 
+        # Track active requests for utilization calculation
+        async with self._counter_lock:
+            self._request_count += 1
+            self._active_requests += 1
+
         try:
-            async with self._counter_lock:
-                self._request_count += 1
             response = await session.request(method, url, **kwargs)
             return response
         except Exception as e:
@@ -114,6 +194,10 @@ class HTTPClientManager:
                 self._error_count += 1
             logger.error(f"HTTP request failed: {e}")
             raise
+        finally:
+            # Decrement active request count
+            async with self._counter_lock:
+                self._active_requests = max(0, self._active_requests - 1)
 
     async def get(self, url: str, **kwargs) -> aiohttp.ClientResponse:
         """Convenience method for GET requests."""
@@ -173,18 +257,28 @@ class HTTPClientManager:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get client usage statistics."""
+        utilization = (
+            self._active_requests / self._current_pool_size
+            if self._current_pool_size > 0
+            else 0
+        )
+
         return {
             "total_requests": self._request_count,
             "total_errors": self._error_count,
+            "active_requests": self._active_requests,
             "error_rate": (
                 self._error_count / self._request_count
                 if self._request_count > 0
                 else 0
             ),
             "session_active": bool(self._session and not self._session.closed),
-            "connector_stats": (
-                self._connector._connector_stats() if self._connector else {}
-            ),
+            "pool_size": {
+                "current": self._current_pool_size,
+                "min": self._pool_min,
+                "max": self._pool_max,
+                "utilization": utilization,
+            },
         }
 
     async def __aenter__(self):
@@ -237,7 +331,7 @@ async def example_usage():
     # Simple GET request
     try:
         data = await http_client.get_json("https://api.example.com/data")
-        print(f"Received data: {data}")
+        logger.info(f"Received data: {data}")
     except aiohttp.ClientError as e:
         logger.error(f"Request failed: {e}")
 
@@ -246,7 +340,7 @@ async def example_usage():
         response_data = await http_client.post_json(
             "https://api.example.com/submit", json_data={"key": "value"}
         )
-        print(f"Response: {response_data}")
+        logger.info(f"Response: {response_data}")
     except aiohttp.ClientError as e:
         logger.error(f"Request failed: {e}")
 
