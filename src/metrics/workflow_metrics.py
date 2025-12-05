@@ -4,7 +4,26 @@
 """
 Workflow Performance Metrics and Monitoring System
 Provides comprehensive tracking and analysis of workflow execution performance
+
+DEPRECATED (Phase 2, Issue #345): This module is redundant with PrometheusMetricsManager.
+All workflow metrics are now tracked in src/monitoring/prometheus_metrics.py.
+This module will be REMOVED in Phase 5.
+
+Use PrometheusMetricsManager instead:
+    from src.monitoring.prometheus_metrics import get_metrics_manager
+    metrics = get_metrics_manager()
+    metrics.record_workflow_execution(workflow_type, status, duration)
+    metrics.record_workflow_step(workflow_type, step_type, status)
+    metrics.update_active_workflows(workflow_type, count)
 """
+
+import warnings
+warnings.warn(
+    "workflow_metrics module is deprecated and will be removed in Phase 5. "
+    "Use PrometheusMetricsManager at src/monitoring/prometheus_metrics.py instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import json
 import logging

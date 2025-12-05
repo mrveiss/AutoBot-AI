@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
+from backend.api.alertmanager_webhook import router as alertmanager_webhook_router
 
 # Import new AI Stack integration routers
 from backend.api.ai_stack_integration import router as ai_stack_router
@@ -527,6 +528,7 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
         (voice_router, "/voice", ["voice"], "voice"),
         (agent_router, "/agent", ["agent"], "agent"),
         (agent_config_router, "/agent-config", ["agent-config"], "agent_config"),
+        (alertmanager_webhook_router, "/webhook", ["webhooks"], "alertmanager_webhook"),
         (
             intelligent_agent_router,
             "/intelligent-agent",

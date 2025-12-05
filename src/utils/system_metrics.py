@@ -44,13 +44,21 @@ class SystemMetricsCollector:
         self.logger = logging.getLogger(__name__)
         # REFACTORED: Centralized Redis client management
         # Don't cache clients - always use get_redis_client() for proper connection pooling
-        self._metrics_buffer = deque(maxlen=1000)  # Buffer for recent metrics
+        self._metrics_buffer = deque(maxlen=100)  # Reduced from 1000 to 100 (Phase 2 migration)
         self._collection_interval = config.get(
             "monitoring.metrics.collection_interval", 5
         )
         self._retention_hours = config.get("monitoring.metrics.retention_hours", 24)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged
+
+        # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
+        try:
+            from src.monitoring.prometheus_metrics import get_metrics_manager
+            self.prometheus = get_metrics_manager()
+        except (ImportError, Exception) as e:
+            self.logger.warning(f"Prometheus metrics not available: {e}")
+            self.prometheus = None
 
         # Metric categories to collect
         self.metric_categories = {
@@ -100,6 +108,10 @@ class SystemMetricsCollector:
                 metadata={"cores": psutil.cpu_count()},
             )
 
+            # Phase 2 (Issue #345): Push to Prometheus
+            if self.prometheus:
+                self.prometheus.update_system_cpu(cpu_percent)
+
             # Memory metrics
             memory = psutil.virtual_memory()
             metrics["memory_percent"] = SystemMetric(
@@ -113,6 +125,10 @@ class SystemMetricsCollector:
                     "available_gb": round(memory.available / (1024**3), 2),
                 },
             )
+
+            # Phase 2 (Issue #345): Push to Prometheus
+            if self.prometheus:
+                self.prometheus.update_system_memory(memory.percent)
 
             # Disk usage
             disk = psutil.disk_usage("/")
@@ -128,6 +144,10 @@ class SystemMetricsCollector:
                     "free_gb": round(disk.free / (1024**3), 2),
                 },
             )
+
+            # Phase 2 (Issue #345): Push to Prometheus
+            if self.prometheus:
+                self.prometheus.update_system_disk("/", disk_percent)
 
             # Network I/O
             network = psutil.net_io_counters()
@@ -146,6 +166,11 @@ class SystemMetricsCollector:
                     unit="bytes",
                     category="system",
                 )
+
+                # Phase 2 (Issue #345): Push to Prometheus
+                if self.prometheus:
+                    self.prometheus.record_network_bytes("sent", network.bytes_sent)
+                    self.prometheus.record_network_bytes("recv", network.bytes_recv)
 
         except Exception as e:
             self.logger.error(f"Error collecting system metrics: {e}")
@@ -193,6 +218,19 @@ class SystemMetricsCollector:
                             health_value = 0.0
                     else:
                         health_value = 0.0
+
+                    metrics[f"{service_name}_health"] = SystemMetric(
+                        timestamp=timestamp,
+                        name=f"{service_name}_health",
+                        value=health_value,
+                        unit="status",
+                        category="services",
+                    )
+
+                    # Phase 2 (Issue #345): Push to Prometheus
+                    if self.prometheus:
+                        status = "online" if health_value == 1.0 else "offline"
+                        self.prometheus.update_service_status(service_name, status)
                 else:
                     # HTTP health check
                     start_time = time.time()
@@ -217,6 +255,17 @@ class SystemMetricsCollector:
                             category="services",
                         )
 
+                        # Phase 2 (Issue #345): Push to Prometheus
+                        if self.prometheus:
+                            # Convert health value (0.0 or 1.0) to status string
+                            status = "online" if health_value == 1.0 else "offline"
+                            self.prometheus.update_service_status(service_name, status)
+                            # Also record response time
+                            if f"{service_name}_response_time" in metrics:
+                                self.prometheus.record_service_response_time(
+                                    service_name, response_time
+                                )
+
             except Exception as e:
                 self.logger.warning(f"Health check failed for {service_name}: {e}")
                 metrics[f"{service_name}_health"] = SystemMetric(
@@ -227,6 +276,10 @@ class SystemMetricsCollector:
                     category="services",
                     metadata={"error": str(e)},
                 )
+
+                # Phase 2 (Issue #345): Push to Prometheus (error case)
+                if self.prometheus:
+                    self.prometheus.update_service_status(service_name, "offline")
 
         return metrics
 
@@ -381,7 +434,19 @@ class SystemMetricsCollector:
     async def get_recent_metrics(
         self, category: str = None, minutes: int = 10
     ) -> List[SystemMetric]:
-        """Get recent metrics from the buffer or Redis"""
+        """Get recent metrics from the buffer or Redis
+
+        DEPRECATED (Phase 2, Issue #345): This method will be removed in Phase 5.
+        Use Prometheus queries instead: http://172.16.168.20:8001/api/monitoring/metrics
+        """
+        import warnings
+        warnings.warn(
+            "get_recent_metrics() is deprecated and will be removed in Phase 5. "
+            "Query Prometheus directly at /api/monitoring/metrics instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         try:
             if category:
                 # Filter by category from buffer

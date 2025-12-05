@@ -5,7 +5,25 @@
 """
 Advanced Monitoring Alerts and Notifications System
 Monitors system metrics and sends alerts when thresholds are exceeded
+
+DEPRECATED (Phase 3, Issue #346): This module is being replaced by Prometheus AlertManager.
+All alert rules have been migrated to config/prometheus/alertmanager_rules.yml.
+This module will be REMOVED in Phase 5.
+
+Use Prometheus AlertManager instead:
+    - Alert rules: config/prometheus/alertmanager_rules.yml
+    - AlertManager config: config/prometheus/alertmanager.yml
+    - WebSocket integration: backend/api/alertmanager_webhook.py
+    - AlertManager UI: http://localhost:9093
 """
+
+import warnings
+warnings.warn(
+    "monitoring_alerts module is deprecated and will be removed in Phase 5. "
+    "Use Prometheus AlertManager with alertmanager_webhook.py instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import asyncio
 import json
