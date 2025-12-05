@@ -473,7 +473,7 @@ class FactsMixin:
             decoded = {}
             for key, value in fact_data.items():
                 k = key.decode("utf-8") if isinstance(key, bytes) else key
-                v = value.decode("utf-8") if isinstance(v, bytes) else value
+                v = value.decode("utf-8") if isinstance(value, bytes) else value
                 decoded[k] = v
 
             # Parse current metadata

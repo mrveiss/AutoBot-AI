@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from fastapi import HTTPException
+
 from backend.type_defs.common import Metadata
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file

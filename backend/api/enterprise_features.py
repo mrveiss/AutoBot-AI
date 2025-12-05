@@ -6,6 +6,7 @@ Enterprise Features API - Phase 4 Implementation
 Provides API endpoints for managing enterprise-grade features.
 """
 
+import asyncio
 import logging
 from typing import List, Optional
 

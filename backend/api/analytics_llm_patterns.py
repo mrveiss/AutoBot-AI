@@ -76,6 +76,14 @@ class CostLevel(str, Enum):
     CRITICAL = "critical"
 
 
+# Simple prompt categories that don't require expensive models (O(1) lookup)
+SIMPLE_PROMPT_CATEGORIES = {
+    PromptCategory.CHAT,
+    PromptCategory.TRANSLATION,
+    PromptCategory.SUMMARIZATION,
+}
+
+
 # Model costs per 1M tokens (USD)
 MODEL_COSTS = {
     # Anthropic
