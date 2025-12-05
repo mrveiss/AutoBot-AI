@@ -816,8 +816,6 @@ class ArchitectureAnalyzer:
                     consistent_count += len(pattern_matches)
 
             # Check confidence consistency
-            confidences = [m.confidence for m in pattern_matches]
-            avg_confidence = sum(confidences) / len(confidences)
             low_confidence = [m for m in pattern_matches if m.confidence < 0.5]
 
             if low_confidence:

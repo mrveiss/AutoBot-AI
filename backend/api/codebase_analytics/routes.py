@@ -15,19 +15,16 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import aiofiles
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
-from .models import CodebaseStats, ProblemItem, HardcodeItem, DeclarationItem
-from .storage import get_redis_connection, get_code_collection, InMemoryStorage
+from .storage import get_redis_connection, get_code_collection
 from .scanner import (
-    scan_codebase,
     do_indexing_with_progress,
     indexing_tasks,
     _active_tasks,
-    _indexing_lock,
     _tasks_lock,
     _tasks_sync_lock,
     _current_indexing_task_id,
@@ -751,7 +748,6 @@ async def get_dependencies():
                     elif metadata.get("type") == "class":
                         modules[file_path]["classes"] += 1
 
-            storage_type = "chromadb"
             logger.info(f"Found {len(modules)} modules in ChromaDB")
 
         except Exception as chroma_error:

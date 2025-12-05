@@ -1042,8 +1042,6 @@ class ConsolidatedOrchestrator:
 
 
 # Global orchestrator instance (thread-safe)
-import asyncio
-
 _orchestrator_instance = None
 _orchestrator_lock = asyncio.Lock()
 

@@ -949,7 +949,6 @@ class CFGBuilder(ast.NodeVisitor):
         # Check if all paths have returns
         # This is a simplified check - full analysis would require path enumeration
         exit_nodes = self._current_graph.exit_node_ids
-        return_ids = {n.id for n in return_nodes}
 
         # Check edges to exit
         edges_to_exit = [

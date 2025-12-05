@@ -472,8 +472,6 @@ class WakeWordDetector:
 
 
 # Singleton instance for global access (thread-safe)
-import threading
-
 _wake_word_detector: Optional[WakeWordDetector] = None
 _wake_word_detector_lock = threading.Lock()
 

@@ -442,8 +442,6 @@ def memory_usage_decorator(func: Callable) -> Callable:
 
 
 # Global memory monitor instance (thread-safe)
-import threading
-
 _memory_monitor = None
 _memory_monitor_lock = threading.Lock()
 

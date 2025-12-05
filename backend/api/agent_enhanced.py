@@ -11,18 +11,16 @@ coordination, and execution across multiple specialized AI agents.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from backend.utils.response_helpers import (
-    create_error_response,
     create_success_response,
     handle_ai_stack_error,
 )

@@ -577,8 +577,6 @@ class WebResearchIntegration:
 
 
 # Global research integration instance (thread-safe)
-import threading
-
 _global_research_integration = None
 _global_research_integration_lock = threading.Lock()
 

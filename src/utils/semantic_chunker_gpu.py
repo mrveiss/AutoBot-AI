@@ -527,8 +527,6 @@ class GPUSemanticChunker:
 
 
 # Global GPU chunker instance (thread-safe)
-import threading
-
 _gpu_chunker_instance = None
 _gpu_chunker_instance_lock = threading.Lock()
 

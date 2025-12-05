@@ -915,33 +915,3 @@ async def metrics_health_check():
             "autobot_task_retries_total",
         ],
     }
-
-
-# Phase 1: Prometheus Metrics Endpoint (Issue #344)
-@router.get("/metrics")
-async def get_prometheus_metrics():
-    """
-    Prometheus metrics endpoint for scraping.
-
-    Returns metrics in Prometheus text-based exposition format.
-    This endpoint is scraped by Prometheus server every 15s.
-
-    Phase 1 (Issue #344): Added system, error, Claude API, service health metrics
-    """
-    try:
-        from src.monitoring.prometheus_metrics import get_metrics_manager
-
-        metrics_manager = get_metrics_manager()
-        metrics_data = metrics_manager.get_metrics()
-
-        return Response(
-            content=metrics_data,
-            media_type="text/plain; version=0.0.4; charset=utf-8",
-        )
-    except Exception as e:
-        logging.error(f"Failed to generate Prometheus metrics: {e}")
-        return Response(
-            content=f"# Error generating metrics: {str(e)}\n",
-            media_type="text/plain; charset=utf-8",
-            status_code=500,
-        )

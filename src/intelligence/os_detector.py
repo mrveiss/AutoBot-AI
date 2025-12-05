@@ -549,8 +549,6 @@ class OSDetector:
 
 
 # Global detector instance (thread-safe)
-import asyncio
-
 _detector_instance: Optional[OSDetector] = None
 _detector_lock = asyncio.Lock()
 

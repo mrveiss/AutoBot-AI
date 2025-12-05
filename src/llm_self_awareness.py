@@ -561,7 +561,6 @@ def get_llm_self_awareness() -> LLMSelfAwareness:
 
 # Example usage
 if __name__ == "__main__":
-    import asyncio
 
     async def main():
         awareness = get_llm_self_awareness()
