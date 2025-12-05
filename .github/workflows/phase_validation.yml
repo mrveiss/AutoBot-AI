@@ -78,34 +78,9 @@ jobs:
         # Run the validation system
         python3 scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
-        # Display results
+        # Display results summary
         echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
-        python3 -c "
-import json
-try:
-    with open('phase_validation_results.json', 'r') as f:
-        results = json.load(f)
-
-    print(f'📊 **Overall System Maturity:** {results.get(\"overall_maturity\", 0):.1f}%')
-    print('')
-    print('### Phase Details:')
-
-    for phase in results.get('phases', []):
-        status = phase.get('status', 'unknown')
-        completion = phase.get('completion_percentage', 0)
-        emoji = '✅' if status == 'complete' else '🔄' if status == 'in_progress' else '❌'
-        print(f'{emoji} **{phase.get(\"name\", \"Unknown\")}**: {completion:.1f}% complete')
-
-        # Show failing criteria
-        if completion < 100:
-            criteria = phase.get('validation_details', {})
-            for check_type, check_data in criteria.items():
-                if not check_data.get('passed', True):
-                    print(f'   - ⚠️ {check_type}: {check_data.get(\"message\", \"Failed\")}')
-
-except Exception as e:
-    print(f'Error reading validation results: {e}')
-" >> $GITHUB_STEP_SUMMARY
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"📊 **Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
 
     - name: Generate Validation Dashboard
       run: |
@@ -118,15 +93,7 @@ except Exception as e:
         echo "🚪 Checking phase validation gate..."
 
         # Extract overall maturity from results
-        MATURITY=$(python3 -c "
-import json, sys
-try:
-    with open('phase_validation_results.json', 'r') as f:
-        results = json.load(f)
-    print(results.get('overall_maturity', 0))
-except:
-    print(0)
-")
+        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
 
         echo "System maturity: ${MATURITY}%"
 
@@ -231,15 +198,7 @@ except:
         echo "🔗 Checking integration readiness..."
 
         # Check if validation results indicate system is ready for integration
-        MATURITY=$(python3 -c "
-import json
-try:
-    with open('phase_validation_results.json', 'r') as f:
-        results = json.load(f)
-    print(results.get('overall_maturity', 0))
-except:
-    print(0)
-")
+        MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
           echo "✅ System ready for integration (${MATURITY}%)"

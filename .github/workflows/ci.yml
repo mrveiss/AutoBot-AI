@@ -265,18 +265,10 @@ jobs:
         echo "✅ All required files present"
 
         # Test configuration loading
-        python3 -c "
-from src.config import config
-print('✅ Configuration system working')
-"
+        python3 -c 'from src.config import config; print("✅ Configuration system working")'
 
         # Test core imports
-        python3 -c "
-from src.enhanced_security_layer import EnhancedSecurityLayer
-from src.secure_command_executor import SecureCommandExecutor
-from backend.app_factory import create_app
-print('✅ Core imports working')
-"
+        python3 -c 'from src.enhanced_security_layer import EnhancedSecurityLayer; from src.secure_command_executor import SecureCommandExecutor; from backend.app_factory import create_app; print("✅ Core imports working")'
 
     - name: Generate deployment artifact
       run: |
