@@ -152,7 +152,7 @@ class ToolHandlerMixin:
     ) -> None:
         """Persist approval request to chat history (Issue #332 - extracted helper)."""
         try:
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
 
             chat_mgr = ChatHistoryManager()
             await chat_mgr.add_message(

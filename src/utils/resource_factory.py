@@ -127,7 +127,7 @@ class ResourceFactory:
                     return chm
 
             # Fallback to module-level import and creation
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
             from src.unified_config_manager import config as global_config_manager
 
             logger.info(

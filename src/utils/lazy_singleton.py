@@ -30,7 +30,7 @@ def get_chat_history_manager(request):
     manager = getattr(request.app.state, "chat_history_manager", None)
     if manager is None:
         try:
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
             manager = ChatHistoryManager()
             request.app.state.chat_history_manager = manager
             logger.info("✅ Lazy-initialized chat_history_manager")
@@ -40,7 +40,7 @@ def get_chat_history_manager(request):
 
 # New pattern (3 lines)
 def get_chat_history_manager(request):
-    from src.chat_history_manager import ChatHistoryManager
+    from src.chat_history import ChatHistoryManager
     return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
 
 ADVANCED USAGE:
@@ -334,7 +334,7 @@ def singleton_getter(attribute_name: str, factory: Callable):
     Examples:
         # Without decorator (old way)
         def get_chat_history_manager(request):
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
             return lazy_init_singleton(
                 request.app.state,
                 "chat_history_manager",
@@ -344,7 +344,7 @@ def singleton_getter(attribute_name: str, factory: Callable):
         # With decorator (new way)
         @singleton_getter("chat_history_manager", ChatHistoryManager)
         def get_chat_history_manager(request):
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
             return ChatHistoryManager  # Return factory class
 
         # Or even simpler with lambda

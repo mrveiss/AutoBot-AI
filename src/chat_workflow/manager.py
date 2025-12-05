@@ -164,7 +164,7 @@ class ChatWorkflowManager(
         llm_response: str,
     ) -> None:
         """Persist WorkflowMessages and assistant response to chat history (Issue #332)."""
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
@@ -226,7 +226,7 @@ class ChatWorkflowManager(
         Now also persists WorkflowMessages to chat history to fix approval workflow persistence.
         """
         # Import ChatHistoryManager for message persistence
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         # Collect all workflow messages for persistence
         workflow_messages = []

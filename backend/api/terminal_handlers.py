@@ -32,7 +32,7 @@ from backend.api.terminal_models import (
     RISKY_COMMAND_PATTERNS,
     SecurityLevel,
 )
-from src.chat_history_manager import ChatHistoryManager
+from src.chat_history import ChatHistoryManager
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

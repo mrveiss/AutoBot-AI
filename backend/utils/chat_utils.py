@@ -310,7 +310,7 @@ def get_chat_history_manager(request: Request):
         >>> # Use manager for chat operations...
     """
     from src.utils.lazy_singleton import lazy_init_singleton
-    from src.chat_history_manager import ChatHistoryManager
+    from src.chat_history import ChatHistoryManager
 
     return lazy_init_singleton(
         request.app.state, "chat_history_manager", ChatHistoryManager

@@ -1,0 +1,609 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Chat History Session Mixin - Session CRUD operations.
+
+Provides session management for chat history:
+- Session creation with metadata
+- Session loading with caching
+- Session saving with atomic writes
+- Session deletion with cleanup
+- Session listing and updates
+"""
+
+import asyncio
+import json
+import logging
+import os
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import aiofiles
+
+logger = logging.getLogger(__name__)
+
+
+class SessionMixin:
+    """
+    Mixin providing session CRUD operations for chat history.
+
+    Requires base class to have:
+    - self.redis_client: Redis client or None
+    - self.max_messages: int
+    - self.max_session_files: int
+    - self._counter_lock: threading.Lock
+    - self._session_save_counter: int
+    - self.memory_graph: MemoryGraph or None
+    - self.memory_graph_enabled: bool
+    - self._get_chats_directory(): method
+    - self._encrypt_data(): method
+    - self._decrypt_data(): method
+    - self._dedupe_streaming_messages(): method
+    - self._async_cache_session(): method
+    - self._atomic_write(): method
+    - self._cleanup_old_session_files(): method
+    - self._init_memory_graph(): method
+    - self._extract_conversation_metadata(): method
+    """
+
+    async def create_session(
+        self,
+        session_id: Optional[str] = None,
+        title: Optional[str] = None,
+        session_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a new chat session.
+
+        Args:
+            session_id: Optional session ID (auto-generated if not provided)
+            title: Optional title for the session
+            session_name: Optional name for the session (backward compatibility)
+            metadata: Optional metadata for the session
+
+        Returns:
+            Session data including session_id, title, etc.
+        """
+        # Initialize Memory Graph if not already done
+        await self._init_memory_graph()
+
+        # Generate session ID if not provided
+        if not session_id:
+            session_id = f"chat-{int(time.time() * 1000)}-{str(uuid.uuid4())[:8]}"
+
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Use title, or session_name (for backward compatibility), or auto-generate
+        session_title = title or session_name or f"Chat {session_id[:13]}"
+
+        # Prepare session data
+        session_data = {
+            "id": session_id,
+            "chatId": session_id,  # Backward compatibility
+            "title": session_title,
+            "name": session_title,  # Backward compatibility
+            "messages": [],
+            "createdAt": current_time,
+            "createdTime": current_time,  # Backward compatibility
+            "updatedAt": current_time,
+            "lastModified": current_time,  # Backward compatibility
+            "isActive": True,
+            "metadata": metadata or {},
+        }
+
+        # Create session with initial metadata
+        await self.save_session(session_id=session_id, messages=[], name=session_title)
+
+        # Memory Graph: Create conversation entity (non-blocking)
+        if self.memory_graph_enabled and self.memory_graph:
+            try:
+                entity_metadata = {
+                    "session_id": session_id,
+                    "title": session_title,
+                    "created_at": current_time,
+                    "status": "active",
+                    "priority": "medium",
+                }
+
+                # Merge user-provided metadata
+                if metadata:
+                    entity_metadata.update(metadata)
+
+                # Create conversation entity
+                await self.memory_graph.create_conversation_entity(
+                    session_id=session_id, metadata=entity_metadata
+                )
+
+                logger.info(f"✅ Created Memory Graph entity for session: {session_id}")
+
+            except Exception as e:
+                logger.warning(
+                    f"⚠️ Failed to create Memory Graph entity (continuing): {e}"
+                )
+
+        logger.info(f"Created new chat session: {session_id}")
+        return session_data
+
+    async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Load a specific chat session with Redis cache-first strategy.
+
+        Args:
+            session_id: The session identifier
+
+        Returns:
+            List of messages in the session
+        """
+        try:
+            # Try Redis cache first
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    cached_data = self.redis_client.get(cache_key)
+
+                    if cached_data:
+                        if isinstance(cached_data, bytes):
+                            cached_data = cached_data.decode("utf-8")
+                        chat_data = json.loads(cached_data)
+                        logger.debug(f"Cache HIT for session {session_id}")
+                        return chat_data.get("messages", [])
+                except Exception as e:
+                    logger.error(f"Failed to read from Redis cache: {e}")
+
+            logger.debug(f"Cache MISS for session {session_id}")
+
+            # Cache miss - read from file
+            chats_directory = self._get_chats_directory()
+
+            # Try new naming convention first: {uuid}_chat.json
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+
+            # Backward compatibility: try old naming convention
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
+                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+                if old_file_exists:
+                    chat_file = chat_file_old
+                    logger.debug(f"Using legacy file format for session {session_id}")
+                else:
+                    logger.warning(f"Chat session {session_id} not found")
+                    return []
+
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+
+            # Decrypt data if encryption is enabled
+            chat_data = self._decrypt_data(file_content)
+
+            # Deduplicate streaming messages on load (Issue #259)
+            messages = chat_data.get("messages", [])
+            cleaned_messages = self._dedupe_streaming_messages(messages)
+
+            # If cleanup happened, save the cleaned version
+            if len(cleaned_messages) < len(messages):
+                logger.info(
+                    f"Cleaned {len(messages) - len(cleaned_messages)} duplicate "
+                    f"streaming messages from session {session_id}"
+                )
+                chat_data["messages"] = cleaned_messages
+                try:
+                    await self.save_session(session_id, messages=cleaned_messages)
+                except Exception as save_err:
+                    logger.warning(f"Could not save cleaned session: {save_err}")
+
+            # Warm up Redis cache with cleaned data
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                    logger.debug(f"Warmed cache for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Failed to warm cache: {e}")
+
+            return cleaned_messages
+
+        except Exception as e:
+            logger.error(f"Error loading chat session {session_id}: {str(e)}")
+            return []
+
+    async def save_session(
+        self,
+        session_id: str,
+        messages: Optional[List[Dict[str, Any]]] = None,
+        name: str = "",
+    ):
+        """
+        Save a chat session with messages and metadata.
+
+        Args:
+            session_id: The identifier for the session to save
+            messages: The messages to save (defaults to empty list)
+            name: Optional name for the chat session
+        """
+        try:
+            # Ensure chats directory exists
+            chats_directory = self._get_chats_directory()
+            dir_exists = await asyncio.to_thread(os.path.exists, chats_directory)
+            if not dir_exists:
+                await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
+
+            # Use new naming convention: {uuid}_chat.json
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Use provided messages or empty list (never use self.history)
+            session_messages = messages if messages is not None else []
+
+            # Limit session messages to prevent excessive file sizes
+            if len(session_messages) > self.max_messages:
+                logger.warning(
+                    f"Session {session_id} has {len(session_messages)} messages, "
+                    f"truncating to {self.max_messages} most recent"
+                )
+                session_messages = session_messages[-self.max_messages:]
+
+            # Load existing chat data if it exists to preserve metadata
+            chat_data = {}
+
+            # Check new format first, then old format for backward compatibility
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if file_exists:
+                try:
+                    async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                        file_content = await f.read()
+                    chat_data = self._decrypt_data(file_content)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not load existing chat data for {session_id}: {str(e)}"
+                    )
+            else:
+                # Try old format for backward compatibility
+                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+                if old_file_exists:
+                    try:
+                        async with aiofiles.open(chat_file_old, "r", encoding="utf-8") as f:
+                            file_content = await f.read()
+                        chat_data = self._decrypt_data(file_content)
+                        logger.debug(f"Migrating session {session_id} from old format")
+                    except Exception as e:
+                        logger.warning(f"Could not load old format data: {str(e)}")
+
+            # Update chat data
+            chat_data.update(
+                {
+                    "chatId": session_id,
+                    "name": name or chat_data.get("name", ""),
+                    "messages": session_messages,
+                    "last_modified": current_time,
+                    "created_time": chat_data.get("created_time", current_time),
+                }
+            )
+
+            # Save to file with encryption if enabled (use atomic write)
+            encrypted_data = self._encrypt_data(chat_data)
+            try:
+                await self._atomic_write(chat_file, encrypted_data)
+            except Exception as atomic_error:
+                # Fallback to direct write if atomic write fails
+                logger.warning(
+                    f"Atomic write failed, falling back to direct write: {atomic_error}"
+                )
+                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+                    await f.write(encrypted_data)
+
+            # Update Redis cache (write-through)
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+
+                    # Update recent chats sorted set for fast listing
+                    self.redis_client.zadd("chat:recent", {session_id: time.time()})
+
+                    logger.debug(f"Cached session {session_id} in Redis")
+                except Exception as e:
+                    logger.error(f"Failed to cache session in Redis: {e}")
+
+            logger.info(f"Chat session '{session_id}' saved successfully")
+
+            # Memory Graph: Update conversation entity with observations
+            if self.memory_graph_enabled and self.memory_graph:
+                await self._update_memory_graph_entity(
+                    session_id, session_messages, name, current_time
+                )
+
+            # Periodic cleanup of old session files (thread-safe)
+            with self._counter_lock:
+                self._session_save_counter += 1
+                should_cleanup = self._session_save_counter % 10 == 0
+
+            if should_cleanup:  # Every 10th save
+                await self._cleanup_old_session_files()
+
+        except Exception as e:
+            logger.error(f"Error saving chat session {session_id}: {str(e)}")
+
+    async def _update_memory_graph_entity(
+        self,
+        session_id: str,
+        session_messages: List[Dict[str, Any]],
+        name: str,
+        current_time: str,
+    ):
+        """Update Memory Graph entity with conversation observations."""
+        try:
+            # Extract metadata from conversation
+            metadata = self._extract_conversation_metadata(session_messages)
+
+            # Find entity by session_id
+            entity_name = f"Conversation {session_id[:8]}"
+
+            # Create observations from metadata
+            observations = [
+                f"Summary: {metadata['summary']}",
+                f"Topics: {', '.join(metadata['topics'])}",
+                f"Message count: {metadata['message_count']}",
+                f"Last updated: {current_time}",
+            ]
+
+            # Add entity mentions if any
+            if metadata["entity_mentions"]:
+                observations.append(
+                    f"Mentions: {', '.join(metadata['entity_mentions'])}"
+                )
+
+            # Update entity with new observations
+            try:
+                await self.memory_graph.add_observations(
+                    entity_name=entity_name, observations=observations
+                )
+                logger.debug(
+                    f"✅ Updated Memory Graph entity for session: {session_id}"
+                )
+
+            except (ValueError, RuntimeError) as e:
+                # Entity doesn't exist yet - create it
+                if "Entity not found" in str(e):
+                    logger.debug(
+                        f"Entity not found, creating new entity for session: {session_id}"
+                    )
+
+                    entity_metadata = {
+                        "session_id": session_id,
+                        "title": name or session_id,
+                        "status": "active",
+                        "priority": "medium",
+                        "topics": metadata["topics"],
+                        "entity_mentions": metadata["entity_mentions"],
+                    }
+
+                    # Create entity with observations included
+                    await self.memory_graph.create_conversation_entity(
+                        session_id=session_id,
+                        metadata=entity_metadata,
+                        observations=observations,
+                    )
+
+                    logger.info(
+                        f"✅ Created Memory Graph entity for session: {session_id}"
+                    )
+                else:
+                    raise
+
+        except Exception as mg_error:
+            logger.warning(
+                f"⚠️ Failed to update Memory Graph entity (continuing): {mg_error}"
+            )
+
+    async def delete_session(self, session_id: str) -> bool:
+        """
+        Delete a chat session and its companion files.
+
+        Args:
+            session_id: The identifier for the session to delete
+
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+            deleted = False
+
+            # Delete new format file
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            new_exists = await asyncio.to_thread(os.path.exists, chat_file_new)
+            if new_exists:
+                await asyncio.to_thread(os.remove, chat_file_new)
+                deleted = True
+
+            # Delete old format file if exists
+            chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+            old_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+            if old_exists:
+                await asyncio.to_thread(os.remove, chat_file_old)
+                deleted = True
+
+            # Delete companion files (terminal logs, transcripts, etc.)
+            terminal_log = f"{chats_directory}/{session_id}_terminal.log"
+            log_exists = await asyncio.to_thread(os.path.exists, terminal_log)
+            if log_exists:
+                await asyncio.to_thread(os.remove, terminal_log)
+                logger.debug(f"Deleted terminal log for session {session_id}")
+
+            # Delete terminal transcript file
+            terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
+            transcript_exists = await asyncio.to_thread(os.path.exists, terminal_transcript)
+            if transcript_exists:
+                await asyncio.to_thread(os.remove, terminal_transcript)
+                logger.debug(f"Deleted terminal transcript for session {session_id}")
+
+            # Clear Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    self.redis_client.delete(cache_key)
+                    self.redis_client.zrem("chat:recent", session_id)
+                    logger.debug(f"Cleared Redis cache for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Failed to clear Redis cache: {e}")
+
+            if not deleted:
+                logger.warning(f"Chat session {session_id} not found for deletion")
+                return False
+
+            logger.info(f"Chat session '{session_id}' deleted successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error deleting chat session {session_id}: {str(e)}")
+            return False
+
+    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
+        """
+        Update session metadata (name, etc).
+
+        Args:
+            session_id: The session identifier
+            updates: Dictionary of fields to update
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+
+            # Try new format first
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
+                # Try old format
+                chat_file = f"{chats_directory}/chat_{session_id}.json"
+                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                if not old_exists:
+                    logger.warning(f"Session {session_id} not found for update")
+                    return False
+
+            # Load existing data
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+            chat_data = self._decrypt_data(file_content)
+
+            # Update fields
+            chat_data.update(updates)
+            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Save updated data (always use new format)
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            encrypted_data = self._encrypt_data(chat_data)
+            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
+                await f.write(encrypted_data)
+
+            # Update Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                except Exception as e:
+                    logger.error(f"Failed to update Redis cache: {e}")
+
+            logger.info(f"Session {session_id} updated successfully")
+            return True
+
+        except OSError as e:
+            logger.error(f"Failed to read/write session file for {session_id}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error updating session {session_id}: {e}")
+            return False
+
+    async def update_session_name(self, session_id: str, name: str) -> bool:
+        """
+        Update the name of a chat session.
+
+        Args:
+            session_id: The identifier for the session to update
+            name: The new name for the session
+
+        Returns:
+            True if update was successful, False otherwise
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+
+            # Try new format first
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if not file_exists:
+                # Try old format
+                chat_file = f"{chats_directory}/chat_{session_id}.json"
+                old_exists = await asyncio.to_thread(os.path.exists, chat_file)
+                if not old_exists:
+                    logger.warning(f"Chat session {session_id} not found for name update")
+                    return False
+
+            # Load existing chat data
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+            chat_data = json.loads(file_content)
+
+            # Update name and last modified time
+            chat_data["name"] = name
+            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Save updated data (always use new format)
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
+
+            # Update Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                except Exception as e:
+                    logger.error(f"Failed to update Redis cache: {e}")
+
+            logger.info(f"Chat session '{session_id}' name updated to '{name}'")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating chat session {session_id} name: {str(e)}")
+            return False
+
+    async def get_session_owner(self, session_id: str) -> Optional[str]:
+        """
+        Get the owner/creator of a specific session.
+
+        Args:
+            session_id: The session identifier
+
+        Returns:
+            Username of session owner, or None if not found/set
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+
+            # Try new format first
+            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+            if file_exists:
+                async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                    file_content = await f.read()
+                chat_data = self._decrypt_data(file_content)
+
+                # Check metadata for owner field
+                metadata = chat_data.get("metadata", {})
+                return metadata.get("owner") or metadata.get("username")
+
+        except OSError as e:
+            logger.warning(f"Failed to read session file {chat_file}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to get session owner for {session_id}: {e}")
+
+        return None
