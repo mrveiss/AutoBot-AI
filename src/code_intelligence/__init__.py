@@ -200,6 +200,20 @@ from .code_fingerprinting import (
     get_clone_severities,
     get_fingerprint_types,
 )
+from .test_pattern_analyzer import (
+    TestPatternAnalyzer,
+    TestPatternSeverity,
+    TestAntiPatternType,
+    TestAntiPatternResult,
+    TestQualityMetric,
+    TestQualityReport,
+    TestAnalysisReport,
+    CoverageGap,
+    analyze_tests,
+    get_test_anti_pattern_types,
+    get_test_quality_metrics,
+    get_test_severity_levels,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -369,4 +383,17 @@ __all__ = [
     "get_clone_types",
     "get_clone_severities",
     "get_fingerprint_types",
+    # Test pattern analysis (Issue #236)
+    "TestPatternAnalyzer",
+    "TestPatternSeverity",
+    "TestAntiPatternType",
+    "TestAntiPatternResult",
+    "TestQualityMetric",
+    "TestQualityReport",
+    "TestAnalysisReport",
+    "CoverageGap",
+    "analyze_tests",
+    "get_test_anti_pattern_types",
+    "get_test_quality_metrics",
+    "get_test_severity_levels",
 ]
