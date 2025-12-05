@@ -11,7 +11,7 @@ removing, searching, and managing tags on facts.
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Set
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     import aioredis

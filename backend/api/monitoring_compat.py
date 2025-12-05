@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 

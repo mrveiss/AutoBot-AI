@@ -20,7 +20,7 @@ Usage:
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import httpx
 from opentelemetry import trace

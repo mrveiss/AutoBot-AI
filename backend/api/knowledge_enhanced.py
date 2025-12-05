@@ -11,11 +11,11 @@ intelligent content analysis using the AI Stack VM.
 
 import logging
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 

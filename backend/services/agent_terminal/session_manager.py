@@ -10,7 +10,6 @@ Manages agent terminal session lifecycle: create, get, list, close, persist.
 import asyncio
 import json
 import logging
-import time
 import uuid
 from typing import Dict, List, Optional
 
