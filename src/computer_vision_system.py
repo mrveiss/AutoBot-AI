@@ -32,6 +32,9 @@ from src.unified_multimodal_processor import (
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for form submission button keywords (Issue #326)
+FORM_SUBMISSION_KEYWORDS = {"submit", "save", "ok", "apply", "next"}
+
 
 class ElementType(Enum):
     """Types of UI elements that can be detected"""
@@ -474,7 +477,7 @@ class ScreenAnalyzer:
             if element.element_type == ElementType.BUTTON:
                 if any(
                     word in element.text_content.lower()
-                    for word in ["submit", "save", "ok", "apply", "next"]
+                    for word in FORM_SUBMISSION_KEYWORDS
                 ):
                     opportunities.append(
                         {

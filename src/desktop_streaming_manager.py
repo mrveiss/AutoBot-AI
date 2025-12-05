@@ -22,6 +22,10 @@ from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for VNC process keys (Issue #326)
+ALL_VNC_PROCESS_KEYS = {"novnc_process", "vnc_process", "xvfb_process"}
+CORE_VNC_PROCESS_KEYS = {"xvfb_process", "vnc_process"}
+
 
 class VNCServerManager:
     """Manages VNC server instances for desktop streaming"""
@@ -251,7 +255,7 @@ class VNCServerManager:
 
         try:
             # Terminate processes
-            for process_key in ["novnc_process", "vnc_process", "xvfb_process"]:
+            for process_key in ALL_VNC_PROCESS_KEYS:
                 process = session.get(process_key)
                 if process:
                     try:
@@ -281,7 +285,7 @@ class VNCServerManager:
 
         session = self.active_sessions[session_id].copy()
         # Remove process objects from returned data
-        for key in ["xvfb_process", "vnc_process", "novnc_process"]:
+        for key in ALL_VNC_PROCESS_KEYS:
             session.pop(key, None)
 
         return session
@@ -304,7 +308,7 @@ class VNCServerManager:
         for session_id, session_data in self.active_sessions.items():
             # Check if processes are still running
             processes_alive = 0
-            for process_key in ["xvfb_process", "vnc_process"]:
+            for process_key in CORE_VNC_PROCESS_KEYS:
                 process = session_data.get(process_key)
                 if process and process.poll() is None:
                     processes_alive += 1

@@ -21,6 +21,9 @@ from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for NPU hardware keywords (Issue #326)
+NPU_HARDWARE_KEYWORDS = {"neural", "npu", "ai"}
+
 
 class AccelerationType(Enum):
     """Hardware acceleration types in priority order."""
@@ -109,7 +112,7 @@ class HardwareAccelerationManager:
             )
             if result.returncode == 0:
                 output = result.stdout.lower()
-                if any(keyword in output for keyword in ["neural", "npu", "ai"]):
+                if any(keyword in output for keyword in NPU_HARDWARE_KEYWORDS):
                     logger.info("NPU hardware detected via lspci")
                     return True
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:

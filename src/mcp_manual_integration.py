@@ -20,6 +20,9 @@ from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for searchable doc source types (Issue #326)
+SEARCHABLE_DOC_SOURCE_TYPES = {"autobot_docs", "readme"}
+
 # MCP tools are available directly through the environment
 # No need for separate client manager - we can use MCP tools directly
 MCP_AVAILABLE = True
@@ -788,7 +791,7 @@ class MCPManualService:
                 return await self._search_directory_docs(query, source_name)
 
             # AutoBot docs or readme
-            if source_type not in ["autobot_docs", "readme"] or not self.mcp_available:
+            if source_type not in SEARCHABLE_DOC_SOURCE_TYPES or not self.mcp_available:
                 return results
 
             is_dir = await asyncio.to_thread(os.path.isdir, source_name)
