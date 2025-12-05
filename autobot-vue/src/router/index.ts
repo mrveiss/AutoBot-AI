@@ -328,6 +328,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Business Intelligence',
           parent: 'monitoring'
         }
+      },
+      {
+        path: 'dashboards',
+        name: 'monitoring-dashboards',
+        component: () => import('@/views/GrafanaDashboardsView.vue'),
+        meta: {
+          title: 'Grafana Dashboards',
+          parent: 'monitoring'
+        }
       }
     ]
   },

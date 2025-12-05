@@ -62,12 +62,9 @@ scrape_configs:
     # This assumes node_exporter is running on each VM
     # If not available, jobs will show as down
 
-# Storage configuration
-storage:
-  tsdb:
-    path: /prometheus/data
-    retention.time: 15d  # Keep metrics for 15 days
-    retention.size: 50GB  # Or 50GB, whichever comes first
+# NOTE: Storage configuration is set via command-line flags in systemd service:
+#   --storage.tsdb.path=/var/lib/prometheus/
+#   --storage.tsdb.retention.time=30d
 
 # Alerting configuration (Phase 3 - Issue #346)
 alerting:

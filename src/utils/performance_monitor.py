@@ -13,7 +13,6 @@ import logging
 import os
 import subprocess
 import time
-from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import wraps
@@ -180,12 +179,10 @@ class Phase9PerformanceMonitor:
         # Lock for thread-safe access to shared mutable state
         self._lock = asyncio.Lock()
 
-        # Performance data buffers
-        self.gpu_metrics_buffer = deque(maxlen=1440)  # 2 hours at 5s intervals
-        self.npu_metrics_buffer = deque(maxlen=1440)
-        self.multimodal_metrics_buffer = deque(maxlen=1440)
-        self.system_metrics_buffer = deque(maxlen=1440)
-        self.service_metrics_buffer = defaultdict(lambda: deque(maxlen=1440))
+        # Performance data buffers REMOVED (Phase 5 Issue #348)
+        # Memory savings: ~42MB (6 deques × 1440 entries × ~5KB each)
+        # Historical data now stored in Redis with TTL-based cleanup
+        # Use Prometheus PromQL queries for historical analysis
 
         # Performance baselines and thresholds
         self.performance_baselines = {
@@ -199,7 +196,8 @@ class Phase9PerformanceMonitor:
 
         # Real-time alerting
         self.alert_callbacks = []
-        self.performance_alerts = deque(maxlen=100)
+        # performance_alerts buffer REMOVED (Phase 5 Issue #348)
+        # Use Redis for alert history with TTL-based cleanup
 
         # Hardware acceleration tracking
         self.gpu_available = self._check_gpu_availability()
@@ -892,21 +890,9 @@ class Phase9PerformanceMonitor:
                 ),
                 service_metrics = []
 
-            # Store metrics in buffers under lock
-            async with self._lock:
-                if gpu_metrics:
-                    self.gpu_metrics_buffer.append(gpu_metrics)
-                if npu_metrics:
-                    self.npu_metrics_buffer.append(npu_metrics)
-                if multimodal_metrics:
-                    self.multimodal_metrics_buffer.append(multimodal_metrics)
-                if system_metrics:
-                    self.system_metrics_buffer.append(system_metrics)
-
-                for service_metric in service_metrics or []:
-                    self.service_metrics_buffer[service_metric.service_name].append(
-                        service_metric
-                    )
+            # Store metrics in buffers REMOVED (Phase 5 Issue #348)
+            # Metrics are persisted to Redis only - no local buffer storage
+            # This saves ~42MB of memory (6 deques × 1440 entries × ~5KB each)
 
             # Persist to Redis if available
             if self.redis_client:
@@ -1027,10 +1013,18 @@ class Phase9PerformanceMonitor:
             for service in metrics.get("services", []):
                 self._analyze_service_alerts(service, alerts)
 
-            # Store alerts and get callbacks under lock
+            # Store alerts in Redis instead of local buffer (Phase 5 Issue #348)
+            if self.redis_client and alerts:
+                try:
+                    for alert in alerts:
+                        key = "performance_alerts"
+                        self.redis_client.zadd(key, {json.dumps(alert): time.time()})
+                        self.redis_client.expire(key, 3600)  # 1 hour retention
+                except Exception as e:
+                    self.logger.debug(f"Could not store alerts in Redis: {e}")
+
+            # Get callbacks under lock
             async with self._lock:
-                for alert in alerts:
-                    self.performance_alerts.append(alert)
                 callbacks = list(self.alert_callbacks)
 
             # Trigger alert callbacks outside lock
@@ -1100,41 +1094,51 @@ class Phase9PerformanceMonitor:
         self.logger.info("Phase 9 performance monitoring stopped")
 
     async def get_current_performance_dashboard(self) -> Dict[str, Any]:
-        """Get comprehensive performance dashboard data (thread-safe)"""
+        """Get comprehensive performance dashboard data (thread-safe)
+
+        DEPRECATED: Local buffers removed in Phase 5 (Issue #348).
+        Dashboard now fetches latest metrics from Redis instead of local memory.
+        This saves ~42MB of RAM (6 deques × 1440 entries × ~5KB each).
+        """
         try:
-            # Get all data under lock
-            async with self._lock:
-                dashboard = {
-                    "timestamp": time.time(),
-                    "monitoring_active": self.monitoring_active,
-                    "hardware_acceleration": {
-                        "gpu_available": self.gpu_available,
-                        "npu_available": self.npu_available,
-                    },
-                    "performance_baselines": dict(self.performance_baselines),
-                    "recent_alerts": list(self.performance_alerts)[-10:],  # Last 10 alerts
-                }
+            dashboard = {
+                "timestamp": time.time(),
+                "monitoring_active": self.monitoring_active,
+                "hardware_acceleration": {
+                    "gpu_available": self.gpu_available,
+                    "npu_available": self.npu_available,
+                },
+                "performance_baselines": dict(self.performance_baselines),
+                "recent_alerts": [],  # Fetch from Redis if needed
+                "deprecation_notice": "Local buffers removed in Phase 5. Use Prometheus PromQL for historical data.",
+            }
 
-                # Add latest metrics
-                if self.gpu_metrics_buffer:
-                    dashboard["gpu"] = asdict(self.gpu_metrics_buffer[-1])
+            # Fetch latest metrics from Redis instead of local buffers
+            if self.redis_client:
+                try:
+                    # Fetch latest GPU metrics
+                    gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                    if gpu_data:
+                        dashboard["gpu"] = json.loads(gpu_data[0])
 
-                if self.npu_metrics_buffer:
-                    dashboard["npu"] = asdict(self.npu_metrics_buffer[-1])
+                    # Fetch latest NPU metrics
+                    npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
+                    if npu_data:
+                        dashboard["npu"] = json.loads(npu_data[0])
 
-                if self.multimodal_metrics_buffer:
-                    dashboard["multimodal"] = asdict(self.multimodal_metrics_buffer[-1])
+                    # Fetch latest system metrics
+                    system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+                    if system_data:
+                        dashboard["system"] = json.loads(system_data[0])
 
-                if self.system_metrics_buffer:
-                    dashboard["system"] = asdict(self.system_metrics_buffer[-1])
+                    # Fetch latest alerts (last 10)
+                    alerts_data = self.redis_client.zrange("performance_alerts", -10, -1)
+                    dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
 
-                # Add service statuses
-                dashboard["services"] = {}
-                for service_name, service_buffer in self.service_metrics_buffer.items():
-                    if service_buffer:
-                        dashboard["services"][service_name] = asdict(service_buffer[-1])
+                except Exception as e:
+                    self.logger.debug(f"Could not fetch dashboard data from Redis: {e}")
 
-            # Calculate performance trends (has its own lock handling)
+            # Calculate performance trends (now uses Redis data)
             dashboard["trends"] = await self._calculate_performance_trends()
 
             return dashboard
@@ -1144,57 +1148,63 @@ class Phase9PerformanceMonitor:
             return {"error": str(e), "timestamp": time.time()}
 
     async def _calculate_performance_trends(self) -> Dict[str, Any]:
-        """Calculate performance trends from recent metrics (thread-safe)"""
+        """Calculate performance trends from recent metrics (thread-safe)
+
+        DEPRECATED: Local buffers removed in Phase 5 (Issue #348).
+        Trends now calculated from Redis data if available.
+        Use Prometheus PromQL for advanced trend analysis.
+        """
         try:
             trends = {}
 
-            # Copy buffer data under lock
-            async with self._lock:
-                gpu_buffer_copy = list(self.gpu_metrics_buffer)[-5:] if len(self.gpu_metrics_buffer) >= 5 else []
-                system_buffer_copy = list(self.system_metrics_buffer)[-5:] if len(self.system_metrics_buffer) >= 5 else []
+            # Fetch recent metrics from Redis instead of local buffers
+            if not self.redis_client:
+                return {"deprecation_notice": "Trends require Redis. Use Prometheus PromQL for historical analysis."}
 
-            # GPU utilization trend (process outside lock)
-            if gpu_buffer_copy:
-                utilizations = [g.utilization_percent for g in gpu_buffer_copy]
-                trends["gpu_utilization"] = {
-                    "average": round(sum(utilizations) / len(utilizations), 1),
-                    "trend": (
-                        "increasing"
-                        if utilizations[-1] > utilizations[0]
-                        else (
-                            "decreasing"
-                            if utilizations[-1] < utilizations[0]
+            try:
+                # Fetch last 5 GPU metrics from Redis
+                gpu_data = self.redis_client.zrange("performance_metrics:gpu", -5, -1)
+                if gpu_data and len(gpu_data) >= 2:
+                    gpu_metrics = [json.loads(d) for d in gpu_data]
+                    utilizations = [g.get("utilization_percent", 0) for g in gpu_metrics]
+                    trends["gpu_utilization"] = {
+                        "average": round(sum(utilizations) / len(utilizations), 1),
+                        "trend": (
+                            "increasing" if utilizations[-1] > utilizations[0]
+                            else "decreasing" if utilizations[-1] < utilizations[0]
                             else "stable"
-                        )
-                    ),
-                }
+                        ),
+                    }
 
-            # System load trend (process outside lock)
-            if system_buffer_copy:
-                loads = [s.cpu_load_1m for s in system_buffer_copy]
-                trends["cpu_load"] = {
-                    "average": round(sum(loads) / len(loads), 2),
-                    "trend": (
-                        "increasing"
-                        if loads[-1] > loads[0]
-                        else "decreasing" if loads[-1] < loads[0] else "stable"
-                    ),
-                }
+                # Fetch last 5 system metrics from Redis
+                system_data = self.redis_client.zrange("performance_metrics:system", -5, -1)
+                if system_data and len(system_data) >= 2:
+                    system_metrics = [json.loads(d) for d in system_data]
 
-                # Memory usage trend
-                memory_usage = [s.memory_usage_percent for s in system_buffer_copy]
-                trends["memory_usage"] = {
-                    "average": round(sum(memory_usage) / len(memory_usage), 1),
-                    "trend": (
-                        "increasing"
-                        if memory_usage[-1] > memory_usage[0]
-                        else (
-                            "decreasing"
-                            if memory_usage[-1] < memory_usage[0]
+                    # CPU load trend
+                    loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
+                    trends["cpu_load"] = {
+                        "average": round(sum(loads) / len(loads), 2),
+                        "trend": (
+                            "increasing" if loads[-1] > loads[0]
+                            else "decreasing" if loads[-1] < loads[0]
                             else "stable"
-                        )
-                    ),
-                }
+                        ),
+                    }
+
+                    # Memory usage trend
+                    memory_usage = [s.get("memory_usage_percent", 0) for s in system_metrics]
+                    trends["memory_usage"] = {
+                        "average": round(sum(memory_usage) / len(memory_usage), 1),
+                        "trend": (
+                            "increasing" if memory_usage[-1] > memory_usage[0]
+                            else "decreasing" if memory_usage[-1] < memory_usage[0]
+                            else "stable"
+                        ),
+                    }
+
+            except Exception as e:
+                self.logger.debug(f"Could not calculate trends from Redis: {e}")
 
             return trends
 
@@ -1208,15 +1218,44 @@ class Phase9PerformanceMonitor:
             self.alert_callbacks.append(callback)
 
     async def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
-        """Generate performance optimization recommendations (thread-safe)"""
+        """Generate performance optimization recommendations (thread-safe)
+
+        DEPRECATED: Local buffers removed in Phase 5 (Issue #348).
+        Recommendations now based on latest metrics from Redis.
+        """
         recommendations = []
 
         try:
-            # Get latest metrics under lock
-            async with self._lock:
-                latest_gpu = self.gpu_metrics_buffer[-1] if self.gpu_metrics_buffer else None
-                latest_npu = self.npu_metrics_buffer[-1] if self.npu_available and self.npu_metrics_buffer else None
-                latest_system = self.system_metrics_buffer[-1] if self.system_metrics_buffer else None
+            # Fetch latest metrics from Redis instead of local buffers
+            latest_gpu = None
+            latest_npu = None
+            latest_system = None
+
+            if self.redis_client:
+                try:
+                    # Fetch latest GPU metrics
+                    gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                    if gpu_data:
+                        gpu_dict = json.loads(gpu_data[0])
+                        # Convert dict to object-like structure for compatibility
+                        class MetricObj:
+                            def __init__(self, d):
+                                self.__dict__.update(d)
+                        latest_gpu = MetricObj(gpu_dict)
+
+                    # Fetch latest NPU metrics
+                    if self.npu_available:
+                        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
+                        if npu_data:
+                            latest_npu = MetricObj(json.loads(npu_data[0]))
+
+                    # Fetch latest system metrics
+                    system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+                    if system_data:
+                        latest_system = MetricObj(json.loads(system_data[0]))
+
+                except Exception as e:
+                    self.logger.debug(f"Could not fetch metrics for recommendations: {e}")
 
             # GPU optimization recommendations (process outside lock)
             if latest_gpu:
