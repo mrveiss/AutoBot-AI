@@ -21,6 +21,19 @@ from .network_constants import (  # Legacy compatibility exports
     get_network_config,
 )
 from .path_constants import PATH
+from .threshold_constants import (  # Issue #318: Threshold and timing constants
+    AgentThresholds,
+    BatchConfig,
+    CacheConfig,
+    CircuitBreakerDefaults,
+    ComputerVisionThresholds,
+    KnowledgeSyncConfig,
+    RetryConfig,
+    SecurityThresholds,
+    TimingConstants,
+    VoiceRecognitionConfig,
+    WorkflowThresholds,
+)
 
 __all__ = [
     "NetworkConstants",
@@ -36,4 +49,16 @@ __all__ = [
     "LOCALHOST_IP",
     # Path constants
     "PATH",
+    # Issue #318: Threshold and timing constants
+    "SecurityThresholds",
+    "AgentThresholds",
+    "WorkflowThresholds",
+    "ComputerVisionThresholds",
+    "CircuitBreakerDefaults",
+    "VoiceRecognitionConfig",
+    "CacheConfig",
+    "KnowledgeSyncConfig",
+    "TimingConstants",
+    "RetryConfig",
+    "BatchConfig",
 ]

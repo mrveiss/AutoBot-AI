@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
@@ -23,8 +24,9 @@ class AgentResponseJudge(BaseLLMJudge):
 
     def __init__(self, llm_interface=None):
         super().__init__("agent_response", llm_interface)
-        self.quality_threshold = 0.7  # Minimum quality score for good response
-        self.relevance_threshold = 0.8  # Minimum relevance score required
+        # Issue #318: Use centralized constants instead of magic numbers
+        self.quality_threshold = AgentThresholds.QUALITY_THRESHOLD
+        self.relevance_threshold = AgentThresholds.RELEVANCE_THRESHOLD
 
     async def evaluate_agent_response(
         self,

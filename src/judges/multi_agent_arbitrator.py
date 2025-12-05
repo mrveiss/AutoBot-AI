@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
@@ -23,10 +24,11 @@ class MultiAgentArbitrator(BaseLLMJudge):
 
     def __init__(self, llm_interface=None):
         super().__init__("multi_agent_arbitrator", llm_interface)
-        self.consensus_threshold = 0.8  # Minimum agreement level for consensus
-        self.quality_weight = 0.4  # Weight for quality in final scoring
-        self.relevance_weight = 0.3  # Weight for relevance in final scoring
-        self.consistency_weight = 0.3  # Weight for consistency in final scoring
+        # Issue #318: Use centralized constants instead of magic numbers
+        self.consensus_threshold = AgentThresholds.CONSENSUS_THRESHOLD
+        self.quality_weight = AgentThresholds.QUALITY_WEIGHT
+        self.relevance_weight = AgentThresholds.RELEVANCE_WEIGHT
+        self.consistency_weight = AgentThresholds.CONSISTENCY_WEIGHT
 
     async def arbitrate_agent_responses(
         self,
