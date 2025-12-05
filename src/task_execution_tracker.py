@@ -8,6 +8,7 @@ Integrates with orchestrator and agents to provide comprehensive execution track
 
 import asyncio
 import logging
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
@@ -235,63 +236,47 @@ class TaskExecutionTracker:
         if not history:
             return {"message": "No task history available for analysis"}
 
-        # Analyze success patterns
-        success_by_agent = {}
-        duration_by_agent = {}
-        retry_patterns = {}
+        # Issue #317: Single-pass aggregation using defaultdict (O(2n) → O(n))
+        agent_stats = defaultdict(lambda: {
+            "total": 0, "successful": 0, "durations": [], "retries": []
+        })
 
         for task in history:
             agent = task.agent_type or "unknown"
+            stats = agent_stats[agent]
 
-            # Success rates
-            if agent not in success_by_agent:
-                success_by_agent[agent] = {"total": 0, "successful": 0}
-
-            success_by_agent[agent]["total"] += 1
+            stats["total"] += 1
             if task.status == TaskStatus.COMPLETED:
-                success_by_agent[agent]["successful"] += 1
+                stats["successful"] += 1
 
-            # Duration patterns
             if task.duration_seconds:
-                if agent not in duration_by_agent:
-                    duration_by_agent[agent] = []
-                duration_by_agent[agent].append(task.duration_seconds)
+                stats["durations"].append(task.duration_seconds)
 
-            # Retry patterns
             if task.retry_count > 0:
-                if agent not in retry_patterns:
-                    retry_patterns[agent] = []
-                retry_patterns[agent].append(task.retry_count)
+                stats["retries"].append(task.retry_count)
 
-        # Calculate insights
+        # Calculate insights directly from aggregated data
         insights = {
             "analysis_period_days": days_back,
             "total_tasks_analyzed": len(history),
-            "agent_performance": {},
+            "agent_performance": {
+                agent: {
+                    "success_rate_percent": round(
+                        (data["successful"] / data["total"]) * 100, 2
+                    ),
+                    "total_tasks": data["total"],
+                    "avg_duration_seconds": (
+                        round(sum(data["durations"]) / len(data["durations"]), 2)
+                        if data["durations"] else None
+                    ),
+                    "avg_retry_count": (
+                        round(sum(data["retries"]) / len(data["retries"]), 2)
+                        if data["retries"] else 0
+                    ),
+                }
+                for agent, data in agent_stats.items()
+            },
         }
-
-        for agent in success_by_agent:
-            agent_data = success_by_agent[agent]
-            success_rate = (agent_data["successful"] / agent_data["total"]) * 100
-
-            avg_duration = None
-            if agent in duration_by_agent and duration_by_agent[agent]:
-                avg_duration = sum(duration_by_agent[agent]) / len(
-                    duration_by_agent[agent]
-                )
-
-            avg_retries = None
-            if agent in retry_patterns and retry_patterns[agent]:
-                avg_retries = sum(retry_patterns[agent]) / len(retry_patterns[agent])
-
-            insights["agent_performance"][agent] = {
-                "success_rate_percent": round(success_rate, 2),
-                "total_tasks": agent_data["total"],
-                "avg_duration_seconds": (
-                    round(avg_duration, 2) if avg_duration else None
-                ),
-                "avg_retry_count": round(avg_retries, 2) if avg_retries else 0,
-            }
 
         return insights
 

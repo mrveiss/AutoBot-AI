@@ -574,16 +574,22 @@ class NaturalLanguageProcessor:
         max_confidence = 0.0
         best_command = VoiceCommand.UNKNOWN
 
+        # Issue #317: Pre-count matches per command using dict accumulator (O(n²) → O(n))
+        # Build match counts in single pass through patterns
+        match_counts: Dict[str, int] = {}
+        pattern_counts: Dict[str, int] = {}
+
         for command_name, command_data in self.command_patterns.items():
             patterns = command_data["patterns"]
-            match_count = 0
+            pattern_counts[command_name] = len(patterns)
+            match_counts[command_name] = sum(
+                1 for pattern in patterns if re.search(pattern, transcription)
+            )
 
-            for pattern in patterns:
-                if re.search(pattern, transcription):
-                    match_count += 1
-
-            if match_count > 0:
-                confidence = match_count / len(patterns)
+        # Find best command based on confidence
+        for command_name, count in match_counts.items():
+            if count > 0:
+                confidence = count / pattern_counts[command_name]
                 if confidence > max_confidence:
                     max_confidence = confidence
                     best_command = VoiceCommand(command_name.upper())
