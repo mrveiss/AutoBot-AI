@@ -35,10 +35,7 @@ from backend.utils.chat_utils import (
 )
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from backend.utils.chat_exceptions import (
-    get_exceptions_lazy,
-    log_exception,
-)
+from backend.utils.chat_exceptions import get_exceptions_lazy
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet

@@ -26,7 +26,7 @@ from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.path_validation import contains_path_traversal, is_invalid_name
+from src.utils.path_validation import is_invalid_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

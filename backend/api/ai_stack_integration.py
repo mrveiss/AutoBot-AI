@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -22,10 +22,7 @@ from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
-from backend.utils.response_helpers import (
-    create_success_response,
-    handle_ai_stack_error,
-)
+from backend.utils.response_helpers import create_success_response
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ Monitors multiple machines and their service hierarchies
 import asyncio
 import logging
 import socket
-import subprocess
 import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
