@@ -1,3 +1,6 @@
+# Phase Validation Integration workflow
+# Uses self-hosted runner to avoid GitHub Actions quota limits
+
 name: Phase Validation Integration
 
 on:
@@ -12,39 +15,25 @@ on:
         required: false
         default: ''
 
-env:
-  PYTHON_VERSION: '3.10'
-
 jobs:
   phase-validation:
     name: AutoBot Phase Validation
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-
-    - name: Install system dependencies
+    - name: Set up Python virtual environment
       run: |
-        sudo apt-get update
-        sudo apt-get install -y redis-server build-essential python3-dev
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        python3 -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
 
     - name: Install Python dependencies
       run: |
+        source .venv/bin/activate
         python3 -m pip install --upgrade pip
         python3 -m pip install aiohttp psutil requests pyyaml
 
@@ -81,65 +70,46 @@ jobs:
           db: 0
         EOF
 
-    - name: Start Redis server
-      run: |
-        sudo systemctl start redis-server
-        redis-cli ping
-
-    - name: Start backend for validation
-      run: |
-        # Start backend in background for endpoint validation
-        cd backend
-        python3 -m pip install -r ../requirements-ci.txt --prefer-binary
-        timeout 60s python3 main.py &
-        BACKEND_PID=$!
-        sleep 10  # Give backend time to start
-
-        # Check if backend is running
-        if curl -f http://localhost:8001/api/system/health; then
-          echo "✅ Backend started successfully"
-        else
-          echo "⚠️ Backend startup failed - continuing with file validation only"
-        fi
-
     - name: Run Phase Validation System
       run: |
+        source .venv/bin/activate
         echo "🔍 Running AutoBot Phase Validation System..."
 
         # Run the validation system
-        python3 scripts/phase_validation_system.py --output-format json > phase_validation_results.json
+        python3 scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results
         echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
         python3 -c "
-        import json
-        try:
-            with open('phase_validation_results.json', 'r') as f:
-                results = json.load(f)
+import json
+try:
+    with open('phase_validation_results.json', 'r') as f:
+        results = json.load(f)
 
-            print(f'📊 **Overall System Maturity:** {results.get(\"overall_maturity\", 0):.1f}%')
-            print('')
-            print('### Phase Details:')
+    print(f'📊 **Overall System Maturity:** {results.get(\"overall_maturity\", 0):.1f}%')
+    print('')
+    print('### Phase Details:')
 
-            for phase in results.get('phases', []):
-                status = phase.get('status', 'unknown')
-                completion = phase.get('completion_percentage', 0)
-                emoji = '✅' if status == 'complete' else '🔄' if status == 'in_progress' else '❌'
-                print(f'{emoji} **{phase.get(\"name\", \"Unknown\")}**: {completion:.1f}% complete')
+    for phase in results.get('phases', []):
+        status = phase.get('status', 'unknown')
+        completion = phase.get('completion_percentage', 0)
+        emoji = '✅' if status == 'complete' else '🔄' if status == 'in_progress' else '❌'
+        print(f'{emoji} **{phase.get(\"name\", \"Unknown\")}**: {completion:.1f}% complete')
 
-                # Show failing criteria
-                if completion < 100:
-                    criteria = phase.get('validation_details', {})
-                    for check_type, check_data in criteria.items():
-                        if not check_data.get('passed', True):
-                            print(f'   - ⚠️ {check_type}: {check_data.get(\"message\", \"Failed\")}')
+        # Show failing criteria
+        if completion < 100:
+            criteria = phase.get('validation_details', {})
+            for check_type, check_data in criteria.items():
+                if not check_data.get('passed', True):
+                    print(f'   - ⚠️ {check_type}: {check_data.get(\"message\", \"Failed\")}')
 
-        except Exception as e:
-            print(f'Error reading validation results: {e}')
-        " >> $GITHUB_STEP_SUMMARY
+except Exception as e:
+    print(f'Error reading validation results: {e}')
+" >> $GITHUB_STEP_SUMMARY
 
     - name: Generate Validation Dashboard
       run: |
+        source .venv/bin/activate
         echo "📈 Generating validation dashboard..."
         python3 scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "⚠️ Dashboard generation failed"
 
@@ -149,14 +119,14 @@ jobs:
 
         # Extract overall maturity from results
         MATURITY=$(python3 -c "
-        import json, sys
-        try:
-            with open('phase_validation_results.json', 'r') as f:
-                results = json.load(f)
-            print(results.get('overall_maturity', 0))
-        except:
-            print(0)
-        ")
+import json, sys
+try:
+    with open('phase_validation_results.json', 'r') as f:
+        results = json.load(f)
+    print(results.get('overall_maturity', 0))
+except:
+    print(0)
+")
 
         echo "System maturity: ${MATURITY}%"
 
@@ -236,9 +206,14 @@ jobs:
           echo "❌ No validation results found"
         fi
 
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
   integration-validation:
     name: Integration Phase Validation
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: phase-validation
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
@@ -257,14 +232,14 @@ jobs:
 
         # Check if validation results indicate system is ready for integration
         MATURITY=$(python3 -c "
-        import json
-        try:
-            with open('phase_validation_results.json', 'r') as f:
-                results = json.load(f)
-            print(results.get('overall_maturity', 0))
-        except:
-            print(0)
-        ")
+import json
+try:
+    with open('phase_validation_results.json', 'r') as f:
+        results = json.load(f)
+    print(results.get('overall_maturity', 0))
+except:
+    print(0)
+")
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
           echo "✅ System ready for integration (${MATURITY}%)"
