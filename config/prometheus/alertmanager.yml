@@ -1,0 +1,129 @@
+# AlertManager Configuration for AutoBot
+# Phase 3: Alert Migration (Issue #346)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+global:
+  # Global configuration
+  resolve_timeout: 5m  # Time to wait before considering alert resolved
+
+route:
+  # Root route - all alerts pass through here
+  receiver: 'default'
+  group_by: ['alertname', 'severity', 'component']
+  group_wait: 10s        # Wait before sending first notification
+  group_interval: 10s    # Wait before sending batch of grouped alerts
+  repeat_interval: 4h    # Wait before re-sending same alert
+
+  # Route hierarchy for different alert types
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      group_interval: 5s
+      repeat_interval: 30m
+      continue: true  # Also send to default receiver
+
+    # High severity alerts
+    - match:
+        severity: high
+      receiver: 'high-alerts'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+
+    # Medium severity alerts
+    - match:
+        severity: medium
+      receiver: 'medium-alerts'
+      repeat_interval: 2h
+      continue: true
+
+    # Service-specific routes
+    - match:
+        component: service
+      receiver: 'service-alerts'
+      repeat_interval: 1h
+      continue: true
+
+    # Error monitoring routes
+    - match:
+        component: errors
+      receiver: 'error-alerts'
+      repeat_interval: 30m
+      continue: true
+
+# Alert receivers (notification destinations)
+receivers:
+  # Default receiver - logs all alerts
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 0  # No limit on alerts per request
+
+  # Critical alerts - WebSocket + log
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+
+  # High severity alerts
+  - name: 'high-alerts'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+
+  # Medium severity alerts
+  - name: 'medium-alerts'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+
+  # Service alerts
+  - name: 'service-alerts'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+
+  # Error alerts
+  - name: 'error-alerts'
+    webhook_configs:
+      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+        send_resolved: true
+
+# Inhibition rules - suppress alerts when other alerts are firing
+inhibit_rules:
+  # Don't alert on high CPU if critical CPU is firing
+  - source_match:
+      alertname: 'CriticalCPUUsage'
+    target_match:
+      alertname: 'HighCPUUsage'
+    equal: ['component']
+
+  # Don't alert on high memory if critical memory is firing
+  - source_match:
+      alertname: 'CriticalMemoryUsage'
+    target_match:
+      alertname: 'HighMemoryUsage'
+    equal: ['component']
+
+  # Don't alert on high disk if critical disk is firing
+  - source_match:
+      alertname: 'CriticalDiskUsage'
+    target_match:
+      alertname: 'HighDiskUsage'
+    equal: ['component']
+
+  # Don't alert on service performance if service is down
+  - source_match:
+      severity: 'critical'
+      component: 'service'
+    target_match:
+      severity: 'medium'
+      component: 'service'
+    equal: ['service']

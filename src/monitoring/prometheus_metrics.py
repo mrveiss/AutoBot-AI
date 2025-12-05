@@ -6,7 +6,7 @@ Prometheus Metrics Manager for AutoBot
 Provides centralized metrics collection and exposure.
 """
 
-from typing import Counter, Optional
+from typing import Optional
 
 from prometheus_client import (
     CollectorRegistry,
@@ -32,6 +32,11 @@ class PrometheusMetricsManager:
         self._init_workflow_metrics()
         self._init_github_metrics()
         self._init_task_metrics()
+        # Phase 1: New metrics (Issue #344)
+        self._init_system_metrics()
+        self._init_error_metrics()
+        self._init_claude_api_metrics()
+        self._init_service_health_metrics()
 
     def _init_timeout_metrics(self):
         """Initialize timeout-related metrics"""
@@ -379,6 +384,178 @@ class PrometheusMetricsManager:
     def record_task_retry(self, task_type: str, reason: str):
         """Record a task retry attempt"""
         self.task_retries.labels(task_type=task_type, reason=reason).inc()
+
+    # Phase 1: System Metrics (Issue #344)
+
+    def _init_system_metrics(self):
+        """Initialize system-level metrics"""
+        self.system_cpu_usage = Gauge(
+            "autobot_cpu_usage_percent",
+            "CPU usage percentage",
+            registry=self.registry,
+        )
+
+        self.system_memory_usage = Gauge(
+            "autobot_memory_usage_percent",
+            "Memory usage percentage",
+            registry=self.registry,
+        )
+
+        self.system_disk_usage = Gauge(
+            "autobot_disk_usage_percent",
+            "Disk usage percentage by mount point",
+            ["mount_point"],
+            registry=self.registry,
+        )
+
+        self.system_network_bytes = Counter(
+            "autobot_network_bytes_total",
+            "Total network bytes transferred",
+            ["direction"],  # sent or received
+            registry=self.registry,
+        )
+
+    def _init_error_metrics(self):
+        """Initialize error tracking metrics"""
+        self.errors_total = Counter(
+            "autobot_errors_total",
+            "Total errors by category, component, and error code",
+            ["category", "component", "error_code"],
+            registry=self.registry,
+        )
+
+        self.error_rate = Gauge(
+            "autobot_error_rate",
+            "Error rate per component and time window",
+            ["component", "time_window"],
+            registry=self.registry,
+        )
+
+    def _init_claude_api_metrics(self):
+        """Initialize Claude API metrics"""
+        self.claude_api_requests_total = Counter(
+            "autobot_claude_api_requests_total",
+            "Total Claude API requests",
+            ["tool_name", "success"],
+            registry=self.registry,
+        )
+
+        self.claude_api_payload_bytes = Histogram(
+            "autobot_claude_api_payload_bytes",
+            "Claude API payload size distribution",
+            buckets=[100, 500, 1000, 5000, 10000, 50000, 100000, 500000],
+            registry=self.registry,
+        )
+
+        self.claude_api_response_time = Histogram(
+            "autobot_claude_api_response_time_seconds",
+            "Claude API response time in seconds",
+            buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0],
+            registry=self.registry,
+        )
+
+        self.claude_api_rate_limit_remaining = Gauge(
+            "autobot_claude_api_rate_limit_remaining",
+            "Claude API rate limit remaining",
+            registry=self.registry,
+        )
+
+    def _init_service_health_metrics(self):
+        """Initialize service health metrics"""
+        self.service_health_score = Gauge(
+            "autobot_service_health_score",
+            "Service health score (0-100)",
+            ["service_name"],
+            registry=self.registry,
+        )
+
+        self.service_response_time = Histogram(
+            "autobot_service_response_time_seconds",
+            "Service response time in seconds",
+            ["service_name"],
+            buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+            registry=self.registry,
+        )
+
+        self.service_status = Gauge(
+            "autobot_service_status",
+            "Service status (0=offline, 1=online, 2=degraded)",
+            ["service_name", "status"],
+            registry=self.registry,
+        )
+
+    # System metric recording methods
+
+    def update_system_cpu(self, cpu_percent: float):
+        """Update CPU usage metric"""
+        self.system_cpu_usage.set(cpu_percent)
+
+    def update_system_memory(self, memory_percent: float):
+        """Update memory usage metric"""
+        self.system_memory_usage.set(memory_percent)
+
+    def update_system_disk(self, mount_point: str, disk_percent: float):
+        """Update disk usage metric"""
+        self.system_disk_usage.labels(mount_point=mount_point).set(disk_percent)
+
+    def record_network_bytes(self, direction: str, bytes_count: int):
+        """Record network bytes transferred"""
+        self.system_network_bytes.labels(direction=direction).inc(bytes_count)
+
+    # Error metric recording methods
+
+    def record_error(
+        self, category: str, component: str, error_code: str = "unknown"
+    ):
+        """Record an error occurrence"""
+        self.errors_total.labels(
+            category=category, component=component, error_code=error_code
+        ).inc()
+
+    def update_error_rate(self, component: str, time_window: str, rate: float):
+        """Update error rate for a component"""
+        self.error_rate.labels(component=component, time_window=time_window).set(rate)
+
+    # Claude API metric recording methods
+
+    def record_claude_api_request(self, tool_name: str, success: bool):
+        """Record a Claude API request"""
+        self.claude_api_requests_total.labels(
+            tool_name=tool_name, success=str(success).lower()
+        ).inc()
+
+    def record_claude_api_payload(self, payload_bytes: int):
+        """Record Claude API payload size"""
+        self.claude_api_payload_bytes.observe(payload_bytes)
+
+    def record_claude_api_response_time(self, response_time_seconds: float):
+        """Record Claude API response time"""
+        self.claude_api_response_time.observe(response_time_seconds)
+
+    def update_claude_api_rate_limit(self, remaining: int):
+        """Update Claude API rate limit remaining"""
+        self.claude_api_rate_limit_remaining.set(remaining)
+
+    # Service health metric recording methods
+
+    def update_service_health(self, service_name: str, health_score: float):
+        """Update service health score"""
+        self.service_health_score.labels(service_name=service_name).set(health_score)
+
+    def record_service_response_time(self, service_name: str, response_time: float):
+        """Record service response time"""
+        self.service_response_time.labels(service_name=service_name).observe(
+            response_time
+        )
+
+    def update_service_status(self, service_name: str, status: str):
+        """Update service status"""
+        status_value = {"offline": 0, "online": 1, "degraded": 2}.get(
+            status.lower(), 0
+        )
+        self.service_status.labels(service_name=service_name, status=status).set(
+            status_value
+        )
 
     def get_metrics(self) -> bytes:
         """Get metrics in Prometheus format"""
