@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 
+# Performance optimization: O(1) lookup for control flow keywords (Issue #326)
+CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "while "}
+
 
 # ============================================================================
 # Models
@@ -318,10 +321,7 @@ async def analyze_file_complexity(file_path: str) -> float:
         conditionals = sum(
             1
             for line in lines
-            if any(
-                kw in line
-                for kw in ["if ", "elif ", "else:", "try:", "except:", "for ", "while "]
-            )
+            if any(kw in line for kw in CONTROL_FLOW_KEYWORDS)
         )
         conditional_density = conditionals / max(line_count, 1) * 100
         if conditional_density > 15:

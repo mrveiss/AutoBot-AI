@@ -232,11 +232,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_redis_client
-from backend.services.agent_terminal_service import (
-    AgentRole,
+from backend.services.agent_terminal import (
     AgentSessionState,
     AgentTerminalService,
 )
+from backend.services.command_approval_manager import AgentRole
 from backend.services.command_execution_queue import get_command_queue
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

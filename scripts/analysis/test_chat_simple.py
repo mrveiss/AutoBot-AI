@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_chat():
     """Test the chat workflow with a simple message"""
-    from src.chat_workflow_manager import process_chat_message
+    from src.chat_workflow import process_chat_message
 
     try:
         print("Testing chat workflow...")

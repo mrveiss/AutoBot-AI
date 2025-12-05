@@ -35,6 +35,8 @@ from src.utils.redis_client import RedisDatabase, get_redis_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for excluded language keys (Issue #326)
+EXCLUDED_LANGUAGE_KEYS = {"total", "success", "tokens"}
 
 # =============================================================================
 # Enums and Constants
@@ -933,7 +935,7 @@ if __name__ == "__main__":
                     parts = key.split(":")
                     if len(parts) >= 3:
                         lang = parts[1]
-                        if lang not in ["total", "success", "tokens"]:
+                        if lang not in EXCLUDED_LANGUAGE_KEYS:
                             if lang not in stats["by_language"]:
                                 stats["by_language"][lang] = {"total": 0}
                             stats["by_language"][lang]["total"] = int(value)

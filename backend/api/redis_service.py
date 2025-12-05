@@ -29,6 +29,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
 
+# Performance optimization: O(1) lookup for privileged roles (Issue #326)
+PRIVILEGED_ROLES = {"admin", "operator"}
+
 # Global service manager instance (singleton)
 _service_manager: Optional[RedisServiceManager] = None
 _service_manager_started: bool = False
@@ -108,7 +111,7 @@ def check_operator_permission(request: Request) -> str:
 
     # Check if user has admin or operator role
     role = user_data.get("role", "")
-    if role not in ["admin", "operator"]:
+    if role not in PRIVILEGED_ROLES:
         raise HTTPException(
             status_code=403,
             detail="Admin or operator role required for this operation",

@@ -38,7 +38,7 @@ from pydantic_settings import BaseSettings
 
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
-from src.constants.model_constants import ModelConstants
+from src.constants.model_constants import ModelConstants, ModelConfig
 from src.constants.network_constants import NetworkConstants
 
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
@@ -142,22 +142,22 @@ class LLMSettings(BaseSettings):
 
     # Model settings - Uses centralized model constants
     default_model: str = Field(default=ModelConstants.DEFAULT_OLLAMA_MODEL, env="DEFAULT_LLM_MODEL")
-    temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
-    top_k: int = Field(default=40, env="LLM_TOP_K")
-    top_p: float = Field(default=0.9, env="LLM_TOP_P")
-    repeat_penalty: float = Field(default=1.1, env="LLM_REPEAT_PENALTY")
-    num_ctx: int = Field(default=4096, env="LLM_CONTEXT_SIZE")
+    temperature: float = Field(default=ModelConfig.DEFAULT_TEMPERATURE, env="LLM_TEMPERATURE")
+    top_k: int = Field(default=ModelConfig.DEFAULT_TOP_K, env="LLM_TOP_K")
+    top_p: float = Field(default=ModelConfig.DEFAULT_TOP_P, env="LLM_TOP_P")
+    repeat_penalty: float = Field(default=ModelConfig.DEFAULT_REPEAT_PENALTY, env="LLM_REPEAT_PENALTY")
+    num_ctx: int = Field(default=ModelConfig.DEFAULT_NUM_CTX, env="LLM_CONTEXT_SIZE")
 
     # Performance settings - optimized for high-end hardware
-    max_retries: int = Field(default=3, env="LLM_MAX_RETRIES")
-    connection_pool_size: int = Field(default=20, env="LLM_POOL_SIZE")
-    max_concurrent_requests: int = Field(default=8, env="LLM_MAX_CONCURRENT")
-    connection_timeout: float = Field(default=30.0, env="LLM_CONNECTION_TIMEOUT")
-    cache_ttl: int = Field(default=300, env="LLM_CACHE_TTL")
+    max_retries: int = Field(default=ModelConfig.MAX_RETRIES, env="LLM_MAX_RETRIES")
+    connection_pool_size: int = Field(default=ModelConfig.DEFAULT_CONNECTION_POOL_SIZE, env="LLM_POOL_SIZE")
+    max_concurrent_requests: int = Field(default=ModelConfig.DEFAULT_MAX_CONCURRENT_REQUESTS, env="LLM_MAX_CONCURRENT")
+    connection_timeout: float = Field(default=ModelConfig.DEFAULT_TIMEOUT, env="LLM_CONNECTION_TIMEOUT")
+    cache_ttl: int = Field(default=ModelConfig.DEFAULT_CACHE_TTL, env="LLM_CACHE_TTL")
 
     # Streaming settings - using completion signal detection
     # Removed chunk_timeout - using natural stream termination
-    max_chunks: int = Field(default=1000, env="LLM_MAX_CHUNKS")
+    max_chunks: int = Field(default=ModelConfig.DEFAULT_MAX_CHUNKS, env="LLM_MAX_CHUNKS")
 
     class Config:
         env_file = ".env"
@@ -200,7 +200,7 @@ class LLMRequest:
     llm_type: Union[LLMType, str] = LLMType.GENERAL
     provider: Optional[ProviderType] = None
     model_name: Optional[str] = None
-    temperature: float = 0.7
+    temperature: float = ModelConfig.DEFAULT_TEMPERATURE
     max_tokens: Optional[int] = None
     top_p: float = 1.0
     frequency_penalty: float = 0.0
@@ -209,7 +209,7 @@ class LLMRequest:
     stream: bool = False
     structured_output: bool = False
     timeout: int = None
-    retry_count: int = 3
+    retry_count: int = ModelConfig.MAX_RETRIES
     fallback_enabled: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -219,6 +219,15 @@ class LocalLLM:
     """Local TinyLLaMA fallback"""
 
     async def generate(self, prompt):
+        """
+        Generate response using local TinyLLaMA fallback model.
+
+        Args:
+            prompt: Input text prompt
+
+        Returns:
+            Dict with response in OpenAI-compatible format
+        """
         logger.info("Using local TinyLLaMA fallback.")
         await asyncio.sleep(0.1)
         return {
@@ -232,9 +241,16 @@ class MockPalm:
     """Mock Palm API for testing"""
 
     class QuotaExceededError(Exception):
+        """Exception raised when API quota is exceeded."""
         pass
 
     async def get_quota_status(self):
+        """
+        Get current API quota status (mock implementation for testing).
+
+        Returns:
+            Dict with quota usage information
+        """
         await asyncio.sleep(0.05)
         import random
 
@@ -248,6 +264,18 @@ class MockPalm:
         return mock_status
 
     async def generate_text(self, **kwargs):
+        """
+        Generate text using mock Palm API (for testing).
+
+        Args:
+            **kwargs: Generation parameters
+
+        Returns:
+            Dict with generated text
+
+        Raises:
+            QuotaExceededError: Randomly raised to test quota handling
+        """
         await asyncio.sleep(0.1)
         import random
 

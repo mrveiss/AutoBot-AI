@@ -36,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["agent-enhanced"])
 
+# Performance optimization: O(1) lookup for coordination keywords (Issue #326)
+COORDINATION_KEYWORDS = {"analyze", "research", "comprehensive"}
+
+# Performance optimization: O(1) lookup for research agent names (Issue #326)
+RESEARCH_AGENT_NAMES = {"research", "web_research_assistant"}
+
 # ====================================================================
 # Request/Response Models
 # ====================================================================
@@ -225,10 +231,7 @@ async def execute_enhanced_goal(
         # Use intelligent coordination based on goal complexity
         if len(selected_agents) == 1:
             coordination_mode = "single"
-        elif any(
-            word in payload.goal.lower()
-            for word in ["analyze", "research", "comprehensive"]
-        ):
+        elif any(word in payload.goal.lower() for word in COORDINATION_KEYWORDS):
             coordination_mode = "sequential"
         else:
             coordination_mode = "parallel"
@@ -576,7 +579,7 @@ async def get_agents_status():
                 "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
                 "research_capabilities": any(
                     agent in agents_info.get("agents", [])
-                    for agent in ["research", "web_research_assistant"]
+                    for agent in RESEARCH_AGENT_NAMES
                 ),
                 "development_tools": (
                     "development_speedup" in agents_info.get("agents", [])

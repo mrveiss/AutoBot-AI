@@ -47,6 +47,10 @@ from .long_running_operations_framework import (
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for operation status checks (Issue #326)
+FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
+TERMINAL_OPERATION_STATUSES = {OperationStatus.COMPLETED, OperationStatus.FAILED, OperationStatus.CANCELLED}
+
 
 # Pydantic models for API
 class CreateOperationRequest(BaseModel):
@@ -218,7 +222,7 @@ class OperationIntegrationManager:
                 [
                     op
                     for op in all_operations
-                    if op.status in [OperationStatus.FAILED, OperationStatus.TIMEOUT]
+                    if op.status in FAILED_OPERATION_STATUSES
                 ]
             )
 
@@ -704,10 +708,9 @@ if __name__ == "__main__":
                         operation_id
                     )
                 )
-                if operation.status in [
-                    OperationStatus.COMPLETED,
-                    OperationStatus.FAILED,
-                ]:
+                # Check if operation reached terminal state (Issue #326)
+                # Note: Using subset of TERMINAL_OPERATION_STATUSES (excluding CANCELLED for this polling loop)
+                if operation.status in {OperationStatus.COMPLETED, OperationStatus.FAILED}:
                     break
 
                 print(f"Progress: {operation.progress.progress_percentage:.1f}%")

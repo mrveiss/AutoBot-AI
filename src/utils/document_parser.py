@@ -13,6 +13,11 @@ from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for file extension checks (Issue #326)
+DOCX_EXTENSIONS = {".docx"}
+POWERPOINT_EXTENSIONS = {".ppt", ".pptx"}
+OPENDOCUMENT_GRAPHICS_EXTENSIONS = {".odp", ".odg"}
+
 
 class DocumentParser:
     """Universal document parser for extracting text from various formats"""
@@ -86,17 +91,17 @@ class DocumentParser:
         try:
             if extension == ".pdf":
                 text = self._parse_pdf(file_path, metadata)
-            elif extension in [".docx"]:
+            elif extension in DOCX_EXTENSIONS:  # O(1) lookup (Issue #326)
                 text = self._parse_docx(file_path, metadata)
             elif extension == ".xlsx":
                 text = self._parse_xlsx(file_path, metadata)
-            elif extension in [".ppt", ".pptx"]:
+            elif extension in POWERPOINT_EXTENSIONS:  # O(1) lookup (Issue #326)
                 text = self._parse_pptx(file_path, metadata)
             elif extension == ".odt":
                 text = self._parse_odt(file_path, metadata)
             elif extension == ".ods":
                 text = self._parse_ods(file_path, metadata)
-            elif extension in [".odp", ".odg"]:
+            elif extension in OPENDOCUMENT_GRAPHICS_EXTENSIONS:  # O(1) lookup (Issue #326)
                 text = self._parse_odp(file_path, metadata)
             elif extension == ".doc":
                 # Old Word format - requires textract or antiword

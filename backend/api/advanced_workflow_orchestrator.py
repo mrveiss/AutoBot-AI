@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["advanced_workflow"])
 
+# Performance optimization: O(1) lookup for dangerous command patterns (Issue #326)
+CRITICAL_RISK_PATTERNS = {"rm -r", "dd ", "mkfs"}
+HIGH_RISK_PATTERNS = {"sudo rm", "chmod 777", "killall"}
+MODERATE_RISK_PATTERNS = {"sudo", "systemctl", "apt install"}
+
 
 async def get_advanced_orchestrator_instance(request: Request = None):
     """PERFORMANCE OPTIMIZATION: Get orchestrator instance, preferring pre-initialized app.state"""
@@ -1109,16 +1114,16 @@ complexity, and requirements:
 
     def _assess_step_risk_level(self, command: str) -> str:
         """Assess risk level for step"""
-        if any(pattern in command.lower() for pattern in ["rm -r", "dd ", "mkfs"]):
+        if any(pattern in command.lower() for pattern in CRITICAL_RISK_PATTERNS):
             return "critical"
         elif any(
             pattern in command.lower()
-            for pattern in ["sudo rm", "chmod 777", "killall"]
+            for pattern in HIGH_RISK_PATTERNS
         ):
             return "high"
         elif any(
             pattern in command.lower()
-            for pattern in ["sudo", "systemctl", "apt install"]
+            for pattern in MODERATE_RISK_PATTERNS
         ):
             return "moderate"
         else:

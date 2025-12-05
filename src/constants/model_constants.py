@@ -112,7 +112,10 @@ class ModelConfig:
     # Generation parameters
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 0.9
+    DEFAULT_TOP_K: int = 40
+    DEFAULT_REPEAT_PENALTY: float = 1.1
     DEFAULT_MAX_TOKENS: int = 2048
+    DEFAULT_NUM_CTX: int = 4096  # Ollama context window
 
     # Timeouts (in seconds)
     DEFAULT_TIMEOUT: int = 30
@@ -121,6 +124,12 @@ class ModelConfig:
     # Retry settings
     MAX_RETRIES: int = 3
     RETRY_DELAY: int = 2
+
+    # Performance settings
+    DEFAULT_CONNECTION_POOL_SIZE: int = 20
+    DEFAULT_MAX_CONCURRENT_REQUESTS: int = 8
+    DEFAULT_CACHE_TTL: int = 300  # 5 minutes
+    DEFAULT_MAX_CHUNKS: int = 1000  # Streaming response chunks
 
 
 # Singleton instances for easy access

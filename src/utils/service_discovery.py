@@ -23,6 +23,10 @@ from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for service health checks (Issue #326)
+DEGRADED_STATUS_FIELDS = {"degraded", "warning"}
+SERVICE_UNAVAILABLE_HTTP_CODES = {503, 502, 504}
+
 
 class ServiceStatus(Enum):
     HEALTHY = "healthy"
@@ -394,14 +398,14 @@ class ServiceDiscovery:
 
                             # Check if response indicates degraded state
                             status_field = data.get("status", "healthy").lower()
-                            if status_field in ["degraded", "warning"]:
+                            if status_field in DEGRADED_STATUS_FIELDS:
                                 return ServiceStatus.DEGRADED
                     except Exception:
                         pass  # Ignore JSON parsing errors for simple endpoints
 
                     return ServiceStatus.HEALTHY
 
-                elif response.status in [503, 502, 504]:
+                elif response.status in SERVICE_UNAVAILABLE_HTTP_CODES:
                     return ServiceStatus.DEGRADED  # Temporary issues
                 else:
                     return ServiceStatus.UNHEALTHY

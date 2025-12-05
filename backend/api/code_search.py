@@ -28,6 +28,9 @@ from src.utils.redis_client import get_redis_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for index status validation (Issue #326)
+SUCCESSFUL_INDEX_STATUSES = {"success", "already_indexed"}
+
 # Lazy initialization for NPU code search agent (thread-safe)
 import threading
 
@@ -477,7 +480,7 @@ async def analyze_declarations(request: AnalyticsRequest):
 
         # First ensure the codebase is indexed
         index_result = await index_project(request.root_path, force_reindex=False)
-        if index_result["status"] not in ["success", "already_indexed"]:
+        if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
         # Analyze declarations across all files
@@ -661,7 +664,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
 
         # Index codebase if needed
         index_result = await index_project(request.root_path, force_reindex=False)
-        if index_result["status"] not in ["success", "already_indexed"]:
+        if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
         # Search for common code patterns that might indicate duplication

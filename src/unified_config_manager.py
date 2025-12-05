@@ -44,6 +44,9 @@ from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
+# Module-level constants for O(1) lookups (Issue #326)
+YAML_FILE_EXTENSIONS = {".yaml", ".yml"}
+
 
 class UnifiedConfigSettings(BaseSettings):
     """Configuration settings for the unified config manager"""
@@ -1250,7 +1253,7 @@ class UnifiedConfigManager:
 
                 if file_path.suffix.lower() == ".json":
                     return json.loads(content)
-                elif file_path.suffix.lower() in [".yaml", ".yml"]:
+                elif file_path.suffix.lower() in YAML_FILE_EXTENSIONS:  # O(1) lookup (Issue #326)
                     return yaml.safe_load(content)
                 else:
                     return json.loads(content)
@@ -1273,7 +1276,7 @@ class UnifiedConfigManager:
             async with aiofiles.open(file_path, "w", encoding="utf-8") as file:
                 if file_path.suffix.lower() == ".json":
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
-                elif file_path.suffix.lower() in [".yaml", ".yml"]:
+                elif file_path.suffix.lower() in YAML_FILE_EXTENSIONS:  # O(1) lookup (Issue #326)
                     await file.write(yaml.dump(data, default_flow_style=False))
                 else:
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))

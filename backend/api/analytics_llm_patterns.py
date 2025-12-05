@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 # Enums and Constants
 # =============================================================================
 
+# O(1) lookup optimization constant (Issue #326)
+EXPENSIVE_MODELS = {"opus", "gpt-4"}
+
+
+
 
 class PromptCategory(str, Enum):
     """Categories of LLM prompts"""
@@ -355,7 +360,7 @@ class LLMPatternAnalyzer:
         # Model recommendations
         if model:
             if "opus" in model.lower() or "gpt-4" in model.lower():
-                if category in [PromptCategory.CHAT, PromptCategory.DOCUMENTATION]:
+                if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
                     recommendations.append(
                         "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
                     )
@@ -613,7 +618,7 @@ class LLMPatternAnalyzer:
 
         # Recommendation 2: Model downgrades
         model_usage = stats.get("by_model", {})
-        expensive_models = [m for m in model_usage if "opus" in m.lower() or "gpt-4" in m.lower()]
+        expensive_models = [m for m in model_usage if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)]  # O(1) lookup (Issue #326)
 
         if expensive_models:
             recommendations.append({

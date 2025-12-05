@@ -29,6 +29,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for tool classification (Issue #326)
+READ_KEYWORDS = {"read", "list", "glob", "get"}
+WRITE_KEYWORDS = {"write", "edit", "create", "update"}
+SEARCH_KEYWORDS = {"grep", "search", "find"}
+EXECUTION_KEYWORDS = {"bash", "execute", "run"}
+COMMUNICATION_KEYWORDS = {"todo", "task", "agent"}
+ANALYSIS_KEYWORDS = {"analyze", "diagnostic", "lint"}
+LARGE_PATH_INDICATORS = {"/large/", "/data/", "/logs/"}
+BATCH_PARAMETER_KEYS = {"recursive", "batch", "all"}
+
 
 class ToolCallType(Enum):
     """Classification of tool call types"""
@@ -40,6 +50,10 @@ class ToolCallType(Enum):
     ANALYSIS = "analysis"  # Code analysis, diagnostics
     COMMUNICATION = "communication"  # TodoWrite, API calls
     NAVIGATION = "navigation"  # Directory changes, file browsing
+
+
+# Tool call types for optimization detection - placed after enum (Issue #326)
+BATCHABLE_CALL_TYPES = {ToolCallType.READ_OPERATION, ToolCallType.WRITE_OPERATION}
 
 
 class EfficiencyLevel(Enum):
@@ -206,35 +220,28 @@ class ToolPatternAnalyzer:
         """Classify tool call type based on tool name and parameters"""
         tool_name_lower = tool_name.lower()
 
-        # Read operations
-        if any(
-            keyword in tool_name_lower for keyword in ["read", "list", "glob", "get"]
-        ):
+        # Read operations (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in READ_KEYWORDS):
             return ToolCallType.READ_OPERATION
 
-        # Write operations
-        if any(
-            keyword in tool_name_lower
-            for keyword in ["write", "edit", "create", "update"]
-        ):
+        # Write operations (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in WRITE_KEYWORDS):
             return ToolCallType.WRITE_OPERATION
 
-        # Search operations
-        if any(keyword in tool_name_lower for keyword in ["grep", "search", "find"]):
+        # Search operations (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in SEARCH_KEYWORDS):
             return ToolCallType.SEARCH_OPERATION
 
-        # Execution
-        if any(keyword in tool_name_lower for keyword in ["bash", "execute", "run"]):
+        # Execution (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in EXECUTION_KEYWORDS):
             return ToolCallType.EXECUTION
 
-        # Communication tools
-        if any(keyword in tool_name_lower for keyword in ["todo", "task", "agent"]):
+        # Communication tools (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in COMMUNICATION_KEYWORDS):
             return ToolCallType.COMMUNICATION
 
-        # Analysis tools
-        if any(
-            keyword in tool_name_lower for keyword in ["analyze", "diagnostic", "lint"]
-        ):
+        # Analysis tools (O(1) lookup - Issue #326)
+        if any(keyword in tool_name_lower for keyword in ANALYSIS_KEYWORDS):
             return ToolCallType.ANALYSIS
 
         # Default to navigation
@@ -244,42 +251,35 @@ class ToolPatternAnalyzer:
         """Estimate API cost of tool call on a 1-10 scale"""
         base_cost = 1
 
-        # High cost tools
-        if any(keyword in tool_name.lower() for keyword in ["agent", "task", "todo"]):
+        # High cost tools (O(1) lookup - Issue #326)
+        if any(keyword in tool_name.lower() for keyword in COMMUNICATION_KEYWORDS):
             base_cost = 8
 
-        # Medium-high cost tools
-        elif any(
-            keyword in tool_name.lower() for keyword in ["write", "edit", "execute"]
-        ):
+        # Medium-high cost tools (O(1) lookup - Issue #326)
+        elif any(keyword in tool_name.lower() for keyword in WRITE_KEYWORDS | EXECUTION_KEYWORDS):
             base_cost = 6
 
-        # Medium cost tools
-        elif any(
-            keyword in tool_name.lower() for keyword in ["search", "grep", "analyze"]
-        ):
+        # Medium cost tools (O(1) lookup - Issue #326)
+        elif any(keyword in tool_name.lower() for keyword in SEARCH_KEYWORDS | ANALYSIS_KEYWORDS):
             base_cost = 4
 
-        # Low cost tools
-        elif any(keyword in tool_name.lower() for keyword in ["read", "list", "get"]):
+        # Low cost tools (O(1) lookup - Issue #326)
+        elif any(keyword in tool_name.lower() for keyword in READ_KEYWORDS):
             base_cost = 2
 
         # Adjust based on parameters
         if isinstance(parameters, dict):
-            # Large file operations cost more
+            # Large file operations cost more (O(1) lookup - Issue #326)
             if "file_path" in parameters and isinstance(parameters["file_path"], str):
-                if any(
-                    path in parameters["file_path"]
-                    for path in ["/large/", "/data/", "/logs/"]
-                ):
+                if any(path in parameters["file_path"] for path in LARGE_PATH_INDICATORS):
                     base_cost += 1
 
             # Complex operations cost more
             if len(parameters) > 5:
                 base_cost += 1
 
-            # Recursive or batch operations cost more
-            if any(key in parameters for key in ["recursive", "batch", "all"]):
+            # Recursive or batch operations cost more (O(1) lookup - Issue #326)
+            if any(key in parameters for key in BATCH_PARAMETER_KEYS):
                 base_cost += 2
 
         return min(10, base_cost)
@@ -634,12 +634,9 @@ class ToolPatternAnalyzer:
         """Find operations that could be batched together"""
         similar_ops = defaultdict(list)
 
-        # Group by tool and similar parameters
+        # Group by tool and similar parameters (O(1) lookup - Issue #326)
         for call in self.tool_calls:
-            if call.call_type in [
-                ToolCallType.READ_OPERATION,
-                ToolCallType.WRITE_OPERATION,
-            ]:
+            if call.call_type in BATCHABLE_CALL_TYPES:
                 # Group by tool name and operation type
                 key = f"{call.tool_name}_{call.call_type.value}"
                 similar_ops[key].append(call)

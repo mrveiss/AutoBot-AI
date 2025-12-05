@@ -9,6 +9,7 @@ import ast
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -28,12 +29,16 @@ from .scanner import (
     _active_tasks,
     _indexing_lock,
     _tasks_lock,
+    _tasks_sync_lock,
     _current_indexing_task_id,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
+
+# Performance optimization: O(1) lookup for internal modules (Issue #326)
+INTERNAL_MODULE_PREFIXES = {"src", "backend", "autobot"}
 
 # In-memory storage fallback
 _in_memory_storage = {}
@@ -80,8 +85,8 @@ async def index_codebase():
                     }
                 )
 
-        # Always use project root
-        project_root = Path(__file__).parent.parent.parent
+        # Always use project root (4 levels up from backend/api/codebase_analytics/routes.py)
+        project_root = Path(__file__).parent.parent.parent.parent
         root_path = str(project_root)
         logger.info(f"📁 project_root = {root_path}")
 
@@ -1032,7 +1037,7 @@ async def get_import_tree():
                     for alias in node.names:
                         module_name = alias.name
                         base_module = module_name.split(".")[0]
-                        is_external = base_module in stdlib_modules or base_module not in ["src", "backend", "autobot"]
+                        is_external = base_module in stdlib_modules or base_module not in INTERNAL_MODULE_PREFIXES  # O(1) lookup (Issue #326)
                         target_file = module_to_file.get(module_name)
 
                         import_info = {
@@ -1055,7 +1060,7 @@ async def get_import_tree():
                     if node.module:
                         module_name = node.module
                         base_module = module_name.split(".")[0]
-                        is_external = base_module in stdlib_modules or base_module not in ["src", "backend", "autobot"]
+                        is_external = base_module in stdlib_modules or base_module not in INTERNAL_MODULE_PREFIXES  # O(1) lookup (Issue #326)
                         target_file = module_to_file.get(module_name)
 
                         import_info = {
@@ -1562,5 +1567,39 @@ async def clear_codebase_cache():
             ),
             "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
             "storage_type": storage_type,
+        }
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_config_duplicates",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/config-duplicates")
+async def detect_config_duplicates_endpoint():
+    """
+    Detect configuration value duplicates across codebase (Issue #341).
+
+    Returns configuration values that appear in multiple files,
+    helping enforce single-source-of-truth principle.
+
+    Returns:
+        JSONResponse with duplicate detection results
+    """
+    from .config_duplication_detector import detect_config_duplicates
+
+    # Get project root (4 levels up from this file)
+    project_root = Path(__file__).resolve().parents[3]
+
+    # Run detection
+    result = detect_config_duplicates(str(project_root))
+
+    return JSONResponse(
+        {
+            "status": "success",
+            "duplicates_found": result["duplicates_found"],
+            "duplicates": result["duplicates"],
+            "report": result["report"],
         }
     )

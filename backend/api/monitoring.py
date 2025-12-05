@@ -54,6 +54,9 @@ from backend.api.monitoring_utils import (
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["AutoBot Monitoring"])
 
+# Performance optimization: O(1) lookup for critical service statuses (Issue #326)
+CRITICAL_SERVICE_STATUSES = {"critical", "offline"}
+
 
 class MonitoringStatus(BaseModel):
     """Monitoring system status"""
@@ -631,7 +634,7 @@ async def get_services_health():
         "healthy_services": sum(1 for s in service_metrics if s.status == "healthy"),
         "degraded_services": sum(1 for s in service_metrics if s.status == "degraded"),
         "critical_services": sum(
-            1 for s in service_metrics if s.status in ["critical", "offline"]
+            1 for s in service_metrics if s.status in CRITICAL_SERVICE_STATUSES
         ),
         "services": [],
     }

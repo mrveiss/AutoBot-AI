@@ -44,6 +44,9 @@ except ImportError as e:
 
 router = APIRouter(prefix="/api/workflow_automation", tags=["workflow_automation"])
 
+# Performance optimization: O(1) lookup for approval recommendations (Issue #326)
+APPROVAL_RECOMMENDATIONS = {"APPROVE", "CONDITIONAL"}
+
 
 class WorkflowStepStatus(Enum):
     PENDING = "pending"
@@ -791,14 +794,8 @@ class WorkflowAutomationManager:
             )
 
             # Combine judgments
-            should_approve_workflow = workflow_judgment.recommendation in [
-                "APPROVE",
-                "CONDITIONAL",
-            ]
-            should_approve_security = security_judgment.recommendation in [
-                "APPROVE",
-                "CONDITIONAL",
-            ]
+            should_approve_workflow = workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
+            should_approve_security = security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
 
             # Extract safety scores
             workflow_safety = next(

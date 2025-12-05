@@ -52,6 +52,8 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
+# Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
+FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT} if operation_integration_manager else set()
 
 # Additional models specific to AutoBot integration
 class CodebaseIndexingRequest(BaseModel):
@@ -489,7 +491,7 @@ async def list_operations(
             [
                 op
                 for op in all_operations
-                if op.status in [OperationStatus.FAILED, OperationStatus.TIMEOUT]
+                if op.status in FAILED_OPERATION_STATUSES
             ]
         )
 

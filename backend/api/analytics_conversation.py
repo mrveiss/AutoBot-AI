@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversation-flow", tags=["conversation-flow", "analytics"])
 
+# Performance optimization: O(1) lookup for sentiment indicators (Issue #326)
+SUCCESS_INDICATORS = {"thanks", "perfect", "great", "works", "solved"}
+FRUSTRATION_INDICATORS = {"not working", "still", "again", "wrong", "frustrated"}
+
 
 # ============================================================================
 # Pydantic Models
@@ -189,11 +193,11 @@ class ConversationAnalyzer:
                 intent_id, _ = self.detect_intent(content)
                 intents.append(intent_id)
 
-                # Check for success/frustration indicators
+                # Check for success/frustration indicators (Issue #326: O(1) lookups)
                 content_lower = content.lower()
-                if any(word in content_lower for word in ["thanks", "perfect", "great", "works", "solved"]):
+                if any(word in content_lower for word in SUCCESS_INDICATORS):
                     success_indicators += 1
-                if any(word in content_lower for word in ["not working", "still", "again", "wrong", "frustrated"]):
+                if any(word in content_lower for word in FRUSTRATION_INDICATORS):
                     frustration_indicators += 1
 
         duration = 0

@@ -40,6 +40,9 @@ from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
+# Module-level constants for O(1) lookups (Issue #326)
+DOCX_EXTENSIONS = {".docx", ".doc"}
+
 
 class NumpyJSONEncoder(json.JSONEncoder):
     """
@@ -158,7 +161,7 @@ class DocumentExtractor:
         if not file_path.exists():
             raise FileNotFoundError(f"DOCX file not found: {file_path}")
 
-        if file_path.suffix.lower() not in [".docx", ".doc"]:
+        if file_path.suffix.lower() not in DOCX_EXTENSIONS:  # O(1) lookup (Issue #326)
             raise ValueError(f"File is not a DOCX: {file_path}")
 
         def extract_sync():

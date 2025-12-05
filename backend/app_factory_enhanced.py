@@ -68,7 +68,7 @@ from src.api_registry import APIRegistry
 # Import chat workflow manager
 # NOTE: AuthenticationMiddleware is a utility class, not ASGI middleware
 # It's accessed via auth_middleware singleton in src.auth_middleware
-from src.chat_workflow_manager import ChatWorkflowManager
+from src.chat_workflow import ChatWorkflowManager
 
 # REFACTORED: Removed deprecated RedisPoolManager import
 # from src.redis_pool_manager import RedisPoolManager

@@ -83,6 +83,11 @@ class PatternType(str, Enum):
     MCP_TOOL = "mcp_tool"
 
 
+# Module-level constants for O(1) lookups (Issue #326)
+NAMING_CONSISTENCY_PATTERN_TYPES = {PatternType.REPOSITORY, PatternType.SERVICE_LAYER, PatternType.FACTORY}
+CLASS_SUFFIX_INDICATORS = {"Repository", "Repo", "Service", "Factory"}
+
+
 class ConsistencyLevel(str, Enum):
     """Levels of pattern consistency."""
 
@@ -789,16 +794,12 @@ class ArchitectureAnalyzer:
             consistent_count = 0
 
             # Check naming consistency
-            if pattern_type in [
-                PatternType.REPOSITORY,
-                PatternType.SERVICE_LAYER,
-                PatternType.FACTORY,
-            ]:
+            if pattern_type in NAMING_CONSISTENCY_PATTERN_TYPES:  # O(1) lookup (Issue #326)
                 # Check suffix consistency
                 suffixes = set()
                 for m in pattern_matches:
                     if m.class_name:
-                        for suffix in ["Repository", "Repo", "Service", "Factory"]:
+                        for suffix in CLASS_SUFFIX_INDICATORS:  # O(1) lookup (Issue #326)
                             if m.class_name.endswith(suffix):
                                 suffixes.add(suffix)
                                 break

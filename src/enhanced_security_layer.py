@@ -25,6 +25,11 @@ from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for security checks (Issue #326)
+DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
+HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
+COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
+
 
 class EnhancedSecurityLayer:
     """
@@ -191,8 +196,8 @@ class EnhancedSecurityLayer:
             return True
 
         # SECURITY FIX: Deprecated god/superuser/root roles - use admin with proper permissions
-        # ALL roles must go through RBAC, audit logging, and validation
-        if user_role.lower() in ["god", "superuser", "root"]:
+        # ALL roles must go through RBAC, audit logging, and validation (O(1) lookup - Issue #326)
+        if user_role.lower() in DEPRECATED_PRIVILEGED_ROLES:
             self.audit_log(
                 action="deprecated_role_usage",
                 user=user_role,
@@ -351,10 +356,7 @@ class EnhancedSecurityLayer:
             ):
                 # User can only execute safe commands without approval
                 force_approval = True
-            elif "allow_shell_execute" in role_permissions and risk in [
-                CommandRisk.HIGH,
-                CommandRisk.MODERATE,
-            ]:
+            elif "allow_shell_execute" in role_permissions and risk in HIGH_RISK_COMMAND_RISKS:
                 # User has shell execute permission but high-risk commands need approval
                 force_approval = True
 
@@ -442,10 +444,7 @@ class EnhancedSecurityLayer:
                 for line in f:
                     try:
                         entry = json.loads(line)
-                        if "action" in entry and entry["action"] in [
-                            "command_execution_attempt",
-                            "command_execution_complete",
-                        ]:
+                        if "action" in entry and entry["action"] in COMMAND_EXECUTION_ACTIONS:
                             if user is None or entry.get("user") == user:
                                 command_history.append(entry)
                     except json.JSONDecodeError:

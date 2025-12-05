@@ -1,0 +1,508 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Knowledge Base Core Module
+
+Contains the core KnowledgeBaseCore class with initialization, configuration,
+and connection management functionality.
+"""
+
+import asyncio
+import json
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import aioredis
+import redis
+from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core.storage.storage_context import StorageContext
+from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
+from llama_index.vector_stores.chroma import ChromaVectorStore
+
+from src.constants.network_constants import NetworkConstants
+from src.unified_config_manager import UnifiedConfigManager
+from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
+from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
+from src.utils.knowledge_base_timeouts import kb_timeouts
+
+if TYPE_CHECKING:
+    pass
+
+# Create singleton config instance
+config = UnifiedConfigManager()
+
+logger = logging.getLogger(__name__)
+
+
+class KnowledgeBaseCore:
+    """
+    Core knowledge base functionality including initialization,
+    configuration, and connection management.
+
+    This class provides:
+    - Async initialization with proper locking
+    - Redis connection management (sync and async)
+    - ChromaDB vector store initialization
+    - LlamaIndex configuration with Ollama
+    - V1 compatibility methods
+    """
+
+    def __init__(self):
+        """Initialize instance variables only - no async operations"""
+        self.initialized = False
+        self.initialization_lock = asyncio.Lock()
+
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
+
+        # Configuration from unified config
+        self.redis_host = config.get("redis.host")
+        self.redis_port = config.get("redis.port")
+        self.redis_password = config.get("redis.password")
+        # Knowledge base DB number - now managed by get_redis_client(database="knowledge")
+        # The database mapping is handled automatically by redis_client utility
+        self.redis_db = 1  # Default for knowledge base (historical compatibility)
+
+        # ChromaDB configuration
+        self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
+        self.chromadb_collection = config.get(
+            "memory.chromadb.collection_name", "autobot_memory"
+        )
+
+        # Issue #72: HNSW parameters optimized for 545K+ vectors
+        self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
+        self.hnsw_construction_ef = config.get(
+            "memory.chromadb.hnsw.construction_ef", 300
+        )
+        self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
+        self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
+
+        # Redis index name (legacy compatibility - not used with ChromaDB)
+        self.redis_index_name = config.get(
+            "redis.indexes.knowledge_base", "llama_index"
+        )
+
+        # Connection clients (initialized in async method)
+        self.redis_client: Optional[redis.Redis] = None
+        self.aioredis_client: Optional[aioredis.Redis] = None
+
+        # Vector store components (initialized in async method)
+        self.vector_store: Optional[ChromaVectorStore] = None
+        self.vector_index: Optional[VectorStoreIndex] = None
+
+        # Configuration flags
+        self.llama_index_configured = False
+        self.embedding_model_name: Optional[str] = None  # Store actual model being used
+        self.embedding_dimensions: Optional[int] = None  # Store vector dimensions
+
+        # Redis initialization flag (V1 compatibility)
+        self._redis_initialized = False
+
+        # Stats counter key (Issue #71 - O(1) stats tracking)
+        self._stats_key = "kb:stats"
+
+    @error_boundary(component="knowledge_base", function="initialize")
+    async def initialize(self) -> bool:
+        """Async initialization method - must be called after construction"""
+        if self.initialized:
+            return True
+
+        async with self.initialization_lock:
+            if self.initialized:  # Double-check after acquiring lock
+                return True
+
+            try:
+                logger.info("Starting async knowledge base initialization...")
+
+                # Step 1: Initialize Redis connections first
+                await self._init_redis_connections()
+
+                # Step 2: Configure LlamaIndex (needs Redis for dimension detection)
+                await self._configure_llama_index()
+
+                # Step 3: Initialize vector store
+                await self._init_vector_store()
+
+                # Verify vector store was actually initialized
+                if not self.vector_store:
+                    logger.error(
+                        "Vector store initialization failed - self.vector_store is None"
+                    )
+                    raise RuntimeError("Vector store failed to initialize")
+
+                # Step 4: Initialize stats counters (Issue #71 - O(1) stats)
+                # Note: This will be called from StatsMixin when it's composed
+                # For now, we'll assume it's handled by the composed class
+
+                self.initialized = True
+                self._redis_initialized = True  # V1 compatibility flag
+                logger.info("Knowledge base initialization completed successfully")
+                return True
+
+            except Exception as e:
+                logger.error(f"Knowledge base initialization failed: {e}")
+                await self._cleanup_on_failure()
+                return False
+
+    async def ainit(self) -> bool:
+        """Alias for initialize() - backward compatibility with existing scripts."""
+        return await self.initialize()
+
+    async def _configure_llama_index(self):
+        """Configure LlamaIndex with Ollama models"""
+        try:
+            # Manually construct Ollama URL due to config interpolation issue
+            ollama_host = config.get(
+                "infrastructure.hosts.ollama", NetworkConstants.MAIN_MACHINE_IP
+            )
+            ollama_port = config.get(
+                "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
+            )
+            ollama_url = f"http://{ollama_host}:{ollama_port}"
+            # Use kb_timeouts fallback directly since config.get_timeout() has different signature
+            try:
+                llm_timeout = config.get_timeout("llm", "default")
+            except Exception:
+                llm_timeout = kb_timeouts.llm_default
+
+            Settings.llm = LlamaIndexOllamaLLM(
+                model=config.get_default_llm_model(),
+                request_timeout=llm_timeout,
+                base_url=ollama_url,
+            )
+
+            # Check what embedding model was used for existing data
+            stored_model = await self._detect_stored_embedding_model()
+
+            if stored_model:
+                embed_model_name = stored_model
+                logger.info(f"Using stored embedding model: {embed_model_name}")
+            else:
+                # Default to nomic-embed-text (768 dimensions)
+                embed_model_name = "nomic-embed-text"
+                logger.info("Using nomic-embed-text embedding model (768 dimensions)")
+
+            # Store model configuration in instance variables
+            self.embedding_model_name = embed_model_name
+            self.embedding_dimensions = 768  # nomic-embed-text dimensions
+
+            Settings.embed_model = LlamaIndexOllamaEmbedding(
+                model_name=embed_model_name,
+                base_url=ollama_url,
+                ollama_additional_kwargs={"num_ctx": 2048},
+            )
+
+            self.llama_index_configured = True
+            logger.info(f"LlamaIndex configured with Ollama at {ollama_url}")
+
+        except Exception as e:
+            logger.warning(f"Could not configure LlamaIndex with Ollama: {e}")
+            self.llama_index_configured = False
+
+    async def _init_redis_connections(self):
+        """Initialize Redis connections using canonical utility"""
+        try:
+            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
+
+            # Get sync Redis client for knowledge base operations
+            # Note: Uses DB 1 (knowledge) - canonical utility handles connection pooling
+            self.redis_client = get_redis_client(database="knowledge")
+            if self.redis_client is None:
+                raise Exception("Redis client initialization returned None")
+
+            # Test sync connection
+            await asyncio.to_thread(self.redis_client.ping)
+            logger.info(
+                f"Knowledge Base Redis sync client connected (database {self.redis_db})"
+            )
+
+            # Get async Redis client using pool manager
+            self.aioredis_client = await get_redis_client(
+                async_client=True, database="knowledge"
+            )
+
+            # Test async connection
+            await self.aioredis_client.ping()
+            logger.info("Knowledge Base async Redis client connected successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis connections: {e}")
+            raise
+
+    async def _init_vector_store(self):
+        """Initialize LlamaIndex vector store with ChromaDB backend"""
+        try:
+            # Create ChromaDB directory if it doesn't exist
+            chroma_path = Path(self.chromadb_path)
+
+            logger.info(f"Initializing ChromaDB at path: {chroma_path}")
+
+            # Create ChromaDB persistent client with telemetry disabled
+            chroma_client = create_chromadb_client(
+                db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+            )
+
+            # Issue #72: Get or create collection with optimized HNSW parameters
+            # These parameters are tuned for 545K+ vectors
+            hnsw_metadata = {
+                "hnsw:space": self.hnsw_space,
+                "hnsw:construction_ef": self.hnsw_construction_ef,
+                "hnsw:search_ef": self.hnsw_search_ef,
+                "hnsw:M": self.hnsw_m,
+            }
+
+            logger.info(
+                f"Creating ChromaDB collection with optimized HNSW params: "
+                f"space={self.hnsw_space}, construction_ef={self.hnsw_construction_ef}, "
+                f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+            )
+
+            chroma_collection = chroma_client.get_or_create_collection(
+                name=self.chromadb_collection,
+                metadata=hnsw_metadata,
+            )
+
+            # Create ChromaVectorStore for LlamaIndex
+            self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+
+            logger.info(
+                f"ChromaDB vector store initialized: collection='{self.chromadb_collection}'"
+            )
+
+            # Get collection stats
+            collection_count = chroma_collection.count()
+            logger.info(f"ChromaDB collection contains {collection_count} vectors")
+
+            # Skip eager index creation to prevent blocking during initialization
+            # with 545K+ vectors. Index will be created lazily on first use.
+            logger.info(
+                "Skipping eager vector index creation - will create on first query (lazy loading)"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB vector store: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            self.vector_store = None
+
+    async def _create_initial_vector_index(self):
+        """Create the vector index immediately during initialization
+
+        This ensures the index exists before any facts are stored, allowing all facts
+        to be properly indexed for vector search.
+        """
+        try:
+            if not self.vector_store:
+                logger.warning(
+                    "Cannot create vector index - vector store not initialized"
+                )
+                return
+
+            logger.info("Creating initial vector index with ChromaDB...")
+
+            # Create storage context with ChromaDB vector store
+            storage_context = StorageContext.from_defaults(
+                vector_store=self.vector_store
+            )
+
+            # Create index from existing vector store (connects to existing collection)
+            self.vector_index = await asyncio.to_thread(
+                VectorStoreIndex.from_vector_store,
+                self.vector_store,
+                storage_context=storage_context,
+            )
+
+            logger.info(
+                "✅ Vector index connected to ChromaDB collection - ready for queries"
+            )
+
+            # Note: No need to re-index existing facts - they're already in ChromaDB
+            # from the migration process
+
+        except Exception as e:
+            logger.error(f"Failed to create initial vector index: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            # Don't fail initialization - just log the error
+            self.vector_index = None
+
+    async def _cleanup_on_failure(self):
+        """Cleanup resources on initialization failure"""
+        try:
+            if self.aioredis_client:
+                await self.aioredis_client.close()
+                self.aioredis_client = None
+
+            if self.redis_client:
+                await asyncio.to_thread(self.redis_client.close)
+                self.redis_client = None
+
+            self.vector_store = None
+            self.vector_index = None
+
+            logger.info("Cleanup completed after initialization failure")
+
+        except Exception as e:
+            logger.warning(f"Error during cleanup: {e}")
+
+    # ============================================================================
+    # V1 COMPATIBILITY METHODS
+    # ============================================================================
+
+    async def _ensure_redis_initialized(self):
+        """Ensure Redis is initialized before any operations (V1 compatibility)"""
+        if not self._redis_initialized:
+            await self.initialize()
+
+    def _get_redis_client(self) -> Optional[redis.Redis]:
+        """Get Redis client for sync operations (V1 compatibility)"""
+        return self.redis_client
+
+    async def _get_async_redis_client(self) -> Optional[aioredis.Redis]:
+        """Get async Redis client for async operations (V1 compatibility)"""
+        return self.aioredis_client
+
+    async def _init_redis_and_vector_store(self):
+        """Initialize Redis connection and vector store asynchronously (V1 compatibility)"""
+        # V1 compatibility wrapper - delegates to V2 initialization
+        if not self.initialized:
+            await self.initialize()
+
+    async def _init_vector_index_from_existing(self):
+        """Initialize vector index from existing vectors in storage (V1 compatibility)"""
+        # For ChromaDB, this is handled by _create_initial_vector_index
+        await self._create_initial_vector_index()
+
+    # ============================================================================
+    # PUBLIC API METHODS
+    # ============================================================================
+
+    def ensure_initialized(self):
+        """Ensure the knowledge base is initialized (raises exception if not)"""
+        if not self.initialized:
+            raise RuntimeError(
+                "Knowledge base not initialized. Use 'await knowledge_base.initialize()' first, "
+                "or get instance via get_knowledge_base() factory function."
+            )
+
+    async def ping_redis(self) -> str:
+        """Test Redis connection"""
+        self.ensure_initialized()
+        try:
+            if self.aioredis_client:
+                pong = await self.aioredis_client.ping()
+                return "healthy" if pong else "unhealthy"
+            else:
+                return "no_client"
+        except Exception as e:
+            logger.error(f"Redis ping failed: {e}")
+            return "error"
+
+    def _scan_redis_keys(self, pattern: str) -> List[str]:
+        """Scan Redis keys with pattern using sync client"""
+        if not self.redis_client:
+            return []
+
+        try:
+            keys = []
+            for key in self.redis_client.scan_iter(match=pattern):
+                if isinstance(key, bytes):
+                    keys.append(key.decode("utf-8"))
+                else:
+                    keys.append(str(key))
+            return keys
+        except Exception as e:
+            logger.error(f"Error scanning Redis keys: {e}")
+            return []
+
+    async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
+        """Scan Redis keys with pattern using async client"""
+        if not self.aioredis_client:
+            logger.warning("Async Redis client not available for key scanning")
+            return []
+
+        try:
+            keys = []
+            async for key in self.aioredis_client.scan_iter(match=pattern):
+                if isinstance(key, bytes):
+                    keys.append(key.decode("utf-8"))
+                else:
+                    keys.append(str(key))
+
+            logger.debug(f"Scanned {len(keys)} keys matching pattern '{pattern}'")
+            return keys
+
+        except redis.RedisError as e:
+            logger.error(f"Redis error scanning keys with pattern '{pattern}': {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected error scanning Redis keys: {e}")
+            return []
+
+    def _count_facts(self) -> int:
+        """Count stored facts in Redis"""
+        try:
+            fact_keys = self._scan_redis_keys("fact:*")
+            return len(fact_keys)
+        except Exception as e:
+            logger.error(f"Error counting facts: {e}")
+            return 0
+
+    async def _detect_stored_embedding_model(self) -> Optional[str]:
+        """Detect which embedding model was used for existing data"""
+        try:
+            if self.aioredis_client:
+                # Look for model metadata in existing facts
+                async for key in self.aioredis_client.scan_iter(
+                    match="fact:*", count=10
+                ):
+                    metadata_json = await self.aioredis_client.hget(key, "metadata")
+                    if metadata_json:
+                        try:
+                            metadata = json.loads(metadata_json)
+                            if "embedding_model" in metadata:
+                                return metadata["embedding_model"]
+                        except (json.JSONDecodeError, TypeError):
+                            continue
+        except Exception as e:
+            logger.debug(f"Could not detect stored embedding model: {e}")
+
+        return None
+
+    async def close(self):
+        """Close all connections and cleanup resources"""
+        try:
+            logger.info("Closing knowledge base connections...")
+
+            if self.aioredis_client:
+                await self.aioredis_client.close()
+                self.aioredis_client = None
+
+            if self.redis_client:
+                await asyncio.to_thread(self.redis_client.close)
+                self.redis_client = None
+
+            self.vector_store = None
+            self.vector_index = None
+            self.initialized = False
+            self._redis_initialized = False
+
+            logger.info("Knowledge base connections closed successfully")
+
+        except Exception as e:
+            logger.error(f"Error closing knowledge base connections: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        # Only log, don't perform async operations in __del__
+        if self.initialized:
+            logger.debug(
+                "KnowledgeBase instance deleted while still initialized - "
+                "consider calling await close() explicitly"
+            )

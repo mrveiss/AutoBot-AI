@@ -20,6 +20,10 @@ from src.autobot_memory_graph import AutoBotMemoryGraph
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for security relation types (Issue #326)
+DETAIL_RELATION_TYPES = {"contains", "runs", "has_vulnerability", "exploited_by"}
+SEVERITY_RELATION_TYPES = {"affects"}
+
 
 # Security-specific entity types (extend base ENTITY_TYPES)
 SECURITY_ENTITY_TYPES = {
@@ -394,9 +398,9 @@ class SecurityMemoryIntegration:
         try:
             # Map security relation types to base types
             base_relation = relation_type
-            if relation_type in ["contains", "runs", "has_vulnerability", "exploited_by"]:
+            if relation_type in DETAIL_RELATION_TYPES:
                 base_relation = "contains"
-            elif relation_type in ["affects"]:
+            elif relation_type in SEVERITY_RELATION_TYPES:
                 base_relation = "relates_to"
 
             await self._memory_graph.create_relation(

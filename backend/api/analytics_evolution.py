@@ -28,6 +28,9 @@ from src.utils.redis_client import get_redis_client
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/evolution", tags=["code-evolution", "analytics"])
 
+# Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
+AGGREGATION_GRANULARITIES = {"weekly", "monthly"}
+
 # Redis key prefixes for evolution data
 EVOLUTION_PREFIX = "evolution:"
 SNAPSHOT_PREFIX = f"{EVOLUTION_PREFIX}snapshot:"
@@ -197,7 +200,7 @@ async def get_evolution_timeline(
                 timeline_data.append(snapshot)
 
         # Apply granularity aggregation if needed
-        if granularity in ["weekly", "monthly"] and len(timeline_data) > 1:
+        if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
             timeline_data = _aggregate_by_granularity(timeline_data, granularity)
 
         # Filter to requested metrics

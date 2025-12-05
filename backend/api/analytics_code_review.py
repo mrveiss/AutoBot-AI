@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/code-review", tags=["code-review", "analytics"])
 
+# Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
+REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
+
 
 # ============================================================================
 # Models
@@ -496,7 +499,7 @@ async def analyze_diff(
         # Get full file content for analysis
         try:
             file_path = Path(file_info["path"])
-            if file_path.exists() and file_path.suffix in [".py", ".vue", ".ts", ".js"]:
+            if file_path.exists() and file_path.suffix in REVIEWABLE_EXTENSIONS:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
                 comments = analyze_code(content, str(file_path))
                 all_comments.extend(comments)

@@ -30,6 +30,9 @@ from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for comparison query keywords (Issue #326)
+COMPARISON_QUERY_KEYWORDS = {"compare", "vs", "versus"}
+
 
 @dataclass
 class ConversationMessage:
@@ -640,7 +643,7 @@ Please provide a helpful, accurate response based on the available information. 
             queries.append(f"{user_message} tutorial guide")
         elif "what is" in user_message.lower():
             queries.append(f"{user_message} definition explanation")
-        elif any(word in user_message.lower() for word in ["compare", "vs", "versus"]):
+        elif any(word in user_message.lower() for word in COMPARISON_QUERY_KEYWORDS):
             queries.append(f"{user_message} comparison review")
         else:
             # Add a more specific query

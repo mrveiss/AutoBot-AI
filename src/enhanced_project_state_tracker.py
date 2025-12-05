@@ -100,6 +100,11 @@ class ProjectMilestone:
     evidence: List[str] = field(default_factory=list)
 
 
+# O(1) lookup optimization constants (Issue #326)
+SIGNIFICANT_CHANGES = {StateChangeType.PHASE_PROGRESSION, StateChangeType.CAPABILITY_UNLOCK}
+SIGNIFICANT_INTERACTIONS = {"login", "logout", "settings_change", "agent_switch"}
+
+
 class EnhancedProjectStateTracker:
     """Enhanced tracking system for comprehensive project state management"""
 
@@ -533,10 +538,7 @@ class EnhancedProjectStateTracker:
             logger.error(f"Error recording state change: {e}")
 
         # Trigger snapshot if significant change
-        if change_type in [
-            StateChangeType.PHASE_PROGRESSION,
-            StateChangeType.CAPABILITY_UNLOCK,
-        ]:
+        if change_type in SIGNIFICANT_CHANGES:  # O(1) lookup (Issue #326)
             await self.capture_state_snapshot()
 
     async def _check_milestones(self, snapshot: StateSnapshot):
@@ -838,12 +840,7 @@ class EnhancedProjectStateTracker:
                 await self.redis_client.expire(type_key, 86400)
 
             # Record state change for significant interactions
-            if interaction_type in [
-                "login",
-                "logout",
-                "settings_change",
-                "agent_switch",
-            ]:
+            if interaction_type in SIGNIFICANT_INTERACTIONS:  # O(1) lookup (Issue #326)
                 await self.record_state_change(
                     StateChangeType.USER_ACTION,
                     f"User interaction: {interaction_type}",

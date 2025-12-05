@@ -28,6 +28,10 @@ from src.voice_processing_system import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level constants for O(1) lookups (Issue #326)
+HIGH_RESOURCE_CONSTRAINT_TYPES = {"high_cpu_usage", "high_memory_usage"}
+MITIGATION_REQUIRED_RISK_LEVELS = {"medium", "high"}
+
 
 class DecisionType(Enum):
     """Types of decisions the system can make"""
@@ -1228,7 +1232,7 @@ class DecisionEngine:
         if constraint_type == "human_takeover_active" and action_type == "automation":
             return True
 
-        if constraint_type in ["high_cpu_usage", "high_memory_usage"] and action.get(
+        if constraint_type in HIGH_RESOURCE_CONSTRAINT_TYPES and action.get(  # O(1) lookup (Issue #326)
             "resource_intensive", False
         ):
             return True
@@ -1287,7 +1291,7 @@ class DecisionEngine:
         return {
             "risk_level": risk_level,
             "factors": risk_factors,
-            "mitigation_required": risk_level in ["medium", "high"],
+            "mitigation_required": risk_level in MITIGATION_REQUIRED_RISK_LEVELS,  # O(1) lookup (Issue #326)
         }
 
     def _determine_confidence_level(self, confidence: float) -> ConfidenceLevel:

@@ -19,6 +19,10 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for context level validation (Issue #326)
+VALID_CONTEXT_LEVELS = {"basic", "detailed", "full"}
+DETAILED_CONTEXT_LEVELS = {"detailed", "full"}
+
 
 class ContextRequest(BaseModel):
     level: str = "basic"  # basic, detailed, full
@@ -80,17 +84,17 @@ async def get_system_context(
         awareness = get_llm_self_awareness()
 
         # Validate level parameter
-        if level not in ["basic", "detailed", "full"]:
+        if level not in VALID_CONTEXT_LEVELS:
             return JSONResponse(
                 status_code=400,
                 content={
                     "status": "error",
                     "message": f"Invalid context level: {level}",
-                    "valid_levels": ["basic", "detailed", "full"],
+                    "valid_levels": list(VALID_CONTEXT_LEVELS),
                 },
             )
 
-        include_detailed = level in ["detailed", "full"]
+        include_detailed = level in DETAILED_CONTEXT_LEVELS
         context = await awareness.get_system_context(include_detailed=include_detailed)
 
         if format == "summary":
@@ -185,13 +189,13 @@ async def inject_awareness_context(request: PromptInjectionRequest):
         awareness = get_llm_self_awareness()
 
         # Validate context level
-        if request.context_level not in ["basic", "detailed", "full"]:
+        if request.context_level not in VALID_CONTEXT_LEVELS:
             return JSONResponse(
                 status_code=400,
                 content={
                     "status": "error",
                     "message": f"Invalid context level: {request.context_level}",
-                    "valid_levels": ["basic", "detailed", "full"],
+                    "valid_levels": list(VALID_CONTEXT_LEVELS),
                 },
             )
 

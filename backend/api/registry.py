@@ -24,6 +24,10 @@ class RouterStatus(Enum):
     LAZY_LOAD = "lazy_load"
 
 
+# Performance optimization: O(1) lookup for enabled router statuses (Issue #326)
+ENABLED_ROUTER_STATUSES = {RouterStatus.ENABLED, RouterStatus.LAZY_LOAD}
+
+
 @dataclass
 class RouterConfig:
     """Configuration for a single API router"""
@@ -306,7 +310,7 @@ class APIRegistry:
         return {
             name: config
             for name, config in self.routers.items()
-            if config.status in [RouterStatus.ENABLED, RouterStatus.LAZY_LOAD]
+            if config.status in ENABLED_ROUTER_STATUSES
         }
 
     def get_router_by_name(self, name: str) -> Optional[RouterConfig]:

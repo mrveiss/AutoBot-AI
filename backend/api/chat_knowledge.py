@@ -32,6 +32,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat_knowledge"])
 
+# O(1) lookup optimization constants (Issue #326)
+TROUBLESHOOTING_KEYWORDS = {"error", "bug", "issue", "problem"}
+DOCUMENTATION_KEYWORDS = {"config", "setup", "install", "guide"}
+
+
+
+
 
 async def get_chat_knowledge_manager_instance(request: Request = None):
     """PERFORMANCE OPTIMIZATION: Get chat knowledge manager instance, preferring pre-initialized app.state"""
@@ -254,12 +261,12 @@ class ChatKnowledgeManager:
         content_lower = content.lower()
 
         if any(
-            keyword in content_lower for keyword in ["error", "bug", "issue", "problem"]
+            keyword in content_lower for keyword in TROUBLESHOOTING_KEYWORDS  # O(1) lookup (Issue #326)
         ):
             return KnowledgeDecision.ADD_TO_KB  # Useful for troubleshooting
         elif any(
             keyword in content_lower
-            for keyword in ["config", "setup", "install", "guide"]
+            for keyword in DOCUMENTATION_KEYWORDS  # O(1) lookup (Issue #326)
         ):
             return KnowledgeDecision.ADD_TO_KB  # Useful for documentation
         elif len(content) < 50:

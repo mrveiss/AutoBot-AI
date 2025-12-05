@@ -26,6 +26,9 @@ from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for placeholder patterns (Issue #326)
+PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
+
 
 class SecuritySeverity(Enum):
     """Severity levels for security findings (aligned with CVSS)."""
@@ -751,17 +754,7 @@ class SecurityAnalyzer:
                 if "os.getenv" in code or "os.environ" in code:
                     continue
                 # Skip if it's a placeholder/example
-                if any(
-                    placeholder in match.group().lower()
-                    for placeholder in [
-                        "example",
-                        "placeholder",
-                        "your_",
-                        "xxx",
-                        "changeme",
-                        "todo",
-                    ]
-                ):
+                if any(placeholder in match.group().lower() for placeholder in PLACEHOLDER_PATTERNS):  # O(1) lookup (Issue #326)
                     continue
 
                 findings.append(

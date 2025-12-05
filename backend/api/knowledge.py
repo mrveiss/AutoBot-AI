@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 # Cache TTL constants (seconds)
 CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
 
+# Performance optimization: O(1) lookup for metadata types (Issue #326)
+MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
+
 router = APIRouter()
 
 # Import vectorization router (extracted from this file - Issue #185)
@@ -819,7 +822,7 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
     man_page_results = []
     for result in results:
         metadata = result.get("metadata", {})
-        if metadata.get("type") in ["manual_page", "system_command"]:
+        if metadata.get("type") in MANUAL_PAGE_TYPES:  # Issue #326
             man_page_results.append(result)
 
     return {

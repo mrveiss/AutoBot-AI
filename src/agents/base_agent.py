@@ -48,6 +48,10 @@ class AgentStatus(Enum):
     OFFLINE = "offline"
 
 
+# Performance optimization: O(1) lookup for available agent statuses (Issue #326)
+AVAILABLE_AGENT_STATUSES = {AgentStatus.HEALTHY, AgentStatus.DEGRADED}
+
+
 @dataclass
 class AgentRequest:
     """Standardized agent request format"""
@@ -462,7 +466,7 @@ class ContainerAgent(BaseAgent):
         """Check if container agent is available"""
         try:
             health = await self.health_check()
-            return health.status in [AgentStatus.HEALTHY, AgentStatus.DEGRADED]
+            return health.status in AVAILABLE_AGENT_STATUSES
         except Exception:
             return False
 

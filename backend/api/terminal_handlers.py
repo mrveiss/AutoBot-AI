@@ -40,6 +40,12 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for shell operators (Issue #326)
 SHELL_OPERATORS = {">", ">>", "|", "&&", "||"}
 
+# Performance optimization: O(1) lookup for security levels requiring logging (Issue #326)
+LOGGING_SECURITY_LEVELS = {SecurityLevel.ELEVATED, SecurityLevel.RESTRICTED}
+
+# Performance optimization: O(1) lookup for high-risk command levels (Issue #326)
+HIGH_RISK_COMMAND_LEVELS = {CommandRiskLevel.DANGEROUS, CommandRiskLevel.HIGH}
+
 
 class ConsolidatedTerminalWebSocket:
     """
@@ -59,10 +65,7 @@ class ConsolidatedTerminalWebSocket:
         self.session_id = session_id
         self.conversation_id = conversation_id  # Link to chat session
         self.security_level = security_level
-        self.enable_logging = security_level in [
-            SecurityLevel.ELEVATED,
-            SecurityLevel.RESTRICTED,
-        ]
+        self.enable_logging = security_level in LOGGING_SECURITY_LEVELS
         self.enable_workflow_control = True
         self.command_history = []
         self.audit_log = []
@@ -779,7 +782,7 @@ class ConsolidatedTerminalWebSocket:
     ) -> bool:
         """Determine if command should be blocked based on security level"""
         if self.security_level == SecurityLevel.RESTRICTED:
-            return risk_level in [CommandRiskLevel.DANGEROUS, CommandRiskLevel.HIGH]
+            return risk_level in HIGH_RISK_COMMAND_LEVELS
         elif self.security_level == SecurityLevel.ELEVATED:
             return risk_level == CommandRiskLevel.DANGEROUS
 
