@@ -61,11 +61,31 @@ jobs:
 
     - name: Setup Node.js PATH
       run: |
+        # Try NVM first
         export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-        echo "$(dirname $(which node))" >> $GITHUB_PATH
-        node --version
-        npm --version
+        if [ -s "$NVM_DIR/nvm.sh" ]; then
+          . "$NVM_DIR/nvm.sh"
+          NODE_PATH=$(dirname $(which node) 2>/dev/null || true)
+        fi
+
+        # Try common system paths if NVM didn't work
+        if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH/node" ]; then
+          for path in /usr/local/bin /usr/bin ~/.local/bin; do
+            if [ -x "$path/node" ]; then
+              NODE_PATH="$path"
+              break
+            fi
+          done
+        fi
+
+        if [ -n "$NODE_PATH" ]; then
+          echo "$NODE_PATH" >> $GITHUB_PATH
+          export PATH="$NODE_PATH:$PATH"
+          node --version
+          npm --version
+        else
+          echo "⚠️ Node.js not found - frontend security scan may fail"
+        fi
 
     - name: Install Frontend dependencies
       run: |
