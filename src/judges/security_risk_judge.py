@@ -19,6 +19,16 @@ from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for security checks (Issue #326)
+FILE_DELETE_OPS = {"delete", "remove", "rm"}
+FILE_WRITE_OPS = {"write", "modify", "edit"}
+FILE_READ_OPS = {"read", "view", "cat"}
+CRITICAL_PATHS = {"/etc/", "/boot/", "/sys/"}
+CRITICAL_WRITE_PATHS = {"/etc/", "/boot/"}
+SENSITIVE_FILE_PATTERNS = {"passwd", "shadow", "key"}
+FILE_TRANSFER_OPS = {"upload", "download", "transfer"}
+FILE_TRANSFER_OPS_SIMPLE = {"upload", "download"}
+
 
 class SecurityRiskJudge(BaseLLMJudge):
     """Judge for evaluating security risks, command safety, and compliance"""
@@ -560,16 +570,16 @@ Please provide thorough security assessment focusing on safety, security, and co
         """Evaluate risk level of file operation"""
         operation_lower = operation.lower()
 
-        if operation_lower in ["delete", "remove", "rm"]:
-            if any(critical in file_path for critical in ["/etc/", "/boot/", "/sys/"]):
+        if operation_lower in FILE_DELETE_OPS:  # Issue #326
+            if any(critical in file_path for critical in CRITICAL_PATHS):
                 return "critical"
             return "high"
-        elif operation_lower in ["write", "modify", "edit"]:
-            if any(critical in file_path for critical in ["/etc/", "/boot/"]):
+        elif operation_lower in FILE_WRITE_OPS:  # Issue #326
+            if any(critical in file_path for critical in CRITICAL_WRITE_PATHS):
                 return "high"
             return "medium"
-        elif operation_lower in ["read", "view", "cat"]:
-            if any(sensitive in file_path for sensitive in ["passwd", "shadow", "key"]):
+        elif operation_lower in FILE_READ_OPS:  # Issue #326
+            if any(sensitive in file_path for sensitive in SENSITIVE_FILE_PATTERNS):
                 return "medium"
             return "low"
         else:
@@ -597,8 +607,8 @@ Please provide thorough security assessment focusing on safety, security, and co
         if port in sensitive_ports:
             risks.append(f"Access to sensitive port {port}")
 
-        # Check for risky operations
-        if operation_type in ["upload", "download", "transfer"]:
+        # Check for risky operations (Issue #326)
+        if operation_type in FILE_TRANSFER_OPS:
             risks.append("Data transfer operation - potential data exfiltration")
 
         return risks
@@ -624,7 +634,7 @@ Please provide thorough security assessment focusing on safety, security, and co
 
         operation_type = operation_data.get("type", "").lower()
 
-        if operation_type in ["upload", "download"]:
+        if operation_type in FILE_TRANSFER_OPS_SIMPLE:  # Issue #326
             requirements.extend(
                 [
                     "Verify file content before transfer",

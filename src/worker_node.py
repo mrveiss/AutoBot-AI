@@ -14,6 +14,9 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
+# Constants for unit conversions and hardware detection
+BYTES_PER_GB = 1024 ** 3  # Bytes to gigabytes conversion
+NVIDIA_SMI_EXPECTED_FIELDS = 6  # Expected field count from nvidia-smi CSV output
 
 # Conditional torch import for environments without CUDA
 try:
@@ -30,10 +33,10 @@ from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.security_layer import SecurityLayer
 from src.system_integration import SystemIntegration
+from src.task_handlers import TaskExecutor
 
 # Import the centralized ConfigManager and Redis client utility
 from src.unified_config_manager import config as global_config_manager
-from src.utils.command_validator import command_validator
 from src.utils.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS
@@ -49,6 +52,13 @@ else:
 
 class WorkerNode:
     def __init__(self):
+        """
+        Initialize a worker node with task execution capabilities.
+
+        Sets up task transport (Redis or local), initializes core modules
+        (LLM, knowledge base, GUI, system integration, security), and
+        creates the task executor using the Strategy Pattern.
+        """
         self.worker_id = f"worker_{os.getpid()}"
 
         self.task_transport_type = global_config_manager.get_nested(
@@ -74,6 +84,9 @@ class WorkerNode:
         self.gui_controller = GUIController()
         self.system_integration = SystemIntegration()
         self.security_layer = SecurityLayer()
+
+        # Initialize the task executor with Strategy Pattern
+        self.task_executor = TaskExecutor(self)
 
     def detect_capabilities(self) -> Dict[str, Any]:
         """Detects and returns hardware and software capabilities."""
@@ -102,8 +115,8 @@ class WorkerNode:
                 "freq_mhz": psutil.cpu_freq().current if psutil.cpu_freq() else "N/A",
             },
             "ram": {
-                "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-                "available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
+                "total_gb": round(psutil.virtual_memory().total / BYTES_PER_GB, 2),
+                "available_gb": round(psutil.virtual_memory().available / BYTES_PER_GB, 2),
                 "usage_percent": psutil.virtual_memory().percent,
             },
             "kb_supported": True,
@@ -135,7 +148,7 @@ class WorkerNode:
                 {
                     "name": torch.cuda.get_device_name(i),
                     "memory_gb": round(
-                        torch.cuda.get_device_properties(i).total_memory / (1024**3), 2
+                        torch.cuda.get_device_properties(i).total_memory / BYTES_PER_GB, 2
                     ),
                 }
             )
@@ -161,7 +174,7 @@ class WorkerNode:
             gpu_details = []
             for line in nvidia_smi_output:
                 parts = [p.strip() for p in line.split(",")]
-                if len(parts) == 6:
+                if len(parts) == NVIDIA_SMI_EXPECTED_FIELDS:
                     gpu_details.append(
                         {
                             "name": parts[0],
@@ -230,6 +243,12 @@ class WorkerNode:
         return {"llm_backends_supported": backends}
 
     async def report_capabilities(self):
+        """
+        Report worker capabilities to orchestrator via Redis or event system.
+
+        Publishes detected capabilities (LLM backends, features) to allow
+        the orchestrator to assign appropriate tasks to this worker.
+        """
         capabilities = self.detect_capabilities()
         if self.redis_client:
             channel = "worker_capabilities"
@@ -240,10 +259,23 @@ class WorkerNode:
             await event_manager.publish("worker_capability_report", capabilities)
 
     async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a task using the Strategy Pattern for clean delegation.
+
+        This method has been refactored to eliminate deep nesting (was 21 levels)
+        by delegating to specialized task handlers via TaskExecutor.
+
+        Args:
+            task_payload: Task data including type and parameters
+
+        Returns:
+            Dict with status, message, and any result data
+        """
         task_type = task_payload.get("type")
         task_id = task_payload.get("task_id", "N/A")
         user_role = task_payload.get("user_role", "guest")
 
+        # Permission check - common logic for all tasks
         permission_check = self.security_layer.check_permission(
             user_role, f"allow_{task_type}"
         )
@@ -266,6 +298,7 @@ class WorkerNode:
                 ),
             }
 
+        # Publish task start event
         await event_manager.publish(
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
@@ -275,384 +308,10 @@ class WorkerNode:
             f"'{task_type}' for role '{user_role}'"
         )
 
-        result = {"status": "error", "message": "Unknown task type."}
-        try:
-            if task_type == "llm_chat_completion":
-                model_name = task_payload["model_name"]
-                messages = task_payload["messages"]
-                llm_kwargs = task_payload.get("kwargs", {})
-                response = await self.llm_interface.chat_completion(
-                    model_name, messages, **llm_kwargs
-                )
-                if response:
-                    result = {
-                        "status": "success",
-                        "message": "LLM completion successful.",
-                        "response": response,
-                    }
-                    self.security_layer.audit_log(
-                        "llm_chat_completion",
-                        user_role,
-                        "success",
-                        {"task_id": task_id, "model": model_name},
-                    )
-                else:
-                    result = {
-                        "status": "error",
-                        "message": "LLM completion failed.",
-                    }
-                    self.security_layer.audit_log(
-                        "llm_chat_completion",
-                        user_role,
-                        "failure",
-                        {
-                            "task_id": task_id,
-                            "model": model_name,
-                            "reason": "llm_failed",
-                        },
-                    )
-            elif task_type == "kb_add_file":
-                file_path = task_payload["file_path"]
-                file_type = task_payload["file_type"]
-                metadata = task_payload.get("metadata")
-                kb_result = await self.knowledge_base.add_file(
-                    file_path, file_type, metadata
-                )
-                result = kb_result
-                self.security_layer.audit_log(
-                    "kb_add_file",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "file_path": file_path},
-                )
-            elif task_type == "kb_search":
-                query = task_payload["query"]
-                n_results = task_payload.get("n_results", 5)
-                kb_results = await self.knowledge_base.search(query, n_results)
-                result = {
-                    "status": "success",
-                    "message": "KB search successful.",
-                    "results": kb_results,
-                }
-                self.security_layer.audit_log(
-                    "kb_search",
-                    user_role,
-                    "success",
-                    {"task_id": task_id, "query": query},
-                )
-            elif task_type == "kb_store_fact":
-                content = task_payload["content"]
-                metadata = task_payload.get("metadata")
-                kb_result = await self.knowledge_base.store_fact(content, metadata)
-                result = kb_result
-                self.security_layer.audit_log(
-                    "kb_store_fact",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "content_preview": content[:50]},
-                )
-            elif task_type == "execute_shell_command":
-                command = task_payload["command"]
+        # Delegate to TaskExecutor - Strategy Pattern dispatch
+        result = await self.task_executor.execute(task_payload, user_role, task_id)
 
-                # CRITICAL SECURITY: Validate command before execution
-                validation_result = command_validator.validate_command(command)
-
-                if not validation_result["valid"]:
-                    # Command validation failed - SECURITY BLOCK
-                    result = {
-                        "status": "error",
-                        "message": (
-                            "Command blocked for security: "
-                            f"{validation_result['reason']}"
-                        ),
-                    }
-                    self.security_layer.audit_log(
-                        "execute_shell_command",
-                        user_role,
-                        "blocked",
-                        {
-                            "task_id": task_id,
-                            "command": command,
-                            "reason": validation_result["reason"],
-                            "security_event": "shell_injection_attempt_blocked",
-                        },
-                    )
-                    logger.warning(
-                        f"SECURITY: Blocked potentially dangerous command: {command}"
-                    )
-                else:
-                    # Command validated - proceed with secure execution
-                    try:
-                        parsed_command = validation_result["parsed_command"]
-                        use_shell = validation_result["use_shell"]
-
-                        if use_shell:
-                            # Use shell=True for commands that require it
-                            # (safe because validated)
-                            process = await asyncio.create_subprocess_shell(
-                                command,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-                        else:
-                            # Use shell=False for maximum security
-                            # (preferred method)
-                            process = await asyncio.create_subprocess_exec(
-                                *parsed_command,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-
-                        stdout, stderr = await process.communicate()
-                        output = stdout.decode().strip()
-                        error = stderr.decode().strip()
-
-                        if process.returncode == 0:
-                            result = {
-                                "status": "success",
-                                "message": "Command executed securely.",
-                                "output": output,
-                            }
-                            self.security_layer.audit_log(
-                                "execute_shell_command",
-                                user_role,
-                                "success",
-                                {
-                                    "task_id": task_id,
-                                    "command": command,
-                                    "validation_passed": True,
-                                    "shell_used": use_shell,
-                                },
-                            )
-                        else:
-                            result = {
-                                "status": "error",
-                                "message": "Command failed.",
-                                "error": error,
-                                "output": output,
-                                "returncode": process.returncode,
-                            }
-                            self.security_layer.audit_log(
-                                "execute_shell_command",
-                                user_role,
-                                "failure",
-                                {
-                                    "task_id": task_id,
-                                    "command": command,
-                                    "error": error,
-                                    "validation_passed": True,
-                                    "shell_used": use_shell,
-                                },
-                            )
-                    except Exception as e:
-                        result = {
-                            "status": "error",
-                            "message": f"Command execution error: {str(e)}",
-                        }
-                        self.security_layer.audit_log(
-                            "execute_shell_command",
-                            user_role,
-                            "error",
-                            {
-                                "task_id": task_id,
-                                "command": command,
-                                "error": str(e),
-                                "validation_passed": True,
-                            },
-                        )
-            elif task_type == "gui_click_element":
-                image_path = task_payload["image_path"]
-                confidence = task_payload.get("confidence", 0.9)
-                button = task_payload.get("button", "left")
-                clicks = task_payload.get("clicks", 1)
-                interval = task_payload.get("interval", 0.0)
-                result = self.gui_controller.click_element(
-                    image_path, confidence, button, clicks, interval
-                )
-                self.security_layer.audit_log(
-                    "gui_click_element",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "image_path": image_path},
-                )
-            elif task_type == "gui_read_text_from_region":
-                x, y, width, height = (
-                    task_payload["x"],
-                    task_payload["y"],
-                    task_payload["width"],
-                    task_payload["height"],
-                )
-                result = self.gui_controller.read_text_from_region(x, y, width, height)
-                self.security_layer.audit_log(
-                    "gui_read_text_from_region",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "region": f"({x},{y},{width},{height})"},
-                )
-            elif task_type == "gui_type_text":
-                text = task_payload["text"]
-                interval = task_payload.get("interval", 0.0)
-                result = self.gui_controller.type_text(text, interval)
-                self.security_layer.audit_log(
-                    "gui_type_text",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "text_preview": text[:50]},
-                )
-            elif task_type == "gui_move_mouse":
-                x, y = task_payload["x"], task_payload["y"]
-                duration = task_payload.get("duration", 0.0)
-                result = self.gui_controller.move_mouse(x, y, duration)
-                self.security_layer.audit_log(
-                    "gui_move_mouse",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "coords": f"({x},{y})"},
-                )
-            elif task_type == "gui_bring_window_to_front":
-                app_title = task_payload["app_title"]
-                result = self.gui_controller.bring_window_to_front(app_title)
-                self.security_layer.audit_log(
-                    "gui_bring_window_to_front",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "app_title": app_title},
-                )
-            elif task_type == "system_query_info":
-                result = self.system_integration.query_system_info()
-                self.security_layer.audit_log(
-                    "system_query_info",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id},
-                )
-            elif task_type == "system_list_services":
-                result = self.system_integration.list_services()
-                self.security_layer.audit_log(
-                    "system_list_services",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id},
-                )
-            elif task_type == "system_manage_service":
-                service_name = task_payload["service_name"]
-                action = task_payload["action"]
-                result = self.system_integration.manage_service(service_name, action)
-                self.security_layer.audit_log(
-                    "system_manage_service",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "service": service_name, "action": action},
-                )
-            elif task_type == "system_execute_command":
-                command = task_payload["command"]
-                result = self.system_integration.execute_system_command(command)
-                self.security_layer.audit_log(
-                    "system_execute_command",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "command": command},
-                )
-            elif task_type == "system_get_process_info":
-                process_name = task_payload.get("process_name")
-                pid = task_payload.get("pid")
-                result = self.system_integration.get_process_info(process_name, pid)
-                self.security_layer.audit_log(
-                    "system_get_process_info",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "process_name": process_name, "pid": pid},
-                )
-            elif task_type == "system_terminate_process":
-                pid = task_payload["pid"]
-                result = self.system_integration.terminate_process(pid)
-                self.security_layer.audit_log(
-                    "system_terminate_process",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "pid": pid},
-                )
-            elif task_type == "web_fetch":
-                url = task_payload["url"]
-                result = await self.system_integration.web_fetch(url)
-                self.security_layer.audit_log(
-                    "web_fetch",
-                    user_role,
-                    result.get("status", "unknown"),
-                    {"task_id": task_id, "url": url},
-                )
-            elif task_type == "respond_conversationally":
-                response_text = task_payload.get(
-                    "response_text", "No response provided."
-                )
-                await event_manager.publish("llm_response", {"response": response_text})
-                result = {
-                    "status": "success",
-                    "message": "Responded conversationally.",
-                    "response_text": response_text,
-                }
-                self.security_layer.audit_log(
-                    "respond_conversationally",
-                    user_role,
-                    "success",
-                    {"task_id": task_id, "response_preview": response_text[:50]},
-                )
-            elif task_type == "ask_user_for_manual":
-                program_name = task_payload["program_name"]
-                question_text = task_payload["question_text"]
-                await event_manager.publish(
-                    "ask_user_for_manual",
-                    {
-                        "task_id": task_id,
-                        "program_name": program_name,
-                        "question_text": question_text,
-                    },
-                ),
-                result = {
-                    "status": "success",
-                    "message": f"Asked user for manual for {program_name}.",
-                }
-                self.security_layer.audit_log(
-                    "ask_user_for_manual",
-                    user_role,
-                    "success",
-                    {"task_id": task_id, "program_name": program_name},
-                )
-            elif task_type == "ask_user_command_approval":
-                command_to_approve = task_payload["command"]
-                await event_manager.publish(
-                    "ask_user_command_approval",
-                    {"task_id": task_id, "command": command_to_approve},
-                ),
-                result = {
-                    "status": "pending_approval",
-                    "message": (
-                        "Requested user approval for command: " f"{command_to_approve}"
-                    ),
-                }
-                self.security_layer.audit_log(
-                    "ask_user_command_approval",
-                    user_role,
-                    "pending",
-                    {"task_id": task_id, "command": command_to_approve},
-                )
-            else:
-                result = {
-                    "status": "error",
-                    "message": f"Unsupported task type: {task_type}",
-                }
-        except Exception as e:
-            result = {
-                "status": "error",
-                "message": f"Error during task execution: {e}",
-            }
-            self.security_layer.audit_log(
-                f"execute_task_{task_type}",
-                user_role,
-                "failure",
-                {"task_id": task_id, "payload": task_payload, "error": str(e)},
-            )
-
+        # Publish task completion event
         await event_manager.publish(
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
@@ -664,6 +323,14 @@ class WorkerNode:
         return result
 
     async def listen_for_tasks(self):
+        """
+        Listen for tasks from orchestrator and process them asynchronously.
+
+        In Redis mode: Subscribes to 'orchestrator_tasks' channel and processes
+        incoming tasks concurrently.
+
+        In local mode: Runs indefinitely without external task listening.
+        """
         if self.redis_client:
             pubsub = self.redis_client.pubsub()
             pubsub.subscribe("orchestrator_tasks")
@@ -687,6 +354,12 @@ class WorkerNode:
                 await asyncio.sleep(10)
 
     async def _process_and_respond(self, task_payload: Dict[str, Any]):
+        """
+        Process a task and publish the result back to orchestrator.
+
+        Args:
+            task_payload: Task data including type, task_id, and parameters
+        """
         task_id = task_payload.get("task_id", "N/A")
         result = await self.execute_task(task_payload)
 
@@ -701,6 +374,11 @@ class WorkerNode:
             pass
 
     async def start(self):
+        """
+        Start the worker node: report capabilities and begin listening for tasks.
+
+        This is the main entry point for the worker node lifecycle.
+        """
         logger.info(f"Worker Node {self.worker_id} starting...")
         await self.report_capabilities()
         await self.listen_for_tasks()

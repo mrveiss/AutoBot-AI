@@ -271,8 +271,8 @@ class PayloadOptimizer:
         compressed = {}
 
         for key, value in data.items():
-            # Skip empty values
-            if value in [None, "", [], {}]:
+            # Skip empty values (checking for falsy containers - Issue #326)
+            if value is None or value == "" or value == [] or value == {}:
                 continue
 
             # Shorten common keys
@@ -302,7 +302,8 @@ class PayloadOptimizer:
         seen = set()
 
         for item in data:
-            if item in [None, "", {}, []]:
+            # Skip empty values (checking for falsy containers - Issue #326)
+            if item is None or item == "" or item == {} or item == []:
                 continue
 
             # Handle duplicates for simple types

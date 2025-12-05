@@ -32,6 +32,13 @@ logger = logging.getLogger(__name__)
 config = UnifiedConfigManager()
 router = APIRouter()
 
+# Performance optimization: O(1) lookup for local machine IPs (Issue #326)
+LOCAL_MACHINE_IPS = {
+    NetworkConstants.LOCALHOST_IP,
+    NetworkConstants.LOCALHOST_NAME,
+    NetworkConstants.MAIN_MACHINE_IP,
+}
+
 
 class ServiceStatus(BaseModel):
     name: str
@@ -618,12 +625,7 @@ class ServiceMonitor:
             remote_vms = {
                 name: host
                 for name, host in vm_hosts.items()
-                if host
-                not in [
-                    NetworkConstants.LOCALHOST_IP,
-                    NetworkConstants.LOCALHOST_NAME,
-                    NetworkConstants.MAIN_MACHINE_IP,
-                ]
+                if host not in LOCAL_MACHINE_IPS
             }
 
             # Add main machine status
@@ -1055,11 +1057,7 @@ async def get_single_vm_status(vm_name: str):
     host = vm_hosts[vm_name]
 
     # Special case for main machine
-    if host in [
-        NetworkConstants.LOCALHOST_IP,
-        NetworkConstants.LOCALHOST_NAME,
-        NetworkConstants.MAIN_MACHINE_IP,
-    ]:
+    if host in LOCAL_MACHINE_IPS:
         return VMStatus(
             name="Main Machine (WSL)",
             host=host,
@@ -1093,12 +1091,7 @@ async def debug_vm_config():
             "remote_vms": {
                 name: host
                 for name, host in vm_hosts.items()
-                if host
-                not in [
-                    NetworkConstants.LOCALHOST_IP,
-                    NetworkConstants.LOCALHOST_NAME,
-                    NetworkConstants.MAIN_MACHINE_IP,
-                ]
+                if host not in LOCAL_MACHINE_IPS
             },
         }
     except Exception as e:

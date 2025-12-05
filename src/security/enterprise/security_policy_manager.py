@@ -21,6 +21,10 @@ from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for policy versioning and data classification (Issue #326)
+MAJOR_VERSION_UPDATE_KEYS = {"rules", "enforcement_mode"}
+SENSITIVE_DATA_CLASSIFICATIONS = {"confidential", "restricted", "pii"}
+
 
 class PolicyType(Enum):
     """Types of security policies"""
@@ -524,7 +528,7 @@ class SecurityPolicyManager:
         major, minor = int(version_parts[0]), int(version_parts[1])
 
         # Increment version
-        if any(key in updates for key in ["rules", "enforcement_mode"]):
+        if any(key in updates for key in MAJOR_VERSION_UPDATE_KEYS):
             major += 1
             minor = 0
         else:
@@ -542,7 +546,7 @@ class SecurityPolicyManager:
         policy.author = author
 
         # Reset approval if significant changes
-        if any(key in updates for key in ["rules", "enforcement_mode"]):
+        if any(key in updates for key in MAJOR_VERSION_UPDATE_KEYS):
             policy.status = PolicyStatus.DRAFT
             policy.approved_by = None
             policy.approved_at = None
@@ -785,7 +789,7 @@ class SecurityPolicyManager:
             if rule["name"] == "encryption_at_rest":
                 if (
                     rule["value"]
-                    and data_classification in ["confidential", "restricted", "pii"]
+                    and data_classification in SENSITIVE_DATA_CLASSIFICATIONS
                     and not encryption_status.get("at_rest", False)
                 ):
                     result["compliant"] = False

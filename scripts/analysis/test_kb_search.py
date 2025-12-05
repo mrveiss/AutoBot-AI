@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
 
 from src.knowledge_base import KnowledgeBase
-from src.chat_workflow_manager import ChatWorkflowManager
+from src.chat_workflow import ChatWorkflowManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

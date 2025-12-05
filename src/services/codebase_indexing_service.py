@@ -32,6 +32,10 @@ from src.knowledge_base_factory import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for file type and metadata filtering (Issue #326)
+JAVASCRIPT_LANGUAGE_TYPES = {"javascript", "typescript"}
+EXCLUDED_CHUNK_METADATA_KEYS = {"content"}
+
 
 @dataclass
 class IndexingProgress:
@@ -584,7 +588,7 @@ class CodebaseIndexingService:
             return self.chunker.chunk_vue_file(content, str(file_info.path))
         elif file_info.language == "markdown":
             return self.chunker.chunk_markdown_file(content, str(file_info.path))
-        elif file_info.language in ["javascript", "typescript"]:
+        elif file_info.language in JAVASCRIPT_LANGUAGE_TYPES:
             return self.chunker.chunk_javascript_content(content)
         else:
             return self.chunker.chunk_generic_file(content, str(file_info.path))
@@ -615,7 +619,7 @@ class CodebaseIndexingService:
 
                 # Add chunk-specific metadata
                 for key, value in chunk.items():
-                    if key not in ["content"]:
+                    if key not in EXCLUDED_CHUNK_METADATA_KEYS:
                         metadata[f"chunk_{key}"] = value
 
                 # Store in knowledge base

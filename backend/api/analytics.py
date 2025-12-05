@@ -39,6 +39,9 @@ from backend.api.analytics_controller import (
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
 
+# Module-level constants for O(1) lookups (Issue #326)
+ANALYTICS_REDIS_DATABASES = {RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, RedisDatabase.MAIN}
+
 
 # ============================================================================
 # DASHBOARD OVERVIEW ENDPOINTS
@@ -710,7 +713,7 @@ async def get_analytics_status():
     }
 
     # Check Redis connectivity
-    for db in [RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, RedisDatabase.MAIN]:
+    for db in ANALYTICS_REDIS_DATABASES:  # O(1) lookups for membership checks (Issue #326)
         try:
             redis_conn = await analytics_controller.get_redis_connection(db)
             if redis_conn:

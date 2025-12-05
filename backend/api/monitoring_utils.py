@@ -16,6 +16,9 @@ from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for critical service statuses (Issue #326)
+CRITICAL_SERVICE_STATUSES = {"critical", "offline"}
+
 
 def _calculate_overall_health(dashboard: Metadata) -> str:
     """Calculate overall system health based on dashboard data"""
@@ -45,7 +48,7 @@ def _calculate_overall_health(dashboard: Metadata) -> str:
         # Service health
         if dashboard.get("services"):
             critical_services = any(
-                service.get("status") in ["critical", "offline"]
+                service.get("status") in CRITICAL_SERVICE_STATUSES
                 for service in dashboard["services"].values()
             )
             if critical_services:

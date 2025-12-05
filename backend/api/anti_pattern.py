@@ -23,6 +23,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for refactoring recommendation keywords (Issue #326)
+REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}
+
 # Lazy initialization for detector (thread-safe)
 import asyncio
 
@@ -390,7 +393,7 @@ async def detect_code_smells(request: AnalysisRequest):
                 "by_type": by_type,
                 "recommendations": [
                     rec for rec in report.recommendations
-                    if any(t in rec.lower() for t in ["method", "parameter", "lazy", "clump"])
+                    if any(t in rec.lower() for t in REFACTORING_KEYWORDS)
                 ]
             }
         )

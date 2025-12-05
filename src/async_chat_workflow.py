@@ -21,6 +21,12 @@ from src.llm_interface import ChatMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for message classification keywords (Issue #326)
+TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}
+DESKTOP_KEYWORDS = {"desktop", "gui", "window", "screen"}
+SYSTEM_KEYWORDS = {"system", "config", "install", "setup"}
+RESEARCH_KEYWORDS = {"research", "find", "search", "investigate"}
+
 
 class MessageType(Enum):
     """Message classification types"""
@@ -278,23 +284,13 @@ class AsyncChatWorkflow:
         message_lower = message.lower()
 
         # Simple keyword-based classification
-        if any(
-            word in message_lower
-            for word in ["terminal", "command", "bash", "shell", "run"]
-        ):
+        if any(word in message_lower for word in TERMINAL_KEYWORDS):
             return MessageType.TERMINAL_TASK
-        elif any(
-            word in message_lower for word in ["desktop", "gui", "window", "screen"]
-        ):
+        elif any(word in message_lower for word in DESKTOP_KEYWORDS):
             return MessageType.DESKTOP_TASK
-        elif any(
-            word in message_lower for word in ["system", "config", "install", "setup"]
-        ):
+        elif any(word in message_lower for word in SYSTEM_KEYWORDS):
             return MessageType.SYSTEM_TASK
-        elif any(
-            word in message_lower
-            for word in ["research", "find", "search", "investigate"]
-        ):
+        elif any(word in message_lower for word in RESEARCH_KEYWORDS):
             return MessageType.RESEARCH_NEEDED
         else:
             return MessageType.GENERAL_QUERY

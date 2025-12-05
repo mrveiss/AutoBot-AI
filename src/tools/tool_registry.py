@@ -21,6 +21,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for tool name matching (Issue #326)
+EXECUTE_COMMAND_VARIANTS = {"executesystemcommand", "systemexecutecommand"}
+QUERY_SYSTEM_INFO_VARIANTS = {"querysysteminformation", "systemqueryinfo"}
+LIST_SERVICES_VARIANTS = {"listsystemservices", "systemlistservices"}
+MANAGE_SERVICE_VARIANTS = {"manageservice", "systemmanageservice"}
+GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
+TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
+
 
 class ToolRegistry:
     """
@@ -448,27 +456,27 @@ class ToolRegistry:
         # Normalize tool name variations
         tool_name = tool_name.lower().replace("_", "").replace("-", "")
 
-        # System tools
-        if tool_name in ["executesystemcommand", "systemexecutecommand"]:
+        # System tools (O(1) lookup - Issue #326)
+        if tool_name in EXECUTE_COMMAND_VARIANTS:
             return await self.execute_system_command(tool_args.get("command", ""))
 
-        elif tool_name in ["querysysteminformation", "systemqueryinfo"]:
+        elif tool_name in QUERY_SYSTEM_INFO_VARIANTS:
             return await self.query_system_information()
 
-        elif tool_name in ["listsystemservices", "systemlistservices"]:
+        elif tool_name in LIST_SERVICES_VARIANTS:
             return await self.list_system_services()
 
-        elif tool_name in ["manageservice", "systemmanageservice"]:
+        elif tool_name in MANAGE_SERVICE_VARIANTS:
             return await self.manage_service(
                 tool_args.get("service_name", ""), tool_args.get("action", "")
             )
 
-        elif tool_name in ["getprocessinfo", "systemgetprocessinfo"]:
+        elif tool_name in GET_PROCESS_INFO_VARIANTS:
             return await self.get_process_info(
                 tool_args.get("process_name"), tool_args.get("pid")
             )
 
-        elif tool_name in ["terminateprocess", "systemterminateprocess"]:
+        elif tool_name in TERMINATE_PROCESS_VARIANTS:
             return await self.terminate_process(tool_args.get("pid", ""))
 
         elif tool_name == "webfetch":

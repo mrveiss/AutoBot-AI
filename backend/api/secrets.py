@@ -18,8 +18,10 @@ import json
 import logging
 import os
 import re
+import threading
 import uuid
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from time import time
@@ -187,6 +189,11 @@ class SecretsManager:
         self.key_file = str(get_data_path("secrets.key"))
         self._initialize_encryption()
 
+        # Cache layer to reduce file I/O (Issue #327)
+        self._secrets_cache: Optional[Dict[str, Dict]] = None
+        self._cache_lock = threading.RLock()  # Thread-safe access to cache
+        self._cache_mtime: Optional[float] = None  # Track file modification time
+
     def _ensure_directories(self):
         """Ensure data directory exists - now handled by centralized paths"""
         # This method is kept for compatibility but functionality moved to centralized paths
@@ -216,28 +223,89 @@ class SecretsManager:
         return self.cipher.decrypt(base64.b64decode(encrypted_value.encode())).decode()
 
     def _load_secrets(self) -> Dict[str, Dict]:
-        """Load secrets from encrypted storage"""
-        if not os.path.exists(self.secrets_file):
-            return {}
+        """
+        Load secrets from encrypted storage with thread-safe caching (Issue #327).
 
-        try:
-            with open(self.secrets_file, "r") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            logger.warning("Secrets file corrupted or missing, initializing empty")
-            return {}
+        Uses in-memory cache to avoid repeated file reads with automatic
+        invalidation if file is modified externally.
+
+        Returns:
+            Deep copy of secrets dict to prevent race conditions
+        """
+        with self._cache_lock:
+            # Check if file exists
+            if not os.path.exists(self.secrets_file):
+                self._secrets_cache = {}
+                self._cache_mtime = None
+                return deepcopy(self._secrets_cache)
+
+            # Get current file modification time
+            try:
+                current_mtime = os.path.getmtime(self.secrets_file)
+            except OSError as e:
+                logger.error(f"Failed to get secrets file mtime: {e}")
+                # File may have been deleted - return empty dict
+                self._secrets_cache = {}
+                self._cache_mtime = None
+                return deepcopy(self._secrets_cache)
+
+            # Check if cache is valid
+            if self._secrets_cache is not None and self._cache_mtime == current_mtime:
+                # Return deep copy to prevent race conditions
+                return deepcopy(self._secrets_cache)
+
+            # Cache miss or invalidated - reload from disk
+            try:
+                with open(self.secrets_file, "r", encoding="utf-8") as f:
+                    self._secrets_cache = json.load(f)
+                    self._cache_mtime = current_mtime
+                    return deepcopy(self._secrets_cache)
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                logger.warning(f"Secrets file corrupted or missing: {e}, initializing empty")
+                self._secrets_cache = {}
+                self._cache_mtime = None
+                return deepcopy(self._secrets_cache)
 
     def _save_secrets(self, secrets: Dict[str, Dict]):
-        """Save secrets to encrypted storage"""
+        """
+        Save secrets to encrypted storage with thread-safe cache update (Issue #327).
+
+        Writes to disk immediately and updates in-memory cache with current mtime.
+        Thread-safe to prevent race conditions during concurrent writes.
+
+        Args:
+            secrets: Secrets dictionary to save
+        """
 
         def json_serializer(obj):
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
             return str(obj)
 
-        with open(self.secrets_file, "w") as f:
-            json.dump(secrets, f, indent=2, default=json_serializer)
-        os.chmod(self.secrets_file, 0o600)  # Restrict permissions
+        with self._cache_lock:
+            with open(self.secrets_file, "w", encoding="utf-8") as f:
+                json.dump(secrets, f, indent=2, default=json_serializer)
+            os.chmod(self.secrets_file, 0o600)  # Restrict permissions
+
+            # Update cache and mtime after successful write
+            self._secrets_cache = deepcopy(secrets)
+            try:
+                self._cache_mtime = os.path.getmtime(self.secrets_file)
+            except OSError as e:
+                logger.error(f"Failed to update cache mtime: {e}")
+                self._cache_mtime = None
+
+    def _invalidate_cache(self):
+        """
+        Invalidate the secrets cache to force reload from disk (Issue #327).
+
+        Thread-safe method to manually invalidate cache.
+        Use when you know external processes have modified the secrets file.
+        Note: Automatic mtime-based invalidation handles most cases.
+        """
+        with self._cache_lock:
+            self._secrets_cache = None
+            self._cache_mtime = None
 
     def create_secret(self, request: SecretCreateRequest) -> SecretModel:
         """Create a new secret"""

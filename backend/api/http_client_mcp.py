@@ -44,6 +44,8 @@ from src.utils.http_client import get_http_client
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["http_client_mcp", "mcp"])
 
+# Performance optimization: O(1) lookup for allowed HTTP schemes (Issue #326)
+ALLOWED_HTTP_SCHEMES = {"http", "https"}
 
 # Security Configuration
 
@@ -110,7 +112,7 @@ def is_domain_allowed(url: str) -> bool:
         parsed = urlparse(url)
 
         # Require HTTP/HTTPS
-        if parsed.scheme not in ["http", "https"]:
+        if parsed.scheme not in ALLOWED_HTTP_SCHEMES:
             logger.warning(f"Blocked non-HTTP scheme: {parsed.scheme}")
             return False
 

@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["logs"])
 
+# Performance optimization: O(1) lookup for log level detection (Issue #326)
+LOG_LEVEL_KEYWORDS = {"CRITICAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"}
+
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
@@ -441,7 +444,7 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
 
                 # Extract log level from message
                 message_upper = message.upper()
-                for level in ["CRITICAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"]:
+                for level in LOG_LEVEL_KEYWORDS:
                     if level in message_upper:
                         parsed["level"] = "WARNING" if level == "WARN" else level
                         break
@@ -530,7 +533,7 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
                 )
 
                 # Look for log level
-                for level in ["CRITICAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"]:
+                for level in LOG_LEVEL_KEYWORDS:
                     if level in line.upper():
                         parsed["level"] = "WARNING" if level == "WARN" else level
                         break

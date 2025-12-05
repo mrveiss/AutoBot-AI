@@ -26,6 +26,10 @@ router = APIRouter(prefix="/log-patterns", tags=["log-patterns", "analytics"])
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
+# Performance optimization: O(1) lookup for error levels and log level iteration (Issue #326)
+ERROR_LEVELS = {"ERROR", "CRITICAL"}
+LOG_LEVEL_PRIORITIES = ["CRITICAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG"]
+
 
 # ============================================================================
 # Pydantic Models
@@ -140,7 +144,7 @@ class LogPatternMiner:
     def extract_log_level(self, line: str) -> str:
         """Extract log level from a log line"""
         line_upper = line.upper()
-        for level in ["CRITICAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG"]:
+        for level in LOG_LEVEL_PRIORITIES:
             if level in line_upper:
                 return "WARNING" if level == "WARN" else level
         return "INFO"
@@ -225,7 +229,7 @@ class LogPatternMiner:
                 if duration > 0:
                     freq_per_hour = data["occurrences"] / (duration / 3600)
 
-            is_error = any(l in ["ERROR", "CRITICAL"] for l in data["levels"])
+            is_error = any(l in ERROR_LEVELS for l in data["levels"])  # Issue #326
 
             patterns.append(
                 LogPattern(
@@ -272,7 +276,7 @@ class LogPatternMiner:
                 hourly_counts[hour_key][source] += 1
 
                 level = self.extract_log_level(line)
-                if level in ["ERROR", "CRITICAL"]:
+                if level in ERROR_LEVELS:  # O(1) lookup (Issue #326)
                     error_counts[hour_key] += 1
 
         # Detect error spikes
@@ -357,7 +361,7 @@ class LogPatternMiner:
                 hourly_data[hour_key]["total"] += 1
 
                 level = self.extract_log_level(line)
-                if level in ["ERROR", "CRITICAL"]:
+                if level in ERROR_LEVELS:  # O(1) lookup (Issue #326)
                     hourly_data[hour_key]["errors"] += 1
                 elif level == "WARNING":
                     hourly_data[hour_key]["warnings"] += 1
@@ -505,7 +509,7 @@ def _process_error_hotspot_line(
     hourly_errors[hour_key]["total"] += 1
 
     level = pattern_miner.extract_log_level(line)
-    if level in ["ERROR", "CRITICAL"]:
+    if level in ERROR_LEVELS:  # Issue #326
         hourly_errors[hour_key]["errors"] += 1
         if len(hourly_errors[hour_key]["samples"]) < 5:
             hourly_errors[hour_key]["samples"].append(line[:200])
@@ -879,7 +883,7 @@ async def get_realtime_summary():
             "level_counts": dict(level_counts),
             "error_count": level_counts.get("ERROR", 0) + level_counts.get("CRITICAL", 0),
             "recent_errors": [
-                log for log in recent_logs if log["level"] in ["ERROR", "CRITICAL"]
+                log for log in recent_logs if log["level"] in ERROR_LEVELS  # Issue #326
             ][:10],
             "timestamp": datetime.now().isoformat(),
         }

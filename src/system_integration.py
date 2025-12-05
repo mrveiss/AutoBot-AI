@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 class SystemIntegration:
+    """
+    Cross-platform system integration and process management.
+
+    Provides unified interface for system commands, GUI automation,
+    process monitoring, and OS-specific operations across Windows,
+    macOS, and Linux platforms.
+    """
+
     def __init__(self):
         self.os_type = platform.system()
         logger.info(f"SystemIntegration initialized for OS: {self.os_type}")
@@ -335,17 +343,29 @@ class SystemIntegration:
         """
         import psutil  # psutil is already in requirements.txt
 
+        def _matches_search_criteria(pinfo: Dict[str, Any]) -> bool:
+            """Check if process matches search criteria."""
+            # If no criteria specified, match all processes
+            if not process_name and not pid:
+                return True
+
+            # Check if process name matches (case-insensitive substring)
+            if process_name and process_name.lower() in pinfo["name"].lower():
+                return True
+
+            # Check if PID matches exactly
+            if pid and pinfo["pid"] == pid:
+                return True
+
+            return False
+
         processes_info = []
         for proc in psutil.process_iter(
             ["pid", "name", "username", "cpu_percent", "memory_percent"]
         ):
             try:
                 pinfo = proc.info
-                if (
-                    (process_name and process_name.lower() in pinfo["name"].lower())
-                    or (pid and pinfo["pid"] == pid)
-                    or (not process_name and not pid)
-                ):
+                if _matches_search_criteria(pinfo):
                     processes_info.append(pinfo)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
                 logger.debug("Process access error: %s", e)

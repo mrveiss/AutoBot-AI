@@ -22,6 +22,24 @@ from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for routing patterns (Issue #326)
+CODE_SEARCH_TERMS = {"search", "find", "code", "function"}
+CLASSIFICATION_TERMS = {"classify", "category", "type"}
+GREETING_PATTERNS = {"hello", "hi", "how are you", "thank you", "goodbye"}
+SYSTEM_COMMAND_PATTERNS = {
+    "run",
+    "execute",
+    "command",
+    "system",
+    "shell",
+    "terminal",
+    "ps",
+    "ls",
+    "df",
+}
+RESEARCH_PATTERNS = {"search web", "research", "find online", "latest", "current", "recent"}
+KNOWLEDGE_PATTERNS = {"according to", "based on documents", "analyze", "summarize"}
+
 # Import communication protocol
 try:
     from src.protocols.agent_communication import get_communication_manager
@@ -529,16 +547,14 @@ class AgentOrchestrator:
         request_lower = request.lower()
 
         # Prefer specific agent types based on content
-        if any(
-            term in request_lower for term in ["search", "find", "code", "function"]
-        ):
+        if any(term in request_lower for term in CODE_SEARCH_TERMS):  # O(1) lookup (Issue #326)
             npu_agents = [
                 a for a in healthy_agents if a.agent_type == "npu_code_search"
             ]
             if npu_agents:
                 return npu_agents[0]
 
-        if any(term in request_lower for term in ["classify", "category", "type"]):
+        if any(term in request_lower for term in CLASSIFICATION_TERMS):  # O(1) lookup (Issue #326)
             classification_agents = [
                 a for a in healthy_agents if a.agent_type == "classification"
             ]
@@ -638,10 +654,7 @@ class AgentOrchestrator:
         request_lower = request.lower()
 
         # Chat patterns
-        if any(
-            pattern in request_lower
-            for pattern in ["hello", "hi", "how are you", "thank you", "goodbye"]
-        ):
+        if any(pattern in request_lower for pattern in GREETING_PATTERNS):  # O(1) lookup (Issue #326)
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.CHAT,
@@ -650,20 +663,7 @@ class AgentOrchestrator:
             }
 
         # System command patterns
-        if any(
-            pattern in request_lower
-            for pattern in [
-                "run",
-                "execute",
-                "command",
-                "system",
-                "shell",
-                "terminal",
-                "ps",
-                "ls",
-                "df",
-            ]
-        ):
+        if any(pattern in request_lower for pattern in SYSTEM_COMMAND_PATTERNS):  # O(1) lookup (Issue #326)
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.SYSTEM_COMMANDS,
@@ -672,17 +672,7 @@ class AgentOrchestrator:
             }
 
         # Research patterns
-        if any(
-            pattern in request_lower
-            for pattern in [
-                "search web",
-                "research",
-                "find online",
-                "latest",
-                "current",
-                "recent",
-            ]
-        ):
+        if any(pattern in request_lower for pattern in RESEARCH_PATTERNS):  # O(1) lookup (Issue #326)
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.RESEARCH,
@@ -692,15 +682,7 @@ class AgentOrchestrator:
             }
 
         # Knowledge/RAG patterns
-        if any(
-            pattern in request_lower
-            for pattern in [
-                "according to",
-                "based on documents",
-                "analyze",
-                "summarize",
-            ]
-        ):
+        if any(pattern in request_lower for pattern in KNOWLEDGE_PATTERNS):  # O(1) lookup (Issue #326)
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.KNOWLEDGE_RETRIEVAL,

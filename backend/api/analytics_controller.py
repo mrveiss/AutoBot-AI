@@ -44,6 +44,10 @@ config = UnifiedConfigManager()
 # Lock for thread-safe analytics state access
 _analytics_state_lock = asyncio.Lock()
 
+# Performance optimization: O(1) lookup for analysis type routing (Issue #326)
+COMMUNICATION_CHAIN_ANALYSIS_TYPES = {"full", "communication_chains"}
+CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
+
 
 # Simple service address function using configuration
 def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
@@ -202,14 +206,14 @@ class AnalyticsController:
                 return analysis_results
 
             # Run code analysis suite
-            if request.analysis_type in ["full", "communication_chains"]:
+            if request.analysis_type in COMMUNICATION_CHAIN_ANALYSIS_TYPES:
                 await self._run_code_analysis_suite(request, analysis_results)
 
             # Run code indexing if available
-            if self.code_index_path.exists() and request.analysis_type in [
-                "full",
-                "incremental",
-            ]:
+            if (
+                self.code_index_path.exists()
+                and request.analysis_type in CODE_INDEXING_ANALYSIS_TYPES
+            ):
                 await self._run_code_indexing(request, analysis_results)
 
             # Store results in cache (thread-safe)

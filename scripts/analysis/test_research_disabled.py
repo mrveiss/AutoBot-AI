@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_research_disabled():
     """Test behavior when research is disabled"""
-    from src.chat_workflow_manager import ChatWorkflowManager
+    from src.chat_workflow import ChatWorkflowManager
 
     print("=== Testing Research Agent Disabled Scenario ===\n")
 

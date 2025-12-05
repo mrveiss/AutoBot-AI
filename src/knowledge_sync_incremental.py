@@ -41,6 +41,10 @@ from src.utils.semantic_chunker_gpu import (
 
 logger = get_llm_logger("knowledge_sync_incremental")
 
+# O(1) lookup optimization constants (Issue #326)
+APPROVAL_KEYWORDS = {"approved", "denied", "executed", "rejected"}
+PROJECT_ROOT_FILES = {"README.md", "CLAUDE.md"}
+
 
 @dataclass
 class FileMetadata:
@@ -408,7 +412,7 @@ class IncrementalKnowledgeSync:
             return "reports"
         elif "troubleshooting" in path_str:
             return "troubleshooting"
-        elif relative_path.name in ["README.md", "CLAUDE.md"]:
+        elif relative_path.name in PROJECT_ROOT_FILES:  # O(1) lookup (Issue #326)
             return "project-overview"
         elif path_str.endswith(".py"):
             return "source-code"

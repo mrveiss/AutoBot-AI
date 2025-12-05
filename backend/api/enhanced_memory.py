@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 
+# Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
+TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.CANCELLED}
+
 # URGENT FIX: Use lazy initialization to prevent blocking during module import
 memory_manager = None
 markdown_system = None
@@ -230,7 +233,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
 
             if status_enum == TaskStatus.IN_PROGRESS:
                 success = memory_manager.start_task(task_id)
-            elif status_enum in [TaskStatus.COMPLETED, TaskStatus.CANCELLED]:
+            elif status_enum in TERMINAL_TASK_STATUSES:
                 success = memory_manager.complete_task(
                     task_id, request.outputs, status_enum
                 )

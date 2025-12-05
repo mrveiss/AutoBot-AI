@@ -20,7 +20,7 @@ from fastapi import FastAPI
 
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history_manager import ChatHistoryManager
-from src.chat_workflow_manager import ChatWorkflowManager
+from src.chat_workflow import ChatWorkflowManager
 from src.security_layer import SecurityLayer
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.background_llm_sync import BackgroundLLMSync

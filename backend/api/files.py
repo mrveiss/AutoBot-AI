@@ -90,6 +90,9 @@ ALLOWED_EXTENSIONS = {
     ".gi",
 }
 
+# Performance optimization: O(1) lookup for invalid path characters (Issue #326)
+INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
+
 
 class FileInfo(BaseModel):
     """File information model"""
@@ -158,7 +161,7 @@ def validate_and_resolve_path(path: str) -> Path:
         ".." in clean_path
         or clean_path.startswith("/")
         or "~" in clean_path
-        or any(char in clean_path for char in ["<", ">", ":", '"', "|", "?", "*"])
+        or any(char in clean_path for char in INVALID_PATH_CHARACTERS)
     ):
         raise HTTPException(
             status_code=400, detail="Invalid path: path traversal not allowed"
@@ -628,6 +631,9 @@ async def view_file(request: Request, path: str):
             # PERFORMANCE FIX: Convert to async file I/O
             async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
                 content = await f.read()
+        except OSError as e:
+            logger.error(f"Failed to read file {target_file}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
         except UnicodeDecodeError as e:
             # File is binary, don't include content
             logger.debug("File is binary, skipping content read: %s", e)
@@ -760,6 +766,9 @@ async def preview_file(request: Request, path: str):
             try:
                 async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
                     content = await f.read()
+            except OSError as e:
+                logger.error(f"Failed to read file {target_file}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
             except UnicodeDecodeError:
                 file_type = "binary"
         elif file_info.mime_type.startswith("image/"):

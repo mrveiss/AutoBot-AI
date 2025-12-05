@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 # Create router for search endpoints
 router = APIRouter(tags=["knowledge-search"])
 
+# Performance optimization: O(1) lookup for valid search modes (Issue #326)
+VALID_SEARCH_MODES = {"vector", "text", "auto"}
+
 
 # ===== SEARCH ENDPOINTS =====
 
@@ -230,7 +233,7 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
         results = await kb_to_use.search(
             query=request.query,
             top_k=request.limit,
-            mode=request.mode if request.mode in ["vector", "text", "auto"] else "auto",
+            mode=request.mode if request.mode in VALID_SEARCH_MODES else "auto",
         )
         return {
             "success": True,

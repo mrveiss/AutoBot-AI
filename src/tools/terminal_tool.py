@@ -66,7 +66,7 @@ class TerminalTool:
 
         try:
             # Import here to avoid circular dependency
-            from backend.services.agent_terminal_service import AgentRole
+            from backend.services.command_approval_manager import AgentRole
 
             # Parse agent role
             try:
@@ -166,7 +166,7 @@ class TerminalTool:
                 "Auto-creating session (chat sessions MUST have terminal sessions)."
             )
 
-            from backend.services.agent_terminal_service import AgentRole
+            from backend.services.command_approval_manager import AgentRole
 
             # Auto-create terminal session for this chat conversation
             create_result = await self.agent_terminal_service.create_session(
@@ -199,7 +199,7 @@ class TerminalTool:
                 )
 
                 # Auto-recreate session with same IDs to preserve continuity
-                from backend.services.agent_terminal_service import AgentRole
+                from backend.services.command_approval_manager import AgentRole
 
                 # Use chat_agent role as default for auto-recreation
                 recreate_result = await self.agent_terminal_service.create_session(

@@ -29,6 +29,9 @@ from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
 
+# Performance optimization: O(1) lookup for troubleshooting keywords (Issue #326)
+TROUBLESHOOTING_KEYWORDS = {"error", "problem", "issue", "trouble"}
+
 
 @dataclass
 class SearchResult:
@@ -171,9 +174,7 @@ class AdvancedRAGOptimizer:
         elif any(kw in query_lower for kw in self.procedural_keywords):
             query_type = "procedural"
             complexity_score = 0.6
-        elif any(
-            word in query_lower for word in ["error", "problem", "issue", "trouble"]
-        ):
+        elif any(word in query_lower for word in TROUBLESHOOTING_KEYWORDS):
             query_type = "troubleshooting"
             complexity_score = 0.9
 

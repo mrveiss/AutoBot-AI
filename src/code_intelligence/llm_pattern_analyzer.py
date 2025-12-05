@@ -29,6 +29,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for LLM patterns (Issue #326)
+SIMPLE_LLM_MODELS = {"gpt-3.5", "haiku", "llama"}
+
 
 # =============================================================================
 # Enums
@@ -56,6 +59,10 @@ class OptimizationPriority(Enum):
     MEDIUM = "medium"  # Moderate improvements
     LOW = "low"  # Minor enhancements
     INFO = "info"  # Informational only
+
+
+# Performance optimization: O(1) lookup for priority levels (Issue #326)
+HIGH_PRIORITY_LEVELS = {OptimizationPriority.HIGH, OptimizationPriority.CRITICAL}
 
 
 class CacheOpportunityType(Enum):
@@ -719,7 +726,7 @@ class CodePatternScanner:
             potential += 0.2
 
         # Higher potential if there's a hardcoded model
-        if any(model in line.lower() for model in ["gpt-3.5", "haiku", "llama"]):
+        if any(model in line.lower() for model in SIMPLE_LLM_MODELS):  # O(1) lookup (Issue #326)
             potential += 0.1
 
         return min(potential, 1.0)
@@ -994,7 +1001,7 @@ class RecommendationEngine:
 
         # Caching recommendations
         for cache_opp in cache_opportunities:
-            if cache_opp.priority in [OptimizationPriority.HIGH, OptimizationPriority.CRITICAL]:
+            if cache_opp.priority in HIGH_PRIORITY_LEVELS:  # O(1) lookup (Issue #326)
                 rec = OptimizationRecommendation(
                     recommendation_id=f"rec_{cache_opp.opportunity_id}",
                     category=OptimizationCategory.CACHING,

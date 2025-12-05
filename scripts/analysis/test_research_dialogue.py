@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_research_dialogue():
     """Test the research dialogue workflow"""
-    from src.chat_workflow_manager import process_chat_message
+    from src.chat_workflow import process_chat_message
 
     print("=== Testing Research Dialogue Workflow ===\n")
 

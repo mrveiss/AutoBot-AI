@@ -89,9 +89,15 @@ def get_llm_service(request):
 async def get_chat_workflow_manager(request):
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
     from src.utils.lazy_singleton import lazy_init_singleton_async
-    from src.chat_workflow_manager import ChatWorkflowManager
+    from src.chat_workflow import ChatWorkflowManager
 
     async def create_workflow_manager():
+        """
+        Factory function to create and initialize ChatWorkflowManager.
+
+        Returns:
+            ChatWorkflowManager: Initialized workflow manager instance
+        """
         manager = ChatWorkflowManager()
         await manager.initialize()
         return manager
@@ -342,6 +348,12 @@ async def stream_chat_response(
     """Stream chat response for real-time communication"""
 
     async def generate_stream():
+        """
+        Generate streaming response chunks for real-time chat communication.
+
+        Yields:
+            str: Server-sent events (SSE) formatted data chunks
+        """
         try:
             # Initial setup
             session_id = message.session_id or generate_chat_session_id()
@@ -640,6 +652,12 @@ async def send_chat_message_by_id(
 
     # Process the message using ChatWorkflowManager and stream response
     async def generate_stream():
+        """
+        Generate streaming workflow response for chat message processing.
+
+        Yields:
+            str: Server-sent events (SSE) formatted workflow message chunks
+        """
         try:
             logger.debug(
                 f"[{request_id}] Starting stream generation for chat_id={chat_id}"
@@ -1029,6 +1047,12 @@ async def send_direct_chat_response(
 
     # Stream the response (command approval/denial response)
     async def generate_stream():
+        """
+        Generate streaming response for direct chat interactions (approvals/denials).
+
+        Yields:
+            str: Server-sent events (SSE) formatted response chunks
+        """
         try:
             # Send start event
             start_evt = {

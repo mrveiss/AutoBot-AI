@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/performance", tags=["performance", "analytics"])
 
-
 # ============================================================================
 # Models
 # ============================================================================
@@ -37,6 +36,10 @@ class ImpactLevel(str, Enum):
     HIGH = "high"  # Noticeable slowdown
     MEDIUM = "medium"  # Minor impact
     LOW = "low"  # Optimization opportunity
+
+
+# Performance optimization: O(1) lookup for high-severity impact levels (Issue #326)
+HIGH_SEVERITY_IMPACT_LEVELS = {ImpactLevel.CRITICAL, ImpactLevel.HIGH}
 
 
 class PatternCategory(str, Enum):
@@ -641,7 +644,7 @@ async def get_categories() -> list[dict]:
         else:
             category_counts[cat]["disabled"] += 1
 
-        if pattern.impact in [ImpactLevel.CRITICAL, ImpactLevel.HIGH]:
+        if pattern.impact in HIGH_SEVERITY_IMPACT_LEVELS:
             category_counts[cat][pattern.impact.value] += 1
 
     return [

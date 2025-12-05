@@ -70,6 +70,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for command classification (Issue #326)
+LAUNCH_COMMAND_WORDS = {"open", "launch", "start", "run"}
+CLOSE_COMMAND_WORDS = {"close", "quit", "exit", "stop"}
+SEARCH_COMMAND_WORDS = {"search", "find", "look for"}
+TEXT_INPUT_COMMAND_WORDS = {"type", "write", "input"}
+INTERACTION_COMMAND_WORDS = {"click", "press", "select"}
+NAVIGATION_COMMAND_WORDS = {"navigate", "go to", "browse"}
+MEDIA_CONTROL_COMMAND_WORDS = {"play", "pause", "volume"}
+QUERY_COMMAND_WORDS = {"help", "what", "how", "explain"}
+
 
 class ModalityType(Enum):
     """Types of input modalities supported"""
@@ -79,6 +89,10 @@ class ModalityType(Enum):
     AUDIO = "audio"
     VIDEO = "video"
     COMBINED = "combined"
+
+
+# Modality types for visual processing - placed after enum definition (Issue #326)
+VISUAL_MODALITY_TYPES = {ModalityType.IMAGE, ModalityType.VIDEO}
 
 
 class ProcessingIntent(Enum):
@@ -738,22 +752,22 @@ class VoiceProcessor(BaseModalProcessor):
 
         text_lower = text.lower()
 
-        # Simple rule-based classification
-        if any(word in text_lower for word in ["open", "launch", "start", "run"]):
+        # Simple rule-based classification using O(1) lookups (Issue #326)
+        if any(word in text_lower for word in LAUNCH_COMMAND_WORDS):
             return "launch_application"
-        elif any(word in text_lower for word in ["close", "quit", "exit", "stop"]):
+        elif any(word in text_lower for word in CLOSE_COMMAND_WORDS):
             return "close_application"
-        elif any(word in text_lower for word in ["search", "find", "look for"]):
+        elif any(word in text_lower for word in SEARCH_COMMAND_WORDS):
             return "search"
-        elif any(word in text_lower for word in ["type", "write", "input"]):
+        elif any(word in text_lower for word in TEXT_INPUT_COMMAND_WORDS):
             return "text_input"
-        elif any(word in text_lower for word in ["click", "press", "select"]):
+        elif any(word in text_lower for word in INTERACTION_COMMAND_WORDS):
             return "interaction"
-        elif any(word in text_lower for word in ["navigate", "go to", "browse"]):
+        elif any(word in text_lower for word in NAVIGATION_COMMAND_WORDS):
             return "navigation"
-        elif any(word in text_lower for word in ["play", "pause", "volume"]):
+        elif any(word in text_lower for word in MEDIA_CONTROL_COMMAND_WORDS):
             return "media_control"
-        elif any(word in text_lower for word in ["help", "what", "how", "explain"]):
+        elif any(word in text_lower for word in QUERY_COMMAND_WORDS):
             return "query"
         else:
             return "general_command"
@@ -872,8 +886,8 @@ class UnifiedMultiModalProcessor:
         await self.performance_monitor.auto_optimize()
 
         try:
-            # Route to appropriate processor based on modality
-            if input_data.modality_type in [ModalityType.IMAGE, ModalityType.VIDEO]:
+            # Route to appropriate processor based on modality (O(1) lookup - Issue #326)
+            if input_data.modality_type in VISUAL_MODALITY_TYPES:
                 result = await self.vision_processor.process(input_data)
             elif input_data.modality_type == ModalityType.AUDIO:
                 result = await self.voice_processor.process(input_data)

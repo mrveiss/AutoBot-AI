@@ -36,6 +36,8 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter(tags=["chat-sessions"])
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for valid export formats (Issue #326)
+VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
 
 # ====================================================================
 # Helper Functions
@@ -558,7 +560,7 @@ async def export_session(session_id: str, request: Request, format: str = "json"
         raise ValidationError("Invalid session ID format")
 
     # Validate format
-    if format not in ["json", "txt", "csv"]:
+    if format not in VALID_EXPORT_FORMATS:
         (
             AutoBotError,
             InternalError,
