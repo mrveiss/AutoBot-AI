@@ -43,6 +43,9 @@ from typing import FrozenSet
 # Using frozenset for O(1) membership testing
 PATH_TRAVERSAL_PATTERNS: FrozenSet[str] = frozenset({"..", "/", "\\"})
 
+# Extended patterns including null byte (for session IDs and identifiers)
+INJECTION_PATTERNS: FrozenSet[str] = frozenset({"..", "/", "\\", "\0"})
+
 
 def contains_path_traversal(value: str) -> bool:
     """
@@ -120,9 +123,35 @@ def is_safe_identifier(identifier: str) -> bool:
     return bool(identifier) and not contains_path_traversal(identifier)
 
 
+def contains_injection_patterns(value: str) -> bool:
+    """
+    Check if a string contains injection attack patterns (path traversal + null byte).
+
+    More comprehensive than contains_path_traversal, includes null byte detection
+    for session IDs and identifiers where null byte injection could be a concern.
+
+    Args:
+        value: String to check (session ID, identifier, etc.)
+
+    Returns:
+        True if injection patterns are detected, False otherwise
+
+    Examples:
+        >>> contains_injection_patterns("session\\x00malicious")
+        True
+        >>> contains_injection_patterns("../parent")
+        True
+        >>> contains_injection_patterns("valid_session_id")
+        False
+    """
+    return any(pattern in value for pattern in INJECTION_PATTERNS)
+
+
 __all__ = [
     "PATH_TRAVERSAL_PATTERNS",
+    "INJECTION_PATTERNS",
     "contains_path_traversal",
+    "contains_injection_patterns",
     "is_invalid_name",
     "is_safe_identifier",
 ]
