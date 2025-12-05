@@ -15,7 +15,7 @@ Key Features:
 - Backward compatible with existing chat history system
 
 Architecture:
-- Storage: Redis Stack DB 9 (memory database) on VM3
+- Storage: Redis Stack DB 0 on VM3 (required for RediSearch FT.* commands)
 - Entity Storage: RedisJSON documents
 - Relations: Custom bidirectional indexing
 - Search: RediSearch + Ollama embeddings (nomic-embed-text, 768 dims)
@@ -92,7 +92,7 @@ class AutoBotMemoryGraph:
         self,
         redis_host: Optional[str] = None,
         redis_port: Optional[int] = None,
-        database: int = 9,
+        database: int = 0,
         chat_history_manager: Optional[Any] = None,
     ):
         """
@@ -101,7 +101,7 @@ class AutoBotMemoryGraph:
         Args:
             redis_host: Redis server hostname (default from config)
             redis_port: Redis server port (default from config)
-            database: Redis database number (default: 9)
+            database: Redis database number (default: 0, required for RediSearch)
             chat_history_manager: Optional link to chat history manager
         """
         self.initialized = False
@@ -168,19 +168,21 @@ class AutoBotMemoryGraph:
 
     async def _init_redis_connection(self):
         """
-        Initialize Redis connection to DB 9.
+        Initialize Redis connection to DB 0.
 
         USES CANONICAL PATTERN: get_redis_client() from src/utils/redis_client.py
         This ensures Redis Stack JSON support is properly configured.
+
+        NOTE: Memory uses DB 0 because RediSearch (FT.* commands) only works on DB 0.
         """
         try:
             from src.utils.redis_client import get_redis_client
 
             # CANONICAL: Use get_redis_client for proper Redis Stack support
-            # Database 9 is used for Memory Graph entities
+            # Database 0 is required for RediSearch indexing (FT.* commands)
             self.redis_client = await get_redis_client(
                 async_client=True,
-                database="memory",  # Will map to DB 9 via redis_database_manager
+                database="memory",  # Maps to DB 0 for RediSearch compatibility
             )
 
             # Test connection

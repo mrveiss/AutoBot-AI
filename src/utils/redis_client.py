@@ -108,7 +108,7 @@ class RedisDatabase(Enum):
     WORKFLOWS = 7
     VECTORS = 8
     MODELS = 9
-    MEMORY = 9  # Shares DB 9 with models
+    MEMORY = 0  # Uses DB 0 - required for RediSearch indexing (FT.* commands)
     ANALYTICS = 11
     AUDIT = 10
     NOTIFICATIONS = 12
@@ -754,8 +754,8 @@ class RedisConnectionManager:
             "vectors": 8,
             "rate_limiting": 8,  # Alias for vectors (rate limit counters)
             "models": 9,
-            "memory": 9,
-            "analytics": 9,  # Maps to models/memory database
+            "memory": 0,  # Uses DB 0 - required for RediSearch indexing (FT.* commands)
+            "analytics": 9,  # Maps to models database
             "websockets": 10,
             "config": 11,  # CRITICAL: Cache configuration storage
             "audit": 12,  # Security audit logging (OWASP/NIST compliant)
