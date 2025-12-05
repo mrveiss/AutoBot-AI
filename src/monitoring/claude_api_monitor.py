@@ -261,6 +261,9 @@ class ClaudeAPIMonitor:
 
     Provides comprehensive monitoring, alerting, and analytics
     for Claude API usage to prevent conversation crashes.
+
+    DEPRECATED (Phase 2, Issue #345): Claude API metrics are now tracked in PrometheusMetricsManager.
+    This class will be REMOVED in Phase 5.
     """
 
     def __init__(
@@ -289,6 +292,14 @@ class ClaudeAPIMonitor:
 
         # Setup default alert callback
         self.alert_manager.add_alert_callback(self._log_alert)
+
+        # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
+        try:
+            from src.monitoring.prometheus_metrics import get_metrics_manager
+            self.prometheus = get_metrics_manager()
+        except (ImportError, Exception) as e:
+            logger.warning(f"Prometheus metrics not available: {e}")
+            self.prometheus = None
 
         logger.info("ClaudeAPIMonitor initialized")
 
@@ -319,6 +330,17 @@ class ClaudeAPIMonitor:
         )
 
         self.usage_tracker.add_call(record)
+
+        # Phase 2 (Issue #345): Push to Prometheus
+        if self.prometheus:
+            self.prometheus.record_claude_api_request(
+                tool_name or "unknown",
+                success
+            )
+            if payload_size > 0:
+                self.prometheus.record_claude_api_payload(payload_size)
+            if response_time > 0:
+                self.prometheus.record_claude_api_response_time(response_time)
 
         # Check for immediate alerts
         alerts = self.alert_manager.check_usage_alerts(self.usage_tracker)

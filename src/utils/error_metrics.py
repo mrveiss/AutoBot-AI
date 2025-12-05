@@ -116,6 +116,14 @@ class ErrorMetricsCollector:
         # Metrics retention (24 hours)
         self._retention_seconds = 86400
 
+        # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
+        try:
+            from src.monitoring.prometheus_metrics import get_metrics_manager
+            self.prometheus = get_metrics_manager()
+        except (ImportError, Exception) as e:
+            logger.warning(f"Prometheus metrics not available: {e}")
+            self.prometheus = None
+
     def _create_stats(self) -> ErrorStats:
         """Create default ErrorStats instance"""
         return ErrorStats(error_code=None, category="unknown", component="unknown")
@@ -193,6 +201,16 @@ class ErrorMetricsCollector:
             one_hour_ago = timestamp - 3600
             recent_count = sum(1 for m in self._metrics if m.timestamp > one_hour_ago)
             stats.error_rate = recent_count / 60.0
+
+        # Phase 2 (Issue #345): Push to Prometheus
+        if self.prometheus:
+            self.prometheus.record_error(
+                category.value,
+                component,
+                error_code or "unknown"
+            )
+            # Also update error rate gauge
+            self.prometheus.update_error_rate(component, "1m", stats.error_rate)
 
         # Persist to Redis if available
         if self._redis:
@@ -354,6 +372,9 @@ class ErrorMetricsCollector:
         """
         Get recent error metrics
 
+        DEPRECATED (Phase 2, Issue #345): This method will be removed in Phase 5.
+        Query Prometheus directly at /api/monitoring/metrics for error metrics.
+
         Args:
             limit: Maximum number of metrics to return
             component: Optional component filter
@@ -361,6 +382,14 @@ class ErrorMetricsCollector:
         Returns:
             List of recent ErrorMetric objects
         """
+        import warnings
+        warnings.warn(
+            "get_recent_errors() is deprecated and will be removed in Phase 5. "
+            "Query Prometheus directly at /api/monitoring/metrics instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         metrics = self._metrics
 
         if component:
