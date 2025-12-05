@@ -489,13 +489,17 @@ class ContextCollector:
         """Identify constraints that limit available actions"""
         constraints = []
 
+        # Issue #317: Single-pass grouping of context elements by type (O(n²) → O(n))
+        context_by_type: Dict[str, List[ContextElement]] = {}
+        for ce in context_elements:
+            ctx_type = ce.metadata.get("type")
+            if ctx_type:
+                if ctx_type not in context_by_type:
+                    context_by_type[ctx_type] = []
+                context_by_type[ctx_type].append(ce)
+
         # Check for active takeovers (constraint on autonomous actions)
-        active_takeovers = [
-            ce
-            for ce in context_elements
-            if ce.metadata.get("type") == "active_takeovers"
-        ]
-        if active_takeovers:
+        if context_by_type.get("active_takeovers"):
             constraints.append({
                 "type": "human_takeover_active",
                 "description": "Human operator has taken control",
@@ -504,19 +508,11 @@ class ContextCollector:
             })
 
         # Check system resources (Issue #298 - uses extracted helper)
-        resource_contexts = [
-            ce for ce in context_elements if ce.metadata.get("type") == "resource_usage"
-        ]
-        for resource_context in resource_contexts:
+        for resource_context in context_by_type.get("resource_usage", []):
             constraints.extend(self._check_resource_constraints(resource_context.content))
 
         # Time-based constraints
-        temporal_contexts = [
-            ce
-            for ce in context_elements
-            if ce.metadata.get("type") == "temporal_context"
-        ]
-        for temporal_context in temporal_contexts:
+        for temporal_context in context_by_type.get("temporal_context", []):
             temporal_info = temporal_context.content
             if not temporal_info.get("is_business_hours", True):
                 constraints.append({
@@ -532,43 +528,38 @@ class ContextCollector:
         self, context_elements: List[ContextElement]
     ) -> List[Dict[str, Any]]:
         """Get automation actions from context (Issue #298 - extracted helper)."""
-        actions = []
-        automation_contexts = [
-            ce for ce in context_elements
+        # Issue #317: Single-pass extraction using list comprehension (O(n*m) → O(n+m))
+        return [
+            {
+                "action_type": "automation",
+                "action": opportunity.get("automation_action", "unknown"),
+                "target": opportunity.get("element_id"),
+                "confidence": opportunity.get("confidence", 0.5),
+                "description": opportunity.get("description", ""),
+            }
+            for ce in context_elements
             if ce.metadata.get("type") == "automation_opportunities"
+            for opportunity in ce.content
         ]
-        for auto_context in automation_contexts:
-            for opportunity in auto_context.content:
-                actions.append({
-                    "action_type": "automation",
-                    "action": opportunity.get("automation_action", "unknown"),
-                    "target": opportunity.get("element_id"),
-                    "confidence": opportunity.get("confidence", 0.5),
-                    "description": opportunity.get("description", ""),
-                })
-        return actions
 
     def _get_navigation_actions(
         self, context_elements: List[ContextElement]
     ) -> List[Dict[str, Any]]:
         """Get navigation actions from context (Issue #298 - extracted helper)."""
-        actions = []
-        ui_contexts = [
-            ce for ce in context_elements
+        # Issue #317: Optimized with set conversion for O(1) membership check (O(n*m*k) → O(n*m))
+        return [
+            {
+                "action_type": "navigation",
+                "action": "click_element",
+                "target": element.get("id"),
+                "confidence": element.get("confidence", 0.5),
+                "description": f"Click {element.get('text', 'element')}",
+            }
+            for ce in context_elements
             if ce.metadata.get("type") == "ui_elements"
+            for element in ce.content
+            if "click" in set(element.get("interactions", []))
         ]
-        for ui_context in ui_contexts:
-            for element in ui_context.content:
-                if "click" not in element.get("interactions", []):
-                    continue
-                actions.append({
-                    "action_type": "navigation",
-                    "action": "click_element",
-                    "target": element.get("id"),
-                    "confidence": element.get("confidence", 0.5),
-                    "description": f"Click {element.get('text', 'element')}",
-                })
-        return actions
 
     async def _identify_available_actions(
         self, decision_type: DecisionType, context_elements: List[ContextElement]
