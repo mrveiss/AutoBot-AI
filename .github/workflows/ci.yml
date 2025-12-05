@@ -160,33 +160,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup Node.js PATH
-      run: |
-        # Try NVM first
-        export NVM_DIR="$HOME/.nvm"
-        if [ -s "$NVM_DIR/nvm.sh" ]; then
-          . "$NVM_DIR/nvm.sh"
-          NODE_PATH=$(dirname $(which node) 2>/dev/null || true)
-        fi
-
-        # Try common system paths if NVM didn't work
-        if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH/node" ]; then
-          for path in /usr/local/bin /usr/bin ~/.local/bin; do
-            if [ -x "$path/node" ]; then
-              NODE_PATH="$path"
-              break
-            fi
-          done
-        fi
-
-        if [ -n "$NODE_PATH" ]; then
-          echo "$NODE_PATH" >> $GITHUB_PATH
-          export PATH="$NODE_PATH:$PATH"
-          node --version
-          npm --version
-        else
-          echo "⚠️ Node.js not found - frontend tests may fail"
-        fi
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
     - name: Install frontend dependencies
       run: |
