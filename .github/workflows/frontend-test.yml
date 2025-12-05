@@ -31,6 +31,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js PATH
+        run: |
+          # Ensure Node.js is in PATH for self-hosted runner
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          echo "$(dirname $(which node))" >> $GITHUB_PATH
+          node --version
+          npm --version
+
       - name: Install dependencies
         working-directory: autobot-vue
         run: npm ci
@@ -96,6 +105,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js PATH
+        run: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          echo "$(dirname $(which node))" >> $GITHUB_PATH
+
       - name: Install dependencies
         working-directory: autobot-vue
         run: npm ci
@@ -133,6 +148,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js PATH
+        run: |
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          echo "$(dirname $(which node))" >> $GITHUB_PATH
 
       - name: Install dependencies
         working-directory: autobot-vue
