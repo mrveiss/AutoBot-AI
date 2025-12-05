@@ -377,10 +377,11 @@ class AdvancedRAGOptimizer:
         for candidate in results[1:]:
             # Check similarity with already selected results
             is_diverse = True
+            # Cache candidate.content.lower() outside inner loop (Issue #323)
+            candidate_words = set(candidate.content.lower().split())
 
             for selected in diversified:
                 # Simple diversity check based on content similarity
-                candidate_words = set(candidate.content.lower().split())
                 selected_words = set(selected.content.lower().split())
 
                 if candidate_words and selected_words:
@@ -461,10 +462,12 @@ class AdvancedRAGOptimizer:
             else:
                 # Fallback to simple term-based reranking
                 logger.debug("Using fallback term-based reranking")
+                # Cache query.lower() outside loop (Issue #323)
+                query_lower = query.lower()
+                query_terms = query_lower.split()
 
                 for result in results:
                     # Simple reranking based on query term frequency in content
-                    query_terms = query.lower().split()
                     content_lower = result.content.lower()
 
                     # Count query terms in content
@@ -473,7 +476,7 @@ class AdvancedRAGOptimizer:
                     )
 
                     # Bonus for exact query match
-                    exact_match_bonus = 2 if query.lower() in content_lower else 0
+                    exact_match_bonus = 2 if query_lower in content_lower else 0
 
                     # Combine with existing hybrid score
                     rerank_score = (

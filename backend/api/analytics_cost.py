@@ -333,12 +333,14 @@ async def get_model_pricing():
     pricing_list = []
 
     for model, prices in MODEL_PRICING.items():
+        # Cache model.lower() to avoid repeated computation (Issue #323)
+        model_lower = model.lower()
         # Determine provider from model name
-        if "claude" in model.lower():
+        if "claude" in model_lower:
             provider = "anthropic"
-        elif "gpt" in model.lower() or model.startswith("o1"):
+        elif "gpt" in model_lower or model.startswith("o1"):
             provider = "openai"
-        elif "gemini" in model.lower():
+        elif "gemini" in model_lower:
             provider = "google"
         else:
             provider = "local"

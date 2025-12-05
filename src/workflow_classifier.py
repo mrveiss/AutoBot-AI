@@ -17,6 +17,10 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for workflow classification (Issue #326)
+CRITICAL_CATEGORIES = {"security", "network", "system"}
+INSTALLATION_KEYWORDS = {"install", "setup", "configure"}
+
 
 class WorkflowClassifier:
     """Manages workflow classification rules in Redis."""
@@ -152,10 +156,14 @@ class WorkflowClassifier:
             if category not in keywords:
                 keywords[category] = []
 
-            # Add new keywords, avoiding duplicates
+            # Add new keywords, avoiding duplicates (O(1) lookup - Issue #326)
+            existing_keywords_lower = {k.lower() for k in keywords[category]}
             for keyword in new_keywords:
-                if keyword.lower() not in [k.lower() for k in keywords[category]]:
-                    keywords[category].append(keyword.lower())
+                # Cache keyword.lower() to avoid repeated computation (Issue #323)
+                keyword_lower = keyword.lower()
+                if keyword_lower not in existing_keywords_lower:
+                    keywords[category].append(keyword_lower)
+                    existing_keywords_lower.add(keyword_lower)
 
             self.redis_client.set(self.keywords_key, json.dumps(keywords))
             logger.info(f"Added {len(new_keywords)} keywords to category {category}")
@@ -176,10 +184,10 @@ class WorkflowClassifier:
             keywords_data = self.redis_client.get(self.keywords_key)
             keywords = json.loads(keywords_data) if keywords_data else {}
 
-            # Count keyword matches
+            # Count keyword matches (O(1) category lookup - Issue #326)
             keyword_counts = {}
             for category, keyword_list in keywords.items():
-                if category in ["security", "network", "system"]:
+                if category in CRITICAL_CATEGORIES:
                     # For these categories, check if ANY keyword matches
                     keyword_counts[f"any_{category}"] = any(
                         kw in message_lower for kw in keyword_list
@@ -244,8 +252,8 @@ class WorkflowClassifier:
         if complex_count >= 2:
             return TaskComplexity.COMPLEX
 
-        # Check for installation tasks
-        if any(kw in message_lower for kw in ["install", "setup", "configure"]):
+        # Check for installation tasks (O(1) lookup - Issue #326)
+        if any(kw in message_lower for kw in INSTALLATION_KEYWORDS):
             return TaskComplexity.COMPLEX
 
         # Check for research tasks
