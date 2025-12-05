@@ -9,7 +9,7 @@ Phase 3: Alert Migration (Issue #346)
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel

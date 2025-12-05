@@ -13,7 +13,7 @@ import logging
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
