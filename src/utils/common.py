@@ -14,6 +14,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+logger = logging.getLogger(__name__)
+
 
 class CommonUtils:
     """Common utility functions used across the codebase"""

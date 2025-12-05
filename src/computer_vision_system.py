@@ -6,6 +6,7 @@ Computer Vision System for AutoBot
 Advanced screen understanding and visual automation capabilities
 """
 
+import asyncio
 import base64
 import io
 import logging

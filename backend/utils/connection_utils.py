@@ -191,8 +191,8 @@ class ConnectionTester:
     async def test_ollama_connection() -> Metadata:
         """Test Ollama LLM connection with current configuration"""
         try:
-            endpoint, model = ConnectionUtils._get_ollama_config_from_new_structure()
-            endpoint, model = ConnectionUtils._get_ollama_config_fallback(endpoint, model)
+            endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
+            endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
 
             check_url = endpoint.replace("/api/generate", "/api/tags")
             timeout = aiohttp.ClientTimeout(total=10)
@@ -206,7 +206,7 @@ class ConnectionTester:
                             "endpoint": endpoint,
                             "status_code": response.status,
                         }
-                    return await ConnectionUtils._test_ollama_model(endpoint, model)
+                    return await ConnectionTester._test_ollama_model(endpoint, model)
 
         except Exception as e:
             logger.error(f"Ollama connection test failed: {str(e)}")
