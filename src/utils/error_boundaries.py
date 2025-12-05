@@ -592,8 +592,6 @@ class ErrorBoundaryManager:
 
 
 # Global error boundary manager instance (thread-safe)
-import threading
-
 _error_boundary_manager = None
 _error_boundary_manager_lock = threading.Lock()
 

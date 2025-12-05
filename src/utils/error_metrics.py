@@ -9,9 +9,7 @@ for the error handling system. Integrates with error_boundaries and error_catalo
 """
 
 import asyncio
-import json
 import logging
-import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -47,7 +45,12 @@ def _get_alerts_manager():
 
 @dataclass
 class ErrorMetric:
-    """Single error occurrence metric"""
+    """
+    Single error occurrence metric
+
+    DEPRECATED (Phase 5, Issue #348): No longer used. Metrics stored in Prometheus only.
+    Kept for backward compatibility.
+    """
 
     error_code: Optional[str]
     category: str
@@ -67,7 +70,12 @@ class ErrorMetric:
 
 @dataclass
 class ErrorStats:
-    """Aggregated error statistics"""
+    """
+    Aggregated error statistics
+
+    DEPRECATED (Phase 5, Issue #348): No longer used. Query Prometheus for stats.
+    Kept for backward compatibility.
+    """
 
     error_code: Optional[str]
     category: str

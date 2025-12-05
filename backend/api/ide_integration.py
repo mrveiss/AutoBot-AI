@@ -22,12 +22,10 @@ import hashlib
 import logging
 import re
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -660,8 +658,6 @@ class IDEIntegrationEngine:
 
         if line_num >= len(lines):
             return HoverResponse(contents="")
-
-        line = lines[line_num]
 
         # Check if position is on a diagnostic
         analysis = await self.analyze(

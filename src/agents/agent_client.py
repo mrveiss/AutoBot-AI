@@ -426,8 +426,6 @@ class AgentClient:
 
 
 # Singleton instance for global access (thread-safe)
-import asyncio
-
 _agent_client_instance: Optional[AgentClient] = None
 _agent_client_lock = asyncio.Lock()
 

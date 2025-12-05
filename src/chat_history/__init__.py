@@ -28,7 +28,7 @@ Usage:
     await manager.add_message("user", "Hello!")
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from src.chat_history.analysis import AnalysisMixin
 from src.chat_history.base import ChatHistoryBase

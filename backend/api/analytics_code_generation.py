@@ -536,8 +536,6 @@ class CodeGenerationEngine:
         # Simulate LLM response for demonstration
         # In production, this would use the actual LLM providers
 
-        start_time = time.time()
-
         # Simulate processing time
         await self._simulate_llm_processing()
 

@@ -327,7 +327,7 @@ async def get_services_health():
     health_data = {}
 
     for service in services:
-        status = await query_prometheus_instant(
+        service_status = await query_prometheus_instant(
             f'autobot_service_status{{service_name="{service}",status="online"}}'
         )
         response_time = await query_prometheus_instant(
@@ -338,7 +338,7 @@ async def get_services_health():
         )
 
         health_data[service] = {
-            "online": bool(status and status == 1),
+            "online": bool(service_status and service_status == 1),
             "response_time_seconds": response_time,
             "health_score": health_score,
         }

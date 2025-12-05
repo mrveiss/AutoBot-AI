@@ -252,8 +252,6 @@ class NPUTaskQueue:
 
 
 # Global NPU client instance (thread-safe)
-import asyncio
-
 _npu_client = None
 _npu_queue = None
 _npu_client_lock = asyncio.Lock()

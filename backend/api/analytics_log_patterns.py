@@ -229,7 +229,7 @@ class LogPatternMiner:
                 if duration > 0:
                     freq_per_hour = data["occurrences"] / (duration / 3600)
 
-            is_error = any(l in ERROR_LEVELS for l in data["levels"])  # Issue #326
+            is_error = any(level in ERROR_LEVELS for level in data["levels"])  # Issue #326
 
             patterns.append(
                 LogPattern(
@@ -641,7 +641,7 @@ async def mine_log_patterns(
             ),
             "anomalies_detected": len(anomalies),
             "trends_detected": len(trends),
-            "sources_analyzed": list(set(l[1] for l in log_lines)),
+            "sources_analyzed": list(set(line[1] for line in log_lines)),
             "time_range_hours": hours,
         }
 
@@ -726,7 +726,7 @@ async def get_pattern_details(
             "level_distribution": dict(levels),
             "source_distribution": dict(sources),
             "hourly_distribution": dict(sorted(hourly_dist.items())),
-            "sample_messages": [l[0][:500] for l in log_lines[:20]],
+            "sample_messages": [line[0][:500] for line in log_lines[:20]],
         }
 
     except HTTPException:

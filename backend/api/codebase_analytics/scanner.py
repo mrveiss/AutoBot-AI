@@ -6,10 +6,8 @@ Codebase scanning and indexing functions
 """
 
 import asyncio
-import json
 import logging
 import threading
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -17,7 +15,7 @@ from typing import Dict, Optional
 from backend.type_defs.common import Metadata
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file
-from .storage import get_redis_connection, get_code_collection, InMemoryStorage
+from .storage import get_code_collection
 
 logger = logging.getLogger(__name__)
 

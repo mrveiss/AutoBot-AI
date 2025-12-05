@@ -121,7 +121,6 @@ class TracingMiddleware(BaseHTTPMiddleware):
             attributes["http.user_agent"] = user_agent[:200]  # Truncate long UAs
 
         response: Optional[Response] = None
-        error: Optional[Exception] = None
 
         # Use the tracing service's span context manager
         with self.tracing.span(
@@ -153,7 +152,6 @@ class TracingMiddleware(BaseHTTPMiddleware):
                 return response
 
             except Exception as e:
-                error = e
                 # Record the exception in the span
                 if span and span.is_recording():
                     span.set_status(Status(StatusCode.ERROR, str(e)))

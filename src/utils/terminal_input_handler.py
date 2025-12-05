@@ -130,7 +130,7 @@ class TerminalInputHandler:
         try:
             return self._get_interactive_input(prompt, timeout, default)
         except KeyboardInterrupt:
-            print("\nOperation cancelled by user")
+            logger.info("Operation cancelled by user")
             return default
 
     def _get_testing_response(self, prompt: str, default: str) -> str:
@@ -316,8 +316,6 @@ class TerminalInputHandler:
 
 
 # Global instance (thread-safe)
-import threading
-
 _terminal_input_handler = None
 _terminal_input_handler_lock = threading.Lock()
 
