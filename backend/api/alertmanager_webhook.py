@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from backend.api.websockets import ws_manager
+from backend.api.monitoring import ws_manager
 
 logger = logging.getLogger(__name__)
 
