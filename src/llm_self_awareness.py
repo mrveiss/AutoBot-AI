@@ -23,6 +23,18 @@ from src.project_state_manager import get_project_state_manager
 
 logger = logging.getLogger(__name__)
 
+# O(1) lookup optimization constants (Issue #326)
+CORE_KEYWORDS = {"api", "endpoint", "service"}
+AI_KEYWORDS = {"ai", "llm", "model", "intelligent"}
+SECURITY_KEYWORDS = {"security", "auth", "audit"}
+INTERFACE_KEYWORDS = {"ui", "interface", "web", "gui"}
+DATA_KEYWORDS = {"data", "storage", "memory", "cache"}
+AUTOMATION_KEYWORDS = {"auto", "workflow", "task"}
+MONITORING_KEYWORDS = {"monitor", "metric", "health"}
+PROGRESSION_QUERIES = {"upgrade", "progress"}
+CAPABILITY_QUERIES = {"capability", "feature"}
+DETAILED_CONTEXT_LEVELS = {"detailed", "full"}
+
 
 class LLMSelfAwareness:
     """Manages LLM agent self-awareness of system state and capabilities"""
@@ -240,34 +252,34 @@ class LLMSelfAwareness:
             if not categorized:
                 capability_lower = capability.lower()
                 if any(
-                    word in capability_lower for word in ["api", "endpoint", "service"]
+                    word in capability_lower for word in CORE_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["core"].append(capability)
                 elif any(
                     word in capability_lower
-                    for word in ["ai", "llm", "model", "intelligent"]
+                    for word in AI_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["ai"].append(capability)
                 elif any(
-                    word in capability_lower for word in ["security", "auth", "audit"]
+                    word in capability_lower for word in SECURITY_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["security"].append(capability)
                 elif any(
                     word in capability_lower
-                    for word in ["ui", "interface", "web", "gui"]
+                    for word in INTERFACE_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["interface"].append(capability)
                 elif any(
                     word in capability_lower
-                    for word in ["data", "storage", "memory", "cache"]
+                    for word in DATA_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["data"].append(capability)
                 elif any(
-                    word in capability_lower for word in ["auto", "workflow", "task"]
+                    word in capability_lower for word in AUTOMATION_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["automation"].append(capability)
                 elif any(
-                    word in capability_lower for word in ["monitor", "metric", "health"]
+                    word in capability_lower for word in MONITORING_KEYWORDS  # O(1) lookup (Issue #326)
                 ):
                     categories["monitoring"].append(capability)
                 else:
@@ -361,7 +373,7 @@ class LLMSelfAwareness:
         self, prompt: str, context_level: str = "basic"
     ) -> str:
         """Inject system awareness context into a prompt"""
-        include_detailed = context_level in ["detailed", "full"]
+        include_detailed = context_level in DETAILED_CONTEXT_LEVELS  # O(1) lookup (Issue #326)
         context = await self.get_system_context(include_detailed=include_detailed)
 
         # Build context injection
@@ -376,12 +388,15 @@ Current System State:
 Your Current Capabilities by Category:
 """
 
+        # Build capability lines using list append + join (O(n)) instead of += (O(n²))
+        capability_lines = []
         for category, caps in context["current_capabilities"]["categories"].items():
             if caps:
-                awareness_prompt += f"- {category.title()}: {', '.join(caps[:5])}"
+                line = f"- {category.title()}: {', '.join(caps[:5])}"
                 if len(caps) > 5:
-                    awareness_prompt += f" (and {len(caps) - 5} more)"
-                awareness_prompt += "\n"
+                    line += f" (and {len(caps) - 5} more)"
+                capability_lines.append(line)
+        awareness_prompt += "\n".join(capability_lines) + "\n" if capability_lines else ""
 
         awareness_prompt += f"""
 System Metrics:
@@ -460,7 +475,7 @@ You should be aware of your current capabilities and limitations based on the sy
                     )
 
         # Add phase-specific recommendations
-        if "upgrade" in query_lower or "progress" in query_lower:
+        if any(word in query_lower for word in PROGRESSION_QUERIES):  # O(1) lookup (Issue #326)
             response["recommendations"].append(
                 {
                     "type": "phase_progression",
@@ -474,7 +489,7 @@ You should be aware of your current capabilities and limitations based on the sy
                 }
             )
 
-        if "capability" in query_lower or "feature" in query_lower:
+        if any(word in query_lower for word in CAPABILITY_QUERIES):  # O(1) lookup (Issue #326)
             response["recommendations"].append(
                 {
                     "type": "capability_info",

@@ -795,17 +795,18 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 # Search in tool data
                 for tool in knowledge_data.get("tools", []):
                     usage_basic = tool.get("usage", {}).get("basic", "")
-                    searchable_text = (
+                    # Build searchable text using list + join (O(n)) instead of += (O(n²))
+                    text_parts = [
                         f"{tool.get('name', '')} {tool.get('purpose', '')} {usage_basic}"
-                    )
-
+                    ]
                     # Add options text
-                    for option in tool.get("options", []):
-                        searchable_text += f" {option}".lower()
-
+                    text_parts.extend(option.lower() for option in tool.get("options", []))
                     # Add examples
-                    for example in tool.get("common_examples", []):
-                        searchable_text += f" {example.get('description', '')} {example.get('command', '')}".lower()
+                    text_parts.extend(
+                        f"{example.get('description', '')} {example.get('command', '')}".lower()
+                        for example in tool.get("common_examples", [])
+                    )
+                    searchable_text = " ".join(text_parts)
 
                     if query.lower() in searchable_text:
                         results.append(

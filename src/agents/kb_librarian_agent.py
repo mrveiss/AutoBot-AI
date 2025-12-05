@@ -86,12 +86,16 @@ class KBLibrarianAgent:
         # Search for relevant knowledge
         kb_results = await self.search_knowledge(question, limit=context_limit)
 
-        # Build context
+        # Build context using list + join (O(n)) instead of += (O(n²))
         if kb_results:
-            context = "Based on the following information from the knowledge base:\n\n"
-            for result in kb_results:
-                context += f"- {result['content']} (Source: {result['source']})\n"
-
+            result_lines = [
+                f"- {result['content']} (Source: {result['source']})"
+                for result in kb_results
+            ]
+            context = (
+                "Based on the following information from the knowledge base:\n\n"
+                + "\n".join(result_lines)
+            )
             prompt = f"{context}\n\nQuestion: {question}\n\nAnswer:"
         else:
             # No knowledge base results - trigger auto-learning if enabled

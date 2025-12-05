@@ -569,14 +569,17 @@ class IntelligentRequestBatcher:
         if len(batch) == 1:
             return batch[0].content
 
-        combined = "I have multiple related requests to process:\n\n"
-
-        for i, request in enumerate(batch, 1):
-            combined += f"Request {i} (ID: {request.id}):\n"
-            combined += f"{request.content}\n\n"
-
-        combined += "Please provide responses for each request separately, "
-        combined += "clearly indicating which response corresponds to which request ID."
+        # Build request sections using list + join (O(n)) instead of += (O(n²))
+        request_sections = [
+            f"Request {i} (ID: {request.id}):\n{request.content}"
+            for i, request in enumerate(batch, 1)
+        ]
+        combined = (
+            "I have multiple related requests to process:\n\n"
+            + "\n\n".join(request_sections)
+            + "\n\nPlease provide responses for each request separately, "
+            "clearly indicating which response corresponds to which request ID."
+        )
 
         return combined
 

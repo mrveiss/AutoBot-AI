@@ -269,13 +269,12 @@ USER REQUEST:
 AGENT RESPONSES TO EVALUATE:
 """
 
-        for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            response_json = json.dumps(response, indent=2)
-            prompt += f"""
-RESPONSE {i+1} - {agent_type.upper()} AGENT:
-{response_json}
-
-"""
+        # Build response sections using list + join (O(n)) instead of += (O(n²))
+        response_sections = [
+            f"RESPONSE {i+1} - {agent_type.upper()} AGENT:\n{json.dumps(response, indent=2)}"
+            for i, (response, agent_type) in enumerate(zip(responses, agent_types), 1)
+        ]
+        prompt += "\n" + "\n\n".join(response_sections) + "\n\n"
 
         prompt += f"""
 ARBITRATION CONTEXT:
@@ -354,13 +353,12 @@ Please analyze the following agent responses for conflicts, contradictions, and 
 AGENT RESPONSES:
 """
 
-        for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            response_json = json.dumps(response, indent=2)
-            prompt += f"""
-RESPONSE {i+1} - {agent_type.upper()} AGENT:
-{response_json}
-
-"""
+        # Build response sections using list + join (O(n)) instead of += (O(n²))
+        response_sections = [
+            f"RESPONSE {i+1} - {agent_type.upper()} AGENT:\n{json.dumps(response, indent=2)}"
+            for i, (response, agent_type) in enumerate(zip(responses, agent_types), 1)
+        ]
+        prompt += "\n" + "\n\n".join(response_sections) + "\n\n"
 
         prompt += """
 CONFLICT ANALYSIS REQUIREMENTS:
