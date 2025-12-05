@@ -65,6 +65,8 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+from src.utils.path_validation import contains_path_traversal
+
 # ============================================================================
 # String Validators
 # ============================================================================
@@ -472,8 +474,8 @@ def validate_filename_safe(
         >>> validate_filename_safe("../etc/passwd")
         ValueError: Filename contains path traversal characters
     """
-    # Check for path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
+    # Check for path traversal (Issue #328 - uses shared validation)
+    if contains_path_traversal(filename):
         raise ValueError(f"{field_name} contains path traversal characters")
 
     # Check length

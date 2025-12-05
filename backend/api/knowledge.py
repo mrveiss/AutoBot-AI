@@ -15,6 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Requ
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.path_validation import contains_path_traversal
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -1246,8 +1247,8 @@ async def get_fact_by_key(
         - Path traversal attempts blocked
         - Maximum key length enforced
     """
-    # Additional security check for path traversal
-    if ".." in fact_key or "/" in fact_key or "\\" in fact_key:
+    # Additional security check for path traversal (Issue #328 - uses shared validation)
+    if contains_path_traversal(fact_key):
         raise HTTPException(
             status_code=400, detail="Invalid fact_key: path traversal not allowed"
         )

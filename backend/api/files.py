@@ -26,6 +26,7 @@ from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.path_validation import contains_path_traversal, is_invalid_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -143,6 +144,9 @@ class FileOperation(BaseModel):
 def get_security_layer(request: Request) -> SecurityLayer:
     """Get security layer from app state"""
     return request.app.state.security_layer
+
+
+# Path validation imported from src.utils.path_validation (Issue #328 - shared utility)
 
 
 def validate_and_resolve_path(path: str) -> Path:
@@ -674,7 +678,7 @@ async def rename_file_or_directory(
     request.state.user = user_data
 
     # Validate new name
-    if not new_name or "/" in new_name or "\\" in new_name or ".." in new_name:
+    if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
 
     source_path = validate_and_resolve_path(path)
@@ -910,7 +914,7 @@ async def create_directory(
     request.state.user = user_data
 
     # Validate directory name
-    if not name or "/" in name or "\\" in name or ".." in name:
+    if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
 
     parent_dir = validate_and_resolve_path(path)

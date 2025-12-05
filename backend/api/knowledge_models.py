@@ -41,6 +41,7 @@ from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from pydantic import BaseModel, Field, validator
+from src.utils.path_validation import contains_path_traversal
 
 
 # ===== BASIC VALIDATION MODELS =====
@@ -59,8 +60,8 @@ class FactIdValidator(BaseModel):
             raise ValueError(
                 "Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed"
             )
-        # Prevent path traversal attempts
-        if ".." in v or "/" in v or "\\" in v:
+        # Prevent path traversal attempts (Issue #328 - uses shared validation)
+        if contains_path_traversal(v):
             raise ValueError("Path traversal not allowed in fact_id")
         return v
 
@@ -232,8 +233,8 @@ class TagValidator(BaseModel):
                 "Invalid tag format: only lowercase alphanumeric, underscore, "
                 "and hyphen allowed"
             )
-        # Prevent injection attempts
-        if ".." in v or "/" in v or "\\" in v:
+        # Prevent injection attempts (Issue #328 - uses shared validation)
+        if contains_path_traversal(v):
             raise ValueError("Invalid characters in tag")
         return v
 
@@ -307,8 +308,8 @@ class BulkTagRequest(BaseModel):
                 f"Invalid fact_id format: {v} - only alphanumeric, "
                 "underscore, and hyphen allowed"
             )
-        # Prevent path traversal attempts
-        if ".." in v or "/" in v or "\\" in v:
+        # Prevent path traversal attempts (Issue #328 - uses shared validation)
+        if contains_path_traversal(v):
             raise ValueError(f"Path traversal not allowed in fact_id: {v}")
         return v
 
@@ -479,7 +480,8 @@ class BulkDeleteRequest(BaseModel):
         """Validate fact ID format"""
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
             raise ValueError(f"Invalid fact_id format: {v}")
-        if ".." in v or "/" in v or "\\" in v:
+        # Prevent path traversal (Issue #328 - uses shared validation)
+        if contains_path_traversal(v):
             raise ValueError(f"Path traversal not allowed in fact_id: {v}")
         return v
 
