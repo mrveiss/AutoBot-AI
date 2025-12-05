@@ -21,7 +21,7 @@ from backend.type_defs.common import Metadata
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from src.chat_history_manager import ChatHistoryManager
+from src.chat_history import ChatHistoryManager
 
 # Import existing components
 from src.knowledge_base import KnowledgeBase

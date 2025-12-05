@@ -346,7 +346,7 @@ Explain what it means and answer their original question."""
             Exception: If save fails (logged, not propagated)
         """
         try:
-            from src.chat_history_manager import ChatHistoryManager
+            from src.chat_history import ChatHistoryManager
 
             chat_mgr = ChatHistoryManager()
             await chat_mgr.add_message(

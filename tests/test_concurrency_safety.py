@@ -94,7 +94,7 @@ class TestFileWriteAtomicity:
     @pytest.mark.asyncio
     async def test_atomic_write_creates_temp_file(self):
         """Test that atomic write uses temporary file"""
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
 
@@ -116,7 +116,7 @@ class TestFileWriteAtomicity:
     @pytest.mark.asyncio
     async def test_atomic_write_cleanup_on_failure(self):
         """Test that temp file is cleaned up on write failure"""
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
 
@@ -134,7 +134,7 @@ class TestFileWriteAtomicity:
     @pytest.mark.asyncio
     async def test_concurrent_atomic_writes(self):
         """Test that concurrent atomic writes don't corrupt file"""
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
 
@@ -320,7 +320,7 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_atomic_write_overhead(self):
         """Measure atomic write overhead vs direct write"""
-        from src.chat_history_manager import ChatHistoryManager
+        from src.chat_history import ChatHistoryManager
 
         # Create manager BEFORE timing (exclude initialization overhead)
         manager = ChatHistoryManager()

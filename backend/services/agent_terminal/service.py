@@ -15,7 +15,7 @@ from backend.models.command_execution import CommandState
 from backend.services.command_approval_manager import AgentRole, CommandApprovalManager
 from backend.services.command_execution_queue import get_command_queue
 from backend.type_defs.common import Metadata
-from src.chat_history_manager import ChatHistoryManager
+from src.chat_history import ChatHistoryManager
 from src.logging.terminal_logger import TerminalLogger
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.secure_command_executor import SecureCommandExecutor, SecurityPolicy

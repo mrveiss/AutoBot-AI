@@ -1,0 +1,231 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Chat History Base - Core initialization and configuration.
+
+Provides the foundation for the ChatHistoryManager composed class with:
+- Configuration loading from unified config manager
+- Redis client initialization
+- Memory Graph integration
+- Context window management
+"""
+
+import logging
+import os
+import threading
+from typing import Any, Dict, Optional
+
+from src.autobot_memory_graph import AutoBotMemoryGraph
+from src.constants.network_constants import NetworkConstants
+from src.context_window_manager import ContextWindowManager
+from src.encryption_service import get_encryption_service, is_encryption_enabled
+from src.unified_config_manager import config as global_config_manager
+from src.utils.redis_client import get_redis_client
+
+logger = logging.getLogger(__name__)
+
+
+class ChatHistoryBase:
+    """
+    Base class for ChatHistoryManager providing core initialization.
+
+    Handles:
+    - Configuration loading from unified config manager
+    - Redis client setup
+    - Encryption service initialization
+    - Memory Graph integration
+    - Context window management
+    - Performance optimization settings
+    """
+
+    def __init__(
+        self,
+        history_file: Optional[str] = None,
+        use_redis: Optional[bool] = None,
+        redis_host: Optional[str] = None,
+        redis_port: Optional[int] = None,
+    ):
+        """
+        Initialize the ChatHistoryManager base with performance optimizations.
+
+        Args:
+            history_file: Path to the JSON file for persistent storage.
+            use_redis: If True, attempts to use Redis for active memory storage.
+            redis_host: Hostname for Redis server.
+            redis_port: Port for Redis server.
+        """
+        # Load configuration from centralized config manager
+        data_config = global_config_manager.get("data", {})
+        redis_config = global_config_manager.get_redis_config()
+
+        # Set values using configuration with environment variable overrides
+        self.history_file = history_file or data_config.get(
+            "chat_history_file",
+            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
+        )
+        self.use_redis = (
+            use_redis if use_redis is not None else redis_config.get("enabled", False)
+        )
+
+        # Use config system instead of hardcoded IP fallback
+        from src.unified_config_manager import UnifiedConfigManager
+
+        unified_config = UnifiedConfigManager()
+        self.redis_host = redis_host or redis_config.get(
+            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
+        )
+        self.redis_port = redis_port or redis_config.get(
+            "port",
+            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
+        )
+
+        # Message history storage
+        self.history: list = []
+        self.redis_client = None
+        self.encryption_enabled = is_encryption_enabled()
+
+        # Performance optimization settings
+        self.max_messages = 10000  # Maximum messages per session
+        self.cleanup_threshold = 12000  # Cleanup trigger (120% of max)
+        self.max_session_files = 1000  # Maximum session files to keep
+        self.memory_check_counter = 0  # Counter for periodic memory checks
+        self.memory_check_interval = 50  # Check memory every N operations
+        self._counter_lock = threading.Lock()  # Lock for thread-safe counter access
+        self._session_save_counter = 0  # Counter for periodic session file cleanup
+
+        # Memory Graph integration for entity tracking
+        self.memory_graph: Optional[AutoBotMemoryGraph] = None
+        self.memory_graph_enabled = False
+
+        # Context window management for model-aware message limits
+        self.context_manager = ContextWindowManager()
+
+        logger.info(
+            "PERFORMANCE: ChatHistoryManager initialized with memory protection - "
+            f"max_messages: {self.max_messages}, cleanup_threshold: {self.cleanup_threshold}"
+        )
+        logger.info("✅ Context window manager initialized with model-aware limits")
+
+        # Initialize encryption
+        self._init_encryption()
+
+        # Initialize Redis client
+        self._init_redis()
+
+        # Ensure data directory exists
+        self._ensure_data_directory_exists()
+
+        # Load history (now just initializes empty - per-session files used)
+        self._load_history()
+
+        logger.info(
+            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+        )
+
+    def _init_encryption(self):
+        """Initialize encryption service if enabled."""
+        if self.encryption_enabled:
+            logger.info("Chat history encryption is ENABLED")
+            try:
+                encryption_service = get_encryption_service()
+                key_info = encryption_service.get_key_info()
+                logger.info(f"Encryption service initialized: {key_info['algorithm']}")
+            except Exception as e:
+                logger.error(f"Failed to initialize encryption service: {e}")
+                self.encryption_enabled = False
+        else:
+            logger.info("Chat history encryption is DISABLED")
+
+    def _init_redis(self):
+        """Initialize Redis client for caching."""
+        if self.use_redis:
+            self.redis_client = get_redis_client(async_client=False)
+            if self.redis_client:
+                logger.info(
+                    "Redis connection established via centralized utility "
+                    "for active memory storage."
+                )
+            else:
+                logger.error(
+                    "Failed to get Redis client from centralized utility. "
+                    "Falling back to file storage."
+                )
+                self.use_redis = False
+
+    def _ensure_data_directory_exists(self):
+        """Ensure the directory for the history file exists."""
+        data_dir = os.path.dirname(self.history_file)
+        if data_dir and not os.path.exists(data_dir):
+            os.makedirs(data_dir, exist_ok=True)
+
+    def _get_chats_directory(self) -> str:
+        """Get the chats directory path from configuration."""
+        data_config = global_config_manager.get("data", {})
+        return data_config.get(
+            "chats_directory",
+            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
+        )
+
+    def _load_history(self):
+        """
+        Initialize with empty history.
+
+        Modern architecture uses per-session files in data/chats/ directory.
+        self.history remains EMPTY to prevent data pollution.
+        """
+        self.history = []
+
+        logger.info(
+            "ChatHistoryManager initialized with EMPTY default history. "
+            "All sessions are managed independently in data/chats/ directory."
+        )
+
+        # Warn about obsolete legacy file
+        if os.path.exists(self.history_file):
+            logger.warning(
+                f"⚠️ Legacy chat_history.json file exists at {self.history_file}. "
+                "This file is NO LONGER USED. Sessions are stored in data/chats/ directory. "
+                "Consider archiving this file to prevent confusion."
+            )
+
+    async def _init_memory_graph(self):
+        """
+        Initialize Memory Graph for conversation entity tracking.
+
+        Called asynchronously during first session operation.
+        Non-blocking - failures are logged but don't prevent normal operation.
+        """
+        if self.memory_graph_enabled or self.memory_graph is not None:
+            return  # Already initialized
+
+        try:
+            logger.info("Initializing Memory Graph for conversation tracking...")
+
+            self.memory_graph = AutoBotMemoryGraph(chat_history_manager=self)
+
+            # Attempt async initialization
+            initialized = await self.memory_graph.initialize()
+
+            if initialized:
+                self.memory_graph_enabled = True
+                logger.info(
+                    "✅ Memory Graph initialized successfully for conversation tracking"
+                )
+            else:
+                logger.warning(
+                    "⚠️ Memory Graph initialization returned False - "
+                    "conversation entity tracking disabled"
+                )
+                self.memory_graph = None
+
+        except Exception as e:
+            logger.warning(
+                f"⚠️ Failed to initialize Memory Graph (continuing without entity tracking): {e}"
+            )
+            self.memory_graph = None
+            self.memory_graph_enabled = False
+
+    def get_all_messages(self) -> list:
+        """Return the entire chat history (legacy method)."""
+        return self.history
