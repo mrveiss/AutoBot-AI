@@ -55,12 +55,17 @@ class UsageAlert:
 
 
 class UsageTracker:
-    """Tracks API usage patterns and calculates metrics"""
+    """
+    Tracks API usage patterns and calculates metrics
+
+    DEPRECATED (Phase 5, Issue #348): All in-memory buffers removed.
+    Methods return empty/safe defaults. Use PrometheusMetricsManager.
+    """
 
     def __init__(self, history_limit: int = 1000):
         self.history_limit = history_limit
-        self.call_history = deque(maxlen=history_limit)
-        self.tool_usage = defaultdict(list)
+        # REMOVED (Phase 5, Issue #348): self.call_history = deque(maxlen=history_limit)
+        # REMOVED (Phase 5, Issue #348): self.tool_usage = defaultdict(list)
         self.error_patterns = defaultdict(int)
         self._stats_lock = threading.Lock()  # Lock for thread-safe stats access
 
@@ -70,29 +75,40 @@ class UsageTracker:
         self.total_response_size = 0
         self.total_response_time = 0.0
 
+        import warnings
+        warnings.warn(
+            "UsageTracker is deprecated. All in-memory tracking removed. "
+            "Use PrometheusMetricsManager for metrics. Will be removed in v3.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
     def add_call(self, record: APICallRecord):
-        """Add a new API call record (thread-safe)"""
-        # CRITICAL: Protect shared state modifications with lock
+        """
+        Add a new API call record (thread-safe)
+
+        DEPRECATED (Phase 5, Issue #348): No-op. Use PrometheusMetricsManager.record_claude_api_request()
+        """
+        # REMOVED (Phase 5, Issue #348): All deque append operations removed
+        # Only update basic counters for backwards compatibility
         with self._stats_lock:
-            self.call_history.append(record)
             self.total_calls += 1
             self.total_payload_size += record.payload_size
             self.total_response_size += record.response_size
             self.total_response_time += record.response_time
 
-            # Track tool usage
-            if record.tool_name:
-                self.tool_usage[record.tool_name].append(record)
-
-            # Track error patterns
+            # Track error patterns (no memory growth - dict only)
             if not record.success and record.error_type:
                 self.error_patterns[record.error_type] += 1
 
     def get_recent_calls(self, minutes: int = 60) -> List[APICallRecord]:
-        """Get calls from the last N minutes (thread-safe)"""
-        cutoff = time.time() - (minutes * 60)
-        with self._stats_lock:
-            return [call for call in self.call_history if call.timestamp > cutoff]
+        """
+        Get calls from the last N minutes (thread-safe)
+
+        DEPRECATED (Phase 5, Issue #348): Returns empty list. Use Prometheus query.
+        """
+        # REMOVED (Phase 5, Issue #348): call_history deque removed
+        return []  # Return empty list for backwards compatibility
 
     def calculate_usage_rate(self, window_minutes: int = 60) -> float:
         """Calculate calls per minute in the given window"""
@@ -134,44 +150,36 @@ class UsageTracker:
         }
 
     def get_tool_usage_stats(self) -> Dict[str, Dict[str, Any]]:
-        """Get usage statistics per tool (thread-safe)"""
-        stats = {}
+        """
+        Get usage statistics per tool (thread-safe)
 
-        # CRITICAL: Snapshot tool_usage under lock to prevent race conditions
-        with self._stats_lock:
-            tool_usage_copy = {k: list(v) for k, v in self.tool_usage.items()}
-
-        for tool_name, calls in tool_usage_copy.items():
-            recent_calls = [
-                call for call in calls if time.time() - call.timestamp <= 3600
-            ]  # Last hour
-
-            if recent_calls:
-                payload_sizes = [call.payload_size for call in recent_calls]
-                response_times = [call.response_time for call in recent_calls]
-                success_rate = sum(1 for call in recent_calls if call.success) / len(
-                    recent_calls
-                )
-
-                stats[tool_name] = {
-                    "call_count": len(recent_calls),
-                    "avg_payload_size": statistics.mean(payload_sizes),
-                    "avg_response_time": statistics.mean(response_times),
-                    "success_rate": success_rate * 100,
-                    "total_data": sum(payload_sizes),
-                }
-
-        return stats
+        DEPRECATED (Phase 5, Issue #348): Returns empty dict. Use Prometheus query.
+        """
+        # REMOVED (Phase 5, Issue #348): tool_usage tracking removed
+        return {}  # Return empty dict for backwards compatibility
 
 
 class AlertManager:
-    """Manages alerts and warnings for API usage"""
+    """
+    Manages alerts and warnings for API usage
+
+    DEPRECATED (Phase 5, Issue #348): All in-memory buffers removed.
+    Methods return empty/safe defaults. Use Prometheus Alertmanager.
+    """
 
     def __init__(self, alert_cooldown: int = 300):  # 5 minutes
         self.alert_cooldown = alert_cooldown
         self.last_alerts = {}
-        self.alert_history = deque(maxlen=100)
+        # REMOVED (Phase 5, Issue #348): self.alert_history = deque(maxlen=100)
         self.alert_callbacks: List[Callable] = []
+
+        import warnings
+        warnings.warn(
+            "AlertManager is deprecated. All in-memory alerting removed. "
+            "Use Prometheus Alertmanager for alerts. Will be removed in v3.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
     def add_alert_callback(self, callback: Callable[[UsageAlert], None]):
         """Add a callback function for alerts"""
@@ -234,7 +242,7 @@ class AlertManager:
         for alert in alerts:
             if self._should_send_alert(alert, current_time):
                 filtered_alerts.append(alert)
-                self.alert_history.append(alert)
+                # REMOVED (Phase 5, Issue #348): self.alert_history.append(alert)
                 self.last_alerts[alert.level] = current_time
 
                 # Send to callbacks
@@ -444,10 +452,8 @@ class ClaudeAPIMonitor:
         risk_prediction = self.predict_rate_limit_risk()
 
         # Recent alerts
-        recent_alerts = [
-            asdict(alert)
-            for alert in list(self.alert_manager.alert_history)[-10:]  # Last 10 alerts
-        ]
+        # REMOVED (Phase 5, Issue #348): alert_history deque removed
+        recent_alerts = []  # Return empty list for backwards compatibility
 
         return {
             "basic_stats": basic_stats,
