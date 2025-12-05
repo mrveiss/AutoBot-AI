@@ -84,6 +84,14 @@ for file in $PY_FILES; do
             continue ;;
         *"script_utils.py")  # Script formatting utilities with intentional print()
             continue ;;
+        *"cleanup_redis_metrics.py")  # Phase 5 CLI tool for Redis cleanup
+            continue ;;
+        *"test_phase5_cleanup.py")  # Phase 5 test script
+            continue ;;
+        *"test_grafana_integration.py")  # Phase 4 test script
+            continue ;;
+        *"test_alertmanager.py")  # Phase 3 test script
+            continue ;;
     esac
 
     # Check if file has if __name__ == "__main__"

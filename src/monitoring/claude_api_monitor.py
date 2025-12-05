@@ -4,8 +4,17 @@
 # Author: mrveiss
 """
 Claude API Usage Monitoring and Tracking System
-Provides comprehensive monitoring of Claude API usage patterns to predict
-and prevent rate limit issues during development conversations.
+
+DEPRECATED (Phase 5, Issue #348): This entire module is deprecated.
+Claude API metrics are now tracked in PrometheusMetricsManager.
+The in-memory deque buffers and local tracking are no longer needed.
+
+For Claude API metrics, use:
+- Prometheus: autobot_claude_api_requests_total, autobot_claude_api_response_time_seconds
+- Grafana dashboard: autobot-claude-api
+- REST API: /api/metrics/claude-api/status (deprecated, use Grafana)
+
+This module remains for backwards compatibility but will be REMOVED in v3.0.
 """
 
 import logging
@@ -558,7 +567,20 @@ _global_monitor_lock = threading.Lock()
 
 
 def get_api_monitor() -> ClaudeAPIMonitor:
-    """Get the global API monitor instance (thread-safe)."""
+    """
+    Get the global API monitor instance (thread-safe).
+
+    DEPRECATED (Phase 5, Issue #348): Use PrometheusMetricsManager instead.
+    This function and the ClaudeAPIMonitor class will be removed in v3.0.
+    """
+    import warnings
+    warnings.warn(
+        "get_api_monitor() is deprecated. Use PrometheusMetricsManager for "
+        "Claude API metrics. This will be removed in v3.0.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
     global _global_monitor
     if _global_monitor is None:
         with _global_monitor_lock:
@@ -569,7 +591,18 @@ def get_api_monitor() -> ClaudeAPIMonitor:
 
 
 def record_api_call(payload_size: int, **kwargs):
-    """Convenience function to record an API call"""
+    """
+    Convenience function to record an API call.
+
+    DEPRECATED (Phase 5, Issue #348): Use PrometheusMetricsManager.record_claude_api_request()
+    """
+    import warnings
+    warnings.warn(
+        "record_api_call() is deprecated. Use PrometheusMetricsManager for "
+        "Claude API metrics. This will be removed in v3.0.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     monitor = get_api_monitor()
     monitor.record_api_call(payload_size, **kwargs)
 
