@@ -17,6 +17,13 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #328 - extracted complex conditional into named function
+
+
+def is_empty_value(value: Any) -> bool:
+    """Check if a value is considered empty (None, empty string/list/dict)."""
+    return value is None or value == "" or value == [] or value == {}
+
 
 @dataclass
 class OptimizationResult:
@@ -271,8 +278,8 @@ class PayloadOptimizer:
         compressed = {}
 
         for key, value in data.items():
-            # Skip empty values (checking for falsy containers - Issue #326)
-            if value is None or value == "" or value == [] or value == {}:
+            # Skip empty values (Issue #328 - uses helper function)
+            if is_empty_value(value):
                 continue
 
             # Shorten common keys
@@ -302,8 +309,8 @@ class PayloadOptimizer:
         seen = set()
 
         for item in data:
-            # Skip empty values (checking for falsy containers - Issue #326)
-            if item is None or item == "" or item == {} or item == []:
+            # Skip empty values (Issue #328 - uses helper function)
+            if is_empty_value(item):
                 continue
 
             # Handle duplicates for simple types
