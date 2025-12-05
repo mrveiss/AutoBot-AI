@@ -16,10 +16,12 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
+import aiohttp
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/unified", tags=["unified-analytics"])
@@ -28,16 +30,15 @@ router = APIRouter(prefix="/unified", tags=["unified-analytics"])
 async def fetch_quality_health() -> Dict[str, Any]:
     """Fetch quality health score data via HTTP."""
     try:
-        import aiohttp
-
         from src.constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/quality/health-score",
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}/api/quality/health-score",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -56,10 +57,11 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
         from src.constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/analytics/codebase/analytics/charts",
-                timeout=aiohttp.ClientTimeout(total=10),
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}/api/analytics/codebase/analytics/charts",
+            timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -79,10 +81,11 @@ async def fetch_debt_summary() -> Dict[str, Any]:
         from src.constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/debt/summary",
-                timeout=aiohttp.ClientTimeout(total=10),
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}/api/debt/summary",
+            timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -102,10 +105,11 @@ async def fetch_performance_summary() -> Dict[str, Any]:
         from src.constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/performance/summary",
-                timeout=aiohttp.ClientTimeout(total=10),
+        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}/api/performance/summary",
+            timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
                     return await response.json()

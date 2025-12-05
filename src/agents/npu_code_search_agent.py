@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from src.npu_semantic_search import get_npu_search_engine
 from src.utils.redis_client import get_redis_client
 from src.worker_node import WorkerNode
 
@@ -75,6 +76,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Worker node for NPU capabilities
         self.worker_node = WorkerNode()
+
+        # NPU Semantic Search Engine (Issue #68)
+        self.npu_search_engine = None
 
         # Search configuration
         self.index_prefix = "autobot:code:index:"
@@ -216,6 +220,13 @@ class NPUCodeSearchAgent(StandardizedAgent):
         except Exception as e:
             self.logger.warning(f"Failed to initialize NPU: {e}")
             self.npu_available = False
+
+    async def _ensure_search_engine_initialized(self):
+        """Lazy-initialize NPU semantic search engine when needed (Issue #68)"""
+        if self.npu_search_engine is None:
+            self.logger.info("Initializing NPU Semantic Search Engine...")
+            self.npu_search_engine = await get_npu_search_engine()
+            self.logger.info("✅ NPU Semantic Search Engine initialized")
 
     async def handle_search_code(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle code search action"""
@@ -842,28 +853,90 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _search_semantic(
         self, query: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
-        """Perform semantic search using NPU acceleration when available"""
-        # For now, fallback to exact search with fuzzy matching
-        # TODO: Implement proper semantic search with embeddings and NPU acceleration
+        """
+        Perform semantic search using NPU acceleration and pre-computed embeddings.
 
-        results = []
-        query_words = query.lower().split()
-        pattern = f"{self.index_prefix}file:*"
-        file_keys = self.redis_client.keys(pattern)
+        Issue #68: Enhanced with NPUSemanticSearch engine for:
+        - Pre-computed embedding cache (60-80% improvement)
+        - NPU-accelerated embedding generation
+        - Proper semantic similarity scoring
+        """
+        try:
+            # Initialize NPU search engine if needed
+            await self._ensure_search_engine_initialized()
 
-        for file_key in file_keys:
-            try:
-                file_data = json.loads(self.redis_client.get(file_key))
-                file_results = await self._search_file_semantic(
-                    file_data, query, query_words, language
+            # Use NPU semantic search for query
+            search_results, metrics = await self.npu_search_engine.enhanced_search(
+                query=query,
+                similarity_top_k=max_results,
+                filters={"language": language} if language else None,
+                enable_npu_acceleration=self.npu_available,
+            )
+
+            # Convert to CodeSearchResult format
+            code_results = []
+            for result in search_results:
+                # Extract file path and line number from metadata
+                file_path = result.metadata.get("file_path", "unknown")
+                line_number = result.metadata.get("line_number", 0)
+
+                # Get context lines
+                context_lines = await self._get_file_context(
+                    file_path, line_number, context_size=3
                 )
-                results.extend(file_results)
-            except Exception as e:
-                self.logger.error(f"Error processing file key {file_key}: {e}")
 
-        # Sort by confidence
-        results.sort(key=lambda x: x.confidence, reverse=True)
-        return results[:max_results]
+                code_result = CodeSearchResult(
+                    file_path=file_path,
+                    content=result.content,
+                    line_number=line_number,
+                    confidence=result.score,
+                    context_lines=context_lines,
+                    metadata={
+                        **result.metadata,
+                        "device_used": result.device_used,
+                        "processing_time_ms": result.processing_time_ms,
+                        "embedding_model": result.embedding_model,
+                    },
+                )
+                code_results.append(code_result)
+
+            # Update stats
+            self.stats = SearchStats(
+                total_files_indexed=len(code_results),
+                search_time_ms=metrics.total_search_time_ms,
+                npu_acceleration_used=(metrics.device_used != "cpu_fallback"),
+                redis_cache_hit=False,  # NPU search has its own cache
+                results_count=len(code_results),
+            )
+
+            self.logger.info(
+                f"✅ Semantic search: {len(code_results)} results in {metrics.total_search_time_ms:.2f}ms using {metrics.device_used}"
+            )
+
+            return code_results
+
+        except Exception as e:
+            self.logger.error(f"NPU semantic search failed: {e}, falling back to basic search")
+
+            # Fallback to basic fuzzy matching if NPU search fails
+            results = []
+            query_words = query.lower().split()
+            pattern = f"{self.index_prefix}file:*"
+            file_keys = self.redis_client.keys(pattern)
+
+            for file_key in file_keys:
+                try:
+                    file_data = json.loads(self.redis_client.get(file_key))
+                    file_results = await self._search_file_semantic(
+                        file_data, query, query_words, language
+                    )
+                    results.extend(file_results)
+                except Exception as file_error:
+                    self.logger.error(f"Error processing file key {file_key}: {file_error}")
+
+            # Sort by confidence
+            results.sort(key=lambda x: x.confidence, reverse=True)
+            return results[:max_results]
 
     def _file_matches_language(self, file_path: str, language: str) -> bool:
         """Check if file matches the specified language"""
