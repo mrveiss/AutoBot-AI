@@ -1176,7 +1176,6 @@ watch(layoutMode, () => {
   stroke: #d1d5db;
   stroke-width: 2;
   fill: none;
-  transition: stroke 0.2s, stroke-width 0.2s;
 }
 
 .edge.highlighted {
@@ -1193,11 +1192,10 @@ watch(layoutMode, () => {
 /* Nodes */
 .node-group {
   cursor: pointer;
-  transition: transform 0.2s;
 }
 
-.node-group:hover {
-  transform: scale(1.1);
+.node-group:hover .node-circle {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
 }
 
 .node-group.selected .node-circle {
@@ -1217,7 +1215,6 @@ watch(layoutMode, () => {
   stroke: white;
   stroke-width: 2;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
-  transition: stroke 0.2s, filter 0.2s;
 }
 
 .node-icon {
