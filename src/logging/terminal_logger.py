@@ -181,7 +181,7 @@ class TerminalLogger:
         line = f"[{timestamp}] [{run_type}] STATUS: {status}"
 
         # Add command if not just status update
-        if status in ["EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"]:
+        if status in {"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"}:
             line += f" | COMMAND: {command}"
 
         # Add user info if available
@@ -383,10 +383,10 @@ class TerminalLogger:
         manual_count = sum(1 for cmd in commands if cmd.get("run_type") == "MANUAL")
 
         success_count = sum(
-            1 for cmd in commands if cmd.get("status") in ["success", "SUCCESS"]
+            1 for cmd in commands if cmd.get("status") in {"success", "SUCCESS"}
         )
         error_count = sum(
-            1 for cmd in commands if cmd.get("status") in ["error", "ERROR"]
+            1 for cmd in commands if cmd.get("status") in {"error", "ERROR"}
         )
 
         return {

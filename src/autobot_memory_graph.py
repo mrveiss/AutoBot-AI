@@ -681,7 +681,7 @@ class AutoBotMemoryGraph:
                 visited.add(current_id)
 
                 # Process outgoing relations
-                if direction in ["outgoing", "both"]:
+                if direction in {"outgoing", "both"}:
                     outgoing = await self._get_outgoing_relations(current_id)
                     outgoing_related = await self._process_direction_relations(
                         outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
@@ -689,7 +689,7 @@ class AutoBotMemoryGraph:
                     related.extend(outgoing_related)
 
                 # Process incoming relations
-                if direction in ["incoming", "both"]:
+                if direction in {"incoming", "both"}:
                     incoming = await self._get_incoming_relations(current_id)
                     incoming_related = await self._process_direction_relations(
                         incoming, relation_type, "incoming", "from", depth, max_depth, queue

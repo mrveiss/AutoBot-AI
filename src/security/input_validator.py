@@ -344,7 +344,7 @@ class WebResearchInputValidator:
                 return result
 
             # Scheme validation
-            if parsed.scheme not in ["http", "https"]:
+            if parsed.scheme not in {"http", "https"}:
                 result.update(
                     {
                         "safe": False,

@@ -423,7 +423,7 @@ class ChatWorkflowManager(
                             tool_calls, session_id, terminal_session_id,
                             ollama_endpoint, selected_model,
                         ):
-                            if tool_msg.type in ["terminal_command", "terminal_output", "error"]:
+                            if tool_msg.type in {"terminal_command", "terminal_output", "error"}:
                                 workflow_messages.append(tool_msg)
                                 logger.debug(
                                     f"Collected WorkflowMessage for persistence: type={tool_msg.type}"

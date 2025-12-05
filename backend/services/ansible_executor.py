@@ -173,7 +173,7 @@ class AnsibleExecutor:
     def _default_event_handler(self, event: Dict):
         """Default event handler for logging"""
         event_type = event.get("event", "unknown")
-        if event_type in ["runner_on_ok", "runner_on_failed", "runner_on_unreachable"]:
+        if event_type in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable"}:
             logger.info(f"Ansible event: {event_type} - {event.get('event_data', {})}")
         else:
             logger.debug(f"Ansible event: {event_type}")

@@ -195,10 +195,10 @@ class SecureWebResearch:
                 ]
 
                 # Check if user confirmation is required for medium/high risk queries
-                if require_user_confirmation and query_validation["risk_level"] in [
+                if require_user_confirmation and query_validation["risk_level"] in {
                     "medium",
                     "high",
-                ]:
+                }:
                     research_result.update(
                         {
                             "status": "requires_confirmation",

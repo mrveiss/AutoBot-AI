@@ -274,7 +274,7 @@ class SecureCommandExecutor:
             reasons.append(f"Moderate-risk command: {base_command}")
             # Check if it involves system paths
             if any(
-                path in command for path in ["/etc", "/usr", "/bin", "/sbin", "/lib"]
+                path in command for path in {"/etc", "/usr", "/bin", "/sbin", "/lib"}
             ):
                 reasons.append("Operates on system paths")
                 return CommandRisk.HIGH, reasons
@@ -289,7 +289,7 @@ class SecureCommandExecutor:
             # Check for output redirection to sensitive files
             if ">" in command or ">>" in command:
                 if any(
-                    sensitive in command for sensitive in ["/etc/", "/boot/", "/sys/"]
+                    sensitive in command for sensitive in {"/etc/", "/boot/", "/sys/"}
                 ):
                     reasons.append("Redirects to sensitive location")
                     return CommandRisk.HIGH, reasons
@@ -384,10 +384,10 @@ class SecureCommandExecutor:
             }
 
         # Check if approval is needed
-        needs_approval = force_approval or risk in [
+        needs_approval = force_approval or risk in {
             CommandRisk.HIGH,
             CommandRisk.MODERATE,
-        ]
+        }
 
         if needs_approval:
             approved = await self._request_approval(command, risk, reasons)

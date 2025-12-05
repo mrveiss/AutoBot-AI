@@ -334,10 +334,10 @@ class AsyncLongTermMemoryManager:
                         error_message,
                         (
                             datetime.now()
-                            if status in ["IN_PROGRESS", "DONE", "FAILED"]
+                            if status in {"IN_PROGRESS", "DONE", "FAILED"}
                             else None
                         ),
-                        datetime.now() if status in ["DONE", "FAILED"] else None,
+                        datetime.now() if status in {"DONE", "FAILED"} else None,
                         json.dumps(metadata or {}),
                     ),
                 )

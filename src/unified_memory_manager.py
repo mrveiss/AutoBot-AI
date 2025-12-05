@@ -387,24 +387,24 @@ class TaskStorage:
             elif key == "priority" and isinstance(value, TaskPriority):
                 set_clauses.append("priority = ?")
                 values.append(value.value)
-            elif key in [
+            elif key in {
                 "inputs",
                 "outputs",
                 "metadata",
                 "markdown_references",
                 "subtask_ids",
-            ]:
+            }:
                 set_clauses.append(f"{key}_json = ?")
                 values.append(json.dumps(value) if value else None)
-            elif key in ["started_at", "completed_at"]:
+            elif key in {"started_at", "completed_at"}:
                 set_clauses.append(f"{key} = ?")
                 values.append(value)
-            elif key in [
+            elif key in {
                 "duration_seconds",
                 "retry_count",
                 "error_message",
                 "agent_type",
-            ]:
+            }:
                 set_clauses.append(f"{key} = ?")
                 values.append(value)
 

@@ -72,9 +72,9 @@ class ConsolidatedHealthService:
 
                 # Update summary counts
                 component_status = component_health.get("status", "unknown")
-                if component_status in ["healthy", "connected", "available"]:
+                if component_status in {"healthy", "connected", "available"}:
                     health_status["summary"]["healthy"] += 1
-                elif component_status in ["degraded", "warning"]:
+                elif component_status in {"degraded", "warning"}:
                     health_status["summary"]["degraded"] += 1
                 else:
                     health_status["summary"]["unhealthy"] += 1

@@ -1838,7 +1838,7 @@ Explain what it means and answer their original question."""
                         selected_model,
                     ):
                         # Collect important WorkflowMessages for persistence
-                        if tool_msg.type in ["terminal_command", "terminal_output", "error"]:
+                        if tool_msg.type in {"terminal_command", "terminal_output", "error"}:
                             workflow_messages.append(tool_msg)
                             logger.debug(
                                 f"Collected WorkflowMessage for persistence: type={tool_msg.type}"

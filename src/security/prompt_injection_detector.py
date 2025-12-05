@@ -239,7 +239,7 @@ class PromptInjectionDetector:
         metadata["sanitized_length"] = len(sanitized_text)
 
         # Determine if text should be blocked
-        blocked = max_risk in [InjectionRisk.HIGH, InjectionRisk.CRITICAL]
+        blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
         if blocked:
             logger.warning(

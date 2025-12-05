@@ -214,7 +214,7 @@ class EnhancedMultiAgentOrchestrator:
             response = await get_robust_llm_response(planning_prompt, context)
 
             # Parse the plan
-            if response.tier_used.value in ["basic", "emergency"]:
+            if response.tier_used.value in {"basic", "emergency"}:
                 # Fallback to simple sequential plan
                 plan_data = self._create_fallback_plan(goal)
             else:

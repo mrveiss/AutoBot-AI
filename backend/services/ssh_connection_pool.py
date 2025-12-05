@@ -407,7 +407,7 @@ class SSHConnectionPool:
         async with self._lock:
             for pool_key, pool in self.pools.items():
                 for conn in pool:
-                    if conn.state in [ConnectionState.IDLE, ConnectionState.ACTIVE]:
+                    if conn.state in {ConnectionState.IDLE, ConnectionState.ACTIVE}:
                         if conn.needs_health_check(self.health_check_interval):
                             if not await self._check_connection_health(conn):
                                 conn.state = ConnectionState.UNHEALTHY

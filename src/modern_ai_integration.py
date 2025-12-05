@@ -1019,7 +1019,7 @@ class ModernAIIntegration:
             sum(
                 1
                 for r in self.request_history
-                if r.finish_reason not in ["error", "timeout"]
+                if r.finish_reason not in {"error", "timeout"}
             )
             / total_requests
         )

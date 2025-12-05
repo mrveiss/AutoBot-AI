@@ -293,7 +293,7 @@ class NPUWorkerManager:
             }
 
             # Add full worker data for certain events
-            if event_type in ["worker.added", "worker.updated"]:
+            if event_type in {"worker.added", "worker.updated"}:
                 event_data["worker"] = {
                     "id": worker_details.config.id,
                     "name": worker_details.config.name,

@@ -416,11 +416,11 @@ class SSOIntegrationFramework:
 
         if provider.protocol == SSOProtocol.SAML2:
             return await self._initiate_saml_auth(provider, redirect_uri, state)
-        elif provider.protocol in [
+        elif provider.protocol in {
             SSOProtocol.OAUTH2,
             SSOProtocol.OPENID_CONNECT,
             SSOProtocol.AZURE_AD,
-        ]:
+        }:
             return await self._initiate_oauth_auth(provider, redirect_uri, state)
         elif provider.protocol == SSOProtocol.LDAP:
             return {"error": "LDAP requires direct credential authentication"}
@@ -534,11 +534,11 @@ class SSOIntegrationFramework:
         try:
             if provider.protocol == SSOProtocol.SAML2:
                 return await self._handle_saml_callback(provider, callback_data)
-            elif provider.protocol in [
+            elif provider.protocol in {
                 SSOProtocol.OAUTH2,
                 SSOProtocol.OPENID_CONNECT,
                 SSOProtocol.AZURE_AD,
-            ]:
+            }:
                 return await self._handle_oauth_callback(provider, callback_data)
             else:
                 return {"error": "Unsupported protocol for callback"}

@@ -148,6 +148,28 @@ class OSDetector:
 
     async def _detect_linux_distro(self) -> LinuxDistro:
         """Detect Linux distribution."""
+        # Distro detection mapping for os-release file
+        DISTRO_KEYWORDS = [
+            ("kali", LinuxDistro.KALI),
+            ("ubuntu", LinuxDistro.UBUNTU),
+            ("debian", LinuxDistro.DEBIAN),
+            ("fedora", LinuxDistro.FEDORA),
+            ("centos", LinuxDistro.CENTOS),
+            ("rhel", LinuxDistro.RHEL),
+            ("red hat", LinuxDistro.RHEL),
+            ("arch", LinuxDistro.ARCH),
+            ("opensuse", LinuxDistro.OPENSUSE),
+            ("suse", LinuxDistro.OPENSUSE),
+        ]
+
+        # Fallback file detection mapping
+        FALLBACK_FILES = {
+            "/etc/debian_version": LinuxDistro.DEBIAN,
+            "/etc/fedora-release": LinuxDistro.FEDORA,
+            "/etc/centos-release": LinuxDistro.CENTOS,
+            "/etc/arch-release": LinuxDistro.ARCH,
+        }
+
         try:
             # Try /etc/os-release first
             os_release_exists = await asyncio.to_thread(
@@ -157,47 +179,16 @@ class OSDetector:
                 async with aiofiles.open("/etc/os-release", "r", encoding="utf-8") as f:
                     content = (await f.read()).lower()
 
-                    if "ubuntu" in content:
-                        return LinuxDistro.UBUNTU
-                    elif "debian" in content:
-                        return LinuxDistro.DEBIAN
-                    elif "fedora" in content:
-                        return LinuxDistro.FEDORA
-                    elif "centos" in content:
-                        return LinuxDistro.CENTOS
-                    elif "rhel" in content or "red hat" in content:
-                        return LinuxDistro.RHEL
-                    elif "arch" in content:
-                        return LinuxDistro.ARCH
-                    elif "opensuse" in content or "suse" in content:
-                        return LinuxDistro.OPENSUSE
-                    elif "kali" in content:
-                        return LinuxDistro.KALI
+                    # Check each keyword in priority order
+                    for keyword, distro in DISTRO_KEYWORDS:
+                        if keyword in content:
+                            return distro
 
-            # Fallback to other methods
-            debian_exists = await asyncio.to_thread(
-                os.path.exists, "/etc/debian_version"
-            )
-            if debian_exists:
-                return LinuxDistro.DEBIAN
-
-            fedora_exists = await asyncio.to_thread(
-                os.path.exists, "/etc/fedora-release"
-            )
-            if fedora_exists:
-                return LinuxDistro.FEDORA
-
-            centos_exists = await asyncio.to_thread(
-                os.path.exists, "/etc/centos-release"
-            )
-            if centos_exists:
-                return LinuxDistro.CENTOS
-
-            arch_exists = await asyncio.to_thread(
-                os.path.exists, "/etc/arch-release"
-            )
-            if arch_exists:
-                return LinuxDistro.ARCH
+            # Fallback to other detection methods
+            for file_path, distro in FALLBACK_FILES.items():
+                file_exists = await asyncio.to_thread(os.path.exists, file_path)
+                if file_exists:
+                    return distro
 
         except Exception as e:
             logger.warning(f"Error detecting Linux distribution: {e}")
@@ -225,32 +216,46 @@ class OSDetector:
         self, os_type: OSType, distro: Optional[LinuxDistro]
     ) -> str:
         """Detect the system package manager."""
+        # Linux distro to package manager mapping
+        LINUX_DISTRO_PM = {
+            LinuxDistro.UBUNTU: "apt",
+            LinuxDistro.DEBIAN: "apt",
+            LinuxDistro.KALI: "apt",
+            LinuxDistro.FEDORA: "dnf",
+            LinuxDistro.CENTOS: "yum",
+            LinuxDistro.RHEL: "yum",
+            LinuxDistro.ARCH: "pacman",
+            LinuxDistro.OPENSUSE: "zypper",
+        }
+
+        # macOS package managers (in order of preference)
+        MACOS_PM = ["brew", "port"]
+
+        # Windows package managers (in order of preference)
+        WINDOWS_PM = ["winget", "choco"]
+
+        # Linux package managers (for auto-detection)
+        LINUX_PM_FALLBACK = ["apt", "dnf", "yum", "pacman", "zypper"]
+
         if os_type == OSType.LINUX:
-            if distro in [LinuxDistro.UBUNTU, LinuxDistro.DEBIAN, LinuxDistro.KALI]:
-                return "apt"
-            elif distro == LinuxDistro.FEDORA:
-                return "dn"
-            elif distro in [LinuxDistro.CENTOS, LinuxDistro.RHEL]:
-                return "yum"
-            elif distro == LinuxDistro.ARCH:
-                return "pacman"
-            elif distro == LinuxDistro.OPENSUSE:
-                return "zypper"
-            else:
-                # Auto-detect common package managers
-                for pm in ["apt", "dn", "yum", "pacman", "zypper"]:
-                    if shutil.which(pm):
-                        return pm
+            # Try distro-specific detection first
+            if distro and distro in LINUX_DISTRO_PM:
+                return LINUX_DISTRO_PM[distro]
+
+            # Auto-detect common package managers
+            for pm in LINUX_PM_FALLBACK:
+                if shutil.which(pm):
+                    return pm
+
         elif os_type == OSType.MACOS:
-            if shutil.which("brew"):
-                return "brew"
-            elif shutil.which("port"):
-                return "port"
+            for pm in MACOS_PM:
+                if shutil.which(pm):
+                    return pm
+
         elif os_type == OSType.WINDOWS:
-            if shutil.which("winget"):
-                return "winget"
-            elif shutil.which("choco"):
-                return "choco"
+            for pm in WINDOWS_PM:
+                if shutil.which(pm):
+                    return pm
 
         return "unknown"
 
@@ -362,7 +367,7 @@ class OSDetector:
             return False, f"Package manager {self._os_info.package_manager} not found"
 
         # Check permissions for common package managers that need root
-        root_required_managers = ["apt", "yum", "dn", "pacman", "zypper"]
+        root_required_managers = ["apt", "yum", "dnf", "pacman", "zypper"]
 
         if (
             self._os_info.package_manager in root_required_managers
@@ -394,7 +399,7 @@ class OSDetector:
             tool
             for tool in capabilities
             if tool
-            in [
+            in {
                 "ping",
                 "curl",
                 "wget",
@@ -407,14 +412,14 @@ class OSDetector:
                 "traceroute",
                 "ifconfig",
                 "ip",
-            ]
+            }
         ]
 
         system_tools = [
             tool
             for tool in capabilities
             if tool
-            in [
+            in {
                 "ps",
                 "top",
                 "htop",
@@ -430,14 +435,14 @@ class OSDetector:
                 "crontab",
                 "systemctl",
                 "service",
-            ]
+            }
         ]
 
         file_tools = [
             tool
             for tool in capabilities
             if tool
-            in [
+            in {
                 "ls",
                 "find",
                 "grep",
@@ -454,14 +459,14 @@ class OSDetector:
                 "tar",
                 "zip",
                 "unzip",
-            ]
+            }
         ]
 
         dev_tools = [
             tool
             for tool in capabilities
             if tool
-            in [
+            in {
                 "git",
                 "python",
                 "python3",
@@ -474,7 +479,7 @@ class OSDetector:
                 "vim",
                 "nano",
                 "emacs",
-            ]
+            }
         ]
 
         return {
@@ -523,29 +528,24 @@ class OSDetector:
         Returns:
             Optional[str]: Installation command or None if not available
         """
+        # Package manager command templates
+        PM_INSTALL_COMMANDS = {
+            "apt": f"sudo apt update && sudo apt install -y {tool_name}",
+            "dnf": f"sudo dnf install -y {tool_name}",
+            "yum": f"sudo yum install -y {tool_name}",
+            "pacman": f"sudo pacman -S --noconfirm {tool_name}",
+            "zypper": f"sudo zypper install -y {tool_name}",
+            "brew": f"brew install {tool_name}",
+            "winget": f"winget install {tool_name}",
+            "choco": f"choco install {tool_name}",
+        }
+
         if not self._os_info:
             await self.detect_system()
 
         package_manager = self._os_info.package_manager
 
-        if package_manager == "apt":
-            return f"sudo apt update && sudo apt install -y {tool_name}"
-        elif package_manager == "dn":
-            return f"sudo dnf install -y {tool_name}"
-        elif package_manager == "yum":
-            return f"sudo yum install -y {tool_name}"
-        elif package_manager == "pacman":
-            return f"sudo pacman -S --noconfirm {tool_name}"
-        elif package_manager == "zypper":
-            return f"sudo zypper install -y {tool_name}"
-        elif package_manager == "brew":
-            return f"brew install {tool_name}"
-        elif package_manager == "winget":
-            return f"winget install {tool_name}"
-        elif package_manager == "choco":
-            return f"choco install {tool_name}"
-
-        return None
+        return PM_INSTALL_COMMANDS.get(package_manager, None)
 
 
 # Global detector instance (thread-safe)
@@ -575,6 +575,12 @@ if __name__ == "__main__":
     """Test the OS detector functionality."""
 
     async def test_detector():
+        """
+        Test function to demonstrate OS detector capabilities.
+
+        Detects and displays system information, installation capabilities,
+        and available tools organized by category.
+        """
         detector = await get_os_detector()
 
         print("=== OS Detection Test ===")
