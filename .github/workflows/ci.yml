@@ -160,6 +160,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup Node.js PATH
+      run: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        echo "$(dirname $(which node))" >> $GITHUB_PATH
+        node --version
+        npm --version
+
     - name: Install frontend dependencies
       run: |
         cd autobot-vue
