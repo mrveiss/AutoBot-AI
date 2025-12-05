@@ -163,7 +163,7 @@ class BulkOperationsMixin:
         self, source_file: str, format: str = "json", skip_duplicates: bool = True
     ) -> Dict[str, Any]:
         """
-        Import facts from a file.
+        Import facts from a file using parallel processing.
 
         Args:
             source_file: Source file path
@@ -187,26 +187,42 @@ class BulkOperationsMixin:
             else:
                 return {"status": "error", "message": f"Unknown format: {format}"}
 
-            # Import each fact
-            imported = 0
-            skipped = 0
-            errors = 0
-
-            for fact_data in facts:
+            # Batch import facts using asyncio.gather for parallel execution
+            async def store_single_fact(fact_data: Dict[str, Any]) -> Dict[str, Any]:
                 try:
-                    result = await self.store_fact(
+                    return await self.store_fact(
                         content=fact_data.get("content", ""),
                         metadata=fact_data.get("metadata", {}),
                         fact_id=fact_data.get("fact_id"),
                     )
+                except Exception as e:
+                    return {"status": "error", "message": str(e)}
 
-                    if result.get("status") == "success":
-                        imported += 1
-                    elif result.get("status") == "duplicate" and skip_duplicates:
-                        skipped += 1
-                    else:
-                        errors += 1
-                except Exception:
+            # Process all facts in parallel (with semaphore to limit concurrency)
+            semaphore = asyncio.Semaphore(50)  # Limit concurrent operations
+
+            async def bounded_store(fact_data: Dict[str, Any]) -> Dict[str, Any]:
+                async with semaphore:
+                    return await store_single_fact(fact_data)
+
+            results = await asyncio.gather(
+                *[bounded_store(fact_data) for fact_data in facts],
+                return_exceptions=True
+            )
+
+            # Count results
+            imported = 0
+            skipped = 0
+            errors = 0
+
+            for result in results:
+                if isinstance(result, Exception):
+                    errors += 1
+                elif result.get("status") == "success":
+                    imported += 1
+                elif result.get("status") == "duplicate" and skip_duplicates:
+                    skipped += 1
+                else:
                     errors += 1
 
             return {
@@ -287,7 +303,7 @@ class BulkOperationsMixin:
 
     async def bulk_delete(self, fact_ids: List[str]) -> Dict[str, Any]:
         """
-        Delete multiple facts in bulk.
+        Delete multiple facts in bulk using parallel processing.
 
         Args:
             fact_ids: List of fact IDs to delete
@@ -296,12 +312,29 @@ class BulkOperationsMixin:
             Dict with status and counts
         """
         try:
+            # Process all deletions in parallel with bounded concurrency
+            semaphore = asyncio.Semaphore(50)
+
+            async def bounded_delete(fact_id: str) -> Dict[str, Any]:
+                async with semaphore:
+                    try:
+                        return await self.delete_fact(fact_id)
+                    except Exception as e:
+                        return {"status": "error", "message": str(e)}
+
+            results = await asyncio.gather(
+                *[bounded_delete(fact_id) for fact_id in fact_ids],
+                return_exceptions=True
+            )
+
+            # Count results
             deleted = 0
             errors = 0
 
-            for fact_id in fact_ids:
-                result = await self.delete_fact(fact_id)
-                if result.get("status") == "success":
+            for result in results:
+                if isinstance(result, Exception):
+                    errors += 1
+                elif result.get("status") == "success":
                     deleted += 1
                 else:
                     errors += 1
@@ -321,7 +354,7 @@ class BulkOperationsMixin:
         self, fact_ids: List[str], new_category: str
     ) -> Dict[str, Any]:
         """
-        Update category for multiple facts.
+        Update category for multiple facts using parallel processing.
 
         Args:
             fact_ids: List of fact IDs
@@ -331,14 +364,31 @@ class BulkOperationsMixin:
             Dict with status and counts
         """
         try:
+            # Process all updates in parallel with bounded concurrency
+            semaphore = asyncio.Semaphore(50)
+
+            async def bounded_update(fact_id: str) -> Dict[str, Any]:
+                async with semaphore:
+                    try:
+                        return await self.update_fact(
+                            fact_id, metadata={"category": new_category}
+                        )
+                    except Exception as e:
+                        return {"status": "error", "message": str(e)}
+
+            results = await asyncio.gather(
+                *[bounded_update(fact_id) for fact_id in fact_ids],
+                return_exceptions=True
+            )
+
+            # Count results
             updated = 0
             errors = 0
 
-            for fact_id in fact_ids:
-                result = await self.update_fact(
-                    fact_id, metadata={"category": new_category}
-                )
-                if result.get("status") == "success":
+            for result in results:
+                if isinstance(result, Exception):
+                    errors += 1
+                elif result.get("status") == "success":
                     updated += 1
                 else:
                     errors += 1

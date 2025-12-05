@@ -86,6 +86,57 @@ Suggestion: {problem.get('suggestion', '')}
         logger.debug(f"Failed to store problem immediately: {e}")
 
 
+async def _store_problems_batch_to_chromadb(
+    collection,
+    problems: list,
+    start_idx: int,
+) -> None:
+    """Store multiple problems to ChromaDB collection in a single batch operation."""
+    if not collection or not problems:
+        return
+
+    try:
+        ids = []
+        documents = []
+        metadatas = []
+
+        for i, problem in enumerate(problems):
+            problem_idx = start_idx + i
+            problem_doc = f"""
+Problem: {problem.get('type', 'unknown')}
+Severity: {problem.get('severity', 'medium')}
+File: {problem.get('file_path', '')}
+Line: {problem.get('line', 0)}
+Description: {problem.get('description', '')}
+Suggestion: {problem.get('suggestion', '')}
+            """.strip()
+
+            metadata = {
+                "type": "problem",
+                "problem_type": problem.get("type", "unknown"),
+                "severity": problem.get("severity", "medium"),
+                "file_path": problem.get("file_path", ""),
+                "line_number": str(problem.get("line", 0)),
+                "description": problem.get("description", ""),
+                "suggestion": problem.get("suggestion", ""),
+            }
+
+            ids.append(f"problem_{problem_idx}_{problem.get('type', 'unknown')}")
+            documents.append(problem_doc)
+            metadatas.append(metadata)
+
+        # Single batch operation instead of N individual calls
+        await asyncio.to_thread(
+            collection.add,
+            ids=ids,
+            documents=documents,
+            metadatas=metadatas,
+        )
+        logger.debug(f"Batch stored {len(problems)} problems to ChromaDB")
+    except Exception as e:
+        logger.debug(f"Failed to batch store problems: {e}")
+
+
 def _aggregate_file_analysis(
     analysis_results: Dict,
     file_analysis: Dict,
@@ -234,14 +285,19 @@ async def scan_codebase(
                     _aggregate_file_analysis(analysis_results, file_analysis, relative_path)
 
                     # Process problems separately for ChromaDB storage
-                    for problem in file_analysis.get("problems", []):
-                        problem["file_path"] = relative_path
-                        analysis_results["all_problems"].append(problem)
+                    file_problems = file_analysis.get("problems", [])
+                    if file_problems:
+                        # Track starting index for batch operation
+                        start_idx = len(analysis_results["all_problems"])
 
-                        # Store problem immediately to ChromaDB if collection provided
-                        problem_idx = len(analysis_results["all_problems"]) - 1
-                        await _store_problem_to_chromadb(
-                            immediate_store_collection, problem, problem_idx
+                        # Add file_path to each problem and collect for batch storage
+                        for problem in file_problems:
+                            problem["file_path"] = relative_path
+                            analysis_results["all_problems"].append(problem)
+
+                        # Batch store all problems from this file in a single operation
+                        await _store_problems_batch_to_chromadb(
+                            immediate_store_collection, file_problems, start_idx
                         )
 
         # Calculate average file size
