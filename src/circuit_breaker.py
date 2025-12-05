@@ -17,6 +17,7 @@ from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
+from src.constants import CircuitBreakerDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,11 @@ class CircuitState(Enum):
 class CircuitBreakerConfig:
     """Configuration for circuit breaker"""
 
-    failure_threshold: int = 5  # Number of failures to open circuit
-    recovery_timeout: float = 60.0  # Seconds before trying half-open
+    # Issue #318: Use centralized constants instead of magic numbers
+    failure_threshold: int = CircuitBreakerDefaults.DEFAULT_FAILURE_THRESHOLD
+    recovery_timeout: float = CircuitBreakerDefaults.DEFAULT_RECOVERY_TIMEOUT
     success_threshold: int = 3  # Successes needed to close circuit from half-open
-    timeout: float = 30.0  # Call timeout in seconds
+    timeout: float = CircuitBreakerDefaults.DEFAULT_TIMEOUT
 
     # Exceptions that should trigger circuit breaker
     monitored_exceptions: tuple = (
@@ -569,10 +571,11 @@ def circuit_breaker_sync(
 # Convenience functions for AutoBot services
 async def protected_llm_call(func: Callable, *args, **kwargs) -> Any:
     """Make an LLM call protected by circuit breaker"""
+    # Issue #318: Use centralized constants instead of magic numbers
     config = CircuitBreakerConfig(
-        failure_threshold=3,
-        recovery_timeout=30.0,
-        timeout=120.0,  # LLM calls can be slow
+        failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
+        recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
+        timeout=CircuitBreakerDefaults.LLM_TIMEOUT,
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 

@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
@@ -23,8 +24,9 @@ class WorkflowStepJudge(BaseLLMJudge):
 
     def __init__(self, llm_interface=None):
         super().__init__("workflow_step", llm_interface)
-        self.safety_threshold = 0.7  # Minimum safety score required
-        self.quality_threshold = 0.6  # Minimum quality score required
+        # Issue #318: Use centralized constants instead of magic numbers
+        self.safety_threshold = WorkflowThresholds.SAFETY_THRESHOLD
+        self.quality_threshold = WorkflowThresholds.QUALITY_THRESHOLD
 
     async def evaluate_workflow_step(
         self,

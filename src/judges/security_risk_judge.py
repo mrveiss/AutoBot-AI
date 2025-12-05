@@ -13,6 +13,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+from src.constants import SecurityThresholds
 from src.constants.network_constants import NetworkConstants
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
@@ -35,8 +36,9 @@ class SecurityRiskJudge(BaseLLMJudge):
 
     def __init__(self, llm_interface=None):
         super().__init__("security_risk", llm_interface)
-        self.high_risk_threshold = 0.3  # Commands with risk > 0.3 are high risk
-        self.block_threshold = 0.7  # Commands with risk > 0.7 should be blocked
+        # Issue #318: Use centralized constants instead of magic numbers
+        self.high_risk_threshold = SecurityThresholds.HIGH_RISK_THRESHOLD
+        self.block_threshold = SecurityThresholds.BLOCK_THRESHOLD
 
         # Define dangerous command patterns
         self.dangerous_patterns = {
