@@ -795,8 +795,10 @@ class SecurityWorkflowManager:
                         status="up",
                     )
 
-                # Create vulnerability entity
-                await memory.create_vulnerability_entity(
+                # Issue #319: Use request object to reduce parameter count
+                from src.services.security_memory_integration import VulnerabilityRequest
+
+                vuln_request = VulnerabilityRequest(
                     assessment_id=assessment_id,
                     host_ip=host_ip,
                     cve_id=cve_id,
@@ -808,6 +810,7 @@ class SecurityWorkflowManager:
                     references=references,
                     metadata=metadata,
                 )
+                await memory.create_vulnerability_entity(request=vuln_request)
         except Exception as e:
             logger.warning(f"Failed to create vulnerability entity in Memory MCP: {e}")
 
