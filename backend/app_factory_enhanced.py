@@ -42,7 +42,7 @@ from backend.api.knowledge import router as knowledge_router
 from backend.api.knowledge_advanced_rag import router as knowledge_advanced_rag_router
 from backend.api.knowledge_enhanced import router as knowledge_enhanced_router
 from backend.api.llm import router as llm_router
-from backend.api.metrics import router as metrics_router
+from backend.api.prometheus_endpoint import router as prometheus_router
 from backend.api.monitoring import router as monitoring_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
@@ -541,7 +541,7 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
         (kb_librarian_router, "/kb-librarian", ["kb-librarian"], "kb_librarian"),
         (terminal_router, "/terminal", ["terminal"], "terminal"),
         (workflow_router, "/workflow", ["workflow"], "workflow"),
-        (metrics_router, "/metrics", ["metrics"], "metrics"),
+        (prometheus_router, "/metrics", ["prometheus"], "prometheus_metrics"),
         (monitoring_router, "/monitoring", ["monitoring"], "monitoring"),
         (templates_router, "/templates", ["templates"], "templates"),
         (scheduler_router, "/scheduler", ["scheduler"], "scheduler"),

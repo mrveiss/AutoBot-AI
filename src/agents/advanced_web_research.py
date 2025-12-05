@@ -7,7 +7,6 @@ Includes browser automation, anti-detection, and CAPTCHA handling
 """
 
 import asyncio
-import base64
 import logging
 import random
 import time

@@ -24,7 +24,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from backend.services.tracing_service import get_tracing_service

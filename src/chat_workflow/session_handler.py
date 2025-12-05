@@ -7,7 +7,6 @@ Session management for chat workflow.
 Handles session creation, initialization, cleanup, and session information retrieval.
 """
 
-import asyncio
 import logging
 import time
 from typing import Any, Dict, Optional

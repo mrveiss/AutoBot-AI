@@ -21,7 +21,7 @@ from backend.initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
-from src.constants.network_constants import NetworkConstants
+from src.constants.network_constants import NetworkConstants  # noqa: F401 - used in docstring example
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)

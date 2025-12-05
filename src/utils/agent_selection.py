@@ -15,7 +15,7 @@ Functions:
     release_agent: Release an agent after task completion
 """
 
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.utils.logging_manager import get_logger
 

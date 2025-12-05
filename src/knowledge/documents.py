@@ -14,8 +14,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from llama_index.core import Document
-
 if TYPE_CHECKING:
     pass
 

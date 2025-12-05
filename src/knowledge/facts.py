@@ -17,7 +17,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llama_index.core import Document
-from src.utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
     import aioredis

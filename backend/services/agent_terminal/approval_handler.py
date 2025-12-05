@@ -13,10 +13,9 @@ import time
 from typing import Dict, Optional
 
 from backend.services.command_approval_manager import CommandApprovalManager
-from backend.type_defs.common import Metadata
 from src.secure_command_executor import CommandRisk
 
-from .models import AgentSessionState, AgentTerminalSession
+from .models import AgentTerminalSession
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,7 @@ Endpoints:
 """
 
 import logging
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field

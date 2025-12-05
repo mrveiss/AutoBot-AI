@@ -11,7 +11,6 @@ import logging
 import time
 from typing import Optional
 
-from backend.models.command_execution import CommandState
 from backend.services.command_approval_manager import AgentRole, CommandApprovalManager
 from backend.services.command_execution_queue import get_command_queue
 from backend.type_defs.common import Metadata
