@@ -28,6 +28,8 @@ Created: 2025-01-14
 import logging
 from typing import Any, Optional
 
+from src.utils.path_validation import contains_injection_patterns
+
 from backend.type_defs.common import Metadata
 from uuid import uuid4
 
@@ -128,8 +130,8 @@ def validate_chat_session_id(session_id: str) -> bool:
     if not session_id or len(session_id) > 255:
         return False
 
-    # Security: reject path traversal and null bytes
-    if any(char in session_id for char in ["/", "\\", "..", "\0"]):
+    # Security: reject path traversal and null bytes (Issue #328 - uses shared validation)
+    if contains_injection_patterns(session_id):
         return False
 
     # Accept if it's a valid UUID
