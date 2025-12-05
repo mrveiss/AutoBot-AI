@@ -1,5 +1,6 @@
 # GitHub Actions workflow for code quality enforcement
 # Runs on every push and pull request
+# Uses self-hosted runner to avoid GitHub Actions quota limits
 
 name: Code Quality
 
@@ -11,37 +12,30 @@ on:
 
 jobs:
   code-quality:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        cache: 'pip'
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/requirements-dev.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+    - name: Set up Python virtual environment
+      run: |
+        python3 -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
 
     - name: Install dependencies
       run: |
-        python3 -m pip install --no-cache-dir --upgrade pip
-        python3 -m pip install --no-cache-dir black isort flake8 autoflake bandit[toml]
-        # Note: Code quality checks don't require project dependencies
-        # Only linting tools are needed
+        source .venv/bin/activate
+        python3 -m pip install --upgrade pip
+        python3 -m pip install black isort flake8 autoflake bandit[toml]
         echo "Final disk usage:"
         df -h
 
     - name: Check code formatting with Black
       run: |
+        source .venv/bin/activate
         python3 -m black --check --line-length=88 backend/ src/ || {
           echo "❌ Black formatting check failed"
           echo "Run 'python3 -m black --line-length=88 backend/ src/' to fix"
@@ -50,6 +44,7 @@ jobs:
 
     - name: Check import sorting with isort
       run: |
+        source .venv/bin/activate
         python3 -m isort --check --profile=black --line-length=88 backend/ src/ || {
           echo "❌ isort check failed"
           echo "Run 'python3 -m isort --profile=black --line-length=88 backend/ src/' to fix"
@@ -58,6 +53,7 @@ jobs:
 
     - name: Lint with flake8
       run: |
+        source .venv/bin/activate
         python3 -m flake8 backend/ src/ \
           --max-line-length=100 \
           --extend-ignore=E203,W503 \
@@ -70,6 +66,7 @@ jobs:
 
     - name: Check for unused imports with autoflake
       run: |
+        source .venv/bin/activate
         python3 -m autoflake --check --recursive \
           --remove-all-unused-imports \
           --remove-unused-variables \
@@ -81,6 +78,7 @@ jobs:
 
     - name: Security check with bandit
       run: |
+        source .venv/bin/activate
         python3 -m bandit -c .bandit -r backend/ src/ || {
           echo "⚠️ Security issues detected"
           exit 1
@@ -97,3 +95,8 @@ jobs:
         echo "  ✓ flake8 linting"
         echo "  ✓ autoflake unused code detection"
         echo "  ✓ bandit security analysis"
+
+    - name: Cleanup virtual environment
+      if: always()
+      run: |
+        rm -rf .venv || true
