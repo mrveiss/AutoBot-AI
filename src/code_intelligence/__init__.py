@@ -20,6 +20,8 @@ Provides advanced code analysis capabilities including:
 - LLM pattern analysis for cost optimization
 - Code fingerprinting for clone detection (Type 1-4)
 - Metrics and severity scoring
+- Test pattern analysis and quality metrics
+- Automated documentation generation
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
@@ -214,6 +216,32 @@ from .test_pattern_analyzer import (
     get_test_quality_metrics,
     get_test_severity_levels,
 )
+from .doc_generator import (
+    DocGenerator,
+    DocFormat,
+    DocSection,
+    ElementType,
+    DocCompleteness,
+    DiagramType,
+    ParameterDoc,
+    ReturnDoc,
+    ExceptionDoc,
+    ExampleDoc,
+    FunctionDoc,
+    ClassDoc,
+    ModuleDoc,
+    PackageDoc,
+    DiagramSpec,
+    GeneratedDoc,
+    analyze_module,
+    analyze_package,
+    generate_docs,
+    get_doc_formats,
+    get_doc_sections,
+    get_element_types,
+    get_diagram_types,
+    get_completeness_levels,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -396,4 +424,29 @@ __all__ = [
     "get_test_anti_pattern_types",
     "get_test_quality_metrics",
     "get_test_severity_levels",
+    # Automated documentation generation (Issue #241)
+    "DocGenerator",
+    "DocFormat",
+    "DocSection",
+    "ElementType",
+    "DocCompleteness",
+    "DiagramType",
+    "ParameterDoc",
+    "ReturnDoc",
+    "ExceptionDoc",
+    "ExampleDoc",
+    "FunctionDoc",
+    "ClassDoc",
+    "ModuleDoc",
+    "PackageDoc",
+    "DiagramSpec",
+    "GeneratedDoc",
+    "analyze_module",
+    "analyze_package",
+    "generate_docs",
+    "get_doc_formats",
+    "get_doc_sections",
+    "get_element_types",
+    "get_diagram_types",
+    "get_completeness_levels",
 ]
