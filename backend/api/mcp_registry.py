@@ -286,6 +286,12 @@ MCP_BRIDGES = [
         "/api/git/mcp/tools",
         ["status", "log", "diff", "branch", "blame", "show", "repository_whitelist"],
     ),
+    (
+        "prometheus_mcp",
+        "Prometheus Metrics - System Monitoring and Alerting",
+        "/api/prometheus/mcp/tools",
+        ["query_metric", "query_range", "get_system_metrics", "get_service_health", "get_vm_metrics", "list_available_metrics"],
+    ),
 ]
 
 

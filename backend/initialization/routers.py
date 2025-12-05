@@ -46,6 +46,7 @@ from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
+from backend.api.prometheus_mcp import router as prometheus_mcp_router
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ def load_core_routers():
         ),
         (database_mcp_router, "/database", ["database_mcp", "mcp"], "database_mcp"),
         (git_mcp_router, "/git", ["git_mcp", "mcp"], "git_mcp"),
+        (prometheus_mcp_router, "/prometheus", ["prometheus_mcp", "mcp"], "prometheus_mcp"),
         (agent_router, "/agent", ["agent"], "agent"),
         (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
         (
