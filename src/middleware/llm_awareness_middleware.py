@@ -210,10 +210,13 @@ class LLMAwarenessInjector:
 
 Active capabilities ({context['current_capabilities']['count']}):"""
 
-            # Add capability categories
-            for category, caps in context["current_capabilities"]["categories"].items():
-                if caps:
-                    prefix += f"\n- {category.title()}: {len(caps)} capabilities"
+            # Add capability categories using list + join (O(n)) instead of += (O(n²))
+            cap_lines = [
+                f"- {category.title()}: {len(caps)} capabilities"
+                for category, caps in context["current_capabilities"]["categories"].items()
+                if caps
+            ]
+            prefix += "\n" + "\n".join(cap_lines) if cap_lines else ""
 
             prefix += (
                 "\n\nRespond based on your current capabilities and system state.\n"

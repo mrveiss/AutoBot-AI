@@ -18,6 +18,33 @@ from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for keyword checks (Issue #326)
+REQUIREMENT_KEYWORDS = {"require", "depend", "need", "prerequisite"}
+SYNTAX_PATTERNS = {"Usage:", "Syntax:", "SYNOPSIS", "usage:"}
+OUTPUT_FORMAT_KEYWORDS = {"output", "format", "result", "report"}
+ADVANCED_FEATURE_KEYWORDS = {"feature", "capability", "support", "advanced"}
+ERROR_CODE_PATTERNS = {"error", "exit code", "return code"}
+PROBLEM_KEYWORDS = {"problem", "issue", "error", "fail"}
+SOLUTION_KEYWORDS = {"solution", "fix", "resolve"}
+COMMON_CLI_TOOLS = {"grep", "awk", "sed", "find", "xargs"}
+SECURITY_KEYWORDS = {"secure", "safe", "recommend", "best practice"}
+OFFICIAL_DOC_DOMAINS = {"github.com", "docs.", "man7.org", ".org"}
+LIMITATION_KEYWORDS = {"limit", "cannot", "not support", "restriction"}
+PERFORMANCE_KEYWORDS = {"performance", "speed", "memory", "cpu", "slow", "fast"}
+INSTALLATION_COMMANDS = {
+    "apt install",
+    "apt-get install",
+    "yum install",
+    "dnf install",
+    "pacman -S",
+    "brew install",
+    "pip install",
+    "npm install",
+}
+COMMAND_OPERATORS = {"-", "--", "|", ">", "<"}
+FEATURE_INDICATORS = {"feature", "support", "can", "allow", "enable"}
+TOOL_NAME_CHARS = {"-", "_"}  # Characters that often appear in tool names
+
 
 class EnhancedKBLibrarian:
     """
@@ -381,8 +408,7 @@ METADATA:
         for line in lines:
             line_lower = line.lower()
             if any(
-                word in line_lower
-                for word in ["require", "depend", "need", "prerequisite"]
+                word in line_lower for word in REQUIREMENT_KEYWORDS  # O(1) lookup (Issue #326)
             ):
                 requirements.append(line.strip())
 
@@ -394,10 +420,7 @@ METADATA:
         syntax_lines = []
 
         for line in lines:
-            if any(
-                pattern in line
-                for pattern in ["Usage:", "Syntax:", "SYNOPSIS", "usage:"]
-            ):
+            if any(pattern in line for pattern in SYNTAX_PATTERNS):  # O(1) lookup (Issue #326)
                 syntax_lines.append(line.strip())
 
         return "\n".join(syntax_lines) if syntax_lines else "See man page for syntax"
@@ -446,9 +469,7 @@ METADATA:
 
         for line in lines:
             line_lower = line.lower()
-            if any(
-                word in line_lower for word in ["output", "format", "result", "report"]
-            ):
+            if any(word in line_lower for word in OUTPUT_FORMAT_KEYWORDS):  # O(1) lookup (Issue #326)
                 formats.append(line.strip())
 
         return "\n".join(formats[:3]) if formats else "Standard text output"
@@ -460,10 +481,7 @@ METADATA:
 
         for line in lines:
             line_lower = line.lower()
-            if any(
-                word in line_lower
-                for word in ["feature", "capability", "support", "advanced"]
-            ):
+            if any(word in line_lower for word in ADVANCED_FEATURE_KEYWORDS):  # O(1) lookup (Issue #326)
                 features.append(line.strip())
 
         return (
@@ -478,10 +496,7 @@ METADATA:
         lines = text.split("\n")
 
         for line in lines:
-            if any(
-                pattern in line.lower()
-                for pattern in ["error", "exit code", "return code"]
-            ):
+            if any(pattern in line.lower() for pattern in ERROR_CODE_PATTERNS):  # O(1) lookup (Issue #326)
                 error_info.append(line.strip())
 
         return "\n".join(error_info[:5]) if error_info else "Standard Unix exit codes"
@@ -494,15 +509,11 @@ METADATA:
         current_issue = None
         for line in lines:
             line = line.strip()
-            if any(
-                word in line.lower() for word in ["problem", "issue", "error", "fail"]
-            ):
+            if any(word in line.lower() for word in PROBLEM_KEYWORDS):  # O(1) lookup (Issue #326)
                 if current_issue:
                     issues.append(current_issue)
                 current_issue = {"problem": line, "solution": ""}
-            elif current_issue and any(
-                word in line.lower() for word in ["solution", "fix", "resolve"]
-            ):
+            elif current_issue and any(word in line.lower() for word in SOLUTION_KEYWORDS):  # O(1) lookup (Issue #326)
                 current_issue["solution"] = line
 
         if current_issue:
@@ -524,8 +535,8 @@ METADATA:
                     len(word) > 2
                     and word.islower()
                     and not word.isdigit()
-                    and any(char in word for char in ["-", "_"])
-                    or word in ["grep", "awk", "sed", "find", "xargs"]
+                    and any(char in word for char in TOOL_NAME_CHARS)  # O(1) lookup (Issue #326)
+                    or word in COMMON_CLI_TOOLS  # O(1) lookup (Issue #326)
                 ):
                     tools.append(word)
 
@@ -538,10 +549,7 @@ METADATA:
 
         for line in lines:
             line_lower = line.lower()
-            if any(
-                word in line_lower
-                for word in ["secure", "safe", "recommend", "best practice"]
-            ):
+            if any(word in line_lower for word in SECURITY_KEYWORDS):  # O(1) lookup (Issue #326)
                 practices.append(line.strip())
 
         return practices[:5]
@@ -552,10 +560,7 @@ METADATA:
             sources = result.get("sources", [])
             for source in sources:
                 url = source.get("url", "")
-                if any(
-                    domain in url
-                    for domain in ["github.com", "docs.", "man7.org", ".org"]
-                ):
+                if any(domain in url for domain in OFFICIAL_DOC_DOMAINS):  # O(1) lookup (Issue #326)
                     return url
         return "N/A"
 
@@ -566,10 +571,7 @@ METADATA:
             summary = result.get("summary", "")
             lines = summary.split("\n")
             for line in lines:
-                if any(
-                    word in line.lower()
-                    for word in ["limit", "cannot", "not support", "restriction"]
-                ):
+                if any(word in line.lower() for word in LIMITATION_KEYWORDS):  # O(1) lookup (Issue #326)
                     limitations.append(line.strip())
 
         return (
@@ -585,17 +587,7 @@ METADATA:
             summary = result.get("summary", "")
             lines = summary.split("\n")
             for line in lines:
-                if any(
-                    word in line.lower()
-                    for word in [
-                        "performance",
-                        "speed",
-                        "memory",
-                        "cpu",
-                        "slow",
-                        "fast",
-                    ]
-                ):
+                if any(word in line.lower() for word in PERFORMANCE_KEYWORDS):  # O(1) lookup (Issue #326)
                     perf_notes.append(line.strip())
 
         return (
@@ -612,19 +604,7 @@ METADATA:
         for line in lines:
             line = line.strip()
             # Look for common installation patterns
-            if any(
-                cmd in line
-                for cmd in [
-                    "apt install",
-                    "apt-get install",
-                    "yum install",
-                    "dnf install",
-                    "pacman -S",
-                    "brew install",
-                    "pip install",
-                    "npm install",
-                ]
-            ):
+            if any(cmd in line for cmd in INSTALLATION_COMMANDS):  # O(1) lookup (Issue #326)
                 install_commands.append(line)
 
         if install_commands:
@@ -652,7 +632,7 @@ METADATA:
             # Look for code blocks or command patterns
             elif line and not line[0].isupper() and " " in line and len(line) < 100:
                 # Heuristic: might be a command
-                if any(cmd in line for cmd in ["-", "--", "|", ">", "<"]):
+                if any(cmd in line for cmd in COMMAND_OPERATORS):  # O(1) lookup (Issue #326)
                     commands.append(line)
 
         return commands[:10]  # Return top 10 examples
@@ -870,13 +850,16 @@ Date: {datetime.now().isoformat()}
 Found {len(tools)} tools for {tool_type}:
 
 """
-        for i, tool in enumerate(tools, 1):
-            summary_content += """
+        # Build tool summaries using list + join (O(n)) instead of += (O(n²))
+        tool_summaries = [
+            f"""
 {i}. {tool['name']}
    Purpose: {tool.get('purpose', 'N/A')}
    Installation: {tool.get('installation', 'N/A')[:200]}...
-
 """
+            for i, tool in enumerate(tools, 1)
+        ]
+        summary_content += "".join(tool_summaries)
 
         metadata = {
             "type": "tool_research_summary",
@@ -927,10 +910,7 @@ Found {len(tools)} tools for {tool_type}:
         lines = text.split("\n")
 
         for line in lines:
-            if any(
-                indicator in line.lower()
-                for indicator in ["feature", "support", "can", "allow", "enable"]
-            ):
+            if any(indicator in line.lower() for indicator in FEATURE_INDICATORS):  # O(1) lookup (Issue #326)
                 features.append(line.strip())
 
         return (

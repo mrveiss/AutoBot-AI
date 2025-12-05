@@ -630,11 +630,13 @@ async def receive_goal_compat(
 
             # Extract main response content
             if isinstance(ai_result, dict) and "results" in ai_result:
-                # Multi-agent results
-                main_content = ""
-                for agent, agent_result in ai_result["results"].items():
-                    if isinstance(agent_result, dict) and "content" in agent_result:
-                        main_content += f"{agent_result['content']}\n"
+                # Multi-agent results - use list + join (O(n)) instead of += (O(n²))
+                content_parts = [
+                    agent_result["content"]
+                    for agent_result in ai_result["results"].values()
+                    if isinstance(agent_result, dict) and "content" in agent_result
+                ]
+                main_content = "\n".join(content_parts)
                 response_message = main_content.strip() or "Task completed successfully"
             else:
                 response_message = (

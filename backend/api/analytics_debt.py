@@ -705,8 +705,12 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 | Severity | Count |
 |----------|-------|
 """
-        for sev, count in summary.get("by_severity", {}).items():
-            report += f"| {sev.capitalize()} | {count} |\n"
+        # Build table rows using list + join (O(n)) instead of += (O(n²))
+        severity_rows = [
+            f"| {sev.capitalize()} | {count} |"
+            for sev, count in summary.get("by_severity", {}).items()
+        ]
+        report += "\n".join(severity_rows) + "\n"
 
         report += """
 ## Debt by Category
@@ -714,8 +718,11 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 | Category | Count |
 |----------|-------|
 """
-        for cat, count in summary.get("by_category", {}).items():
-            report += f"| {cat.replace('_', ' ').title()} | {count} |\n"
+        category_rows = [
+            f"| {cat.replace('_', ' ').title()} | {count} |"
+            for cat, count in summary.get("by_category", {}).items()
+        ]
+        report += "\n".join(category_rows) + "\n"
 
         report += """
 ## Top Files by Debt
@@ -723,8 +730,11 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 | File | Hours | Cost |
 |------|-------|------|
 """
-        for f in debt_data.get("top_files", [])[:10]:
-            report += f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |\n"
+        file_rows = [
+            f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |"
+            for f in debt_data.get("top_files", [])[:10]
+        ]
+        report += "\n".join(file_rows) + "\n"
 
         report += """
 ## Top ROI Priorities (Quick Wins)
@@ -732,9 +742,11 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 | Description | ROI | Hours | Complexity |
 |-------------|-----|-------|------------|
 """
-        for item in debt_data.get("roi_ranking", [])[:10]:
-            desc = item.get("description", "")[:40]
-            report += f"| {desc}... | {item.get('roi_score', 0)} | {item.get('estimated_hours', 0):.1f} | {item.get('fix_complexity', 'unknown')} |\n"
+        roi_rows = [
+            f"| {item.get('description', '')[:40]}... | {item.get('roi_score', 0)} | {item.get('estimated_hours', 0):.1f} | {item.get('fix_complexity', 'unknown')} |"
+            for item in debt_data.get("roi_ranking", [])[:10]
+        ]
+        report += "\n".join(roi_rows) + "\n"
 
         report += """
 ## Recommendations
