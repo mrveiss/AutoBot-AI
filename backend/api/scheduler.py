@@ -15,7 +15,12 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
+from src.workflow_scheduler import (
+    WorkflowPriority,
+    WorkflowScheduleRequest as InternalScheduleRequest,
+    WorkflowStatus,
+    workflow_scheduler,
+)
 
 router = APIRouter()
 
@@ -62,8 +67,8 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
             status_code=400, detail=f"Invalid priority: {request.priority}"
         )
 
-    # Schedule the workflow
-    workflow_id = workflow_scheduler.schedule_workflow(
+    # Issue #319: Use request object to reduce parameter count
+    internal_request = InternalScheduleRequest(
         user_message=request.user_message,
         scheduled_time=request.scheduled_time,
         priority=priority,
@@ -78,6 +83,7 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
         timeout_minutes=request.timeout_minutes,
         max_retries=request.max_retries,
     )
+    workflow_id = workflow_scheduler.schedule_workflow(request=internal_request)
 
     # Get the created workflow for response
     workflow = workflow_scheduler.get_workflow(workflow_id)
@@ -422,8 +428,8 @@ async def schedule_template_workflow(
     if template_variables:
         user_message += f" with variables: {template_variables}"
 
-    # Schedule the workflow
-    workflow_id = workflow_scheduler.schedule_workflow(
+    # Issue #319: Use request object to reduce parameter count
+    internal_request = InternalScheduleRequest(
         user_message=user_message,
         scheduled_time=scheduled_time,
         priority=priority,
@@ -437,6 +443,7 @@ async def schedule_template_workflow(
         estimated_duration_minutes=template.estimated_duration_minutes,
         tags=template.tags.copy(),
     )
+    workflow_id = workflow_scheduler.schedule_workflow(request=internal_request)
 
     # Get the created workflow
     workflow = workflow_scheduler.get_workflow(workflow_id)
@@ -531,8 +538,8 @@ async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
             # Validate priority
             priority = WorkflowPriority[request.priority.upper()]
 
-            # Schedule the workflow
-            workflow_id = workflow_scheduler.schedule_workflow(
+            # Issue #319: Use request object to reduce parameter count
+            internal_request = InternalScheduleRequest(
                 user_message=request.user_message,
                 scheduled_time=request.scheduled_time,
                 priority=priority,
@@ -547,6 +554,7 @@ async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
                 timeout_minutes=request.timeout_minutes,
                 max_retries=request.max_retries,
             )
+            workflow_id = workflow_scheduler.schedule_workflow(request=internal_request)
 
             scheduled_workflows.append(workflow_id)
 

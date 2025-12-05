@@ -115,6 +115,30 @@ class QueuedWorkflow:
         return self.priority_score > other.priority_score
 
 
+@dataclass
+class WorkflowScheduleRequest:
+    """
+    Request parameters for scheduling a workflow.
+
+    Issue #319: Reduces long parameter list in schedule_workflow().
+    Groups all scheduling parameters into a single request object.
+    """
+
+    user_message: str
+    scheduled_time: Union[datetime, str]
+    priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL
+    complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE
+    template_id: Optional[str] = None
+    variables: Optional[Dict[str, Any]] = None
+    auto_approve: bool = False
+    tags: Optional[List[str]] = None
+    dependencies: Optional[List[str]] = None
+    user_id: Optional[str] = None
+    estimated_duration_minutes: int = 30
+    timeout_minutes: int = 120
+    max_retries: int = 3
+
+
 class WorkflowQueue:
     """Priority-based workflow execution queue"""
 
@@ -296,8 +320,10 @@ class WorkflowScheduler:
 
     def schedule_workflow(
         self,
-        user_message: str,
-        scheduled_time: Union[datetime, str],
+        request: Optional[WorkflowScheduleRequest] = None,
+        *,  # Force keyword-only args for backwards compatibility
+        user_message: Optional[str] = None,
+        scheduled_time: Optional[Union[datetime, str]] = None,
         priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL,
         complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE,
         template_id: Optional[str] = None,
@@ -308,7 +334,42 @@ class WorkflowScheduler:
         user_id: Optional[str] = None,
         **kwargs,
     ) -> str:
-        """Schedule a workflow for future execution"""
+        """
+        Schedule a workflow for future execution.
+
+        Issue #319: Supports both request object and individual parameters.
+
+        Args:
+            request: WorkflowScheduleRequest object (preferred, reduces param count)
+            user_message: Message for workflow (legacy, use request instead)
+            scheduled_time: When to execute (legacy, use request instead)
+            ... other params for backwards compatibility
+
+        Returns:
+            Workflow ID string
+        """
+        # Issue #319: Extract from request object if provided
+        if request is not None:
+            user_message = request.user_message
+            scheduled_time = request.scheduled_time
+            priority = request.priority
+            complexity = request.complexity
+            template_id = request.template_id
+            variables = request.variables
+            auto_approve = request.auto_approve
+            tags = request.tags
+            dependencies = request.dependencies
+            user_id = request.user_id
+            # Include additional fields from request
+            kwargs.setdefault(
+                "estimated_duration_minutes", request.estimated_duration_minutes
+            )
+            kwargs.setdefault("timeout_minutes", request.timeout_minutes)
+            kwargs.setdefault("max_retries", request.max_retries)
+        elif user_message is None or scheduled_time is None:
+            raise ValueError(
+                "Either 'request' object or 'user_message' and 'scheduled_time' required"
+            )
 
         # Parse scheduled time
         if isinstance(scheduled_time, str):

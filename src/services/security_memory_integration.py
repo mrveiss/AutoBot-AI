@@ -14,9 +14,51 @@ Issue: #260
 """
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from src.autobot_memory_graph import AutoBotMemoryGraph
+
+
+@dataclass
+class VulnerabilityRequest:
+    """
+    Request parameters for creating a vulnerability entity.
+
+    Issue #319: Reduces long parameter list in create_vulnerability_entity().
+    Groups vulnerability data into a single request object.
+    """
+
+    assessment_id: str
+    host_ip: str
+    cve_id: Optional[str] = None
+    title: str = ""
+    severity: str = "unknown"
+    description: str = ""
+    affected_port: Optional[int] = None
+    affected_service: Optional[str] = None
+    references: Optional[list[str]] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+@dataclass
+class ServiceRequest:
+    """
+    Request parameters for creating a service entity.
+
+    Issue #319: Reduces long parameter list in create_service_entity().
+    Groups service data into a single request object.
+    """
+
+    assessment_id: str
+    host_ip: str
+    port: int
+    protocol: str = "tcp"
+    service_name: Optional[str] = None
+    version: Optional[str] = None
+    product: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -289,8 +331,10 @@ class SecurityMemoryIntegration:
 
     async def create_vulnerability_entity(
         self,
-        assessment_id: str,
-        host_ip: str,
+        request: Optional[VulnerabilityRequest] = None,
+        *,  # Force keyword-only args for backwards compatibility
+        assessment_id: Optional[str] = None,
+        host_ip: Optional[str] = None,
         cve_id: Optional[str] = None,
         title: str = "",
         severity: str = "unknown",
@@ -303,9 +347,12 @@ class SecurityMemoryIntegration:
         """
         Create a memory entity for a discovered vulnerability.
 
+        Issue #319: Supports both request object and individual parameters.
+
         Args:
-            assessment_id: Parent assessment ID
-            host_ip: Affected host IP
+            request: VulnerabilityRequest object (preferred, reduces param count)
+            assessment_id: Parent assessment ID (legacy, use request instead)
+            host_ip: Affected host IP (legacy, use request instead)
             cve_id: CVE identifier
             title: Vulnerability title
             severity: Severity level (critical/high/medium/low/info)
@@ -318,6 +365,23 @@ class SecurityMemoryIntegration:
         Returns:
             Created entity data
         """
+        # Issue #319: Extract from request object if provided
+        if request is not None:
+            assessment_id = request.assessment_id
+            host_ip = request.host_ip
+            cve_id = request.cve_id
+            title = request.title
+            severity = request.severity
+            description = request.description
+            affected_port = request.affected_port
+            affected_service = request.affected_service
+            references = request.references
+            metadata = request.metadata
+        elif assessment_id is None or host_ip is None:
+            raise ValueError(
+                "Either 'request' object or 'assessment_id' and 'host_ip' required"
+            )
+
         await self.ensure_initialized()
 
         vuln_name = cve_id or title or "Unknown Vulnerability"
