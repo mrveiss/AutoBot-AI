@@ -278,7 +278,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'system',
         name: 'monitoring-system',
-        component: () => import('@/components/SystemMonitor.vue'),
+        component: () => import('@/components/GrafanaSystemMonitor.vue'),
         meta: {
           title: 'System Monitor',
           parent: 'monitoring'
