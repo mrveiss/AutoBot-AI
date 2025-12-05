@@ -24,6 +24,10 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for embedding model detection (Issue #326)
+EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
+TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -230,14 +234,15 @@ async def get_available_embedding_models():
             model_name = (
                 model.get("name", "") if isinstance(model, dict) else str(model)
             )
+            # Cache model_name.lower() to avoid repeated computation (Issue #323)
+            model_name_lower = model_name.lower()
             # Common embedding model patterns
             if any(
-                pattern in model_name.lower()
-                for pattern in ["embed", "nomic", "all-minilm", "sentence"]
+                pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS
             ):
                 embedding_models.append(model)
-            elif "text" in model_name.lower() and any(
-                size in model_name.lower() for size in ["small", "large", "medium"]
+            elif "text" in model_name_lower and any(
+                size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS
             ):
                 embedding_models.append(model)
 

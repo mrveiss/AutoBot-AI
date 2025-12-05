@@ -181,8 +181,11 @@ class SmartCancellationHandler:
                     if token.is_cancelled:
                         continue
 
+                    # Cache operation_id.lower() to avoid repeated computation (Issue #323)
+                    operation_id_lower = operation_id.lower()
+
                     # Cancel if Redis is unavailable and operation needs it
-                    if not resources["redis"] and "redis" in operation_id.lower():
+                    if not resources["redis"] and "redis" in operation_id_lower:
                         token.cancel(
                             CancellationReason.RESOURCE_UNAVAILABLE,
                             "Redis service unavailable",
@@ -190,7 +193,7 @@ class SmartCancellationHandler:
 
                     # Cancel if LLM is unavailable and operation needs it
                     if not resources["llm"] and (
-                        "llm" in operation_id.lower() or "chat" in operation_id.lower()
+                        "llm" in operation_id_lower or "chat" in operation_id_lower
                     ):
                         token.cancel(
                             CancellationReason.RESOURCE_UNAVAILABLE,
@@ -198,7 +201,7 @@ class SmartCancellationHandler:
                         )
 
                     # Cancel if KB is unavailable and operation needs it
-                    if not resources["kb"] and "knowledge" in operation_id.lower():
+                    if not resources["kb"] and "knowledge" in operation_id_lower:
                         token.cancel(
                             CancellationReason.RESOURCE_UNAVAILABLE,
                             "Knowledge base unavailable",

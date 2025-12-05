@@ -147,6 +147,8 @@ class JSONFormatterAgent:
 
         for pattern in json_patterns:
             matches = re.findall(pattern, text, re.DOTALL)
+            # Cache len(matches) outside loop for O(1) access (Issue #323)
+            matches_count = len(matches)
             for match in matches:
                 parsed = self._try_parse_json_match(match)
                 if parsed is None:
@@ -154,8 +156,8 @@ class JSONFormatterAgent:
 
                 with self._stats_lock:
                     self.successful_parses += 1
-                confidence = 0.9 if len(matches) == 1 else 0.7
-                if len(matches) > 1:
+                confidence = 0.9 if matches_count == 1 else 0.7
+                if matches_count > 1:
                     warnings.append(
                         "Multiple JSON objects found, using first valid one"
                     )

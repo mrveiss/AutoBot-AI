@@ -874,6 +874,8 @@ class EnhancedOrchestrator:
         """Search through workflow documentation"""
         matching_docs = []
 
+        # Cache query.lower() outside loop for O(1) access (Issue #323)
+        query_lower = query.lower()
         for doc_id, doc in self.workflow_documentation.items():
             # Filter by document type if specified
             if doc_type and doc.documentation_type != doc_type:
@@ -881,9 +883,9 @@ class EnhancedOrchestrator:
 
             # Simple text matching (in real implementation, use more sophisticated search)
             if (
-                query.lower() in doc.title.lower()
-                or query.lower() in doc.description.lower()
-                or any(query.lower() in tag.lower() for tag in doc.tags)
+                query_lower in doc.title.lower()
+                or query_lower in doc.description.lower()
+                or any(query_lower in tag.lower() for tag in doc.tags)
             ):
                 matching_docs.append(
                     {
