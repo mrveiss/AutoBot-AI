@@ -6,6 +6,9 @@ import os
 import platform
 import subprocess
 
+# Performance optimization: O(1) lookup for sensitive env var keywords (Issue #326)
+SENSITIVE_ENV_KEYWORDS = {"key", "token", "secret", "password"}
+
 
 def get_os_info():
     info = {
@@ -19,7 +22,7 @@ def get_os_info():
         "env": {
             k: (
                 "REDACTED"
-                if any(s in k.lower() for s in ["key", "token", "secret", "password"])
+                if any(s in k.lower() for s in SENSITIVE_ENV_KEYWORDS)
                 else v
             )
             for k, v in os.environ.items()

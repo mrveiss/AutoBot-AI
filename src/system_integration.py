@@ -17,6 +17,9 @@ from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for valid service actions (Issue #326)
+VALID_SERVICE_ACTIONS = {"start", "stop", "restart"}
+
 
 class SystemIntegration:
     """
@@ -170,7 +173,7 @@ class SystemIntegration:
 
     def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Starts, stops, or restarts a system service."""
-        if action not in ["start", "stop", "restart"]:
+        if action not in VALID_SERVICE_ACTIONS:
             return {
                 "status": "error",
                 "message": (

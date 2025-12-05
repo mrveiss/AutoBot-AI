@@ -30,6 +30,9 @@ from src.utils.common import PathUtils
 # Import database pooling for performance
 from src.utils.database_pool import get_connection_pool
 
+# Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
+TERMINAL_TASK_STATUSES = {"DONE", "FAILED"}
+
 
 @dataclass
 class MemoryEntry:
@@ -388,7 +391,7 @@ class LongTermMemoryManager:
                     datetime.now().isoformat(),
                     (
                         datetime.now().isoformat()
-                        if status in ["DONE", "FAILED"]
+                        if status in TERMINAL_TASK_STATUSES
                         else None
                     ),
                     metadata_json,

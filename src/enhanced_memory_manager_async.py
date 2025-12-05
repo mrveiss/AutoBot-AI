@@ -46,6 +46,9 @@ class Priority(Enum):
 # Alias for backward compatibility
 TaskPriority = Priority
 
+# Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
+TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+
 
 @dataclass
 class TaskEntry:
@@ -289,11 +292,7 @@ class AsyncEnhancedMemoryManager:
                     "updated_at": datetime.now().timestamp(),
                 }
 
-                if status in [
-                    TaskStatus.COMPLETED,
-                    TaskStatus.FAILED,
-                    TaskStatus.CANCELLED,
-                ]:
+                if status in TERMINAL_TASK_STATUSES:
                     updates["completed_at"] = datetime.now().timestamp()
 
                 if metadata:

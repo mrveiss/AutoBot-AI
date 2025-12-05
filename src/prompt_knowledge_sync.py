@@ -20,6 +20,9 @@ from src.prompt_manager import prompt_manager
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for domain expertise keywords (Issue #326)
+DOMAIN_EXPERTISE_KEYWORDS = {"developer", "hacker", "researcher"}
+
 
 class PromptKnowledgeSync:
     """
@@ -198,9 +201,7 @@ class PromptKnowledgeSync:
             return "error_handling"
         elif "memory" in prompt_key:
             return "memory_pattern"
-        elif any(
-            domain in prompt_key for domain in ["developer", "hacker", "researcher"]
-        ):
+        elif any(domain in prompt_key for domain in DOMAIN_EXPERTISE_KEYWORDS):
             return "domain_expertise"
         else:
             return "operational_guidance"

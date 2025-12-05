@@ -16,6 +16,12 @@ from src.constants.network_constants import NetworkConstants
 # Import the centralized ConfigManager
 from src.unified_config_manager import config as global_config_manager
 
+# Performance optimization: O(1) lookup for boolean string values (Issue #326)
+BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
+
+# Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
+DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
+
 
 class SecurityLayer:
     def __init__(self):
@@ -23,9 +29,10 @@ class SecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = os.getenv(
-            "AUTOBOT_SINGLE_USER_MODE", "true"
-        ).lower() in ["true", "1", "yes"]
+        self.single_user_mode = (
+            os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower()
+            in BOOLEAN_TRUE_VALUES
+        )
 
         # If single-user mode is enabled, disable all authentication
         if self.single_user_mode:
@@ -69,7 +76,7 @@ class SecurityLayer:
 
         # SECURITY: Removed god mode - all access must go through proper RBAC
         # Former god/superuser roles now use admin permissions with audit logging
-        if user_role.lower() in ["god", "superuser", "root"]:
+        if user_role.lower() in DEPRECATED_PRIVILEGED_ROLES:
             # Log the deprecated role usage for security audit
             self.audit_log(
                 action="deprecated_role_usage",
