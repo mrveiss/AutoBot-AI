@@ -50,7 +50,7 @@ AutoBot uses OpenTelemetry for distributed tracing across its 5-VM infrastructur
 
 ### 1. Tracing Service (`backend/services/tracing_service.py`)
 
-Central OpenTelemetry configuration providing:
+Central OpenTelemetry configuration (365 lines) providing:
 - Singleton pattern for single tracer per process
 - OpenTelemetry TracerProvider initialization
 - OTLP exporter configuration for Jaeger
@@ -58,14 +58,31 @@ Central OpenTelemetry configuration providing:
 - Span creation and management
 - W3C TraceContext + B3 propagation
 
+Key methods:
+- `initialize()` - Configure OpenTelemetry with Jaeger exporter
+- `instrument_fastapi(app)` - Auto-instrument FastAPI application
+- `span(name, attributes)` - Context manager for creating spans
+- `get_trace_context()` - Get headers for cross-service propagation
+- `set_error(exception)` - Record exception in current span
+
 ### 2. Tracing Middleware (`backend/middleware/tracing_middleware.py`)
 
-ASGI middleware adding AutoBot-specific tracing:
+ASGI middleware (267 lines) adding AutoBot-specific tracing:
 - Automatic span creation per request
 - Request/response attribute capture
 - Error tracking and exception recording
 - Performance timing metrics
 - Path exclusions for health/metrics endpoints
+
+### 3. Traced HTTP Client (`src/utils/traced_http_client.py`)
+
+HTTP client wrapper (245 lines) for cross-VM communication:
+- Automatic trace context propagation via headers
+- Span creation for each HTTP request
+- Error recording with exception details
+- Request/response attribute capture
+- Retry logic with exponential backoff
+- Connection pooling for performance
 
 ## Installation
 
@@ -214,7 +231,42 @@ with tracing.span("risky_operation"):
 
 ### Cross-Service Propagation
 
-For HTTP calls between VMs, propagate trace context:
+For HTTP calls between VMs, use the `TracedHttpClient` for automatic trace propagation:
+
+```python
+from src.utils.traced_http_client import get_traced_http_client
+
+# Get the traced HTTP client singleton
+http_client = get_traced_http_client()
+
+async def call_ai_stack(payload: dict):
+    # Trace context is automatically propagated via headers
+    response = await http_client.post(
+        "http://172.16.168.24:8080/api/process",
+        payload=payload,
+    )
+    return response
+
+# Other HTTP methods available:
+result = await http_client.get("http://...")
+result = await http_client.put("http://...", payload=data)
+result = await http_client.patch("http://...", payload=data)
+result = await http_client.delete("http://...")
+```
+
+#### TracedHttpClient Features
+
+The `TracedHttpClient` (`src/utils/traced_http_client.py`) provides:
+- **Automatic trace context injection** via W3C TraceContext headers
+- **Span creation** for each HTTP request
+- **Error recording** when requests fail
+- **Request/response attribute capture** (method, URL, status code, duration)
+- **Retry logic** with exponential backoff
+- **Connection pooling** for performance
+
+#### Manual Propagation (Alternative)
+
+For cases where you can't use `TracedHttpClient`:
 
 ```python
 import httpx
@@ -223,7 +275,7 @@ from backend.services.tracing_service import get_tracing_service
 tracing = get_tracing_service()
 
 async def call_ai_stack(payload: dict):
-    # Get trace context headers
+    # Get trace context headers manually
     headers = tracing.get_trace_context()
 
     async with httpx.AsyncClient() as client:
