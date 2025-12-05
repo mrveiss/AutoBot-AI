@@ -883,11 +883,11 @@ class AutoBotMemoryGraph:
                 tag_filter = "|".join(tags)
                 query_parts.append(f"@tags:{{{tag_filter}}}")
 
-            # Add text search
-            if query:
+            # Add text search (don't wrap wildcards in parentheses)
+            if query and query != "*":
                 query_parts.append(f"({query})")
 
-            # Combine filters
+            # Combine filters - use "*" for all entities if no filters
             redis_query = " ".join(query_parts) if query_parts else "*"
 
             # Execute search
@@ -948,8 +948,8 @@ class AutoBotMemoryGraph:
                     if entity_type and entity.get("type") != entity_type:
                         continue
 
-                    # Simple text matching
-                    if query:
+                    # Simple text matching (skip for wildcards)
+                    if query and query != "*":
                         name_match = query_lower in entity.get("name", "").lower()
                         obs_match = any(
                             query_lower in obs.lower()
