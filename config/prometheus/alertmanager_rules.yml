@@ -1,0 +1,257 @@
+# Prometheus AlertManager Rules for AutoBot
+# Phase 3: Alert Migration (Issue #346)
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+groups:
+  # System Resource Alerts
+  - name: autobot_system_resources
+    rules:
+      # CPU Alerts
+      - alert: HighCPUUsage
+        expr: autobot_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: high
+          component: system
+          resource: cpu
+        annotations:
+          summary: "VM0 High CPU Usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+          recommendation: "Check for runaway processes or high load"
+
+      - alert: CriticalCPUUsage
+        expr: autobot_cpu_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+          resource: cpu
+        annotations:
+          summary: "VM0 Critical CPU Usage"
+          description: "CPU usage is {{ $value }}% (threshold: 95%)"
+          recommendation: "Immediate action required - system may become unresponsive"
+
+      # Memory Alerts
+      - alert: HighMemoryUsage
+        expr: autobot_memory_usage_percent > 85
+        for: 10m
+        labels:
+          severity: high
+          component: system
+          resource: memory
+        annotations:
+          summary: "VM0 High Memory Usage"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)"
+          recommendation: "Check for memory leaks or high memory consumers"
+
+      - alert: CriticalMemoryUsage
+        expr: autobot_memory_usage_percent > 95
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+          resource: memory
+        annotations:
+          summary: "VM0 Critical Memory Usage"
+          description: "Memory usage is {{ $value }}% (threshold: 95%)"
+          recommendation: "Immediate action required - OOM killer may activate"
+
+      # Disk Alerts
+      - alert: HighDiskUsage
+        expr: autobot_disk_usage_percent{mount_point="/"} > 85
+        for: 1h
+        labels:
+          severity: medium
+          component: system
+          resource: disk
+        annotations:
+          summary: "VM0 High Disk Usage"
+          description: "Disk usage on {{ $labels.mount_point }} is {{ $value }}% (threshold: 85%)"
+          recommendation: "Clean up old logs or temporary files"
+
+      - alert: CriticalDiskUsage
+        expr: autobot_disk_usage_percent{mount_point="/"} > 95
+        for: 15m
+        labels:
+          severity: critical
+          component: system
+          resource: disk
+        annotations:
+          summary: "VM0 Critical Disk Usage"
+          description: "Disk usage on {{ $labels.mount_point }} is {{ $value }}% (threshold: 95%)"
+          recommendation: "Immediate cleanup required - system may fail to write"
+
+  # Service Health Alerts
+  - name: autobot_service_health
+    rules:
+      - alert: BackendAPIDown
+        expr: autobot_service_status{service_name="backend",status="offline"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+          service: backend
+        annotations:
+          summary: "Backend API Unavailable"
+          description: "Backend API is not responding"
+          recommendation: "Check backend service logs and restart if necessary"
+
+      - alert: RedisUnavailable
+        expr: autobot_service_status{service_name="redis",status="offline"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: service
+          service: redis
+        annotations:
+          summary: "Redis Database Unavailable"
+          description: "Redis database is not accessible"
+          recommendation: "Check Redis service on VM3 (172.16.168.23)"
+
+      - alert: OllamaDown
+        expr: autobot_service_status{service_name="ollama",status="offline"} == 1
+        for: 2m
+        labels:
+          severity: high
+          component: service
+          service: ollama
+        annotations:
+          summary: "Ollama LLM Service Down"
+          description: "Ollama LLM service is not responding"
+          recommendation: "Check AI Stack VM4 (172.16.168.24)"
+
+      - alert: ServiceHighResponseTime
+        expr: autobot_service_response_time_seconds > 5.0
+        for: 5m
+        labels:
+          severity: medium
+          component: service
+          resource: performance
+        annotations:
+          summary: "Service High Response Time"
+          description: "{{ $labels.service_name }} response time is {{ $value }}s (threshold: 5s)"
+          recommendation: "Check service performance and resource usage"
+
+      - alert: ServiceLowHealthScore
+        expr: autobot_service_health_score < 50
+        for: 5m
+        labels:
+          severity: high
+          component: service
+          resource: health
+        annotations:
+          summary: "Service Low Health Score"
+          description: "{{ $labels.service_name }} health score is {{ $value }}/100 (threshold: 50)"
+          recommendation: "Investigate service health issues"
+
+  # Error Rate Alerts
+  - name: autobot_error_monitoring
+    rules:
+      - alert: HighErrorRate
+        expr: rate(autobot_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: high
+          component: errors
+        annotations:
+          summary: "High Error Rate Detected"
+          description: "Error rate is {{ $value }} errors/5min (threshold: 10)"
+          recommendation: "Check error logs for patterns"
+
+      - alert: CriticalErrorSpike
+        expr: rate(autobot_errors_total[1m]) > 50
+        for: 1m
+        labels:
+          severity: critical
+          component: errors
+        annotations:
+          summary: "Critical Error Spike"
+          description: "Error spike detected: {{ $value }} errors/min (threshold: 50)"
+          recommendation: "Immediate investigation required"
+
+      - alert: ComponentErrorRate
+        expr: autobot_error_rate{time_window="1m"} > 0.1
+        for: 5m
+        labels:
+          severity: medium
+          component: errors
+        annotations:
+          summary: "Component Error Rate Elevated"
+          description: "{{ $labels.component }} error rate is {{ $value }} errors/min"
+          recommendation: "Check component-specific logs"
+
+  # Claude API Alerts
+  - name: autobot_claude_api
+    rules:
+      - alert: ClaudeAPIHighFailureRate
+        expr: rate(autobot_claude_api_requests_total{success="false"}[5m]) / rate(autobot_claude_api_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          component: claude_api
+        annotations:
+          summary: "Claude API High Failure Rate"
+          description: "Claude API failure rate is {{ $value | humanizePercentage }}"
+          recommendation: "Check API connectivity and rate limits"
+
+      - alert: ClaudeAPISlowResponses
+        expr: histogram_quantile(0.95, rate(autobot_claude_api_response_time_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: medium
+          component: claude_api
+        annotations:
+          summary: "Claude API Slow Responses"
+          description: "95th percentile response time is {{ $value }}s (threshold: 10s)"
+          recommendation: "Check network latency and API status"
+
+      - alert: ClaudeAPIRateLimitLow
+        expr: autobot_claude_api_rate_limit_remaining < 100
+        for: 1m
+        labels:
+          severity: warning
+          component: claude_api
+        annotations:
+          summary: "Claude API Rate Limit Low"
+          description: "Only {{ $value }} requests remaining"
+          recommendation: "Slow down API requests to avoid rate limiting"
+
+  # Workflow Alerts
+  - name: autobot_workflow_monitoring
+    rules:
+      - alert: WorkflowHighFailureRate
+        expr: rate(autobot_workflow_executions_total{status="failed"}[10m]) / rate(autobot_workflow_executions_total[10m]) > 0.2
+        for: 10m
+        labels:
+          severity: high
+          component: workflow
+        annotations:
+          summary: "Workflow High Failure Rate"
+          description: "Workflow failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+          recommendation: "Check workflow execution logs"
+
+      - alert: WorkflowLongDuration
+        expr: histogram_quantile(0.95, rate(autobot_workflow_duration_seconds_bucket[10m])) > 600
+        for: 10m
+        labels:
+          severity: medium
+          component: workflow
+        annotations:
+          summary: "Workflow Long Duration"
+          description: "95th percentile workflow duration is {{ $value }}s (threshold: 600s)"
+          recommendation: "Optimize workflow execution or check for blocking operations"
+
+  # Network Alerts
+  - name: autobot_network_monitoring
+    rules:
+      - alert: HighNetworkTraffic
+        expr: rate(autobot_network_bytes_total[5m]) > 100000000  # 100 MB/s
+        for: 5m
+        labels:
+          severity: medium
+          component: network
+        annotations:
+          summary: "High Network Traffic"
+          description: "Network traffic is {{ $value | humanize }}B/s (threshold: 100MB/s)"
+          recommendation: "Check for unusual network activity"
