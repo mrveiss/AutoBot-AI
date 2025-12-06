@@ -976,6 +976,31 @@ class AntiPatternDetector:
 
         return patterns
 
+    # Objects to exclude from Feature Envy detection (Issue #312)
+    # These are legitimate patterns, not code smells
+    FEATURE_ENVY_EXCLUDED_OBJECTS = {
+        # Standard library modules
+        "os", "sys", "time", "datetime", "re", "json", "ast", "typing",
+        "pathlib", "subprocess", "socket", "hashlib", "base64", "uuid",
+        "asyncio", "logging", "collections", "itertools", "functools",
+        "math", "random", "copy", "io", "contextlib", "enum",
+        # Common framework/library objects
+        "logger", "log", "cls", "np", "numpy", "cv2", "torch", "tf",
+        "pd", "plt", "redis", "aiohttp", "httpx", "requests",
+        # HTTP/FastAPI patterns (legitimate dependency injection)
+        "request", "response", "session", "db", "conn", "cursor",
+        "Request", "Response", "Session",
+        # Common parameter names (passed-in data is expected to be accessed)
+        "data", "config", "settings", "options", "params", "kwargs", "args",
+        "node", "tree", "element", "item", "obj", "result", "results",
+        # Third-party utilities
+        "psutil", "pydantic", "PIL", "Image",
+    }
+
+    # Minimum threshold for Feature Envy detection (Issue #312)
+    # Increased from 3 to 5 to reduce false positives
+    FEATURE_ENVY_MIN_ACCESSES = 5
+
     def _detect_feature_envy(
         self, node: ast.FunctionDef, file_path: str, class_name: Optional[str] = None
     ) -> List[AntiPatternResult]:
@@ -984,6 +1009,11 @@ class AntiPatternDetector:
 
         This is a heuristic detection that looks for methods accessing external
         object attributes more frequently than self attributes.
+
+        Excludes:
+        - Standard library modules (os, time, ast, etc.)
+        - Common framework objects (logger, request, response)
+        - Parameter names (data passed in is expected to be accessed)
         """
         patterns: List[AntiPatternResult] = []
 
@@ -997,13 +1027,18 @@ class AntiPatternDetector:
                         self_accesses += 1
                     else:
                         obj_name = child.value.id
-                        external_accesses[obj_name] = (
-                            external_accesses.get(obj_name, 0) + 1
-                        )
+                        # Skip excluded objects (stdlib, frameworks, params)
+                        if obj_name.lower() not in {
+                            x.lower() for x in self.FEATURE_ENVY_EXCLUDED_OBJECTS
+                        }:
+                            external_accesses[obj_name] = (
+                                external_accesses.get(obj_name, 0) + 1
+                            )
 
         # Check if any external object is accessed more than self
         for obj_name, count in external_accesses.items():
-            if count > self_accesses and count >= 3:  # At least 3 accesses
+            # Increased threshold and require significant imbalance
+            if count > self_accesses and count >= self.FEATURE_ENVY_MIN_ACCESSES:
                 patterns.append(
                     AntiPatternResult(
                         pattern_type=AntiPatternType.FEATURE_ENVY,
