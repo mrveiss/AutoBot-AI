@@ -350,10 +350,13 @@ class ToolHandlerMixin:
 
         Yields:
             WorkflowMessage for each stage of execution
+            Also yields execution_summary at end for Issue #352 continuation loop
         Returns:
             Additional text to append to llm_response
         """
         additional_response = ""
+        # Issue #352: Track execution results for continuation loop
+        execution_results = []
 
         for tool_call in tool_calls:
             if tool_call["name"] == "execute_command":
@@ -400,6 +403,17 @@ class ToolHandlerMixin:
 
                     # Process approval result
                     if approval_result and approval_result.get("status") == "success":
+                        # Issue #352: Track execution result for continuation
+                        execution_results.append({
+                            "command": command,
+                            "host": host,
+                            "stdout": approval_result.get("stdout", ""),
+                            "stderr": approval_result.get("stderr", ""),
+                            "return_code": approval_result.get("return_code", 0),
+                            "status": "success",
+                            "approved": True,
+                        })
+
                         # Yield execution confirmation
                         yield WorkflowMessage(
                             type="response",
@@ -452,6 +466,17 @@ class ToolHandlerMixin:
                         )
 
                 elif result.get("status") == "success":
+                    # Issue #352: Track execution result for continuation
+                    execution_results.append({
+                        "command": command,
+                        "host": host,
+                        "stdout": result.get("stdout", ""),
+                        "stderr": result.get("stderr", ""),
+                        "return_code": result.get("return_code", 0),
+                        "status": "success",
+                        "approved": False,  # Auto-approved (not user-approved)
+                    })
+
                     # Command executed without approval
                     # _interpret_command_results is an async generator, must iterate it
                     interpretation = ""
@@ -491,6 +516,20 @@ class ToolHandlerMixin:
                         content=f"Command failed: {error}",
                         metadata={"command": command, "error": True},
                     )
+
+        # Issue #352: Yield execution summary for continuation loop
+        if execution_results:
+            yield WorkflowMessage(
+                type="execution_summary",
+                content="",
+                metadata={
+                    "execution_results": execution_results,
+                    "total_commands": len(execution_results),
+                    "successful_commands": sum(
+                        1 for r in execution_results if r.get("status") == "success"
+                    ),
+                },
+            )
 
         # Can't use return in generator - caller will aggregate chunks instead
         # Return value would be: additional_response
