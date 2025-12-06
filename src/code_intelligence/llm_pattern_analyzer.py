@@ -15,6 +15,7 @@ to optimize performance and reduce costs through:
 - Parallel call optimization
 
 Part of EPIC #217 - Advanced Code Intelligence Methods (Issue #229)
+Refactored to fix Feature Envy code smells (Issue #312)
 """
 
 import hashlib
@@ -97,6 +98,22 @@ class PromptIssueType(Enum):
     REPETITIVE_CONTENT = "repetitive_content"
     UNCLEAR_INTENT = "unclear_intent"
 
+    def get_suggestion(self) -> str:
+        """
+        Get improvement suggestion for this issue type.
+
+        Fixes Feature Envy: Move suggestion logic to where data lives (Issue #312)
+        """
+        suggestions = {
+            self.REDUNDANT_INSTRUCTIONS: "Remove redundant instructions and consolidate repeated phrases",
+            self.EXCESSIVE_CONTEXT: "Consider summarizing or limiting context to relevant portions",
+            self.INEFFICIENT_FORMAT: "Optimize formatting: reduce whitespace and simplify",
+            self.REPETITIVE_CONTENT: "Remove repeated content and consolidate similar ideas",
+            self.MISSING_CONSTRAINTS: "Add explicit constraints and requirements",
+            self.UNCLEAR_INTENT: "Clarify the intended goal and expected output",
+        }
+        return suggestions.get(self, "Review and optimize this section")
+
 
 # =============================================================================
 # Data Classes
@@ -114,6 +131,54 @@ class TokenUsage:
 
 
 @dataclass
+class PromptAnalysisResult:
+    """
+    Result of prompt analysis with integrated logic.
+
+    Fixes Feature Envy: Encapsulates analysis data with its operations (Issue #312)
+    """
+    issues: List[PromptIssueType] = field(default_factory=list)
+    estimated_tokens: int = 0
+    variables: List[str] = field(default_factory=list)
+
+    def get_suggestions(self, prompt_text: str) -> List[str]:
+        """
+        Generate improvement suggestions based on detected issues.
+
+        Args:
+            prompt_text: Original prompt text for context
+
+        Returns:
+            List of improvement suggestions
+        """
+        suggestions = []
+
+        # Get issue-specific suggestions
+        for issue in self.issues:
+            suggestions.append(issue.get_suggestion())
+
+        # Add length-based suggestions
+        if self.estimated_tokens > 2000:
+            suggestions.append(
+                f"Consider reducing prompt length (~{self.estimated_tokens} tokens)"
+            )
+
+        return suggestions
+
+    def has_issue(self, issue_type: PromptIssueType) -> bool:
+        """Check if a specific issue type is present."""
+        return issue_type in self.issues
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "issues": [issue.value for issue in self.issues],
+            "estimated_tokens": self.estimated_tokens,
+            "variables": self.variables,
+        }
+
+
+@dataclass
 class PromptTemplate:
     """Information about a detected prompt template."""
 
@@ -125,6 +190,39 @@ class PromptTemplate:
     file_path: Optional[str] = None
     line_number: int = 0
     issues: List[PromptIssueType] = field(default_factory=list)
+
+    def analyze(self) -> PromptAnalysisResult:
+        """
+        Analyze this template for issues and optimization opportunities.
+
+        Fixes Feature Envy: Template analyzes itself (Issue #312)
+        """
+        from .prompt_analyzer import PromptAnalyzer
+
+        issues = PromptAnalyzer.analyze_prompt(self.template_text)
+        tokens = PromptAnalyzer.estimate_tokens(self.template_text)
+        variables = PromptAnalyzer.extract_variables(self.template_text)
+
+        return PromptAnalysisResult(
+            issues=issues,
+            estimated_tokens=tokens,
+            variables=variables
+        )
+
+    def get_optimization_potential(self) -> float:
+        """Calculate optimization potential based on issues."""
+        if not self.issues:
+            return 0.0
+
+        # Weight different issue types
+        weights = {
+            PromptIssueType.REDUNDANT_INSTRUCTIONS: 0.3,
+            PromptIssueType.EXCESSIVE_CONTEXT: 0.4,
+            PromptIssueType.INEFFICIENT_FORMAT: 0.2,
+            PromptIssueType.REPETITIVE_CONTENT: 0.3,
+        }
+
+        return min(sum(weights.get(issue, 0.1) for issue in self.issues), 1.0)
 
 
 @dataclass
@@ -139,6 +237,55 @@ class CacheOpportunity:
     affected_calls_per_hour: int = 0
     implementation_effort: str = "medium"
     priority: OptimizationPriority = OptimizationPriority.MEDIUM
+
+    def should_implement(self) -> bool:
+        """
+        Determine if this caching opportunity should be implemented.
+
+        Fixes Feature Envy: Opportunity decides for itself (Issue #312)
+        """
+        # High priority always worth implementing
+        if self.priority in HIGH_PRIORITY_LEVELS:
+            return True
+
+        # Medium priority if savings are significant
+        if self.estimated_savings_percent > 20.0:
+            return True
+
+        # Low effort with any savings is worth it
+        if self.implementation_effort == "low" and self.estimated_savings_percent > 10.0:
+            return True
+
+        return False
+
+    def get_implementation_steps(self) -> List[str]:
+        """Get implementation steps based on cache type."""
+        base_steps = [
+            "Add Redis/in-memory cache layer",
+            "Generate cache keys from prompt content hash",
+            "Set appropriate TTL based on content freshness needs",
+            "Add cache hit/miss metrics",
+        ]
+
+        type_specific = {
+            CacheOpportunityType.EMBEDDING_CACHE: [
+                "Hash input text for cache key",
+                "Store embedding vectors in Redis",
+                "Set long TTL (embeddings rarely change)",
+            ],
+            CacheOpportunityType.STATIC_PROMPT: [
+                "Identify static prompt patterns",
+                "Cache full responses with hash keys",
+                "Monitor hit rates to adjust TTL",
+            ],
+            CacheOpportunityType.SEMANTIC_CACHE: [
+                "Implement semantic similarity matching",
+                "Use vector similarity for cache lookup",
+                "Set threshold for similarity matches",
+            ],
+        }
+
+        return base_steps + type_specific.get(self.cache_type, [])
 
 
 @dataclass
@@ -155,6 +302,18 @@ class UsagePattern:
     token_estimate: int = 0
     optimization_potential: float = 0.0
 
+    def is_high_token_usage(self) -> bool:
+        """Check if this pattern uses high token counts."""
+        return self.token_estimate > 1000
+
+    def is_cacheable(self) -> bool:
+        """Determine if this pattern is cacheable."""
+        cacheable_types = {
+            UsagePatternType.EMBEDDING,
+            UsagePatternType.ANALYSIS,
+        }
+        return self.pattern_type in cacheable_types or self.optimization_potential > 0.5
+
 
 @dataclass
 class RetryPattern:
@@ -170,6 +329,37 @@ class RetryPattern:
     timeout_value: Optional[float] = None
     issues: List[str] = field(default_factory=list)
 
+    def is_optimal(self) -> bool:
+        """
+        Check if this retry pattern follows best practices.
+
+        Fixes Feature Envy: Pattern evaluates itself (Issue #312)
+        """
+        # Optimal patterns have exponential backoff, reasonable retries, and timeout
+        return (
+            self.backoff_strategy == "exponential"
+            and self.max_retries <= 3
+            and self.has_timeout
+        )
+
+    def get_optimization_recommendations(self) -> List[str]:
+        """Get specific recommendations for this retry pattern."""
+        recommendations = []
+
+        if self.backoff_strategy == "unknown":
+            recommendations.append("Implement exponential backoff with jitter")
+
+        if self.max_retries > 5:
+            recommendations.append("Reduce max retries to 3")
+
+        if not self.has_timeout:
+            recommendations.append("Add timeout to prevent infinite hangs")
+
+        if self.backoff_strategy not in ("exponential", "linear"):
+            recommendations.append("Use exponential or linear backoff")
+
+        return recommendations
+
 
 @dataclass
 class BatchingOpportunity:
@@ -181,6 +371,14 @@ class BatchingOpportunity:
     estimated_speedup: float
     estimated_token_savings: int
     priority: OptimizationPriority = OptimizationPriority.MEDIUM
+
+    def get_batch_size(self) -> int:
+        """Get recommended batch size."""
+        return len(self.related_calls)
+
+    def is_significant(self) -> bool:
+        """Check if this batching opportunity is significant."""
+        return len(self.related_calls) >= 2 and self.estimated_speedup > 1.2
 
 
 @dataclass
@@ -197,6 +395,15 @@ class CostEstimate:
     monthly_cost_usd: float
     optimization_potential_percent: float = 0.0
     optimized_monthly_cost_usd: float = 0.0
+
+    def get_monthly_savings(self) -> float:
+        """Calculate monthly savings from optimization."""
+        return self.monthly_cost_usd - self.optimized_monthly_cost_usd
+
+    def is_expensive_model(self) -> bool:
+        """Check if this is an expensive model."""
+        expensive_markers = ["gpt-4", "opus", "claude-3-opus"]
+        return any(marker in self.model.lower() for marker in expensive_markers)
 
 
 @dataclass
@@ -215,6 +422,13 @@ class OptimizationRecommendation:
     affected_files: List[str] = field(default_factory=list)
     code_examples: Dict[str, str] = field(default_factory=dict)
 
+    def should_prioritize(self) -> bool:
+        """Determine if this recommendation should be prioritized."""
+        return (
+            self.priority in HIGH_PRIORITY_LEVELS
+            or self.estimated_savings_percent > 30.0
+        )
+
 
 @dataclass
 class AnalysisResult:
@@ -232,6 +446,18 @@ class AnalysisResult:
     recommendations: List[OptimizationRecommendation]
     total_estimated_savings_percent: float = 0.0
     summary: Dict[str, Any] = field(default_factory=dict)
+
+    def get_high_priority_recommendations(self) -> List[OptimizationRecommendation]:
+        """Get only high-priority recommendations."""
+        return [rec for rec in self.recommendations if rec.should_prioritize()]
+
+    def get_total_monthly_cost(self) -> float:
+        """Calculate total monthly cost across all models."""
+        return sum(est.monthly_cost_usd for est in self.cost_estimates)
+
+    def get_total_monthly_savings(self) -> float:
+        """Calculate total potential monthly savings."""
+        return sum(est.get_monthly_savings() for est in self.cost_estimates)
 
 
 # =============================================================================
@@ -367,6 +593,8 @@ class PromptAnalyzer:
 
     Detects issues like redundant instructions, excessive context,
     and suggests improvements for token efficiency.
+
+    Refactored to use PromptAnalysisResult (Issue #312)
     """
 
     # Patterns that indicate potential issues
@@ -485,6 +713,9 @@ class PromptAnalyzer:
         """
         Suggest improvements for detected issues.
 
+        DEPRECATED: Use PromptAnalysisResult.get_suggestions() instead.
+        Kept for backward compatibility.
+
         Args:
             prompt: The original prompt
             issues: List of detected issues
@@ -492,32 +723,12 @@ class PromptAnalyzer:
         Returns:
             List of improvement suggestions
         """
-        suggestions = []
-
-        if PromptIssueType.REDUNDANT_INSTRUCTIONS in issues:
-            suggestions.append(
-                "Remove redundant instructions and consolidate repeated phrases"
-            )
-
-        if PromptIssueType.EXCESSIVE_CONTEXT in issues:
-            suggestions.append(
-                "Consider summarizing or limiting context to relevant portions"
-            )
-
-        if PromptIssueType.INEFFICIENT_FORMAT in issues:
-            suggestions.append("Optimize formatting: reduce whitespace and simplify")
-
-        if PromptIssueType.REPETITIVE_CONTENT in issues:
-            suggestions.append("Remove repeated content and consolidate similar ideas")
-
-        # General suggestions based on length
-        estimated_tokens = cls.estimate_tokens(prompt)
-        if estimated_tokens > 2000:
-            suggestions.append(
-                f"Consider reducing prompt length (~{estimated_tokens} tokens)"
-            )
-
-        return suggestions
+        result = PromptAnalysisResult(
+            issues=issues,
+            estimated_tokens=cls.estimate_tokens(prompt),
+            variables=cls.extract_variables(prompt)
+        )
+        return result.get_suggestions(prompt)
 
 
 # =============================================================================
@@ -575,7 +786,7 @@ class CacheOpportunityDetector:
         static_prompts = [
             p
             for p in patterns
-            if p.optimization_potential > 0.5
+            if p.is_cacheable()
             and p.pattern_type == UsagePatternType.CHAT_COMPLETION
         ]
         if static_prompts:
@@ -973,6 +1184,8 @@ class RecommendationEngine:
     Generates optimization recommendations based on analysis results.
 
     Combines insights from all analyzers to produce actionable recommendations.
+
+    Refactored to use data class methods (Issue #312)
     """
 
     @classmethod
@@ -999,9 +1212,9 @@ class RecommendationEngine:
         """
         recommendations = []
 
-        # Caching recommendations
+        # Caching recommendations - use CacheOpportunity methods
         for cache_opp in cache_opportunities:
-            if cache_opp.priority in HIGH_PRIORITY_LEVELS:  # O(1) lookup (Issue #326)
+            if cache_opp.should_implement():
                 rec = OptimizationRecommendation(
                     recommendation_id=f"rec_{cache_opp.opportunity_id}",
                     category=OptimizationCategory.CACHING,
@@ -1009,26 +1222,22 @@ class RecommendationEngine:
                     title=f"Implement {cache_opp.cache_type.value} caching",
                     description=cache_opp.description,
                     impact=f"~{cache_opp.estimated_savings_percent:.0f}% cost reduction",
-                    implementation_steps=[
-                        "Add Redis/in-memory cache layer",
-                        "Generate cache keys from prompt content hash",
-                        "Set appropriate TTL based on content freshness needs",
-                        "Add cache hit/miss metrics",
-                    ],
+                    implementation_steps=cache_opp.get_implementation_steps(),
                     estimated_savings_percent=cache_opp.estimated_savings_percent,
                     effort=cache_opp.implementation_effort,
                 )
                 recommendations.append(rec)
 
-        # Batching recommendations
-        if batching_opportunities:
-            files = list(set(b.file_path for b in batching_opportunities))
+        # Batching recommendations - use BatchingOpportunity methods
+        significant_batching = [b for b in batching_opportunities if b.is_significant()]
+        if significant_batching:
+            files = list(set(b.file_path for b in significant_batching))
             rec = OptimizationRecommendation(
                 recommendation_id="rec_batching_001",
                 category=OptimizationCategory.BATCHING,
                 priority=OptimizationPriority.MEDIUM,
                 title="Batch similar LLM calls",
-                description=f"Found {len(batching_opportunities)} opportunities to batch LLM calls",
+                description=f"Found {len(significant_batching)} opportunities to batch LLM calls",
                 impact="~1.5x throughput improvement, reduced latency",
                 implementation_steps=[
                     "Collect similar requests into batches",
@@ -1042,12 +1251,14 @@ class RecommendationEngine:
             )
             recommendations.append(rec)
 
-        # Retry strategy recommendations
-        suboptimal_retries = [
-            r for r in retry_patterns
-            if r.backoff_strategy == "unknown" or r.max_retries > 5
-        ]
+        # Retry strategy recommendations - use RetryPattern methods
+        suboptimal_retries = [r for r in retry_patterns if not r.is_optimal()]
         if suboptimal_retries:
+            # Aggregate recommendations from all patterns
+            all_recs = []
+            for retry_pat in suboptimal_retries:
+                all_recs.extend(retry_pat.get_optimization_recommendations())
+
             rec = OptimizationRecommendation(
                 recommendation_id="rec_retry_001",
                 category=OptimizationCategory.RETRY_STRATEGY,
@@ -1055,20 +1266,15 @@ class RecommendationEngine:
                 title="Optimize retry strategies",
                 description=f"Found {len(suboptimal_retries)} suboptimal retry patterns",
                 impact="Reduced latency, better error handling",
-                implementation_steps=[
-                    "Implement exponential backoff with jitter",
-                    "Limit max retries to 3",
-                    "Add circuit breaker pattern",
-                    "Log retry attempts for analysis",
-                ],
+                implementation_steps=list(set(all_recs)),  # Deduplicate
                 estimated_savings_percent=10.0,
                 effort="low",
                 affected_files=list(set(r.file_path for r in suboptimal_retries))[:5],
             )
             recommendations.append(rec)
 
-        # Token optimization recommendations
-        high_token_patterns = [p for p in patterns if p.token_estimate > 1000]
+        # Token optimization recommendations - use UsagePattern methods
+        high_token_patterns = [p for p in patterns if p.is_high_token_usage()]
         if high_token_patterns:
             rec = OptimizationRecommendation(
                 recommendation_id="rec_tokens_001",
@@ -1088,11 +1294,8 @@ class RecommendationEngine:
             )
             recommendations.append(rec)
 
-        # Model selection recommendations
-        expensive_models = [
-            e for e in cost_estimates
-            if "gpt-4" in e.model.lower() or "opus" in e.model.lower()
-        ]
+        # Model selection recommendations - use CostEstimate methods
+        expensive_models = [e for e in cost_estimates if e.is_expensive_model()]
         if expensive_models and len(patterns) > 5:
             rec = OptimizationRecommendation(
                 recommendation_id="rec_model_001",
@@ -1398,12 +1601,15 @@ def analyze_prompt(prompt: str) -> Dict[str, Any]:
         Analysis result with issues and suggestions
     """
     issues = PromptAnalyzer.analyze_prompt(prompt)
-    suggestions = PromptAnalyzer.suggest_improvements(prompt, issues)
-    tokens = PromptAnalyzer.estimate_tokens(prompt)
+    result = PromptAnalysisResult(
+        issues=issues,
+        estimated_tokens=PromptAnalyzer.estimate_tokens(prompt),
+        variables=PromptAnalyzer.extract_variables(prompt)
+    )
 
     return {
-        "issues": [issue.value for issue in issues],
-        "suggestions": suggestions,
-        "estimated_tokens": tokens,
-        "variables": PromptAnalyzer.extract_variables(prompt),
+        "issues": [issue.value for issue in result.issues],
+        "suggestions": result.get_suggestions(prompt),
+        "estimated_tokens": result.estimated_tokens,
+        "variables": result.variables,
     }

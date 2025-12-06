@@ -9,9 +9,11 @@ Provides behavioral anomaly detection, ML-based threat detection, and enhanced s
 import asyncio
 import logging
 import pickle
+import re
 import time
+from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -53,6 +55,200 @@ class ThreatCategory(Enum):
 
 
 @dataclass
+class SecurityEvent:
+    """Typed wrapper for raw security event dictionaries"""
+
+    raw_event: Dict
+
+    @property
+    def user_id(self) -> str:
+        return self.raw_event.get("user_id", "unknown")
+
+    @property
+    def source_ip(self) -> str:
+        return self.raw_event.get("source_ip", "unknown")
+
+    @property
+    def action(self) -> str:
+        return self.raw_event.get("action", "")
+
+    @property
+    def resource(self) -> str:
+        return self.raw_event.get("resource", "")
+
+    @property
+    def timestamp(self) -> datetime:
+        timestamp_str = self.raw_event.get("timestamp", datetime.utcnow().isoformat())
+        return datetime.fromisoformat(timestamp_str)
+
+    @property
+    def details(self) -> Dict:
+        return self.raw_event.get("details", {})
+
+    @property
+    def outcome(self) -> str:
+        return self.raw_event.get("outcome", "")
+
+    def is_authentication_event(self) -> bool:
+        return self.action == "authentication"
+
+    def is_authentication_failure(self) -> bool:
+        return self.is_authentication_event() and self.outcome == "failure"
+
+    def is_file_operation(self) -> bool:
+        return self.action in {"file_read", "file_write", "file_delete", "file_upload"}
+
+    def is_api_request(self) -> bool:
+        return self.action == "api_request"
+
+    def get_timestamp_hour(self) -> int:
+        return self.timestamp.hour
+
+    def get_command_content(self) -> str:
+        """Extract command content from details"""
+        command = self.details.get("command", "")
+        args = self.details.get("args", "")
+        return f"{command} {args}"
+
+    def get_filename(self) -> str:
+        return self.details.get("filename", "")
+
+    def get_file_content_preview(self) -> str:
+        return self.details.get("content_preview", "")
+
+    def get_file_size(self) -> int:
+        return self.details.get("file_size", 0)
+
+    def get_response_size(self) -> int:
+        return self.details.get("response_size", 0)
+
+    def get_data_volume(self) -> int:
+        return self.details.get("data_volume", 0)
+
+
+@dataclass
+class EventHistory:
+    """Encapsulates event history and provides query methods to reduce Feature Envy"""
+
+    events: deque
+
+    def count_recent_failures(
+        self, user_id: str, source_ip: str, window_minutes: int
+    ) -> int:
+        """Count recent authentication failures"""
+        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
+        count = 0
+
+        for event in reversed(self.events):
+            event_time = datetime.fromisoformat(
+                event.get("timestamp", datetime.utcnow().isoformat())
+            )
+            if event_time < cutoff_time:
+                break
+            if (
+                event.get("action") == "authentication"
+                and event.get("outcome") == "failure"
+                and (
+                    event.get("user_id") == user_id
+                    or event.get("source_ip") == source_ip
+                )
+            ):
+                count += 1
+
+        return count
+
+    def count_recent_api_requests(
+        self, user_id: str, source_ip: str, window_minutes: int
+    ) -> int:
+        """Count recent API requests"""
+        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
+        count = 0
+
+        for event in reversed(self.events):
+            event_time = datetime.fromisoformat(
+                event.get("timestamp", datetime.utcnow().isoformat())
+            )
+            if event_time < cutoff_time:
+                break
+            if event.get("action") == "api_request" and (
+                event.get("user_id") == user_id or event.get("source_ip") == source_ip
+            ):
+                count += 1
+
+        return count
+
+    def get_recent_action_frequency(
+        self, user_id: str, action: str, hours: int = 1
+    ) -> int:
+        """Count recent action frequency for a user"""
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        count = 0
+
+        for event in reversed(self.events):
+            event_time = datetime.fromisoformat(
+                event.get("timestamp", datetime.utcnow().isoformat())
+            )
+            if event_time < cutoff_time:
+                break
+            if event.get("user_id") == user_id and event.get("action") == action:
+                count += 1
+
+        return count
+
+    def get_recent_endpoint_usage(
+        self, user_id: str, endpoint: str, hours: int = 24
+    ) -> int:
+        """Get recent endpoint usage count"""
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        count = 0
+
+        for event in reversed(self.events):
+            event_time = datetime.fromisoformat(
+                event.get("timestamp", datetime.utcnow().isoformat())
+            )
+            if event_time < cutoff_time:
+                break
+            if (
+                event.get("user_id") == user_id
+                and event.get("action") == "api_request"
+                and event.get("resource") == endpoint
+            ):
+                count += 1
+
+        return count
+
+    def filter_by_user(self, user_id: str) -> List[Dict]:
+        """Get all events for a specific user"""
+        return [e for e in self.events if e.get("user_id") == user_id]
+
+    def count_high_risk_actions(self, user_id: str) -> int:
+        """Count recent high-risk actions for a user"""
+        high_risk_actions = [
+            "admin_action",
+            "system_configuration",
+            "privilege_escalation",
+        ]
+        return sum(
+            1
+            for event in self.events
+            if event.get("user_id") == user_id
+            and event.get("action") in high_risk_actions
+        )
+
+    def count_off_hours_activity(self, user_id: str) -> int:
+        """Count off-hours activity (before 6 AM) for a user"""
+        return sum(
+            1
+            for event in self.events
+            if event.get("user_id") == user_id
+            and datetime.fromisoformat(
+                event.get("timestamp", datetime.utcnow().isoformat())
+            ).hour
+            < 6
+        )
+
+
+@dataclass
 class ThreatEvent:
     """Represents a detected security threat"""
 
@@ -75,14 +271,602 @@ class UserProfile:
     """User behavioral profile for anomaly detection"""
 
     user_id: str
-    baseline_actions: Dict[str, float]
-    typical_hours: List[int]
-    typical_ips: set
-    command_patterns: List[str]
-    file_access_patterns: Dict[str, int]
-    api_usage_patterns: Dict[str, float]
-    risk_score: float
-    last_updated: datetime
+    baseline_actions: Dict[str, float] = field(default_factory=dict)
+    typical_hours: List[int] = field(default_factory=list)
+    typical_ips: set = field(default_factory=set)
+    command_patterns: List[str] = field(default_factory=list)
+    file_access_patterns: Dict[str, int] = field(default_factory=dict)
+    api_usage_patterns: Dict[str, float] = field(default_factory=dict)
+    risk_score: float = 0.5
+    last_updated: datetime = field(default_factory=datetime.utcnow)
+
+    def is_anomalous_time(self, hour: int) -> bool:
+        """Check if access hour is anomalous for this user"""
+        return hour not in self.typical_hours
+
+    def is_anomalous_ip(self, ip: str) -> bool:
+        """Check if IP is anomalous for this user"""
+        return ip not in self.typical_ips
+
+    def is_anomalous_action_frequency(
+        self, action: str, current_frequency: int, deviation_threshold: float
+    ) -> bool:
+        """Check if action frequency is anomalous"""
+        normal_frequency = self.baseline_actions.get(action, 0)
+        return current_frequency > normal_frequency * deviation_threshold
+
+    def is_anomalous_file_access(self, resource: str) -> bool:
+        """Check if file access is anomalous (never accessed before)"""
+        return self.file_access_patterns.get(resource, 0) == 0
+
+    def is_high_risk(self) -> bool:
+        """Check if user is considered high risk"""
+        return self.risk_score > 0.7
+
+    def update_with_event(self, event: SecurityEvent):
+        """Update profile with new event data"""
+        # Update action frequency
+        if event.action:
+            self.baseline_actions[event.action] = (
+                self.baseline_actions.get(event.action, 0) + 1
+            )
+
+        # Update typical hours
+        event_hour = event.get_timestamp_hour()
+        if event_hour not in self.typical_hours and len(self.typical_hours) < 12:
+            self.typical_hours.append(event_hour)
+
+        # Update typical IPs
+        if event.source_ip and len(self.typical_ips) < 10:
+            self.typical_ips.add(event.source_ip)
+
+        # Update file access patterns
+        if event.is_file_operation() and event.resource:
+            self.file_access_patterns[event.resource] = (
+                self.file_access_patterns.get(event.resource, 0) + 1
+            )
+
+        # Update API usage patterns
+        if event.is_api_request() and event.resource:
+            self.api_usage_patterns[event.resource] = (
+                self.api_usage_patterns.get(event.resource, 0) + 1
+            )
+
+        self.last_updated = datetime.utcnow()
+
+    def calculate_risk_score(self, event_history: EventHistory) -> float:
+        """Calculate risk score based on recent behavior from event history"""
+        risk_factors = []
+
+        # Count recent high-risk actions
+        recent_high_risk = event_history.count_high_risk_actions(self.user_id)
+
+        if recent_high_risk > 5:
+            risk_factors.append(0.3)
+        elif recent_high_risk > 2:
+            risk_factors.append(0.2)
+
+        # Check for off-hours activity
+        off_hours_activity = event_history.count_off_hours_activity(self.user_id)
+
+        if off_hours_activity > 10:
+            risk_factors.append(0.2)
+        elif off_hours_activity > 5:
+            risk_factors.append(0.1)
+
+        # Base risk score
+        base_risk = 0.3
+        return min(1.0, base_risk + sum(risk_factors))
+
+    def get_risk_assessment(self, event_history: EventHistory) -> Dict:
+        """Get comprehensive risk assessment for this user"""
+        # Filter events for this user
+        user_events = event_history.filter_by_user(self.user_id)
+
+        return {
+            "user_id": self.user_id,
+            "risk_score": self.risk_score,
+            "risk_level": (
+                "high"
+                if self.risk_score > 0.7
+                else "medium" if self.risk_score > 0.4 else "low"
+            ),
+            "profile_age_days": (datetime.utcnow() - self.last_updated).days,
+            "total_actions": sum(self.baseline_actions.values()),
+            "unique_actions": len(self.baseline_actions),
+            "typical_access_hours": sorted(self.typical_hours),
+            "known_ip_addresses": len(self.typical_ips),
+            "recent_activity_count": len(user_events),
+            "file_access_diversity": len(self.file_access_patterns),
+            "api_usage_diversity": len(self.api_usage_patterns),
+            "last_updated": self.last_updated.isoformat(),
+        }
+
+
+@dataclass
+class AnalysisContext:
+    """Context data for threat analysis"""
+
+    config: Dict
+    user_profiles: Dict[str, UserProfile]
+    event_history: EventHistory
+    injection_patterns: List[Dict]
+    file_signatures: List[Dict]
+    api_patterns: List[Dict]
+
+    def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
+        """Get user profile if exists"""
+        return self.user_profiles.get(user_id)
+
+    def get_recent_action_frequency(
+        self, user_id: str, action: str, hours: int = 1
+    ) -> int:
+        """Count recent action frequency for a user"""
+        return self.event_history.get_recent_action_frequency(user_id, action, hours)
+
+    def count_recent_failures(
+        self, user_id: str, source_ip: str, window_minutes: int
+    ) -> int:
+        """Count recent authentication failures"""
+        return self.event_history.count_recent_failures(
+            user_id, source_ip, window_minutes
+        )
+
+    def count_recent_api_requests(
+        self, user_id: str, source_ip: str, window_minutes: int
+    ) -> int:
+        """Count recent API requests"""
+        return self.event_history.count_recent_api_requests(
+            user_id, source_ip, window_minutes
+        )
+
+    def get_recent_endpoint_usage(
+        self, user_id: str, endpoint: str, hours: int = 24
+    ) -> int:
+        """Get recent endpoint usage count"""
+        return self.event_history.get_recent_endpoint_usage(user_id, endpoint, hours)
+
+
+class ThreatAnalyzer(ABC):
+    """Abstract base class for threat analyzers"""
+
+    @abstractmethod
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Analyze event for specific threat type"""
+        pass
+
+
+class CommandInjectionAnalyzer(ThreatAnalyzer):
+    """Analyzes events for command injection threats"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect command injection attempts"""
+        command_content = event.get_command_content()
+
+        detected_patterns = []
+        max_severity = "low"
+
+        for pattern_info in context.injection_patterns:
+            if re.search(pattern_info["pattern"], command_content, re.IGNORECASE):
+                detected_patterns.append(pattern_info)
+                if pattern_info["severity"] == "critical":
+                    max_severity = "critical"
+                elif pattern_info["severity"] == "high" and max_severity != "critical":
+                    max_severity = "high"
+                elif pattern_info["severity"] == "medium" and max_severity not in {
+                    "critical",
+                    "high",
+                }:
+                    max_severity = "medium"
+
+        if detected_patterns:
+            confidence = min(1.0, len(detected_patterns) * 0.3 + 0.4)
+
+            return ThreatEvent(
+                event_id=f"cmd_inj_{int(time.time())}_{hash(command_content) % 10000}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.COMMAND_INJECTION,
+                threat_level=ThreatLevel(max_severity),
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action=event.action,
+                resource=event.resource,
+                details={
+                    "detected_patterns": [p["description"] for p in detected_patterns],
+                    "command_content": command_content[:200],
+                    "pattern_categories": [p["category"] for p in detected_patterns],
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "block_command",
+                    "quarantine_session",
+                    "alert_security_team",
+                ],
+            )
+
+        return None
+
+
+class BehavioralAnomalyAnalyzer(ThreatAnalyzer):
+    """Analyzes events for behavioral anomalies"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect behavioral anomalies using user profiles"""
+        if event.user_id == "unknown":
+            return None
+
+        profile = context.get_user_profile(event.user_id)
+        if not profile:
+            return None
+
+        anomalies = []
+
+        # Check time-based anomalies
+        if profile.is_anomalous_time(event.get_timestamp_hour()):
+            anomalies.append("unusual_access_time")
+
+        # Check IP-based anomalies
+        if profile.is_anomalous_ip(event.source_ip):
+            anomalies.append("unusual_source_ip")
+
+        # Check action frequency anomalies
+        recent_frequency = context.get_recent_action_frequency(
+            event.user_id, event.action
+        )
+        deviation_threshold = context.config.get("behavioral_analysis", {}).get(
+            "deviation_threshold", 2.0
+        )
+        if profile.is_anomalous_action_frequency(
+            event.action, recent_frequency, deviation_threshold
+        ):
+            anomalies.append("unusual_action_frequency")
+
+        # Check file access patterns
+        if event.is_file_operation() and profile.is_anomalous_file_access(
+            event.resource
+        ):
+            anomalies.append("unusual_file_access")
+
+        if anomalies:
+            confidence = min(1.0, len(anomalies) * 0.25 + 0.3)
+            threat_level = (
+                ThreatLevel.HIGH if len(anomalies) >= 3 else ThreatLevel.MEDIUM
+            )
+
+            return ThreatEvent(
+                event_id=f"behavioral_{int(time.time())}_{hash(event.user_id) % 10000}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.BEHAVIORAL_ANOMALY,
+                threat_level=threat_level,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action=event.action,
+                resource=event.resource,
+                details={
+                    "anomalies_detected": anomalies,
+                    "user_risk_score": profile.risk_score,
+                    "baseline_comparison": {
+                        "normal_action_frequency": profile.baseline_actions.get(
+                            event.action, 0
+                        ),
+                        "current_frequency": recent_frequency,
+                        "typical_hours": list(profile.typical_hours),
+                        "typical_ip_count": len(profile.typical_ips),
+                    },
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "monitor_user",
+                    "require_additional_auth",
+                    "alert_security_team",
+                ],
+            )
+
+        return None
+
+
+class BruteForceAnalyzer(ThreatAnalyzer):
+    """Analyzes events for brute force attacks"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect brute force attacks"""
+        if not event.is_authentication_failure():
+            return None
+
+        window_minutes = context.config.get("thresholds", {}).get(
+            "brute_force_window_minutes", 15
+        )
+        threshold = context.config.get("thresholds", {}).get("brute_force_attempts", 5)
+
+        recent_failures = context.count_recent_failures(
+            event.user_id, event.source_ip, window_minutes
+        )
+
+        if recent_failures >= threshold:
+            confidence = min(1.0, recent_failures / threshold)
+            event_hash = hash(f"{event.user_id}_{event.source_ip}") % 10000
+
+            return ThreatEvent(
+                event_id=f"brute_force_{int(time.time())}_{event_hash}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.BRUTE_FORCE,
+                threat_level=ThreatLevel.HIGH,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action="authentication",
+                resource="login",
+                details={
+                    "failed_attempts": recent_failures,
+                    "time_window_minutes": window_minutes,
+                    "attack_pattern": (
+                        "credential_stuffing"
+                        if event.user_id != "unknown"
+                        else "dictionary_attack"
+                    ),
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=["block_ip", "lock_account", "alert_security_team"],
+            )
+
+        return None
+
+
+class MaliciousFileAnalyzer(ThreatAnalyzer):
+    """Analyzes events for malicious file uploads"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect malicious file uploads"""
+        if not event.is_file_operation():
+            return None
+
+        filename = event.get_filename()
+        file_content = event.get_file_content_preview()
+        file_size = event.get_file_size()
+
+        threats = []
+
+        # Check file signatures
+        for signature in context.file_signatures:
+            # Check extensions
+            if "extension" in signature:
+                for ext in signature["extension"]:
+                    if filename.lower().endswith(ext.lower()):
+                        threats.append(f"suspicious_extension_{ext}")
+
+            # Check content patterns
+            if "content_patterns" in signature and file_content:
+                for pattern in signature["content_patterns"]:
+                    if pattern in file_content:
+                        threats.append(f"malicious_content_{pattern}")
+
+            # Check suspicious names
+            if "suspicious_names" in signature:
+                for name in signature["suspicious_names"]:
+                    if name.lower() in filename.lower():
+                        threats.append(f"suspicious_name_{name}")
+
+        # Check file size anomalies
+        size_threshold = (
+            context.config.get("thresholds", {}).get("file_size_suspicious_mb", 100)
+            * 1024
+            * 1024
+        )
+        if file_size > size_threshold:
+            threats.append("unusually_large_file")
+
+        if threats:
+            confidence = min(1.0, len(threats) * 0.3 + 0.4)
+            threat_level = (
+                ThreatLevel.CRITICAL
+                if any("malicious_content" in t for t in threats)
+                else ThreatLevel.HIGH
+            )
+
+            return ThreatEvent(
+                event_id=f"malicious_file_{int(time.time())}_{hash(filename) % 10000}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.MALICIOUS_UPLOAD,
+                threat_level=threat_level,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action=event.action,
+                resource=filename,
+                details={
+                    "detected_threats": threats,
+                    "filename": filename,
+                    "file_size": file_size,
+                    "content_preview": file_content[:100] if file_content else "",
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "quarantine_file",
+                    "scan_with_antivirus",
+                    "alert_security_team",
+                ],
+            )
+
+        return None
+
+
+class APIAbuseAnalyzer(ThreatAnalyzer):
+    """Analyzes events for API abuse patterns"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect API abuse patterns"""
+        if not event.is_api_request():
+            return None
+
+        rate_limit = context.config.get("thresholds", {}).get(
+            "api_rate_limit_per_minute", 100
+        )
+        recent_requests = context.count_recent_api_requests(
+            event.user_id, event.source_ip, 1
+        )
+
+        threats = []
+
+        if recent_requests > rate_limit:
+            threats.append("rate_limit_exceeded")
+
+        # Check for unusual endpoint access
+        user_profile = context.get_user_profile(event.user_id)
+        if user_profile and event.resource:
+            normal_usage = user_profile.api_usage_patterns.get(event.resource, 0)
+            current_usage = context.get_recent_endpoint_usage(
+                event.user_id, event.resource
+            )
+
+            if normal_usage == 0 and current_usage > 0:
+                threats.append("unusual_endpoint_access")
+            elif current_usage > normal_usage * 5:
+                threats.append("excessive_endpoint_usage")
+
+        # Check for bulk data operations
+        response_size = event.get_response_size()
+        bulk_threshold = (
+            context.config.get("thresholds", {}).get("bulk_data_threshold_mb", 100)
+            * 1024
+            * 1024
+        )
+
+        if response_size > bulk_threshold:
+            threats.append("bulk_data_download")
+
+        if threats:
+            confidence = min(1.0, len(threats) * 0.4 + 0.3)
+            threat_level = (
+                ThreatLevel.HIGH
+                if "bulk_data_download" in threats
+                else ThreatLevel.MEDIUM
+            )
+            event_hash = hash(f"{event.user_id}_{event.resource}") % 10000
+
+            return ThreatEvent(
+                event_id=f"api_abuse_{int(time.time())}_{event_hash}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.API_ABUSE,
+                threat_level=threat_level,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action="api_request",
+                resource=event.resource,
+                details={
+                    "abuse_patterns": threats,
+                    "request_rate": recent_requests,
+                    "rate_limit": rate_limit,
+                    "response_size": response_size,
+                    "endpoint": event.resource,
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "rate_limit_user",
+                    "monitor_api_usage",
+                    "alert_security_team",
+                ],
+            )
+
+        return None
+
+
+class InsiderThreatAnalyzer(ThreatAnalyzer):
+    """Analyzes events for insider threat indicators"""
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect insider threat indicators"""
+        if event.user_id == "unknown":
+            return None
+
+        # High-risk insider threat indicators
+        high_risk_actions = [
+            "bulk_data_export",
+            "privilege_escalation",
+            "unauthorized_access",
+            "credential_theft",
+            "system_configuration_change",
+        ]
+
+        risk_indicators = []
+
+        if event.action in high_risk_actions:
+            risk_indicators.append(f"high_risk_action_{event.action}")
+
+        # Check for off-hours access
+        if event.get_timestamp_hour() < 6 or event.get_timestamp_hour() > 22:
+            risk_indicators.append("off_hours_access")
+
+        # Check for unusual resource access
+        if event.resource and any(
+            sensitive in event.resource.lower()
+            for sensitive in ["admin", "config", "secret", "key", "password"]
+        ):
+            risk_indicators.append("sensitive_resource_access")
+
+        # Check user risk profile
+        user_profile = context.get_user_profile(event.user_id)
+        if user_profile and user_profile.is_high_risk():
+            risk_indicators.append("high_risk_user")
+
+        # Check for data exfiltration patterns
+        if event.get_data_volume() > 1000000:
+            risk_indicators.append("large_data_access")
+
+        if len(risk_indicators) >= 2:
+            confidence = min(1.0, len(risk_indicators) * 0.3 + 0.4)
+            threat_level = (
+                ThreatLevel.CRITICAL if len(risk_indicators) >= 4 else ThreatLevel.HIGH
+            )
+
+            return ThreatEvent(
+                event_id=f"insider_{int(time.time())}_{hash(event.user_id) % 10000}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.INSIDER_THREAT,
+                threat_level=threat_level,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action=event.action,
+                resource=event.resource,
+                details={
+                    "risk_indicators": risk_indicators,
+                    "user_risk_score": user_profile.risk_score if user_profile else 0.0,
+                    "access_time": event.timestamp.isoformat(),
+                    "data_sensitivity": (
+                        "high"
+                        if any(
+                            "sensitive" in indicator for indicator in risk_indicators
+                        )
+                        else "medium"
+                    ),
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "enhanced_monitoring",
+                    "require_manager_approval",
+                    "alert_security_team",
+                    "document_incident",
+                ],
+            )
+
+        return None
 
 
 class ThreatDetectionEngine:
@@ -116,6 +900,7 @@ class ThreatDetectionEngine:
 
         # Real-time monitoring data structures
         self.recent_events = deque(maxlen=10000)  # Last 10k events for analysis
+        self.event_history = EventHistory(events=self.recent_events)
         self.user_sessions = defaultdict(dict)  # Active user session tracking
         self.ip_reputation = defaultdict(float)  # IP reputation scores
 
@@ -130,6 +915,16 @@ class ThreatDetectionEngine:
             "models_trained": 0,
         }
 
+        # Initialize threat analyzers
+        self.analyzers: List[ThreatAnalyzer] = [
+            CommandInjectionAnalyzer(),
+            BehavioralAnomalyAnalyzer(),
+            BruteForceAnalyzer(),
+            MaliciousFileAnalyzer(),
+            APIAbuseAnalyzer(),
+            InsiderThreatAnalyzer(),
+        ]
+
         # Load existing profiles
         self._load_user_profiles()
 
@@ -142,7 +937,7 @@ class ThreatDetectionEngine:
         """Load threat detection configuration"""
         try:
             if Path(self.config_path).exists():
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f)
             else:
                 default_config = self._get_default_config()
@@ -198,7 +993,7 @@ class ThreatDetectionEngine:
         """Save configuration to file"""
         try:
             Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, "w") as f:
+            with open(self.config_path, "w", encoding="utf-8") as f:
                 yaml.dump(config, f, default_flow_style=False)
         except Exception as e:
             logger.error(f"Failed to save threat detection config: {e}")
@@ -325,10 +1120,16 @@ class ThreatDetectionEngine:
 
     def _start_background_tasks(self):
         """Start background monitoring and maintenance tasks"""
-        # Schedule periodic tasks
-        asyncio.create_task(self._periodic_model_training())
-        asyncio.create_task(self._periodic_profile_updates())
-        asyncio.create_task(self._periodic_cleanup())
+        # Schedule periodic tasks only if event loop is running
+        try:
+            asyncio.create_task(self._periodic_model_training())
+            asyncio.create_task(self._periodic_profile_updates())
+            asyncio.create_task(self._periodic_cleanup())
+        except RuntimeError:
+            # No event loop running - tasks will be started when loop becomes available
+            logger.debug(
+                "No event loop running, background tasks will be started later"
+            )
 
     async def _periodic_model_training(self):
         """Periodically retrain ML models with new data"""
@@ -379,49 +1180,41 @@ class ThreatDetectionEngine:
         self.stats["total_events_processed"] += 1
         self.recent_events.append(event)
 
-        # Extract user_id for behavior tracking
-        user_id = event.get("user_id", "unknown")
+        # Wrap event in SecurityEvent for typed access
+        security_event = SecurityEvent(raw_event=event)
 
-        # Run all detection methods
+        # Create analysis context
+        context = AnalysisContext(
+            config=self.config,
+            user_profiles=self.user_profiles,
+            event_history=self.event_history,
+            injection_patterns=self.command_injection_patterns,
+            file_signatures=self.malicious_file_signatures,
+            api_patterns=self.suspicious_api_patterns,
+        )
+
+        # Run all analyzers
         detected_threats = []
 
-        # 1. Command injection detection
-        if self.config.get("detection_modes", {}).get(
-            "command_injection_detection", True
-        ):
-            cmd_threat = await self._detect_command_injection(event)
-            if cmd_threat:
-                detected_threats.append(cmd_threat)
+        detection_modes = self.config.get("detection_modes", {})
+        analyzer_mode_map = {
+            CommandInjectionAnalyzer: "command_injection_detection",
+            BehavioralAnomalyAnalyzer: "behavioral_analysis",
+            BruteForceAnalyzer: "brute_force_detection",
+            MaliciousFileAnalyzer: "file_upload_scanning",
+            APIAbuseAnalyzer: "api_abuse_detection",
+            InsiderThreatAnalyzer: "insider_threat_detection",
+        }
 
-        # 2. Behavioral anomaly detection
-        if self.config.get("detection_modes", {}).get("behavioral_analysis", True):
-            behavioral_threat = await self._detect_behavioral_anomaly(event)
-            if behavioral_threat:
-                detected_threats.append(behavioral_threat)
+        for analyzer in self.analyzers:
+            # Check if this analyzer type is enabled
+            mode_key = analyzer_mode_map.get(type(analyzer))
+            if mode_key and not detection_modes.get(mode_key, True):
+                continue
 
-        # 3. Brute force detection
-        if self.config.get("detection_modes", {}).get("brute_force_detection", True):
-            brute_force_threat = await self._detect_brute_force(event)
-            if brute_force_threat:
-                detected_threats.append(brute_force_threat)
-
-        # 4. File upload scanning
-        if self.config.get("detection_modes", {}).get("file_upload_scanning", True):
-            file_threat = await self._detect_malicious_file(event)
-            if file_threat:
-                detected_threats.append(file_threat)
-
-        # 5. API abuse detection
-        if self.config.get("detection_modes", {}).get("api_abuse_detection", True):
-            api_threat = await self._detect_api_abuse(event)
-            if api_threat:
-                detected_threats.append(api_threat)
-
-        # 6. Insider threat detection
-        if self.config.get("detection_modes", {}).get("insider_threat_detection", True):
-            insider_threat = await self._detect_insider_threat(event)
-            if insider_threat:
-                detected_threats.append(insider_threat)
+            threat = await analyzer.analyze(security_event, context)
+            if threat:
+                detected_threats.append(threat)
 
         # Select highest priority threat
         if detected_threats:
@@ -440,581 +1233,21 @@ class ThreatDetectionEngine:
             return primary_threat
 
         # Update user profile with benign behavior
-        await self._update_user_behavior(user_id, event)
+        await self._update_user_behavior(security_event.user_id, security_event)
 
         return None
 
-    async def _detect_command_injection(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect command injection attempts"""
-        action = event.get("action", "")
-        details = event.get("details", {})
-
-        # Check command content for injection patterns
-        command_content = details.get("command", "") + " " + details.get("args", "")
-
-        detected_patterns = []
-        max_severity = "low"
-
-        for pattern_info in self.command_injection_patterns:
-            import re
-
-            if re.search(pattern_info["pattern"], command_content, re.IGNORECASE):
-                detected_patterns.append(pattern_info)
-                if pattern_info["severity"] == "critical":
-                    max_severity = "critical"
-                elif pattern_info["severity"] == "high" and max_severity != "critical":
-                    max_severity = "high"
-                elif pattern_info["severity"] == "medium" and max_severity not in {
-                    "critical",
-                    "high",
-                }:
-                    max_severity = "medium"
-
-        if detected_patterns:
-            confidence = min(1.0, len(detected_patterns) * 0.3 + 0.4)
-
-            return ThreatEvent(
-                event_id=f"cmd_inj_{int(time.time())}_{hash(command_content) % 10000}",
-                timestamp=datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
-                ),
-                threat_category=ThreatCategory.COMMAND_INJECTION,
-                threat_level=ThreatLevel(max_severity),
-                confidence_score=confidence,
-                user_id=event.get("user_id", "unknown"),
-                source_ip=event.get("source_ip", "unknown"),
-                action=action,
-                resource=event.get("resource", ""),
-                details={
-                    "detected_patterns": [p["description"] for p in detected_patterns],
-                    "command_content": command_content[:200],  # Truncated for logging
-                    "pattern_categories": [p["category"] for p in detected_patterns],
-                },
-                raw_event=event,
-                mitigation_actions=[
-                    "block_command",
-                    "quarantine_session",
-                    "alert_security_team",
-                ],
-            )
-
-        return None
-
-    async def _detect_behavioral_anomaly(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect behavioral anomalies using user profiles"""
-        user_id = event.get("user_id", "unknown")
-
-        if user_id == "unknown" or user_id not in self.user_profiles:
-            return None
-
-        profile = self.user_profiles[user_id]
-        anomalies = []
-
-        # Check time-based anomalies
-        current_hour = datetime.fromisoformat(
-            event.get("timestamp", datetime.utcnow().isoformat())
-        ).hour
-        if current_hour not in profile.typical_hours:
-            anomalies.append("unusual_access_time")
-
-        # Check IP-based anomalies
-        source_ip = event.get("source_ip", "")
-        if source_ip and source_ip not in profile.typical_ips:
-            anomalies.append("unusual_source_ip")
-
-        # Check action frequency anomalies
-        action = event.get("action", "")
-        normal_frequency = profile.baseline_actions.get(action, 0)
-        recent_frequency = self._get_recent_action_frequency(user_id, action)
-
-        deviation_threshold = self.config.get("behavioral_analysis", {}).get(
-            "deviation_threshold", 2.0
-        )
-        if recent_frequency > normal_frequency * deviation_threshold:
-            anomalies.append("unusual_action_frequency")
-
-        # Check file access patterns
-        resource = event.get("resource", "")
-        if resource and action in {"file_read", "file_write", "file_delete"}:
-            normal_access = profile.file_access_patterns.get(resource, 0)
-            if normal_access == 0:  # Never accessed this file before
-                anomalies.append("unusual_file_access")
-
-        if anomalies:
-            # Calculate confidence based on number and severity of anomalies
-            confidence = min(1.0, len(anomalies) * 0.25 + 0.3)
-            threat_level = (
-                ThreatLevel.HIGH if len(anomalies) >= 3 else ThreatLevel.MEDIUM
-            )
-
-            return ThreatEvent(
-                event_id=f"behavioral_{int(time.time())}_{hash(user_id) % 10000}",
-                timestamp=datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
-                ),
-                threat_category=ThreatCategory.BEHAVIORAL_ANOMALY,
-                threat_level=threat_level,
-                confidence_score=confidence,
-                user_id=user_id,
-                source_ip=source_ip,
-                action=action,
-                resource=resource,
-                details={
-                    "anomalies_detected": anomalies,
-                    "user_risk_score": profile.risk_score,
-                    "baseline_comparison": {
-                        "normal_action_frequency": normal_frequency,
-                        "current_frequency": recent_frequency,
-                        "typical_hours": list(profile.typical_hours),
-                        "typical_ip_count": len(profile.typical_ips),
-                    },
-                },
-                raw_event=event,
-                mitigation_actions=[
-                    "monitor_user",
-                    "require_additional_auth",
-                    "alert_security_team",
-                ],
-            )
-
-        return None
-
-    async def _detect_brute_force(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect brute force attacks"""
-        if event.get("action") != "authentication" or event.get("outcome") != "failure":
-            return None
-
-        user_id = event.get("user_id", "unknown")
-        source_ip = event.get("source_ip", "unknown")
-
-        # Count recent failed attempts
-        window_minutes = self.config.get("thresholds", {}).get(
-            "brute_force_window_minutes", 15
-        )
-        threshold = self.config.get("thresholds", {}).get("brute_force_attempts", 5)
-
-        recent_failures = self._count_recent_failures(
-            user_id, source_ip, window_minutes
-        )
-
-        if recent_failures >= threshold:
-            confidence = min(1.0, recent_failures / threshold)
-
-            return ThreatEvent(
-                event_id=f"brute_force_{int(time.time())}_{hash(f'{user_id}_{source_ip}') % 10000}",
-                timestamp=datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
-                ),
-                threat_category=ThreatCategory.BRUTE_FORCE,
-                threat_level=ThreatLevel.HIGH,
-                confidence_score=confidence,
-                user_id=user_id,
-                source_ip=source_ip,
-                action="authentication",
-                resource="login",
-                details={
-                    "failed_attempts": recent_failures,
-                    "time_window_minutes": window_minutes,
-                    "attack_pattern": (
-                        "credential_stuffing"
-                        if user_id != "unknown"
-                        else "dictionary_attack"
-                    ),
-                },
-                raw_event=event,
-                mitigation_actions=["block_ip", "lock_account", "alert_security_team"],
-            )
-
-        return None
-
-    async def _detect_malicious_file(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect malicious file uploads"""
-        if event.get("action") not in {"file_upload", "file_write"}:
-            return None
-
-        details = event.get("details", {})
-        filename = details.get("filename", "")
-        file_content = details.get("content_preview", "")
-        file_size = details.get("file_size", 0)
-
-        threats = []
-
-        # Check file signatures
-        for signature in self.malicious_file_signatures:
-            # Check extensions
-            if "extension" in signature:
-                for ext in signature["extension"]:
-                    if filename.lower().endswith(ext.lower()):
-                        threats.append(f"suspicious_extension_{ext}")
-
-            # Check content patterns
-            if "content_patterns" in signature and file_content:
-                for pattern in signature["content_patterns"]:
-                    if pattern in file_content:
-                        threats.append(f"malicious_content_{pattern}")
-
-            # Check suspicious names
-            if "suspicious_names" in signature:
-                for name in signature["suspicious_names"]:
-                    if name.lower() in filename.lower():
-                        threats.append(f"suspicious_name_{name}")
-
-        # Check file size anomalies
-        size_threshold = (
-            self.config.get("thresholds", {}).get("file_size_suspicious_mb", 100)
-            * 1024
-            * 1024
-        )
-        if file_size > size_threshold:
-            threats.append("unusually_large_file")
-
-        if threats:
-            confidence = min(1.0, len(threats) * 0.3 + 0.4)
-            threat_level = (
-                ThreatLevel.CRITICAL
-                if any("malicious_content" in t for t in threats)
-                else ThreatLevel.HIGH
-            )
-
-            return ThreatEvent(
-                event_id=f"malicious_file_{int(time.time())}_{hash(filename) % 10000}",
-                timestamp=datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
-                ),
-                threat_category=ThreatCategory.MALICIOUS_UPLOAD,
-                threat_level=threat_level,
-                confidence_score=confidence,
-                user_id=event.get("user_id", "unknown"),
-                source_ip=event.get("source_ip", "unknown"),
-                action=event.get("action"),
-                resource=filename,
-                details={
-                    "detected_threats": threats,
-                    "filename": filename,
-                    "file_size": file_size,
-                    "content_preview": file_content[:100] if file_content else "",
-                },
-                raw_event=event,
-                mitigation_actions=[
-                    "quarantine_file",
-                    "scan_with_antivirus",
-                    "alert_security_team",
-                ],
-            )
-
-        return None
-
-    async def _detect_api_abuse(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect API abuse patterns"""
-        if event.get("action") != "api_request":
-            return None
-
-        user_id = event.get("user_id", "unknown")
-        source_ip = event.get("source_ip", "unknown")
-        endpoint = event.get("resource", "")
-
-        # Check rate limiting
-        rate_limit = self.config.get("thresholds", {}).get(
-            "api_rate_limit_per_minute", 100
-        )
-        recent_requests = self._count_recent_api_requests(
-            user_id, source_ip, 1
-        )  # 1 minute window
-
-        threats = []
-
-        if recent_requests > rate_limit:
-            threats.append("rate_limit_exceeded")
-
-        # Check for unusual endpoint access
-        user_profile = self.user_profiles.get(user_id)
-        if user_profile and endpoint:
-            normal_usage = user_profile.api_usage_patterns.get(endpoint, 0)
-            current_usage = self._get_recent_endpoint_usage(user_id, endpoint)
-
-            if normal_usage == 0 and current_usage > 0:
-                threats.append("unusual_endpoint_access")
-            elif current_usage > normal_usage * 5:  # 5x normal usage
-                threats.append("excessive_endpoint_usage")
-
-        # Check for bulk data operations
-        details = event.get("details", {})
-        response_size = details.get("response_size", 0)
-        bulk_threshold = (
-            self.config.get("thresholds", {}).get("bulk_data_threshold_mb", 100)
-            * 1024
-            * 1024
-        )
-
-        if response_size > bulk_threshold:
-            threats.append("bulk_data_download")
-
-        if threats:
-            confidence = min(1.0, len(threats) * 0.4 + 0.3)
-            threat_level = (
-                ThreatLevel.HIGH
-                if "bulk_data_download" in threats
-                else ThreatLevel.MEDIUM
-            )
-
-            return ThreatEvent(
-                event_id=f"api_abuse_{int(time.time())}_{hash(f'{user_id}_{endpoint}') % 10000}",
-                timestamp=datetime.fromisoformat(
-                    event.get("timestamp", datetime.utcnow().isoformat())
-                ),
-                threat_category=ThreatCategory.API_ABUSE,
-                threat_level=threat_level,
-                confidence_score=confidence,
-                user_id=user_id,
-                source_ip=source_ip,
-                action="api_request",
-                resource=endpoint,
-                details={
-                    "abuse_patterns": threats,
-                    "request_rate": recent_requests,
-                    "rate_limit": rate_limit,
-                    "response_size": response_size,
-                    "endpoint": endpoint,
-                },
-                raw_event=event,
-                mitigation_actions=[
-                    "rate_limit_user",
-                    "monitor_api_usage",
-                    "alert_security_team",
-                ],
-            )
-
-        return None
-
-    async def _detect_insider_threat(self, event: Dict) -> Optional[ThreatEvent]:
-        """Detect insider threat indicators"""
-        user_id = event.get("user_id", "unknown")
-        action = event.get("action", "")
-
-        if user_id == "unknown":
-            return None
-
-        # High-risk insider threat indicators
-        high_risk_actions = [
-            "bulk_data_export",
-            "privilege_escalation",
-            "unauthorized_access",
-            "credential_theft",
-            "system_configuration_change",
-        ]
-
-        # Check for high-risk actions
-        risk_indicators = []
-
-        if action in high_risk_actions:
-            risk_indicators.append(f"high_risk_action_{action}")
-
-        # Check for off-hours access
-        timestamp = datetime.fromisoformat(
-            event.get("timestamp", datetime.utcnow().isoformat())
-        )
-        if timestamp.hour < 6 or timestamp.hour > 22:  # Outside normal business hours
-            risk_indicators.append("off_hours_access")
-
-        # Check for unusual resource access
-        resource = event.get("resource", "")
-        if resource and any(
-            sensitive in resource.lower()
-            for sensitive in ["admin", "config", "secret", "key", "password"]
-        ):
-            risk_indicators.append("sensitive_resource_access")
-
-        # Check user risk profile
-        user_profile = self.user_profiles.get(user_id)
-        if user_profile and user_profile.risk_score > 0.7:
-            risk_indicators.append("high_risk_user")
-
-        # Check for data exfiltration patterns
-        details = event.get("details", {})
-        if details.get("data_volume", 0) > 1000000:  # > 1MB
-            risk_indicators.append("large_data_access")
-
-        if len(risk_indicators) >= 2:  # Multiple indicators suggest insider threat
-            confidence = min(1.0, len(risk_indicators) * 0.3 + 0.4)
-            threat_level = (
-                ThreatLevel.CRITICAL if len(risk_indicators) >= 4 else ThreatLevel.HIGH
-            )
-
-            return ThreatEvent(
-                event_id=f"insider_{int(time.time())}_{hash(user_id) % 10000}",
-                timestamp=timestamp,
-                threat_category=ThreatCategory.INSIDER_THREAT,
-                threat_level=threat_level,
-                confidence_score=confidence,
-                user_id=user_id,
-                source_ip=event.get("source_ip", "unknown"),
-                action=action,
-                resource=resource,
-                details={
-                    "risk_indicators": risk_indicators,
-                    "user_risk_score": user_profile.risk_score if user_profile else 0.0,
-                    "access_time": timestamp.isoformat(),
-                    "data_sensitivity": (
-                        "high"
-                        if any(
-                            "sensitive" in indicator for indicator in risk_indicators
-                        )
-                        else "medium"
-                    ),
-                },
-                raw_event=event,
-                mitigation_actions=[
-                    "enhanced_monitoring",
-                    "require_manager_approval",
-                    "alert_security_team",
-                    "document_incident",
-                ],
-            )
-
-        return None
-
-    def _get_recent_action_frequency(
-        self, user_id: str, action: str, hours: int = 1
-    ) -> int:
-        """Count recent action frequency for a user"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        count = 0
-
-        for event in reversed(self.recent_events):
-            event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
-            )
-            if event_time < cutoff_time:
-                break
-            if event.get("user_id") == user_id and event.get("action") == action:
-                count += 1
-
-        return count
-
-    def _count_recent_failures(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
-        """Count recent authentication failures"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
-        count = 0
-
-        for event in reversed(self.recent_events):
-            event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
-            )
-            if event_time < cutoff_time:
-                break
-            if (
-                event.get("action") == "authentication"
-                and event.get("outcome") == "failure"
-                and (
-                    event.get("user_id") == user_id
-                    or event.get("source_ip") == source_ip
-                )
-            ):
-                count += 1
-
-        return count
-
-    def _count_recent_api_requests(
-        self, user_id: str, source_ip: str, window_minutes: int
-    ) -> int:
-        """Count recent API requests"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=window_minutes)
-        count = 0
-
-        for event in reversed(self.recent_events):
-            event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
-            )
-            if event_time < cutoff_time:
-                break
-            if event.get("action") == "api_request" and (
-                event.get("user_id") == user_id or event.get("source_ip") == source_ip
-            ):
-                count += 1
-
-        return count
-
-    def _get_recent_endpoint_usage(
-        self, user_id: str, endpoint: str, hours: int = 24
-    ) -> int:
-        """Get recent endpoint usage count"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        count = 0
-
-        for event in reversed(self.recent_events):
-            event_time = datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
-            )
-            if event_time < cutoff_time:
-                break
-            if (
-                event.get("user_id") == user_id
-                and event.get("action") == "api_request"
-                and event.get("resource") == endpoint
-            ):
-                count += 1
-
-        return count
-
-    async def _update_user_behavior(self, user_id: str, event: Dict):
+    async def _update_user_behavior(self, user_id: str, event: SecurityEvent):
         """Update user behavioral profile with new event"""
         if user_id == "unknown":
             return
 
         if user_id not in self.user_profiles:
-            self.user_profiles[user_id] = UserProfile(
-                user_id=user_id,
-                baseline_actions={},
-                typical_hours=[],
-                typical_ips=set(),
-                command_patterns=[],
-                file_access_patterns={},
-                api_usage_patterns={},
-                risk_score=0.5,
-                last_updated=datetime.utcnow(),
-            )
+            self.user_profiles[user_id] = UserProfile(user_id=user_id)
             self.stats["users_monitored"] += 1
 
         profile = self.user_profiles[user_id]
-
-        # Update action frequency
-        action = event.get("action", "")
-        if action:
-            profile.baseline_actions[action] = (
-                profile.baseline_actions.get(action, 0) + 1
-            )
-
-        # Update typical hours
-        event_hour = datetime.fromisoformat(
-            event.get("timestamp", datetime.utcnow().isoformat())
-        ).hour
-        if event_hour not in profile.typical_hours and len(profile.typical_hours) < 12:
-            profile.typical_hours.append(event_hour)
-
-        # Update typical IPs
-        source_ip = event.get("source_ip", "")
-        if source_ip and len(profile.typical_ips) < 10:
-            profile.typical_ips.add(source_ip)
-
-        # Update file access patterns
-        if action in {"file_read", "file_write", "file_delete"}:
-            resource = event.get("resource", "")
-            if resource:
-                profile.file_access_patterns[resource] = (
-                    profile.file_access_patterns.get(resource, 0) + 1
-                )
-
-        # Update API usage patterns
-        if action == "api_request":
-            endpoint = event.get("resource", "")
-            if endpoint:
-                profile.api_usage_patterns[endpoint] = (
-                    profile.api_usage_patterns.get(endpoint, 0) + 1
-                )
-
-        profile.last_updated = datetime.utcnow()
+        profile.update_with_event(event)
 
     async def _execute_response_actions(self, threat: ThreatEvent):
         """Execute automated response actions based on threat"""
@@ -1112,59 +1345,16 @@ class ThreatDetectionEngine:
         return np.array(features)
 
     async def _update_user_profiles(self):
-        """Update all user profiles"""
+        """Update all user profiles with risk scores from event history"""
         try:
             for user_id, profile in self.user_profiles.items():
-                # Calculate risk score based on recent activity
-                profile.risk_score = self._calculate_user_risk_score(user_id)
+                # Calculate risk score using profile's method with event history
+                profile.risk_score = profile.calculate_risk_score(self.event_history)
 
             self._save_user_profiles()
             logger.info("User profiles updated successfully")
         except Exception as e:
             logger.error(f"Failed to update user profiles: {e}")
-
-    def _calculate_user_risk_score(self, user_id: str) -> float:
-        """Calculate risk score for a user based on recent behavior"""
-        risk_factors = []
-
-        # Count recent high-risk actions
-        high_risk_actions = [
-            "admin_action",
-            "system_configuration",
-            "privilege_escalation",
-        ]
-        recent_high_risk = sum(
-            1
-            for event in self.recent_events
-            if event.get("user_id") == user_id
-            and event.get("action") in high_risk_actions
-        )
-
-        if recent_high_risk > 5:
-            risk_factors.append(0.3)
-        elif recent_high_risk > 2:
-            risk_factors.append(0.2)
-
-        # Check for off-hours activity
-        off_hours_activity = sum(
-            1
-            for event in self.recent_events
-            if event.get("user_id") == user_id
-            and datetime.fromisoformat(
-                event.get("timestamp", datetime.utcnow().isoformat())
-            ).hour
-            < 6
-        )
-
-        if off_hours_activity > 10:
-            risk_factors.append(0.2)
-        elif off_hours_activity > 5:
-            risk_factors.append(0.1)
-
-        # Base risk score
-        base_risk = 0.3
-
-        return min(1.0, base_risk + sum(risk_factors))
 
     async def _cleanup_old_data(self):
         """Clean up old data and maintain performance"""
@@ -1215,24 +1405,5 @@ class ThreatDetectionEngine:
 
         profile = self.user_profiles[user_id]
 
-        # Analyze recent activity
-        recent_events = [e for e in self.recent_events if e.get("user_id") == user_id]
-
-        return {
-            "user_id": user_id,
-            "risk_score": profile.risk_score,
-            "risk_level": (
-                "high"
-                if profile.risk_score > 0.7
-                else "medium" if profile.risk_score > 0.4 else "low"
-            ),
-            "profile_age_days": (datetime.utcnow() - profile.last_updated).days,
-            "total_actions": sum(profile.baseline_actions.values()),
-            "unique_actions": len(profile.baseline_actions),
-            "typical_access_hours": sorted(profile.typical_hours),
-            "known_ip_addresses": len(profile.typical_ips),
-            "recent_activity_count": len(recent_events),
-            "file_access_diversity": len(profile.file_access_patterns),
-            "api_usage_diversity": len(profile.api_usage_patterns),
-            "last_updated": profile.last_updated.isoformat(),
-        }
+        # Use profile's method to generate assessment with event history
+        return profile.get_risk_assessment(self.event_history)
