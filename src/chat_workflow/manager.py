@@ -129,11 +129,58 @@ class ChatWorkflowManager(
             logger.error(f"❌ Failed to initialize ChatWorkflowManager: {e}")
             return False
 
+    # Issue #352: Maximum iterations for multi-step task continuation
+    MAX_CONTINUATION_ITERATIONS = 5
+
+    # Issue #351 Fix: Tag patterns for thought/planning detection
+    THOUGHT_TAG_PATTERN = re.compile(r"\[THOUGHT\]", re.IGNORECASE)
+    THOUGHT_END_PATTERN = re.compile(r"\[/THOUGHT\]", re.IGNORECASE)
+    PLANNING_TAG_PATTERN = re.compile(r"\[PLANNING\]", re.IGNORECASE)
+    PLANNING_END_PATTERN = re.compile(r"\[/PLANNING\]", re.IGNORECASE)
+
     def _normalize_tool_call_text(self, text: str) -> str:
         """Normalize TOOL_CALL spacing in LLM response text (Issue #332)."""
         text = re.sub(r"<TOOL_\s+CALL", "<TOOL_CALL", text)
         text = re.sub(r"</TOOL_\s+CALL>", "</TOOL_CALL>", text)
         return text
+
+    def _detect_content_type(
+        self, content: str, current_type: str = "response"
+    ) -> str:
+        """
+        Detect message type from content tags (Issue #351 Fix).
+
+        Checks for [THOUGHT] and [PLANNING] tags to determine message type.
+        Used to emit proper message types for frontend filtering.
+
+        Args:
+            content: Current accumulated content
+            current_type: Current detected type (maintains state across chunks)
+
+        Returns:
+            Message type: 'thought', 'planning', or 'response'
+        """
+        # Check for [THOUGHT] tag
+        if self.THOUGHT_TAG_PATTERN.search(content):
+            return "thought"
+
+        # Check for [PLANNING] tag
+        if self.PLANNING_TAG_PATTERN.search(content):
+            return "planning"
+
+        # If currently in thought/planning mode and no end tag yet, maintain type
+        if current_type in ("thought", "planning"):
+            # Check if corresponding end tag appeared
+            if current_type == "thought" and self.THOUGHT_END_PATTERN.search(content):
+                return "response"  # End of thought block
+            elif (
+                current_type == "planning"
+                and self.PLANNING_END_PATTERN.search(content)
+            ):
+                return "response"  # End of planning block
+            return current_type
+
+        return "response"
 
     def _build_chunk_message(
         self,
@@ -142,10 +189,31 @@ class ChatWorkflowManager(
         terminal_session_id: str,
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
+        accumulated_content: str = "",
+        current_type: str = "response",
     ) -> WorkflowMessage:
-        """Build a WorkflowMessage for a streaming chunk (Issue #332)."""
+        """
+        Build a WorkflowMessage for a streaming chunk (Issue #332).
+
+        Issue #351 Fix: Now detects thought/planning tags and emits proper types.
+
+        Args:
+            chunk_text: Current chunk text
+            selected_model: Model name
+            terminal_session_id: Terminal session ID
+            used_knowledge: Whether knowledge base was used
+            rag_citations: RAG citations if any
+            accumulated_content: Full accumulated content for type detection
+            current_type: Current detected message type
+
+        Returns:
+            WorkflowMessage with appropriate type
+        """
+        # Issue #351: Detect message type from accumulated content
+        detected_type = self._detect_content_type(accumulated_content, current_type)
+
         return WorkflowMessage(
-            type="response",
+            type=detected_type,
             content=chunk_text,
             metadata={
                 "message_type": "llm_response_chunk",
@@ -156,6 +224,57 @@ class ChatWorkflowManager(
                 "citations": rag_citations if used_knowledge else [],
             },
         )
+
+    def _build_continuation_prompt(
+        self,
+        original_message: str,
+        execution_history: List[Dict[str, Any]],
+        system_prompt: str,
+    ) -> str:
+        """
+        Build continuation prompt with execution results for multi-step tasks.
+
+        Issue #352: This enables the LLM to continue multi-step tasks by
+        providing context about what commands have already been executed.
+
+        Args:
+            original_message: User's original request
+            execution_history: List of execution results from previous steps
+            system_prompt: Original system prompt
+
+        Returns:
+            Formatted continuation prompt
+        """
+        history_parts = []
+        for i, result in enumerate(execution_history, 1):
+            cmd = result.get("command", "unknown")
+            stdout = result.get("stdout", "").strip()
+            stderr = result.get("stderr", "").strip()
+            status = result.get("status", "unknown")
+
+            output_text = stdout if stdout else "(no output)"
+            if stderr:
+                output_text += f"\nStderr: {stderr}"
+
+            history_parts.append(
+                f"**Step {i}:** `{cmd}`\n"
+                f"- Status: {status}\n"
+                f"- Output:\n```\n{output_text[:500]}\n```"
+            )
+
+        history_text = "\n\n".join(history_parts)
+
+        return f"""{system_prompt}
+
+**Original User Request:** {original_message}
+
+**Commands Already Executed:**
+{history_text}
+
+**Instructions:** Based on the execution results above, determine the next step.
+- If the task is complete, provide a comprehensive summary of all results
+- If more commands are needed, generate the next TOOL_CALL
+- Do NOT repeat commands that have already been executed"""
 
     async def _persist_workflow_messages(
         self,
@@ -333,113 +452,194 @@ class ChatWorkflowManager(
             )
             ollama_endpoint = llm_params["endpoint"]
             selected_model = llm_params["model"]
-            full_prompt = llm_params["prompt"]
+            current_prompt = llm_params["prompt"]
+            system_prompt = llm_params.get("system_prompt", "")  # Issue #352
             rag_citations = llm_params.get("citations", [])  # Issue #249: RAG citations
             used_knowledge = llm_params.get("used_knowledge", False)
 
+            # Issue #352: Multi-step task continuation loop
+            execution_history = []
+            iteration = 0
+            all_llm_responses = []
+
             # Debug logging
             logger.info(
-                f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters"
-            )
-            logger.debug(
-                f"[ChatWorkflowManager] OLLAMA REQUEST DEBUG: "
-                f"Endpoint={ollama_endpoint}, Model={selected_model}, "
-                f"Prompt length={len(full_prompt)} characters"
+                f"[ChatWorkflowManager] Initial prompt length: "
+                f"{len(current_prompt)} characters"
             )
 
-            # Stage 3: Stream LLM response and handle tool calls (Issue #332 - refactored)
+            # Stage 3: Continuation loop for multi-step tasks (Issue #352)
             try:
                 import aiohttp
 
                 from src.utils.http_client import get_http_client
                 http_client = get_http_client()
-                async with await http_client.post(
-                    ollama_endpoint,
-                    json={
-                        "model": selected_model,
-                        "prompt": full_prompt,
-                        "stream": True,
-                        "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
-                    },
-                    timeout=aiohttp.ClientTimeout(total=60.0),
-                ) as response:
+
+                while iteration < self.MAX_CONTINUATION_ITERATIONS:
+                    iteration += 1
                     logger.info(
-                        f"[ChatWorkflowManager] Ollama response status: {response.status}"
+                        f"[ChatWorkflowManager] Continuation iteration "
+                        f"{iteration}/{self.MAX_CONTINUATION_ITERATIONS}"
                     )
 
-                    # Handle non-200 responses early (guard clause)
-                    if response.status != 200:
-                        logger.error(
-                            f"[ChatWorkflowManager] Ollama request failed: {response.status}"
+                    async with await http_client.post(
+                        ollama_endpoint,
+                        json={
+                            "model": selected_model,
+                            "prompt": current_prompt,
+                            "stream": True,
+                            "options": {
+                                "temperature": 0.7,
+                                "top_p": 0.9,
+                                "num_ctx": 2048
+                            },
+                        },
+                        timeout=aiohttp.ClientTimeout(total=60.0),
+                    ) as response:
+                        logger.info(
+                            f"[ChatWorkflowManager] Ollama response status: "
+                            f"{response.status}"
                         )
-                        error_msg = WorkflowMessage(
-                            type="error",
-                            content=f"LLM service error: {response.status}",
-                            metadata={"error": True},
-                        )
-                        workflow_messages.append(error_msg)
-                        yield error_msg
-                        return
 
-                    # Stream response chunks (Issue #332 - uses helpers)
-                    llm_response = ""
-                    async for line in response.content:
-                        line_str = line.decode("utf-8").strip()
-                        if not line_str:
-                            continue
-
-                        try:
-                            chunk_data = json.loads(line_str)
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse stream chunk: {e}")
-                            continue
-
-                        chunk_text = chunk_data.get("response", "")
-                        if chunk_text:
-                            chunk_text = self._normalize_tool_call_text(chunk_text)
-                            llm_response += chunk_text
-                            chunk_msg = self._build_chunk_message(
-                                chunk_text, selected_model, terminal_session_id,
-                                used_knowledge, rag_citations
+                        # Handle non-200 responses early (guard clause)
+                        if response.status != 200:
+                            logger.error(
+                                f"[ChatWorkflowManager] Ollama request failed: "
+                                f"{response.status}"
                             )
-                            yield chunk_msg
+                            error_msg = WorkflowMessage(
+                                type="error",
+                                content=f"LLM service error: {response.status}",
+                                metadata={"error": True},
+                            )
+                            workflow_messages.append(error_msg)
+                            yield error_msg
+                            return
 
-                        if chunk_data.get("done", False):
+                        # Stream response chunks (Issue #332 - uses helpers)
+                        # Issue #351 Fix: Track current message type for thought/planning
+                        llm_response = ""
+                        current_message_type = "response"
+                        async for line in response.content:
+                            line_str = line.decode("utf-8").strip()
+                            if not line_str:
+                                continue
+
+                            try:
+                                chunk_data = json.loads(line_str)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to parse stream chunk: {e}")
+                                continue
+
+                            chunk_text = chunk_data.get("response", "")
+                            if chunk_text:
+                                chunk_text = self._normalize_tool_call_text(chunk_text)
+                                llm_response += chunk_text
+                                # Issue #351: Pass accumulated content for type detection
+                                chunk_msg = self._build_chunk_message(
+                                    chunk_text, selected_model, terminal_session_id,
+                                    used_knowledge, rag_citations,
+                                    accumulated_content=llm_response,
+                                    current_type=current_message_type,
+                                )
+                                # Update current type for next chunk
+                                current_message_type = chunk_msg.type
+                                yield chunk_msg
+
+                            if chunk_data.get("done", False):
+                                break
+
+                        logger.info(
+                            f"[ChatWorkflowManager] Full LLM response length: "
+                            f"{len(llm_response)} characters (iteration {iteration})"
+                        )
+                        all_llm_responses.append(llm_response)
+
+                        # Stage 4: Process tool calls if present
+                        tool_calls = self._parse_tool_calls(llm_response)
+                        logger.info(
+                            f"[ChatWorkflowManager] Parsed {len(tool_calls)} "
+                            f"tool calls from response"
+                        )
+
+                        # If no tool calls, LLM has completed the task
+                        if not tool_calls:
+                            logger.info(
+                                f"[ChatWorkflowManager] No more tool calls - "
+                                f"multi-step task complete after {iteration} iteration(s)"
+                            )
                             break
 
-                    logger.info(
-                        f"[ChatWorkflowManager] Full LLM response length: "
-                        f"{len(llm_response)} characters"
-                    )
-
-                    # Stage 4: Process tool calls if present
-                    tool_calls = self._parse_tool_calls(llm_response)
-                    logger.info(
-                        f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response"
-                    )
-
-                    if tool_calls:
+                        # Process tool calls and collect execution results
+                        new_execution_results = []
                         async for tool_msg in self._process_tool_calls(
                             tool_calls, session_id, terminal_session_id,
                             ollama_endpoint, selected_model,
                         ):
-                            if tool_msg.type in {"terminal_command", "terminal_output", "error"}:
+                            # Issue #352: Capture execution summary for continuation
+                            if tool_msg.type == "execution_summary":
+                                new_results = tool_msg.metadata.get(
+                                    "execution_results", []
+                                )
+                                new_execution_results.extend(new_results)
+                                execution_history.extend(new_results)
+                                logger.info(
+                                    f"[ChatWorkflowManager] Collected "
+                                    f"{len(new_results)} execution results"
+                                )
+                                # Don't yield execution_summary to frontend
+                                continue
+
+                            if tool_msg.type in {
+                                "terminal_command", "terminal_output", "error"
+                            }:
                                 workflow_messages.append(tool_msg)
                                 logger.debug(
-                                    f"Collected WorkflowMessage for persistence: type={tool_msg.type}"
+                                    f"Collected WorkflowMessage: type={tool_msg.type}"
                                 )
                             yield tool_msg
 
-                    # Stage 5: Persist conversation
-                    await self._persist_conversation(session_id, session, message, llm_response)
+                        # If no execution results, break to avoid infinite loop
+                        if not new_execution_results:
+                            logger.warning(
+                                "[ChatWorkflowManager] Tool calls found but no "
+                                "execution results - breaking continuation loop"
+                            )
+                            break
 
-                    # Stage 6: Persist WorkflowMessages (Issue #332 - uses helper)
-                    await self._persist_workflow_messages(
-                        session_id, workflow_messages, llm_response
+                        # Build continuation prompt for next iteration
+                        current_prompt = self._build_continuation_prompt(
+                            original_message=message,
+                            execution_history=execution_history,
+                            system_prompt=system_prompt,
+                        )
+                        logger.info(
+                            f"[ChatWorkflowManager] Built continuation prompt: "
+                            f"{len(current_prompt)} characters"
+                        )
+
+                # Log completion
+                if iteration >= self.MAX_CONTINUATION_ITERATIONS:
+                    logger.warning(
+                        f"[ChatWorkflowManager] Reached max continuation iterations "
+                        f"({self.MAX_CONTINUATION_ITERATIONS})"
                     )
 
+                # Stage 5: Persist conversation (use combined response)
+                combined_response = "\n\n".join(all_llm_responses)
+                await self._persist_conversation(
+                    session_id, session, message, combined_response
+                )
+
+                # Stage 6: Persist WorkflowMessages (Issue #332 - uses helper)
+                await self._persist_workflow_messages(
+                    session_id, workflow_messages, combined_response
+                )
+
             except aiohttp.ClientError as llm_error:
-                logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}")
+                logger.error(
+                    f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}"
+                )
                 error_msg = WorkflowMessage(
                     type="error",
                     content=f"Failed to connect to LLM: {str(llm_error)}",

@@ -223,6 +223,7 @@ NEVER teach commands - ALWAYS execute them."""
             "endpoint": ollama_endpoint,
             "model": selected_model,
             "prompt": full_prompt,
+            "system_prompt": system_prompt,  # Issue #352: For continuation loop
             "citations": citations,  # Issue #249: RAG citations for frontend
             "used_knowledge": bool(knowledge_context),
         }
