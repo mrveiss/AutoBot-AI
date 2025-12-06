@@ -446,236 +446,297 @@ class ASTHasher:
         return hashlib.sha256(structure_str.encode("utf-8")).hexdigest()[:32]
 
     def _node_to_structure(self, node: ast.AST) -> Tuple[str, ...]:
-        """Convert AST node to a hashable structure tuple."""
+        """Convert AST node to a hashable structure tuple using dispatch table."""
         if node is None:
             return ("None",)
 
         node_type = type(node).__name__
 
-        # Handle different node types
-        if isinstance(node, ast.Constant):
-            return (node_type, type(node.value).__name__)
-        elif isinstance(node, ast.Name):
-            return (node_type, node.id, type(node.ctx).__name__)
-        elif isinstance(node, ast.FunctionDef):
-            args_tuple = self._args_to_structure(node.args)
-            body_tuple = tuple(self._node_to_structure(n) for n in node.body)
-            return (node_type, node.name, args_tuple, body_tuple)
-        elif isinstance(node, ast.AsyncFunctionDef):
-            args_tuple = self._args_to_structure(node.args)
-            body_tuple = tuple(self._node_to_structure(n) for n in node.body)
-            return ("AsyncFunctionDef", node.name, args_tuple, body_tuple)
-        elif isinstance(node, ast.ClassDef):
-            body_tuple = tuple(self._node_to_structure(n) for n in node.body)
-            bases_tuple = tuple(self._node_to_structure(b) for b in node.bases)
-            return (node_type, node.name, bases_tuple, body_tuple)
-        elif isinstance(node, ast.BinOp):
-            left = self._node_to_structure(node.left)
-            right = self._node_to_structure(node.right)
-            op = type(node.op).__name__
-            return (node_type, op, left, right)
-        elif isinstance(node, ast.Compare):
-            left = self._node_to_structure(node.left)
-            ops = tuple(type(op).__name__ for op in node.ops)
-            comparators = tuple(
-                self._node_to_structure(c) for c in node.comparators
-            )
-            return (node_type, left, ops, comparators)
-        elif isinstance(node, ast.Call):
-            func = self._node_to_structure(node.func)
-            args = tuple(self._node_to_structure(a) for a in node.args)
-            return (node_type, func, args)
-        elif isinstance(node, ast.Attribute):
-            value = self._node_to_structure(node.value)
-            return (node_type, value, node.attr)
-        elif isinstance(node, ast.If):
-            test = self._node_to_structure(node.test)
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            orelse = tuple(self._node_to_structure(n) for n in node.orelse)
-            return (node_type, test, body, orelse)
-        elif isinstance(node, ast.For):
-            target = self._node_to_structure(node.target)
-            iter_node = self._node_to_structure(node.iter)
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            return (node_type, target, iter_node, body)
-        elif isinstance(node, ast.While):
-            test = self._node_to_structure(node.test)
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            return (node_type, test, body)
-        elif isinstance(node, ast.Return):
-            value = (
-                self._node_to_structure(node.value)
-                if node.value
-                else ("None",)
-            )
-            return (node_type, value)
-        elif isinstance(node, ast.Assign):
-            targets = tuple(self._node_to_structure(t) for t in node.targets)
-            value = self._node_to_structure(node.value)
-            return (node_type, targets, value)
-        elif isinstance(node, ast.AugAssign):
-            target = self._node_to_structure(node.target)
-            op = type(node.op).__name__
-            value = self._node_to_structure(node.value)
-            return (node_type, target, op, value)
-        elif isinstance(node, ast.Expr):
-            value = self._node_to_structure(node.value)
-            return (node_type, value)
-        elif isinstance(node, ast.Try):
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            handlers = tuple(self._node_to_structure(h) for h in node.handlers)
-            orelse = tuple(self._node_to_structure(n) for n in node.orelse)
-            finalbody = tuple(self._node_to_structure(n) for n in node.finalbody)
-            return (node_type, body, handlers, orelse, finalbody)
-        elif isinstance(node, ast.ExceptHandler):
-            handler_type = (
-                self._node_to_structure(node.type) if node.type else ("None",)
-            )
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            return (node_type, handler_type, node.name, body)
-        elif isinstance(node, ast.With):
-            items = tuple(self._node_to_structure(i) for i in node.items)
-            body = tuple(self._node_to_structure(n) for n in node.body)
-            return (node_type, items, body)
-        elif isinstance(node, ast.withitem):
-            context = self._node_to_structure(node.context_expr)
-            optional_vars = (
-                self._node_to_structure(node.optional_vars)
-                if node.optional_vars
-                else ("None",)
-            )
-            return ("withitem", context, optional_vars)
-        elif isinstance(node, ast.List):
-            elts = tuple(self._node_to_structure(e) for e in node.elts)
-            return (node_type, elts)
-        elif isinstance(node, ast.Dict):
-            keys = tuple(
-                self._node_to_structure(k) if k else ("None",) for k in node.keys
-            )
-            values = tuple(self._node_to_structure(v) for v in node.values)
-            return (node_type, keys, values)
-        elif isinstance(node, ast.Tuple):
-            elts = tuple(self._node_to_structure(e) for e in node.elts)
-            return (node_type, elts)
-        elif isinstance(node, ast.Set):
-            elts = tuple(self._node_to_structure(e) for e in node.elts)
-            return (node_type, elts)
-        elif isinstance(node, ast.ListComp):
-            elt = self._node_to_structure(node.elt)
-            generators = tuple(
-                self._node_to_structure(g) for g in node.generators
-            )
-            return (node_type, elt, generators)
-        elif isinstance(node, ast.comprehension):
-            target = self._node_to_structure(node.target)
-            iter_node = self._node_to_structure(node.iter)
-            ifs = tuple(self._node_to_structure(i) for i in node.ifs)
-            return ("comprehension", target, iter_node, ifs, node.is_async)
-        elif isinstance(node, ast.Lambda):
-            args = self._args_to_structure(node.args)
-            body = self._node_to_structure(node.body)
-            return (node_type, args, body)
-        elif isinstance(node, ast.UnaryOp):
-            op = type(node.op).__name__
-            operand = self._node_to_structure(node.operand)
-            return (node_type, op, operand)
-        elif isinstance(node, ast.BoolOp):
-            op = type(node.op).__name__
-            values = tuple(self._node_to_structure(v) for v in node.values)
-            return (node_type, op, values)
-        elif isinstance(node, ast.IfExp):
-            test = self._node_to_structure(node.test)
-            body = self._node_to_structure(node.body)
-            orelse = self._node_to_structure(node.orelse)
-            return (node_type, test, body, orelse)
-        elif isinstance(node, ast.Subscript):
-            value = self._node_to_structure(node.value)
-            slice_node = self._node_to_structure(node.slice)
-            return (node_type, value, slice_node)
-        elif isinstance(node, ast.Slice):
-            lower = (
-                self._node_to_structure(node.lower)
-                if node.lower
-                else ("None",)
-            )
-            upper = (
-                self._node_to_structure(node.upper)
-                if node.upper
-                else ("None",)
-            )
-            step = (
-                self._node_to_structure(node.step)
-                if node.step
-                else ("None",)
-            )
-            return (node_type, lower, upper, step)
-        elif isinstance(node, ast.Raise):
-            exc = (
-                self._node_to_structure(node.exc)
-                if node.exc
-                else ("None",)
-            )
-            cause = (
-                self._node_to_structure(node.cause)
-                if node.cause
-                else ("None",)
-            )
-            return (node_type, exc, cause)
-        elif isinstance(node, ast.Assert):
-            test = self._node_to_structure(node.test)
-            msg = (
-                self._node_to_structure(node.msg)
-                if node.msg
-                else ("None",)
-            )
-            return (node_type, test, msg)
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            names = tuple((alias.name, alias.asname) for alias in node.names)
-            if isinstance(node, ast.ImportFrom):
-                return (node_type, node.module, names)
-            return (node_type, names)
-        elif isinstance(node, ast.Pass):
-            return (node_type,)
-        elif isinstance(node, ast.Break):
-            return (node_type,)
-        elif isinstance(node, ast.Continue):
-            return (node_type,)
-        elif isinstance(node, ast.Global):
-            return (node_type, tuple(node.names))
-        elif isinstance(node, ast.Nonlocal):
-            return (node_type, tuple(node.names))
-        elif isinstance(node, ast.Await):
-            value = self._node_to_structure(node.value)
-            return (node_type, value)
-        elif isinstance(node, ast.Yield):
-            value = (
-                self._node_to_structure(node.value)
-                if node.value
-                else ("None",)
-            )
-            return (node_type, value)
-        elif isinstance(node, ast.YieldFrom):
-            value = self._node_to_structure(node.value)
-            return (node_type, value)
-        elif isinstance(node, ast.FormattedValue):
-            value = self._node_to_structure(node.value)
-            return (node_type, value, node.conversion)
-        elif isinstance(node, ast.JoinedStr):
-            values = tuple(self._node_to_structure(v) for v in node.values)
-            return (node_type, values)
-        elif isinstance(node, ast.Starred):
-            value = self._node_to_structure(node.value)
-            return (node_type, value)
-        elif isinstance(node, ast.NamedExpr):
-            target = self._node_to_structure(node.target)
-            value = self._node_to_structure(node.value)
-            return (node_type, target, value)
-        else:
-            # Fallback for any other node types
-            children = []
-            for child in ast.iter_child_nodes(node):
-                children.append(self._node_to_structure(child))
-            return (node_type, tuple(children))
+        # Use dispatch table for O(1) lookup instead of long if/elif chain
+        handler = self._NODE_HANDLERS.get(type(node))
+        if handler:
+            return handler(self, node, node_type)
+
+        # Fallback for any other node types
+        children = tuple(self._node_to_structure(child) for child in ast.iter_child_nodes(node))
+        return (node_type, children)
+
+    # =========================================================================
+    # Node Handler Methods - Each handles one AST node type
+    # =========================================================================
+
+    def _handle_constant(self, node: ast.Constant, node_type: str) -> Tuple:
+        return (node_type, type(node.value).__name__)
+
+    def _handle_name(self, node: ast.Name, node_type: str) -> Tuple:
+        return (node_type, node.id, type(node.ctx).__name__)
+
+    def _handle_function_def(self, node: ast.FunctionDef, node_type: str) -> Tuple:
+        args_tuple = self._args_to_structure(node.args)
+        body_tuple = tuple(self._node_to_structure(n) for n in node.body)
+        return (node_type, node.name, args_tuple, body_tuple)
+
+    def _handle_async_function_def(self, node: ast.AsyncFunctionDef, node_type: str) -> Tuple:
+        args_tuple = self._args_to_structure(node.args)
+        body_tuple = tuple(self._node_to_structure(n) for n in node.body)
+        return ("AsyncFunctionDef", node.name, args_tuple, body_tuple)
+
+    def _handle_class_def(self, node: ast.ClassDef, node_type: str) -> Tuple:
+        body_tuple = tuple(self._node_to_structure(n) for n in node.body)
+        bases_tuple = tuple(self._node_to_structure(b) for b in node.bases)
+        return (node_type, node.name, bases_tuple, body_tuple)
+
+    def _handle_binop(self, node: ast.BinOp, node_type: str) -> Tuple:
+        left = self._node_to_structure(node.left)
+        right = self._node_to_structure(node.right)
+        op = type(node.op).__name__
+        return (node_type, op, left, right)
+
+    def _handle_compare(self, node: ast.Compare, node_type: str) -> Tuple:
+        left = self._node_to_structure(node.left)
+        ops = tuple(type(op).__name__ for op in node.ops)
+        comparators = tuple(self._node_to_structure(c) for c in node.comparators)
+        return (node_type, left, ops, comparators)
+
+    def _handle_call(self, node: ast.Call, node_type: str) -> Tuple:
+        func = self._node_to_structure(node.func)
+        args = tuple(self._node_to_structure(a) for a in node.args)
+        return (node_type, func, args)
+
+    def _handle_attribute(self, node: ast.Attribute, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value, node.attr)
+
+    def _handle_if(self, node: ast.If, node_type: str) -> Tuple:
+        test = self._node_to_structure(node.test)
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        orelse = tuple(self._node_to_structure(n) for n in node.orelse)
+        return (node_type, test, body, orelse)
+
+    def _handle_for(self, node: ast.For, node_type: str) -> Tuple:
+        target = self._node_to_structure(node.target)
+        iter_node = self._node_to_structure(node.iter)
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        return (node_type, target, iter_node, body)
+
+    def _handle_while(self, node: ast.While, node_type: str) -> Tuple:
+        test = self._node_to_structure(node.test)
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        return (node_type, test, body)
+
+    def _handle_return(self, node: ast.Return, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value) if node.value else ("None",)
+        return (node_type, value)
+
+    def _handle_assign(self, node: ast.Assign, node_type: str) -> Tuple:
+        targets = tuple(self._node_to_structure(t) for t in node.targets)
+        value = self._node_to_structure(node.value)
+        return (node_type, targets, value)
+
+    def _handle_aug_assign(self, node: ast.AugAssign, node_type: str) -> Tuple:
+        target = self._node_to_structure(node.target)
+        op = type(node.op).__name__
+        value = self._node_to_structure(node.value)
+        return (node_type, target, op, value)
+
+    def _handle_expr(self, node: ast.Expr, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value)
+
+    def _handle_try(self, node: ast.Try, node_type: str) -> Tuple:
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        handlers = tuple(self._node_to_structure(h) for h in node.handlers)
+        orelse = tuple(self._node_to_structure(n) for n in node.orelse)
+        finalbody = tuple(self._node_to_structure(n) for n in node.finalbody)
+        return (node_type, body, handlers, orelse, finalbody)
+
+    def _handle_except_handler(self, node: ast.ExceptHandler, node_type: str) -> Tuple:
+        handler_type = self._node_to_structure(node.type) if node.type else ("None",)
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        return (node_type, handler_type, node.name, body)
+
+    def _handle_with(self, node: ast.With, node_type: str) -> Tuple:
+        items = tuple(self._node_to_structure(i) for i in node.items)
+        body = tuple(self._node_to_structure(n) for n in node.body)
+        return (node_type, items, body)
+
+    def _handle_withitem(self, node: ast.withitem, node_type: str) -> Tuple:
+        context = self._node_to_structure(node.context_expr)
+        optional_vars = (
+            self._node_to_structure(node.optional_vars)
+            if node.optional_vars
+            else ("None",)
+        )
+        return ("withitem", context, optional_vars)
+
+    def _handle_list(self, node: ast.List, node_type: str) -> Tuple:
+        elts = tuple(self._node_to_structure(e) for e in node.elts)
+        return (node_type, elts)
+
+    def _handle_dict(self, node: ast.Dict, node_type: str) -> Tuple:
+        keys = tuple(self._node_to_structure(k) if k else ("None",) for k in node.keys)
+        values = tuple(self._node_to_structure(v) for v in node.values)
+        return (node_type, keys, values)
+
+    def _handle_tuple(self, node: ast.Tuple, node_type: str) -> Tuple:
+        elts = tuple(self._node_to_structure(e) for e in node.elts)
+        return (node_type, elts)
+
+    def _handle_set(self, node: ast.Set, node_type: str) -> Tuple:
+        elts = tuple(self._node_to_structure(e) for e in node.elts)
+        return (node_type, elts)
+
+    def _handle_list_comp(self, node: ast.ListComp, node_type: str) -> Tuple:
+        elt = self._node_to_structure(node.elt)
+        generators = tuple(self._node_to_structure(g) for g in node.generators)
+        return (node_type, elt, generators)
+
+    def _handle_comprehension(self, node: ast.comprehension, node_type: str) -> Tuple:
+        target = self._node_to_structure(node.target)
+        iter_node = self._node_to_structure(node.iter)
+        ifs = tuple(self._node_to_structure(i) for i in node.ifs)
+        return ("comprehension", target, iter_node, ifs, node.is_async)
+
+    def _handle_lambda(self, node: ast.Lambda, node_type: str) -> Tuple:
+        args = self._args_to_structure(node.args)
+        body = self._node_to_structure(node.body)
+        return (node_type, args, body)
+
+    def _handle_unary_op(self, node: ast.UnaryOp, node_type: str) -> Tuple:
+        op = type(node.op).__name__
+        operand = self._node_to_structure(node.operand)
+        return (node_type, op, operand)
+
+    def _handle_bool_op(self, node: ast.BoolOp, node_type: str) -> Tuple:
+        op = type(node.op).__name__
+        values = tuple(self._node_to_structure(v) for v in node.values)
+        return (node_type, op, values)
+
+    def _handle_if_exp(self, node: ast.IfExp, node_type: str) -> Tuple:
+        test = self._node_to_structure(node.test)
+        body = self._node_to_structure(node.body)
+        orelse = self._node_to_structure(node.orelse)
+        return (node_type, test, body, orelse)
+
+    def _handle_subscript(self, node: ast.Subscript, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        slice_node = self._node_to_structure(node.slice)
+        return (node_type, value, slice_node)
+
+    def _handle_slice(self, node: ast.Slice, node_type: str) -> Tuple:
+        lower = self._node_to_structure(node.lower) if node.lower else ("None",)
+        upper = self._node_to_structure(node.upper) if node.upper else ("None",)
+        step = self._node_to_structure(node.step) if node.step else ("None",)
+        return (node_type, lower, upper, step)
+
+    def _handle_raise(self, node: ast.Raise, node_type: str) -> Tuple:
+        exc = self._node_to_structure(node.exc) if node.exc else ("None",)
+        cause = self._node_to_structure(node.cause) if node.cause else ("None",)
+        return (node_type, exc, cause)
+
+    def _handle_assert(self, node: ast.Assert, node_type: str) -> Tuple:
+        test = self._node_to_structure(node.test)
+        msg = self._node_to_structure(node.msg) if node.msg else ("None",)
+        return (node_type, test, msg)
+
+    def _handle_import(self, node: ast.Import, node_type: str) -> Tuple:
+        names = tuple((alias.name, alias.asname) for alias in node.names)
+        return (node_type, names)
+
+    def _handle_import_from(self, node: ast.ImportFrom, node_type: str) -> Tuple:
+        names = tuple((alias.name, alias.asname) for alias in node.names)
+        return (node_type, node.module, names)
+
+    def _handle_simple_stmt(self, node: ast.AST, node_type: str) -> Tuple:
+        """Handle simple statements with no children: Pass, Break, Continue."""
+        return (node_type,)
+
+    def _handle_global(self, node: ast.Global, node_type: str) -> Tuple:
+        return (node_type, tuple(node.names))
+
+    def _handle_nonlocal(self, node: ast.Nonlocal, node_type: str) -> Tuple:
+        return (node_type, tuple(node.names))
+
+    def _handle_await(self, node: ast.Await, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value)
+
+    def _handle_yield(self, node: ast.Yield, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value) if node.value else ("None",)
+        return (node_type, value)
+
+    def _handle_yield_from(self, node: ast.YieldFrom, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value)
+
+    def _handle_formatted_value(self, node: ast.FormattedValue, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value, node.conversion)
+
+    def _handle_joined_str(self, node: ast.JoinedStr, node_type: str) -> Tuple:
+        values = tuple(self._node_to_structure(v) for v in node.values)
+        return (node_type, values)
+
+    def _handle_starred(self, node: ast.Starred, node_type: str) -> Tuple:
+        value = self._node_to_structure(node.value)
+        return (node_type, value)
+
+    def _handle_named_expr(self, node: ast.NamedExpr, node_type: str) -> Tuple:
+        target = self._node_to_structure(node.target)
+        value = self._node_to_structure(node.value)
+        return (node_type, target, value)
+
+    # Dispatch table mapping AST node types to handler methods
+    _NODE_HANDLERS = {
+        ast.Constant: _handle_constant,
+        ast.Name: _handle_name,
+        ast.FunctionDef: _handle_function_def,
+        ast.AsyncFunctionDef: _handle_async_function_def,
+        ast.ClassDef: _handle_class_def,
+        ast.BinOp: _handle_binop,
+        ast.Compare: _handle_compare,
+        ast.Call: _handle_call,
+        ast.Attribute: _handle_attribute,
+        ast.If: _handle_if,
+        ast.For: _handle_for,
+        ast.While: _handle_while,
+        ast.Return: _handle_return,
+        ast.Assign: _handle_assign,
+        ast.AugAssign: _handle_aug_assign,
+        ast.Expr: _handle_expr,
+        ast.Try: _handle_try,
+        ast.ExceptHandler: _handle_except_handler,
+        ast.With: _handle_with,
+        ast.withitem: _handle_withitem,
+        ast.List: _handle_list,
+        ast.Dict: _handle_dict,
+        ast.Tuple: _handle_tuple,
+        ast.Set: _handle_set,
+        ast.ListComp: _handle_list_comp,
+        ast.comprehension: _handle_comprehension,
+        ast.Lambda: _handle_lambda,
+        ast.UnaryOp: _handle_unary_op,
+        ast.BoolOp: _handle_bool_op,
+        ast.IfExp: _handle_if_exp,
+        ast.Subscript: _handle_subscript,
+        ast.Slice: _handle_slice,
+        ast.Raise: _handle_raise,
+        ast.Assert: _handle_assert,
+        ast.Import: _handle_import,
+        ast.ImportFrom: _handle_import_from,
+        ast.Pass: _handle_simple_stmt,
+        ast.Break: _handle_simple_stmt,
+        ast.Continue: _handle_simple_stmt,
+        ast.Global: _handle_global,
+        ast.Nonlocal: _handle_nonlocal,
+        ast.Await: _handle_await,
+        ast.Yield: _handle_yield,
+        ast.YieldFrom: _handle_yield_from,
+        ast.FormattedValue: _handle_formatted_value,
+        ast.JoinedStr: _handle_joined_str,
+        ast.Starred: _handle_starred,
+        ast.NamedExpr: _handle_named_expr,
+    }
 
     def _args_to_structure(self, args: ast.arguments) -> Tuple:
         """Convert arguments to a hashable structure."""
@@ -787,42 +848,35 @@ class SemanticHasher:
             "call_graph": self._extract_calls(node),
         }
 
+    # Built-in names to exclude from input detection
+    _BUILTIN_NAMES = frozenset({
+        "print", "len", "str", "int", "float", "list", "dict", "set",
+        "tuple", "range", "enumerate", "zip", "True", "False", "None",
+    })
+
     def _find_inputs(self, node: ast.AST) -> List[str]:
         """Find variables that are read but not defined in the node."""
         defined: Set[str] = set()
         used: Set[str] = set()
 
         for child in ast.walk(node):
-            if isinstance(child, ast.Name):
-                if isinstance(child.ctx, ast.Store):
-                    defined.add(child.id)
-                elif isinstance(child.ctx, ast.Load):
-                    used.add(child.id)
-            elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for arg in child.args.args:
-                    defined.add(arg.arg)
+            self._process_node_for_inputs(child, defined, used)
 
-        inputs = used - defined
-        # Remove built-in names
-        builtins_to_remove = {
-            "print",
-            "len",
-            "str",
-            "int",
-            "float",
-            "list",
-            "dict",
-            "set",
-            "tuple",
-            "range",
-            "enumerate",
-            "zip",
-            "True",
-            "False",
-            "None",
-        }
-        inputs -= builtins_to_remove
+        inputs = used - defined - self._BUILTIN_NAMES
         return sorted(inputs)
+
+    def _process_node_for_inputs(
+        self, child: ast.AST, defined: Set[str], used: Set[str]
+    ) -> None:
+        """Process a single node for input/output variable tracking."""
+        if isinstance(child, ast.Name):
+            if isinstance(child.ctx, ast.Store):
+                defined.add(child.id)
+            elif isinstance(child.ctx, ast.Load):
+                used.add(child.id)
+        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for arg in child.args.args:
+                defined.add(arg.arg)
 
     def _find_outputs(self, node: ast.AST) -> List[str]:
         """Find variables that are defined/modified in the node."""
@@ -836,63 +890,72 @@ class SemanticHasher:
 
         return sorted(outputs)
 
+    # Dispatch table for control flow extraction
+    _CONTROL_FLOW_MAP = {
+        ast.If: "IF",
+        ast.For: "FOR",
+        ast.While: "WHILE",
+        ast.Try: "TRY",
+        ast.With: "WITH",
+        ast.Return: "RETURN",
+        ast.Raise: "RAISE",
+        ast.Break: "BREAK",
+        ast.Continue: "CONTINUE",
+    }
+
     def _extract_control_flow(self, node: ast.AST) -> List[str]:
         """Extract control flow pattern as a sequence of control structures."""
         pattern: List[str] = []
-
         for child in ast.walk(node):
-            if isinstance(child, ast.If):
-                pattern.append("IF")
-            elif isinstance(child, ast.For):
-                pattern.append("FOR")
-            elif isinstance(child, ast.While):
-                pattern.append("WHILE")
-            elif isinstance(child, ast.Try):
-                pattern.append("TRY")
-            elif isinstance(child, ast.With):
-                pattern.append("WITH")
-            elif isinstance(child, ast.Return):
-                pattern.append("RETURN")
-            elif isinstance(child, ast.Raise):
-                pattern.append("RAISE")
-            elif isinstance(child, ast.Break):
-                pattern.append("BREAK")
-            elif isinstance(child, ast.Continue):
-                pattern.append("CONTINUE")
-
+            label = self._CONTROL_FLOW_MAP.get(type(child))
+            if label:
+                pattern.append(label)
         return pattern
 
     def _extract_operations(self, node: ast.AST) -> List[str]:
         """Extract sequence of operations/operators used."""
         operations: List[str] = []
-
         for child in ast.walk(node):
-            if isinstance(child, ast.BinOp):
-                operations.append(f"BINOP:{type(child.op).__name__}")
-            elif isinstance(child, ast.UnaryOp):
-                operations.append(f"UNARYOP:{type(child.op).__name__}")
-            elif isinstance(child, ast.Compare):
-                for op in child.ops:
-                    operations.append(f"COMPARE:{type(op).__name__}")
-            elif isinstance(child, ast.BoolOp):
-                operations.append(f"BOOLOP:{type(child.op).__name__}")
-            elif isinstance(child, ast.AugAssign):
-                operations.append(f"AUGASSIGN:{type(child.op).__name__}")
-
+            op_str = self._get_operation_string(child)
+            if op_str:
+                if isinstance(op_str, list):
+                    operations.extend(op_str)
+                else:
+                    operations.append(op_str)
         return operations
+
+    def _get_operation_string(self, child: ast.AST) -> Optional[str | List[str]]:
+        """Get operation string for an AST node. Returns None if not an operation."""
+        if isinstance(child, ast.BinOp):
+            return f"BINOP:{type(child.op).__name__}"
+        if isinstance(child, ast.UnaryOp):
+            return f"UNARYOP:{type(child.op).__name__}"
+        if isinstance(child, ast.Compare):
+            return [f"COMPARE:{type(op).__name__}" for op in child.ops]
+        if isinstance(child, ast.BoolOp):
+            return f"BOOLOP:{type(child.op).__name__}"
+        if isinstance(child, ast.AugAssign):
+            return f"AUGASSIGN:{type(child.op).__name__}"
+        return None
 
     def _extract_calls(self, node: ast.AST) -> List[str]:
         """Extract function calls made within the node."""
         calls: List[str] = []
-
         for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Name):
-                    calls.append(child.func.id)
-                elif isinstance(child.func, ast.Attribute):
-                    calls.append(f"*.{child.func.attr}")
-
+            if not isinstance(child, ast.Call):
+                continue
+            call_name = self._get_call_name(child)
+            if call_name:
+                calls.append(call_name)
         return calls
+
+    def _get_call_name(self, call_node: ast.Call) -> Optional[str]:
+        """Extract the function name from a Call node."""
+        if isinstance(call_node.func, ast.Name):
+            return call_node.func.id
+        if isinstance(call_node.func, ast.Attribute):
+            return f"*.{call_node.func.attr}"
+        return None
 
 
 # =============================================================================
@@ -1263,38 +1326,38 @@ class CloneDetector:
 
     def _extract_fragments(self, file_path: str) -> List[CodeFragment]:
         """Extract code fragments (functions, classes) from a file."""
-        fragments: List[CodeFragment] = []
-
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-                lines = source.split("\n")
-
-            tree = ast.parse(source, filename=file_path)
-
-            for node in ast.walk(tree):
-                # Extract functions
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    fragment = self._create_fragment_from_node(
-                        node, file_path, lines, "function"
-                    )
-                    if fragment:
-                        fragments.append(fragment)
-
-                # Extract classes
-                elif isinstance(node, ast.ClassDef):
-                    fragment = self._create_fragment_from_node(
-                        node, file_path, lines, "class"
-                    )
-                    if fragment:
-                        fragments.append(fragment)
-
+            return self._extract_fragments_from_file(file_path)
         except SyntaxError as e:
             logger.warning(f"Syntax error in {file_path}: {e}")
+            return []
         except Exception as e:
             logger.error(f"Error extracting fragments from {file_path}: {e}")
+            return []
 
+    def _extract_fragments_from_file(self, file_path: str) -> List[CodeFragment]:
+        """Parse file and extract code fragments."""
+        with open(file_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        lines = source.split("\n")
+        tree = ast.parse(source, filename=file_path)
+
+        fragments: List[CodeFragment] = []
+        for node in ast.walk(tree):
+            fragment = self._maybe_create_fragment(node, file_path, lines)
+            if fragment:
+                fragments.append(fragment)
         return fragments
+
+    def _maybe_create_fragment(
+        self, node: ast.AST, file_path: str, lines: List[str]
+    ) -> Optional[CodeFragment]:
+        """Create a fragment from node if it's a function or class."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return self._create_fragment_from_node(node, file_path, lines, "function")
+        if isinstance(node, ast.ClassDef):
+            return self._create_fragment_from_node(node, file_path, lines, "class")
+        return None
 
     def _generate_fingerprints(self, fragment: CodeFragment) -> None:
         """Generate all types of fingerprints for a fragment."""
@@ -1542,82 +1605,94 @@ class CloneDetector:
         type3_groups: List[CloneGroup],
     ) -> List[CloneGroup]:
         """Detect Type 4 (semantic) clones."""
-        # Get fragments already classified
-        existing_fragments: Set[Tuple[str, int, int]] = set()
-        for group in type1_groups + type2_groups + type3_groups:
-            for instance in group.instances:
-                existing_fragments.add(
-                    (
-                        instance.fragment.file_path,
-                        instance.fragment.start_line,
-                        instance.fragment.end_line,
-                    )
-                )
+        existing_fragments = self._collect_existing_fragments(
+            type1_groups + type2_groups + type3_groups
+        )
 
         clone_groups: List[CloneGroup] = []
-
         for hash_value, fingerprints in self._semantic_fingerprints.items():
-            if len(fingerprints) >= 2:
-                # Check if all are from same structural group
-                structural_hashes = set()
-                for fp in fingerprints:
-                    if fp.fragment.ast_node:
-                        structural_hashes.add(
-                            self.ast_hasher.hash_structural(fp.fragment.ast_node)
-                        )
-
-                # Skip if they're all structurally identical (already caught)
-                if len(structural_hashes) == 1:
-                    continue
-
-                # Check if all fragments are already classified
-                all_classified = all(
-                    (
-                        fp.fragment.file_path,
-                        fp.fragment.start_line,
-                        fp.fragment.end_line,
-                    )
-                    in existing_fragments
-                    for fp in fingerprints
-                )
-
-                if all_classified:
-                    continue
-
-                instances = [
-                    CloneInstance(
-                        fragment=fp.fragment,
-                        fingerprint=fp,
-                        similarity_score=0.8,  # Semantic similarity placeholder
-                    )
-                    for fp in fingerprints
-                ]
-
-                total_lines = sum(i.fragment.line_count for i in instances)
-                severity = self._calculate_severity(len(instances), total_lines)
-
-                group = CloneGroup(
-                    clone_type=CloneType.TYPE_4,
-                    severity=severity,
-                    instances=instances,
-                    canonical_fingerprint=hash_value,
-                    similarity_range=(0.6, 0.9),
-                    total_duplicated_lines=total_lines,
-                )
+            group = self._maybe_create_type4_group(
+                hash_value, fingerprints, existing_fragments
+            )
+            if group:
                 clone_groups.append(group)
-
         return clone_groups
+
+    def _collect_existing_fragments(
+        self, groups: List[CloneGroup]
+    ) -> Set[Tuple[str, int, int]]:
+        """Collect fragment identifiers from existing groups."""
+        existing: Set[Tuple[str, int, int]] = set()
+        for group in groups:
+            for instance in group.instances:
+                existing.add((
+                    instance.fragment.file_path,
+                    instance.fragment.start_line,
+                    instance.fragment.end_line,
+                ))
+        return existing
+
+    def _maybe_create_type4_group(
+        self,
+        hash_value: str,
+        fingerprints: List,
+        existing_fragments: Set[Tuple[str, int, int]],
+    ) -> Optional[CloneGroup]:
+        """Create a Type 4 clone group if valid."""
+        if len(fingerprints) < 2:
+            return None
+        if self._should_skip_type4_group(fingerprints, existing_fragments):
+            return None
+
+        instances = [
+            CloneInstance(
+                fragment=fp.fragment,
+                fingerprint=fp,
+                similarity_score=0.8,  # Semantic similarity placeholder
+            )
+            for fp in fingerprints
+        ]
+        total_lines = sum(i.fragment.line_count for i in instances)
+        severity = self._calculate_severity(len(instances), total_lines)
+
+        return CloneGroup(
+            clone_type=CloneType.TYPE_4,
+            severity=severity,
+            instances=instances,
+            canonical_fingerprint=hash_value,
+            similarity_range=(0.6, 0.9),
+            total_duplicated_lines=total_lines,
+        )
+
+    def _should_skip_type4_group(
+        self, fingerprints: List, existing_fragments: Set[Tuple[str, int, int]]
+    ) -> bool:
+        """Check if this semantic group should be skipped."""
+        # Check if all are from same structural group
+        structural_hashes = {
+            self.ast_hasher.hash_structural(fp.fragment.ast_node)
+            for fp in fingerprints
+            if fp.fragment.ast_node
+        }
+        if len(structural_hashes) == 1:
+            return True  # Already caught by structural detection
+
+        # Check if all fragments are already classified
+        return all(
+            (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
+            in existing_fragments
+            for fp in fingerprints
+        )
 
     def _calculate_severity(self, instance_count: int, total_lines: int) -> CloneSeverity:
         """Calculate severity based on clone metrics."""
-        # Consider both instance count and total duplicated lines
         if instance_count >= 7 or total_lines >= 200:
             return CloneSeverity.CRITICAL
-        elif instance_count >= 5 or total_lines >= 100:
+        if instance_count >= 5 or total_lines >= 100:
             return CloneSeverity.HIGH
-        elif instance_count >= 3 or total_lines >= 50:
+        if instance_count >= 3 or total_lines >= 50:
             return CloneSeverity.MEDIUM
-        elif instance_count >= 2:
+        if instance_count >= 2:
             return CloneSeverity.LOW
         return CloneSeverity.INFO
 
@@ -1711,38 +1786,40 @@ class CloneDetector:
             for group, score in sorted_groups
         ]
 
+    # Suggestion templates for each clone type
+    _REFACTORING_TEMPLATES = {
+        CloneType.TYPE_1: (
+            "Extract duplicated {fragment_type} into a shared utility function "
+            "or module. All {count} copies are identical and can be "
+            "replaced with a single implementation."
+        ),
+        CloneType.TYPE_2: (
+            "The {count} {fragment_type} copies differ only in variable "
+            "names. Create a parameterized function or use generics to eliminate "
+            "duplication while preserving the different naming contexts."
+        ),
+        CloneType.TYPE_3: (
+            "These {count} similar {fragment_type}s share significant "
+            "logic. Consider extracting common parts into a base function, "
+            "then use composition or inheritance for variations."
+        ),
+        CloneType.TYPE_4: (
+            "These {count} {fragment_type}s achieve the same result "
+            "differently. Evaluate which implementation is best and consolidate, "
+            "or document why different approaches are needed."
+        ),
+    }
+
     def _generate_refactoring_suggestion(self, group: CloneGroup) -> str:
         """Generate a refactoring suggestion for a clone group."""
-        clone_type = group.clone_type
-        instance_count = len(group.instances)
-        fragment_type = group.instances[0].fragment.fragment_type if group.instances else "code"
+        template = self._REFACTORING_TEMPLATES.get(group.clone_type)
+        if not template:
+            return "Review and consider consolidating duplicated code."
 
-        if clone_type == CloneType.TYPE_1:
-            return (
-                f"Extract duplicated {fragment_type} into a shared utility function "
-                f"or module. All {instance_count} copies are identical and can be "
-                f"replaced with a single implementation."
-            )
-        elif clone_type == CloneType.TYPE_2:
-            return (
-                f"The {instance_count} {fragment_type} copies differ only in variable "
-                f"names. Create a parameterized function or use generics to eliminate "
-                f"duplication while preserving the different naming contexts."
-            )
-        elif clone_type == CloneType.TYPE_3:
-            return (
-                f"These {instance_count} similar {fragment_type}s share significant "
-                f"logic. Consider extracting common parts into a base function, "
-                f"then use composition or inheritance for variations."
-            )
-        elif clone_type == CloneType.TYPE_4:
-            return (
-                f"These {instance_count} {fragment_type}s achieve the same result "
-                f"differently. Evaluate which implementation is best and consolidate, "
-                f"or document why different approaches are needed."
-            )
-
-        return "Review and consider consolidating duplicated code."
+        fragment_type = (
+            group.instances[0].fragment.fragment_type if group.instances else "code"
+        )
+        return template.format(count=len(group.instances), fragment_type=fragment_type)
 
     def _estimate_refactoring_effort(self, group: CloneGroup) -> str:
         """Estimate the effort required to refactor a clone group."""

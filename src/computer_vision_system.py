@@ -4,6 +4,14 @@
 """
 Computer Vision System for AutoBot
 Advanced screen understanding and visual automation capabilities
+
+Feature Envy Refactoring (Issue #312):
+- Enhanced UIElement with behavior methods (Tell, Don't Ask)
+- Created ClassificationFeatures data class for feature analysis
+- Enhanced ScreenState with analysis delegation methods
+- Created InteractionMapping data class for interaction determination
+- Refactored ElementClassifier to use data objects
+- All changes maintain backward compatibility
 """
 
 import asyncio
@@ -11,7 +19,7 @@ import base64
 import io
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -72,7 +80,12 @@ class InteractionType(Enum):
 
 @dataclass
 class UIElement:
-    """Detected UI element with properties and interaction capabilities"""
+    """Detected UI element with properties and interaction capabilities
+
+    Enhanced with behavior methods to reduce Feature Envy (Tell, Don't Ask).
+    Clients should call methods on this object rather than accessing properties
+    and performing logic externally.
+    """
 
     element_id: str
     element_type: ElementType
@@ -85,10 +98,97 @@ class UIElement:
     screenshot_region: Optional[np.ndarray] = None
     ocr_data: Optional[Dict[str, Any]] = None
 
+    def matches_automation_pattern(self, keywords: set) -> bool:
+        """Check if element matches automation keywords"""
+        return any(word in self.text_content.lower() for word in keywords)
+
+    def has_low_confidence(self, threshold: float = 0.6) -> bool:
+        """Check if confidence is below threshold"""
+        return self.confidence < threshold
+
+    def is_interactive(self) -> bool:
+        """Check if element supports click interaction"""
+        return InteractionType.CLICK in self.possible_interactions
+
+    def is_button(self) -> bool:
+        """Check if element is a button type (Feature Envy fix)"""
+        return self.element_type == ElementType.BUTTON
+
+    def is_input_field(self) -> bool:
+        """Check if element is an input field (Feature Envy fix)"""
+        return self.element_type == ElementType.INPUT_FIELD
+
+    def is_link(self) -> bool:
+        """Check if element is a link (Feature Envy fix)"""
+        return self.element_type == ElementType.LINK
+
+    def get_area(self) -> int:
+        """Get element area from dimensions (Feature Envy fix)"""
+        return self.bbox.get("width", 0) * self.bbox.get("height", 0)
+
+    def get_aspect_ratio(self) -> float:
+        """Get element aspect ratio from dimensions (Feature Envy fix)"""
+        width = self.bbox.get("width", 1)
+        height = self.bbox.get("height", 1)
+        return width / height if height > 0 else 1.0
+
+    def get_perimeter(self) -> int:
+        """Get element perimeter from dimensions (Feature Envy fix)"""
+        width = self.bbox.get("width", 0)
+        height = self.bbox.get("height", 0)
+        return 2 * (width + height)
+
+    def get_automation_opportunity(self) -> Optional[Dict[str, Any]]:
+        """Generate automation opportunity if this element is automatable
+
+        Returns None if no automation opportunity exists.
+        (Feature Envy fix - moved logic from UIElementCollection)
+        """
+        if self.is_button() and self.matches_automation_pattern(FORM_SUBMISSION_KEYWORDS):
+            return {
+                "type": "form_submission",
+                "element_id": self.element_id,
+                "action": "click",
+                "confidence": self.confidence * 0.9,
+                "description": f"Click {self.text_content} button",
+            }
+        elif self.is_input_field():
+            return {
+                "type": "data_entry",
+                "element_id": self.element_id,
+                "action": "type_text",
+                "confidence": self.confidence * 0.8,
+                "description": "Enter text in input field",
+            }
+        elif self.is_link():
+            return {
+                "type": "navigation",
+                "element_id": self.element_id,
+                "action": "click",
+                "confidence": self.confidence * 0.7,
+                "description": f"Navigate via {self.text_content} link",
+            }
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API responses"""
+        return {
+            "id": self.element_id,
+            "type": self.element_type.value,
+            "bbox": self.bbox,
+            "center": self.center_point,
+            "confidence": self.confidence,
+            "text": self.text_content,
+            "interactions": [i.value for i in self.possible_interactions],
+        }
+
 
 @dataclass
 class ScreenState:
-    """Complete screen state analysis"""
+    """Complete screen state analysis
+
+    Enhanced to reduce Feature Envy by delegating analysis to UI elements.
+    """
 
     timestamp: float
     screenshot: np.ndarray
@@ -102,6 +202,258 @@ class ScreenState:
     multimodal_analysis: Optional[List[Dict[str, Any]]] = (
         None  # New field for multi-modal processing results
     )
+
+    def get_element_collection(self) -> "UIElementCollection":
+        """Get UI elements as a collection with analysis methods"""
+        return UIElementCollection(self.ui_elements)
+
+    def count_low_confidence_elements(self, threshold: float = 0.6) -> int:
+        """Count elements with low confidence (Feature Envy fix)"""
+        return sum(1 for el in self.ui_elements if el.has_low_confidence(threshold))
+
+    def get_low_confidence_elements(self, threshold: float = 0.6) -> List[UIElement]:
+        """Get all low-confidence elements (Feature Envy fix)"""
+        return [el for el in self.ui_elements if el.has_low_confidence(threshold)]
+
+    def get_automation_readiness(self) -> Dict[str, Any]:
+        """Get automation readiness from context (Feature Envy fix)"""
+        return self.context_analysis.get("automation_readiness", {})
+
+    def is_automation_ready(self) -> bool:
+        """Check if screen is automation ready (Feature Envy fix)"""
+        readiness = self.get_automation_readiness()
+        return readiness.get("recommendation") == "ready"
+
+    def generate_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate actionable recommendations based on analysis"""
+        recommendations = []
+
+        # Automation recommendations
+        if len(self.automation_opportunities) > 0:
+            recommendations.append(
+                {
+                    "type": "automation",
+                    "priority": "high",
+                    "description": (
+                        f"Found {len(self.automation_opportunities)} automation opportunities"
+                    ),
+                    "actions": ["create_automation_workflow", "test_interactions"],
+                }
+            )
+
+        # UI improvement recommendations (Feature Envy fix - use delegated method)
+        low_confidence_count = self.count_low_confidence_elements()
+        if low_confidence_count > 0:
+            recommendations.append(
+                {
+                    "type": "ui_analysis",
+                    "priority": "medium",
+                    "description": (
+                        f"{low_confidence_count} elements have low detection confidence"
+                    ),
+                    "actions": ["improve_detection", "manual_verification"],
+                }
+            )
+
+        # Context recommendations (Feature Envy fix - use delegated method)
+        readiness = self.get_automation_readiness()
+        if readiness.get("recommendation") == "needs_improvement":
+            recommendations.append(
+                {
+                    "type": "preparation",
+                    "priority": "medium",
+                    "description": "Screen may need preparation for automation",
+                    "actions": ["optimize_screen_state", "enhance_element_visibility"],
+                }
+            )
+
+        return recommendations
+
+    def get_analysis_summary(self) -> Dict[str, Any]:
+        """Get summary of screen analysis"""
+        return {
+            "timestamp": self.timestamp,
+            "confidence_score": self.confidence_score,
+            "elements_detected": len(self.ui_elements),
+            "text_regions": len(self.text_regions),
+            "automation_opportunities": len(self.automation_opportunities),
+        }
+
+
+class UIElementCollection:
+    """Collection of UI elements with analysis methods (Tell, Don't Ask pattern)
+
+    Feature Envy fixes:
+    - Uses delegated methods from UIElement instead of accessing properties
+    - find_automation_opportunities now calls element.get_automation_opportunity()
+    - Element type checks use is_button(), is_input_field(), is_link() methods
+    """
+
+    def __init__(self, elements: List[UIElement]):
+        self.elements = elements
+
+    def count_by_type(self) -> Dict[str, int]:
+        """Count elements by type (Feature Envy fix)"""
+        distribution = {}
+        for element in self.elements:
+            element_type = element.element_type.value
+            distribution[element_type] = distribution.get(element_type, 0) + 1
+        return distribution
+
+    def filter_by_confidence(self, threshold: float) -> List[UIElement]:
+        """Get elements above confidence threshold"""
+        return [el for el in self.elements if el.confidence > threshold]
+
+    def find_interactive_elements(self) -> List[UIElement]:
+        """Get all interactive elements"""
+        return [el for el in self.elements if el.is_interactive()]
+
+    def count_button_elements(self) -> int:
+        """Count button elements (Feature Envy fix)"""
+        return sum(1 for el in self.elements if el.is_button())
+
+    def count_input_elements(self) -> int:
+        """Count input field elements (Feature Envy fix)"""
+        return sum(1 for el in self.elements if el.is_input_field())
+
+    def count_link_elements(self) -> int:
+        """Count link elements (Feature Envy fix)"""
+        return sum(1 for el in self.elements if el.is_link())
+
+    def has_web_content(self) -> bool:
+        """Check if any element suggests web content (Feature Envy fix)"""
+        return any("http" in el.text_content.lower() for el in self.elements)
+
+    def calculate_interaction_complexity(self) -> str:
+        """Calculate complexity of interactions"""
+        total_interactions = sum(len(el.possible_interactions) for el in self.elements)
+        if total_interactions < 10:
+            return "low"
+        elif total_interactions < 25:
+            return "medium"
+        return "high"
+
+    def detect_application_type(self, screenshot: np.ndarray) -> str:
+        """Detect the type of application being displayed (Feature Envy fix)
+
+        Now uses delegated element methods instead of accessing properties directly.
+        """
+        button_count = self.count_button_elements()
+        input_count = self.count_input_elements()
+
+        # Apply heuristics based on element distribution
+        if input_count > 3 and button_count > 1:
+            return "form_application"
+        elif button_count > 5:
+            return "desktop_application"
+        elif self.has_web_content():
+            return "web_browser"
+        else:
+            return "unknown"
+
+    def assess_automation_readiness(self) -> Dict[str, Any]:
+        """Assess how ready the screen is for automation (Feature Envy fix)
+
+        Now uses delegated element methods.
+        """
+        interactive_elements = self.find_interactive_elements()
+        high_confidence_elements = self.filter_by_confidence(0.8)
+
+        readiness_score = (
+            len(high_confidence_elements) / max(len(self.elements), 1)
+        ) * 100
+
+        return {
+            "readiness_score": readiness_score,
+            "interactive_elements": len(interactive_elements),
+            "high_confidence_elements": len(high_confidence_elements),
+            "recommendation": "ready" if readiness_score > 70 else "needs_improvement",
+        }
+
+    def find_automation_opportunities(
+        self, context_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Find automation opportunities based on elements and context
+
+        Feature Envy fix: Uses UIElement.get_automation_opportunity() instead of
+        accessing element properties and building opportunities externally.
+        """
+        opportunities = []
+
+        # Delegate to elements to identify their automation opportunities
+        for element in self.elements:
+            opportunity = element.get_automation_opportunity()
+            if opportunity is not None:
+                opportunities.append(opportunity)
+
+        # Context-based opportunities
+        if context_analysis.get("application_type") == "web_browser":
+            opportunities.append(
+                {
+                    "type": "web_automation",
+                    "description": "Web page automation detected",
+                    "confidence": 0.8,
+                    "suggested_actions": ["extract_data", "fill_forms", "navigate"],
+                }
+            )
+
+        return opportunities
+
+    def to_dict_list(self) -> List[Dict[str, Any]]:
+        """Convert all elements to dictionaries"""
+        return [el.to_dict() for el in self.elements]
+
+
+class ProcessingResultExtractor:
+    """Extracts data from multimodal processing results (Tell, Don't Ask pattern)"""
+
+    @staticmethod
+    def extract_text_regions(result_data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract text regions from processing results"""
+        if not result_data:
+            return []
+        return result_data.get("text_content", {}).get("text_regions", [])
+
+    @staticmethod
+    def extract_dominant_colors(
+        result_data: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Extract dominant colors from processing results"""
+        if not result_data:
+            return []
+        return result_data.get("dominant_colors", [])
+
+    @staticmethod
+    def extract_layout_structure(result_data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract layout analysis from processing results"""
+        if not result_data:
+            return {}
+        return result_data.get("layout_analysis", {})
+
+    @staticmethod
+    def extract_ui_elements(result_data: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract detected UI elements from processing results"""
+        if not result_data:
+            return []
+        return result_data.get("ui_elements", [])
+
+    @staticmethod
+    def to_multimodal_analysis(processing_results: List[Any]) -> List[Dict[str, Any]]:
+        """Convert processing results to multimodal analysis format"""
+        return [
+            {
+                "modality": (
+                    r.modality_type.value
+                    if hasattr(r.modality_type, "value")
+                    else str(r.modality_type)
+                ),
+                "confidence": r.confidence,
+                "data": r.result_data,
+                "success": r.success,
+                "processing_time": getattr(r, "processing_time", 0.0),
+            }
+            for r in processing_results
+        ]
 
 
 class ScreenAnalyzer:
@@ -221,45 +573,25 @@ class ScreenAnalyzer:
                     ui_elements, context_analysis
                 )
 
+                # Use ProcessingResultExtractor to extract data (Tell, Don't Ask)
+                extractor = ProcessingResultExtractor()
+
                 # Create comprehensive screen state
                 screen_state = ScreenState(
                     timestamp=time.time(),
                     screenshot=screenshot,
                     ui_elements=ui_elements,
-                    text_regions=(
-                        primary_result.result_data.get("text_content", {}).get(
-                            "text_regions", []
-                        )
-                        if primary_result.result_data
-                        else []
+                    text_regions=extractor.extract_text_regions(primary_result.result_data),
+                    dominant_colors=extractor.extract_dominant_colors(
+                        primary_result.result_data
                     ),
-                    dominant_colors=(
-                        primary_result.result_data.get("dominant_colors", [])
-                        if primary_result.result_data
-                        else []
-                    ),
-                    layout_structure=(
-                        primary_result.result_data.get("layout_analysis", {})
-                        if primary_result.result_data
-                        else {}
+                    layout_structure=extractor.extract_layout_structure(
+                        primary_result.result_data
                     ),
                     automation_opportunities=automation_opportunities,
                     context_analysis=context_analysis,
                     confidence_score=max(r.confidence for r in processing_results),
-                    multimodal_analysis=[
-                        {
-                            "modality": (
-                                r.modality_type.value
-                                if hasattr(r.modality_type, "value")
-                                else str(r.modality_type)
-                            ),
-                            "confidence": r.confidence,
-                            "data": r.result_data,
-                            "success": r.success,
-                            "processing_time": getattr(r, "processing_time", 0.0),
-                        }
-                        for r in processing_results
-                    ],
+                    multimodal_analysis=extractor.to_multimodal_analysis(processing_results),
                 )
 
                 # Update screenshot cache
@@ -347,8 +679,9 @@ class ScreenAnalyzer:
         ui_elements = []
 
         try:
-            # Get basic UI elements from multi-modal processor
-            detected_elements = processing_results.get("ui_elements", [])
+            # Get basic UI elements from multi-modal processor (Tell, Don't Ask)
+            extractor = ProcessingResultExtractor()
+            detected_elements = extractor.extract_ui_elements(processing_results)
 
             # Enhance with advanced classification
             for i, element in enumerate(detected_elements):
@@ -471,59 +804,9 @@ class ScreenAnalyzer:
         self, ui_elements: List[UIElement], context_analysis: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Find automation opportunities based on detected elements and context"""
-        opportunities = []
-
-        for element in ui_elements:
-            # Check for common automation patterns
-            if element.element_type == ElementType.BUTTON:
-                if any(
-                    word in element.text_content.lower()
-                    for word in FORM_SUBMISSION_KEYWORDS
-                ):
-                    opportunities.append(
-                        {
-                            "type": "form_submission",
-                            "element_id": element.element_id,
-                            "action": "click",
-                            "confidence": element.confidence * 0.9,
-                            "description": f"Click {element.text_content} button",
-                        }
-                    )
-
-            elif element.element_type == ElementType.INPUT_FIELD:
-                opportunities.append(
-                    {
-                        "type": "data_entry",
-                        "element_id": element.element_id,
-                        "action": "type_text",
-                        "confidence": element.confidence * 0.8,
-                        "description": "Enter text in input field",
-                    }
-                )
-
-            elif element.element_type == ElementType.LINK:
-                opportunities.append(
-                    {
-                        "type": "navigation",
-                        "element_id": element.element_id,
-                        "action": "click",
-                        "confidence": element.confidence * 0.7,
-                        "description": f"Navigate via {element.text_content} link",
-                    }
-                )
-
-        # Context-based opportunities
-        if context_analysis.get("application_type") == "web_browser":
-            opportunities.append(
-                {
-                    "type": "web_automation",
-                    "description": "Web page automation detected",
-                    "confidence": 0.8,
-                    "suggested_actions": ["extract_data", "fill_forms", "navigate"],
-                }
-            )
-
-        return opportunities
+        # Use UIElementCollection for analysis (Tell, Don't Ask)
+        collection = UIElementCollection(ui_elements)
+        return collection.find_automation_opportunities(context_analysis)
 
     def _update_screenshot_cache(self, screenshot: np.ndarray):
         """Update the screenshot cache for comparison"""
@@ -849,24 +1132,21 @@ class ContextAnalyzer:
     async def analyze_context(
         self, screenshot: np.ndarray, ui_elements: List[UIElement]
     ) -> Dict[str, Any]:
-        """Analyze screen context and determine application state"""
+        """Analyze screen context and determine application state (Tell, Don't Ask)"""
         try:
+            # Use UIElementCollection for all element analysis (Tell, Don't Ask)
+            collection = UIElementCollection(ui_elements)
+
             context = {
                 "screen_size": {
                     "width": screenshot.shape[1],
                     "height": screenshot.shape[0],
                 },
                 "element_count": len(ui_elements),
-                "application_type": await self._detect_application_type(
-                    screenshot, ui_elements
-                ),
-                "interaction_complexity": self._calculate_interaction_complexity(
-                    ui_elements
-                ),
-                "automation_readiness": self._assess_automation_readiness(ui_elements),
-                "dominant_element_types": self._analyze_element_distribution(
-                    ui_elements
-                ),
+                "application_type": collection.detect_application_type(screenshot),
+                "interaction_complexity": collection.calculate_interaction_complexity(),
+                "automation_readiness": collection.assess_automation_readiness(),
+                "dominant_element_types": collection.count_by_type(),
             }
 
             return context
@@ -874,71 +1154,6 @@ class ContextAnalyzer:
         except Exception as e:
             logger.error(f"Context analysis failed: {e}")
             return {"error": str(e)}
-
-    async def _detect_application_type(
-        self, screenshot: np.ndarray, ui_elements: List[UIElement]
-    ) -> str:
-        """Detect the type of application being displayed"""
-        # Simple heuristics for application type detection
-        button_count = sum(
-            1 for el in ui_elements if el.element_type == ElementType.BUTTON
-        )
-        input_count = sum(
-            1 for el in ui_elements if el.element_type == ElementType.INPUT_FIELD
-        )
-
-        if input_count > 3 and button_count > 1:
-            return "form_application"
-        elif button_count > 5:
-            return "desktop_application"
-        elif any("http" in el.text_content.lower() for el in ui_elements):
-            return "web_browser"
-        else:
-            return "unknown"
-
-    def _calculate_interaction_complexity(self, ui_elements: List[UIElement]) -> str:
-        """Calculate the complexity of possible interactions"""
-        total_interactions = sum(len(el.possible_interactions) for el in ui_elements)
-
-        if total_interactions < 10:
-            return "low"
-        elif total_interactions < 25:
-            return "medium"
-        else:
-            return "high"
-
-    def _assess_automation_readiness(
-        self, ui_elements: List[UIElement]
-    ) -> Dict[str, Any]:
-        """Assess how ready the screen is for automation"""
-        interactive_elements = [
-            el
-            for el in ui_elements
-            if InteractionType.CLICK in el.possible_interactions
-        ]
-        high_confidence_elements = [el for el in ui_elements if el.confidence > 0.8]
-
-        readiness_score = (
-            len(high_confidence_elements) / max(len(ui_elements), 1)
-        ) * 100
-
-        return {
-            "readiness_score": readiness_score,
-            "interactive_elements": len(interactive_elements),
-            "high_confidence_elements": len(high_confidence_elements),
-            "recommendation": "ready" if readiness_score > 70 else "needs_improvement",
-        }
-
-    def _analyze_element_distribution(
-        self, ui_elements: List[UIElement]
-    ) -> Dict[str, int]:
-        """Analyze the distribution of element types"""
-        distribution = {}
-        for element in ui_elements:
-            element_type = element.element_type.value
-            distribution[element_type] = distribution.get(element_type, 0) + 1
-
-        return distribution
 
 
 class ComputerVisionSystem:
@@ -980,35 +1195,14 @@ class ComputerVisionSystem:
                 if len(self.analysis_history) > self.max_history:
                     self.analysis_history = self.analysis_history[-self.max_history :]
 
-                # Prepare comprehensive results
+                # Prepare comprehensive results (Tell, Don't Ask)
                 results = {
-                    "screen_analysis": {
-                        "timestamp": screen_state.timestamp,
-                        "confidence_score": screen_state.confidence_score,
-                        "elements_detected": len(screen_state.ui_elements),
-                        "text_regions": len(screen_state.text_regions),
-                        "automation_opportunities": len(
-                            screen_state.automation_opportunities
-                        ),
-                    },
-                    "ui_elements": [
-                        {
-                            "id": el.element_id,
-                            "type": el.element_type.value,
-                            "bbox": el.bbox,
-                            "center": el.center_point,
-                            "confidence": el.confidence,
-                            "text": el.text_content,
-                            "interactions": [i.value for i in el.possible_interactions],
-                        }
-                        for el in screen_state.ui_elements
-                    ],
+                    "screen_analysis": screen_state.get_analysis_summary(),
+                    "ui_elements": screen_state.get_element_collection().to_dict_list(),
                     "context_analysis": screen_state.context_analysis,
                     "automation_opportunities": screen_state.automation_opportunities,
                     "change_detection": changes,
-                    "recommendations": await self._generate_recommendations(
-                        screen_state
-                    ),
+                    "recommendations": screen_state.generate_recommendations(),
                 }
 
                 task_context.set_outputs(
@@ -1029,57 +1223,6 @@ class ComputerVisionSystem:
                 task_context.set_outputs({"error": str(e)})
                 logger.error(f"Computer vision analysis failed: {e}")
                 raise
-
-    async def _generate_recommendations(
-        self, screen_state: ScreenState
-    ) -> List[Dict[str, Any]]:
-        """Generate actionable recommendations based on analysis"""
-        recommendations = []
-
-        # Automation recommendations
-        if len(screen_state.automation_opportunities) > 0:
-            recommendations.append(
-                {
-                    "type": "automation",
-                    "priority": "high",
-                    "description": (
-                        f"Found {len(screen_state.automation_opportunities)} automation opportunities"
-                    ),
-                    "actions": ["create_automation_workflow", "test_interactions"],
-                }
-            )
-
-        # UI improvement recommendations
-        low_confidence_elements = [
-            el for el in screen_state.ui_elements if el.confidence < 0.6
-        ]
-        if len(low_confidence_elements) > 0:
-            recommendations.append(
-                {
-                    "type": "ui_analysis",
-                    "priority": "medium",
-                    "description": (
-                        f"{len(low_confidence_elements)} elements have low detection confidence"
-                    ),
-                    "actions": ["improve_detection", "manual_verification"],
-                }
-            )
-
-        # Context recommendations
-        context_readiness = screen_state.context_analysis.get(
-            "automation_readiness", {}
-        )
-        if context_readiness.get("recommendation") == "needs_improvement":
-            recommendations.append(
-                {
-                    "type": "preparation",
-                    "priority": "medium",
-                    "description": "Screen may need preparation for automation",
-                    "actions": ["optimize_screen_state", "enhance_element_visibility"],
-                }
-            )
-
-        return recommendations
 
     def get_analysis_summary(self) -> Dict[str, Any]:
         """Get summary of recent computer vision analysis"""

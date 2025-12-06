@@ -18,12 +18,14 @@ Supported Commands:
 Related Issues:
 - #166 - Architecture Roadmap Phase 1 - Critical Fixes
 - #260 - Security Assessment Workflow Manager
+- #312 - Code Smell: Fix Feature Envy patterns
 Created: 2025-01-26
-Updated: 2025-01-29 - Added security commands
+Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 """
 
 import logging
 import re
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -59,123 +61,35 @@ class SlashCommandResult:
             self.file_paths = []
 
 
-class SlashCommandHandler:
+# ============================================================================
+# Command Pattern Implementation - Fixes Feature Envy
+# ============================================================================
+
+
+class Command(ABC):
     """
-    Handler for slash commands in the chat interface.
+    Base command class following Command pattern.
 
-    Detects and processes commands starting with '/' character,
-    providing quick access to documentation and system features.
+    Each command encapsulates its own execution logic, preventing
+    Feature Envy by keeping behavior with the data it operates on.
     """
 
-    def __init__(self, docs_base_path: str = "docs"):
-        """
-        Initialize the slash command handler.
+    @abstractmethod
+    async def execute(self) -> SlashCommandResult:
+        """Execute the command and return result."""
+        pass
 
-        Args:
-            docs_base_path: Base path to documentation directory
-        """
-        self.docs_base_path = Path(docs_base_path)
-        self._command_pattern = re.compile(r"^/(\w+)(?:\s+(.*))?$", re.IGNORECASE)
 
-        # Documentation category mappings
-        self.doc_categories = {
-            "api": "api/",
-            "architecture": "architecture/",
-            "developer": "developer/",
-            "features": "features/",
-            "security": "security/",
-            "deployment": "deployment/",
-            "agents": "agents/",
-            "guides": "guides/",
-            "workflow": "workflow/",
-            "testing": "testing/",
-        }
+class DocsCommand(Command):
+    """Documentation browsing command."""
 
-        logger.info(f"SlashCommandHandler initialized with docs path: {docs_base_path}")
+    def __init__(self, args: Optional[str], docs_base_path: Path, doc_categories: dict):
+        self.args = args
+        self.docs_base_path = docs_base_path
+        self.doc_categories = doc_categories
 
-    def is_slash_command(self, message: str) -> bool:
-        """
-        Check if a message is a slash command.
-
-        Args:
-            message: User message to check
-
-        Returns:
-            True if the message starts with '/' and matches command pattern
-        """
-        if not message or not message.strip():
-            return False
-        return bool(self._command_pattern.match(message.strip()))
-
-    def parse_command(self, message: str) -> tuple:
-        """
-        Parse a slash command into command type and arguments.
-
-        Args:
-            message: Slash command message
-
-        Returns:
-            Tuple of (CommandType, argument_string or None)
-        """
-        match = self._command_pattern.match(message.strip())
-        if not match:
-            return CommandType.UNKNOWN, None
-
-        cmd = match.group(1).lower()
-        args = match.group(2).strip() if match.group(2) else None
-
-        command_map = {
-            "docs": CommandType.DOCS,
-            "doc": CommandType.DOCS,
-            "documentation": CommandType.DOCS,
-            "help": CommandType.HELP,
-            "h": CommandType.HELP,
-            "status": CommandType.STATUS,
-            "st": CommandType.STATUS,
-            # Security assessment commands (#260)
-            "scan": CommandType.SCAN,
-            "nmap": CommandType.SCAN,
-            "security": CommandType.SECURITY,
-            "sec": CommandType.SECURITY,
-            "assessment": CommandType.SECURITY,
-        }
-
-        return command_map.get(cmd, CommandType.UNKNOWN), args
-
-    async def execute(self, message: str) -> SlashCommandResult:
-        """
-        Execute a slash command and return the result.
-
-        Args:
-            message: Slash command message
-
-        Returns:
-            SlashCommandResult with execution outcome
-        """
-        cmd_type, args = self.parse_command(message)
-
-        handlers = {
-            CommandType.DOCS: self._handle_docs,
-            CommandType.HELP: self._handle_help,
-            CommandType.STATUS: self._handle_status,
-            CommandType.SCAN: self._handle_scan,
-            CommandType.SECURITY: self._handle_security,
-            CommandType.UNKNOWN: self._handle_unknown,
-        }
-
-        handler = handlers.get(cmd_type, self._handle_unknown)
-        return await handler(args)
-
-    async def _handle_docs(self, args: Optional[str]) -> SlashCommandResult:
-        """
-        Handle /docs command - list or search documentation.
-
-        Args:
-            args: Optional search term or category
-
-        Returns:
-            SlashCommandResult with documentation listing
-        """
+    async def execute(self) -> SlashCommandResult:
+        """Execute /docs command - list or search documentation."""
         if not self.docs_base_path.exists():
             return SlashCommandResult(
                 success=False,
@@ -183,25 +97,25 @@ class SlashCommandHandler:
                 content="📁 Documentation directory not found.",
             )
 
-        if not args:
+        if not self.args:
             # List all documentation categories
-            content = self._list_doc_categories()
+            content = self._list_categories()
             return SlashCommandResult(
                 success=True,
                 command_type=CommandType.DOCS,
                 content=content,
             )
 
-        args_lower = args.lower().strip()
+        args_lower = self.args.lower().strip()
 
         # Check if it's a category request
         if args_lower in self.doc_categories:
             return await self._list_category_docs(args_lower)
 
         # Search for matching docs
-        return await self._search_docs(args)
+        return await self._search_docs(self.args)
 
-    def _list_doc_categories(self) -> str:
+    def _list_categories(self) -> str:
         """Generate a list of documentation categories."""
         lines = [
             "## 📚 AutoBot Documentation",
@@ -335,8 +249,12 @@ class SlashCommandHandler:
             file_paths=[str(m) for m in matches[:15]],
         )
 
-    async def _handle_help(self, args: Optional[str]) -> SlashCommandResult:
-        """Handle /help command."""
+
+class HelpCommand(Command):
+    """Help information command."""
+
+    async def execute(self) -> SlashCommandResult:
+        """Execute /help command."""
         content = """## 💡 AutoBot Chat Commands
 
 **Available Commands:**
@@ -381,8 +299,12 @@ class SlashCommandHandler:
             content=content,
         )
 
-    async def _handle_status(self, args: Optional[str]) -> SlashCommandResult:
-        """Handle /status command - show system status."""
+
+class StatusCommand(Command):
+    """System status command."""
+
+    async def execute(self) -> SlashCommandResult:
+        """Execute /status command - show system status."""
         # Import here to avoid circular dependencies
         try:
             from backend.services.consolidated_health_service import ConsolidatedHealthService
@@ -420,18 +342,44 @@ check the monitoring dashboard or system logs.
             content=content,
         )
 
-    async def _handle_scan(self, args: Optional[str]) -> SlashCommandResult:
-        """
-        Handle /scan command - Start a new security assessment.
 
-        Args:
-            args: Target specification (IP, CIDR, or hostname)
+class ScanCommand(Command):
+    """Security scan initiation command."""
 
-        Returns:
-            SlashCommandResult with assessment details or instructions
-        """
-        if not args:
-            content = """## 🔍 Security Scan Command
+    def __init__(self, args: Optional[str]):
+        self.args = args
+
+    async def execute(self) -> SlashCommandResult:
+        """Execute /scan command - Start a new security assessment."""
+        if not self.args:
+            return self._show_usage()
+
+        # Parse the target and options
+        scan_params = self._parse_scan_params(self.args)
+
+        try:
+            from src.services.security_workflow_manager import get_security_workflow_manager
+
+            manager = get_security_workflow_manager()
+            assessment = await manager.create_assessment(
+                name=scan_params["name"],
+                target=scan_params["target"],
+                training_mode=scan_params["training_mode"],
+            )
+
+            return self._format_scan_result(assessment, scan_params["training_mode"])
+
+        except Exception as e:
+            logger.error(f"Failed to create security assessment: {e}")
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SCAN,
+                content=f"❌ Failed to create assessment: {e}\n\nPlease check the logs for details.",
+            )
+
+    def _show_usage(self) -> SlashCommandResult:
+        """Show scan command usage."""
+        content = """## 🔍 Security Scan Command
 
 **Usage:** `/scan <target> [options]`
 
@@ -452,13 +400,14 @@ check the monitoring dashboard or system logs.
 
 💡 Use `/security list` to see existing assessments."""
 
-            return SlashCommandResult(
-                success=True,
-                command_type=CommandType.SCAN,
-                content=content,
-            )
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SCAN,
+            content=content,
+        )
 
-        # Parse the target and options
+    def _parse_scan_params(self, args: str) -> dict:
+        """Parse scan command parameters."""
         parts = args.split()
         target = parts[0]
         training_mode = "--training" in args.lower()
@@ -477,24 +426,22 @@ check the monitoring dashboard or system logs.
                 else:
                     assessment_name = name_part.split()[0]
 
-        try:
-            from src.services.security_workflow_manager import get_security_workflow_manager
+        return {
+            "target": target,
+            "training_mode": training_mode,
+            "name": assessment_name,
+        }
 
-            manager = get_security_workflow_manager()
-            assessment = await manager.create_assessment(
-                name=assessment_name,
-                target=target,
-                training_mode=training_mode,
-            )
+    def _format_scan_result(self, assessment, training_mode: bool) -> SlashCommandResult:
+        """Format scan initiation result."""
+        mode_emoji = "🎯" if training_mode else "🛡️"
+        mode_text = "Training Mode (exploitation enabled)" if training_mode else "Safe Mode (no exploitation)"
 
-            mode_emoji = "🎯" if training_mode else "🛡️"
-            mode_text = "Training Mode (exploitation enabled)" if training_mode else "Safe Mode (no exploitation)"
-
-            content = f"""## {mode_emoji} Security Assessment Started
+        content = f"""## {mode_emoji} Security Assessment Started
 
 **Assessment ID:** `{assessment.id[:8]}...`
 **Name:** {assessment.name}
-**Target:** {target}
+**Target:** {assessment.target}
 **Mode:** {mode_text}
 **Phase:** {assessment.phase.value}
 
@@ -512,33 +459,66 @@ check the monitoring dashboard or system logs.
 
 💡 The agent will guide you through each phase."""
 
-            return SlashCommandResult(
-                success=True,
-                command_type=CommandType.SCAN,
-                content=content,
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SCAN,
+            content=content,
+        )
+
+
+class SecurityCommand(Command):
+    """Security assessment management command."""
+
+    def __init__(self, args: Optional[str]):
+        self.args = args
+
+    async def execute(self) -> SlashCommandResult:
+        """Execute /security command - Manage security assessments."""
+        if not self.args:
+            return self._show_usage()
+
+        # Parse subcommand
+        parts = self.args.strip().split(maxsplit=1)
+        subcommand = parts[0].lower()
+        sub_args = parts[1] if len(parts) > 1 else None
+
+        try:
+            from src.services.security_workflow_manager import (
+                PHASE_DESCRIPTIONS,
+                get_security_workflow_manager,
             )
+
+            manager = get_security_workflow_manager()
+
+            # Dispatch to appropriate subcommand
+            subcommand_handlers = {
+                "list": lambda: SecurityListSubcommand(manager).execute(),
+                "status": lambda: SecurityStatusSubcommand(manager, sub_args).execute(),
+                "resume": lambda: SecurityResumeSubcommand(manager, sub_args).execute(),
+                "phases": lambda: SecurityPhasesSubcommand(PHASE_DESCRIPTIONS).execute(),
+            }
+
+            handler = subcommand_handlers.get(subcommand)
+            if handler:
+                return await handler()
+            else:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECURITY,
+                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/security` for available commands.",
+                )
 
         except Exception as e:
-            logger.error(f"Failed to create security assessment: {e}")
+            logger.error(f"Security command failed: {e}")
             return SlashCommandResult(
                 success=False,
-                command_type=CommandType.SCAN,
-                content=f"❌ Failed to create assessment: {e}\n\nPlease check the logs for details.",
+                command_type=CommandType.SECURITY,
+                content=f"❌ Security command failed: {e}",
             )
 
-    async def _handle_security(self, args: Optional[str]) -> SlashCommandResult:
-        """
-        Handle /security command - Manage security assessments.
-
-        Args:
-            args: Subcommand (list, resume, status, etc.)
-
-        Returns:
-            SlashCommandResult with assessment information
-        """
-        if not args:
-            # Show security command help
-            content = """## 🔒 Security Assessment Commands
+    def _show_usage(self) -> SlashCommandResult:
+        """Show security command usage."""
+        content = """## 🔒 Security Assessment Commands
 
 **Usage:** `/security <subcommand> [options]`
 
@@ -559,100 +539,27 @@ check the monitoring dashboard or system logs.
 **Workflow Phases:**
 INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING"""
 
-            return SlashCommandResult(
-                success=True,
-                command_type=CommandType.SECURITY,
-                content=content,
-            )
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
 
-        # Parse subcommand
-        parts = args.strip().split(maxsplit=1)
-        subcommand = parts[0].lower()
-        sub_args = parts[1] if len(parts) > 1 else None
 
-        try:
-            from src.services.security_workflow_manager import (
-                PHASE_DESCRIPTIONS,
-                get_security_workflow_manager,
-            )
+class SecurityListSubcommand(Command):
+    """List active security assessments."""
 
-            manager = get_security_workflow_manager()
+    def __init__(self, manager):
+        self.manager = manager
 
-            if subcommand == "list":
-                return await self._security_list(manager)
-            elif subcommand == "status":
-                return await self._security_status(manager, sub_args)
-            elif subcommand == "resume":
-                return await self._security_resume(manager, sub_args)
-            elif subcommand == "phases":
-                return self._security_phases(PHASE_DESCRIPTIONS)
-            else:
-                return SlashCommandResult(
-                    success=False,
-                    command_type=CommandType.SECURITY,
-                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/security` for available commands.",
-                )
-
-        except Exception as e:
-            logger.error(f"Security command failed: {e}")
-            return SlashCommandResult(
-                success=False,
-                command_type=CommandType.SECURITY,
-                content=f"❌ Security command failed: {e}",
-            )
-
-    async def _security_list(self, manager) -> SlashCommandResult:
+    async def execute(self) -> SlashCommandResult:
         """List active security assessments."""
-        assessments = await manager.list_active_assessments()
+        assessments = await self.manager.list_active_assessments()
 
         if not assessments:
-            content = """## 📋 Active Security Assessments
-
-No active assessments found.
-
-**Start a new scan:**
-  • `/scan <target_network/24>` - Scan a network
-  • `/scan example.com` - Scan a host"""
+            content = self._format_empty_list()
         else:
-            lines = [
-                "## 📋 Active Security Assessments",
-                "",
-                f"Found {len(assessments)} active assessment(s):",
-                "",
-            ]
-
-            for a in assessments[:10]:
-                phase_emoji = {
-                    "INIT": "🔵",
-                    "RECON": "🔍",
-                    "PORT_SCAN": "📡",
-                    "ENUMERATION": "📊",
-                    "VULN_ANALYSIS": "⚠️",
-                    "EXPLOITATION": "🎯",
-                    "REPORTING": "📝",
-                    "COMPLETE": "✅",
-                    "ERROR": "❌",
-                }.get(a.phase.value, "⚪")
-
-                host_count = len(a.hosts)
-                vuln_count = sum(len(h.vulnerabilities) for h in a.hosts)
-
-                lines.append(
-                    f"  {phase_emoji} `{a.id[:8]}` | **{a.name}** | "
-                    f"{a.phase.value} | {host_count} hosts, {vuln_count} vulns"
-                )
-
-            if len(assessments) > 10:
-                lines.append(f"  ... and {len(assessments) - 10} more")
-
-            lines.extend([
-                "",
-                "**Commands:**",
-                "  • `/security status <id>` - View details",
-                "  • `/security resume <id>` - Continue assessment",
-            ])
-
-            content = "\n".join(lines)
+            content = self._format_assessment_list(assessments)
 
         return SlashCommandResult(
             success=True,
@@ -660,36 +567,106 @@ No active assessments found.
             content=content,
         )
 
-    async def _security_status(self, manager, assessment_id: Optional[str]) -> SlashCommandResult:
+    def _format_empty_list(self) -> str:
+        """Format empty assessment list message."""
+        return """## 📋 Active Security Assessments
+
+No active assessments found.
+
+**Start a new scan:**
+  • `/scan <target_network/24>` - Scan a network
+  • `/scan example.com` - Scan a host"""
+
+    def _format_assessment_list(self, assessments: list) -> str:
+        """Format assessment list display."""
+        lines = [
+            "## 📋 Active Security Assessments",
+            "",
+            f"Found {len(assessments)} active assessment(s):",
+            "",
+        ]
+
+        phase_emojis = {
+            "INIT": "🔵",
+            "RECON": "🔍",
+            "PORT_SCAN": "📡",
+            "ENUMERATION": "📊",
+            "VULN_ANALYSIS": "⚠️",
+            "EXPLOITATION": "🎯",
+            "REPORTING": "📝",
+            "COMPLETE": "✅",
+            "ERROR": "❌",
+        }
+
+        for a in assessments[:10]:
+            emoji = phase_emojis.get(a.phase.value, "⚪")
+            host_count = len(a.hosts)
+            vuln_count = sum(len(h.vulnerabilities) for h in a.hosts)
+
+            lines.append(
+                f"  {emoji} `{a.id[:8]}` | **{a.name}** | "
+                f"{a.phase.value} | {host_count} hosts, {vuln_count} vulns"
+            )
+
+        if len(assessments) > 10:
+            lines.append(f"  ... and {len(assessments) - 10} more")
+
+        lines.extend([
+            "",
+            "**Commands:**",
+            "  • `/security status <id>` - View details",
+            "  • `/security resume <id>` - Continue assessment",
+        ])
+
+        return "\n".join(lines)
+
+
+class SecurityStatusSubcommand(Command):
+    """Get status of a specific assessment."""
+
+    def __init__(self, manager, assessment_id: Optional[str]):
+        self.manager = manager
+        self.assessment_id = assessment_id
+
+    async def execute(self) -> SlashCommandResult:
         """Get status of a specific assessment."""
-        if not assessment_id:
+        if not self.assessment_id:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECURITY,
                 content="❌ Please provide an assessment ID: `/security status <id>`",
             )
 
-        # Find assessment by ID prefix
-        assessments = await manager.list_active_assessments()
-        assessment = None
-        for a in assessments:
-            if a.id.startswith(assessment_id):
-                assessment = a
-                break
-
-        if not assessment:
-            # Try to load directly
-            assessment = await manager.get_assessment(assessment_id)
-
+        # Find assessment
+        assessment = await self._find_assessment(self.assessment_id)
         if not assessment:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECURITY,
-                content=f"❌ Assessment not found: `{assessment_id}`",
+                content=f"❌ Assessment not found: `{self.assessment_id}`",
             )
 
-        summary = await manager.get_assessment_summary(assessment.id)
+        summary = await self.manager.get_assessment_summary(assessment.id)
+        content = self._format_status(assessment, summary)
 
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
+
+    async def _find_assessment(self, assessment_id: str):
+        """Find assessment by ID or prefix."""
+        assessments = await self.manager.list_active_assessments()
+        for a in assessments:
+            if a.id.startswith(assessment_id):
+                return a
+
+        # Try to load directly
+        return await self.manager.get_assessment(assessment_id)
+
+    def _format_status(self, assessment, summary: dict) -> str:
+        """Format assessment status display."""
         # Build severity display
         severity_lines = []
         for sev, count in summary.get("stats", {}).get("severity_distribution", {}).items():
@@ -698,7 +675,7 @@ No active assessments found.
 
         severity_text = "\n".join(severity_lines) if severity_lines else "    No vulnerabilities found yet"
 
-        content = f"""## 🔒 Assessment Status
+        return f"""## 🔒 Assessment Status
 
 **ID:** `{assessment.id[:8]}...`
 **Name:** {assessment.name}
@@ -722,15 +699,17 @@ No active assessments found.
 **Commands:**
   • `/security resume {assessment.id[:8]}` - Continue this assessment"""
 
-        return SlashCommandResult(
-            success=True,
-            command_type=CommandType.SECURITY,
-            content=content,
-        )
 
-    async def _security_resume(self, manager, assessment_id: Optional[str]) -> SlashCommandResult:
+class SecurityResumeSubcommand(Command):
+    """Resume a security assessment."""
+
+    def __init__(self, manager, assessment_id: Optional[str]):
+        self.manager = manager
+        self.assessment_id = assessment_id
+
+    async def execute(self) -> SlashCommandResult:
         """Resume a security assessment."""
-        if not assessment_id:
+        if not self.assessment_id:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECURITY,
@@ -738,26 +717,36 @@ No active assessments found.
             )
 
         # Find assessment
-        assessments = await manager.list_active_assessments()
-        assessment = None
-        for a in assessments:
-            if a.id.startswith(assessment_id):
-                assessment = a
-                break
-
-        if not assessment:
-            assessment = await manager.get_assessment(assessment_id)
-
+        assessment = await self._find_assessment(self.assessment_id)
         if not assessment:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECURITY,
-                content=f"❌ Assessment not found: `{assessment_id}`",
+                content=f"❌ Assessment not found: `{self.assessment_id}`",
             )
 
-        summary = await manager.get_assessment_summary(assessment.id)
+        summary = await self.manager.get_assessment_summary(assessment.id)
+        content = self._format_resume(assessment, summary)
 
-        content = f"""## 🔄 Resuming Security Assessment
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
+
+    async def _find_assessment(self, assessment_id: str):
+        """Find assessment by ID or prefix."""
+        assessments = await self.manager.list_active_assessments()
+        for a in assessments:
+            if a.id.startswith(assessment_id):
+                return a
+
+        # Try to load directly
+        return await self.manager.get_assessment(assessment_id)
+
+    def _format_resume(self, assessment, summary: dict) -> str:
+        """Format resume message."""
+        return f"""## 🔄 Resuming Security Assessment
 
 **Assessment:** {assessment.name}
 **ID:** `{assessment.id[:8]}...`
@@ -777,14 +766,24 @@ No active assessments found.
 
 💡 The agent is ready to continue. Describe your next action or ask for guidance."""
 
+
+class SecurityPhasesSubcommand(Command):
+    """Show security workflow phases."""
+
+    def __init__(self, phase_descriptions: dict):
+        self.phase_descriptions = phase_descriptions
+
+    async def execute(self) -> SlashCommandResult:
+        """Show security workflow phases."""
+        content = self._format_phases()
         return SlashCommandResult(
             success=True,
             command_type=CommandType.SECURITY,
             content=content,
         )
 
-    def _security_phases(self, phase_descriptions: dict) -> SlashCommandResult:
-        """Show security workflow phases."""
+    def _format_phases(self) -> str:
+        """Format phases display."""
         lines = [
             "## 🔄 Security Assessment Phases",
             "",
@@ -804,7 +803,7 @@ No active assessments found.
             "ERROR": "❌",
         }
 
-        for phase, info in phase_descriptions.items():
+        for phase, info in self.phase_descriptions.items():
             emoji = phase_emojis.get(phase, "⚪")
             desc = info.get("description", "")
             actions = info.get("actions", [])
@@ -824,19 +823,148 @@ No active assessments found.
             "```",
         ])
 
-        return SlashCommandResult(
-            success=True,
-            command_type=CommandType.SECURITY,
-            content="\n".join(lines),
-        )
+        return "\n".join(lines)
 
-    async def _handle_unknown(self, args: Optional[str]) -> SlashCommandResult:
+
+class UnknownCommand(Command):
+    """Handler for unknown commands."""
+
+    async def execute(self) -> SlashCommandResult:
         """Handle unknown commands."""
         return SlashCommandResult(
             success=False,
             command_type=CommandType.UNKNOWN,
             content="❓ Unknown command. Type `/help` to see available commands.",
         )
+
+
+# ============================================================================
+# Main Handler - Delegates to Command Objects
+# ============================================================================
+
+
+class SlashCommandHandler:
+    """
+    Handler for slash commands in the chat interface.
+
+    Detects and processes commands starting with '/' character,
+    providing quick access to documentation and system features.
+
+    Refactored to use Command pattern to fix Feature Envy code smells.
+    Each command type is now a separate class that encapsulates its
+    own execution logic.
+    """
+
+    def __init__(self, docs_base_path: str = "docs"):
+        """
+        Initialize the slash command handler.
+
+        Args:
+            docs_base_path: Base path to documentation directory
+        """
+        self.docs_base_path = Path(docs_base_path)
+        self._command_pattern = re.compile(r"^/(\w+)(?:\s+(.*))?$", re.IGNORECASE)
+
+        # Documentation category mappings
+        self.doc_categories = {
+            "api": "api/",
+            "architecture": "architecture/",
+            "developer": "developer/",
+            "features": "features/",
+            "security": "security/",
+            "deployment": "deployment/",
+            "agents": "agents/",
+            "guides": "guides/",
+            "workflow": "workflow/",
+            "testing": "testing/",
+        }
+
+        logger.info(f"SlashCommandHandler initialized with docs path: {docs_base_path}")
+
+    def is_slash_command(self, message: str) -> bool:
+        """
+        Check if a message is a slash command.
+
+        Args:
+            message: User message to check
+
+        Returns:
+            True if the message starts with '/' and matches command pattern
+        """
+        if not message or not message.strip():
+            return False
+        return bool(self._command_pattern.match(message.strip()))
+
+    def parse_command(self, message: str) -> tuple:
+        """
+        Parse a slash command into command type and arguments.
+
+        Args:
+            message: Slash command message
+
+        Returns:
+            Tuple of (CommandType, argument_string or None)
+        """
+        match = self._command_pattern.match(message.strip())
+        if not match:
+            return CommandType.UNKNOWN, None
+
+        cmd = match.group(1).lower()
+        args = match.group(2).strip() if match.group(2) else None
+
+        command_map = {
+            "docs": CommandType.DOCS,
+            "doc": CommandType.DOCS,
+            "documentation": CommandType.DOCS,
+            "help": CommandType.HELP,
+            "h": CommandType.HELP,
+            "status": CommandType.STATUS,
+            "st": CommandType.STATUS,
+            # Security assessment commands (#260)
+            "scan": CommandType.SCAN,
+            "nmap": CommandType.SCAN,
+            "security": CommandType.SECURITY,
+            "sec": CommandType.SECURITY,
+            "assessment": CommandType.SECURITY,
+        }
+
+        return command_map.get(cmd, CommandType.UNKNOWN), args
+
+    async def execute(self, message: str) -> SlashCommandResult:
+        """
+        Execute a slash command and return the result.
+
+        Args:
+            message: Slash command message
+
+        Returns:
+            SlashCommandResult with execution outcome
+        """
+        cmd_type, args = self.parse_command(message)
+
+        # Create appropriate command object - Tell, Don't Ask
+        command = self._create_command(cmd_type, args)
+        return await command.execute()
+
+    def _create_command(self, cmd_type: CommandType, args: Optional[str]) -> Command:
+        """
+        Create the appropriate command object.
+
+        Factory method that encapsulates command creation logic.
+        Fixes Feature Envy by delegating to command objects.
+        """
+        if cmd_type == CommandType.DOCS:
+            return DocsCommand(args, self.docs_base_path, self.doc_categories)
+        elif cmd_type == CommandType.HELP:
+            return HelpCommand()
+        elif cmd_type == CommandType.STATUS:
+            return StatusCommand()
+        elif cmd_type == CommandType.SCAN:
+            return ScanCommand(args)
+        elif cmd_type == CommandType.SECURITY:
+            return SecurityCommand(args)
+        else:
+            return UnknownCommand()
 
 
 # Module-level instance for easy access (thread-safe)
