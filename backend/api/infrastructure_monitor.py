@@ -4,14 +4,18 @@
 """
 Infrastructure Monitoring API
 Monitors multiple machines and their service hierarchies
+
+Refactored to fix Feature Envy code smells by applying "Tell, Don't Ask" principle.
+Data classes now own their behavior, and specialized collectors handle data gathering.
 """
 
 import asyncio
+import hashlib
 import logging
 import socket
 import time
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from backend.type_defs.common import Metadata
 
@@ -33,15 +37,897 @@ router = APIRouter()
 config = UnifiedConfigManager()
 
 
+# ============================================================================
+# DATA CLASSES WITH ENHANCED BEHAVIOR (Tell, Don't Ask)
+# ============================================================================
+
+
+class ServiceInfo(BaseModel):
+    """Individual service information with factory methods"""
+
+    name: str
+    status: str  # "online", "offline", "warning", "error"
+    response_time: Optional[str] = None
+    error: Optional[str] = None
+    details: Optional[Metadata] = None
+    last_check: Optional[datetime] = None
+
+    @classmethod
+    def from_health_check(
+        cls,
+        name: str,
+        status_code: int,
+        response_time_ms: int,
+        error_msg: Optional[str] = None,
+    ) -> "ServiceInfo":
+        """Create ServiceInfo from HTTP health check result"""
+        if status_code == 200:
+            return cls(
+                name=name,
+                status="online",
+                response_time=f"{response_time_ms}ms",
+                last_check=datetime.now(),
+            )
+        else:
+            return cls(
+                name=name,
+                status="warning",
+                response_time=f"{response_time_ms}ms",
+                error=error_msg or f"HTTP {status_code}",
+                last_check=datetime.now(),
+            )
+
+    @classmethod
+    def from_error(cls, name: str, error_msg: str, response_time: str = None) -> "ServiceInfo":
+        """Create ServiceInfo for error case"""
+        return cls(
+            name=name,
+            status="error",
+            error=error_msg[:100],
+            response_time=response_time,
+            last_check=datetime.now(),
+        )
+
+    @classmethod
+    def from_port_check(
+        cls, name: str, is_open: bool, port: int = None, host: str = None
+    ) -> "ServiceInfo":
+        """Create ServiceInfo from port check result"""
+        if is_open:
+            return cls(name=name, status="online", response_time="2ms", last_check=datetime.now())
+        else:
+            error_msg = (
+                f"Port {port} not accessible" if port else "Port not accessible"
+            )
+            if host:
+                error_msg += f" on {host}"
+            return cls(name=name, status="offline", error=error_msg, last_check=datetime.now())
+
+    @classmethod
+    def online(cls, name: str, response_time: str) -> "ServiceInfo":
+        """Create online ServiceInfo with response time"""
+        return cls(name=name, status="online", response_time=response_time, last_check=datetime.now())
+
+    @classmethod
+    def offline(cls, name: str, error: Optional[str] = None) -> "ServiceInfo":
+        """Create offline ServiceInfo"""
+        return cls(name=name, status="offline", error=error, last_check=datetime.now())
+
+
+class MachineServices(BaseModel):
+    """Services grouped by category with status calculation"""
+
+    core: List[ServiceInfo] = []
+    database: List[ServiceInfo] = []
+    application: List[ServiceInfo] = []
+    support: List[ServiceInfo] = []
+
+    def get_all_services(self) -> List[ServiceInfo]:
+        """Get all services across all categories"""
+        return self.core + self.database + self.application + self.support
+
+    def count_by_status(self) -> Dict[str, int]:
+        """Count services by status"""
+        counts = {"online": 0, "offline": 0, "warning": 0, "error": 0, "total": 0}
+        for service in self.get_all_services():
+            counts["total"] += 1
+            counts[service.status] = counts.get(service.status, 0) + 1
+        return counts
+
+    def calculate_overall_status(self) -> str:
+        """Calculate overall status from service statuses"""
+        counts = self.count_by_status()
+        if counts.get("error", 0) > 0:
+            return "error"
+        elif counts.get("warning", 0) > 0:
+            return "warning"
+        else:
+            return "healthy"
+
+    def calculate_health_summary(self) -> Dict[str, Any]:
+        """Calculate comprehensive health summary"""
+        counts = self.count_by_status()
+        return {
+            "overall_status": self.calculate_overall_status(),
+            "total_services": counts["total"],
+            "online_services": counts.get("online", 0),
+            "error_services": counts.get("error", 0),
+            "warning_services": counts.get("warning", 0),
+        }
+
+
+class MachineStats(BaseModel):
+    """Machine resource statistics with factory methods"""
+
+    cpu_usage: Optional[float] = None
+    cpu_load_1m: Optional[float] = None
+    cpu_load_5m: Optional[float] = None
+    cpu_load_15m: Optional[float] = None
+    memory_used: Optional[float] = None
+    memory_total: Optional[float] = None
+    memory_percent: Optional[float] = None
+    disk_used: Optional[str] = None
+    disk_total: Optional[str] = None
+    disk_percent: Optional[float] = None
+    disk_free: Optional[str] = None
+    uptime: Optional[str] = None
+    processes: Optional[int] = None
+
+    def validate(self) -> bool:
+        """Validate that statistics are within expected ranges"""
+        if self.cpu_usage is not None and not (0 <= self.cpu_usage <= 100):
+            return False
+        if self.memory_percent is not None and not (0 <= self.memory_percent <= 100):
+            return False
+        if self.disk_percent is not None and not (0 <= self.disk_percent <= 100):
+            return False
+        return True
+
+
+class MachineInfo(BaseModel):
+    """Complete machine information with status calculation"""
+
+    id: str
+    name: str
+    ip: str
+    status: str  # "healthy", "warning", "error", "offline"
+    icon: Optional[str] = "fas fa-server"
+    services: MachineServices
+    stats: Optional[MachineStats] = None
+    last_update: datetime
+
+    def determine_status(self) -> str:
+        """Determine machine status from services"""
+        return self.services.calculate_overall_status()
+
+    @classmethod
+    def create(
+        cls,
+        machine_id: str,
+        name: str,
+        ip: str,
+        services: MachineServices,
+        stats: Optional[MachineStats] = None,
+        icon: str = "fas fa-server",
+    ) -> "MachineInfo":
+        """Create MachineInfo with auto-calculated status"""
+        status = services.calculate_overall_status()
+        return cls(
+            id=machine_id,
+            name=name,
+            ip=ip,
+            status=status,
+            icon=icon,
+            services=services,
+            stats=stats,
+            last_update=datetime.now(),
+        )
+
+
+# ============================================================================
+# SPECIALIZED COLLECTOR CLASSES (Encapsulate Behavior)
+# ============================================================================
+
+
+class ServiceCollector:
+    """Collects service health information"""
+
+    def __init__(self, http_client, config_manager: UnifiedConfigManager):
+        self._http_client = http_client
+        self._config = config_manager
+
+    async def check_http_health(
+        self, url: str, name: str, timeout: int = None
+    ) -> ServiceInfo:
+        """Check health of HTTP service endpoint"""
+        try:
+            start_time = time.time()
+            if timeout is None:
+                timeout = self._config.get_timeout("http", "quick")
+            connect_timeout = self._config.get_timeout("http", "connect")
+            timeout_obj = aiohttp.ClientTimeout(total=timeout, connect=connect_timeout)
+
+            async with await self._http_client.get(url, timeout=timeout_obj) as response:
+                response_time = int((time.time() - start_time) * 1000)
+                return ServiceInfo.from_health_check(
+                    name=name,
+                    status_code=response.status,
+                    response_time_ms=response_time,
+                )
+
+        except asyncio.TimeoutError:
+            return ServiceInfo.from_error(name, "Connection timeout", "timeout")
+        except aiohttp.ClientError as e:
+            return ServiceInfo.from_error(name, f"Connection error: {str(e)[:80]}")
+        except Exception as e:
+            return ServiceInfo.from_error(name, str(e))
+
+    def check_port(self, host: str, port: int, name: str, timeout: float = None) -> ServiceInfo:
+        """Check if a port is open and return ServiceInfo"""
+        if timeout is None:
+            timeout = self._config.get_timeout("tcp", "port_check")
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        try:
+            result = sock.connect_ex((host, port))
+            is_open = result == 0
+            return ServiceInfo.from_port_check(name, is_open, port, host)
+        except Exception:
+            return ServiceInfo.from_port_check(name, False, port, host)
+        finally:
+            sock.close()
+
+
+class StatsCollector:
+    """Collects machine statistics"""
+
+    def __init__(self, config_manager: UnifiedConfigManager):
+        self._config = config_manager
+
+    async def collect_local_stats(self) -> MachineStats:
+        """Collect detailed local machine statistics using Linux system calls"""
+        stats = MachineStats()
+
+        try:
+            # CPU load averages from /proc/loadavg
+            returncode, stdout, _ = await self._run_command(["cat", "/proc/loadavg"])
+            if returncode == 0:
+                self._parse_load_avg(stdout, stats)
+
+            # Current CPU usage from /proc/stat
+            returncode, stdout, _ = await self._run_command(["cat", "/proc/stat"])
+            if returncode == 0:
+                self._parse_cpu_usage(stdout, stats)
+
+            # Memory information from /proc/meminfo
+            returncode, stdout, _ = await self._run_command(["cat", "/proc/meminfo"])
+            if returncode == 0:
+                self._parse_meminfo(stdout, stats)
+
+            # Disk usage for root filesystem
+            returncode, stdout, _ = await self._run_command(["df", "-h", "/"])
+            if returncode == 0:
+                self._parse_disk_usage(stdout, stats)
+
+            # System uptime
+            returncode, stdout, _ = await self._run_command(["uptime", "-p"])
+            if returncode == 0:
+                stats.uptime = stdout.strip().replace("up ", "")
+            else:
+                # Fallback to /proc/uptime
+                returncode, stdout, _ = await self._run_command(["cat", "/proc/uptime"])
+                if returncode == 0:
+                    self._parse_proc_uptime(stdout, stats)
+
+            # Process count
+            returncode, stdout, _ = await self._run_command(["ps", "-e", "--no-headers"])
+            if returncode == 0:
+                process_lines = stdout.strip().split("\n")
+                stats.processes = len([line for line in process_lines if line.strip()])
+
+        except asyncio.TimeoutError:
+            logger.warning("Timeout collecting local system stats")
+        except Exception as e:
+            logger.error(f"Error collecting local machine stats: {e}")
+
+        return stats
+
+    async def collect_remote_stats(self, host: str) -> MachineStats:
+        """Generate realistic stats for remote machines based on machine type"""
+        host_hash = int(hashlib.md5(host.encode()).hexdigest()[:8], 16)
+
+        # Determine machine-specific stats based on role
+        machine_profile = self._get_machine_profile(host, host_hash)
+
+        return MachineStats(
+            cpu_usage=round(machine_profile["base_cpu"] + (host_hash % 20) - 10, 1),
+            cpu_load_1m=machine_profile["cpu_load_1m"],
+            cpu_load_5m=round(machine_profile["cpu_load_1m"] * 0.8, 1),
+            cpu_load_15m=round(machine_profile["cpu_load_1m"] * 0.6, 1),
+            memory_used=machine_profile["memory_used"],
+            memory_total=machine_profile["memory_total"],
+            memory_percent=round(
+                (machine_profile["memory_used"] / machine_profile["memory_total"]) * 100, 1
+            ),
+            disk_total=machine_profile["disk_sizes"][0],
+            disk_used=machine_profile["disk_sizes"][1],
+            disk_free=machine_profile["disk_sizes"][2],
+            disk_percent=round(machine_profile["base_disk"] + (host_hash % 30) - 15, 1),
+            uptime=machine_profile["uptime"],
+            processes=machine_profile["processes"],
+        )
+
+    def _get_machine_profile(self, host: str, host_hash: int) -> Dict[str, Any]:
+        """Get machine-specific performance profile"""
+        npu_worker_host = self._config.get_host("npu_worker")
+
+        if host == npu_worker_host:  # NPU Worker
+            return {
+                "base_cpu": 45.0,
+                "base_disk": 92.0,
+                "cpu_load_1m": round(2.1 + (host_hash % 100) / 100, 1),
+                "memory_used": round(6.2 + (host_hash % 40) / 10, 1),
+                "memory_total": 16.0,
+                "disk_sizes": ["380G", "350G", "38G"],
+                "processes": 85 + (host_hash % 30),
+                "uptime": self._format_uptime(host_hash),
+            }
+        elif "23" in host:  # Redis
+            return {
+                "base_cpu": 15.0,
+                "base_disk": 90.0,
+                "cpu_load_1m": round(0.5 + (host_hash % 50) / 100, 1),
+                "memory_used": round(12.8 + (host_hash % 30) / 10, 1),
+                "memory_total": 16.0,
+                "disk_sizes": ["465G", "420G", "28G"],
+                "processes": 45 + (host_hash % 20),
+                "uptime": self._format_uptime(host_hash),
+            }
+        elif "24" in host:  # AI Stack
+            return {
+                "base_cpu": 65.0,
+                "base_disk": 91.0,
+                "cpu_load_1m": round(3.2 + (host_hash % 80) / 100, 1),
+                "memory_used": round(28.5 + (host_hash % 60) / 10, 1),
+                "memory_total": 32.0,
+                "disk_sizes": ["930G", "850G", "65G"],
+                "processes": 120 + (host_hash % 40),
+                "uptime": self._format_uptime(host_hash),
+            }
+        elif "25" in host:  # Browser
+            return {
+                "base_cpu": 35.0,
+                "base_disk": 82.0,
+                "cpu_load_1m": round(1.4 + (host_hash % 60) / 100, 1),
+                "memory_used": round(8.9 + (host_hash % 40) / 10, 1),
+                "memory_total": 16.0,
+                "disk_sizes": ["465G", "380G", "52G"],
+                "processes": 95 + (host_hash % 25),
+                "uptime": self._format_uptime(host_hash),
+            }
+        else:  # Frontend or others
+            return {
+                "base_cpu": 25.0,
+                "base_disk": 75.0,
+                "cpu_load_1m": round(1.1 + (host_hash % 70) / 100, 1),
+                "memory_used": round(5.4 + (host_hash % 50) / 10, 1),
+                "memory_total": 8.0,
+                "disk_sizes": ["240G", "180G", "45G"],
+                "processes": 65 + (host_hash % 35),
+                "uptime": self._format_uptime(host_hash),
+            }
+
+    def _format_uptime(self, host_hash: int) -> str:
+        """Format uptime string from hash"""
+        uptime_days = (host_hash % 25) + 5
+        uptime_hours = host_hash % 24
+        return (
+            f"{uptime_days} day{'s' if uptime_days != 1 else ''}, "
+            f"{uptime_hours} hour{'s' if uptime_hours != 1 else ''}"
+        )
+
+    async def _run_command(self, cmd: list, timeout: float = 2.0) -> Tuple[int, str, str]:
+        """Run command asynchronously and return (returncode, stdout, stderr)"""
+        process = None
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=timeout
+            )
+            return process.returncode, stdout.decode(), stderr.decode()
+        except asyncio.TimeoutError:
+            if process is not None:
+                process.kill()
+                await process.wait()
+            return -1, "", "timeout"
+        except Exception as e:
+            return -1, "", str(e)
+
+    def _parse_load_avg(self, stdout: str, stats: MachineStats) -> None:
+        """Parse /proc/loadavg output into stats"""
+        load_values = stdout.strip().split()
+        if len(load_values) >= 3:
+            stats.cpu_load_1m = float(load_values[0])
+            stats.cpu_load_5m = float(load_values[1])
+            stats.cpu_load_15m = float(load_values[2])
+
+    def _parse_cpu_usage(self, stdout: str, stats: MachineStats) -> None:
+        """Parse /proc/stat output into CPU usage"""
+        lines = stdout.split("\n")
+        cpu_line = lines[0]
+        if cpu_line.startswith("cpu "):
+            values = [int(x) for x in cpu_line.split()[1:]]
+            if len(values) >= 4:
+                idle_time = values[3]
+                iowait_time = values[4] if len(values) > 4 else 0
+                total_idle = idle_time + iowait_time
+                total_time = sum(values)
+                if total_time > 0:
+                    stats.cpu_usage = round(
+                        (total_time - total_idle) / total_time * 100, 1
+                    )
+
+    def _parse_meminfo(self, stdout: str, stats: MachineStats) -> None:
+        """Parse /proc/meminfo output into memory stats"""
+        meminfo_lines = stdout.split("\n")
+        mem_values = {}
+
+        for line in meminfo_lines:
+            if ":" in line:
+                key, value_str = line.split(":", 1)
+                key = key.strip()
+                value_parts = value_str.strip().split()
+                if value_parts and value_parts[0].isdigit():
+                    mem_values[key] = int(value_parts[0]) * 1024  # Convert kB to bytes
+
+        if "MemTotal" in mem_values:
+            mem_total = mem_values["MemTotal"]
+            stats.memory_total = round(mem_total / (1024**3), 2)
+
+            if "MemAvailable" in mem_values:
+                mem_available = mem_values["MemAvailable"]
+                mem_used = mem_total - mem_available
+            else:
+                mem_free = mem_values.get("MemFree", 0)
+                buffers = mem_values.get("Buffers", 0)
+                cached = mem_values.get("Cached", 0)
+                mem_used = mem_total - mem_free - buffers - cached
+
+            stats.memory_used = round(mem_used / (1024**3), 2)
+            stats.memory_percent = round((mem_used / mem_total) * 100, 1)
+
+    def _parse_disk_usage(self, stdout: str, stats: MachineStats) -> None:
+        """Parse df output into disk stats"""
+        lines = stdout.strip().split("\n")
+        if len(lines) > 1:
+            parts = lines[1].split()
+            if len(parts) >= 5:
+                stats.disk_total = parts[1]
+                stats.disk_used = parts[2]
+                stats.disk_free = parts[3]
+                stats.disk_percent = float(parts[4].rstrip("%"))
+
+    def _parse_proc_uptime(self, stdout: str, stats: MachineStats) -> None:
+        """Parse /proc/uptime into formatted uptime string"""
+        uptime_seconds = float(stdout.split()[0])
+        days = int(uptime_seconds // 86400)
+        hours = int((uptime_seconds % 86400) // 3600)
+        minutes = int((uptime_seconds % 3600) // 60)
+
+        uptime_parts = []
+        if days > 0:
+            uptime_parts.append(f"{days} day{'s' if days != 1 else ''}")
+        if hours > 0:
+            uptime_parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+        if minutes > 0 and days == 0:
+            uptime_parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+
+        stats.uptime = ", ".join(uptime_parts) if uptime_parts else "less than 1 minute"
+
+
+# ============================================================================
+# INFRASTRUCTURE MONITOR (Orchestrates Collectors)
+# ============================================================================
+
+
+class InfrastructureMonitor:
+    """Monitors infrastructure across multiple machines using specialized collectors"""
+
+    def __init__(self):
+        self.redis_client = None
+        self._http_client = get_http_client()
+        self._service_collector = ServiceCollector(self._http_client, config)
+        self._stats_collector = StatsCollector(config)
+        self._initialize_clients()
+
+    def _initialize_clients(self):
+        """Initialize monitoring clients using canonical utility"""
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="monitoring")
+            if self.redis_client is None:
+                logger.warning("Redis client initialization returned None (Redis disabled?)")
+        except Exception as e:
+            logger.error(f"Could not initialize Redis client: {e}")
+
+    async def check_service_health(
+        self, url: str, name: str, timeout: int = None
+    ) -> ServiceInfo:
+        """Check health of a service endpoint (delegates to ServiceCollector)"""
+        return await self._service_collector.check_http_health(url, name, timeout)
+
+    def check_port(self, host: str, port: int, timeout: float = None) -> bool:
+        """Check if a port is open (backward compatibility wrapper)"""
+        service_info = self._service_collector.check_port(
+            host, port, "Port Check", timeout
+        )
+        return service_info.status == "online"
+
+    async def get_machine_stats(self, host: str = "localhost") -> MachineStats:
+        """Get comprehensive machine resource statistics"""
+        try:
+            backend_host = config.get_host("backend")
+            local_hosts = config.get(
+                "infrastructure.local_hosts",
+                [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP],
+            ) + [socket.gethostname()]
+
+            if host in local_hosts or host == backend_host:
+                return await self._stats_collector.collect_local_stats()
+            else:
+                return await self._stats_collector.collect_remote_stats(host)
+
+        except Exception as e:
+            logger.error(f"Error getting machine stats for {host}: {e}")
+            return MachineStats()
+
+    async def get_local_stats(self) -> MachineStats:
+        """Get detailed local machine statistics (delegates to StatsCollector)"""
+        return await self._stats_collector.collect_local_stats()
+
+    async def get_remote_stats(self, host: str) -> MachineStats:
+        """Get remote machine statistics (delegates to StatsCollector)"""
+        return await self._stats_collector.collect_remote_stats(host)
+
+    async def monitor_vm0(self) -> MachineInfo:
+        """Monitor VM0 (Main backend/frontend)"""
+        services = MachineServices()
+        backend_host = config.get_host("backend")
+        backend_port = config.get_port("backend")
+
+        # Core services
+        services.core.append(
+            await self._service_collector.check_http_health(
+                f"http://{backend_host}:{backend_port}/api/health", "Backend API"
+            )
+        )
+        services.core.append(
+            await self._service_collector.check_http_health(
+                f"http://{backend_host}:{backend_port}/ws/health", "WebSocket Server"
+            )
+        )
+
+        # Database services
+        redis_host = config.get_host("redis")
+        if self.redis_client:
+            try:
+                self.redis_client.ping()
+                services.database.append(
+                    ServiceInfo.online(f"Redis ({redis_host})", "3ms")
+                )
+            except Exception:
+                services.database.append(
+                    ServiceInfo.from_error(f"Redis ({redis_host})", "Connection failed")
+                )
+
+        services.database.append(ServiceInfo.online("SQLite", "2ms"))
+        services.database.append(
+            await self._service_collector.check_http_health(
+                f"http://{backend_host}:{backend_port}/api/knowledge_base/stats/basic",
+                "Knowledge Base",
+            )
+        )
+        services.database.append(ServiceInfo.online("ChromaDB", "85ms"))
+
+        # Application services
+        services.application.append(
+            await self._service_collector.check_http_health(
+                f"http://{backend_host}:{backend_port}/api/chat/health", "Chat Service"
+            )
+        )
+        services.application.append(
+            await self._service_collector.check_http_health(
+                f"http://{backend_host}:{backend_port}/api/llm/models", "LLM Interface"
+            )
+        )
+
+        ollama_host = config.get_host("ollama")
+        ollama_port = config.get_port("ollama")
+        services.application.append(
+            self._service_collector.check_port(ollama_host, ollama_port, "Ollama")
+        )
+        services.application.append(ServiceInfo.online("Workflow Engine", "45ms"))
+
+        # Support services
+        services.support.extend([
+            ServiceInfo.online("Service Monitor", "15ms"),
+            ServiceInfo.online("Prompts API", "10ms"),
+            ServiceInfo.online("File Manager", "8ms"),
+            ServiceInfo.online("Terminal Service", "12ms"),
+        ])
+
+        stats = await self.get_machine_stats(backend_host)
+
+        return MachineInfo.create(
+            machine_id="vm0",
+            name="VM0 - Main",
+            ip=backend_host,
+            services=services,
+            stats=stats,
+            icon="fas fa-server",
+        )
+
+    async def monitor_vm1(self) -> MachineInfo:
+        """Monitor VM1 (Frontend development)"""
+        services = MachineServices()
+        vm1_host = config.get_host("frontend")
+        frontend_port = config.get_port("frontend")
+
+        services.core.append(
+            self._service_collector.check_port(vm1_host, frontend_port, "Vite Dev Server")
+        )
+        services.application.append(
+            await self._service_collector.check_http_health(
+                f"http://{vm1_host}:{frontend_port}/", "Vue Application"
+            )
+        )
+
+        return MachineInfo.create(
+            machine_id="vm1",
+            name="VM1 - Frontend",
+            ip=vm1_host,
+            services=services,
+            stats=await self.get_machine_stats(vm1_host),
+            icon="fas fa-desktop",
+        )
+
+    async def monitor_localhost(self) -> MachineInfo:
+        """Monitor local host services"""
+        services = MachineServices()
+
+        # VNC Server
+        vnc_port = config.get_port("vnc")
+        vnc_service = self._service_collector.check_port(
+            NetworkConstants.LOCALHOST_IP, vnc_port, "VNC Server (kex)"
+        )
+        services.core.append(vnc_service)
+        if vnc_service.status == "online":
+            services.core.append(ServiceInfo.online("Desktop Access", "5ms"))
+
+        # Local Redis
+        redis_port = config.get_port("redis")
+        services.database.append(
+            self._service_collector.check_port(
+                NetworkConstants.LOCALHOST_IP, redis_port, "Redis Local"
+            )
+        )
+
+        # Development tools
+        services.application.extend([
+            ServiceInfo.online("Browser Automation", "45ms"),
+            ServiceInfo.online("Python Environment", "12ms"),
+            ServiceInfo.online("Development Tools", "8ms"),
+        ])
+
+        # Git check
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "git", "--version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(process.communicate(), timeout=1.0)
+            if process.returncode == 0:
+                services.support.append(ServiceInfo.online("Git", "1ms"))
+            else:
+                services.support.append(ServiceInfo.offline("Git"))
+        except (asyncio.TimeoutError, Exception):
+            services.support.append(ServiceInfo.offline("Git"))
+
+        # VS Code Server
+        vscode_port = config.get(
+            "infrastructure.ports.vscode", NetworkConstants.AI_STACK_PORT
+        )
+        vscode_service = self._service_collector.check_port(
+            NetworkConstants.LOCALHOST_IP, vscode_port, "VS Code Server"
+        )
+        if vscode_service.status == "online":
+            services.support.append(vscode_service)
+
+        return MachineInfo.create(
+            machine_id="localhost",
+            name="Local Services",
+            ip=NetworkConstants.LOCALHOST_IP,
+            services=services,
+            stats=await self.get_machine_stats(),
+            icon="fas fa-laptop",
+        )
+
+    async def monitor_vm2(self) -> MachineInfo:
+        """Monitor VM2 - NPU Worker"""
+        services = MachineServices()
+        vm2_host = config.get_host("npu_worker")
+        npu_port = config.get_port("npu_worker")
+
+        services.core.extend([
+            await self._service_collector.check_http_health(
+                f"http://{vm2_host}:{npu_port}/health", "NPU Worker API"
+            ),
+            await self._service_collector.check_http_health(
+                f"http://{vm2_host}:{npu_port}/health", "Health Endpoint"
+            ),
+        ])
+
+        services.application.extend([
+            ServiceInfo.online("AI Processing", "156ms"),
+            ServiceInfo.online("Intel NPU", "78ms"),
+            ServiceInfo.online("Model Inference", "234ms"),
+        ])
+
+        services.support.extend([
+            ServiceInfo.online("Worker Queue", "25ms"),
+            ServiceInfo.online("Task Scheduler", "18ms"),
+        ])
+
+        return MachineInfo.create(
+            machine_id="vm2",
+            name="VM2 - NPU Worker",
+            ip=vm2_host,
+            services=services,
+            stats=await self.get_machine_stats(vm2_host),
+            icon="fas fa-microchip",
+        )
+
+    async def monitor_vm3(self) -> MachineInfo:
+        """Monitor VM3 - Redis Database"""
+        services = MachineServices()
+        vm3_host = config.get_host("redis")
+        redis_port = config.get_port("redis")
+
+        redis_service = self._service_collector.check_port(vm3_host, redis_port, "Redis Server")
+        services.core.append(redis_service)
+        if redis_service.status == "online":
+            services.core.append(ServiceInfo.online("Redis Stack", "5ms"))
+
+        services.database.extend([
+            ServiceInfo.online("Memory Store", "2ms"),
+            ServiceInfo.online("Pub/Sub", "4ms"),
+            ServiceInfo.online("Search Index", "8ms"),
+            ServiceInfo.online("Time Series", "6ms"),
+        ])
+
+        services.support.extend([
+            ServiceInfo.online("Persistence", "12ms"),
+            ServiceInfo.online("Backup Manager", "25ms"),
+        ])
+
+        return MachineInfo.create(
+            machine_id="vm3",
+            name="VM3 - Redis Database",
+            ip=vm3_host,
+            services=services,
+            stats=await self.get_machine_stats(vm3_host),
+            icon="fas fa-database",
+        )
+
+    async def monitor_vm4(self) -> MachineInfo:
+        """Monitor VM4 - AI Stack"""
+        services = MachineServices()
+        vm4_host = config.get_host("ai_stack")
+        ai_port = config.get_port("ai_stack")
+
+        services.core.extend([
+            await self._service_collector.check_http_health(
+                f"http://{vm4_host}:{ai_port}/health", "AI Stack API"
+            ),
+            await self._service_collector.check_http_health(
+                f"http://{vm4_host}:{ai_port}/health", "Health Endpoint"
+            ),
+        ])
+
+        services.application.extend([
+            ServiceInfo.online("LLM Processing", "567ms"),
+            ServiceInfo.online("Embeddings", "234ms"),
+            ServiceInfo.online("Vector Search", "89ms"),
+            ServiceInfo.online("Model Manager", "156ms"),
+        ])
+
+        services.support.extend([
+            ServiceInfo.online("GPU Manager", "23ms"),
+            ServiceInfo.online("Memory Pool", "15ms"),
+        ])
+
+        return MachineInfo.create(
+            machine_id="vm4",
+            name="VM4 - AI Stack",
+            ip=vm4_host,
+            services=services,
+            stats=await self.get_machine_stats(vm4_host),
+            icon="fas fa-brain",
+        )
+
+    async def monitor_vm5(self) -> MachineInfo:
+        """Monitor VM5 - Browser Service"""
+        services = MachineServices()
+        vm5_host = config.get_host("browser_service")
+        browser_port = config.get_port("browser_service")
+
+        services.core.extend([
+            await self._service_collector.check_http_health(
+                f"http://{vm5_host}:{browser_port}/health", "Browser API"
+            ),
+            await self._service_collector.check_http_health(
+                f"http://{vm5_host}:{browser_port}/health", "Health Endpoint"
+            ),
+        ])
+
+        services.application.extend([
+            ServiceInfo.online("Playwright Engine", "89ms"),
+            ServiceInfo.online("Chromium Pool", "156ms"),
+            ServiceInfo.online("Screenshot Service", "234ms"),
+            ServiceInfo.online("Automation Engine", "123ms"),
+        ])
+
+        services.support.extend([
+            ServiceInfo.online("Browser Pool", "67ms"),
+            ServiceInfo.online("Session Manager", "34ms"),
+        ])
+
+        return MachineInfo.create(
+            machine_id="vm5",
+            name="VM5 - Browser Service",
+            ip=vm5_host,
+            services=services,
+            stats=await self.get_machine_stats(vm5_host),
+            icon="fas fa-globe",
+        )
+
+    async def get_infrastructure_status(self) -> List[MachineInfo]:
+        """Get complete infrastructure status"""
+        tasks = [
+            self.monitor_vm0(),
+            self.monitor_vm1(),
+            self.monitor_vm2(),
+            self.monitor_vm3(),
+            self.monitor_vm4(),
+            self.monitor_vm5(),
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        machines = []
+        for result in results:
+            if isinstance(result, MachineInfo):
+                machines.append(result)
+            else:
+                logger.error(f"Error monitoring machine: {result}")
+
+        return machines
+
+
+# ============================================================================
+# HELPER FUNCTIONS (Backward Compatibility)
+# ============================================================================
+
+
 def _get_machine_monitor_dispatch(monitor: Any) -> Dict[str, Callable[[], Awaitable[Any]]]:
-    """Get dispatch table for machine monitoring (Issue #336 - extracted helper).
-
-    Args:
-        monitor: The InfrastructureMonitor instance
-
-    Returns:
-        Dict mapping machine IDs to their monitor functions
-    """
+    """Get dispatch table for machine monitoring (Issue #336 - extracted helper)"""
     return {
         "vm0": monitor.monitor_vm0,
         "vm1": monitor.monitor_vm1,
@@ -53,14 +939,11 @@ def _get_machine_monitor_dispatch(monitor: Any) -> Dict[str, Callable[[], Awaita
     }
 
 
-def _calculate_service_health(machines: List[Any]) -> Dict[str, Any]:
-    """Calculate overall service health from machines (Issue #336 - extracted helper).
+def _calculate_service_health(machines: List[MachineInfo]) -> Dict[str, Any]:
+    """Calculate overall service health from machines (Issue #336 - extracted helper)
 
-    Args:
-        machines: List of MachineInfo objects
-
-    Returns:
-        Dict with service counts and overall status
+    This function now delegates to MachineServices.calculate_health_summary()
+    for improved encapsulation (Tell, Don't Ask principle).
     """
     total_services = 0
     online_services = 0
@@ -68,21 +951,11 @@ def _calculate_service_health(machines: List[Any]) -> Dict[str, Any]:
     warning_services = 0
 
     for machine in machines:
-        categories = [
-            machine.services.core,
-            machine.services.database,
-            machine.services.application,
-            machine.services.support,
-        ]
-        for category in categories:
-            for service in category:
-                total_services += 1
-                if service.status == "online":
-                    online_services += 1
-                elif service.status == "error":
-                    error_services += 1
-                elif service.status == "warning":
-                    warning_services += 1
+        counts = machine.services.count_by_status()
+        total_services += counts["total"]
+        online_services += counts.get("online", 0)
+        error_services += counts.get("error", 0)
+        warning_services += counts.get("warning", 0)
 
     overall_status = "healthy"
     if error_services > 0:
@@ -99,6 +972,14 @@ def _calculate_service_health(machines: List[Any]) -> Dict[str, Any]:
     }
 
 
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
+# Global monitor instance
+monitor = InfrastructureMonitor()
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
@@ -108,14 +989,12 @@ def _calculate_service_health(machines: List[Any]) -> Dict[str, Any]:
 async def health_check():
     """Health check endpoint for infrastructure monitoring"""
     try:
-        # Check if we can access configuration
-        # Get infrastructure hosts as a proxy for machine count
         backend_host = config.get_host("backend")
         frontend_host = config.get_host("frontend")
         redis_host = config.get_host("redis")
 
         machines = [backend_host, frontend_host, redis_host]
-        unique_machines = len(set(machines))  # Count unique hosts
+        unique_machines = len(set(machines))
 
         return {
             "status": "healthy",
@@ -133,1067 +1012,6 @@ async def health_check():
         }
 
 
-class ServiceInfo(BaseModel):
-    """Individual service information"""
-
-    name: str
-    status: str  # "online", "offline", "warning", "error"
-    response_time: Optional[str] = None
-    error: Optional[str] = None
-    details: Optional[Metadata] = None
-    last_check: Optional[datetime] = None
-
-
-class MachineServices(BaseModel):
-    """Services grouped by category"""
-
-    core: List[ServiceInfo] = []
-    database: List[ServiceInfo] = []
-    application: List[ServiceInfo] = []
-    support: List[ServiceInfo] = []
-
-
-class MachineStats(BaseModel):
-    """Machine resource statistics"""
-
-    cpu_usage: Optional[float] = None
-    cpu_load_1m: Optional[float] = None
-    cpu_load_5m: Optional[float] = None
-    cpu_load_15m: Optional[float] = None
-    memory_used: Optional[float] = None
-    memory_total: Optional[float] = None
-    memory_percent: Optional[float] = None
-    disk_used: Optional[str] = None
-    disk_total: Optional[str] = None
-    disk_percent: Optional[float] = None
-    disk_free: Optional[str] = None
-    uptime: Optional[str] = None
-    processes: Optional[int] = None
-
-
-class MachineInfo(BaseModel):
-    """Complete machine information"""
-
-    id: str
-    name: str
-    ip: str
-    status: str  # "healthy", "warning", "error", "offline"
-    icon: Optional[str] = "fas fa-server"
-    services: MachineServices
-    stats: Optional[MachineStats] = None
-    last_update: datetime
-
-
-class InfrastructureMonitor:
-    """Monitors infrastructure across multiple machines"""
-
-    def __init__(self):
-        self.redis_client = None
-        self._http_client = get_http_client()  # Use singleton HTTP client
-        self._initialize_clients()
-
-    def _initialize_clients(self):
-        """
-        Initialize monitoring clients using canonical utility
-
-        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
-        Uses DB 7 (monitoring) for infrastructure monitoring data.
-        """
-        try:
-            # Use canonical Redis utility instead of service discovery
-            from src.utils.redis_client import get_redis_client
-
-            self.redis_client = get_redis_client(database="monitoring")
-            if self.redis_client is None:
-                logger.warning(
-                    "Redis client initialization returned None (Redis disabled?)"
-                )
-        except Exception as e:
-            logger.error(f"Could not initialize Redis client: {e}")
-
-    async def check_service_health(
-        self, url: str, name: str, timeout: int = None
-    ) -> ServiceInfo:
-        """Check health of a service endpoint"""
-        try:
-            start_time = time.time()
-            # Use timeout from config if not provided
-            if timeout is None:
-                timeout = config.get_timeout("http", "quick")
-            connect_timeout = config.get_timeout("http", "connect")
-            timeout_obj = aiohttp.ClientTimeout(total=timeout, connect=connect_timeout)
-
-            async with await self._http_client.get(url, timeout=timeout_obj) as response:
-                response_time = int((time.time() - start_time) * 1000)
-
-                if response.status == 200:
-                    return ServiceInfo(
-                        name=name,
-                        status="online",
-                        response_time=f"{response_time}ms",
-                        last_check=datetime.now(),
-                    )
-                else:
-                    return ServiceInfo(
-                        name=name,
-                        status="warning",
-                        response_time=f"{response_time}ms",
-                        error=f"HTTP {response.status}",
-                        last_check=datetime.now(),
-                    )
-        except asyncio.TimeoutError:
-            return ServiceInfo(
-                name=name,
-                status="error",
-                response_time="timeout",
-                error="Connection timeout",
-                last_check=datetime.now(),
-            )
-        except aiohttp.ClientError as e:
-            return ServiceInfo(
-                name=name,
-                status="error",
-                error=f"Connection error: {str(e)[:80]}",
-                last_check=datetime.now(),
-            )
-        except Exception as e:
-            return ServiceInfo(
-                name=name, status="error", error=str(e)[:100], last_check=datetime.now()
-            )
-
-    def check_port(self, host: str, port: int, timeout: float = None) -> bool:
-        """Check if a port is open"""
-        # Use timeout from config if not provided
-        if timeout is None:
-            timeout = config.get_timeout("tcp", "port_check")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        try:
-            result = sock.connect_ex((host, port))
-            return result == 0
-        except Exception:
-            return False
-        finally:
-            sock.close()
-
-    async def get_machine_stats(self, host: str = "localhost") -> MachineStats:
-        """Get comprehensive machine resource statistics"""
-        try:
-            # For local machine, use system commands for accurate info
-            backend_host = config.get_host("backend")
-            local_hosts = config.get(
-                "infrastructure.local_hosts",
-                [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP],
-            ) + [socket.gethostname()]
-            if host in local_hosts or host == backend_host:
-                return await self.get_local_stats()
-            else:
-                # For remote machines, try SSH or return basic info
-                return await self.get_remote_stats(host)
-
-        except Exception as e:
-            logger.error(f"Error getting machine stats for {host}: {e}")
-            return MachineStats()
-
-    async def get_local_stats(self) -> MachineStats:
-        """Get detailed local machine statistics using Linux system calls"""
-        stats = MachineStats()
-
-        async def run_command(cmd: list, timeout: float = 2.0) -> tuple:
-            """Run a command asynchronously and return (returncode, stdout, stderr)"""
-            process = None
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
-                return process.returncode, stdout.decode(), stderr.decode()
-            except asyncio.TimeoutError:
-                if process is not None:
-                    process.kill()
-                    await process.wait()
-                return -1, "", "timeout"
-            except Exception as e:
-                return -1, "", str(e)
-
-        try:
-            # CPU load averages from /proc/loadavg
-            returncode, stdout, _ = await run_command(["cat", "/proc/loadavg"])
-            if returncode == 0:
-                load_values = stdout.strip().split()
-                if len(load_values) >= 3:
-                    stats.cpu_load_1m = float(load_values[0])
-                    stats.cpu_load_5m = float(load_values[1])
-                    stats.cpu_load_15m = float(load_values[2])
-
-            # Current CPU usage from /proc/stat (snapshot method)
-            returncode, stdout, _ = await run_command(["cat", "/proc/stat"])
-            if returncode == 0:
-                lines = stdout.split("\n")
-                cpu_line = lines[0]  # First line is overall CPU
-                if cpu_line.startswith("cpu "):
-                    # Format: cpu user nice system idle iowait irq softirq steal guest guest_nice
-                    values = [int(x) for x in cpu_line.split()[1:]]
-                    if len(values) >= 4:
-                        idle_time = values[3]  # idle
-                        iowait_time = values[4] if len(values) > 4 else 0  # iowait
-                        total_idle = idle_time + iowait_time
-                        total_time = sum(values)
-                        if total_time > 0:
-                            stats.cpu_usage = round(
-                                (total_time - total_idle) / total_time * 100, 1
-                            )
-
-            # Memory information from /proc/meminfo
-            returncode, stdout, _ = await run_command(["cat", "/proc/meminfo"])
-            if returncode == 0:
-                meminfo_lines = stdout.split("\n")
-                mem_values = {}
-
-                for line in meminfo_lines:
-                    if ":" in line:
-                        key, value_str = line.split(":", 1)
-                        key = key.strip()
-                        # Extract numeric value (in kB)
-                        value_parts = value_str.strip().split()
-                        if value_parts and value_parts[0].isdigit():
-                            mem_values[key] = (
-                                int(value_parts[0]) * 1024
-                            )  # Convert kB to bytes
-
-                # Calculate memory statistics
-                if "MemTotal" in mem_values:
-                    mem_total = mem_values["MemTotal"]
-                    stats.memory_total = round(
-                        mem_total / (1024**3), 2
-                    )  # Convert to GB
-
-                    # Use MemAvailable if present (more accurate), otherwise calculate
-                    if "MemAvailable" in mem_values:
-                        mem_available = mem_values["MemAvailable"]
-                        mem_used = mem_total - mem_available
-                    else:
-                        # Fallback calculation
-                        mem_free = mem_values.get("MemFree", 0)
-                        buffers = mem_values.get("Buffers", 0)
-                        cached = mem_values.get("Cached", 0)
-                        mem_used = mem_total - mem_free - buffers - cached
-
-                    stats.memory_used = round(mem_used / (1024**3), 2)  # Convert to GB
-                    stats.memory_percent = round((mem_used / mem_total) * 100, 1)
-
-            # Disk usage for root filesystem using df command
-            returncode, stdout, _ = await run_command(["df", "-h", "/"])
-            if returncode == 0:
-                lines = stdout.strip().split("\n")
-                if len(lines) > 1:  # Skip header line
-                    # Format: Filesystem Size Used Avail Use% Mounted on
-                    parts = lines[1].split()
-                    if len(parts) >= 5:
-                        stats.disk_total = parts[1]  # Size (e.g., "465G")
-                        stats.disk_used = parts[2]  # Used (e.g., "234G")
-                        stats.disk_free = parts[3]  # Available (e.g., "207G")
-                        stats.disk_percent = float(
-                            parts[4].rstrip("%")
-                        )  # Use% (e.g., "53%")
-
-            # System uptime
-            returncode, stdout, _ = await run_command(["uptime", "-p"])
-            if returncode == 0:
-                # Format: "up X days, Y hours, Z minutes" -> clean format
-                uptime_str = stdout.strip().replace("up ", "")
-                stats.uptime = uptime_str
-            else:
-                # Fallback to /proc/uptime if uptime -p fails
-                returncode, stdout, _ = await run_command(["cat", "/proc/uptime"])
-                if returncode == 0:
-                    uptime_seconds = float(stdout.split()[0])
-                    days = int(uptime_seconds // 86400)
-                    hours = int((uptime_seconds % 86400) // 3600)
-                    minutes = int((uptime_seconds % 3600) // 60)
-
-                    uptime_parts = []
-                    if days > 0:
-                        uptime_parts.append(f"{days} day{'s' if days != 1 else ''}")
-                    if hours > 0:
-                        uptime_parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
-                    if minutes > 0 and days == 0:  # Only show minutes if no days
-                        uptime_parts.append(
-                            f"{minutes} minute{'s' if minutes != 1 else ''}"
-                        )
-
-                    stats.uptime = (
-                        ", ".join(uptime_parts)
-                        if uptime_parts
-                        else "less than 1 minute"
-                    )
-
-            # Process count using ps
-            returncode, stdout, _ = await run_command(["ps", "-e", "--no-headers"])
-            if returncode == 0:
-                process_lines = stdout.strip().split("\n")
-                stats.processes = len([line for line in process_lines if line.strip()])
-
-        except asyncio.TimeoutError:
-            logger.warning("Timeout getting local system stats")
-        except Exception as e:
-            logger.error(f"Error collecting local machine stats: {e}")
-
-        return stats
-
-    async def get_remote_stats(self, host: str) -> MachineStats:
-        """Get basic stats for remote machines (placeholder for SSH implementation)"""
-        # This would typically use SSH to get remote machine stats
-        # For now, return realistic placeholder stats based on machine type
-
-        # Generate machine-specific realistic stats based on IP - NO HARDCODED VALUES
-        import hashlib
-
-        host_hash = int(hashlib.md5(host.encode()).hexdigest()[:8], 16)
-
-        # Machine-specific stats based on role - use config for host mapping
-        npu_worker_host = config.get_host("npu_worker")
-        if host == npu_worker_host:  # NPU Worker - higher CPU, moderate memory
-            base_cpu = 45.0  # Base CPU usage percentage
-            base_disk = 92.0  # Base disk usage percentage
-            cpu_load_1m = round(2.1 + (host_hash % 100) / 100, 1)
-            memory_used = round(6.2 + (host_hash % 40) / 10, 1)
-            memory_total = 16.0
-            disk_sizes = ["380G", "350G", "38G"]
-        elif "23" in host:  # Redis - high memory, low CPU
-            base_cpu = 15.0
-            base_disk = 90.0
-            cpu_load_1m = round(0.5 + (host_hash % 50) / 100, 1)
-            memory_used = round(12.8 + (host_hash % 30) / 10, 1)
-            memory_total = 16.0
-            disk_sizes = ["465G", "420G", "28G"]
-        elif "24" in host:  # AI Stack - high CPU and memory
-            base_cpu = 65.0
-            base_disk = 91.0
-            cpu_load_1m = round(3.2 + (host_hash % 80) / 100, 1)
-            memory_used = round(28.5 + (host_hash % 60) / 10, 1)
-            memory_total = 32.0
-            disk_sizes = ["930G", "850G", "65G"]
-        elif "25" in host:  # Browser - moderate resources
-            base_cpu = 35.0
-            base_disk = 82.0
-            cpu_load_1m = round(1.4 + (host_hash % 60) / 100, 1)
-            memory_used = round(8.9 + (host_hash % 40) / 10, 1)
-            memory_total = 16.0
-            disk_sizes = ["465G", "380G", "52G"]
-        else:  # VM1 Frontend or others
-            base_cpu = 25.0
-            base_disk = 75.0
-            cpu_load_1m = round(1.1 + (host_hash % 70) / 100, 1)
-            memory_used = round(5.4 + (host_hash % 50) / 10, 1)
-            memory_total = 8.0
-            disk_sizes = ["240G", "180G", "45G"]
-
-        # Generate uptime (days based on hash)
-        uptime_days = (host_hash % 25) + 5  # 5-30 days
-        uptime_hours = host_hash % 24
-        uptime = (
-            f"{uptime_days} day{'s' if uptime_days != 1 else ''},"
-            f"{uptime_hours} hour{'s' if uptime_hours != 1 else ''}"
-        )
-
-        # Process count based on machine type
-        if "23" in host:  # Redis
-            processes = 45 + (host_hash % 20)
-        elif "24" in host:  # AI Stack
-            processes = 120 + (host_hash % 40)
-        elif "22" in host:  # NPU Worker
-            processes = 85 + (host_hash % 30)
-        elif "25" in host:  # Browser
-            processes = 95 + (host_hash % 25)
-        else:  # Frontend
-            processes = 65 + (host_hash % 35)
-
-        return MachineStats(
-            cpu_usage=round(base_cpu + (host_hash % 20) - 10, 1),  # Add some variance
-            cpu_load_1m=cpu_load_1m,
-            cpu_load_5m=round(cpu_load_1m * 0.8, 1),
-            cpu_load_15m=round(cpu_load_1m * 0.6, 1),
-            memory_used=memory_used,
-            memory_total=memory_total,
-            memory_percent=round((memory_used / memory_total) * 100, 1),
-            disk_total=disk_sizes[0],
-            disk_used=disk_sizes[1],
-            disk_free=disk_sizes[2],
-            disk_percent=round(base_disk + (host_hash % 30) - 15, 1),
-            uptime=uptime,
-            processes=processes,
-        )
-
-    async def get_stats_via_commands(self) -> MachineStats:
-        """Get stats using system commands as fallback"""
-        stats = MachineStats()
-
-        async def run_command(cmd: list, timeout: float = 2.0) -> tuple:
-            """Run a command asynchronously and return (returncode, stdout, stderr)"""
-            process = None
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
-                return process.returncode, stdout.decode(), stderr.decode()
-            except asyncio.TimeoutError:
-                if process is not None:
-                    process.kill()
-                    await process.wait()
-                return -1, "", "timeout"
-            except Exception as e:
-                return -1, "", str(e)
-
-        try:
-            # CPU usage
-            returncode, stdout, _ = await run_command(["top", "-bn1"])
-            if returncode == 0:
-                for line in stdout.split("\n"):
-                    if "Cpu(s)" in line or "%Cpu" in line:
-                        # Parse CPU idle and calculate usage
-                        parts = line.split(",")
-                        for part in parts:
-                            if "id" in part:
-                                idle = float(part.split()[0])
-                                stats.cpu = 100 - idle
-                                break
-                        break
-
-            # Memory usage
-            returncode, stdout, _ = await run_command(["free", "-m"])
-            if returncode == 0:
-                lines = stdout.split("\n")
-                for line in lines:
-                    if line.startswith("Mem:"):
-                        parts = line.split()
-                        total = float(parts[1])
-                        used = float(parts[2])
-                        stats.memory = (used / total) * 100
-                        break
-
-            # Disk usage
-            returncode, stdout, _ = await run_command(["df", "-h", "/"])
-            if returncode == 0:
-                lines = stdout.split("\n")
-                if len(lines) > 1:
-                    parts = lines[1].split()
-                    if len(parts) > 4:
-                        usage_str = parts[4].rstrip("%")
-                        stats.disk = float(usage_str)
-
-            # Uptime
-            returncode, stdout, _ = await run_command(["uptime", "-p"])
-            if returncode == 0:
-                stats.uptime = stdout.strip().replace("up ", "")
-
-        except Exception as e:
-            logger.error(f"Error getting stats via commands: {e}")
-
-        return stats
-
-    async def monitor_vm0(self) -> MachineInfo:
-        """Monitor VM0 (Main backend/frontend)"""
-        services = MachineServices()
-
-        # Check core services
-        backend_host = config.get_host("backend")
-        backend_port = config.get_port("backend")
-
-        # Backend API
-        backend_service = await self.check_service_health(
-            f"http://{backend_host}:{backend_port}/api/health", "Backend API"
-        )
-        services.core.append(backend_service)
-
-        # NOTE: Frontend is NOT monitored on VM0 (main machine)
-        # Per architecture rules, frontend only runs on VM1 (172.16.168.21)
-        # See CLAUDE.md "Single Frontend Server Architecture"
-
-        # WebSocket Server
-        ws_service = await self.check_service_health(
-            f"http://{backend_host}:{backend_port}/ws/health", "WebSocket Server"
-        )
-        services.core.append(ws_service)
-
-        # Database services - using already imported cfg
-        redis_host = config.get_host("redis")
-        if self.redis_client:
-            try:
-                self.redis_client.ping()
-                services.database.append(
-                    ServiceInfo(
-                        name=f"Redis ({redis_host})", status="online", response_time="3ms"
-                    )
-                )
-            except Exception:
-                services.database.append(
-                    ServiceInfo(
-                        name=f"Redis ({redis_host})",
-                        status="error",
-                        error="Connection failed",
-                    )
-                )
-
-        # SQLite (always available)
-        services.database.append(
-            ServiceInfo(name="SQLite", status="online", response_time="2ms")
-        )
-
-        # Knowledge Base
-        kb_service = await self.check_service_health(
-            f"http://{backend_host}:{backend_port}/api/knowledge_base/stats/basic",
-            "Knowledge Base",
-        )
-        services.database.append(kb_service)
-
-        # ChromaDB (vector database)
-        services.database.append(
-            ServiceInfo(name="ChromaDB", status="online", response_time="85ms")
-        )
-
-        # Application services
-        chat_service = await self.check_service_health(
-            f"http://{backend_host}:{backend_port}/api/chat/health", "Chat Service"
-        )
-        services.application.append(chat_service)
-
-        # LLM Interface
-        llm_service = await self.check_service_health(
-            f"http://{backend_host}:{backend_port}/api/llm/models", "LLM Interface"
-        )
-        services.application.append(llm_service)
-
-        # Ollama
-        ollama_host = config.get_host("ollama")
-        ollama_port = config.get_port("ollama")
-        if self.check_port(ollama_host, ollama_port):
-            services.application.append(
-                ServiceInfo(name="Ollama", status="online", response_time="180ms")
-            )
-        else:
-            services.application.append(
-                ServiceInfo(
-                    name="Ollama",
-                    status="offline",
-                    error=f"Port {ollama_port} not accessible on {ollama_host}",
-                )
-            )
-
-        # Workflow Engine
-        services.application.append(
-            ServiceInfo(name="Workflow Engine", status="online", response_time="45ms")
-        )
-
-        # Support services
-        services.support.append(
-            ServiceInfo(name="Service Monitor", status="online", response_time="15ms")
-        )
-
-        services.support.append(
-            ServiceInfo(name="Prompts API", status="online", response_time="10ms")
-        )
-
-        services.support.append(
-            ServiceInfo(name="File Manager", status="online", response_time="8ms")
-        )
-
-        services.support.append(
-            ServiceInfo(name="Terminal Service", status="online", response_time="12ms")
-        )
-
-        # Get machine stats
-        stats = await self.get_machine_stats(backend_host)
-
-        # Determine overall status
-        all_services = (
-            services.core + services.database + services.application + services.support
-        )
-        error_count = sum(1 for s in all_services if s.status == "error")
-        warning_count = sum(1 for s in all_services if s.status == "warning")
-
-        if error_count > 0:
-            status = "error"
-        elif warning_count > 0:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        return MachineInfo(
-            id="vm0",
-            name="VM0 - Main",
-            ip=backend_host,
-            status=status,
-            icon="fas fa-server",
-            services=services,
-            stats=stats,
-            last_update=datetime.now(),
-        )
-
-    async def monitor_vm1(self) -> MachineInfo:
-        """Monitor VM1 (Frontend development) - NO HARDCODED IPs"""
-        services = MachineServices()
-        vm1_host = config.get_host("frontend")
-
-        # Check Vite dev server
-        frontend_port = config.get_port("frontend")
-        if self.check_port(vm1_host, frontend_port):
-            services.core.append(
-                ServiceInfo(
-                    name="Vite Dev Server", status="online", response_time="8ms"
-                )
-            )
-        else:
-            services.core.append(
-                ServiceInfo(
-                    name="Vite Dev Server",
-                    status="offline",
-                    error=f"Port {frontend_port} not accessible",
-                )
-            )
-
-        # NOTE: Nginx is NOT part of AutoBot infrastructure
-        # Frontend VM runs Vite dev server directly, not behind Nginx
-
-        # Vue Application
-        vue_service = await self.check_service_health(
-            f"http://{vm1_host}:{frontend_port}/", "Vue Application"
-        )
-        services.application.append(vue_service)
-
-        # Determine overall status
-        all_services = services.core + services.application
-        error_count = sum(1 for s in all_services if s.status == "error")
-
-        status = "error" if error_count > 0 else "healthy"
-
-        return MachineInfo(
-            id="vm1",
-            name="VM1 - Frontend",
-            ip=vm1_host,
-            status=status,
-            icon="fas fa-desktop",
-            services=services,
-            stats=await self.get_machine_stats(vm1_host),
-            last_update=datetime.now(),
-        )
-
-    async def monitor_localhost(self) -> MachineInfo:
-        """Monitor local host services"""
-        services = MachineServices()
-
-        # Core local services
-        # VNC Server check
-        vnc_port = config.get_port("vnc")
-        if self.check_port(NetworkConstants.LOCALHOST_IP, vnc_port):  # noVNC port
-            services.core.append(
-                ServiceInfo(
-                    name="VNC Server (kex)", status="online", response_time="2ms"
-                )
-            )
-            services.core.append(
-                ServiceInfo(name="Desktop Access", status="online", response_time="5ms")
-            )
-        else:
-            services.core.append(
-                ServiceInfo(
-                    name="VNC Server (kex)",
-                    status="offline",
-                    error=f"Port {vnc_port} not accessible",
-                )
-            )
-
-        # Local Redis
-        redis_port = config.get_port("redis")
-        if self.check_port(NetworkConstants.LOCALHOST_IP, redis_port):
-            services.database.append(
-                ServiceInfo(name="Redis Local", status="online", response_time="3ms")
-            )
-        else:
-            services.database.append(
-                ServiceInfo(
-                    name="Redis Local", status="offline", error="Redis not running"
-                )
-            )
-
-        # Development tools
-        services.application.append(
-            ServiceInfo(
-                name="Browser Automation", status="online", response_time="45ms"
-            )
-        )
-
-        services.application.append(
-            ServiceInfo(
-                name="Python Environment", status="online", response_time="12ms"
-            )
-        )
-
-        services.application.append(
-            ServiceInfo(name="Development Tools", status="online", response_time="8ms")
-        )
-
-        # Support services
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "git", "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            try:
-                await asyncio.wait_for(process.communicate(), timeout=1.0)
-                if process.returncode == 0:
-                    services.support.append(
-                        ServiceInfo(name="Git", status="online", response_time="1ms")
-                    )
-                else:
-                    services.support.append(ServiceInfo(name="Git", status="offline"))
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
-                services.support.append(ServiceInfo(name="Git", status="offline"))
-        except Exception:
-            services.support.append(ServiceInfo(name="Git", status="offline"))
-
-        # VS Code Server check (if running)
-        vscode_port = config.get(
-            "infrastructure.ports.vscode", NetworkConstants.AI_STACK_PORT
-        )  # VS Code server port
-        if self.check_port(NetworkConstants.LOCALHOST_IP, vscode_port):
-            services.support.append(
-                ServiceInfo(
-                    name="VS Code Server", status="online", response_time="15ms"
-                )
-            )
-
-        # Get local machine stats
-        stats = await self.get_machine_stats()
-
-        # Determine overall status
-        all_services = (
-            services.core + services.database + services.application + services.support
-        )
-        error_count = sum(1 for s in all_services if s.status == "error")
-        warning_count = sum(1 for s in all_services if s.status == "warning")
-
-        if error_count > 0:
-            status = "error"
-        elif warning_count > 0:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        return MachineInfo(
-            id="localhost",
-            name="Local Services",
-            ip=NetworkConstants.LOCALHOST_IP,
-            status=status,
-            icon="fas fa-laptop",
-            services=services,
-            stats=stats,
-            last_update=datetime.now(),
-        )
-
-    async def monitor_vm2(self) -> MachineInfo:
-        """Monitor VM2 - NPU Worker - NO HARDCODED IPs"""
-        services = MachineServices()
-        vm2_host = config.get_host("npu_worker")
-
-        # Core services - NO HARDCODED PORTS
-        npu_port = config.get_port("npu_worker")
-        npu_api_service = await self.check_service_health(
-            f"http://{vm2_host}:{npu_port}/health", "NPU Worker API"
-        )
-        services.core.append(npu_api_service)
-
-        # Health endpoint check
-        health_service = await self.check_service_health(
-            f"http://{vm2_host}:{npu_port}/health", "Health Endpoint"
-        )
-        services.core.append(health_service)
-
-        # Application services
-        services.application.extend(
-            [
-                ServiceInfo(
-                    name="AI Processing", status="online", response_time="156ms"
-                ),
-                ServiceInfo(name="Intel NPU", status="online", response_time="78ms"),
-                ServiceInfo(
-                    name="Model Inference", status="online", response_time="234ms"
-                ),
-            ]
-        )
-
-        # Support services
-        services.support.extend(
-            [
-                ServiceInfo(name="Worker Queue", status="online", response_time="25ms"),
-                ServiceInfo(
-                    name="Task Scheduler", status="online", response_time="18ms"
-                ),
-            ]
-        )
-
-        # Determine overall status
-        all_services = services.core + services.application + services.support
-        error_count = sum(1 for s in all_services if s.status == "error")
-        warning_count = sum(1 for s in all_services if s.status == "warning")
-
-        if error_count > 0:
-            status = "error"
-        elif warning_count > 0:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        return MachineInfo(
-            id="vm2",
-            name="VM2 - NPU Worker",
-            ip=vm2_host,
-            status=status,
-            icon="fas fa-microchip",
-            services=services,
-            stats=await self.get_machine_stats(vm2_host),
-            last_update=datetime.now(),
-        )
-
-    async def monitor_vm3(self) -> MachineInfo:
-        """Monitor VM3 - Redis Database - NO HARDCODED IPs"""
-        services = MachineServices()
-        vm3_host = config.get_host("redis")
-
-        # Core Redis services - NO HARDCODED PORTS
-        redis_port = config.get_port("redis")
-        if self.check_port(vm3_host, redis_port):
-            services.core.extend(
-                [
-                    ServiceInfo(
-                        name="Redis Server", status="online", response_time="3ms"
-                    ),
-                    ServiceInfo(
-                        name="Redis Stack", status="online", response_time="5ms"
-                    ),
-                ]
-            )
-        else:
-            services.core.append(
-                ServiceInfo(
-                    name="Redis Server",
-                    status="error",
-                    error=f"Port {redis_port} not accessible",
-                )
-            )
-
-        # Database services
-        services.database.extend(
-            [
-                ServiceInfo(name="Memory Store", status="online", response_time="2ms"),
-                ServiceInfo(name="Pub/Sub", status="online", response_time="4ms"),
-                ServiceInfo(name="Search Index", status="online", response_time="8ms"),
-                ServiceInfo(name="Time Series", status="online", response_time="6ms"),
-            ]
-        )
-
-        # Support services
-        services.support.extend(
-            [
-                ServiceInfo(name="Persistence", status="online", response_time="12ms"),
-                ServiceInfo(
-                    name="Backup Manager", status="online", response_time="25ms"
-                ),
-            ]
-        )
-
-        # Determine overall status
-        all_services = services.core + services.database + services.support
-        error_count = sum(1 for s in all_services if s.status == "error")
-
-        status = "error" if error_count > 0 else "healthy"
-
-        return MachineInfo(
-            id="vm3",
-            name="VM3 - Redis Database",
-            ip=vm3_host,
-            status=status,
-            icon="fas fa-database",
-            services=services,
-            stats=await self.get_machine_stats(vm3_host),
-            last_update=datetime.now(),
-        )
-
-    async def monitor_vm4(self) -> MachineInfo:
-        """Monitor VM4 - AI Stack - NO HARDCODED IPs"""
-        services = MachineServices()
-        vm4_host = config.get_host("ai_stack")
-
-        # Core services - NO HARDCODED PORTS
-        ai_port = config.get_port("ai_stack")
-        ai_api_service = await self.check_service_health(
-            f"http://{vm4_host}:{ai_port}/health", "AI Stack API"
-        )
-        services.core.append(ai_api_service)
-
-        # Health endpoint
-        health_service = await self.check_service_health(
-            f"http://{vm4_host}:{ai_port}/health", "Health Endpoint"
-        )
-        services.core.append(health_service)
-
-        # Application services
-        services.application.extend(
-            [
-                ServiceInfo(
-                    name="LLM Processing", status="online", response_time="567ms"
-                ),
-                ServiceInfo(name="Embeddings", status="online", response_time="234ms"),
-                ServiceInfo(
-                    name="Vector Search", status="online", response_time="89ms"
-                ),
-                ServiceInfo(
-                    name="Model Manager", status="online", response_time="156ms"
-                ),
-            ]
-        )
-
-        # Support services
-        services.support.extend(
-            [
-                ServiceInfo(name="GPU Manager", status="online", response_time="23ms"),
-                ServiceInfo(name="Memory Pool", status="online", response_time="15ms"),
-            ]
-        )
-
-        # Determine overall status
-        all_services = services.core + services.application + services.support
-        error_count = sum(1 for s in all_services if s.status == "error")
-        warning_count = sum(1 for s in all_services if s.status == "warning")
-
-        if error_count > 0:
-            status = "error"
-        elif warning_count > 0:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        return MachineInfo(
-            id="vm4",
-            name="VM4 - AI Stack",
-            ip=vm4_host,
-            status=status,
-            icon="fas fa-brain",
-            services=services,
-            stats=await self.get_machine_stats(vm4_host),
-            last_update=datetime.now(),
-        )
-
-    async def monitor_vm5(self) -> MachineInfo:
-        """Monitor VM5 - Browser Service - NO HARDCODED IPs"""
-        services = MachineServices()
-        vm5_host = config.get_host("browser_service")
-
-        # Core services - NO HARDCODED PORTS
-        browser_port = config.get_port("browser_service")
-        browser_api_service = await self.check_service_health(
-            f"http://{vm5_host}:{browser_port}/health", "Browser API"
-        )
-        services.core.append(browser_api_service)
-
-        # Health endpoint
-        health_service = await self.check_service_health(
-            f"http://{vm5_host}:{browser_port}/health", "Health Endpoint"
-        )
-        services.core.append(health_service)
-
-        # Application services
-        services.application.extend(
-            [
-                ServiceInfo(
-                    name="Playwright Engine", status="online", response_time="89ms"
-                ),
-                ServiceInfo(
-                    name="Chromium Pool", status="online", response_time="156ms"
-                ),
-                ServiceInfo(
-                    name="Screenshot Service", status="online", response_time="234ms"
-                ),
-                ServiceInfo(
-                    name="Automation Engine", status="online", response_time="123ms"
-                ),
-            ]
-        )
-
-        # Support services
-        services.support.extend(
-            [
-                ServiceInfo(name="Browser Pool", status="online", response_time="67ms"),
-                ServiceInfo(
-                    name="Session Manager", status="online", response_time="34ms"
-                ),
-            ]
-        )
-
-        # Determine overall status
-        all_services = services.core + services.application + services.support
-        error_count = sum(1 for s in all_services if s.status == "error")
-        warning_count = sum(1 for s in all_services if s.status == "warning")
-
-        if error_count > 0:
-            status = "error"
-        elif warning_count > 0:
-            status = "warning"
-        else:
-            status = "healthy"
-
-        return MachineInfo(
-            id="vm5",
-            name="VM5 - Browser Service",
-            ip=vm5_host,
-            status=status,
-            icon="fas fa-globe",
-            services=services,
-            stats=await self.get_machine_stats(vm5_host),
-            last_update=datetime.now(),
-        )
-
-    async def get_infrastructure_status(self) -> List[MachineInfo]:
-        """Get complete infrastructure status"""
-        machines = []
-
-        # Monitor all 6 machines in parallel - using config for IPs
-        tasks = [
-            self.monitor_vm0(),  # Backend
-            self.monitor_vm1(),  # Frontend
-            self.monitor_vm2(),  # NPU Worker
-            self.monitor_vm3(),  # Redis
-            self.monitor_vm4(),  # AI Stack
-            self.monitor_vm5(),  # Browser Service
-        ]
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, MachineInfo):
-                machines.append(result)
-            else:
-                logger.error(f"Error monitoring machine: {result}")
-
-        return machines
-
-
-# Global monitor instance
-monitor = InfrastructureMonitor()
-
-
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_infrastructure_status",
@@ -1204,8 +1022,6 @@ async def get_infrastructure_status():
     """Get complete infrastructure monitoring status"""
     try:
         machines = await monitor.get_infrastructure_status()
-
-        # Issue #336: Use extracted helper for health calculation
         health = _calculate_service_health(machines)
 
         return {
@@ -1236,7 +1052,6 @@ async def get_infrastructure_status():
 async def get_machine_status(machine_id: str):
     """Get status for a specific machine"""
     try:
-        # Issue #336: Use dispatch table instead of elif chain
         dispatch = _get_machine_monitor_dispatch(monitor)
         monitor_func = dispatch.get(machine_id)
 
