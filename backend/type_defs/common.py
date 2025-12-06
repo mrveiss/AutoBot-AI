@@ -87,10 +87,26 @@ class MessageTypes:
     TERMINAL_INTERPRETATION = "terminal_interpretation"
 
 
-# Frozenset of streaming message types for efficient membership testing
-# Used in deduplication logic to handle progressive token accumulation
-STREAMING_MESSAGE_TYPES: frozenset = frozenset([
+# Frozenset of message types that should NOT be persisted in websockets.py
+# These are either:
+# 1. Streaming types that accumulate tokens progressively (persisted once at completion)
+# 2. Types explicitly persisted by their source (tool_handler, chat_integration, etc.)
+#
+# Issue #350 Root Cause Fix: Adding explicitly-persisted types prevents duplication
+# from multiple persistence paths (websocket broadcast + explicit persistence).
+SKIP_WEBSOCKET_PERSISTENCE_TYPES: frozenset = frozenset([
+    # Streaming LLM response types - persisted once at completion
     MessageTypes.LLM_RESPONSE,
     MessageTypes.LLM_RESPONSE_CHUNK,
     MessageTypes.RESPONSE,
+    # Terminal types - explicitly persisted by chat_integration.py and service.py
+    MessageTypes.TERMINAL_COMMAND,
+    MessageTypes.TERMINAL_OUTPUT,
+    # Approval request - explicitly persisted by tool_handler.py::_persist_approval_request()
+    MessageTypes.COMMAND_APPROVAL_REQUEST,
+    # Terminal interpretation - explicitly persisted by llm_handler.py
+    MessageTypes.TERMINAL_INTERPRETATION,
 ])
+
+# Backwards compatibility alias (deprecated - use SKIP_WEBSOCKET_PERSISTENCE_TYPES)
+STREAMING_MESSAGE_TYPES = SKIP_WEBSOCKET_PERSISTENCE_TYPES

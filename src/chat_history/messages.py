@@ -9,6 +9,10 @@ Provides message management functionality:
 - Get session messages with model-aware limits
 - Update message metadata
 - Add tool markers to messages
+
+Note: Message deduplication is handled at the source level via
+SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
+(Issue #350 root cause fix).
 """
 
 import logging
