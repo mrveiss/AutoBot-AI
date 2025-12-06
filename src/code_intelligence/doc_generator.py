@@ -229,6 +229,50 @@ class FunctionDoc:
             "completeness": self.completeness.value,
         }
 
+    def update_parameter_description(self, param_name: str, description: str) -> None:
+        """
+        Update parameter description.
+
+        Args:
+            param_name: Name of parameter to update
+            description: New description text
+        """
+        for param in self.parameters:
+            if param.name == param_name:
+                param.description = description
+                break
+
+    def calculate_completeness(self) -> DocCompleteness:
+        """
+        Calculate documentation completeness for this function.
+
+        Returns:
+            DocCompleteness level based on available documentation
+        """
+        score = 0
+
+        if self.docstring:
+            score += 1
+        if self.description:
+            score += 1
+        if all(p.description for p in self.parameters):
+            score += 1
+        if self.returns and self.returns.description:
+            score += 1
+        if self.examples:
+            score += 1
+
+        if score == 0:
+            return DocCompleteness.NONE
+        elif score == 1:
+            return DocCompleteness.MINIMAL
+        elif score <= 3:
+            return DocCompleteness.PARTIAL
+        elif score == 4:
+            return DocCompleteness.COMPLETE
+        else:
+            return DocCompleteness.COMPREHENSIVE
+
 
 @dataclass
 class ClassDoc:
@@ -270,6 +314,85 @@ class ClassDoc:
             "completeness": self.completeness.value,
         }
 
+    def add_base_class(self, base_name: str) -> None:
+        """Add a base class to this class."""
+        self.base_classes.append(base_name)
+
+    def add_decorator(self, decorator_name: str) -> None:
+        """
+        Add a decorator and update class flags.
+
+        Args:
+            decorator_name: Name of the decorator
+        """
+        self.decorators.append(decorator_name)
+        if decorator_name == "dataclass":
+            self.is_dataclass = True
+        elif decorator_name in ("ABC", "abstractmethod"):
+            self.is_abstract = True
+
+    def check_enum_inheritance(self) -> None:
+        """Check if this class inherits from Enum and set flag."""
+        if any(base in ["Enum", "IntEnum", "StrEnum"] for base in self.base_classes):
+            self.is_enum = True
+
+    def add_method(self, method_doc: FunctionDoc) -> None:
+        """
+        Add a method or property to this class.
+
+        Args:
+            method_doc: Function documentation to add
+        """
+        if method_doc.is_property:
+            self.properties.append(method_doc)
+        else:
+            self.methods.append(method_doc)
+
+    def add_class_variable(self, var_name: str, var_type: str = "Unknown") -> None:
+        """
+        Add a class variable.
+
+        Args:
+            var_name: Variable name
+            var_type: Type hint or "Unknown"
+        """
+        self.class_variables[var_name] = var_type
+
+    def calculate_completeness(self) -> DocCompleteness:
+        """
+        Calculate documentation completeness for this class.
+
+        Returns:
+            DocCompleteness level based on available documentation
+        """
+        score = 0
+
+        if self.docstring:
+            score += 1
+        if self.description:
+            score += 1
+        if self.examples:
+            score += 1
+
+        method_scores = [m.completeness.value for m in self.methods]
+        if method_scores:
+            avg_score = sum(
+                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
+                for s in method_scores
+            ) / len(method_scores)
+            score += int(avg_score)
+
+        if score == 0:
+            return DocCompleteness.NONE
+        elif score == 1:
+            return DocCompleteness.MINIMAL
+        elif score <= 3:
+            return DocCompleteness.PARTIAL
+        elif score <= 5:
+            return DocCompleteness.COMPLETE
+        else:
+            return DocCompleteness.COMPREHENSIVE
+
 
 @dataclass
 class ModuleDoc:
@@ -306,6 +429,65 @@ class ModuleDoc:
             "line_count": self.line_count,
             "completeness": self.completeness.value,
         }
+
+    def add_constant(self, name: str, value: str) -> None:
+        """
+        Add a module-level constant.
+
+        Args:
+            name: Constant name
+            value: Constant value
+        """
+        self.constants[name] = value
+
+    def add_import(self, import_statement: str) -> None:
+        """
+        Add an import statement.
+
+        Args:
+            import_statement: Import to add
+        """
+        self.imports.append(import_statement)
+
+    def calculate_completeness(self) -> DocCompleteness:
+        """
+        Calculate documentation completeness for this module.
+
+        Returns:
+            DocCompleteness level based on available documentation
+        """
+        score = 0
+
+        if self.docstring:
+            score += 1
+        if self.description:
+            score += 1
+        if self.examples:
+            score += 1
+
+        all_completeness = []
+        for cls in self.classes:
+            all_completeness.append(cls.completeness.value)
+        for func in self.functions:
+            all_completeness.append(func.completeness.value)
+
+        if all_completeness:
+            avg_score = sum(
+                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
+                for s in all_completeness
+            ) / len(all_completeness)
+            score += int(avg_score)
+
+        if score == 0:
+            return DocCompleteness.NONE
+        elif score == 1:
+            return DocCompleteness.MINIMAL
+        elif score <= 3:
+            return DocCompleteness.PARTIAL
+        elif score <= 5:
+            return DocCompleteness.COMPLETE
+        else:
+            return DocCompleteness.COMPREHENSIVE
 
 
 @dataclass
@@ -530,6 +712,95 @@ class DocGenerator:
         self.max_depth = max_depth
         self._analyzed_files: Set[str] = set()
 
+    def _validate_module_path(self, file_path: str) -> Optional[str]:
+        """Validate module path exists and is a Python file (Issue #315 - extracted helper).
+
+        Args:
+            file_path: Path to validate
+
+        Returns:
+            Absolute path if valid, None otherwise
+        """
+        abs_path = os.path.abspath(file_path)
+
+        if not os.path.exists(abs_path):
+            logger.error(f"File not found: {abs_path}")
+            return None
+
+        if not abs_path.endswith(".py"):
+            logger.warning(f"Not a Python file: {abs_path}")
+            return None
+
+        return abs_path
+
+    def _read_and_parse_module(self, file_path: str) -> Optional[Tuple[str, ast.Module]]:
+        """Read and parse a Python module (Issue #315 - extracted helper).
+
+        Args:
+            file_path: Path to the Python file
+
+        Returns:
+            Tuple of (source, ast) or None on error
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        except OSError as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return None
+
+        try:
+            tree = ast.parse(source, filename=file_path)
+            return (source, tree)
+        except SyntaxError as e:
+            logger.error(f"Syntax error in {file_path}: {e}")
+            return None
+
+    def _process_module_node(
+        self, node: ast.AST, source: str, module_doc: "ModuleDoc"
+    ) -> None:
+        """Process a single top-level module node (Issue #315 - extracted helper).
+
+        Args:
+            node: AST node to process
+            source: Module source code
+            module_doc: ModuleDoc to populate
+        """
+        if isinstance(node, ast.ClassDef):
+            class_doc = self._analyze_class(node, source)
+            if class_doc and self._should_include(class_doc.name):
+                module_doc.classes.append(class_doc)
+            return
+
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            func_doc = self._analyze_function(node, source)
+            if func_doc and self._should_include(func_doc.name):
+                module_doc.functions.append(func_doc)
+            return
+
+        if isinstance(node, ast.Assign):
+            self._process_module_constants(node, module_doc)
+            return
+
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for import_stmt in self._extract_imports(node):
+                module_doc.add_import(import_stmt)
+
+    def _process_module_constants(self, node: ast.Assign, module_doc: "ModuleDoc") -> None:
+        """Extract constants from assignment node (Issue #315 - extracted helper).
+
+        Args:
+            node: Assignment AST node
+            module_doc: ModuleDoc to populate
+        """
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+            if not target.id.isupper():
+                continue
+            value = self._get_node_value(node.value)
+            module_doc.add_constant(target.id, value)
+
     def analyze_module(self, file_path: str) -> Optional[ModuleDoc]:
         """
         Analyze a Python module and extract documentation.
@@ -540,74 +811,34 @@ class DocGenerator:
         Returns:
             ModuleDoc containing extracted documentation, or None if parse fails
         """
-        file_path = os.path.abspath(file_path)
-
-        if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
+        validated_path = self._validate_module_path(file_path)
+        if validated_path is None:
             return None
 
-        if not file_path.endswith(".py"):
-            logger.warning(f"Not a Python file: {file_path}")
+        parsed = self._read_and_parse_module(validated_path)
+        if parsed is None:
             return None
 
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-        except OSError as e:
-            logger.error(f"Failed to read file {file_path}: {e}")
-            return None
-
-        try:
-            tree = ast.parse(source, filename=file_path)
-        except SyntaxError as e:
-            logger.error(f"Syntax error in {file_path}: {e}")
-            return None
-
-        module_name = os.path.splitext(os.path.basename(file_path))[0]
+        source, tree = parsed
+        module_name = os.path.splitext(os.path.basename(validated_path))[0]
         module_doc = ModuleDoc(
             name=module_name,
-            file_path=file_path,
+            file_path=validated_path,
             docstring=ast.get_docstring(tree),
             line_count=len(source.splitlines()),
         )
 
-        # Extract module-level description from docstring
         if module_doc.docstring:
             module_doc.description = self._extract_description(module_doc.docstring)
 
-        # Process top-level nodes
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.ClassDef):
-                class_doc = self._analyze_class(node, source)
-                if class_doc and self._should_include(class_doc.name):
-                    module_doc.classes.append(class_doc)
+            self._process_module_node(node, source, module_doc)
 
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                func_doc = self._analyze_function(node, source)
-                if func_doc and self._should_include(func_doc.name):
-                    module_doc.functions.append(func_doc)
-
-            elif isinstance(node, ast.Assign):
-                # Extract constants
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        if target.id.isupper():  # Convention for constants
-                            value = self._get_node_value(node.value)
-                            module_doc.constants[target.id] = value
-
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                module_doc.imports.extend(self._extract_imports(node))
-
-        # Extract __all__ exports
         module_doc.exports = self._extract_all_exports(tree)
-
-        # Extract dependencies from imports
         module_doc.dependencies = self._extract_dependencies(module_doc.imports)
+        module_doc.completeness = module_doc.calculate_completeness()
 
-        # Calculate completeness
-        module_doc.completeness = self._calculate_module_completeness(module_doc)
-
-        self._analyzed_files.add(file_path)
+        self._analyzed_files.add(validated_path)
         return module_doc
 
     def analyze_package(
@@ -683,6 +914,49 @@ class DocGenerator:
 
         return package_doc
 
+    def _process_class_body_item(
+        self, item: ast.AST, source: str, class_doc: "ClassDoc"
+    ) -> None:
+        """Process a single class body item (Issue #315 - extracted helper).
+
+        Args:
+            item: AST node from class body
+            source: Module source code
+            class_doc: ClassDoc to populate
+        """
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not self._should_include(item.name):
+                return
+            func_doc = self._analyze_function(item, source)
+            if func_doc:
+                class_doc.add_method(func_doc)
+            return
+
+        if isinstance(item, ast.AnnAssign):
+            self._process_annotated_class_var(item, class_doc)
+            return
+
+        if isinstance(item, ast.Assign):
+            self._process_unannotated_class_var(item, class_doc)
+
+    def _process_annotated_class_var(
+        self, item: ast.AnnAssign, class_doc: "ClassDoc"
+    ) -> None:
+        """Process annotated class variable (Issue #315 - extracted helper)."""
+        if not isinstance(item.target, ast.Name):
+            return
+        var_name = item.target.id
+        var_type = self._get_node_name(item.annotation) if item.annotation else "Any"
+        class_doc.add_class_variable(var_name, var_type)
+
+    def _process_unannotated_class_var(
+        self, item: ast.Assign, class_doc: "ClassDoc"
+    ) -> None:
+        """Process unannotated class variable (Issue #315 - extracted helper)."""
+        for target in item.targets:
+            if isinstance(target, ast.Name):
+                class_doc.add_class_variable(target.id)
+
     def _analyze_class(self, node: ast.ClassDef, source: str) -> ClassDoc:
         """Analyze a class definition and extract documentation."""
         class_doc = ClassDoc(
@@ -691,55 +965,50 @@ class DocGenerator:
             line_number=node.lineno,
         )
 
-        # Extract base classes
         for base in node.bases:
-            class_doc.base_classes.append(self._get_node_name(base))
+            class_doc.add_base_class(self._get_node_name(base))
 
-        # Extract decorators
         for decorator in node.decorator_list:
             dec_name = self._get_node_name(decorator)
-            class_doc.decorators.append(dec_name)
-            if dec_name == "dataclass":
-                class_doc.is_dataclass = True
-            elif dec_name in ("ABC", "abstractmethod"):
-                class_doc.is_abstract = True
+            class_doc.add_decorator(dec_name)
 
-        # Check if it's an Enum
-        if any(base in ["Enum", "IntEnum", "StrEnum"] for base in class_doc.base_classes):
-            class_doc.is_enum = True
+        class_doc.check_enum_inheritance()
 
-        # Extract description from docstring
         if class_doc.docstring:
             class_doc.description = self._extract_description(class_doc.docstring)
 
-        # Process class body
         for item in node.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if self._should_include(item.name):
-                    func_doc = self._analyze_function(item, source)
-                    if func_doc:
-                        if func_doc.is_property:
-                            class_doc.properties.append(func_doc)
-                        else:
-                            class_doc.methods.append(func_doc)
+            self._process_class_body_item(item, source, class_doc)
 
-            elif isinstance(item, ast.AnnAssign):
-                # Class variable with type annotation
-                if isinstance(item.target, ast.Name):
-                    var_name = item.target.id
-                    var_type = self._get_node_name(item.annotation) if item.annotation else "Any"
-                    class_doc.class_variables[var_name] = var_type
-
-            elif isinstance(item, ast.Assign):
-                # Class variable without annotation
-                for target in item.targets:
-                    if isinstance(target, ast.Name):
-                        class_doc.class_variables[target.id] = "Unknown"
-
-        # Calculate completeness
-        class_doc.completeness = self._calculate_class_completeness(class_doc)
-
+        class_doc.completeness = class_doc.calculate_completeness()
         return class_doc
+
+    # Decorator attribute mappings (Issue #315 - data-driven to avoid nesting)
+    _DECORATOR_ATTR_MAP = {
+        "staticmethod": ("is_static", True),
+        "classmethod": ("is_classmethod", True),
+        "abstractmethod": ("is_abstract", True),
+    }
+
+    def _process_function_decorator(self, dec_name: str, func_doc: "FunctionDoc") -> None:
+        """Process a single function decorator (Issue #315 - extracted helper).
+
+        Args:
+            dec_name: Name of the decorator
+            func_doc: FunctionDoc to update
+        """
+        func_doc.decorators.append(dec_name)
+
+        # Handle property decorator specially (sets two attributes)
+        if dec_name == "property":
+            func_doc.is_property = True
+            func_doc.element_type = ElementType.PROPERTY
+            return
+
+        # Use lookup for simple attribute decorators
+        if dec_name in self._DECORATOR_ATTR_MAP:
+            attr_name, attr_value = self._DECORATOR_ATTR_MAP[dec_name]
+            setattr(func_doc, attr_name, attr_value)
 
     def _analyze_function(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], source: str
@@ -757,35 +1026,20 @@ class DocGenerator:
             line_number=node.lineno,
         )
 
-        # Extract decorators
         for decorator in node.decorator_list:
             dec_name = self._get_node_name(decorator)
-            func_doc.decorators.append(dec_name)
-            if dec_name == "staticmethod":
-                func_doc.is_static = True
-            elif dec_name == "classmethod":
-                func_doc.is_classmethod = True
-            elif dec_name == "property":
-                func_doc.is_property = True
-                func_doc.element_type = ElementType.PROPERTY
-            elif dec_name == "abstractmethod":
-                func_doc.is_abstract = True
+            self._process_function_decorator(dec_name, func_doc)
 
-        # Extract parameters
         func_doc.parameters = self._extract_parameters(node)
 
-        # Extract return type
         if node.returns:
             func_doc.returns = ReturnDoc(type_hint=self._get_node_name(node.returns))
 
-        # Parse docstring for additional info
         if func_doc.docstring:
             func_doc.description = self._extract_description(func_doc.docstring)
             self._enhance_from_docstring(func_doc)
 
-        # Calculate completeness
-        func_doc.completeness = self._calculate_function_completeness(func_doc)
-
+        func_doc.completeness = func_doc.calculate_completeness()
         return func_doc
 
     def _extract_parameters(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ParameterDoc]:
@@ -995,10 +1249,7 @@ class DocGenerator:
         self, func_doc: FunctionDoc, param_name: str, description: str
     ) -> None:
         """Update parameter description in function documentation."""
-        for param in func_doc.parameters:
-            if param.name == param_name:
-                param.description = description
-                break
+        func_doc.update_parameter_description(param_name, description)
 
     def _should_include(self, name: str) -> bool:
         """Check if a name should be included based on settings."""
@@ -1118,18 +1369,31 @@ class DocGenerator:
 
         return imports
 
+    def _is_all_assignment(self, node: ast.AST) -> bool:
+        """Check if node is an __all__ assignment (Issue #315 - extracted helper)."""
+        if not isinstance(node, ast.Assign):
+            return False
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "__all__":
+                return True
+        return False
+
+    def _extract_all_values(self, value_node: ast.AST) -> List[str]:
+        """Extract string values from __all__ list/tuple (Issue #315 - extracted helper)."""
+        if not isinstance(value_node, (ast.List, ast.Tuple)):
+            return []
+        return [
+            e.value
+            for e in value_node.elts
+            if isinstance(e, ast.Constant) and isinstance(e.value, str)
+        ]
+
     def _extract_all_exports(self, tree: ast.Module) -> List[str]:
         """Extract __all__ exports from a module."""
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "__all__":
-                        if isinstance(node.value, (ast.List, ast.Tuple)):
-                            return [
-                                e.value if isinstance(e, ast.Constant) else str(e)
-                                for e in node.value.elts
-                                if isinstance(e, ast.Constant) and isinstance(e.value, str)
-                            ]
+            if not self._is_all_assignment(node):
+                continue
+            return self._extract_all_values(node.value)
         return []
 
     def _extract_dependencies(self, imports: List[str]) -> List[str]:
@@ -1194,96 +1458,6 @@ class DocGenerator:
                 pass
         return None
 
-    def _calculate_function_completeness(self, func_doc: FunctionDoc) -> DocCompleteness:
-        """Calculate documentation completeness for a function."""
-        score = 0
-
-        if func_doc.docstring:
-            score += 1
-        if func_doc.description:
-            score += 1
-        if all(p.description for p in func_doc.parameters):
-            score += 1
-        if func_doc.returns and func_doc.returns.description:
-            score += 1
-        if func_doc.examples:
-            score += 1
-
-        if score == 0:
-            return DocCompleteness.NONE
-        elif score == 1:
-            return DocCompleteness.MINIMAL
-        elif score <= 3:
-            return DocCompleteness.PARTIAL
-        elif score == 4:
-            return DocCompleteness.COMPLETE
-        else:
-            return DocCompleteness.COMPREHENSIVE
-
-    def _calculate_class_completeness(self, class_doc: ClassDoc) -> DocCompleteness:
-        """Calculate documentation completeness for a class."""
-        score = 0
-
-        if class_doc.docstring:
-            score += 1
-        if class_doc.description:
-            score += 1
-        if class_doc.examples:
-            score += 1
-
-        method_scores = [m.completeness.value for m in class_doc.methods]
-        if method_scores:
-            avg_score = sum(
-                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
-                for s in method_scores
-            ) / len(method_scores)
-            score += int(avg_score)
-
-        if score == 0:
-            return DocCompleteness.NONE
-        elif score == 1:
-            return DocCompleteness.MINIMAL
-        elif score <= 3:
-            return DocCompleteness.PARTIAL
-        elif score <= 5:
-            return DocCompleteness.COMPLETE
-        else:
-            return DocCompleteness.COMPREHENSIVE
-
-    def _calculate_module_completeness(self, module_doc: ModuleDoc) -> DocCompleteness:
-        """Calculate documentation completeness for a module."""
-        score = 0
-
-        if module_doc.docstring:
-            score += 1
-        if module_doc.description:
-            score += 1
-        if module_doc.examples:
-            score += 1
-
-        all_completeness = []
-        for cls in module_doc.classes:
-            all_completeness.append(cls.completeness.value)
-        for func in module_doc.functions:
-            all_completeness.append(func.completeness.value)
-
-        if all_completeness:
-            avg_score = sum(
-                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
-                for s in all_completeness
-            ) / len(all_completeness)
-            score += int(avg_score)
-
-        if score == 0:
-            return DocCompleteness.NONE
-        elif score == 1:
-            return DocCompleteness.MINIMAL
-        elif score <= 3:
-            return DocCompleteness.PARTIAL
-        elif score <= 5:
-            return DocCompleteness.COMPLETE
-        else:
-            return DocCompleteness.COMPREHENSIVE
 
     # =========================================================================
     # Documentation Generation

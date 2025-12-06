@@ -33,6 +33,49 @@ HIGH_RESOURCE_CONSTRAINT_TYPES = {"high_cpu_usage", "high_memory_usage"}
 MITIGATION_REQUIRED_RISK_LEVELS = {"medium", "high"}
 
 
+class TimeProvider:
+    """Utility class for time-related operations to reduce Feature Envy"""
+
+    @staticmethod
+    def current_timestamp() -> float:
+        """Get current Unix timestamp"""
+        return time.time()
+
+    @staticmethod
+    def current_timestamp_millis() -> int:
+        """Get current timestamp in milliseconds"""
+        return int(time.time() * 1000)
+
+    @staticmethod
+    def current_datetime() -> datetime:
+        """Get current datetime object"""
+        return datetime.now()
+
+    @staticmethod
+    def is_business_hours() -> bool:
+        """Check if current time is within business hours (9 AM - 5 PM)"""
+        current_hour = datetime.now().hour
+        return 9 <= current_hour <= 17
+
+    @staticmethod
+    def is_weekend() -> bool:
+        """Check if current day is weekend"""
+        return datetime.now().weekday() >= 5
+
+    @staticmethod
+    def get_temporal_context_data() -> Dict[str, Any]:
+        """Get comprehensive temporal context data"""
+        current_time = datetime.now()
+        return {
+            "timestamp": time.time(),
+            "datetime": current_time.isoformat(),
+            "hour": current_time.hour,
+            "day_of_week": current_time.weekday(),
+            "is_business_hours": 9 <= current_time.hour <= 17,
+            "is_weekend": current_time.weekday() >= 5,
+        }
+
+
 class DecisionType(Enum):
     """Types of decisions the system can make"""
 
@@ -82,6 +125,23 @@ class ContextElement:
     source: str
     metadata: Dict[str, Any]
 
+    def is_low_confidence(self, threshold: float = 0.6) -> bool:
+        """Check if this element has low confidence"""
+        return self.confidence < threshold
+
+    def get_age_hours(self) -> float:
+        """Get age of this context element in hours"""
+        return (time.time() - self.timestamp) / 3600
+
+    def apply_relevance_decay(self, decay_factor: float = 0.95) -> None:
+        """Apply time-based relevance decay"""
+        age_hours = self.get_age_hours()
+        self.relevance_score *= decay_factor ** age_hours
+
+    def is_type(self, metadata_type: str) -> bool:
+        """Check if element matches a specific metadata type"""
+        return self.metadata.get("type") == metadata_type
+
 
 @dataclass
 class DecisionContext:
@@ -121,6 +181,238 @@ class Decision:
     metadata: Dict[str, Any]
 
 
+class VisualContextCollector:
+    """Specialized collector for visual context information"""
+
+    def __init__(self):
+        self.time_provider = TimeProvider()
+
+    async def collect(self) -> List[ContextElement]:
+        """Collect visual context from screen analysis"""
+        try:
+            screen_analysis = (
+                await computer_vision_system.analyze_and_understand_screen()
+            )
+            visual_elements = []
+
+            # Screen state context
+            if screen_analysis.get("screen_analysis"):
+                visual_elements.append(
+                    self._create_screen_context(screen_analysis["screen_analysis"])
+                )
+
+            # UI elements context
+            if screen_analysis.get("ui_elements"):
+                visual_elements.append(
+                    self._create_ui_context(screen_analysis["ui_elements"])
+                )
+
+            # Automation opportunities context
+            if screen_analysis.get("automation_opportunities"):
+                visual_elements.append(
+                    self._create_automation_context(
+                        screen_analysis["automation_opportunities"]
+                    )
+                )
+
+            return visual_elements
+
+        except Exception as e:
+            logger.debug(f"Visual context collection failed: {e}")
+            return []
+
+    def _create_screen_context(self, screen_data: Dict[str, Any]) -> ContextElement:
+        """Create context element for screen analysis"""
+        return ContextElement(
+            context_id=f"screen_state_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.VISUAL,
+            content=screen_data,
+            confidence=screen_data.get("confidence_score", 0.8),
+            relevance_score=0.9,
+            timestamp=self.time_provider.current_timestamp(),
+            source="computer_vision_system",
+            metadata={"type": "screen_analysis"},
+        )
+
+    def _create_ui_context(self, ui_elements: List[Dict[str, Any]]) -> ContextElement:
+        """Create context element for UI elements"""
+        return ContextElement(
+            context_id=f"ui_elements_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.VISUAL,
+            content=ui_elements,
+            confidence=0.8,
+            relevance_score=0.85,
+            timestamp=self.time_provider.current_timestamp(),
+            source="computer_vision_system",
+            metadata={"type": "ui_elements", "count": len(ui_elements)},
+        )
+
+    def _create_automation_context(
+        self, opportunities: List[Dict[str, Any]]
+    ) -> ContextElement:
+        """Create context element for automation opportunities"""
+        return ContextElement(
+            context_id=f"automation_ops_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.VISUAL,
+            content=opportunities,
+            confidence=0.75,
+            relevance_score=0.9,
+            timestamp=self.time_provider.current_timestamp(),
+            source="computer_vision_system",
+            metadata={"type": "automation_opportunities"},
+        )
+
+
+class AudioContextCollector:
+    """Specialized collector for audio/voice context information"""
+
+    def __init__(self):
+        self.time_provider = TimeProvider()
+
+    async def collect(self) -> List[ContextElement]:
+        """Collect audio/voice context"""
+        try:
+            voice_status = voice_processing_system.get_system_status()
+            audio_elements = []
+
+            # Recent voice commands context
+            if voice_status.get("recent_activity"):
+                audio_elements.append(
+                    self._create_voice_activity_context(voice_status["recent_activity"])
+                )
+
+            # Command history context
+            command_history = voice_processing_system.get_command_history(limit=5)
+            if command_history:
+                audio_elements.append(
+                    self._create_command_history_context(command_history)
+                )
+
+            return audio_elements
+
+        except Exception as e:
+            logger.debug(f"Audio context collection failed: {e}")
+            return []
+
+    def _create_voice_activity_context(
+        self, recent_activity: Dict[str, Any]
+    ) -> ContextElement:
+        """Create context element for voice activity"""
+        return ContextElement(
+            context_id=f"voice_activity_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.AUDIO,
+            content=recent_activity,
+            confidence=0.8,
+            relevance_score=0.7,
+            timestamp=self.time_provider.current_timestamp(),
+            source="voice_processing_system",
+            metadata={"type": "voice_activity"},
+        )
+
+    def _create_command_history_context(
+        self, command_history: List[Dict[str, Any]]
+    ) -> ContextElement:
+        """Create context element for command history"""
+        return ContextElement(
+            context_id=f"voice_history_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.HISTORICAL,
+            content=command_history,
+            confidence=0.9,
+            relevance_score=0.6,
+            timestamp=self.time_provider.current_timestamp(),
+            source="voice_processing_system",
+            metadata={"type": "command_history", "count": len(command_history)},
+        )
+
+
+class SystemContextCollector:
+    """Specialized collector for system state context information"""
+
+    def __init__(self):
+        self.time_provider = TimeProvider()
+
+    async def collect(self) -> List[ContextElement]:
+        """Collect system state context"""
+        try:
+            system_elements = []
+
+            # Takeover system status
+            system_elements.append(self._create_takeover_status_context())
+
+            # Active takeovers
+            active_takeovers = takeover_manager.get_active_sessions()
+            if active_takeovers:
+                system_elements.append(
+                    self._create_active_takeovers_context(active_takeovers)
+                )
+
+            # System resource information
+            resource_context = self._create_resource_context()
+            if resource_context:
+                system_elements.append(resource_context)
+
+            return system_elements
+
+        except Exception as e:
+            logger.debug(f"System context collection failed: {e}")
+            return []
+
+    def _create_takeover_status_context(self) -> ContextElement:
+        """Create context element for takeover system status"""
+        takeover_status = takeover_manager.get_system_status()
+        return ContextElement(
+            context_id=f"takeover_status_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.SYSTEM_STATE,
+            content=takeover_status,
+            confidence=1.0,
+            relevance_score=0.8,
+            timestamp=self.time_provider.current_timestamp(),
+            source="takeover_manager",
+            metadata={"type": "takeover_status"},
+        )
+
+    def _create_active_takeovers_context(
+        self, active_takeovers: List[Dict[str, Any]]
+    ) -> ContextElement:
+        """Create context element for active takeovers"""
+        return ContextElement(
+            context_id=f"active_takeovers_{self.time_provider.current_timestamp_millis()}",
+            context_type=ContextType.SYSTEM_STATE,
+            content=active_takeovers,
+            confidence=1.0,
+            relevance_score=0.95,
+            timestamp=self.time_provider.current_timestamp(),
+            source="takeover_manager",
+            metadata={"type": "active_takeovers", "count": len(active_takeovers)},
+        )
+
+    def _create_resource_context(self) -> Optional[ContextElement]:
+        """Create context element for system resources"""
+        try:
+            import psutil
+
+            resource_info = {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_usage": psutil.disk_usage("/").percent,
+            }
+
+            return ContextElement(
+                context_id=f"system_resources_{self.time_provider.current_timestamp_millis()}",
+                context_type=ContextType.ENVIRONMENTAL,
+                content=resource_info,
+                confidence=1.0,
+                relevance_score=0.6,
+                timestamp=self.time_provider.current_timestamp(),
+                source="system_monitor",
+                metadata={"type": "resource_usage"},
+            )
+
+        except ImportError:
+            logger.debug("psutil not available for system resource monitoring")
+            return None
+
+
 class ContextCollector:
     """Collects and manages context information from various sources"""
 
@@ -128,6 +420,12 @@ class ContextCollector:
         self.context_cache: List[ContextElement] = []
         self.max_cache_size = 100
         self.context_relevance_decay = 0.95  # Decay factor per hour
+        self.time_provider = TimeProvider()
+
+        # Specialized collectors to reduce Feature Envy
+        self.visual_collector = VisualContextCollector()
+        self.audio_collector = AudioContextCollector()
+        self.system_collector = SystemContextCollector()
 
         logger.info("Context Collector initialized")
 
@@ -144,19 +442,19 @@ class ContextCollector:
             inputs={"decision_type": decision_type.value, "goal": primary_goal},
         ) as task_context:
             try:
-                decision_id = f"decision_{int(time.time() * 1000)}"
+                decision_id = f"decision_{self.time_provider.current_timestamp_millis()}"
                 context_elements = []
 
-                # Collect visual context
-                visual_context = await self._collect_visual_context()
+                # Collect visual context using specialized collector
+                visual_context = await self.visual_collector.collect()
                 context_elements.extend(visual_context)
 
-                # Collect audio/voice context
-                audio_context = await self._collect_audio_context()
+                # Collect audio/voice context using specialized collector
+                audio_context = await self.audio_collector.collect()
                 context_elements.extend(audio_context)
 
-                # Collect system state context
-                system_context = await self._collect_system_context()
+                # Collect system state context using specialized collector
+                system_context = await self.system_collector.collect()
                 context_elements.extend(system_context)
 
                 # Collect historical context
@@ -221,180 +519,6 @@ class ContextCollector:
                 logger.error(f"Context collection failed: {e}")
                 raise
 
-    async def _collect_visual_context(self) -> List[ContextElement]:
-        """Collect visual context from screen analysis"""
-        try:
-            # Get latest screen analysis
-            screen_analysis = (
-                await computer_vision_system.analyze_and_understand_screen()
-            )
-
-            visual_elements = []
-
-            # Screen state context
-            if screen_analysis.get("screen_analysis"):
-                screen_context = ContextElement(
-                    context_id=f"screen_state_{int(time.time())}",
-                    context_type=ContextType.VISUAL,
-                    content=screen_analysis["screen_analysis"],
-                    confidence=screen_analysis["screen_analysis"].get(
-                        "confidence_score", 0.8
-                    ),
-                    relevance_score=0.9,
-                    timestamp=time.time(),
-                    source="computer_vision_system",
-                    metadata={"type": "screen_analysis"},
-                )
-                visual_elements.append(screen_context)
-
-            # UI elements context
-            if screen_analysis.get("ui_elements"):
-                ui_context = ContextElement(
-                    context_id=f"ui_elements_{int(time.time())}",
-                    context_type=ContextType.VISUAL,
-                    content=screen_analysis["ui_elements"],
-                    confidence=0.8,
-                    relevance_score=0.85,
-                    timestamp=time.time(),
-                    source="computer_vision_system",
-                    metadata={
-                        "type": "ui_elements",
-                        "count": len(screen_analysis["ui_elements"]),
-                    },
-                )
-                visual_elements.append(ui_context)
-
-            # Automation opportunities context
-            if screen_analysis.get("automation_opportunities"):
-                automation_context = ContextElement(
-                    context_id=f"automation_ops_{int(time.time())}",
-                    context_type=ContextType.VISUAL,
-                    content=screen_analysis["automation_opportunities"],
-                    confidence=0.75,
-                    relevance_score=0.9,
-                    timestamp=time.time(),
-                    source="computer_vision_system",
-                    metadata={"type": "automation_opportunities"},
-                )
-                visual_elements.append(automation_context)
-
-            return visual_elements
-
-        except Exception as e:
-            logger.debug(f"Visual context collection failed: {e}")
-            return []
-
-    async def _collect_audio_context(self) -> List[ContextElement]:
-        """Collect audio/voice context"""
-        try:
-            # Get voice processing system status
-            voice_status = voice_processing_system.get_system_status()
-
-            audio_elements = []
-
-            # Recent voice commands context
-            if voice_status.get("recent_activity"):
-                voice_context = ContextElement(
-                    context_id=f"voice_activity_{int(time.time())}",
-                    context_type=ContextType.AUDIO,
-                    content=voice_status["recent_activity"],
-                    confidence=0.8,
-                    relevance_score=0.7,
-                    timestamp=time.time(),
-                    source="voice_processing_system",
-                    metadata={"type": "voice_activity"},
-                )
-                audio_elements.append(voice_context)
-
-            # Command history context
-            command_history = voice_processing_system.get_command_history(limit=5)
-            if command_history:
-                history_context = ContextElement(
-                    context_id=f"voice_history_{int(time.time())}",
-                    context_type=ContextType.HISTORICAL,
-                    content=command_history,
-                    confidence=0.9,
-                    relevance_score=0.6,
-                    timestamp=time.time(),
-                    source="voice_processing_system",
-                    metadata={"type": "command_history", "count": len(command_history)},
-                )
-                audio_elements.append(history_context)
-
-            return audio_elements
-
-        except Exception as e:
-            logger.debug(f"Audio context collection failed: {e}")
-            return []
-
-    async def _collect_system_context(self) -> List[ContextElement]:
-        """Collect system state context"""
-        try:
-            system_elements = []
-
-            # Takeover system status
-            takeover_status = takeover_manager.get_system_status()
-            takeover_context = ContextElement(
-                context_id=f"takeover_status_{int(time.time())}",
-                context_type=ContextType.SYSTEM_STATE,
-                content=takeover_status,
-                confidence=1.0,
-                relevance_score=0.8,
-                timestamp=time.time(),
-                source="takeover_manager",
-                metadata={"type": "takeover_status"},
-            )
-            system_elements.append(takeover_context)
-
-            # Active takeovers
-            active_takeovers = takeover_manager.get_active_sessions()
-            if active_takeovers:
-                active_takeover_context = ContextElement(
-                    context_id=f"active_takeovers_{int(time.time())}",
-                    context_type=ContextType.SYSTEM_STATE,
-                    content=active_takeovers,
-                    confidence=1.0,
-                    relevance_score=0.95,
-                    timestamp=time.time(),
-                    source="takeover_manager",
-                    metadata={
-                        "type": "active_takeovers",
-                        "count": len(active_takeovers),
-                    },
-                )
-                system_elements.append(active_takeover_context)
-
-            # System resource information
-            try:
-                import psutil
-
-                resource_info = {
-                    "cpu_percent": psutil.cpu_percent(),
-                    "memory_percent": psutil.virtual_memory().percent,
-                    "disk_usage": psutil.disk_usage("/").percent,
-                }
-
-                resource_context = ContextElement(
-                    context_id=f"system_resources_{int(time.time())}",
-                    context_type=ContextType.ENVIRONMENTAL,
-                    content=resource_info,
-                    confidence=1.0,
-                    relevance_score=0.6,
-                    timestamp=time.time(),
-                    source="system_monitor",
-                    metadata={"type": "resource_usage"},
-                )
-                system_elements.append(resource_context)
-
-            except ImportError:
-                logger.debug("psutil not available for system resource monitoring")
-
-            return system_elements
-
-        except Exception as e:
-            logger.debug(f"System context collection failed: {e}")
-            return []
-
     async def _collect_historical_context(
         self, decision_type: DecisionType
     ) -> List[ContextElement]:
@@ -408,12 +532,12 @@ class ContextCollector:
             recent_decisions = []  # Would query memory system
             if recent_decisions:
                 history_context = ContextElement(
-                    context_id=f"decision_history_{int(time.time())}",
+                    context_id=f"decision_history_{self.time_provider.current_timestamp_millis()}",
                     context_type=ContextType.HISTORICAL,
                     content=recent_decisions,
                     confidence=0.8,
                     relevance_score=0.7,
-                    timestamp=time.time(),
+                    timestamp=self.time_provider.current_timestamp(),
                     source="enhanced_memory_system",
                     metadata={
                         "type": "decision_history",
@@ -431,22 +555,13 @@ class ContextCollector:
     async def _collect_environmental_context(self) -> List[ContextElement]:
         """Collect environmental context (time, date, system load, etc.)"""
         try:
-            current_time = datetime.now()
-
             temporal_context = ContextElement(
-                context_id=f"temporal_{int(time.time())}",
+                context_id=f"temporal_{self.time_provider.current_timestamp_millis()}",
                 context_type=ContextType.ENVIRONMENTAL,
-                content={
-                    "timestamp": time.time(),
-                    "datetime": current_time.isoformat(),
-                    "hour": current_time.hour,
-                    "day_of_week": current_time.weekday(),
-                    "is_business_hours": 9 <= current_time.hour <= 17,
-                    "is_weekend": current_time.weekday() >= 5,
-                },
+                content=self.time_provider.get_temporal_context_data(),
                 confidence=1.0,
                 relevance_score=0.5,
-                timestamp=time.time(),
+                timestamp=self.time_provider.current_timestamp(),
                 source="system_clock",
                 metadata={"type": "temporal_context"},
             )
@@ -713,7 +828,7 @@ class ContextCollector:
             "active_sessions": 0,
             "pending_tasks": 0,
             "system_health": "healthy",
-            "last_user_interaction": time.time() - 3600,  # 1 hour ago
+            "last_user_interaction": self.time_provider.current_timestamp() - 3600,  # 1 hour ago
             "current_focus": "monitoring",
         }
 
@@ -725,17 +840,16 @@ class ContextCollector:
         if len(self.context_cache) > self.max_cache_size:
             self.context_cache = self.context_cache[-self.max_cache_size :]
 
-        # Decay relevance scores based on age
-        current_time = time.time()
+        # Decay relevance scores based on age using ContextElement method
         for element in self.context_cache:
-            age_hours = (current_time - element.timestamp) / 3600
-            element.relevance_score *= self.context_relevance_decay**age_hours
+            element.apply_relevance_decay(self.context_relevance_decay)
 
 
 class DecisionEngine:
     """Core decision making engine"""
 
     def __init__(self):
+        self.time_provider = TimeProvider()
         self.decision_algorithms = {
             DecisionType.AUTOMATION_ACTION: self._decide_automation_action,
             DecisionType.NAVIGATION_CHOICE: self._decide_navigation_choice,
@@ -855,7 +969,7 @@ class DecisionEngine:
                 {"action": "request_human_takeover"} if confidence < 0.6 else None
             ),
             requires_approval=requires_approval,
-            timestamp=time.time(),
+            timestamp=self.time_provider.current_timestamp(),
             metadata={
                 "algorithm": "automation_scoring",
                 "total_actions_considered": len(automation_actions),
@@ -933,7 +1047,7 @@ class DecisionEngine:
             monitoring_criteria=["navigation_success", "page_load_status"],
             fallback_plan=None,
             requires_approval=False,
-            timestamp=time.time(),
+            timestamp=self.time_provider.current_timestamp(),
             metadata={"algorithm": "navigation_selection"},
         )
 
@@ -980,7 +1094,7 @@ class DecisionEngine:
                 monitoring_criteria=["human_response", "risk_mitigation_status"],
                 fallback_plan=None,
                 requires_approval=False,
-                timestamp=time.time(),
+                timestamp=self.time_provider.current_timestamp(),
                 metadata={"algorithm": "risk_assessment"},
             )
         else:
@@ -1009,7 +1123,7 @@ class DecisionEngine:
                 monitoring_criteria=["risk_factor_changes", "system_performance"],
                 fallback_plan=None,
                 requires_approval=False,
-                timestamp=time.time(),
+                timestamp=self.time_provider.current_timestamp(),
                 metadata={"algorithm": "risk_assessment"},
             )
 
@@ -1078,7 +1192,7 @@ class DecisionEngine:
                 ],
                 fallback_plan={"action": "pause_all_operations"},
                 requires_approval=False,  # Emergency escalation doesn't require approval
-                timestamp=time.time(),
+                timestamp=self.time_provider.current_timestamp(),
                 metadata={"algorithm": "escalation_urgency_analysis"},
             )
         else:
@@ -1107,7 +1221,7 @@ class DecisionEngine:
                 monitoring_criteria=["context_changes", "risk_factor_evolution"],
                 fallback_plan={"action": "request_human_review"},
                 requires_approval=False,
-                timestamp=time.time(),
+                timestamp=self.time_provider.current_timestamp(),
                 metadata={"algorithm": "escalation_analysis"},
             )
 
@@ -1148,7 +1262,7 @@ class DecisionEngine:
             monitoring_criteria=[],
             fallback_plan=None,
             requires_approval=False,
-            timestamp=time.time(),
+            timestamp=self.time_provider.current_timestamp(),
             metadata={"algorithm": "no_action"},
         )
 
@@ -1177,7 +1291,7 @@ class DecisionEngine:
             monitoring_criteria=[],
             fallback_plan={"action": "request_human_guidance"},
             requires_approval=True,  # Placeholder decisions should be reviewed
-            timestamp=time.time(),
+            timestamp=self.time_provider.current_timestamp(),
             metadata={"algorithm": "placeholder"},
         )
 
