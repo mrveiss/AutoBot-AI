@@ -144,6 +144,54 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * Update metadata for a specific message.
+   * Properly triggers Vue reactivity for nested metadata updates.
+   *
+   * @param messageId - The message ID to update
+   * @param metadataUpdates - Partial metadata to merge
+   * @returns true if message was found and updated
+   */
+  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, any>): boolean {
+    if (!currentSession.value) return false
+
+    const messageIndex = currentSession.value.messages.findIndex(m => m.id === messageId)
+    if (messageIndex !== -1) {
+      const message = currentSession.value.messages[messageIndex]
+      // Create new message object to ensure Vue reactivity
+      currentSession.value.messages[messageIndex] = {
+        ...message,
+        metadata: {
+          ...(message.metadata || {}),
+          ...metadataUpdates
+        }
+      }
+      currentSession.value.updatedAt = new Date()
+      logger.debug(`[METADATA] Updated message ${messageId} metadata:`, metadataUpdates)
+      return true
+    }
+    logger.warn(`[METADATA] Message not found for metadata update: ${messageId}`)
+    return false
+  }
+
+  /**
+   * Find a message by metadata criteria.
+   * Helper for finding messages to update (e.g., approval status).
+   *
+   * @param criteria - Metadata key-value pairs to match
+   * @returns The matching message or undefined
+   */
+  function findMessageByMetadata(criteria: Record<string, any>): ChatMessage | undefined {
+    if (!currentSession.value) return undefined
+
+    return currentSession.value.messages.find(msg => {
+      if (!msg.metadata) return false
+      return Object.entries(criteria).every(
+        ([key, value]) => msg.metadata?.[key] === value
+      )
+    })
+  }
+
   function deleteMessage(messageId: string) {
     if (!currentSession.value) return
 
@@ -444,6 +492,8 @@ export const useChatStore = defineStore('chat', () => {
     switchToSession,
     addMessage,
     updateMessage,
+    updateMessageMetadata,
+    findMessageByMetadata,
     deleteMessage,
     deleteSession,
     updateSessionTitle,

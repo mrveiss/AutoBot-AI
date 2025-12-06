@@ -16,7 +16,7 @@ from typing import Callable, Dict, Optional, Tuple
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from backend.type_defs.common import STREAMING_MESSAGE_TYPES
+from backend.type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -392,9 +392,12 @@ async def websocket_endpoint(websocket: WebSocket):
             text, sender = _format_event_for_chat(message_type, raw_data)
 
             # Add to chat history if we have meaningful text and chat_history_manager is available
-            # CRITICAL FIX: Skip streaming responses to prevent duplicate messages
-            # Streaming responses are persisted once at completion in chat_workflow_manager.py
-            if text and chat_history_manager and message_type not in STREAMING_MESSAGE_TYPES:
+            # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
+            # This prevents duplication from multiple persistence paths:
+            # - Streaming responses: persisted once at completion in chat_workflow_manager.py
+            # - Terminal messages: persisted by chat_integration.py and service.py
+            # - Approval requests: persisted by tool_handler.py::_persist_approval_request()
+            if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
                 try:
                     await chat_history_manager.add_message(
                         sender, text, message_type, raw_data
