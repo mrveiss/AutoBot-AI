@@ -1,145 +1,150 @@
+#!/usr/bin/env python3
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-AutoBot Unified Timeout Configuration
-====================================
-
-Centralized timeout configuration for all AutoBot services.
-This module provides standardized timeout values that can be overridden
-via environment variables.
-
-Usage:
-    from src.config.timeout_config import TIMEOUT_CONFIG
-
-    redis_timeout = TIMEOUT_CONFIG.redis_socket_timeout
-    api_timeout = TIMEOUT_CONFIG.api_request_timeout
+Timeout configuration management for unified config manager.
 """
 
+import logging
 import os
-from dataclasses import dataclass
-from typing import Union
+from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class TimeoutConfiguration:
-    """Unified timeout configuration for AutoBot"""
+class TimeoutConfigMixin:
+    """Mixin providing timeout configuration management"""
 
-    # Redis Configuration
-    redis_socket_timeout: float = 5.0
-    redis_connect_timeout: float = 5.0
-    redis_retry_on_timeout: bool = True
-    redis_max_retries: int = 3
-    redis_circuit_breaker_timeout: int = 60
+    def get_timeout(self, category: str, timeout_type: str = "default") -> float:
+        """
+        Get timeout value for a category.
 
-    # HTTP/API Configuration
-    api_request_timeout: int = 30
-    health_check_timeout: int = 3
-    websocket_timeout: int = 30
+        Provides compatibility with config_helper.cfg.get_timeout()
+        for config consolidation (Issue #63).
 
-    # Database Configuration
-    database_query_timeout: int = 10
-    chromadb_timeout: int = 15
-    vector_search_timeout: int = 20
-    sqlite_timeout: int = 30
+        Args:
+            category: Timeout category (e.g., 'llm', 'http', 'redis')
+            timeout_type: Type of timeout (default: 'default')
 
-    # LLM Configuration
-    llm_connect_timeout: float = 5.0
-    llm_non_streaming_timeout: int = 30
-    llm_streaming_heartbeat: int = 5
+        Returns:
+            Timeout in seconds
+        """
+        timeout = self.get_nested(f"timeouts.{category}.{timeout_type}")
+        if timeout is not None:
+            return float(timeout)
 
-    # File Operations
-    upload_timeout: int = 300
-    download_timeout: int = 120
+        # Fallback defaults
+        defaults = {
+            "llm": {"default": 120.0, "streaming": 180.0},
+            "http": {"default": 30.0, "long": 60.0},
+            "redis": {"default": 5.0, "connection": 10.0},
+            "database": {"default": 30.0, "query": 60.0},
+        }
+        return defaults.get(category, {}).get(timeout_type, 30.0)
 
-    # Background Processing
-    background_processing_timeout: int = 60
-    long_running_operation_timeout: int = 1800  # 30 minutes
+    def get_timeout_for_env(
+        self,
+        category: str,
+        timeout_type: str,
+        environment: str = None,
+        default: float = 60.0,
+    ) -> float:
+        """
+        Get environment-aware timeout value.
 
-    # Deployment Configuration
-    deployment_timeout: int = 1800
-    health_check_deployment_timeout: int = 300
-    graceful_shutdown_timeout: int = 30
+        Args:
+            category: Category path (e.g., 'redis.operations')
+            timeout_type: Specific timeout type (e.g., 'get')
+            environment: Environment name ('development', 'production')
+            default: Fallback value if not found
 
-    def get_env_override(
-        self, key: str, default: Union[int, float, bool]
-    ) -> Union[int, float, bool]:
-        """Get environment variable override for timeout value"""
-        env_key = f"AUTOBOT_{key.upper()}"
-        env_value = os.getenv(env_key)
+        Returns:
+            Timeout value in seconds
+        """
+        if environment is None:
+            environment = os.getenv("AUTOBOT_ENVIRONMENT", "production")
 
-        if env_value is None:
-            return default
+        # Try environment-specific override first
+        env_path = f"environments.{environment}.timeouts.{category}.{timeout_type}"
+        env_timeout = self.get_nested(env_path)
+        if env_timeout is not None:
+            return float(env_timeout)
 
-        try:
-            if isinstance(default, bool):
-                return env_value.lower() in ("true", "1", "yes", "on")
-            elif isinstance(default, float):
-                return float(env_value)
-            elif isinstance(default, int):
-                return int(env_value)
-        except (ValueError, TypeError):
-            return default
+        # Fall back to base configuration
+        base_path = f"timeouts.{category}.{timeout_type}"
+        base_timeout = self.get_nested(base_path, default)
+        return float(base_timeout)
 
-        return default
+    def get_timeout_group(
+        self, category: str, environment: str = None
+    ) -> Dict[str, float]:
+        """
+        Get all timeouts for a category as a dictionary.
 
-    def __post_init__(self):
-        """Apply environment variable overrides"""
-        for field_name in self.__dataclass_fields__:
-            current_value = getattr(self, field_name)
-            override_value = self.get_env_override(field_name, current_value)
-            setattr(self, field_name, override_value)
+        Args:
+            category: Category path (e.g., 'redis.operations')
+            environment: Environment name (optional)
 
+        Returns:
+            Dictionary of timeout names to values
+        """
+        base_path = f"timeouts.{category}"
+        base_config = self.get_nested(base_path, {})
 
-# Global timeout configuration instance
-TIMEOUT_CONFIG = TimeoutConfiguration()
+        if not isinstance(base_config, dict):
+            return {}
 
+        # Apply environment overrides if specified
+        if environment:
+            env_path = f"environments.{environment}.timeouts.{category}"
+            env_overrides = self.get_nested(env_path, {})
+            if isinstance(env_overrides, dict):
+                base_config = {**base_config, **env_overrides}
 
-def get_redis_timeout_config() -> dict:
-    """Get Redis-specific timeout configuration"""
-    return {
-        "socket_timeout": TIMEOUT_CONFIG.redis_socket_timeout,
-        "socket_connect_timeout": TIMEOUT_CONFIG.redis_connect_timeout,
-        "retry_on_timeout": TIMEOUT_CONFIG.redis_retry_on_timeout,
-        "max_retries": TIMEOUT_CONFIG.redis_max_retries,
-    }
+        # Convert all values to float
+        result = {}
+        for k, v in base_config.items():
+            if isinstance(v, (int, float)):
+                result[k] = float(v)
 
+        return result
 
-def get_api_timeout_config() -> dict:
-    """Get API-specific timeout configuration"""
-    return {
-        "request_timeout": TIMEOUT_CONFIG.api_request_timeout,
-        "health_check_timeout": TIMEOUT_CONFIG.health_check_timeout,
-        "websocket_timeout": TIMEOUT_CONFIG.websocket_timeout,
-    }
+    def validate_timeouts(self) -> Dict[str, Any]:
+        """
+        Validate all timeout configurations.
 
+        Returns:
+            Validation report with issues and warnings
+        """
+        issues = []
+        warnings = []
 
-def get_database_timeout_config() -> dict:
-    """Get database-specific timeout configuration"""
-    return {
-        "query_timeout": TIMEOUT_CONFIG.database_query_timeout,
-        "chromadb_timeout": TIMEOUT_CONFIG.chromadb_timeout,
-        "vector_search_timeout": TIMEOUT_CONFIG.vector_search_timeout,
-        "sqlite_timeout": TIMEOUT_CONFIG.sqlite_timeout,
-    }
+        # Check required timeout categories
+        required_categories = ["redis", "llamaindex", "documents", "http", "llm"]
+        for category in required_categories:
+            timeout_config = self.get_nested(f"timeouts.{category}")
+            if timeout_config is None:
+                issues.append(f"Missing timeout configuration for '{category}'")
 
+        # Validate timeout ranges
+        all_timeouts = self.get_nested("timeouts", {})
 
-def validate_timeout_hierarchy():
-    """Validate that timeout values maintain proper hierarchy"""
-    issues = []
+        def check_timeout_values(config, path=""):
+            for key, value in config.items():
+                current_path = f"{path}.{key}" if path else key
+                if isinstance(value, dict):
+                    check_timeout_values(value, current_path)
+                elif isinstance(value, (int, float)):
+                    if value <= 0:
+                        issues.append(
+                            f"Invalid timeout '{current_path}': {value} (must be > 0)"
+                        )
+                    elif value > 600:
+                        warnings.append(
+                            f"Very long timeout '{current_path}': {value}s (> 10 minutes)"
+                        )
 
-    # Connection timeout should be less than operation timeout
-    if TIMEOUT_CONFIG.redis_connect_timeout >= TIMEOUT_CONFIG.redis_socket_timeout:
-        issues.append("Redis connect timeout should be less than socket timeout")
+        check_timeout_values(all_timeouts)
 
-    # Health check should be fast
-    if TIMEOUT_CONFIG.health_check_timeout > TIMEOUT_CONFIG.api_request_timeout:
-        issues.append("Health check timeout should be less than API request timeout")
-
-    # WebSocket timeout should be reasonable for interactive use
-    if TIMEOUT_CONFIG.websocket_timeout > 60:
-        issues.append(
-            "WebSocket timeout should not exceed 60 seconds for user experience"
-        )
-
-    return issues
+        return {"valid": len(issues) == 0, "issues": issues, "warnings": warnings}

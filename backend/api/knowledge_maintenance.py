@@ -402,6 +402,68 @@ async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
 # ===== ORPHANED FACTS MANAGEMENT =====
 
 
+def _decode_key(key) -> str:
+    """Decode Redis key from bytes if needed."""
+    return key.decode("utf-8") if isinstance(key, bytes) else key
+
+
+def _check_orphaned_fact(key: str, metadata_str) -> tuple:
+    """
+    Check if a fact is orphaned (source file doesn't exist).
+
+    Returns:
+        Tuple of (is_file_based: bool, is_orphaned: bool, orphan_info: dict or None)
+    """
+    if not metadata_str:
+        return False, False, None
+
+    try:
+        metadata = json.loads(metadata_str)
+    except json.JSONDecodeError:
+        logger.warning(f"Failed to parse metadata for {key}")
+        return False, False, None
+
+    file_path = metadata.get("file_path")
+    if not file_path:
+        return False, False, None
+
+    # This is a file-based fact
+    if PathLib(file_path).exists():
+        return True, False, None
+
+    # File doesn't exist - this is an orphan
+    return True, True, {
+        "fact_id": metadata.get("fact_id"),
+        "fact_key": key,
+        "title": metadata.get("title", "Unknown"),
+        "category": metadata.get("category", "Unknown"),
+        "file_path": file_path,
+        "source": metadata.get("source", "Unknown"),
+    }
+
+
+def _process_orphan_batch(keys: list, results: list) -> tuple:
+    """
+    Process a batch of facts and identify orphans.
+
+    Returns:
+        Tuple of (file_based_count, orphaned_facts_list)
+    """
+    file_based_count = 0
+    orphaned_facts = []
+
+    for key, metadata_str in zip(keys, results):
+        key = _decode_key(key)
+        is_file_based, is_orphan, orphan_info = _check_orphaned_fact(key, metadata_str)
+
+        if is_file_based:
+            file_based_count += 1
+        if is_orphan and orphan_info:
+            orphaned_facts.append(orphan_info)
+
+    return file_based_count, orphaned_facts
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_orphaned_facts",
@@ -430,41 +492,21 @@ async def find_orphaned_facts(req: Request):
     while True:
         cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
 
-        if keys:
-            # Use pipeline for batch operations
-            pipe = kb.redis_client.pipeline()
-            for key in keys:
-                pipe.hget(key, "metadata")
-            results = pipe.execute()
+        if not keys:
+            if cursor == 0:
+                break
+            continue
 
-            for key, metadata_str in zip(keys, results):
-                # Decode key if it's bytes
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
+        # Use pipeline for batch operations
+        pipe = kb.redis_client.pipeline()
+        for key in keys:
+            pipe.hget(key, "metadata")
+        results = pipe.execute()
 
-                if metadata_str:
-                    try:
-                        metadata = json.loads(metadata_str)
-                        file_path = metadata.get("file_path")
-
-                        # Only check facts with file_path metadata
-                        if file_path:
-                            total_checked += 1
-
-                            # Check if file exists
-                            if not PathLib(file_path).exists():
-                                orphaned_facts.append(
-                                    {
-                                        "fact_id": metadata.get("fact_id"),
-                                        "fact_key": key,
-                                        "title": metadata.get("title", "Unknown"),
-                                        "category": metadata.get("category", "Unknown"),
-                                        "file_path": file_path,
-                                        "source": metadata.get("source", "Unknown"),
-                                    }
-                                )
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse metadata for {key}")
+        # Process batch (extracted helper reduces nesting)
+        batch_checked, batch_orphans = _process_orphan_batch(keys, results)
+        total_checked += batch_checked
+        orphaned_facts.extend(batch_orphans)
 
         if cursor == 0:
             break

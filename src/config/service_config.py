@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Service, host, port, and URL configuration management.
+"""
+
+import logging
+import os
+from typing import Any, Dict
+
+from src.constants.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
+
+
+class ServiceConfigMixin:
+    """Mixin providing service, host, port, and URL configuration"""
+
+    def get_host(self, service: str) -> str:
+        """
+        Get host address for a service.
+
+        Provides compatibility with config_helper.cfg.get_host()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+
+        Returns:
+            Host address string
+        """
+        # Try infrastructure.hosts first
+        host = self.get_nested(f"infrastructure.hosts.{service}")
+        if host:
+            return host
+
+        # Fallback to NetworkConstants
+        service_map = {
+            "backend": NetworkConstants.MAIN_MACHINE_IP,
+            "redis": NetworkConstants.REDIS_VM_IP,
+            "frontend": NetworkConstants.FRONTEND_VM_IP,
+            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+            "browser": NetworkConstants.BROWSER_VM_IP,
+            "ollama": NetworkConstants.AI_STACK_HOST,
+            "browser_service": NetworkConstants.BROWSER_VM_IP,
+        }
+        return service_map.get(service, "localhost")
+
+    def get_port(self, service: str) -> int:
+        """
+        Get port number for a service.
+
+        Provides compatibility with config_helper.cfg.get_port()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+
+        Returns:
+            Port number
+        """
+        # Try infrastructure.ports first
+        port = self.get_nested(f"infrastructure.ports.{service}")
+        if port:
+            return int(port)
+
+        # Fallback to NetworkConstants
+        service_map = {
+            "backend": NetworkConstants.BACKEND_PORT,
+            "redis": NetworkConstants.REDIS_PORT,
+            "frontend": NetworkConstants.FRONTEND_PORT,
+            "npu_worker": NetworkConstants.NPU_WORKER_PORT,
+            "ai_stack": NetworkConstants.AI_STACK_PORT,
+            "browser": NetworkConstants.BROWSER_SERVICE_PORT,
+            "ollama": NetworkConstants.OLLAMA_PORT,
+            "browser_service": NetworkConstants.BROWSER_SERVICE_PORT,
+        }
+        return service_map.get(service, 8000)
+
+    def get_service_url(self, service: str, endpoint: str = None) -> str:
+        """
+        Get full URL for a service with optional endpoint.
+
+        Provides compatibility with config_helper.cfg.get_service_url()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+            endpoint: Optional endpoint path to append
+
+        Returns:
+            Full service URL string
+        """
+        host = self.get_host(service)
+        port = self.get_port(service)
+        url = f"http://{host}:{port}"
+        if endpoint:
+            url = f"{url}/{endpoint.lstrip('/')}"
+        return url
+
+    def get_backend_config(self) -> Dict[str, Any]:
+        """Get backend configuration with fallback defaults"""
+        backend_config = self.get_nested("backend", {})
+
+        defaults = {
+            "server_host": NetworkConstants.BIND_ALL_INTERFACES,
+            "server_port": int(
+                os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
+            ),
+            "api_endpoint": (
+                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}"
+            ),
+            "timeout": 60,
+            "max_retries": 3,
+            "streaming": False,
+            "cors_origins": [],
+            "allowed_hosts": ["*"],
+            "max_request_size": 10485760,  # 10MB
+        }
+
+        from src.config.loader import deep_merge
+
+        return deep_merge(defaults, backend_config)
+
+    def get_config_section(self, section: str) -> Dict[str, Any]:
+        """Get configuration section with fallback defaults"""
+        return self.get_nested(section, {})
+
+    def get_redis_config(self) -> Dict[str, Any]:
+        """Get Redis configuration with fallback defaults"""
+        redis_config = self.get_nested("memory.redis", {})
+
+        # Use self.get_host/get_port for consistency (Issue #63 consolidation)
+        default_host = self.get_host("redis")
+        default_port = self.get_port("redis")
+
+        # FIX: Don't override password with None - let it come from redis_config
+        defaults = {
+            "enabled": True,
+            "host": default_host,
+            "port": default_port,
+            "db": 1,
+        }
+
+        from src.config.loader import deep_merge
+
+        return deep_merge(defaults, redis_config)
+
+    def get_ollama_url(self) -> str:
+        """Get the Ollama service URL from configuration (backward compatibility)"""
+        # First check environment variable
+        env_url = os.getenv("AUTOBOT_OLLAMA_URL")
+        if env_url:
+            return env_url
+
+        # Then check configuration
+        endpoint = self.get_nested("backend.llm.local.providers.ollama.endpoint")
+        if endpoint:
+            return endpoint.replace("/api/generate", "")  # Get base URL
+
+        host = self.get_nested("backend.llm.local.providers.ollama.host")
+        if host:
+            return host
+
+        # Finally fall back to configured host (Issue #63 consolidation)
+        ollama_host = self.get_host("ollama")
+        ollama_port = self.get_port("ollama")
+        if ollama_host and ollama_port:
+            return f"http://{ollama_host}:{ollama_port}"
+        return (
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+        )
+
+    def get_redis_url(self) -> str:
+        """Get the Redis service URL from configuration (backward compatibility)"""
+        env_url = os.getenv("AUTOBOT_REDIS_URL")
+        if env_url:
+            return env_url
+
+        host = self.get_nested("memory.redis.host", NetworkConstants.LOCALHOST_IP)
+        port = self.get_nested("memory.redis.port", NetworkConstants.REDIS_PORT)
+        return f"redis://{host}:{port}"
+
+    def get_distributed_services_config(self) -> Dict[str, Any]:
+        """Get distributed services configuration from NetworkConstants"""
+        return {
+            "frontend": {
+                "host": str(NetworkConstants.FRONTEND_HOST),
+                "port": NetworkConstants.FRONTEND_PORT,
+            },
+            "npu_worker": {
+                "host": str(NetworkConstants.NPU_WORKER_HOST),
+                "port": NetworkConstants.NPU_WORKER_PORT,
+            },
+            "redis": {
+                "host": str(NetworkConstants.REDIS_HOST),
+                "port": NetworkConstants.REDIS_PORT,
+            },
+            "ai_stack": {
+                "host": str(NetworkConstants.AI_STACK_HOST),
+                "port": NetworkConstants.AI_STACK_PORT,
+            },
+            "browser": {
+                "host": str(NetworkConstants.BROWSER_VM_IP),
+                "port": NetworkConstants.BROWSER_SERVICE_PORT,
+            },
+        }
+
+    def get_cors_origins(self) -> list:
+        """Generate CORS allowed origins from infrastructure configuration
+
+        Returns a list of allowed origins including:
+        - Localhost variants for development
+        - Frontend service (Vite dev server)
+        - Browser service (Playwright)
+        - Backend service (for WebSocket/CORS testing)
+        """
+        # Check if explicitly configured in security.cors_origins
+        explicit_origins = self.get_nested("security.cors_origins", [])
+        if explicit_origins:
+            return explicit_origins
+
+        # Otherwise, generate from infrastructure config
+        frontend_host = self.get_host("frontend")
+        frontend_port = self.get_port("frontend")
+        browser_host = self.get_host("browser_service")
+        browser_port = self.get_port("browser_service")
+        backend_host = self.get_host("backend")
+        backend_port = self.get_port("backend")
+
+        origins = [
+            # Localhost variants for development
+            # Vite dev server default
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
+            f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.FRONTEND_PORT}",
+            # Browser/other dev tools
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BROWSER_SERVICE_PORT}",
+            f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}",
+            # Frontend service
+            f"http://{frontend_host}:{frontend_port}",
+            # Browser service (Playwright)
+            f"http://{browser_host}:{browser_port}",
+            # Backend service (for testing/debugging)
+            f"http://{backend_host}:{backend_port}",
+        ]
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_origins = []
+        for origin in origins:
+            if origin not in seen:
+                seen.add(origin)
+                unique_origins.append(origin)
+
+        return unique_origins
+
+    def get_path(self, category: str, name: str = None) -> str:
+        """
+        Get filesystem path from configuration.
+
+        Provides compatibility with config_helper.cfg.get_path()
+        for config consolidation (Issue #63).
+
+        Args:
+            category: Path category (e.g., 'logs', 'data', 'config')
+            name: Optional specific path name within category
+
+        Returns:
+            Filesystem path string
+        """
+        if name:
+            path = self.get_nested(f"paths.{category}.{name}")
+        else:
+            path = self.get_nested(f"paths.{category}")
+
+        if path:
+            return str(path)
+
+        # Fallback defaults
+        from pathlib import Path
+
+        project_root = Path(__file__).parent.parent.parent
+        defaults = {
+            "logs": str(project_root / "logs"),
+            "data": str(project_root / "data"),
+            "config": str(project_root / "config"),
+            "reports": str(project_root / "reports"),
+        }
+        return defaults.get(category, str(project_root))

@@ -34,6 +34,64 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge-population"])
 
 
+# ===== HELPER FUNCTIONS =====
+
+
+def _format_command_content(cmd_info: dict) -> str:
+    """Format system command info into structured content string."""
+    examples_text = "\n".join(f"  {ex}" for ex in cmd_info["examples"])
+    options_text = "\n".join(f"  {opt}" for opt in cmd_info["options"])
+    return f"""Command: {cmd_info['command']}
+
+Description: {cmd_info['description']}
+
+Usage: {cmd_info['usage']}
+
+Examples:
+{examples_text}
+
+Common Options:
+{options_text}
+
+Category: System Command
+Type: Command Reference
+"""
+
+
+def _get_command_metadata(cmd_info: dict) -> dict:
+    """Create metadata dict for system command storage."""
+    return {
+        "title": f"{cmd_info['command']} command",
+        "source": "system_commands_population",
+        "category": "commands",
+        "command": cmd_info["command"],
+        "type": "system_command",
+    }
+
+
+async def _store_system_command(kb_to_use, cmd_info: dict) -> bool:
+    """Store a single system command in knowledge base, returns success status."""
+    content = _format_command_content(cmd_info)
+    metadata = _get_command_metadata(cmd_info)
+
+    try:
+        if hasattr(kb_to_use, "store_fact"):
+            result = await kb_to_use.store_fact(content=content, metadata=metadata)
+        else:
+            result = await kb_to_use.store_fact(text=content, metadata=metadata)
+
+        if result and result.get("fact_id"):
+            logger.info(f"Added command: {cmd_info['command']}")
+            return True
+
+        logger.warning(f"Failed to add command: {cmd_info['command']}")
+        return False
+
+    except Exception as e:
+        logger.error(f"Error adding command {cmd_info['command']}: {e}")
+        return False
+
+
 # ===== POPULATION ENDPOINTS =====
 
 
@@ -248,59 +306,9 @@ async def populate_system_commands(request: dict, req: Request):
     batch_size = 5
     for i in range(0, len(system_commands), batch_size):
         batch = system_commands[i : i + batch_size]
-
         for cmd_info in batch:
-            try:
-                # Create comprehensive content for each command
-                content = f"""Command: {cmd_info['command']}
-
-Description: {cmd_info['description']}
-
-Usage: {cmd_info['usage']}
-
-Examples:
-{chr(10).join(f"  {example}" for example in cmd_info['examples'])}
-
-Common Options:
-{chr(10).join(f"  {option}" for option in cmd_info['options'])}
-
-Category: System Command
-Type: Command Reference
-"""
-
-                # Store in knowledge base
-                if hasattr(kb_to_use, "store_fact"):
-                    result = await kb_to_use.store_fact(
-                        content=content,
-                        metadata={
-                            "title": f"{cmd_info['command']} command",
-                            "source": "system_commands_population",
-                            "category": "commands",
-                            "command": cmd_info["command"],
-                            "type": "system_command",
-                        },
-                    )
-                else:
-                    result = await kb_to_use.store_fact(
-                        text=content,
-                        metadata={
-                            "title": f"{cmd_info['command']} command",
-                            "source": "system_commands_population",
-                            "category": "commands",
-                            "command": cmd_info["command"],
-                            "type": "system_command",
-                        },
-                    )
-
-                if result and result.get("fact_id"):
-                    items_added += 1
-                    logger.info(f"Added command: {cmd_info['command']}")
-                else:
-                    logger.warning(f"Failed to add command: {cmd_info['command']}")
-
-            except Exception as e:
-                logger.error(f"Error adding command {cmd_info['command']}: {e}")
-
+            if await _store_system_command(kb_to_use, cmd_info):
+                items_added += 1
         # Small delay between batches to prevent overload
         await asyncio.sleep(0.1)
 
@@ -314,98 +322,20 @@ Type: Command Reference
     }
 
 
-async def _populate_man_pages_background(kb_to_use):
-    """Background task to populate man pages"""
-    try:
-        logger.info("Starting manual pages population in background...")
+def _get_man_page_metadata(command: str) -> dict:
+    """Create metadata dict for man page storage."""
+    return {
+        "title": f"man {command}",
+        "source": "manual_pages_population",
+        "category": "manpages",
+        "command": command,
+        "type": "manual_page",
+    }
 
-        # Common commands to get man pages for
-        common_commands = [
-            "ls",
-            "cd",
-            "cp",
-            "mv",
-            "rm",
-            "mkdir",
-            "rmdir",
-            "chmod",
-            "chown",
-            "find",
-            "grep",
-            "sed",
-            "awk",
-            "sort",
-            "uniq",
-            "head",
-            "tail",
-            "cat",
-            "less",
-            "more",
-            "ps",
-            "top",
-            "kill",
-            "jobs",
-            "nohup",
-            "crontab",
-            "systemctl",
-            "service",
-            "curl",
-            "wget",
-            "ssh",
-            "scp",
-            "rsync",
-            "tar",
-            "zip",
-            "unzip",
-            "gzip",
-            "gunzip",
-            "git",
-            "docker",
-            "npm",
-            "pip",
-            "python",
-            "node",
-            "java",
-            "gcc",
-            "make",
-        ]
 
-        items_added = 0
-
-        # Process man pages in batches
-        batch_size = 5
-        for i in range(0, len(common_commands), batch_size):
-            batch = common_commands[i : i + batch_size]
-
-            for command in batch:
-                try:
-                    # Try to get the man page with async subprocess
-                    proc = await asyncio.create_subprocess_exec(
-                        "man",
-                        command,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-
-                    try:
-                        stdout, _ = await asyncio.wait_for(
-                            proc.communicate(), timeout=3  # Reduced from 10 to 3 seconds
-                        )
-                    except asyncio.TimeoutError:
-                        proc.kill()
-                        await proc.wait()
-                        logger.warning(f"Timeout getting man page for: {command}")
-                        continue
-
-                    if proc.returncode == 0 and stdout.strip():
-                        # Clean up the man page output
-                        man_content = stdout.decode("utf-8").strip()
-
-                        # Remove ANSI escape sequences if present
-                        man_content = re.sub(r"\x1b\[[0-9;]*m", "", man_content)
-
-                        # Create structured content
-                        content = f"""Manual Page: {command}
+def _format_man_page_content(command: str, man_content: str) -> str:
+    """Format man page content for storage."""
+    return f"""Manual Page: {command}
 
 {man_content}
 
@@ -414,48 +344,94 @@ Category: Manual Page
 Command: {command}
 """
 
-                        # Store in knowledge base
-                        if hasattr(kb_to_use, "store_fact"):
-                            store_result = await kb_to_use.store_fact(
-                                content=content,
-                                metadata={
-                                    "title": f"man {command}",
-                                    "source": "manual_pages_population",
-                                    "category": "manpages",
-                                    "command": command,
-                                    "type": "manual_page",
-                                },
-                            )
-                        else:
-                            store_result = await kb_to_use.store_fact(
-                                text=content,
-                                metadata={
-                                    "title": f"man {command}",
-                                    "source": "manual_pages_population",
-                                    "category": "manpages",
-                                    "command": command,
-                                    "type": "manual_page",
-                                },
-                            )
 
-                        if store_result and store_result.get("fact_id"):
-                            items_added += 1
-                            logger.info(f"Added man page: {command}")
-                        else:
-                            logger.warning(f"Failed to store man page: {command}")
+async def _fetch_man_page(command: str) -> str | None:
+    """Fetch man page content for a command, returns None on failure."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "man",
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-                    else:
-                        logger.warning(f"No man page found for command: {command}")
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.warning(f"Timeout getting man page for: {command}")
+            return None
 
-                except Exception as e:
-                    logger.error(f"Error processing man page for {command}: {e}")
+        if proc.returncode != 0 or not stdout.strip():
+            logger.warning(f"No man page found for command: {command}")
+            return None
 
-            # Small delay between batches (reduced for faster completion)
+        man_content = stdout.decode("utf-8").strip()
+        # Remove ANSI escape sequences
+        return re.sub(r"\x1b\[[0-9;]*m", "", man_content)
+
+    except Exception as e:
+        logger.error(f"Error fetching man page for {command}: {e}")
+        return None
+
+
+async def _store_man_page(kb_to_use, command: str, content: str) -> bool:
+    """Store a man page in knowledge base, returns success status."""
+    metadata = _get_man_page_metadata(command)
+    try:
+        if hasattr(kb_to_use, "store_fact"):
+            store_result = await kb_to_use.store_fact(content=content, metadata=metadata)
+        else:
+            store_result = await kb_to_use.store_fact(text=content, metadata=metadata)
+
+        if store_result and store_result.get("fact_id"):
+            logger.info(f"Added man page: {command}")
+            return True
+        logger.warning(f"Failed to store man page: {command}")
+        return False
+    except Exception as e:
+        logger.error(f"Error storing man page for {command}: {e}")
+        return False
+
+
+async def _process_single_man_page(kb_to_use, command: str) -> bool:
+    """Process a single man page: fetch and store."""
+    man_content = await _fetch_man_page(command)
+    if not man_content:
+        return False
+    content = _format_man_page_content(command, man_content)
+    return await _store_man_page(kb_to_use, command, content)
+
+
+# Common commands for man pages
+COMMON_MAN_PAGE_COMMANDS = [
+    "ls", "cd", "cp", "mv", "rm", "mkdir", "rmdir", "chmod", "chown",
+    "find", "grep", "sed", "awk", "sort", "uniq", "head", "tail", "cat",
+    "less", "more", "ps", "top", "kill", "jobs", "nohup", "crontab",
+    "systemctl", "service", "curl", "wget", "ssh", "scp", "rsync",
+    "tar", "zip", "unzip", "gzip", "gunzip", "git", "docker", "npm",
+    "pip", "python", "node", "java", "gcc", "make",
+]
+
+
+async def _populate_man_pages_background(kb_to_use):
+    """Background task to populate man pages"""
+    try:
+        logger.info("Starting manual pages population in background...")
+        items_added = 0
+
+        batch_size = 5
+        for i in range(0, len(COMMON_MAN_PAGE_COMMANDS), batch_size):
+            batch = COMMON_MAN_PAGE_COMMANDS[i : i + batch_size]
+
+            for command in batch:
+                if await _process_single_man_page(kb_to_use, command):
+                    items_added += 1
+
             await asyncio.sleep(0.1)
 
-        logger.info(
-            f"Manual pages population completed. Added {items_added} man pages."
-        )
+        logger.info(f"Manual pages population completed. Added {items_added} man pages.")
         return items_added
 
     except Exception as e:
@@ -606,6 +582,163 @@ def extract_category_from_path(doc_file: str) -> str:
     return "root"
 
 
+def _format_doc_content(doc_file: str, file_path, content: str, category: str) -> str:
+    """Format documentation content for storage."""
+    return f"""AutoBot Documentation: {doc_file}
+
+File Path: {file_path}
+
+Content:
+{content}
+
+Source: AutoBot Documentation
+Category: {category}
+Type: Documentation
+"""
+
+
+def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
+    """Create metadata dict for documentation storage."""
+    return {
+        "title": f"AutoBot: {doc_file}",
+        "source": "autobot_docs_population",
+        "category": category,
+        "filename": doc_file,
+        "type": f"{category}_documentation",
+        "file_path": str(file_path),
+    }
+
+
+async def _store_doc_file(
+    kb_to_use, doc_file: str, file_path, content: str, category: str
+) -> dict | None:
+    """Store a documentation file in knowledge base, returns result or None."""
+    structured_content = _format_doc_content(doc_file, file_path, content, category)
+    metadata = _get_doc_metadata(doc_file, file_path, category)
+
+    try:
+        if hasattr(kb_to_use, "store_fact"):
+            return await kb_to_use.store_fact(content=structured_content, metadata=metadata)
+        return await kb_to_use.store_fact(text=structured_content, metadata=metadata)
+    except Exception as e:
+        logger.error(f"Error storing doc {doc_file}: {e}")
+        return None
+
+
+async def _process_doc_file(
+    kb_to_use, tracker, autobot_base_path, doc_file: str
+) -> tuple[int, int, int]:
+    """
+    Process a single documentation file.
+
+    Returns:
+        Tuple of (added, skipped, failed) counts
+    """
+    file_path = autobot_base_path / doc_file
+
+    # Check file exists
+    if not file_path.exists() or not file_path.is_file():
+        logger.warning(f"File not found: {doc_file}")
+        return (0, 1, 0)
+
+    # Read content
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+    except OSError as e:
+        tracker.mark_failed(str(file_path), f"File read error: {e}")
+        logger.error(f"Failed to read AutoBot doc {doc_file}: {e}")
+        return (0, 0, 1)
+
+    # Check for empty content
+    if not content.strip():
+        logger.warning(f"Empty file: {doc_file}")
+        return (0, 1, 0)
+
+    # Extract category and store
+    category = extract_category_from_path(doc_file)
+    result = await _store_doc_file(kb_to_use, doc_file, file_path, content, category)
+
+    if result and result.get("fact_id"):
+        tracker.mark_imported(
+            file_path=str(file_path),
+            category=category,
+            facts_count=1,
+            metadata={
+                "fact_id": result.get("fact_id"),
+                "title": f"AutoBot: {doc_file}",
+                "content_length": len(content),
+            },
+        )
+        logger.info(f"Added AutoBot doc: {doc_file}")
+        return (1, 0, 0)
+
+    tracker.mark_failed(str(file_path), "Failed to store in knowledge base")
+    logger.warning(f"Failed to store AutoBot doc: {doc_file}")
+    return (0, 0, 1)
+
+
+def _build_system_config_info() -> str:
+    """Build system configuration info string."""
+    from src.constants.network_constants import NetworkConstants
+    from src.constants.path_constants import PATH
+
+    return f"""AutoBot System Configuration
+
+Network Layout:
+- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
+  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
+  Desktop/Terminal VNC (port 6080)
+- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
+  (SINGLE FRONTEND SERVER)
+- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
+- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
+- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
+  Web automation (Playwright)
+
+Key Commands:
+- Setup: bash setup.sh [--full|--minimal|--distributed]
+- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+
+Critical Rules:
+- NEVER edit code directly on remote VMs (VM1-VM5)
+- ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
+- Use ./sync-frontend.sh or sync scripts to deploy changes
+- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
+- NO temporary fixes or workarounds allowed
+
+Source: AutoBot System Configuration
+Category: AutoBot
+Type: System Configuration
+"""
+
+
+async def _store_system_config(kb_to_use) -> bool:
+    """Store AutoBot system configuration in knowledge base."""
+    try:
+        config_info = _build_system_config_info()
+        metadata = {
+            "title": "AutoBot System Configuration",
+            "source": "autobot_docs_population",
+            "category": "configuration",
+            "type": "system_configuration",
+        }
+
+        if hasattr(kb_to_use, "store_fact"):
+            result = await kb_to_use.store_fact(content=config_info, metadata=metadata)
+        else:
+            result = await kb_to_use.store_fact(text=config_info, metadata=metadata)
+
+        if result and result.get("fact_id"):
+            logger.info("Added AutoBot system configuration")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error adding AutoBot configuration: {e}")
+        return False
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="populate_autobot_docs",
@@ -658,87 +791,12 @@ async def populate_autobot_docs(request: dict, req: Request):
 
     for doc_file in doc_files:
         try:
-            file_path = autobot_base_path / doc_file
-
-            if file_path.exists() and file_path.is_file():
-                # Read file content
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    content = await f.read()
-
-                if content.strip():
-                    # Extract category from path
-                    category = extract_category_from_path(doc_file)
-
-                    # Create structured content
-                    structured_content = f"""AutoBot Documentation: {doc_file}
-
-File Path: {file_path}
-
-Content:
-{content}
-
-Source: AutoBot Documentation
-Category: {category}
-Type: Documentation
-"""
-
-                    # Store in knowledge base
-                    if hasattr(kb_to_use, "store_fact"):
-                        result = await kb_to_use.store_fact(
-                            content=structured_content,
-                            metadata={
-                                "title": f"AutoBot: {doc_file}",
-                                "source": "autobot_docs_population",
-                                "category": category,
-                                "filename": doc_file,
-                                "type": f"{category}_documentation",
-                                "file_path": str(file_path),
-                            },
-                        )
-                    else:
-                        result = await kb_to_use.store_fact(
-                            text=structured_content,
-                            metadata={
-                                "title": f"AutoBot: {doc_file}",
-                                "source": "autobot_docs_population",
-                                "category": category,
-                                "filename": doc_file,
-                                "type": f"{category}_documentation",
-                                "file_path": str(file_path),
-                            },
-                        )
-
-                    if result and result.get("fact_id"):
-                        items_added += 1
-                        # Mark as imported with tracker
-                        tracker.mark_imported(
-                            file_path=str(file_path),
-                            category=category,
-                            facts_count=1,
-                            metadata={
-                                "fact_id": result.get("fact_id"),
-                                "title": f"AutoBot: {doc_file}",
-                                "content_length": len(content),
-                            },
-                        )
-                        logger.info(f"Added AutoBot doc: {doc_file}")
-                    else:
-                        items_failed += 1
-                        tracker.mark_failed(
-                            str(file_path), "Failed to store in knowledge base"
-                        )
-                        logger.warning(f"Failed to store AutoBot doc: {doc_file}")
-                else:
-                    items_skipped += 1
-                    logger.warning(f"Empty file: {doc_file}")
-            else:
-                items_skipped += 1
-                logger.warning(f"File not found: {doc_file}")
-
-        except OSError as e:
-            items_failed += 1
-            tracker.mark_failed(str(autobot_base_path / doc_file), f"File read error: {e}")
-            logger.error(f"Failed to read AutoBot doc {doc_file}: {e}")
+            added, skipped, failed = await _process_doc_file(
+                kb_to_use, tracker, autobot_base_path, doc_file
+            )
+            items_added += added
+            items_skipped += skipped
+            items_failed += failed
         except Exception as e:
             items_failed += 1
             tracker.mark_failed(str(autobot_base_path / doc_file), str(e))

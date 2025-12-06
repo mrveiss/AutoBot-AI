@@ -6,12 +6,18 @@ Terminal Handlers - WebSocket and Session Management Classes.
 
 This module contains the core handler classes for terminal operations.
 Extracted from terminal.py for better maintainability (Issue #185, #210).
+Further modularized with Issue #290 (God class refactoring).
 
 Classes:
 - ConsolidatedTerminalWebSocket: WebSocket handler for real-time terminal I/O
 - ConsolidatedTerminalManager: Session registry and lifecycle management
 
-Related Issues: #185 (Split), #210 (Terminal split)
+Supporting modules (backend/services/terminal_websocket/):
+- security.py: Command risk assessment
+- audit.py: Audit logging
+- chat_integration.py: Chat history integration
+
+Related Issues: #185 (Split), #210 (Terminal split), #290 (God class refactoring)
 """
 
 import asyncio
@@ -28,23 +34,22 @@ from backend.services.simple_pty import simple_pty_manager
 # Import models from dedicated module (Issue #185)
 from backend.api.terminal_models import (
     CommandRiskLevel,
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
     SecurityLevel,
+)
+
+# Import extracted modules (Issue #290)
+from backend.services.terminal_websocket import (
+    HIGH_RISK_COMMAND_LEVELS,
+    LOGGING_SECURITY_LEVELS,
+    SHELL_OPERATORS,
+    TerminalAuditLogger,
+    TerminalChatIntegrator,
+    command_assessor,
 )
 from src.chat_history import ChatHistoryManager
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
-
-# Performance optimization: O(1) lookup for shell operators (Issue #326)
-SHELL_OPERATORS = {">", ">>", "|", "&&", "||"}
-
-# Performance optimization: O(1) lookup for security levels requiring logging (Issue #326)
-LOGGING_SECURITY_LEVELS = {SecurityLevel.ELEVATED, SecurityLevel.RESTRICTED}
-
-# Performance optimization: O(1) lookup for high-risk command levels (Issue #326)
-HIGH_RISK_COMMAND_LEVELS = {CommandRiskLevel.DANGEROUS, CommandRiskLevel.HIGH}
 
 
 class ConsolidatedTerminalWebSocket:

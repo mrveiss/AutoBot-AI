@@ -320,6 +320,66 @@ async def rag_search(
 # ====================================================================
 
 
+async def _store_single_fact_with_semaphore(
+    kb, fact: Dict[str, Any], semaphore: asyncio.Semaphore,
+    title: Optional[str], source: Optional[str], category: Optional[str]
+) -> Dict[str, Any]:
+    """Store a single fact with semaphore-bounded concurrency."""
+    async with semaphore:
+        try:
+            return await kb.store_fact(
+                content=fact.get("content", ""),
+                metadata={
+                    "title": title or fact.get("title", "Extracted Knowledge"),
+                    "source": source,
+                    "category": category,
+                    "extraction_confidence": fact.get("confidence", 0.5),
+                    "extracted_at": datetime.utcnow().isoformat(),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to store extracted fact: {e}")
+            return {"status": "error", "message": str(e)}
+
+
+async def _store_extracted_facts(
+    req: Request, extraction_result: dict, request_data: KnowledgeExtractionRequest
+) -> List[Dict[str, Any]]:
+    """Store extracted facts in knowledge base with parallel processing."""
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if not kb_to_use:
+        return []
+
+    extracted_facts = extraction_result.get("extracted_facts")
+    if not extracted_facts:
+        return []
+
+    # Use asyncio.gather for parallel fact storage with bounded concurrency
+    semaphore = asyncio.Semaphore(50)
+
+    # Store all facts in parallel
+    results = await asyncio.gather(
+        *[
+            _store_single_fact_with_semaphore(
+                kb_to_use, fact, semaphore,
+                request_data.title, request_data.source, request_data.category
+            )
+            for fact in extracted_facts
+        ],
+        return_exceptions=True
+    )
+
+    # Filter successful results
+    stored_facts = [
+        result for result in results
+        if isinstance(result, dict) and result.get("status") != "error"
+    ]
+
+    logger.info(f"Stored {len(stored_facts)} extracted facts in knowledge base")
+    return stored_facts
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
@@ -343,54 +403,13 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
             extraction_mode=request_data.extraction_mode,
         )
 
-        # Optionally store extracted knowledge in local knowledge base using parallel processing
+        # Optionally store extracted knowledge in local knowledge base
         stored_facts = []
         if request_data.auto_store:
             try:
-                kb_to_use = await get_or_create_knowledge_base(
-                    req.app, force_refresh=False
+                stored_facts = await _store_extracted_facts(
+                    req, extraction_result, request_data
                 )
-                if kb_to_use and extraction_result.get("extracted_facts"):
-                    # Use asyncio.gather for parallel fact storage with bounded concurrency
-                    semaphore = asyncio.Semaphore(50)
-
-                    async def store_single_fact(fact: Dict[str, Any]) -> Dict[str, Any]:
-                        async with semaphore:
-                            try:
-                                return await kb_to_use.store_fact(
-                                    content=fact.get("content", ""),
-                                    metadata={
-                                        "title": (
-                                            request_data.title
-                                            or fact.get("title", "Extracted Knowledge")
-                                        ),
-                                        "source": request_data.source,
-                                        "category": request_data.category,
-                                        "extraction_confidence": fact.get(
-                                            "confidence", 0.5
-                                        ),
-                                        "extracted_at": datetime.utcnow().isoformat(),
-                                    },
-                                )
-                            except Exception as e:
-                                logger.warning(f"Failed to store extracted fact: {e}")
-                                return {"status": "error", "message": str(e)}
-
-                    # Store all facts in parallel
-                    results = await asyncio.gather(
-                        *[store_single_fact(fact) for fact in extraction_result["extracted_facts"]],
-                        return_exceptions=True
-                    )
-
-                    # Filter successful results
-                    for result in results:
-                        if isinstance(result, dict) and result.get("status") != "error":
-                            stored_facts.append(result)
-
-                    logger.info(
-                        f"Stored {len(stored_facts)} extracted facts in knowledge base"
-                    )
-
             except Exception as e:
                 logger.warning(f"Auto-storage of extracted knowledge failed: {e}")
 

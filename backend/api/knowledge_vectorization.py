@@ -243,6 +243,86 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     return result
 
 
+def _extract_fact_content(fact_data: dict) -> str:
+    """Extract content from fact data, handling both bytes and string keys."""
+    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
+    if isinstance(content_raw, bytes):
+        return content_raw.decode("utf-8")
+    return str(content_raw) if content_raw else ""
+
+
+def _extract_fact_metadata(fact_data: dict) -> dict:
+    """Extract metadata from fact data, handling both bytes and string keys."""
+    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+    if isinstance(metadata_str, bytes):
+        return json.loads(metadata_str.decode("utf-8"))
+    return json.loads(metadata_str)
+
+
+async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
+    """
+    Fetch batch fact data and vector existence status.
+
+    Returns:
+        Tuple of (all_fact_data, fact_ids, vector_exists_map)
+    """
+    # Batch fetch all fact data using pipeline - eliminates N+1 queries
+    async with kb.aioredis_client.pipeline() as pipe:
+        for fact_key in batch:
+            await pipe.hgetall(fact_key)
+        all_fact_data = await pipe.execute()
+
+    # Extract fact IDs
+    fact_ids = [
+        fact_key.split(":")[-1] if ":" in fact_key else fact_key
+        for fact_key in batch
+    ]
+
+    # If skip_existing, also batch check vector existence
+    vector_exists = {}
+    if skip_existing:
+        async with kb.aioredis_client.pipeline() as pipe:
+            for fact_id in fact_ids:
+                await pipe.exists(f"llama_index/vector_{fact_id}")
+            exists_results = await pipe.execute()
+            vector_exists = dict(zip(fact_ids, exists_results))
+
+    return all_fact_data, fact_ids, vector_exists
+
+
+async def _process_single_fact(
+    kb, fact_key: str, fact_data: dict, fact_id: str,
+    skip_existing: bool, vector_exists: dict
+) -> tuple:
+    """
+    Process a single fact for vectorization.
+
+    Returns:
+        Tuple of (success: bool, skipped: bool, result_entry: dict or None)
+    """
+    if not fact_data:
+        logger.warning(f"No data found for fact key: {fact_key}")
+        return False, False, None
+
+    # Check if already vectorized
+    if skip_existing and vector_exists.get(fact_id):
+        return False, True, None
+
+    content = _extract_fact_content(fact_data)
+    metadata = _extract_fact_metadata(fact_data)
+
+    # Vectorize existing fact without duplication
+    result = await kb.vectorize_existing_fact(
+        fact_id=fact_id, content=content, metadata=metadata
+    )
+
+    if result.get("status") == "success" and result.get("vector_indexed"):
+        return True, False, {"fact_id": fact_id, "status": "vectorized"}
+
+    logger.warning(f"Failed to vectorize fact {fact_id}: {result.get('message')}")
+    return False, False, None
+
+
 @router.post("/vectorize_facts")
 async def vectorize_existing_facts(
     req: Request,
@@ -301,70 +381,30 @@ async def vectorize_existing_facts(
             f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
         )
 
+        # Fetch batch data (extracted helper reduces nesting)
         try:
-            # Batch fetch all fact data using pipeline - eliminates N+1 queries
-            async with kb.aioredis_client.pipeline() as pipe:
-                for fact_key in batch:
-                    await pipe.hgetall(fact_key)
-                all_fact_data = await pipe.execute()
-
-            # If skip_existing, also batch check vector existence
-            fact_ids = [fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch]
-            vector_exists = {}
-            if skip_existing:
-                async with kb.aioredis_client.pipeline() as pipe:
-                    for fact_id in fact_ids:
-                        await pipe.exists(f"llama_index/vector_{fact_id}")
-                    exists_results = await pipe.execute()
-                    vector_exists = dict(zip(fact_ids, exists_results))
+            all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(
+                kb, batch, skip_existing
+            )
         except RedisError as e:
             logger.error(f"Redis error in batch {batch_num + 1}: {e}")
             failed_count += len(batch)
             continue
 
+        # Process each fact in batch (extracted helper reduces nesting)
         for fact_key, fact_data, fact_id in zip(batch, all_fact_data, fact_ids):
             try:
-                if not fact_data:
-                    logger.warning(f"No data found for fact key: {fact_key}")
-                    failed_count += 1
-                    continue
-
-                # Extract content and metadata (handle both bytes and string keys from Redis)
-                content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-                content = (
-                    content_raw.decode("utf-8")
-                    if isinstance(content_raw, bytes)
-                    else str(content_raw) if content_raw else ""
+                success, skipped, result_entry = await _process_single_fact(
+                    kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
                 )
-
-                metadata_str = fact_data.get("metadata") or fact_data.get(
-                    b"metadata", b"{}"
-                )
-                metadata = json.loads(
-                    metadata_str.decode("utf-8")
-                    if isinstance(metadata_str, bytes)
-                    else metadata_str
-                )
-
-                # Check if already vectorized by checking vector_indexed status
-                if skip_existing and vector_exists.get(fact_id):
-                    skipped_count += 1
-                    continue
-
-                # Vectorize existing fact without duplication
-                result = await kb.vectorize_existing_fact(
-                    fact_id=fact_id, content=content, metadata=metadata
-                )
-
-                if result.get("status") == "success" and result.get("vector_indexed"):
+                if success:
                     success_count += 1
-                    processed_facts.append({"fact_id": fact_id, "status": "vectorized"})
+                    if result_entry:
+                        processed_facts.append(result_entry)
+                elif skipped:
+                    skipped_count += 1
                 else:
                     failed_count += 1
-                    logger.warning(
-                        f"Failed to vectorize fact {fact_id}: {result.get('message')}"
-                    )
-
             except Exception as e:
                 failed_count += 1
                 logger.error(f"Error processing fact {fact_key}: {e}")
@@ -631,6 +671,30 @@ async def get_vectorization_job_status(job_id: str, req: Request):
     return {"status": "success", "job": job_data}
 
 
+def _filter_failed_jobs(results: list) -> List[dict]:
+    """Filter and parse failed jobs from Redis results."""
+    failed_jobs = []
+    for job_json in results:
+        if not job_json:
+            continue
+        job_data = json.loads(job_json)
+        if job_data.get("status") == "failed":
+            failed_jobs.append(job_data)
+    return failed_jobs
+
+
+def _collect_failed_keys(keys: list, results: list) -> List[str]:
+    """Collect keys of failed jobs from Redis results."""
+    failed_keys = []
+    for key, job_json in zip(keys, results):
+        if not job_json:
+            continue
+        job_data = json.loads(job_json)
+        if job_data.get("status") == "failed":
+            failed_keys.append(key)
+    return failed_keys
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_failed_vectorization_jobs",
@@ -658,18 +722,19 @@ async def get_failed_vectorization_jobs(req: Request):
             cursor, match="vectorization_job:*", count=100
         )
 
-        # Use pipeline for batch operations
-        if keys:
-            pipe = kb.redis_client.pipeline()
-            for key in keys:
-                pipe.get(key)
-            results = pipe.execute()
+        if not keys:
+            if cursor == 0:
+                break
+            continue
 
-            for job_json in results:
-                if job_json:
-                    job_data = json.loads(job_json)
-                    if job_data.get("status") == "failed":
-                        failed_jobs.append(job_data)
+        # Use pipeline for batch operations
+        pipe = kb.redis_client.pipeline()
+        for key in keys:
+            pipe.get(key)
+        results = pipe.execute()
+
+        # Filter failed jobs (extracted helper reduces nesting)
+        failed_jobs.extend(_filter_failed_jobs(results))
 
         if cursor == 0:
             break
@@ -812,25 +877,24 @@ async def clear_failed_vectorization_jobs(req: Request):
             cursor, match="vectorization_job:*", count=100
         )
 
+        if not keys:
+            if cursor == 0:
+                break
+            continue
+
         # Use pipeline for batch operations
-        if keys:
-            pipe = kb.redis_client.pipeline()
-            for key in keys:
-                pipe.get(key)
-            results = pipe.execute()
+        pipe = kb.redis_client.pipeline()
+        for key in keys:
+            pipe.get(key)
+        results = pipe.execute()
 
-            # Collect failed job keys
-            failed_keys = []
-            for key, job_json in zip(keys, results):
-                if job_json:
-                    job_data = json.loads(job_json)
-                    if job_data.get("status") == "failed":
-                        failed_keys.append(key)
+        # Collect failed job keys (using extracted helper)
+        failed_keys = _collect_failed_keys(keys, results)
 
-            # Delete failed jobs in batch
-            if failed_keys:
-                kb.redis_client.delete(*failed_keys)
-                deleted_count += len(failed_keys)
+        # Delete failed jobs in batch
+        if failed_keys:
+            kb.redis_client.delete(*failed_keys)
+            deleted_count += len(failed_keys)
 
         if cursor == 0:
             break
