@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+File watching and callback management for config changes.
+"""
+
+import asyncio
+import logging
+from typing import Any, Callable, Dict
+
+logger = logging.getLogger(__name__)
+
+
+class FileWatcherMixin:
+    """Mixin providing file watching and change callback functionality"""
+
+    def add_change_callback(self, config_type: str, callback: Callable) -> None:
+        """Add callback for config changes"""
+        if config_type not in self._callbacks:
+            self._callbacks[config_type] = []
+        self._callbacks[config_type].append(callback)
+
+    async def _notify_callbacks(self, config_type: str, data: Dict[str, Any]) -> None:
+        """Notify callbacks of config changes"""
+        if config_type in self._callbacks:
+            for callback in self._callbacks[config_type]:
+                try:
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback(config_type, data)
+                    else:
+                        callback(config_type, data)
+                except Exception as e:
+                    logger.error(f"Config callback error for {config_type}: {e}")
+
+    async def start_file_watcher(self, config_type: str) -> None:
+        """Start watching config file for changes"""
+        if not self.settings.auto_reload:
+            return
+
+        if config_type in self._file_watchers:
+            return  # Already watching
+
+        # Determine file path
+        if config_type == "settings":
+            file_path = self.settings_file
+        elif config_type == "main":
+            file_path = self.base_config_file
+        else:
+            file_path = self.config_dir / f"{config_type}.json"
+
+        async def watch_file():
+            import time
+
+            last_modified = None
+
+            while True:
+                try:
+                    if file_path.exists():
+                        current_modified = file_path.stat().st_mtime
+
+                        if (
+                            last_modified is not None
+                            and current_modified != last_modified
+                        ):
+                            logger.info(f"Config file {file_path} changed, reloading")
+
+                            # Reload config
+                            new_data = await self._read_file_async(file_path)
+                            if new_data:
+                                # Update cache
+                                if config_type == "main":
+                                    self._config = new_data
+                                    self._sync_cache_timestamp = time.time()
+
+                                # Save to Redis cache
+                                await self._save_to_redis_cache(config_type, new_data)
+
+                                # Notify callbacks
+                                await self._notify_callbacks(config_type, new_data)
+
+                        last_modified = current_modified
+
+                    await asyncio.sleep(1.0)  # Check every second
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"File watcher error for {config_type}: {e}")
+                    await asyncio.sleep(5.0)  # Wait before retrying
+
+        self._file_watchers[config_type] = asyncio.create_task(watch_file())
+        logger.info(f"Started file watcher for {config_type} config")
+
+    async def stop_file_watcher(self, config_type: str) -> None:
+        """Stop watching config file"""
+        if config_type in self._file_watchers:
+            self._file_watchers[config_type].cancel()
+            try:
+                await self._file_watchers[config_type]
+            except asyncio.CancelledError:
+                logger.debug("File watcher for %s cancelled", config_type)
+
+            del self._file_watchers[config_type]
+            logger.info(f"Stopped file watcher for {config_type} config")

@@ -106,6 +106,29 @@ class ConnectionTester:
             }
 
     @staticmethod
+    def _is_search_module(module) -> bool:
+        """Check if a module entry represents the RediSearch module."""
+        if isinstance(module, dict):
+            return module.get("name") == "search" or module.get(b"name") == b"search"
+        if hasattr(module, "__getitem__"):
+            return module.get("name") == "search" or module.get(b"name") == b"search"
+        return False
+
+    @staticmethod
+    def _check_redis_search_module(redis_client) -> bool:
+        """Check if RediSearch module is loaded in Redis."""
+        try:
+            modules = redis_client.module_list()
+            if not modules or not isinstance(modules, list):
+                return False
+            return any(
+                ConnectionTester._is_search_module(module) for module in modules
+            )
+        except Exception:
+            # If we can't check modules, assume it's not loaded
+            return False
+
+    @staticmethod
     def _get_ollama_config_from_new_structure() -> tuple:
         """Get Ollama config from new structure (Issue #336 - extracted helper)."""
         endpoint = None
@@ -278,30 +301,9 @@ class ConnectionTester:
             redis_client.ping()
 
             # Check if RediSearch module is loaded
-            redis_search_module_loaded = False
-            try:
-                modules = redis_client.module_list()
-                if modules and isinstance(modules, list):
-                    redis_search_module_loaded = any(
-                        (isinstance(module, dict) and module.get("name") == "search")
-                        or (
-                            isinstance(module, dict)
-                            and module.get(b"name") == b"search"
-                        )
-                        or (
-                            hasattr(module, "__getitem__")
-                            and (
-                                module.get("name") == "search"
-                                or module.get(b"name") == b"search"
-                            )
-                        )
-                        for module in modules
-                    )
-                else:
-                    redis_search_module_loaded = False
-            except Exception:
-                # If we can't check modules, assume it's not loaded
-                redis_search_module_loaded = False
+            redis_search_module_loaded = ConnectionTester._check_redis_search_module(
+                redis_client
+            )
 
             return {
                 "status": "connected",
@@ -318,6 +320,42 @@ class ConnectionTester:
                 "status": "disconnected",
                 "message": f"Failed to connect to Redis: {str(e)}",
             }
+
+    @staticmethod
+    async def _check_ollama_embedding(
+        provider_config: dict, current_model: str, provider: str
+    ) -> Metadata:
+        """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
+        from src.unified_config_manager import OLLAMA_URL
+
+        ollama_host = provider_config.get("host", OLLAMA_URL)
+        tags_url = f"{ollama_host}/api/tags"
+        timeout = aiohttp.ClientTimeout(total=5)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(tags_url) as response:
+                if response.status != 200:
+                    return {
+                        "connected": False,
+                        "current_model": current_model,
+                        "provider": provider,
+                        "message": f"Cannot connect to Ollama at {ollama_host}",
+                    }
+                data = await response.json()
+                available_models = [
+                    model["name"] for model in data.get("models", [])
+                ]
+                model_available = current_model in available_models if current_model else False
+                return {
+                    "connected": True,
+                    "current_model": current_model,
+                    "model_available": model_available,
+                    "provider": provider,
+                    "message": (
+                        f"Embedding model '{current_model}' "
+                        f"{'available' if model_available else 'not found'}"
+                    ),
+                }
 
     @staticmethod
     async def _get_embedding_status() -> Metadata:
@@ -339,43 +377,11 @@ class ConnectionTester:
             current_model = provider_config.get("selected_model")
 
             if provider == "ollama":
-                # Test Ollama embedding model
-                from src.unified_config_manager import OLLAMA_URL
+                return await ConnectionTester._check_ollama_embedding(
+                    provider_config, current_model, provider
+                )
 
-                ollama_host = provider_config.get("host", OLLAMA_URL)
-
-                # Check if model is available
-                tags_url = f"{ollama_host}/api/tags"
-                timeout = aiohttp.ClientTimeout(total=5)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(tags_url) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            available_models = [
-                                model["name"] for model in data.get("models", [])
-                            ]
-                            model_available = (
-                                current_model in available_models if current_model else False
-                            )
-
-                            return {
-                                "connected": True,
-                                "current_model": current_model,
-                                "model_available": model_available,
-                                "provider": provider,
-                                "message": (
-                                    f"Embedding model '{current_model}' {'available' if model_available else 'not found'}"
-                                ),
-                            }
-                        else:
-                            return {
-                                "connected": False,
-                                "current_model": current_model,
-                                "provider": provider,
-                                "message": f"Cannot connect to Ollama at {ollama_host}",
-                            }
-
-            elif provider == "openai":
+            if provider == "openai":
                 # For OpenAI, just return configured status
                 return {
                     "connected": True,  # Assume connected if API key is configured
@@ -483,6 +489,26 @@ class ModelManager:
             return {"status": "error", "error": str(e), "models": [], "total_count": 0}
 
     @staticmethod
+    def _parse_ollama_model(model: dict) -> dict:
+        """Parse a single Ollama model entry into standardized format."""
+        return {
+            "name": model.get("name", "Unknown"),
+            "type": "ollama",
+            "size": model.get("size", 0),
+            "modified_at": model.get("modified_at", ""),
+            "available": True,
+        }
+
+    @staticmethod
+    def _log_ollama_warning_if_needed(error: Exception) -> None:
+        """Log Ollama warning with rate limiting to prevent spam."""
+        current_time = time.time()
+        time_since_last = current_time - ModelManager._last_ollama_warning
+        if time_since_last >= ModelManager._warning_interval:
+            logger.warning(f"Failed to get Ollama models: {str(error)}")
+            ModelManager._last_ollama_warning = current_time
+
+    @staticmethod
     async def _get_ollama_models() -> list:
         """Get models from Ollama service"""
         try:
@@ -495,29 +521,14 @@ class ModelManager:
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(ollama_url) as response:
-                    if response.status == 200:
-                        ollama_data = await response.json()
-                        models = []
-                        if "models" in ollama_data:
-                            for model in ollama_data["models"]:
-                                models.append(
-                                    {
-                                        "name": model.get("name", "Unknown"),
-                                        "type": "ollama",
-                                        "size": model.get("size", 0),
-                                        "modified_at": model.get("modified_at", ""),
-                                        "available": True,
-                                    }
-                                )
-                        return models
-                    return []
+                    if response.status != 200:
+                        return []
+                    ollama_data = await response.json()
+                    raw_models = ollama_data.get("models", [])
+                    return [
+                        ModelManager._parse_ollama_model(model)
+                        for model in raw_models
+                    ]
         except Exception as e:
-            # Implement rate limiting to prevent log spam
-            current_time = time.time()
-            if (
-                current_time - ModelManager._last_ollama_warning
-                >= ModelManager._warning_interval
-            ):
-                logger.warning(f"Failed to get Ollama models: {str(e)}")
-                ModelManager._last_ollama_warning = current_time
+            ModelManager._log_ollama_warning_if_needed(e)
             return []

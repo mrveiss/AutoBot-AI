@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+LLM and model configuration management.
+"""
+
+import logging
+import os
+from typing import Any, Dict
+
+from src.constants.model_constants import ModelConstants
+from src.constants.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
+
+
+class ModelConfigMixin:
+    """Mixin providing LLM and model configuration management"""
+
+    def get_selected_model(self) -> str:
+        """Get the currently selected model from config.yaml (CRITICAL FIX)"""
+        # This is the key method that was broken in the original global_config_manager
+        # It must read from config.yaml, NOT return hardcoded values
+
+        selected_model = self.get_nested(
+            "backend.llm.local.providers.ollama.selected_model"
+        )
+
+        if selected_model:
+            logger.info(
+                f"UNIFIED CONFIG: Selected model from config.yaml: {selected_model}"
+            )
+            return selected_model
+
+        # Only fall back to environment if config.yaml doesn't have the value
+        env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
+        if env_model:
+            logger.info(f"UNIFIED CONFIG: Selected model from environment: {env_model}")
+            return env_model
+
+        # Final fallback - use centralized constant
+        fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
+        logger.warning(
+            f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}"
+        )
+        return fallback_model
+
+    def update_llm_model(self, model_name: str) -> None:
+        """Update the selected LLM model in config.yaml (GUI integration)"""
+        logger.info(f"UNIFIED CONFIG: Updating selected model to '{model_name}'")
+
+        # Update the configuration in memory
+        self.set_nested("backend.llm.local.providers.ollama.selected_model", model_name)
+
+        # Save both settings.json and config.yaml
+        self.save_settings()
+        self.save_config_to_yaml()
+
+        logger.info(f"Model updated to '{model_name}' in unified configuration")
+
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration with correct model reading"""
+        # Get the full backend.llm configuration
+        backend_llm = self.get_nested("backend.llm", {})
+
+        # Ensure we have proper structure
+        if not backend_llm:
+            # Create default structure
+            backend_llm = {
+                "provider_type": "local",
+                "local": {
+                    "provider": "ollama",
+                    "providers": {
+                        "ollama": {
+                            "selected_model": self.get_selected_model(),
+                            "models": [],
+                            "endpoint": (
+                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}/api/generate"
+                            ),
+                            "host": (
+                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+                            ),
+                        }
+                    },
+                },
+            }
+            self.set_nested("backend.llm", backend_llm)
+
+        # CRITICAL: Always use the selected model from config, not hardcoded values
+        selected_model = self.get_selected_model()
+        if backend_llm.get("local", {}).get("providers", {}).get("ollama"):
+            backend_llm["local"]["providers"]["ollama"][
+                "selected_model"
+            ] = selected_model
+
+        # Build Ollama endpoint from config instead of hardcoded IP
+        ollama_endpoint = (
+            backend_llm.get("local", {})
+            .get("providers", {})
+            .get("ollama", {})
+            .get("endpoint")
+        )
+
+        # If not explicitly configured, construct from infrastructure config
+        if not ollama_endpoint:
+            ollama_host = self.get_host("ollama")
+            ollama_port = self.get_port("ollama")
+            ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
+
+        # Return legacy-compatible format for existing code
+        return {
+            "ollama": {
+                "selected_model": selected_model,
+                "models": (
+                    backend_llm.get("local", {})
+                    .get("providers", {})
+                    .get("ollama", {})
+                    .get("models", [])
+                ),
+                "endpoint": ollama_endpoint,
+            },
+            "unified": backend_llm,  # New unified format
+        }

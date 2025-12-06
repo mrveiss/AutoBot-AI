@@ -172,138 +172,134 @@ async def clear_all_cache():
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
+def _template_to_summary_dict(template) -> dict:
+    """Convert template to summary dict for caching."""
+    return {
+        "id": template.id,
+        "name": template.name,
+        "description": template.description,
+        "category": template.category.value,
+        "complexity": template.complexity.value,
+        "estimated_duration_minutes": template.estimated_duration_minutes,
+        "agents_involved": template.agents_involved,
+        "tags": template.tags,
+        "step_count": len(template.steps),
+        "approval_steps": sum(1 for step in template.steps if step.requires_approval),
+        "variables": template.variables,
+    }
+
+
+def _step_to_dict(step) -> dict:
+    """Convert template step to dict for caching."""
+    return {
+        "id": step.id,
+        "agent_type": step.agent_type,
+        "action": step.action,
+        "description": step.description,
+        "requires_approval": step.requires_approval,
+        "dependencies": step.dependencies,
+        "inputs": step.inputs,
+        "expected_duration_ms": step.expected_duration_ms,
+    }
+
+
+def _template_to_detail_dict(template_detail) -> dict:
+    """Convert template to detailed dict for caching."""
+    return {
+        "id": template_detail.id,
+        "name": template_detail.name,
+        "description": template_detail.description,
+        "category": template_detail.category.value,
+        "complexity": template_detail.complexity.value,
+        "estimated_duration_minutes": template_detail.estimated_duration_minutes,
+        "agents_involved": template_detail.agents_involved,
+        "tags": template_detail.tags,
+        "variables": template_detail.variables,
+        "steps": [_step_to_dict(step) for step in template_detail.steps],
+    }
+
+
+async def _warm_templates_cache() -> bool:
+    """Warm cache for workflow templates."""
+    from src.workflow_templates import workflow_template_manager
+
+    templates = workflow_template_manager.list_templates()
+    template_data = [_template_to_summary_dict(t) for t in templates]
+
+    # Cache templates list
+    await advanced_cache.set(
+        "templates",
+        "list:all",
+        {"success": True, "templates": template_data, "total": len(template_data)},
+    )
+
+    # Cache individual template details
+    for template in templates:
+        template_detail = workflow_template_manager.get_template(template.id)
+        if not template_detail:
+            continue
+        await advanced_cache.set(
+            "templates",
+            f"detail:{template.id}",
+            {"success": True, "template": _template_to_detail_dict(template_detail)},
+        )
+
+    logger.info(f"Warmed cache for {len(templates)} templates")
+    return True
+
+
+async def _warm_system_status_cache() -> bool:
+    """Warm cache for system health status."""
+    from backend.utils.connection_utils import ConnectionTester
+
+    try:
+        fast_status = await ConnectionTester.get_fast_health_status()
+        await advanced_cache.set("health_checks", "health:fast", fast_status)
+
+        detailed_status = await ConnectionTester.get_comprehensive_health_status()
+        await advanced_cache.set("health_checks", "health:detailed", detailed_status)
+
+        logger.info("Warmed cache for system health status")
+        return True
+    except Exception as e:
+        logger.error(f"Error warming system status cache: {e}")
+        return False
+
+
+async def _warm_project_status_cache() -> bool:
+    """Warm cache for project status."""
+    from src.project_state_manager import get_project_state_manager
+
+    try:
+        manager = get_project_state_manager()
+
+        fast_status = manager.get_project_status(use_cache=True)
+        await advanced_cache.set("project_status", "status:fast", fast_status)
+
+        detailed_status = manager.get_project_status(use_cache=False)
+        await advanced_cache.set("project_status", "status:detailed", detailed_status)
+
+        logger.info("Warmed cache for project status")
+        return True
+    except Exception as e:
+        logger.error(f"Error warming project status cache: {e}")
+        return False
+
+
 async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
     """Warm cache for specific data type"""
     try:
         if data_type == "templates":
-            # Warm workflow templates
-            from src.workflow_templates import workflow_template_manager
+            return await _warm_templates_cache()
 
-            # Cache all templates list
-            templates = workflow_template_manager.list_templates()
-            template_data = []
-            for template in templates:
-                template_dict = {
-                    "id": template.id,
-                    "name": template.name,
-                    "description": template.description,
-                    "category": template.category.value,
-                    "complexity": template.complexity.value,
-                    "estimated_duration_minutes": template.estimated_duration_minutes,
-                    "agents_involved": template.agents_involved,
-                    "tags": template.tags,
-                    "step_count": len(template.steps),
-                    "approval_steps": sum(
-                        1 for step in template.steps if step.requires_approval
-                    ),
-                    "variables": template.variables,
-                }
-                template_data.append(template_dict)
+        if data_type == "system_status":
+            return await _warm_system_status_cache()
 
-            # Cache templates list
-            await advanced_cache.set(
-                "templates",
-                "list:all",
-                {
-                    "success": True,
-                    "templates": template_data,
-                    "total": len(template_data),
-                },
-            )
+        if data_type == "project_status":
+            return await _warm_project_status_cache()
 
-            # Cache individual template details
-            for template in templates:
-                template_detail = workflow_template_manager.get_template(template.id)
-                if template_detail:
-                    steps = []
-                    for step in template_detail.steps:
-                        steps.append(
-                            {
-                                "id": step.id,
-                                "agent_type": step.agent_type,
-                                "action": step.action,
-                                "description": step.description,
-                                "requires_approval": step.requires_approval,
-                                "dependencies": step.dependencies,
-                                "inputs": step.inputs,
-                                "expected_duration_ms": step.expected_duration_ms,
-                            }
-                        )
-
-                    await advanced_cache.set(
-                        "templates",
-                        f"detail:{template.id}",
-                        {
-                            "success": True,
-                            "template": {
-                                "id": template_detail.id,
-                                "name": template_detail.name,
-                                "description": template_detail.description,
-                                "category": template_detail.category.value,
-                                "complexity": template_detail.complexity.value,
-                                "estimated_duration_minutes": (
-                                    template_detail.estimated_duration_minutes
-                                ),
-                                "agents_involved": template_detail.agents_involved,
-                                "tags": template_detail.tags,
-                                "variables": template_detail.variables,
-                                "steps": steps,
-                            },
-                        },
-                    )
-
-            logger.info(f"Warmed cache for {len(templates)} templates")
-            return True
-
-        elif data_type == "system_status":
-            # Warm system status
-            from backend.utils.connection_utils import ConnectionTester
-
-            try:
-                # Fast health status
-                fast_status = await ConnectionTester.get_fast_health_status()
-                await advanced_cache.set("health_checks", "health:fast", fast_status)
-
-                # Detailed health status
-                detailed_status = (
-                    await ConnectionTester.get_comprehensive_health_status()
-                )
-                await advanced_cache.set(
-                    "health_checks", "health:detailed", detailed_status
-                )
-
-                logger.info("Warmed cache for system health status")
-                return True
-            except Exception as e:
-                logger.error(f"Error warming system status cache: {e}")
-                return False
-
-        elif data_type == "project_status":
-            # Warm project status
-            from src.project_state_manager import get_project_state_manager
-
-            try:
-                manager = get_project_state_manager()
-
-                # Fast project status
-                fast_status = manager.get_project_status(use_cache=True)
-                await advanced_cache.set("project_status", "status:fast", fast_status)
-
-                # Detailed project status
-                detailed_status = manager.get_project_status(use_cache=False)
-                await advanced_cache.set(
-                    "project_status", "status:detailed", detailed_status
-                )
-
-                logger.info("Warmed cache for project status")
-                return True
-            except Exception as e:
-                logger.error(f"Error warming project status cache: {e}")
-                return False
-
-        else:
-            logger.warning(f"No warming strategy defined for data type: {data_type}")
-            return False
+        logger.warning(f"No warming strategy defined for data type: {data_type}")
+        return False
 
     except Exception as e:
         logger.error(f"Error warming cache for {data_type}: {e}")

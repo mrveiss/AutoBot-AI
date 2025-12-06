@@ -106,6 +106,40 @@ class ConfigDuplicationDetector:
                 return -val if val is not None else None
         return None
 
+    def _process_pydantic_field(self, node: ast.Call, filepath: str) -> None:
+        """Extract config values from Pydantic Field() calls."""
+        if not isinstance(node.func, ast.Name) or node.func.id != "Field":
+            return
+        for keyword in node.keywords:
+            if keyword.arg != "default":
+                continue
+            value = self._extract_value(keyword.value)
+            if value is not None and not self._should_ignore_value(value):
+                self.config_values[value].append((filepath, node.lineno, "Pydantic Field"))
+
+    def _is_dataclass(self, node: ast.ClassDef) -> bool:
+        """Check if class has @dataclass decorator."""
+        for dec in node.decorator_list:
+            if isinstance(dec, ast.Name) and dec.id == "dataclass":
+                return True
+            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
+                if dec.func.id == "dataclass":
+                    return True
+        return False
+
+    def _process_dataclass_fields(self, node: ast.ClassDef, filepath: str) -> None:
+        """Extract config values from dataclass field defaults."""
+        if not self._is_dataclass(node):
+            return
+        for item in node.body:
+            if not isinstance(item, ast.AnnAssign) or item.value is None:
+                continue
+            value = self._extract_value(item.value)
+            if value is None or self._should_ignore_value(value):
+                continue
+            target_name = item.target.id if isinstance(item.target, ast.Name) else "field"
+            self.config_values[value].append((filepath, item.lineno, f"dataclass {target_name}"))
+
     def analyze_file(self, filepath: str) -> None:
         """
         Analyze a single Python file for config duplicates (Issue #327 optimization).
@@ -121,39 +155,12 @@ class ConfigDuplicationDetector:
 
             tree = ast.parse(content)
 
-            # Single unified AST walk (Issue #327) - extract both Pydantic and dataclass defaults
+            # Single unified AST walk (Issue #327)
             for node in ast.walk(tree):
-                # Check for Pydantic Field(...) calls
                 if isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name) and node.func.id == "Field":
-                        # Extract Field(default=X) keyword argument
-                        for keyword in node.keywords:
-                            if keyword.arg == "default":
-                                value = self._extract_value(keyword.value)
-                                if value is not None and not self._should_ignore_value(value):
-                                    self.config_values[value].append(
-                                        (filepath, node.lineno, "Pydantic Field")
-                                    )
-
-                # Check for dataclass definitions
-                if isinstance(node, ast.ClassDef):
-                    # Check if it has @dataclass decorator
-                    has_dataclass = any(
-                        isinstance(dec, ast.Name) and dec.id == "dataclass"
-                        or (isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass")
-                        for dec in node.decorator_list
-                    )
-
-                    if has_dataclass:
-                        # Extract field defaults
-                        for item in node.body:
-                            if isinstance(item, ast.AnnAssign) and item.value:
-                                value = self._extract_value(item.value)
-                                if value is not None and not self._should_ignore_value(value):
-                                    target_name = item.target.id if isinstance(item.target, ast.Name) else "field"
-                                    self.config_values[value].append(
-                                        (filepath, item.lineno, f"dataclass {target_name}")
-                                    )
+                    self._process_pydantic_field(node, filepath)
+                elif isinstance(node, ast.ClassDef):
+                    self._process_dataclass_fields(node, filepath)
 
         except Exception as e:
             logger.debug(f"Could not analyze {filepath}: {e}")

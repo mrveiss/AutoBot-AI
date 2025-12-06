@@ -644,6 +644,45 @@ async def tail_log(websocket: WebSocket, filename: str):
             logger.debug(f"Failed to close WebSocket: {close_err}")
 
 
+def _line_matches_query(line_content: str, query: str, case_sensitive: bool) -> bool:
+    """Check if a line matches the search query."""
+    if case_sensitive:
+        return query in line_content
+    return query.lower() in line_content.lower()
+
+
+def _create_search_result(file_name: str, line_num: int, line_content: str) -> dict:
+    """Create a search result entry."""
+    return {
+        "file": file_name,
+        "line": line_num,
+        "content": line_content,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+async def _search_single_log_file(
+    file_path, query: str, case_sensitive: bool, max_results: int, current_count: int
+) -> list:
+    """Search a single log file for matching lines."""
+    results = []
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+        line_num = 0
+        async for line in f:
+            line_num += 1
+            line_content = line.rstrip()
+
+            if not _line_matches_query(line_content, query, case_sensitive):
+                continue
+
+            results.append(_create_search_result(file_path.name, line_num, line_content))
+
+            if current_count + len(results) >= max_results:
+                break
+
+    return results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_logs",
@@ -670,43 +709,17 @@ async def search_logs(
             files_to_search = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
 
         for file_path in files_to_search:
+            if len(results) >= max_results:
+                break
+
             try:
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    line_num = 0
-                    async for line in f:
-                        line_num += 1
-                        line_content = line.rstrip()
-
-                        # Check if line matches query
-                        if case_sensitive:
-                            if query in line_content:
-                                results.append(
-                                    {
-                                        "file": file_path.name,
-                                        "line": line_num,
-                                        "content": line_content,
-                                        "timestamp": datetime.now().isoformat(),
-                                    }
-                                )
-                        else:
-                            if query.lower() in line_content.lower():
-                                results.append(
-                                    {
-                                        "file": file_path.name,
-                                        "line": line_num,
-                                        "content": line_content,
-                                        "timestamp": datetime.now().isoformat(),
-                                    }
-                                )
-
-                        if len(results) >= max_results:
-                            break
+                file_results = await _search_single_log_file(
+                    file_path, query, case_sensitive, max_results, len(results)
+                )
+                results.extend(file_results)
             except OSError as e:
                 logger.error(f"Failed to search log file {file_path}: {e}")
                 continue
-
-            if len(results) >= max_results:
-                break
 
         return {
             "query": query,
