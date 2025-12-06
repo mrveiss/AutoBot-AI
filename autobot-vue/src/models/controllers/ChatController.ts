@@ -256,11 +256,17 @@ export class ChatController {
               } else if (data.content) {
                 accumulatedContent += data.content
 
-                // Map backend message_type to frontend type
+                // Map backend message type to frontend type
+                // Issue #351 Fix: Backend sends type at top level (data.type), not in metadata
                 type MessageType = 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | undefined
                 let messageType: MessageType = 'response'
-                if (data.metadata?.message_type) {
-                  const backendType = data.metadata.message_type
+
+                // Check data.type first (backend WorkflowMessage.to_dict()), then metadata.message_type for backward compat
+                const backendType = data.type || data.metadata?.message_type
+                if (backendType && backendType !== 'response' && backendType !== 'llm_response') {
+                  logger.debug(`Received message type: ${backendType}`)
+                }
+                if (backendType) {
                   // Map backend types to frontend types
                   if (backendType === 'thought' || backendType.includes('thought')) messageType = 'thought'
                   else if (backendType.includes('planning')) messageType = 'planning'
@@ -268,7 +274,8 @@ export class ChatController {
                   else if (backendType.includes('utility')) messageType = 'utility'
                   else if (backendType.includes('source')) messageType = 'sources'
                   else if (backendType.includes('json')) messageType = 'json'
-                  else messageType = 'response'
+                  else if (backendType === 'response' || backendType === 'llm_response') messageType = 'response'
+                  // Keep 'response' as default for unknown types
                 }
 
                 // CRITICAL FIX: Merge metadata instead of replacing to preserve terminal_session_id
