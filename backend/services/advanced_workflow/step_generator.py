@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from src.enhanced_orchestrator import EnhancedOrchestrator
-from src.type_definitions import TaskComplexity
+from src.autobot_types import TaskComplexity
 
 from .models import SmartWorkflowStep, WorkflowIntent
 

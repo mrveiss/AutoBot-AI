@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.api.workflow_automation import WorkflowStep
+from backend.services.workflow_automation import WorkflowStep
 from backend.type_defs.common import Metadata
 
 # Performance optimization: O(1) lookup for dangerous command patterns (Issue #326)
