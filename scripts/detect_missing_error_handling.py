@@ -152,19 +152,24 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
     def _is_api_endpoint(self, node) -> bool:
         """Check if function is an API endpoint."""
         for decorator in node.decorator_list:
+            # (Issue #315 - refactored) Early returns to reduce nesting
             if isinstance(decorator, ast.Call):
-                if isinstance(decorator.func, ast.Attribute):
-                    if decorator.func.attr in self.API_DECORATORS:
-                        return True
-                elif isinstance(decorator.func, ast.Name):
-                    if decorator.func.id in self.API_DECORATORS:
-                        return True
+                if self._is_api_decorator_call(decorator.func):
+                    return True
             elif isinstance(decorator, ast.Attribute):
                 if decorator.attr in self.API_DECORATORS:
                     return True
             elif isinstance(decorator, ast.Name):
                 if decorator.id in self.API_DECORATORS:
                     return True
+        return False
+
+    def _is_api_decorator_call(self, func_node) -> bool:
+        """(Issue #315 - extracted) Check if decorator call uses API decorator."""
+        if isinstance(func_node, ast.Attribute):
+            return func_node.attr in self.API_DECORATORS
+        if isinstance(func_node, ast.Name):
+            return func_node.id in self.API_DECORATORS
         return False
 
     def _has_try_except(self, node) -> bool:
@@ -177,34 +182,47 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
     def _has_error_handling_decorator(self, node) -> bool:
         """Check if function has an error handling decorator."""
         for decorator in node.decorator_list:
+            # (Issue #315 - refactored) Early returns to reduce nesting
             if isinstance(decorator, ast.Call):
-                if isinstance(decorator.func, ast.Name):
-                    if decorator.func.id in self.ERROR_HANDLING_DECORATORS:
-                        return True
-                elif isinstance(decorator.func, ast.Attribute):
-                    if decorator.func.attr in self.ERROR_HANDLING_DECORATORS:
-                        return True
+                if self._is_error_handling_decorator_call(decorator.func):
+                    return True
             elif isinstance(decorator, ast.Name):
                 if decorator.id in self.ERROR_HANDLING_DECORATORS:
                     return True
+        return False
+
+    def _is_error_handling_decorator_call(self, func_node) -> bool:
+        """(Issue #315 - extracted) Check if decorator call uses error handling decorator."""
+        if isinstance(func_node, ast.Name):
+            return func_node.id in self.ERROR_HANDLING_DECORATORS
+        if isinstance(func_node, ast.Attribute):
+            return func_node.attr in self.ERROR_HANDLING_DECORATORS
         return False
 
     def _find_risky_calls(self, node) -> List[dict]:
         """Find risky function calls in the node."""
         risky_calls = []
         for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                call_name = self._get_call_name(child)
-                if call_name:
-                    # Check if any risky pattern matches
-                    for pattern in self.RISKY_CALLS:
-                        if pattern in call_name or call_name.endswith(pattern.split(".")[-1]):
-                            risky_calls.append({
-                                "name": call_name,
-                                "line": child.lineno
-                            })
-                            break
+            # (Issue #315 - refactored) Early continue to reduce nesting
+            if not isinstance(child, ast.Call):
+                continue
+
+            call_name = self._get_call_name(child)
+            if not call_name:
+                continue
+
+            # Check if any risky pattern matches
+            risky_info = self._check_risky_pattern(call_name, child.lineno)
+            if risky_info:
+                risky_calls.append(risky_info)
         return risky_calls
+
+    def _check_risky_pattern(self, call_name: str, lineno: int) -> Optional[dict]:
+        """(Issue #315 - extracted) Check if call name matches risky patterns."""
+        for pattern in self.RISKY_CALLS:
+            if pattern in call_name or call_name.endswith(pattern.split(".")[-1]):
+                return {"name": call_name, "line": lineno}
+        return None
 
     def _get_call_name(self, node: ast.Call) -> Optional[str]:
         """Get the full name of a function call."""
@@ -237,26 +255,40 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
         """Find bare exception handlers without logging."""
         bare = []
         for child in ast.walk(node):
-            if isinstance(child, ast.ExceptHandler):
-                # Check if it catches Exception or bare except
-                if child.type is None or (
-                    isinstance(child.type, ast.Name) and
-                    child.type.id in ("Exception", "BaseException")
-                ):
-                    # Check if there's any logging
-                    has_logging = False
-                    for stmt in ast.walk(child):
-                        if isinstance(stmt, ast.Call):
-                            call_name = self._get_call_name(stmt)
-                            if call_name and any(
-                                log in call_name.lower()
-                                for log in ["log", "logger", "print", "warn", "error"]
-                            ):
-                                has_logging = True
-                                break
-                    if not has_logging:
-                        bare.append({"line": child.lineno})
+            # (Issue #315 - refactored) Early continue to reduce nesting
+            if not isinstance(child, ast.ExceptHandler):
+                continue
+
+            # Check if it catches Exception or bare except
+            if not self._is_bare_exception_handler(child):
+                continue
+
+            # Check if there's any logging
+            if not self._has_logging_in_handler(child):
+                bare.append({"line": child.lineno})
         return bare
+
+    def _is_bare_exception_handler(self, handler: ast.ExceptHandler) -> bool:
+        """(Issue #315 - extracted) Check if exception handler is bare or catches base exceptions."""
+        if handler.type is None:
+            return True
+        if isinstance(handler.type, ast.Name):
+            return handler.type.id in ("Exception", "BaseException")
+        return False
+
+    def _has_logging_in_handler(self, handler: ast.ExceptHandler) -> bool:
+        """(Issue #315 - extracted) Check if exception handler contains logging."""
+        for stmt in ast.walk(handler):
+            if not isinstance(stmt, ast.Call):
+                continue
+
+            call_name = self._get_call_name(stmt)
+            if not call_name:
+                continue
+
+            if any(log in call_name.lower() for log in ["log", "logger", "print", "warn", "error"]):
+                return True
+        return False
 
 
 def analyze_file(filepath: Path) -> List[ErrorHandlingIssue]:

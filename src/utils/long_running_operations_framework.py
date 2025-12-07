@@ -151,6 +151,7 @@ class LongRunningOperation:
     error_info: Optional[str] = None
 
     def __post_init__(self):
+        """Initialize default progress tracker if not provided."""
         if self.progress is None:
             self.progress = OperationProgress(
                 operation_id=self.operation_id,
@@ -241,6 +242,7 @@ class OperationCheckpointManager:
     """Manages checkpoints for operation resume capability"""
 
     def __init__(self, redis_client: Optional[redis.Redis] = None):
+        """Initialize checkpoint manager with Redis client and filesystem storage."""
         self.redis_client = redis_client
         self.checkpoint_dir = PATH.get_data_path("checkpoints")
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -374,6 +376,7 @@ class OperationProgressTracker:
     """Real-time progress tracking with WebSocket broadcasting"""
 
     def __init__(self, redis_client: Optional[redis.Redis] = None):
+        """Initialize progress tracker with Redis client and callback registry."""
         self.redis_client = redis_client
         self.progress_callbacks: Dict[str, List[Callable]] = {}
         self.websocket_connections: Dict[str, List] = {}
@@ -467,6 +470,7 @@ class LongRunningOperationManager:
     """Main manager for long-running operations"""
 
     def __init__(self, redis_client: Optional[redis.Redis] = None):
+        """Initialize operation manager with checkpoint and progress tracking."""
         self.redis_client = redis_client
         self.operations: Dict[str, LongRunningOperation] = {}
         self.checkpoint_manager = OperationCheckpointManager(redis_client)
@@ -533,11 +537,14 @@ class LongRunningOperationManager:
 
                     # Clean up when done - use a closure to capture self properly
                     def make_done_callback(manager):
+                        """Create done callback that decrements active operation count."""
                         async def decrement():
+                            """Decrement active operations counter under lock."""
                             async with manager._lock:
                                 manager.active_operations -= 1
 
                         def callback(t):
+                            """Schedule decrement when task completes."""
                             asyncio.create_task(decrement())
 
                         return callback
@@ -901,7 +908,7 @@ async def execute_codebase_indexing(
     """Execute codebase indexing operation"""
 
     async def indexing_operation(context: OperationExecutionContext):
-        """Actual indexing implementation"""
+        """Index files in codebase with progress tracking and checkpoints."""
 
         from pathlib import Path
 
@@ -981,7 +988,7 @@ async def execute_comprehensive_test_suite(
     """Execute comprehensive test suite operation"""
 
     async def test_suite_operation(context: OperationExecutionContext):
-        """Actual test suite implementation"""
+        """Run test suite with progress tracking and checkpoint support."""
 
         from pathlib import Path
 
@@ -1065,7 +1072,7 @@ async def execute_comprehensive_test_suite(
 if __name__ == "__main__":
 
     async def example_usage():
-        """Example usage of the long-running operations framework"""
+        """Demonstrate long-running operations framework with example tasks."""
 
         # Initialize manager
         manager = LongRunningOperationManager()

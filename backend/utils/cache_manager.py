@@ -38,6 +38,7 @@ class CacheManager:
     """Redis-based cache manager with TTL support"""
 
     def __init__(self, default_ttl: int = 300):  # 5 minutes default
+        """Initialize cache manager with default TTL and Redis client state."""
         self.default_ttl = default_ttl
         self.cache_prefix = "cache:"
         self._redis_client = None
@@ -212,6 +213,8 @@ def cache_response(cache_key: str = None, ttl: int = 300):
     """
 
     def decorator(func):
+        """Wrap endpoint function with cache lookup and storage logic."""
+
         @functools.wraps(func)  # Preserve function signature for FastAPI
         async def wrapper(*args, **kwargs):
             # Extract request object from FastAPI dependency injection
@@ -297,6 +300,8 @@ def cache_function(cache_key: str = None, ttl: int = 300):
     """
 
     def decorator(func):
+        """Wrap async function with cache lookup and storage logic."""
+
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Generate cache key

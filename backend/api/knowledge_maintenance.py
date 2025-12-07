@@ -40,6 +40,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_maintenance"])
 
 
+def _process_fact_metadata(metadata_str, fact_key, created_at) -> dict | None:
+    """Process fact metadata and extract grouping info (Issue #315: extracted).
+
+    Returns:
+        Dict with fact info if valid, None if invalid
+    """
+    # Decode key if it's bytes
+    if isinstance(fact_key, bytes):
+        fact_key = fact_key.decode("utf-8")
+
+    if not metadata_str:
+        return None
+
+    try:
+        metadata = json.loads(metadata_str)
+        return {
+            "fact_id": metadata.get("fact_id", fact_key.split(":")[1]),
+            "fact_key": fact_key,
+            "created_at": created_at or "1970-01-01T00:00:00",
+            "category": metadata.get("category", "unknown"),
+            "title": metadata.get("title", "unknown"),
+        }
+    except json.JSONDecodeError:
+        logger.warning(f"Failed to parse metadata for {fact_key}")
+        return None
+
+
+def _group_fact_by_category_title(fact_info: dict, fact_groups: dict) -> None:
+    """Add fact to appropriate group by category:title (Issue #315: extracted)."""
+    group_key = f"{fact_info['category']}:{fact_info['title']}"
+    if group_key not in fact_groups:
+        fact_groups[group_key] = []
+    fact_groups[group_key].append(fact_info)
+
+
 # ===== DEDUPLICATION ENDPOINTS =====
 
 
@@ -83,40 +118,14 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
                 pipe.hget(key, "created_at")
             results = pipe.execute()
 
-            # Group facts by category+title
+            # Group facts by category+title (Issue #315: uses helper for reduced nesting)
             for i in range(0, len(results), 2):
-                metadata_str = results[i]
-                created_at = results[i + 1]
-                fact_key = keys[i // 2]
-
-                # Decode key if it's bytes
-                if isinstance(fact_key, bytes):
-                    fact_key = fact_key.decode("utf-8")
-
-                if metadata_str:
-                    try:
-                        metadata = json.loads(metadata_str)
-                        category = metadata.get("category", "unknown")
-                        title = metadata.get("title", "unknown")
-                        fact_id = metadata.get("fact_id", fact_key.split(":")[1])
-
-                        group_key = f"{category}:{title}"
-
-                        if group_key not in fact_groups:
-                            fact_groups[group_key] = []
-
-                        fact_groups[group_key].append(
-                            {
-                                "fact_id": fact_id,
-                                "fact_key": fact_key,
-                                "created_at": created_at or "1970-01-01T00:00:00",
-                                "category": category,
-                                "title": title,
-                            }
-                        )
-                        total_facts += 1
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse metadata for {fact_key}")
+                fact_info = _process_fact_metadata(
+                    results[i], keys[i // 2], results[i + 1]
+                )
+                if fact_info:
+                    _group_fact_by_category_title(fact_info, fact_groups)
+                    total_facts += 1
 
         if cursor == 0:
             break

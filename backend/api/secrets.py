@@ -52,6 +52,7 @@ class RateLimiter:
     def __init__(
         self, window: int = RATE_LIMIT_WINDOW, max_requests: int = RATE_LIMIT_MAX_REQUESTS
     ):
+        """Initialize rate limiter with window size and request limit."""
         self.window = window
         self.max_requests = max_requests
         self.requests: Dict[str, List[float]] = defaultdict(list)
@@ -178,6 +179,7 @@ class SecretsManager:
     """Manages encrypted secrets with dual scope support"""
 
     def __init__(self):
+        """Initialize secrets manager with encryption and caching."""
         # Use centralized path management
         from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
@@ -278,6 +280,7 @@ class SecretsManager:
         """
 
         def json_serializer(obj):
+            """Serialize datetime and other objects to JSON-compatible strings."""
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
             return str(obj)

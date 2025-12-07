@@ -309,22 +309,24 @@ def main():
         parser.print_help()
         return 1
 
-    # Route to appropriate command handler
+    # Command dispatch table (Issue #315 - reduced nesting)
+    sync_commands = {
+        "status": cmd_status,
+        "url": cmd_url,
+        "config": cmd_config,
+        "deploy": cmd_deploy_info,
+    }
+    async_commands = {
+        "health": cmd_health,
+        "test": cmd_test_service,
+        "test-all": cmd_test_all,
+    }
+
     try:
-        if args.command == "status":
-            return cmd_status(args)
-        elif args.command == "health":
-            return asyncio.run(cmd_health(args))
-        elif args.command == "url":
-            return cmd_url(args)
-        elif args.command == "config":
-            return cmd_config(args)
-        elif args.command == "test":
-            return asyncio.run(cmd_test_service(args))
-        elif args.command == "test-all":
-            return asyncio.run(cmd_test_all(args))
-        elif args.command == "deploy":
-            return cmd_deploy_info(args)
+        if args.command in sync_commands:
+            return sync_commands[args.command](args)
+        elif args.command in async_commands:
+            return asyncio.run(async_commands[args.command](args))
         else:
             print_status("error", f"Unknown command: {args.command}")
             return 1

@@ -48,6 +48,163 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# =============================================================================
+# Helper Functions for Score Grading (Issue #315 - extracted/refactored)
+# =============================================================================
+
+
+def _calculate_grade_from_score(score: float) -> str:
+    """
+    Calculate letter grade from numeric score.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        score: Numeric score from 0-100
+
+    Returns:
+        Letter grade: A, B, C, D, or F
+    """
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
+    return "F"
+
+
+def _get_redis_status_message(score: float) -> str:
+    """
+    Get status message for Redis health score.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        score: Redis health score from 0-100
+
+    Returns:
+        Human-readable status message
+    """
+    if score >= 90:
+        return "Excellent Redis usage patterns"
+    if score >= 80:
+        return "Good Redis usage with minor improvements possible"
+    if score >= 70:
+        return "Fair Redis usage - several optimizations recommended"
+    if score >= 60:
+        return "Poor Redis usage - significant optimization needed"
+    return "Critical Redis usage issues - immediate attention required"
+
+
+def _get_security_status_message(score: float) -> str:
+    """
+    Get status message for security score.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        score: Security score from 0-100
+
+    Returns:
+        Human-readable status message
+    """
+    if score >= 90:
+        return "Excellent security posture"
+    if score >= 80:
+        return "Good security with minor issues"
+    if score >= 70:
+        return "Fair security - several vulnerabilities to address"
+    if score >= 50:
+        return "Poor security - significant vulnerabilities present"
+    return "Critical security issues - immediate attention required"
+
+
+def _get_performance_status_message(score: float) -> str:
+    """
+    Get status message for performance score.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        score: Performance score from 0-100
+
+    Returns:
+        Human-readable status message
+    """
+    if score >= 90:
+        return "Excellent performance - minimal issues"
+    if score >= 80:
+        return "Good performance with minor optimizations possible"
+    if score >= 70:
+        return "Fair performance - several optimizations recommended"
+    if score >= 50:
+        return "Performance issues detected - optimization needed"
+    return "Critical performance problems - immediate action required"
+
+
+def _calculate_health_score(anti_patterns: list) -> float:
+    """
+    Calculate health score from list of anti-patterns.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        anti_patterns: List of detected anti-patterns
+
+    Returns:
+        Health score from 0-100
+    """
+    score = 100.0
+
+    severity_penalties = {
+        AntiPatternSeverity.INFO: 0.5,
+        AntiPatternSeverity.LOW: 1,
+        AntiPatternSeverity.MEDIUM: 2,
+        AntiPatternSeverity.HIGH: 4,
+        AntiPatternSeverity.CRITICAL: 8,
+    }
+
+    for pattern in anti_patterns:
+        penalty = severity_penalties.get(pattern.severity, 1)
+        score -= penalty
+
+    # Normalize to 0-100
+    return max(0, min(100, score))
+
+
+def _calculate_redis_health_score(results: list) -> float:
+    """
+    Calculate Redis health score from optimization results.
+
+    (Issue #315 - extracted/refactored)
+
+    Args:
+        results: List of Redis optimization findings
+
+    Returns:
+        Health score from 0-100
+    """
+    score = 100.0
+
+    severity_penalties = {
+        OptimizationSeverity.INFO: 0.5,
+        OptimizationSeverity.LOW: 1,
+        OptimizationSeverity.MEDIUM: 2,
+        OptimizationSeverity.HIGH: 4,
+        OptimizationSeverity.CRITICAL: 8,
+    }
+
+    for result in results:
+        penalty = severity_penalties.get(result.severity, 1)
+        score -= penalty
+
+    # Normalize to 0-100
+    return max(0, min(100, score))
+
+
 class AnalysisRequest(BaseModel):
     """Request model for code analysis."""
 
@@ -214,35 +371,10 @@ async def get_codebase_health_score(
         report = await asyncio.to_thread(detector.analyze_directory, path)
 
         # Calculate health score
-        # Start with 100 and subtract based on issues
-        score = 100.0
+        score = _calculate_health_score(report.anti_patterns)
 
-        severity_penalties = {
-            AntiPatternSeverity.INFO: 0.5,
-            AntiPatternSeverity.LOW: 1,
-            AntiPatternSeverity.MEDIUM: 2,
-            AntiPatternSeverity.HIGH: 4,
-            AntiPatternSeverity.CRITICAL: 8,
-        }
-
-        for pattern in report.anti_patterns:
-            penalty = severity_penalties.get(pattern.severity, 1)
-            score -= penalty
-
-        # Normalize to 0-100
-        score = max(0, min(100, score))
-
-        # Determine grade
-        if score >= 90:
-            grade = "A"
-        elif score >= 80:
-            grade = "B"
-        elif score >= 70:
-            grade = "C"
-        elif score >= 60:
-            grade = "D"
-        else:
-            grade = "F"
+        # Determine grade using extracted helper
+        grade = _calculate_grade_from_score(score)
 
         return JSONResponse(
             status_code=200,
@@ -681,41 +813,12 @@ async def get_redis_usage_health_score(
         optimizer = RedisOptimizer(project_root=path)
         results = await asyncio.to_thread(optimizer.analyze_directory, path)
 
-        # Calculate health score
-        # Start with 100 and subtract based on issues
-        score = 100.0
+        # Calculate health score using extracted helper
+        score = _calculate_redis_health_score(results)
 
-        severity_penalties = {
-            OptimizationSeverity.INFO: 0.5,
-            OptimizationSeverity.LOW: 1,
-            OptimizationSeverity.MEDIUM: 2,
-            OptimizationSeverity.HIGH: 4,
-            OptimizationSeverity.CRITICAL: 8,
-        }
-
-        for result in results:
-            penalty = severity_penalties.get(result.severity, 1)
-            score -= penalty
-
-        # Normalize to 0-100
-        score = max(0, min(100, score))
-
-        # Determine grade
-        if score >= 90:
-            grade = "A"
-            status = "Excellent Redis usage patterns"
-        elif score >= 80:
-            grade = "B"
-            status = "Good Redis usage with minor improvements possible"
-        elif score >= 70:
-            grade = "C"
-            status = "Fair Redis usage - several optimizations recommended"
-        elif score >= 60:
-            grade = "D"
-            status = "Poor Redis usage - significant optimization needed"
-        else:
-            grade = "F"
-            status = "Critical Redis usage issues - immediate attention required"
+        # Determine grade and status using extracted helpers
+        grade = _calculate_grade_from_score(score)
+        status = _get_redis_status_message(score)
 
         return JSONResponse(
             status_code=200,
@@ -971,23 +1074,10 @@ async def get_security_score(
         await asyncio.to_thread(analyzer.analyze_directory)
         summary = analyzer.get_summary()
 
-        # Generate grade
+        # Generate grade and status using extracted helpers
         score = summary["security_score"]
-        if score >= 90:
-            grade = "A"
-            status = "Excellent security posture"
-        elif score >= 80:
-            grade = "B"
-            status = "Good security with minor issues"
-        elif score >= 70:
-            grade = "C"
-            status = "Fair security - several vulnerabilities to address"
-        elif score >= 50:
-            grade = "D"
-            status = "Poor security - significant vulnerabilities present"
-        else:
-            grade = "F"
-            status = "Critical security issues - immediate attention required"
+        grade = _calculate_grade_from_score(score)
+        status = _get_security_status_message(score)
 
         return JSONResponse(
             status_code=200,
@@ -1306,19 +1396,10 @@ async def get_performance_score(
         await asyncio.to_thread(analyzer.analyze_directory)
         summary = analyzer.get_summary()
 
+        # Get score and grade, generate status using extracted helper
         score = summary["performance_score"]
         grade = summary["grade"]
-
-        if score >= 90:
-            status = "Excellent performance - minimal issues"
-        elif score >= 80:
-            status = "Good performance with minor optimizations possible"
-        elif score >= 70:
-            status = "Fair performance - several optimizations recommended"
-        elif score >= 50:
-            status = "Performance issues detected - optimization needed"
-        else:
-            status = "Critical performance problems - immediate action required"
+        status = _get_performance_status_message(score)
 
         return JSONResponse(
             status_code=200,

@@ -443,7 +443,58 @@ class ToolRegistry:
             "response_text": response_text,
         }
 
-    # Tool Name Mapping for Compatibility
+    # Tool Name Mapping for Compatibility (Issue #315 - Dispatch Table Pattern)
+
+    def _get_tool_handler(self, tool_name: str):
+        """Get tool handler function for normalized tool name (Issue #315)."""
+        # Check system tool variants first (O(1) lookup)
+        if tool_name in EXECUTE_COMMAND_VARIANTS:
+            return lambda args: self.execute_system_command(args.get("command", ""))
+        if tool_name in QUERY_SYSTEM_INFO_VARIANTS:
+            return lambda args: self.query_system_information()
+        if tool_name in LIST_SERVICES_VARIANTS:
+            return lambda args: self.list_system_services()
+        if tool_name in MANAGE_SERVICE_VARIANTS:
+            return lambda args: self.manage_service(
+                args.get("service_name", ""), args.get("action", "")
+            )
+        if tool_name in GET_PROCESS_INFO_VARIANTS:
+            return lambda args: self.get_process_info(
+                args.get("process_name"), args.get("pid")
+            )
+        if tool_name in TERMINATE_PROCESS_VARIANTS:
+            return lambda args: self.terminate_process(args.get("pid", ""))
+
+        # Single-name tools dispatch table
+        dispatch = {
+            "webfetch": lambda args: self.web_fetch(args.get("url", "")),
+            "searchknowledgebase": lambda args: self.search_knowledge_base(
+                args.get("query", ""), args.get("n_results", 5)
+            ),
+            "addfiletoknowledgebase": lambda args: self.add_file_to_knowledge_base(
+                args.get("file_path", ""),
+                args.get("file_type", ""),
+                args.get("metadata"),
+            ),
+            "storefact": lambda args: self.store_fact(
+                args.get("content", ""), args.get("metadata")
+            ),
+            "getfact": lambda args: self.get_fact(
+                args.get("fact_id"), args.get("query")
+            ),
+            "typetext": lambda args: self.type_text(args.get("text", "")),
+            "clickelement": lambda args: self.click_element(args.get("image_path", "")),
+            "bringwindowtofront": lambda args: self.bring_window_to_front(
+                args.get("window_title", "")
+            ),
+            "askuserformanual": lambda args: self.ask_user_for_manual(
+                args.get("program_name", ""), args.get("question_text", "")
+            ),
+            "respondconversationally": lambda args: self.respond_conversationally(
+                args.get("response_text", "")
+            ),
+        }
+        return dispatch.get(tool_name)
 
     async def execute_tool(
         self, tool_name: str, tool_args: Dict[str, Any]
@@ -454,85 +505,21 @@ class ToolRegistry:
         arguments.
         """
         # Normalize tool name variations
-        tool_name = tool_name.lower().replace("_", "").replace("-", "")
+        normalized_name = tool_name.lower().replace("_", "").replace("-", "")
 
-        # System tools (O(1) lookup - Issue #326)
-        if tool_name in EXECUTE_COMMAND_VARIANTS:
-            return await self.execute_system_command(tool_args.get("command", ""))
+        # Get handler from dispatch table (Issue #315 - depth 16 -> 1)
+        handler = self._get_tool_handler(normalized_name)
 
-        elif tool_name in QUERY_SYSTEM_INFO_VARIANTS:
-            return await self.query_system_information()
+        if handler:
+            return await handler(tool_args)
 
-        elif tool_name in LIST_SERVICES_VARIANTS:
-            return await self.list_system_services()
-
-        elif tool_name in MANAGE_SERVICE_VARIANTS:
-            return await self.manage_service(
-                tool_args.get("service_name", ""), tool_args.get("action", "")
-            )
-
-        elif tool_name in GET_PROCESS_INFO_VARIANTS:
-            return await self.get_process_info(
-                tool_args.get("process_name"), tool_args.get("pid")
-            )
-
-        elif tool_name in TERMINATE_PROCESS_VARIANTS:
-            return await self.terminate_process(tool_args.get("pid", ""))
-
-        elif tool_name == "webfetch":
-            return await self.web_fetch(tool_args.get("url", ""))
-
-        # Knowledge base tools
-        elif tool_name == "searchknowledgebase":
-            return await self.search_knowledge_base(
-                tool_args.get("query", ""), tool_args.get("n_results", 5)
-            )
-
-        elif tool_name == "addfiletoknowledgebase":
-            return await self.add_file_to_knowledge_base(
-                tool_args.get("file_path", ""),
-                tool_args.get("file_type", ""),
-                tool_args.get("metadata"),
-            )
-
-        elif tool_name == "storefact":
-            return await self.store_fact(
-                tool_args.get("content", ""), tool_args.get("metadata")
-            )
-
-        elif tool_name == "getfact":
-            return await self.get_fact(tool_args.get("fact_id"), tool_args.get("query"))
-
-        # GUI tools
-        elif tool_name == "typetext":
-            return await self.type_text(tool_args.get("text", ""))
-
-        elif tool_name == "clickelement":
-            return await self.click_element(tool_args.get("image_path", ""))
-
-        elif tool_name == "bringwindowtofront":
-            return await self.bring_window_to_front(tool_args.get("window_title", ""))
-
-        # User interaction tools
-        elif tool_name == "askuserformanual":
-            return await self.ask_user_for_manual(
-                tool_args.get("program_name", ""),
-                tool_args.get("question_text", ""),
-            )
-
-        elif tool_name == "respondconversationally":
-            return await self.respond_conversationally(
-                tool_args.get("response_text", "")
-            )
-
-        else:
-            # Fallback for unknown tools
-            return {
-                "tool_name": tool_name,
-                "tool_args": tool_args,
-                "result": f"Unknown tool: {tool_name}",
-                "status": "error",
-            }
+        # Fallback for unknown tools
+        return {
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+            "result": f"Unknown tool: {tool_name}",
+            "status": "error",
+        }
 
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names."""

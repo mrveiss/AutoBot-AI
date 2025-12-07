@@ -96,10 +96,44 @@ async def _collect_file_logs(
     return logs
 
 
+async def _get_container_output(container_name: str, service: str) -> Optional[bytes]:
+    """Get stdout from a Docker container (Issue #315 - extracted helper)."""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "docker", "logs", container_name, "--timestamps", "--tail=50",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+        return stdout if process.returncode == 0 else None
+    except asyncio.TimeoutError:
+        logger.debug(f"Timeout getting container logs for {service}")
+        return None
+    except OSError as e:
+        logger.debug(f"Error getting container logs for {service}: {e}")
+        return None
+
+
+def _parse_container_log_lines(
+    stdout: bytes, service: str, level: Optional[str]
+) -> List[Metadata]:
+    """Parse Docker container log lines (Issue #315 - extracted helper)."""
+    logs = []
+    for line in stdout.decode().split("\n"):
+        if not line.strip():
+            continue
+        parsed = parse_docker_log_line(line, service)
+        if level and parsed.get("level", "").upper() != level.upper():
+            continue
+        parsed["source_type"] = "container"
+        logs.append(parsed)
+    return logs
+
+
 async def _collect_container_logs(
     source_filter: Set[str], level: Optional[str]
 ) -> List[Metadata]:
-    """Collect logs from Docker containers (Issue #336 - extracted helper).
+    """Collect logs from Docker containers (Issue #315 - refactored).
 
     Args:
         source_filter: Set of source names to include (empty = all)
@@ -114,31 +148,68 @@ async def _collect_container_logs(
         if source_filter and service not in source_filter:
             continue
 
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "docker", "logs", container_name, "--timestamps", "--tail=50",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            try:
-                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
-                if process.returncode != 0:
-                    continue
-
-                for line in stdout.decode().split("\n"):
-                    if not line.strip():
-                        continue
-                    parsed = parse_docker_log_line(line, service)
-                    if level and parsed.get("level", "").upper() != level.upper():
-                        continue
-                    parsed["source_type"] = "container"
-                    logs.append(parsed)
-            except asyncio.TimeoutError:
-                logger.debug(f"Timeout getting container logs for {service}")
-        except OSError as e:
-            logger.debug(f"Error getting container logs for {service}: {e}")
+        stdout = await _get_container_output(container_name, service)
+        if stdout:
+            logs.extend(_parse_container_log_lines(stdout, service, level))
 
     return logs
+
+
+async def _get_file_log_sources() -> List[Metadata]:
+    """Get file log source information (Issue #315 - extracted helper)."""
+    file_logs = []
+    log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
+    if not log_dir_exists:
+        return file_logs
+
+    log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
+    for file_path in log_files:
+        stat = await asyncio.to_thread(file_path.stat)
+        file_logs.append({
+            "name": file_path.name,
+            "type": "file",
+            "size": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "size_mb": round(stat.st_size / 1024 / 1024, 2),
+        })
+    return file_logs
+
+
+async def _check_container_status(service: str, container_name: str) -> Optional[Metadata]:
+    """Check status of a single Docker container (Issue #315 - extracted helper)."""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "docker", "ps", "-a", "--filter", f"name={container_name}",
+            "--format", "{{.Names}}\t{{.Status}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5)
+        stdout_str = stdout.decode()
+
+        if process.returncode == 0 and container_name in stdout_str:
+            status = "running" if "Up" in stdout_str else "stopped"
+            return {
+                "name": service,
+                "container_name": container_name,
+                "type": "container",
+                "status": status,
+            }
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout checking container {container_name}")
+    except Exception as e:
+        logger.error(f"Error checking container {container_name}: {e}")
+    return None
+
+
+async def _get_container_log_sources() -> List[Metadata]:
+    """Get container log source information (Issue #315 - extracted helper)."""
+    container_logs = []
+    for service, container_name in CONTAINER_LOGS.items():
+        result = await _check_container_status(service, container_name)
+        if result:
+            container_logs.append(result)
+    return container_logs
 
 
 @with_error_handling(
@@ -148,74 +219,57 @@ async def _collect_container_logs(
 )
 @router.get("/logs/sources")
 async def get_log_sources():
-    """Get all available log sources (files + Docker containers)"""
+    """Get all available log sources (files + Docker containers) (Issue #315 - refactored)."""
     try:
-        sources = {"file_logs": [], "container_logs": [], "total_sources": 0}
-
-        # List file logs
-        log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
-        if log_dir_exists:
-            log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
-            for file_path in log_files:
-                stat = await asyncio.to_thread(file_path.stat)
-                sources["file_logs"].append(
-                    {
-                        "name": file_path.name,
-                        "type": "file",
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        "size_mb": round(stat.st_size / 1024 / 1024, 2),
-                    }
-                )
-
-        # Check Docker containers
-        for service, container_name in CONTAINER_LOGS.items():
-            try:
-                # Check if container exists and is running
-                process = await asyncio.create_subprocess_exec(
-                    "docker",
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
-                    "--format",
-                    "{{.Names}}\t{{.Status}}",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=5
-                    )
-                    stdout_str = stdout.decode()
-
-                    if process.returncode == 0 and container_name in stdout_str:
-                        status = "running" if "Up" in stdout_str else "stopped"
-                        sources["container_logs"].append(
-                            {
-                                "name": service,
-                                "container_name": container_name,
-                                "type": "container",
-                                "status": status,
-                            }
-                        )
-                except asyncio.TimeoutError:
-                    logger.warning(f"Timeout checking container {container_name}")
-            except Exception as e:
-                logger.error(f"Error checking container {container_name}: {e}")
-
-        sources["total_sources"] = len(sources["file_logs"]) + len(
-            sources["container_logs"]
-        )
+        file_logs = await _get_file_log_sources()
+        container_logs = await _get_container_log_sources()
 
         # Sort file logs by modified time
-        sources["file_logs"].sort(key=lambda x: x["modified"], reverse=True)
+        file_logs.sort(key=lambda x: x["modified"], reverse=True)
 
-        return sources
-
+        return {
+            "file_logs": file_logs,
+            "container_logs": container_logs,
+            "total_sources": len(file_logs) + len(container_logs),
+        }
     except Exception as e:
         logger.error(f"Error getting log sources: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
+    """Get the most recently modified log file (Issue #315 - extracted helper)."""
+    log_dir_exists = await asyncio.to_thread(os.path.exists, log_dir)
+    if not log_dir_exists:
+        return None
+
+    all_files = await asyncio.to_thread(os.listdir, log_dir)
+    log_files = [f for f in all_files if f.endswith(".log")]
+    if not log_files:
+        return None
+
+    # Get modification times
+    def get_mtime(f):
+        return os.path.getmtime(os.path.join(log_dir, f))
+
+    mtimes = {}
+    for f in log_files:
+        mtimes[f] = await asyncio.to_thread(get_mtime, f)
+
+    log_files.sort(key=lambda f: mtimes[f], reverse=True)
+    return log_files[0]
+
+
+async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
+    """Read recent lines from a log file (Issue #315 - extracted helper)."""
+    try:
+        async with aiofiles.open(log_path, "r") as f:
+            content = await f.read()
+            lines = content.splitlines(keepends=True)
+            return lines[-limit:] if len(lines) > limit else lines
+    except Exception as e:
+        logger.error(f"Error reading log file {log_path}: {e}")
+        return []
 
 
 @with_error_handling(
@@ -225,36 +279,15 @@ async def get_log_sources():
 )
 @router.get("/logs/recent")
 async def get_recent_logs(limit: int = 100):
-    """Get recent log entries across all log files"""
+    """Get recent log entries across all log files (Issue #315 - refactored)."""
     try:
         log_dir = str(PATH.LOGS_DIR)
         recent_entries = []
 
-        # Get the most recent log file
-        log_dir_exists = await asyncio.to_thread(os.path.exists, log_dir)
-        if log_dir_exists:
-            all_files = await asyncio.to_thread(os.listdir, log_dir)
-            log_files = [f for f in all_files if f.endswith(".log")]
-            if log_files:
-                # Sort by modification time and get the most recent
-                def get_mtime(f):
-                    return os.path.getmtime(os.path.join(log_dir, f))
-
-                mtimes = {}
-                for f in log_files:
-                    mtimes[f] = await asyncio.to_thread(get_mtime, f)
-                log_files.sort(key=lambda f: mtimes[f], reverse=True)
-                most_recent = log_files[0]
-
-                # Read the last N lines from the most recent log
-                log_path = os.path.join(log_dir, most_recent)
-                try:
-                    async with aiofiles.open(log_path, "r") as f:
-                        content = await f.read()
-                        lines = content.splitlines(keepends=True)
-                        recent_entries = lines[-limit:] if len(lines) > limit else lines
-                except Exception as e:
-                    logger.error(f"Error reading log file {most_recent}: {e}")
+        most_recent = await _get_most_recent_log_file(log_dir)
+        if most_recent:
+            log_path = os.path.join(log_dir, most_recent)
+            recent_entries = await _read_recent_log_lines(log_path, limit)
 
         return {
             "entries": recent_entries,
@@ -423,8 +456,51 @@ async def read_container_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _extract_log_level(message: str) -> str:
+    """Extract log level from message text (Issue #315 - extracted helper)."""
+    message_upper = message.upper()
+    for level in LOG_LEVEL_KEYWORDS:
+        if level in message_upper:
+            return "WARNING" if level == "WARN" else level
+    return "INFO"
+
+
+def _parse_docker_timestamp_format(line: str, parsed: Metadata) -> str:
+    """Parse Docker timestamp format (Issue #315 - extracted helper)."""
+    # Docker log format: 2024-01-01T12:00:00.000000000Z message
+    if not (line.startswith("20") and "T" in line[:25]):
+        return line.strip()
+
+    parts = line.split(" ", 1)
+    if len(parts) < 2:
+        return line.strip()
+
+    parsed["timestamp"] = parts[0]
+    message = parts[1]
+    parsed["level"] = _extract_log_level(message)
+    return message
+
+
+def _parse_json_log_data(parsed: Metadata) -> None:
+    """Parse JSON log data if present (Issue #315 - extracted helper)."""
+    message = parsed.get("message", "").strip()
+    if not message.startswith("{"):
+        return
+
+    try:
+        json_data = json.loads(message)
+        if "level" in json_data:
+            parsed["level"] = json_data["level"].upper()
+        if "message" in json_data:
+            parsed["message"] = json_data["message"]
+        if "timestamp" in json_data:
+            parsed["timestamp"] = json_data["timestamp"]
+    except json.JSONDecodeError:
+        logger.debug("Log line is plain text, not JSON format")
+
+
 def parse_docker_log_line(line: str, service: str) -> Metadata:
-    """Parse a Docker log line and extract structured information"""
+    """Parse a Docker log line and extract structured information (Issue #315 - refactored)."""
     parsed = {
         "raw": line.strip(),
         "service": service,
@@ -434,36 +510,8 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     }
 
     try:
-        # Docker log format: 2024-01-01T12:00:00.000000000Z message
-        if line.startswith("20") and "T" in line[:25]:
-            parts = line.split(" ", 1)
-            if len(parts) >= 2:
-                parsed["timestamp"] = parts[0]
-                message = parts[1]
-
-                # Extract log level from message
-                message_upper = message.upper()
-                for level in LOG_LEVEL_KEYWORDS:
-                    if level in message_upper:
-                        parsed["level"] = "WARNING" if level == "WARN" else level
-                        break
-
-                parsed["message"] = message
-
-        # Try to parse JSON logs
-        if parsed["message"].strip().startswith("{"):
-            try:
-                json_data = json.loads(parsed["message"])
-                if "level" in json_data:
-                    parsed["level"] = json_data["level"].upper()
-                if "message" in json_data:
-                    parsed["message"] = json_data["message"]
-                if "timestamp" in json_data:
-                    parsed["timestamp"] = json_data["timestamp"]
-            except json.JSONDecodeError:
-                # JSON parsing failed - message is plain text, not JSON
-                logger.debug("Log line is plain text, not JSON format")
-
+        parsed["message"] = _parse_docker_timestamp_format(line, parsed)
+        _parse_json_log_data(parsed)
     except Exception as e:
         logger.debug(f"Failed to parse Docker log line: {e}")
 
@@ -510,8 +558,22 @@ async def get_unified_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _parse_file_timestamp(line: str) -> Optional[str]:
+    """Extract timestamp from file log line (Issue #315 - extracted helper)."""
+    # Format: 2024-01-01 12:00:00,000 [logger] LEVEL: message
+    parts = line.split(" ", 3)
+    if len(parts) < 3:
+        return None
+
+    # Check if first part looks like a date
+    if not (parts[0] and len(parts[0]) >= 10 and "-" in parts[0]):
+        return None
+
+    return f"{parts[0]} {parts[1]}" if len(parts) > 1 else parts[0]
+
+
 def parse_file_log_line(line: str, source: str) -> Metadata:
-    """Parse a file log line and extract structured information"""
+    """Parse a file log line and extract structured information (Issue #315 - refactored)."""
     parsed = {
         "raw": line,
         "service": source,
@@ -521,21 +583,10 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     }
 
     try:
-        # Try to extract timestamp and level from common log formats
-        # Format: 2024-01-01 12:00:00,000 [logger] LEVEL: message
-        parts = line.split(" ", 3)
-        if len(parts) >= 3:
-            # Check if first part looks like a date
-            if parts[0] and len(parts[0]) >= 10 and "-" in parts[0]:
-                parsed["timestamp"] = (
-                    f"{parts[0]} {parts[1]}" if len(parts) > 1 else parts[0]
-                )
-
-                # Look for log level
-                for level in LOG_LEVEL_KEYWORDS:
-                    if level in line.upper():
-                        parsed["level"] = "WARNING" if level == "WARN" else level
-                        break
+        timestamp = _parse_file_timestamp(line)
+        if timestamp:
+            parsed["timestamp"] = timestamp
+            parsed["level"] = _extract_log_level(line)
     except Exception as e:
         logger.debug(f"Failed to parse general log line: {e}")
 

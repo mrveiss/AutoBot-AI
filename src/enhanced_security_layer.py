@@ -31,6 +31,31 @@ HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
 COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
 
 
+def _parse_audit_log_entry(line: str, user: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Parse a single audit log line and filter by user (Issue #315: extracted).
+
+    Args:
+        line: JSON line from audit log
+        user: Optional user filter
+
+    Returns:
+        Parsed entry dict if valid command execution, None otherwise
+    """
+    try:
+        entry = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+
+    if "action" not in entry:
+        return None
+    if entry["action"] not in COMMAND_EXECUTION_ACTIONS:
+        return None
+    if user is not None and entry.get("user") != user:
+        return None
+
+    return entry
+
+
 class EnhancedSecurityLayer:
     """
     Enhanced security layer that integrates command execution security
@@ -38,6 +63,7 @@ class EnhancedSecurityLayer:
     """
 
     def __init__(self):
+        """Initialize security layer with RBAC, auditing, and command executor."""
         # Use centralized config manager
         self.security_config = global_config_manager.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", False)
@@ -442,13 +468,10 @@ class EnhancedSecurityLayer:
         try:
             with open(self.audit_log_file, "r") as f:
                 for line in f:
-                    try:
-                        entry = json.loads(line)
-                        if "action" in entry and entry["action"] in COMMAND_EXECUTION_ACTIONS:
-                            if user is None or entry.get("user") == user:
-                                command_history.append(entry)
-                    except json.JSONDecodeError:
-                        continue
+                    # Use helper for parsing and filtering (Issue #315: depth reduction)
+                    entry = _parse_audit_log_entry(line, user)
+                    if entry:
+                        command_history.append(entry)
         except FileNotFoundError:
             return []
 
@@ -484,6 +507,7 @@ class EnhancedSecurityLayer:
 if __name__ == "__main__":
 
     async def test_security():
+        """Test security layer with various commands and user roles."""
         print("Testing Enhanced Security Layer")
         print("=" * 60)
 

@@ -290,6 +290,7 @@ class UIElementCollection:
     """
 
     def __init__(self, elements: List[UIElement]):
+        """Initialize collection with list of UI elements."""
         self.elements = elements
 
     def count_by_type(self) -> Dict[str, int]:
@@ -460,6 +461,7 @@ class ScreenAnalyzer:
     """Advanced screen analysis and understanding system"""
 
     def __init__(self):
+        """Initialize analyzer with template matcher and classifiers."""
         self.template_matcher = TemplateMatchingEngine()
         self.element_classifier = ElementClassifier()
         self.context_analyzer = ContextAnalyzer()
@@ -978,6 +980,7 @@ class ElementClassifier:
     """Classifies UI elements based on visual features"""
 
     def __init__(self):
+        """Initialize classifier with default classification rules."""
         self.classification_rules = self._load_classification_rules()
         logger.info("Element Classifier initialized")
 
@@ -1088,6 +1091,7 @@ class TemplateMatchingEngine:
     """Template matching for common UI elements"""
 
     def __init__(self):
+        """Initialize engine with loaded UI element templates."""
         self.templates = self._load_templates()
         logger.info("Template Matching Engine initialized")
 
@@ -1127,6 +1131,7 @@ class ContextAnalyzer:
     """Analyzes screen context and application state"""
 
     def __init__(self):
+        """Initialize context analyzer for screen state analysis."""
         logger.info("Context Analyzer initialized")
 
     async def analyze_context(
@@ -1160,6 +1165,7 @@ class ComputerVisionSystem:
     """Main computer vision system coordinator"""
 
     def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        """Initialize vision system with memory manager and screen analyzer."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.screen_analyzer = ScreenAnalyzer()
 

@@ -241,9 +241,54 @@ class EnhancedMultiAgentOrchestrator:
             # Return simple fallback plan
             return self._create_simple_workflow_plan(goal)
 
-    async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
+    async def _execute_by_strategy(
+        self, plan: WorkflowPlan
+    ) -> Dict[str, Any]:
+        """Execute workflow based on its strategy (Issue #315: extracted).
+
+        Args:
+            plan: Workflow plan with strategy
+
+        Returns:
+            Execution results
         """
-        Execute a workflow plan with intelligent coordination.
+        strategy_handlers = {
+            ExecutionStrategy.SEQUENTIAL: self._execute_sequential,
+            ExecutionStrategy.PARALLEL: self._execute_parallel,
+            ExecutionStrategy.PIPELINE: self._execute_pipeline,
+            ExecutionStrategy.COLLABORATIVE: self._execute_collaborative,
+        }
+        handler = strategy_handlers.get(plan.strategy, self._execute_adaptive)
+        return await handler(plan)
+
+    async def _try_fallback_plans(
+        self, plan: WorkflowPlan, original_error: Exception
+    ) -> Dict[str, Any] | None:
+        """Try fallback plans when main execution fails (Issue #315: extracted).
+
+        Args:
+            plan: Original workflow plan with fallback_plans
+            original_error: The original error that triggered fallback
+
+        Returns:
+            Fallback result if successful, None if all fallbacks fail
+        """
+        if not plan.fallback_plans:
+            return None
+
+        self.logger.info("Attempting fallback plan...")
+        for fallback in plan.fallback_plans:
+            try:
+                return await self.execute_workflow(fallback)
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback plan failed: {fallback_error}")
+
+        return None
+
+    async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
+        """Execute a workflow plan with intelligent coordination.
+
+        Issue #315: Refactored to use helper methods for reduced nesting depth.
 
         Args:
             plan: The workflow plan to execute
@@ -270,21 +315,11 @@ class EnhancedMultiAgentOrchestrator:
                 },
             )
 
-            # Execute based on strategy
-            if plan.strategy == ExecutionStrategy.SEQUENTIAL:
-                results = await self._execute_sequential(plan)
-            elif plan.strategy == ExecutionStrategy.PARALLEL:
-                results = await self._execute_parallel(plan)
-            elif plan.strategy == ExecutionStrategy.PIPELINE:
-                results = await self._execute_pipeline(plan)
-            elif plan.strategy == ExecutionStrategy.COLLABORATIVE:
-                results = await self._execute_collaborative(plan)
-            else:  # ADAPTIVE
-                results = await self._execute_adaptive(plan)
+            # Issue #315: Use strategy dispatch helper
+            results = await self._execute_by_strategy(plan)
 
             # Check success criteria
             success = self._check_success_criteria(plan, results)
-
             execution_time = time.time() - start_time
 
             # Update performance metrics
@@ -312,15 +347,10 @@ class EnhancedMultiAgentOrchestrator:
         except Exception as e:
             self.logger.error(f"Workflow execution failed: {e}")
 
-            # Try fallback plans
-            if plan.fallback_plans:
-                self.logger.info("Attempting fallback plan...")
-                for fallback in plan.fallback_plans:
-                    try:
-                        return await self.execute_workflow(fallback)
-                    except Exception as fallback_error:
-                        self.logger.error(f"Fallback plan failed: {fallback_error}")
-                        continue
+            # Issue #315: Use fallback helper
+            fallback_result = await self._try_fallback_plans(plan, e)
+            if fallback_result is not None:
+                return fallback_result
 
             # All plans failed
             return {

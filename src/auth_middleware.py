@@ -29,6 +29,7 @@ config = UnifiedConfigManager()
 
 class AuthenticationMiddleware:
     def __init__(self):
+        """Initialize authentication middleware with security config and sessions."""
         self.security_layer = SecurityLayer()
         self.security_config = config.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", True)
@@ -536,7 +537,9 @@ def require_file_permission(operation: str):
     """
 
     def decorator(func):
+        """Wrap function with permission check for the specified operation."""
         async def wrapper(request: Request, *args, **kwargs):
+            """Check permission and execute function with user in request state."""
             has_permission, user_data = auth_middleware.check_file_permissions(
                 request, operation
             )

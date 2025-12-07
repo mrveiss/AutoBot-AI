@@ -67,6 +67,7 @@ class ServiceMonitor:
     """Monitors all AutoBot services"""
 
     def __init__(self):
+        """Initialize monitor with Redis and HTTP clients."""
         self.redis_client = None
         self._http_client = get_http_client()  # Use singleton HTTP client
         self._initialize_clients()
@@ -774,6 +775,7 @@ monitor = None
 
 
 def get_monitor():
+    """Get or create singleton ServiceMonitor instance."""
     global monitor
     if monitor is None:
         monitor = ServiceMonitor()

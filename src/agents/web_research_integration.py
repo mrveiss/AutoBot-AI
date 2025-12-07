@@ -42,6 +42,7 @@ class CircuitBreaker:
     """Circuit breaker for web research services (thread-safe)"""
 
     def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+        """Initialize circuit breaker with failure threshold and recovery timeout."""
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
@@ -95,6 +96,7 @@ class RateLimiter:
     """Rate limiter for web research requests (thread-safe)"""
 
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
+        """Initialize rate limiter with request limit and time window."""
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = []
@@ -168,6 +170,7 @@ class WebResearchIntegration:
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """Initialize web research integration with config and circuit breakers."""
         self.config = config or {}
 
         # Initialize circuit breakers for different research methods

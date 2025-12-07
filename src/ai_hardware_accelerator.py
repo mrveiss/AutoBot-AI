@@ -41,6 +41,47 @@ except ImportError:
 logger = get_llm_logger("ai_hardware_accelerator")
 
 
+def _get_gpu_metrics_with_pynvml() -> Optional[Dict[str, Any]]:
+    """Get GPU metrics using pynvml (Issue #315 - extracted to reduce nesting)."""
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+
+        return {
+            "utilization_percent": utilization.gpu,
+            "temperature_c": pynvml.nvmlDeviceGetTemperature(
+                handle, pynvml.NVML_TEMPERATURE_GPU
+            ),
+            "power_usage_w": pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0,
+            "available_memory_mb": pynvml.nvmlDeviceGetMemoryInfo(handle).free
+            / 1024
+            / 1024,
+        }
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+async def _try_fallback_processing(
+    task: "ProcessingTask",
+    fallback_device: "HardwareDevice",
+    process_on_gpu: callable,
+    process_on_cpu: callable,
+) -> Optional[Dict[str, Any]]:
+    """Try processing on fallback device (Issue #315 - extracted to reduce nesting)."""
+    try:
+        if fallback_device.value == "gpu":
+            return await process_on_gpu(task)
+        return await process_on_cpu(task)
+    except Exception as fallback_error:
+        logger.error(f"❌ Fallback also failed: {fallback_error}")
+        return None
+
+
 class HardwareDevice(Enum):
     """Available hardware devices for AI processing."""
 
@@ -217,52 +258,34 @@ class AIHardwareAccelerator:
             self.device_status[HardwareDevice.NPU]["available"] = False
 
     async def _check_gpu_availability(self):
-        """Check GPU availability."""
+        """Check GPU availability (Issue #315 - refactored to reduce nesting)."""
+        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
+
+        if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
+            self.device_status[HardwareDevice.GPU]["available"] = False
+            return
+
         try:
-            if torch.cuda.is_available():
-                device_count = torch.cuda.device_count()
-                if device_count > 0:
-                    # Get GPU utilization
-                    try:
-                        import pynvml
-
-                        pynvml.nvmlInit()
-                        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-
-                        self.device_metrics[HardwareDevice.GPU] = HardwareMetrics(
-                            device=HardwareDevice.GPU,
-                            utilization_percent=utilization.gpu,
-                            temperature_c=pynvml.nvmlDeviceGetTemperature(
-                                handle, pynvml.NVML_TEMPERATURE_GPU
-                            ),
-                            power_usage_w=pynvml.nvmlDeviceGetPowerUsage(handle)
-                            / 1000.0,
-                            available_memory_mb=pynvml.nvmlDeviceGetMemoryInfo(
-                                handle
-                            ).free
-                            / 1024
-                            / 1024,
-                            last_updated=datetime.now(),
-                        )
-
-                        self.device_status[HardwareDevice.GPU]["available"] = True
-                        logger.info(
-                            f"✅ GPU available: {torch.cuda.get_device_name(0)}"
-                        )
-                    except ImportError:
-                        # pynvml not available, assume GPU is available
-                        self.device_status[HardwareDevice.GPU]["available"] = True
-                        logger.info("✅ GPU available (basic detection)")
-                else:
-                    self.device_status[HardwareDevice.GPU]["available"] = False
+            # Try to get detailed metrics via pynvml
+            gpu_metrics = _get_gpu_metrics_with_pynvml()
+            if gpu_metrics:
+                self.device_metrics[HardwareDevice.GPU] = HardwareMetrics(
+                    device=HardwareDevice.GPU,
+                    utilization_percent=gpu_metrics["utilization_percent"],
+                    temperature_c=gpu_metrics["temperature_c"],
+                    power_usage_w=gpu_metrics["power_usage_w"],
+                    available_memory_mb=gpu_metrics["available_memory_mb"],
+                    last_updated=datetime.now(),
+                )
+                logger.info(f"✅ GPU available: {torch.cuda.get_device_name(0)}")
             else:
-                self.device_status[HardwareDevice.GPU]["available"] = False
+                # pynvml not available, assume GPU is available with basic detection
+                logger.info("✅ GPU available (basic detection)")
+
+            self.device_status[HardwareDevice.GPU]["available"] = True
         except Exception as e:
             logger.warning(f"⚠️ GPU availability check failed: {e}")
             self.device_status[HardwareDevice.GPU]["available"] = False
-
-        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
 
     async def _update_npu_metrics(self, health_data: Dict[str, Any]):
         """Update NPU metrics from health data."""
@@ -378,75 +401,64 @@ class AIHardwareAccelerator:
             return HardwareDevice.CPU
 
     async def process_task(self, task: ProcessingTask) -> ProcessingResult:
-        """Process an AI task using optimal hardware."""
+        """Process an AI task using optimal hardware (Issue #315 - refactored)."""
         start_time = time.time()
-
-        # Select optimal device
         selected_device = self._select_optimal_device(task)
-
         logger.info(f"🎯 Processing task {task.task_id} on {selected_device.value}")
 
         try:
-            # Route to appropriate processor
-            if selected_device == HardwareDevice.NPU:
-                result = await self._process_on_npu(task)
-            elif selected_device == HardwareDevice.GPU:
-                result = await self._process_on_gpu(task)
-            else:
-                result = await self._process_on_cpu(task)
-
-            processing_time = (time.time() - start_time) * 1000
-
-            # Update metrics
-            device_metrics = self.device_metrics.get(selected_device)
-
-            return ProcessingResult(
-                task_id=task.task_id,
-                success=True,
-                result=result,
-                device_used=selected_device,
-                processing_time_ms=processing_time,
-                device_metrics=device_metrics,
-            )
-
+            result = await self._route_to_processor(task, selected_device)
+            return self._create_success_result(task, selected_device, result, start_time)
         except Exception as e:
-            logger.error(
-                f"❌ Task {task.task_id} failed on {selected_device.value}: {e}"
+            logger.error(f"❌ Task {task.task_id} failed on {selected_device.value}: {e}")
+            return await self._handle_task_failure(task, selected_device, e, start_time)
+
+    async def _route_to_processor(
+        self, task: ProcessingTask, device: HardwareDevice
+    ) -> Dict[str, Any]:
+        """Route task to appropriate processor (Issue #315 - extracted)."""
+        if device == HardwareDevice.NPU:
+            return await self._process_on_npu(task)
+        if device == HardwareDevice.GPU:
+            return await self._process_on_gpu(task)
+        return await self._process_on_cpu(task)
+
+    def _create_success_result(
+        self, task: ProcessingTask, device: HardwareDevice, result: Any, start_time: float
+    ) -> ProcessingResult:
+        """Create successful processing result (Issue #315 - extracted)."""
+        processing_time = (time.time() - start_time) * 1000
+        return ProcessingResult(
+            task_id=task.task_id,
+            success=True,
+            result=result,
+            device_used=device,
+            processing_time_ms=processing_time,
+            device_metrics=self.device_metrics.get(device),
+        )
+
+    async def _handle_task_failure(
+        self, task: ProcessingTask, selected_device: HardwareDevice, error: Exception, start_time: float
+    ) -> ProcessingResult:
+        """Handle task failure with fallback (Issue #315 - extracted)."""
+        fallback_device = self._get_fallback_device(selected_device)
+
+        if fallback_device and fallback_device != selected_device:
+            logger.info(f"🔄 Retrying task {task.task_id} on {fallback_device.value}")
+            fallback_result = await _try_fallback_processing(
+                task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )
+            if fallback_result is not None:
+                return self._create_success_result(task, fallback_device, fallback_result, start_time)
 
-            # Try fallback device
-            fallback_device = self._get_fallback_device(selected_device)
-            if fallback_device and fallback_device != selected_device:
-                logger.info(
-                    f"🔄 Retrying task {task.task_id} on {fallback_device.value}"
-                )
-                try:
-                    if fallback_device == HardwareDevice.GPU:
-                        result = await self._process_on_gpu(task)
-                    else:
-                        result = await self._process_on_cpu(task)
-
-                    processing_time = (time.time() - start_time) * 1000
-
-                    return ProcessingResult(
-                        task_id=task.task_id,
-                        success=True,
-                        result=result,
-                        device_used=fallback_device,
-                        processing_time_ms=processing_time,
-                    )
-                except Exception as fallback_error:
-                    logger.error(f"❌ Fallback also failed: {fallback_error}")
-
-            processing_time = (time.time() - start_time) * 1000
-
-            return ProcessingResult(
-                task_id=task.task_id,
-                success=False,
-                error=str(e),
-                device_used=selected_device,
-                processing_time_ms=processing_time,
-            )
+        processing_time = (time.time() - start_time) * 1000
+        return ProcessingResult(
+            task_id=task.task_id,
+            success=False,
+            error=str(error),
+            device_used=selected_device,
+            processing_time_ms=processing_time,
+        )
 
     def _get_fallback_device(
         self, primary_device: HardwareDevice
@@ -567,102 +579,101 @@ class AIHardwareAccelerator:
         except Exception as e:
             logger.error(f"Failed to initialize multi-modal models: {e}")
 
+    async def _generate_text_embedding(
+        self, content: Any, device: torch.device
+    ) -> np.ndarray:
+        """Generate text embedding (Issue #315)."""
+        from src.utils.semantic_chunker import get_semantic_chunker
+
+        chunker = get_semantic_chunker()
+        await chunker._initialize_model()
+
+        sentences = [content] if isinstance(content, str) else content
+        embeddings = await chunker._compute_sentence_embeddings_async(sentences)
+        raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(384)
+
+        if self.text_projection:
+            with torch.no_grad():
+                emb_tensor = torch.tensor(raw_embedding, dtype=torch.float32).to(device)
+                unified_embedding = self.text_projection(emb_tensor)
+                unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                return unified_embedding.cpu().numpy()
+        return raw_embedding
+
+    def _generate_image_embedding(
+        self, content: Any, device: torch.device
+    ) -> np.ndarray:
+        """Generate image embedding using CLIP (Issue #315)."""
+        if isinstance(content, bytes):
+            image = Image.open(io.BytesIO(content)).convert("RGB")
+        elif isinstance(content, str):
+            image = Image.open(content).convert("RGB")
+        else:
+            image = content
+
+        with torch.no_grad():
+            inputs = self.clip_processor(images=image, return_tensors="pt")
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+
+            if torch.cuda.is_available():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    image_features = self.clip_model.get_image_features(**inputs)
+            else:
+                image_features = self.clip_model.get_image_features(**inputs)
+
+            if self.image_projection:
+                unified_embedding = self.image_projection(image_features.squeeze())
+                unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                return unified_embedding.cpu().numpy()
+            return image_features.cpu().numpy().squeeze()
+
+    def _generate_audio_embedding(
+        self, content: Any, device: torch.device
+    ) -> np.ndarray:
+        """Generate audio embedding using Wav2Vec2 (Issue #315)."""
+        if isinstance(content, bytes):
+            audio_array = np.frombuffer(content, dtype=np.float32)
+        elif isinstance(content, str):
+            audio_array, _ = librosa.load(content, sr=16000)
+        else:
+            audio_array = content
+
+        with torch.no_grad():
+            inputs = self.wav2vec_processor(
+                audio_array, sampling_rate=16000, return_tensors="pt"
+            )
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+
+            if torch.cuda.is_available():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    features = self.wav2vec_model(**inputs).last_hidden_state
+            else:
+                features = self.wav2vec_model(**inputs).last_hidden_state
+
+            audio_embedding = torch.mean(features, dim=1).squeeze()
+
+            if self.audio_projection:
+                unified_embedding = self.audio_projection(audio_embedding)
+                unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
+                return unified_embedding.cpu().numpy()
+            return audio_embedding.cpu().numpy()
+
     async def _gpu_embedding_generation(
         self, input_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Generate embeddings using GPU acceleration for multi-modal inputs."""
+        """Generate embeddings using GPU acceleration (Issue #315 - dispatch table)."""
         modality = input_data.get("modality", "text")
         content = input_data.get("content") or input_data.get("text", "")
-
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         try:
+            # Dispatch table for modality handlers (Issue #315)
             if modality == "text":
-                # Use existing text embedding infrastructure
-                from src.utils.semantic_chunker import get_semantic_chunker
-
-                chunker = get_semantic_chunker()
-                await chunker._initialize_model()
-
-                sentences = [content] if isinstance(content, str) else content
-                embeddings = await chunker._compute_sentence_embeddings_async(sentences)
-                raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(384)
-
-                # Project to unified space
-                if self.text_projection:
-                    with torch.no_grad():
-                        emb_tensor = torch.tensor(
-                            raw_embedding, dtype=torch.float32
-                        ).to(device)
-                        unified_embedding = self.text_projection(emb_tensor)
-                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
-                        final_embedding = unified_embedding.cpu().numpy()
-                else:
-                    final_embedding = raw_embedding
-
+                final_embedding = await self._generate_text_embedding(content, device)
             elif modality == "image" and self.clip_model:
-                # CLIP image embeddings
-                if isinstance(content, bytes):
-                    image = Image.open(io.BytesIO(content)).convert("RGB")
-                elif isinstance(content, str):
-                    image = Image.open(content).convert("RGB")
-                else:
-                    image = content
-
-                with torch.no_grad():
-                    inputs = self.clip_processor(images=image, return_tensors="pt")
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
-
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            image_features = self.clip_model.get_image_features(
-                                **inputs
-                            )
-                    else:
-                        image_features = self.clip_model.get_image_features(**inputs)
-
-                    # Project to unified space
-                    if self.image_projection:
-                        unified_embedding = self.image_projection(
-                            image_features.squeeze()
-                        )
-                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
-                        final_embedding = unified_embedding.cpu().numpy()
-                    else:
-                        final_embedding = image_features.cpu().numpy().squeeze()
-
+                final_embedding = self._generate_image_embedding(content, device)
             elif modality == "audio" and self.wav2vec_model:
-                # Wav2Vec2 audio embeddings
-                if isinstance(content, bytes):
-                    audio_array = np.frombuffer(content, dtype=np.float32)
-                elif isinstance(content, str):
-                    audio_array, _ = librosa.load(content, sr=16000)
-                else:
-                    audio_array = content
-
-                with torch.no_grad():
-                    inputs = self.wav2vec_processor(
-                        audio_array, sampling_rate=16000, return_tensors="pt"
-                    )
-                    inputs = {k: v.to(device) for k, v in inputs.items()}
-
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            features = self.wav2vec_model(**inputs).last_hidden_state
-                    else:
-                        features = self.wav2vec_model(**inputs).last_hidden_state
-
-                    # Average pool to get single embedding
-                    audio_embedding = torch.mean(features, dim=1).squeeze()
-
-                    # Project to unified space
-                    if self.audio_projection:
-                        unified_embedding = self.audio_projection(audio_embedding)
-                        unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
-                        final_embedding = unified_embedding.cpu().numpy()
-                    else:
-                        final_embedding = audio_embedding.cpu().numpy()
-
+                final_embedding = self._generate_audio_embedding(content, device)
             else:
                 raise ValueError(f"Unsupported modality: {modality}")
 
@@ -680,7 +691,6 @@ class AIHardwareAccelerator:
 
         except Exception as e:
             logger.error(f"GPU embedding generation failed: {e}")
-            # Fallback to CPU
             return {
                 "embeddings": np.zeros(self.unified_dim).tolist(),
                 "modality": modality,

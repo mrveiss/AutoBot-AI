@@ -40,6 +40,7 @@ class LLMSelfAwareness:
     """Manages LLM agent self-awareness of system state and capabilities"""
 
     def __init__(self):
+        """Initialize LLM self-awareness with managers and context cache."""
         self.progression_manager = get_progression_manager()
         self.state_tracker = get_state_tracker()
         self.project_state_manager = get_project_state_manager()
@@ -168,125 +169,81 @@ class LLMSelfAwareness:
                 "current_capabilities": {"active": [], "error": str(e)},
             }
 
-    def _categorize_capabilities(self, capabilities: List[str]) -> Dict[str, List[str]]:
-        """Categorize capabilities by type"""
-        categories = {
-            "core": [],
-            "ai": [],
-            "security": [],
-            "interface": [],
-            "data": [],
-            "automation": [],
-            "monitoring": [],
-            "development": [],
-        }
-
-        # Categorization rules
-        categorization_rules = {
+    def _get_categorization_rules(self) -> Dict[str, List[str]]:
+        """Get explicit capability-to-category mapping (Issue #315)."""
+        return {
             "core": ["basic_api", "configuration_management", "logging"],
             "ai": [
-                "llm_interface",
-                "ai_reasoning",
-                "natural_language_processing",
-                "multimodal_ai",
-                "code_search",
-                "intelligent_agents",
-                "local_models",
+                "llm_interface", "ai_reasoning", "natural_language_processing",
+                "multimodal_ai", "code_search", "intelligent_agents", "local_models",
             ],
-            "security": [
-                "security_layer",
-                "authentication",
-                "access_control",
-                "audit_logging",
-            ],
+            "security": ["security_layer", "authentication", "access_control", "audit_logging"],
             "interface": [
-                "web_interface",
-                "user_interaction",
-                "visual_feedback",
-                "desktop_streaming",
-                "takeover_control",
-                "advanced_ui",
+                "web_interface", "user_interaction", "visual_feedback",
+                "desktop_streaming", "takeover_control", "advanced_ui",
             ],
             "data": [
-                "knowledge_storage",
-                "memory_management",
-                "data_persistence",
-                "caching",
-                "embedding_storage",
-                "knowledge_enhancement",
+                "knowledge_storage", "memory_management", "data_persistence",
+                "caching", "embedding_storage", "knowledge_enhancement",
             ],
             "automation": [
-                "agent_coordination",
-                "workflow_management",
-                "task_planning",
-                "auto_documentation",
-                "self_improvement",
-                "error_recovery",
+                "agent_coordination", "workflow_management", "task_planning",
+                "auto_documentation", "self_improvement", "error_recovery",
             ],
-            "monitoring": [
-                "monitoring",
-                "alerting",
-                "health_checks",
-                "performance_tracking",
-            ],
+            "monitoring": ["monitoring", "alerting", "health_checks", "performance_tracking"],
             "development": [
-                "connection_pooling",
-                "performance_optimization",
-                "containerization",
-                "scalability",
-                "production_deployment",
-                "openvino_acceleration",
+                "connection_pooling", "performance_optimization", "containerization",
+                "scalability", "production_deployment", "openvino_acceleration",
             ],
         }
 
-        # Categorize each capability
-        for capability in capabilities:
-            categorized = False
-            for category, keywords in categorization_rules.items():
-                if capability in keywords:
-                    categories[category].append(capability)
-                    categorized = True
-                    break
+    def _get_keyword_category_mapping(self) -> List[tuple]:
+        """Get keyword sets to category mapping for inference (Issue #315)."""
+        return [
+            (CORE_KEYWORDS, "core"),
+            (AI_KEYWORDS, "ai"),
+            (SECURITY_KEYWORDS, "security"),
+            (INTERFACE_KEYWORDS, "interface"),
+            (DATA_KEYWORDS, "data"),
+            (AUTOMATION_KEYWORDS, "automation"),
+            (MONITORING_KEYWORDS, "monitoring"),
+        ]
 
-            # If not categorized, try to guess based on keywords
-            if not categorized:
-                capability_lower = capability.lower()
-                if any(
-                    word in capability_lower for word in CORE_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["core"].append(capability)
-                elif any(
-                    word in capability_lower
-                    for word in AI_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["ai"].append(capability)
-                elif any(
-                    word in capability_lower for word in SECURITY_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["security"].append(capability)
-                elif any(
-                    word in capability_lower
-                    for word in INTERFACE_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["interface"].append(capability)
-                elif any(
-                    word in capability_lower
-                    for word in DATA_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["data"].append(capability)
-                elif any(
-                    word in capability_lower for word in AUTOMATION_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["automation"].append(capability)
-                elif any(
-                    word in capability_lower for word in MONITORING_KEYWORDS  # O(1) lookup (Issue #326)
-                ):
-                    categories["monitoring"].append(capability)
-                else:
-                    categories["development"].append(capability)
+    def _infer_category_from_keywords(self, capability_lower: str) -> str:
+        """Infer category from capability name using keywords (Issue #315)."""
+        for keywords, category in self._get_keyword_category_mapping():
+            if any(word in capability_lower for word in keywords):
+                return category
+        return "development"  # Default fallback
+
+    def _categorize_capabilities(self, capabilities: List[str]) -> Dict[str, List[str]]:
+        """Categorize capabilities by type (Issue #315 - reduced nesting)."""
+        categories = {
+            "core": [], "ai": [], "security": [], "interface": [],
+            "data": [], "automation": [], "monitoring": [], "development": [],
+        }
+
+        categorization_rules = self._get_categorization_rules()
+
+        for capability in capabilities:
+            # Try explicit rule match first
+            category = self._find_explicit_category(capability, categorization_rules)
+            if category:
+                categories[category].append(capability)
+            else:
+                # Infer from keywords
+                inferred = self._infer_category_from_keywords(capability.lower())
+                categories[inferred].append(capability)
 
         # Remove empty categories
         return {k: v for k, v in categories.items() if v}
+
+    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> Optional[str]:
+        """Find category from explicit rules (Issue #315)."""
+        for category, keywords in rules.items():
+            if capability in keywords:
+                return category
+        return None
 
     def _get_available_endpoints(self) -> List[str]:
         """
@@ -563,6 +520,7 @@ def get_llm_self_awareness() -> LLMSelfAwareness:
 if __name__ == "__main__":
 
     async def main():
+        """Demonstrate LLM self-awareness capabilities and context injection."""
         awareness = get_llm_self_awareness()
 
         # Get system context

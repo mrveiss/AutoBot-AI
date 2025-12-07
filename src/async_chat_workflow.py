@@ -110,6 +110,7 @@ class AsyncChatWorkflow:
     """
 
     def __init__(self):
+        """Initialize async chat workflow with message tracking."""
         self.workflow_messages: List[WorkflowMessage] = []
         self._start_time: float = 0
 
@@ -321,6 +322,7 @@ class WorkflowManager:
     """Manages workflow instances"""
 
     def __init__(self):
+        """Initialize workflow manager with async lock."""
         self._instance: Optional[AsyncChatWorkflow] = None
         self._lock = asyncio.Lock()
 

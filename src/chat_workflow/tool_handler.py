@@ -20,6 +20,31 @@ from src.async_chat_workflow import WorkflowMessage
 logger = logging.getLogger(__name__)
 
 
+def _create_execution_result(
+    command: str, host: str, result: Dict[str, Any], approved: bool = False
+) -> Dict[str, Any]:
+    """Create standardized execution result record (Issue #315: extracted).
+
+    Args:
+        command: The command that was executed
+        host: Target host
+        result: Execution result dict
+        approved: Whether user approved the command
+
+    Returns:
+        Standardized execution result dict for continuation loop
+    """
+    return {
+        "command": command,
+        "host": host,
+        "stdout": result.get("stdout", ""),
+        "stderr": result.get("stderr", ""),
+        "return_code": result.get("return_code", 0),
+        "status": "success",
+        "approved": approved,
+    }
+
+
 class ToolHandlerMixin:
     """Mixin for tool and command handling."""
 
@@ -330,6 +355,208 @@ class ToolHandlerMixin:
 
         yield approval_result
 
+    async def _handle_approval_workflow(
+        self,
+        session_id: str,
+        command: str,
+        host: str,
+        result: Dict[str, Any],
+        terminal_session_id: str,
+        description: str,
+        ollama_endpoint: str,
+        selected_model: str,
+    ):
+        """Handle command requiring approval (Issue #315: extracted).
+
+        Yields:
+            WorkflowMessage for approval stages
+            Tuple of (exec_result, additional_text) as final item
+        """
+        # Handle approval workflow - yields messages and returns result
+        approval_result = None
+        async for approval_msg in self._handle_pending_approval(
+            session_id, command, result, terminal_session_id, description
+        ):
+            if isinstance(approval_msg, dict):
+                approval_result = approval_msg
+            else:
+                yield approval_msg
+
+        additional_text = ""
+        exec_result = None
+
+        if approval_result and approval_result.get("status") == "success":
+            exec_result = _create_execution_result(command, host, approval_result, approved=True)
+
+            yield WorkflowMessage(
+                type="response",
+                content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
+                metadata={
+                    "message_type": "command_executed",
+                    "command": command,
+                    "executed": True,
+                    "approved": True,
+                },
+            )
+
+            async for interp_chunk in self._interpret_command_results(
+                command,
+                approval_result.get("stdout", ""),
+                approval_result.get("stderr", ""),
+                approval_result.get("return_code", 0),
+                ollama_endpoint,
+                selected_model,
+                streaming=True,
+            ):
+                yield interp_chunk
+                if hasattr(interp_chunk, "content"):
+                    additional_text += interp_chunk.content
+
+        elif approval_result:
+            error = approval_result.get("error", "Command was denied or failed")
+            additional_text = f"\n\n❌ {error}"
+            yield WorkflowMessage(
+                type="error",
+                content=f"Command execution failed: {error}",
+                metadata={"command": command, "error": True},
+            )
+        else:
+            additional_text = f"\n\n⏱️ Approval timeout for command: {command}"
+            yield WorkflowMessage(
+                type="error",
+                content=f"Approval timeout for command: {command}",
+                metadata={"command": command, "timeout": True},
+            )
+
+        yield (exec_result, additional_text)
+
+    async def _handle_direct_execution(
+        self,
+        command: str,
+        host: str,
+        result: Dict[str, Any],
+        ollama_endpoint: str,
+        selected_model: str,
+    ):
+        """Handle direct command execution without approval (Issue #315: extracted).
+
+        Yields:
+            WorkflowMessage for interpretation
+            Tuple of (exec_result, additional_text) as final item
+        """
+        exec_result = _create_execution_result(command, host, result, approved=False)
+
+        interpretation = ""
+        async for msg in self._interpret_command_results(
+            command,
+            result.get("stdout", ""),
+            result.get("stderr", ""),
+            result.get("return_code", 0),
+            ollama_endpoint,
+            selected_model,
+            streaming=False,
+        ):
+            if hasattr(msg, "content"):
+                interpretation += msg.content
+            yield msg
+
+        if interpretation:
+            yield WorkflowMessage(
+                type="response",
+                content=f"\n\n{interpretation}",
+                metadata={
+                    "message_type": "command_result_interpretation",
+                    "command": command,
+                    "executed": True,
+                },
+            )
+
+        yield (exec_result, f"\n\n{interpretation}")
+
+    async def _collect_workflow_results(
+        self, workflow_gen, execution_results: List, additional_response_parts: List
+    ):
+        """Collect results from workflow generator (Issue #315: extracted).
+
+        Args:
+            workflow_gen: Async generator from workflow handler
+            execution_results: List to append exec results to
+            additional_response_parts: List to append text parts to
+
+        Yields:
+            WorkflowMessage items from the generator
+        """
+        async for msg in workflow_gen:
+            if isinstance(msg, tuple):
+                exec_result, add_text = msg
+                if exec_result:
+                    execution_results.append(exec_result)
+                additional_response_parts.append(add_text)
+            else:
+                yield msg
+
+    async def _process_single_command(
+        self,
+        tool_call: Dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: List,
+        additional_response_parts: List,
+    ):
+        """Process a single execute_command tool call (Issue #315: extracted).
+
+        Yields:
+            WorkflowMessage items
+        """
+        command = tool_call["params"].get("command")
+        host = tool_call["params"].get("host", "main")
+        description = tool_call.get("description", "")
+
+        logger.info(f"[ChatWorkflowManager] Executing command: {command} on {host}")
+
+        result = await self._execute_terminal_command(
+            session_id=session_id, command=command, host=host, description=description
+        )
+
+        if result.get("status") == "pending_approval":
+            if not terminal_session_id:
+                logger.error(f"No terminal session found for conversation {session_id}")
+                yield WorkflowMessage(
+                    type="error",
+                    content="Terminal session error - cannot request approval",
+                    metadata={"error": True},
+                )
+                return
+
+            workflow_gen = self._handle_approval_workflow(
+                session_id, command, host, result, terminal_session_id,
+                description, ollama_endpoint, selected_model
+            )
+            async for msg in self._collect_workflow_results(
+                workflow_gen, execution_results, additional_response_parts
+            ):
+                yield msg
+
+        elif result.get("status") == "success":
+            workflow_gen = self._handle_direct_execution(
+                command, host, result, ollama_endpoint, selected_model
+            )
+            async for msg in self._collect_workflow_results(
+                workflow_gen, execution_results, additional_response_parts
+            ):
+                yield msg
+
+        elif result.get("status") == "error":
+            error = result.get("error", "Unknown error")
+            additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
+            yield WorkflowMessage(
+                type="error",
+                content=f"Command failed: {error}",
+                metadata={"command": command, "error": True},
+            )
+
     async def _process_tool_calls(
         self,
         tool_calls: List[Dict[str, Any]],
@@ -338,186 +565,28 @@ class ToolHandlerMixin:
         ollama_endpoint: str,
         selected_model: str,
     ):
-        """
-        Process all tool calls from LLM response.
+        """Process all tool calls from LLM response.
 
-        Args:
-            tool_calls: List of parsed tool calls
-            session_id: Chat session ID
-            terminal_session_id: Terminal session ID
-            ollama_endpoint: Ollama API endpoint
-            selected_model: LLM model name
+        Issue #315: Refactored to use helper methods for reduced nesting.
 
         Yields:
             WorkflowMessage for each stage of execution
             Also yields execution_summary at end for Issue #352 continuation loop
-        Returns:
-            Additional text to append to llm_response
         """
-        additional_response = ""
-        # Issue #352: Track execution results for continuation loop
         execution_results = []
+        additional_response_parts = []
 
         for tool_call in tool_calls:
-            if tool_call["name"] == "execute_command":
-                command = tool_call["params"].get("command")
-                host = tool_call["params"].get("host", "main")
-                description = tool_call.get("description", "")
+            if tool_call["name"] != "execute_command":
+                continue
 
-                logger.info(
-                    f"[ChatWorkflowManager] Executing command: {command} on {host}"
-                )
+            async for msg in self._process_single_command(
+                tool_call, session_id, terminal_session_id,
+                ollama_endpoint, selected_model,
+                execution_results, additional_response_parts
+            ):
+                yield msg
 
-                # Execute command
-                result = await self._execute_terminal_command(
-                    session_id=session_id,
-                    command=command,
-                    host=host,
-                    description=description,
-                )
-
-                # Handle different result statuses
-                if result.get("status") == "pending_approval":
-                    # Ensure terminal session ID is available
-                    if not terminal_session_id:
-                        logger.error(
-                            f"No terminal session found for conversation {session_id}"
-                        )
-                        yield WorkflowMessage(
-                            type="error",
-                            content="Terminal session error - cannot request approval",
-                            metadata={"error": True},
-                        )
-                        continue
-
-                    # Handle approval workflow - yields messages and returns result
-                    approval_result = None
-                    async for approval_msg in self._handle_pending_approval(
-                        session_id, command, result, terminal_session_id, description
-                    ):
-                        # Check if this is the final result (not a WorkflowMessage)
-                        if isinstance(approval_msg, dict):
-                            approval_result = approval_msg
-                        else:
-                            yield approval_msg
-
-                    # Process approval result
-                    if approval_result and approval_result.get("status") == "success":
-                        # Issue #352: Track execution result for continuation
-                        execution_results.append({
-                            "command": command,
-                            "host": host,
-                            "stdout": approval_result.get("stdout", ""),
-                            "stderr": approval_result.get("stderr", ""),
-                            "return_code": approval_result.get("return_code", 0),
-                            "status": "success",
-                            "approved": True,
-                        })
-
-                        # Yield execution confirmation
-                        yield WorkflowMessage(
-                            type="response",
-                            content=(
-                                "\n\n✅ Command approved and executed! Interpreting"
-                                "results...\n\n"
-                            ),
-                            metadata={
-                                "message_type": "command_executed",
-                                "command": command,
-                                "executed": True,
-                                "approved": True,
-                            },
-                        )
-
-                        # Stream interpretation
-                        async for interp_chunk in self._interpret_command_results(
-                            command,
-                            approval_result.get("stdout", ""),
-                            approval_result.get("stderr", ""),
-                            approval_result.get("return_code", 0),
-                            ollama_endpoint,
-                            selected_model,
-                            streaming=True,
-                        ):
-                            yield interp_chunk
-                            if hasattr(interp_chunk, "content"):
-                                additional_response += interp_chunk.content
-
-                    elif approval_result:
-                        # Command failed or denied
-                        error = approval_result.get(
-                            "error", "Command was denied or failed"
-                        )
-                        additional_response += f"\n\n❌ {error}"
-                        yield WorkflowMessage(
-                            type="error",
-                            content=f"Command execution failed: {error}",
-                            metadata={"command": command, "error": True},
-                        )
-                    else:
-                        # Timeout
-                        additional_response += (
-                            f"\n\n⏱️ Approval timeout for command: {command}"
-                        )
-                        yield WorkflowMessage(
-                            type="error",
-                            content=f"Approval timeout for command: {command}",
-                            metadata={"command": command, "timeout": True},
-                        )
-
-                elif result.get("status") == "success":
-                    # Issue #352: Track execution result for continuation
-                    execution_results.append({
-                        "command": command,
-                        "host": host,
-                        "stdout": result.get("stdout", ""),
-                        "stderr": result.get("stderr", ""),
-                        "return_code": result.get("return_code", 0),
-                        "status": "success",
-                        "approved": False,  # Auto-approved (not user-approved)
-                    })
-
-                    # Command executed without approval
-                    # _interpret_command_results is an async generator, must iterate it
-                    interpretation = ""
-                    async for msg in self._interpret_command_results(
-                        command,
-                        result.get("stdout", ""),
-                        result.get("stderr", ""),
-                        result.get("return_code", 0),
-                        ollama_endpoint,
-                        selected_model,
-                        streaming=False,
-                    ):
-                        if hasattr(msg, "content"):
-                            interpretation += msg.content
-                        # Yield the interpretation message to the caller
-                        yield msg
-
-                    # Also yield a summary message with all content
-                    if interpretation:
-                        yield WorkflowMessage(
-                            type="response",
-                            content=f"\n\n{interpretation}",
-                            metadata={
-                                "message_type": "command_result_interpretation",
-                                "command": command,
-                                "executed": True,
-                            },
-                        )
-                    additional_response += f"\n\n{interpretation}"
-
-                elif result.get("status") == "error":
-                    # Command failed
-                    error = result.get("error", "Unknown error")
-                    additional_response += f"\n\n❌ Command execution failed: {error}"
-                    yield WorkflowMessage(
-                        type="error",
-                        content=f"Command failed: {error}",
-                        metadata={"command": command, "error": True},
-                    )
-
-        # Issue #352: Yield execution summary for continuation loop
         if execution_results:
             yield WorkflowMessage(
                 type="execution_summary",
@@ -530,6 +599,3 @@ class ToolHandlerMixin:
                     ),
                 },
             )
-
-        # Can't use return in generator - caller will aggregate chunks instead
-        # Return value would be: additional_response

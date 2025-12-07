@@ -67,6 +67,7 @@ async def enhanced_background_init(
         # REFACTORED: Redis now uses centralized client management
         # Redis connections are handled by get_redis_client() when needed
         async def init_redis():
+            """Initialize Redis status using centralized client management."""
             try:
                 # Mark Redis as ready - no initialization needed with centralized client
                 # Components will call get_redis_client() directly when they need Redis
@@ -84,6 +85,7 @@ async def enhanced_background_init(
 
         # Knowledge base initialization
         async def init_kb():
+            """Initialize knowledge base with optional AI Stack integration."""
             kb = await get_or_create_knowledge_base(app, force_refresh=False)
             if kb:
                 app.state.knowledge_base = kb
@@ -107,6 +109,7 @@ async def enhanced_background_init(
 
         # Chat workflow initialization
         async def init_chat_workflow():
+            """Initialize chat workflow manager for conversation handling."""
             try:
                 workflow_manager = ChatWorkflowManager()
                 app.state.chat_workflow_manager = workflow_manager
@@ -121,6 +124,7 @@ async def enhanced_background_init(
 
         # LLM sync initialization
         async def init_llm_sync():
+            """Initialize background LLM synchronization."""
             try:
                 await background_llm_sync()
                 await update_status_fn("llm_sync", "ready")
@@ -134,10 +138,12 @@ async def enhanced_background_init(
 
         # AI Stack initialization (new)
         async def init_ai_stack():
+            """Initialize AI Stack services and integration."""
             await initialize_ai_stack(app, update_status_fn, append_error_fn)
 
         # Distributed tracing initialization (Issue #57)
         async def init_distributed_tracing():
+            """Initialize OpenTelemetry distributed tracing with Jaeger export."""
             try:
                 # Lazy import to avoid circular dependency
                 from backend.services.tracing_service import get_tracing_service

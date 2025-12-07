@@ -48,6 +48,7 @@ class StandardizedAgent(BaseAgent):
     def __init__(
         self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL
     ):
+        """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
 
@@ -365,6 +366,7 @@ class ExampleMigratedAgent(StandardizedAgent):
     """
 
     def __init__(self):
+        """Initialize example agent with chat and query action handlers."""
         super().__init__("example_agent")
 
         # Register action handlers instead of implementing process_request

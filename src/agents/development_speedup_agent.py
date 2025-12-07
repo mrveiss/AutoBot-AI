@@ -576,6 +576,7 @@ class DevelopmentSpeedupAgent:
     ) -> List[str]:
         """Get all files with specified extensions"""
         def _walk_files():
+            """Walk directory tree and collect files with matching extensions."""
             files = []
             for root, dirs, filenames in os.walk(root_path):
                 # Skip common ignore directories

@@ -299,61 +299,61 @@ class CodeValidator:
     """Validates generated code using AST parsing and static analysis"""
 
     @staticmethod
+    def _extract_function_info(node: ast.FunctionDef) -> tuple[dict, list]:
+        """Extract function info and warnings (Issue #315)."""
+        func_info = {
+            "name": node.name,
+            "args": len(node.args.args),
+            "has_docstring": ast.get_docstring(node) is not None,
+            "has_return_type": node.returns is not None,
+            "line": node.lineno,
+        }
+        warnings = []
+        if node.returns is None:
+            warnings.append(
+                f"Function '{node.name}' at line {node.lineno} missing return type hint"
+            )
+        return func_info, warnings
+
+    @staticmethod
+    def _extract_class_info(node: ast.ClassDef) -> dict:
+        """Extract class info (Issue #315)."""
+        return {
+            "name": node.name,
+            "methods": len([n for n in node.body if isinstance(n, ast.FunctionDef)]),
+            "has_docstring": ast.get_docstring(node) is not None,
+            "line": node.lineno,
+        }
+
+    @staticmethod
+    def _extract_imports(node) -> list:
+        """Extract import names (Issue #315)."""
+        if isinstance(node, ast.Import):
+            return [alias.name for alias in node.names]
+        module = node.module or ""
+        return [f"{module}.{alias.name}" for alias in node.names]
+
+    @staticmethod
     def validate_python(code: str) -> ValidationResult:
-        """Validate Python code using AST parsing"""
+        """Validate Python code using AST parsing (Issue #315: depth 6→3)"""
         errors = []
         warnings = []
-        ast_info = {}
 
         try:
-            # Parse AST
             tree = ast.parse(code)
-
-            # Collect AST information
             functions = []
             classes = []
             imports = []
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    func_info = {
-                        "name": node.name,
-                        "args": len(node.args.args),
-                        "has_docstring": (
-                            ast.get_docstring(node) is not None
-                        ),
-                        "has_return_type": node.returns is not None,
-                        "line": node.lineno,
-                    }
+                    func_info, func_warnings = CodeValidator._extract_function_info(node)
                     functions.append(func_info)
-
-                    # Check for missing type hints
-                    if node.returns is None:
-                        warnings.append(
-                            f"Function '{node.name}' at line {node.lineno} "
-                            "missing return type hint"
-                        )
-
+                    warnings.extend(func_warnings)
                 elif isinstance(node, ast.ClassDef):
-                    class_info = {
-                        "name": node.name,
-                        "methods": len([
-                            n for n in node.body
-                            if isinstance(n, ast.FunctionDef)
-                        ]),
-                        "has_docstring": ast.get_docstring(node) is not None,
-                        "line": node.lineno,
-                    }
-                    classes.append(class_info)
-
+                    classes.append(CodeValidator._extract_class_info(node))
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    if isinstance(node, ast.Import):
-                        imports.extend([alias.name for alias in node.names])
-                    else:
-                        module = node.module or ""
-                        imports.extend([
-                            f"{module}.{alias.name}" for alias in node.names
-                        ])
+                    imports.extend(CodeValidator._extract_imports(node))
 
             ast_info = {
                 "functions": functions,

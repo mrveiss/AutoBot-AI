@@ -623,6 +623,7 @@ class AntiPatternDetector:
 
     # Severity calculation methods
     def _get_god_class_severity(self, method_count: int) -> AntiPatternSeverity:
+        """Calculate severity based on class method count threshold."""
         if method_count > 50:
             return AntiPatternSeverity.CRITICAL
         elif method_count > 35:
@@ -632,6 +633,7 @@ class AntiPatternDetector:
         return AntiPatternSeverity.LOW
 
     def _get_param_severity(self, param_count: int) -> AntiPatternSeverity:
+        """Calculate severity based on function parameter count threshold."""
         if param_count > 10:
             return AntiPatternSeverity.HIGH
         elif param_count > 7:
@@ -639,6 +641,7 @@ class AntiPatternDetector:
         return AntiPatternSeverity.LOW
 
     def _get_large_file_severity(self, line_count: int) -> AntiPatternSeverity:
+        """Calculate severity based on file line count threshold."""
         if line_count > 3000:
             return AntiPatternSeverity.CRITICAL
         elif line_count > 2000:
@@ -648,6 +651,7 @@ class AntiPatternDetector:
         return AntiPatternSeverity.LOW
 
     def _get_long_method_severity(self, line_count: int) -> AntiPatternSeverity:
+        """Calculate severity based on method line count threshold."""
         if line_count > 150:
             return AntiPatternSeverity.HIGH
         elif line_count > 100:
@@ -655,6 +659,7 @@ class AntiPatternDetector:
         return AntiPatternSeverity.LOW
 
     def _get_nesting_severity(self, depth: int) -> AntiPatternSeverity:
+        """Calculate severity based on code nesting depth threshold."""
         if depth > 7:
             return AntiPatternSeverity.HIGH
         elif depth > 5:

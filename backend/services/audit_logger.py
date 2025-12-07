@@ -445,6 +445,34 @@ class AuditLogger:
         except Exception as e:
             logger.error(f"Fallback logging also failed: {e}")
 
+    async def _execute_query(
+        self,
+        audit_db,
+        start_time: datetime,
+        end_time: datetime,
+        limit: int,
+        offset: int,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        vm_name: Optional[str] = None,
+        result: Optional[AuditResult] = None,
+    ) -> List[AuditEntry]:
+        """Execute appropriate query based on filters (Issue #315 - reduces nesting)."""
+        if session_id:
+            return await self._query_session(audit_db, session_id, start_time, end_time, limit, offset)
+        if user_id and operation:
+            return await self._query_user_operation(audit_db, user_id, operation, start_time, end_time, limit, offset)
+        if user_id:
+            return await self._query_user(audit_db, user_id, start_time, end_time, limit, offset)
+        if operation:
+            return await self._query_operation(audit_db, operation, start_time, end_time, limit, offset)
+        if vm_name:
+            return await self._query_vm(audit_db, vm_name, start_time, end_time, limit, offset)
+        if result:
+            return await self._query_result(audit_db, result, start_time, end_time, limit, offset)
+        return await self._query_time_range(audit_db, start_time, end_time, limit, offset)
+
     async def query(
         self,
         start_time: Optional[datetime] = None,
@@ -458,7 +486,7 @@ class AuditLogger:
         offset: int = 0,
     ) -> List[AuditEntry]:
         """
-        Query audit logs with filtering
+        Query audit logs with filtering (Issue #315: depth 7→3)
 
         Args:
             start_time: Start of time range
@@ -486,44 +514,11 @@ class AuditLogger:
             if not start_time:
                 start_time = end_time - timedelta(days=1)
 
-            # Determine which index to use based on filters
-            if session_id:
-                # Session index (most specific)
-                entries = await self._query_session(
-                    audit_db, session_id, start_time, end_time, limit, offset
-                )
-            elif user_id and operation:
-                # Intersection of user and operation indexes
-                entries = await self._query_user_operation(
-                    audit_db, user_id, operation, start_time, end_time, limit, offset
-                )
-            elif user_id:
-                # User index
-                entries = await self._query_user(
-                    audit_db, user_id, start_time, end_time, limit, offset
-                )
-            elif operation:
-                # Operation index
-                entries = await self._query_operation(
-                    audit_db, operation, start_time, end_time, limit, offset
-                )
-            elif vm_name:
-                # VM index
-                entries = await self._query_vm(
-                    audit_db, vm_name, start_time, end_time, limit, offset
-                )
-            elif result:
-                # Result index
-                entries = await self._query_result(
-                    audit_db, result, start_time, end_time, limit, offset
-                )
-            else:
-                # Primary time-series log
-                entries = await self._query_time_range(
-                    audit_db, start_time, end_time, limit, offset
-                )
-
-            return entries
+            return await self._execute_query(
+                audit_db, start_time, end_time, limit, offset,
+                session_id=session_id, user_id=user_id, operation=operation,
+                vm_name=vm_name, result=result
+            )
 
         except Exception as e:
             logger.error(f"Audit query failed: {e}")

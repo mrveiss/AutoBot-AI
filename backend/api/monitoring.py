@@ -114,11 +114,13 @@ class ThresholdUpdate(BaseModel):
 # WebSocket connection manager for real-time updates
 class MonitoringWebSocketManager:
     def __init__(self):
+        """Initialize WebSocket manager with connection tracking and update task."""
         self.active_connections: List[WebSocket] = []
         self.update_task: Optional[asyncio.Task] = None
         self.update_interval = 2.0  # Send updates every 2 seconds
 
     async def connect(self, websocket: WebSocket):
+        """Accept WebSocket connection and start periodic update task if first."""
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(
@@ -130,6 +132,7 @@ class MonitoringWebSocketManager:
             self.update_task = asyncio.create_task(self._send_periodic_updates())
 
     def disconnect(self, websocket: WebSocket):
+        """Remove WebSocket connection and cancel update task if last."""
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         logger.info(
@@ -242,6 +245,7 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
 
     # Add alert callback for WebSocket broadcasting
     async def alert_callback(alerts: List[Metadata]):
+        """Broadcast performance alerts to connected WebSocket clients."""
         await ws_manager.broadcast_update(
             {
                 "type": "performance_alerts",
@@ -746,6 +750,7 @@ async def export_metrics(
         csv_content = _convert_metrics_to_csv(export_data)
 
         async def generate():
+            """Yield CSV content as encoded bytes."""
             yield csv_content.encode()
 
         return StreamingResponse(

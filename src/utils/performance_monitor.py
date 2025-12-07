@@ -171,6 +171,7 @@ class Phase9PerformanceMonitor:
     """
 
     def __init__(self):
+        """Initialize performance monitor with hardware detection and thresholds."""
         self.logger = logging.getLogger(__name__)
         self.monitoring_active = False
         self.collection_interval = 5.0  # Collect metrics every 5 seconds
@@ -1240,6 +1241,7 @@ class Phase9PerformanceMonitor:
                         # Convert dict to object-like structure for compatibility
                         class MetricObj:
                             def __init__(self, d):
+                                """Initialize metric object from dict."""
                                 self.__dict__.update(d)
                         latest_gpu = MetricObj(gpu_dict)
 
@@ -1414,8 +1416,10 @@ def monitor_performance(category: str = "general"):
     """Decorator to monitor function performance"""
 
     def decorator(func):
+        """Wrap function with performance monitoring and Redis metric storage."""
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
+            """Execute async function with timing and logging."""
             start_time = time.time()
             try:
                 result = await func(*args, **kwargs)
@@ -1439,6 +1443,7 @@ def monitor_performance(category: str = "general"):
 
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
+            """Execute sync function with timing and logging."""
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
@@ -1469,7 +1474,7 @@ def monitor_performance(category: str = "general"):
 if __name__ == "__main__":
 
     async def test_monitoring():
-        """Test Phase 9 performance monitoring"""
+        """Test Phase 9 performance monitoring with metrics and recommendations."""
         print("Testing Phase 9 Performance Monitoring System...")
 
         # Collect metrics

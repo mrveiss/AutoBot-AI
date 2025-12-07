@@ -385,6 +385,7 @@ class IDEIntegrationEngine:
     """
 
     def __init__(self):
+        """Initialize IDE integration with pattern rules and cache."""
         self.rules = PATTERN_RULES.copy()
         self.disabled_rules: Set[str] = set()
         self.severity_overrides: Dict[str, DiagnosticSeverity] = {}

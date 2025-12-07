@@ -24,6 +24,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _extract_imports_from_ast(tree: ast.AST, stdlib_modules: set) -> tuple:
+    """Extract import names and external dependencies from AST (Issue #315)."""
+    file_imports = []
+    external_deps = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module_name = alias.name.split(".")[0]
+                file_imports.append(module_name)
+                if module_name not in stdlib_modules:
+                    external_deps[module_name] = external_deps.get(module_name, 0) + 1
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            module_name = node.module.split(".")[0]
+            file_imports.append(node.module)
+            if module_name not in stdlib_modules:
+                external_deps[module_name] = external_deps.get(module_name, 0) + 1
+
+    return list(set(file_imports)), external_deps
+
+
+async def _read_file_content(py_file: Path) -> str | None:
+    """Read file content safely with aiofiles (Issue #315)."""
+    try:
+        async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
+            return await f.read()
+    except OSError as e:
+        logger.debug(f"Failed to read file {py_file}: {e}")
+        return None
+
+
+def _detect_circular_deps(import_relationships: List[Dict]) -> List[List[str]]:
+    """Detect simple circular dependencies (A→B, B→A) (Issue #315)."""
+    import_map: Dict[str, set] = {}
+    for rel in import_relationships:
+        source = rel["source"]
+        if source not in import_map:
+            import_map[source] = set()
+        import_map[source].add(rel["target"])
+
+    circular_deps = []
+    for source, targets in import_map.items():
+        for target in targets:
+            for other_source, other_targets in import_map.items():
+                if target in other_source and source in other_targets:
+                    cycle = sorted([source, other_source])
+                    if cycle not in circular_deps:
+                        circular_deps.append(cycle)
+    return circular_deps
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dependencies",
@@ -108,79 +159,44 @@ async def get_dependencies():
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
 
-    # Analyze imports from each file
+    # Analyze imports from each file (Issue #315: refactored depth 7→3)
     for py_file in python_files[:500]:  # Limit to 500 files for performance
-        try:
-            rel_path = str(py_file.relative_to(project_root))
-            if rel_path not in modules:
-                modules[rel_path] = {
-                    "path": rel_path,
-                    "name": py_file.stem,
-                    "package": str(py_file.parent.relative_to(project_root)),
-                    "functions": 0,
-                    "classes": 0,
-                    "imports": [],
-                }
+        rel_path = str(py_file.relative_to(project_root))
+        if rel_path not in modules:
+            modules[rel_path] = {
+                "path": rel_path,
+                "name": py_file.stem,
+                "package": str(py_file.parent.relative_to(project_root)),
+                "functions": 0,
+                "classes": 0,
+                "imports": [],
+            }
 
-            # Use aiofiles for non-blocking file I/O
-            try:
-                async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
-                    content = await f.read()
-            except OSError as e:
-                logger.debug(f"Failed to read file {py_file}: {e}")
-                continue
-
-            tree = ast.parse(content)
-
-            file_imports = []
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        module_name = alias.name.split(".")[0]
-                        file_imports.append(module_name)
-                        if module_name not in STDLIB_MODULES:
-                            external_deps[module_name] = (
-                                external_deps.get(module_name, 0) + 1
-                            )
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        module_name = node.module.split(".")[0]
-                        file_imports.append(node.module)
-                        if module_name not in STDLIB_MODULES:
-                            external_deps[module_name] = (
-                                external_deps.get(module_name, 0) + 1
-                            )
-
-            modules[rel_path]["imports"] = list(set(file_imports))
-
-            # Create import relationships for graph
-            for imp in file_imports:
-                import_relationships.append(
-                    {"source": rel_path, "target": imp, "type": "import"}
-                )
-
-        except Exception as e:
-            logger.debug(f"Could not analyze {py_file}: {e}")
+        content = await _read_file_content(py_file)
+        if content is None:
             continue
 
-    # Detect circular dependencies (simplified check)
-    import_map = {}
-    for rel in import_relationships:
-        source = rel["source"]
-        target = rel["target"]
-        if source not in import_map:
-            import_map[source] = set()
-        import_map[source].add(target)
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            logger.debug(f"Syntax error parsing {py_file}")
+            continue
 
-    # Check for simple circular imports (A imports B, B imports A)
-    for source, targets in import_map.items():
-        for target in targets:
-            # Check if target imports source (simple cycle)
-            for other_source, other_targets in import_map.items():
-                if target in other_source and source in other_targets:
-                    cycle = sorted([source, other_source])
-                    if cycle not in circular_deps:
-                        circular_deps.append(cycle)
+        file_imports, file_ext_deps = _extract_imports_from_ast(tree, STDLIB_MODULES)
+        modules[rel_path]["imports"] = file_imports
+
+        # Merge external dependencies
+        for pkg, count in file_ext_deps.items():
+            external_deps[pkg] = external_deps.get(pkg, 0) + count
+
+        # Create import relationships for graph
+        for imp in file_imports:
+            import_relationships.append(
+                {"source": rel_path, "target": imp, "type": "import"}
+            )
+
+    # Detect circular dependencies
+    circular_deps = _detect_circular_deps(import_relationships)
 
     # Build graph structure for visualization
     nodes = []

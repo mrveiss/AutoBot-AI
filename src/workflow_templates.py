@@ -44,6 +44,7 @@ class WorkflowStep:
     expected_duration_ms: int = 5000
 
     def __post_init__(self):
+        """Initialize default values for dependencies and inputs fields."""
         if self.dependencies is None:
             self.dependencies = []
         if self.inputs is None:
@@ -66,6 +67,7 @@ class WorkflowTemplate:
     variables: Dict[str, str] = None  # Template variables that can be customized
 
     def __post_init__(self):
+        """Initialize default value for variables field."""
         if self.variables is None:
             self.variables = {}
 
@@ -74,6 +76,7 @@ class WorkflowTemplateManager:
     """Manages workflow templates and provides template-based execution"""
 
     def __init__(self):
+        """Initialize template manager and load default templates."""
         self.templates: Dict[str, WorkflowTemplate] = {}
         self._initialize_default_templates()
 

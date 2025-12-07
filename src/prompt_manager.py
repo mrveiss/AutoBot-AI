@@ -36,6 +36,7 @@ class PromptManager:
     """
 
     def __init__(self, prompts_dir: str = "prompts"):
+        """Initialize prompt manager with prompts directory."""
         # Get absolute path to prompts directory
         if Path(prompts_dir).is_absolute():
             self.prompts_dir = Path(prompts_dir)

@@ -176,13 +176,25 @@ class PerformanceAnalyzer:
         root = Path(root_path)
 
         for pattern in patterns:
-            for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        file_issues = await self._scan_file_for_performance_issues(str(file_path))
-                        issues.extend(file_issues)
-                    except Exception as e:
-                        logger.warning(f"Failed to scan {file_path}: {e}")
+            pattern_issues = await self._scan_pattern_files(root, pattern)  # (Issue #315 - extracted)
+            issues.extend(pattern_issues)
+
+        return issues
+
+    async def _scan_pattern_files(self, root: Path, pattern: str) -> List[PerformanceIssue]:
+        """Scan all files matching a pattern (Issue #315 - extracted)"""
+        issues = []
+
+        for file_path in root.glob(pattern):
+            # Guard clause - skip non-files or files that should be skipped
+            if not file_path.is_file() or self._should_skip_file(file_path):
+                continue
+
+            try:
+                file_issues = await self._scan_file_for_performance_issues(str(file_path))
+                issues.extend(file_issues)
+            except Exception as e:
+                logger.warning(f"Failed to scan {file_path}: {e}")
 
         return issues
 
@@ -208,27 +220,41 @@ class PerformanceAnalyzer:
     async def _scan_file_for_performance_issues(self, file_path: str) -> List[PerformanceIssue]:
         """Scan a single file for performance issues"""
 
-        issues = []
-
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
 
-            # Regex-based scanning for each category
-            for category, pattern_list in self.performance_patterns.items():
-                for pattern in pattern_list:
-                    for match in re.finditer(pattern, content, re.MULTILINE):
-                        line_num = content[:match.start()].count('\n') + 1
-
-                        issue = self._create_performance_issue(
-                            file_path, line_num, match.group(0), category, lines
-                        )
-                        if issue:
-                            issues.append(issue)
+            return self._scan_file_content_for_patterns(file_path, content, lines)  # (Issue #315 - extracted)
 
         except Exception as e:
             logger.error(f"Error scanning {file_path}: {e}")
+            return []
+
+    def _scan_file_content_for_patterns(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
+        """Scan file content for performance patterns (Issue #315 - extracted)"""
+        issues = []
+
+        for category, pattern_list in self.performance_patterns.items():
+            category_issues = self._scan_category_patterns(file_path, content, lines, category, pattern_list)
+            issues.extend(category_issues)
+
+        return issues
+
+    def _scan_category_patterns(self, file_path: str, content: str, lines: List[str],
+                                category: str, pattern_list: List[str]) -> List[PerformanceIssue]:
+        """Scan a single category's patterns (Issue #315 - extracted)"""
+        issues = []
+
+        for pattern in pattern_list:
+            for match in re.finditer(pattern, content, re.MULTILINE):
+                line_num = content[:match.start()].count('\n') + 1
+
+                issue = self._create_performance_issue(
+                    file_path, line_num, match.group(0), category, lines
+                )
+                if issue:
+                    issues.append(issue)
 
         return issues
 
@@ -239,20 +265,30 @@ class PerformanceAnalyzer:
         root = Path(root_path)
 
         for pattern in patterns:
-            for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        file_issues = await self._analyze_ast_performance(str(file_path))
-                        issues.extend(file_issues)
-                    except Exception as e:
-                        logger.warning(f"Failed to analyze AST for {file_path}: {e}")
+            pattern_issues = await self._analyze_ast_pattern_files(root, pattern)  # (Issue #315 - extracted)
+            issues.extend(pattern_issues)
+
+        return issues
+
+    async def _analyze_ast_pattern_files(self, root: Path, pattern: str) -> List[PerformanceIssue]:
+        """Analyze AST for all files matching a pattern (Issue #315 - extracted)"""
+        issues = []
+
+        for file_path in root.glob(pattern):
+            # Guard clause - skip non-files or files that should be skipped
+            if not file_path.is_file() or self._should_skip_file(file_path):
+                continue
+
+            try:
+                file_issues = await self._analyze_ast_performance(str(file_path))
+                issues.extend(file_issues)
+            except Exception as e:
+                logger.warning(f"Failed to analyze AST for {file_path}: {e}")
 
         return issues
 
     async def _analyze_ast_performance(self, file_path: str) -> List[PerformanceIssue]:
         """Analyze AST for performance patterns"""
-
-        issues = []
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -260,37 +296,47 @@ class PerformanceAnalyzer:
                 lines = content.splitlines()
 
             tree = ast.parse(content, filename=file_path)
-
-            for node in ast.walk(tree):
-                # Detect potential memory leaks
-                if isinstance(node, ast.With):
-                    # Check for proper resource management
-                    pass
-
-                # Detect inefficient loops
-                elif isinstance(node, ast.For):
-                    issue = self._analyze_loop_efficiency(node, file_path, lines)
-                    if issue:
-                        issues.append(issue)
-
-                # Detect blocking calls in async functions
-                elif isinstance(node, ast.AsyncFunctionDef):
-                    blocking_issues = self._analyze_async_function(node, file_path, lines)
-                    issues.extend(blocking_issues)
-
-                # Detect database query patterns
-                elif isinstance(node, ast.Call):
-                    db_issue = self._analyze_database_call(node, file_path, lines)
-                    if db_issue:
-                        issues.append(db_issue)
+            return self._walk_ast_nodes(tree, file_path, lines)  # (Issue #315 - extracted)
 
         except SyntaxError:
             # Skip files with syntax errors
-            pass
+            return []
         except Exception as e:
             logger.error(f"AST analysis error for {file_path}: {e}")
+            return []
+
+    def _walk_ast_nodes(self, tree: ast.AST, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
+        """Walk AST nodes and analyze for performance issues (Issue #315 - extracted)"""
+        issues = []
+
+        for node in ast.walk(tree):
+            node_issues = self._analyze_ast_node(node, file_path, lines)  # (Issue #315 - extracted)
+            issues.extend(node_issues)
 
         return issues
+
+    def _analyze_ast_node(self, node: ast.AST, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
+        """Analyze a single AST node for performance patterns (Issue #315 - extracted)"""
+        # Detect potential memory leaks
+        if isinstance(node, ast.With):
+            # Check for proper resource management
+            return []
+
+        # Detect inefficient loops
+        if isinstance(node, ast.For):
+            issue = self._analyze_loop_efficiency(node, file_path, lines)
+            return [issue] if issue else []
+
+        # Detect blocking calls in async functions
+        if isinstance(node, ast.AsyncFunctionDef):
+            return self._analyze_async_function(node, file_path, lines)
+
+        # Detect database query patterns
+        if isinstance(node, ast.Call):
+            db_issue = self._analyze_database_call(node, file_path, lines)
+            return [db_issue] if db_issue else []
+
+        return []
 
     def _analyze_loop_efficiency(self, node: ast.For, file_path: str, lines: List[str]) -> Optional[PerformanceIssue]:
         """Analyze loop for efficiency issues"""

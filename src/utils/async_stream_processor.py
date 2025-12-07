@@ -45,6 +45,7 @@ class StreamProcessor:
     """Base stream processor for different LLM providers"""
 
     def __init__(self, provider: str, max_chunks: int = 1000):
+        """Initialize stream processor with provider and chunk limit."""
         self.provider = provider
         self.max_chunks = max_chunks
         self.chunk_count = 0
@@ -71,6 +72,7 @@ class OllamaStreamProcessor(StreamProcessor):
     """Ollama-specific stream processor"""
 
     def __init__(self, max_chunks: int = 1000):
+        """Initialize Ollama stream processor."""
         super().__init__("ollama", max_chunks)
         self.expecting_done = False
 
@@ -150,6 +152,7 @@ class OpenAIStreamProcessor(StreamProcessor):
     """OpenAI-specific stream processor"""
 
     def __init__(self, max_chunks: int = 1000):
+        """Initialize OpenAI stream processor."""
         super().__init__("openai", max_chunks)
 
     async def process_chunk(self, chunk_data: str) -> Tuple[bool, Optional[str]]:

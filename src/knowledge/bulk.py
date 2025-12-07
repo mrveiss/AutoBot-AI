@@ -189,6 +189,7 @@ class BulkOperationsMixin:
 
             # Batch import facts using asyncio.gather for parallel execution
             async def store_single_fact(fact_data: Dict[str, Any]) -> Dict[str, Any]:
+                """Store a single fact with error handling."""
                 try:
                     return await self.store_fact(
                         content=fact_data.get("content", ""),
@@ -202,6 +203,7 @@ class BulkOperationsMixin:
             semaphore = asyncio.Semaphore(50)  # Limit concurrent operations
 
             async def bounded_store(fact_data: Dict[str, Any]) -> Dict[str, Any]:
+                """Store fact with concurrency limit."""
                 async with semaphore:
                     return await store_single_fact(fact_data)
 
@@ -316,6 +318,7 @@ class BulkOperationsMixin:
             semaphore = asyncio.Semaphore(50)
 
             async def bounded_delete(fact_id: str) -> Dict[str, Any]:
+                """Delete fact with concurrency limit."""
                 async with semaphore:
                     try:
                         return await self.delete_fact(fact_id)

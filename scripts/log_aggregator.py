@@ -494,41 +494,62 @@ class LogAggregator:
         case_sensitive: bool,
     ) -> List[Dict[str, Any]]:
         """Search a single log source."""
+        # Early return for non-file sources (Issue #315 - refactored)
+        if config["type"] != LogSource.FILE:
+            return []
+
+        log_path = config["path"]
+        if not log_path.exists():
+            return []
+
+        return await self._search_file_source(
+            source_name, log_path, config, pattern, since_time, case_sensitive
+        )
+
+    async def _search_file_source(
+        self,
+        source_name: str,
+        log_path: Path,
+        config: Dict[str, Any],
+        pattern: str,
+        since_time: datetime,
+        case_sensitive: bool,
+    ) -> List[Dict[str, Any]]:
+        """Search a file-based log source. (Issue #315 - extracted)"""
         results = []
         regex_flags = 0 if case_sensitive else re.IGNORECASE
 
-        if config["type"] == LogSource.FILE:
-            log_path = config["path"]
-            if log_path.exists():
-                try:
-                    async with aiofiles.open(
-                        log_path, "r", encoding="utf-8"
-                    ) as f:
-                        async for line in f:
-                            if re.search(pattern, line, regex_flags):
-                                parsed = self.parse_log_line(
-                                    line, config.get("format", "text")
-                                )
-                                parsed["source"] = source_name
+        try:
+            async with aiofiles.open(log_path, "r", encoding="utf-8") as f:
+                async for line in f:
+                    if not re.search(pattern, line, regex_flags):
+                        continue
 
-                                # Check timestamp if available
-                                if parsed.get("timestamp"):
-                                    try:
-                                        log_time = datetime.fromisoformat(
-                                            parsed["timestamp"]
-                                        )
-                                        if log_time < since_time:
-                                            continue
-                                    except Exception:
-                                        pass  # Invalid timestamp, include log anyway
+                    parsed = self.parse_log_line(line, config.get("format", "text"))
+                    parsed["source"] = source_name
 
-                                results.append(parsed)
-                except OSError as e:
-                    self.print_step(
-                        f"Failed to read log file {log_path}: {e}", "error"
-                    )
+                    # Check timestamp if available (Issue #315 - refactored)
+                    if not self._is_log_within_timeframe(parsed, since_time):
+                        continue
+
+                    results.append(parsed)
+        except OSError as e:
+            self.print_step(f"Failed to read log file {log_path}: {e}", "error")
 
         return results
+
+    def _is_log_within_timeframe(
+        self, parsed: Dict[str, Any], since_time: datetime
+    ) -> bool:
+        """Check if log entry is within the specified timeframe. (Issue #315 - extracted)"""
+        if not parsed.get("timestamp"):
+            return True  # Include logs without timestamps
+
+        try:
+            log_time = datetime.fromisoformat(parsed["timestamp"])
+            return log_time >= since_time
+        except Exception:
+            return True  # Invalid timestamp, include log anyway
 
     def analyze_logs(
         self, sources: List[str] = None, last_hours: int = 24
@@ -595,21 +616,41 @@ class LogAggregator:
         """Analyze a single log source."""
         config = self.log_sources[source_name]
 
-        if config["type"] == LogSource.FILE:
-            log_path = config["path"]
-            if log_path.exists():
-                with open(log_path, "r") as f:
-                    for line in f:
-                        parsed = self.parse_log_line(line, config.get("format", "text"))
+        # Early return for non-file sources (Issue #315 - refactored)
+        if config["type"] != LogSource.FILE:
+            return
 
-                        analysis["statistics"]["total_entries"] += 1
-                        analysis["statistics"]["by_level"][parsed["level"]] += 1
-                        analysis["statistics"]["by_source"][source_name] += 1
+        log_path = config["path"]
+        if not log_path.exists():
+            return
 
-                        # Track errors by module
-                        if parsed["level"] in [LogLevel.ERROR, LogLevel.CRITICAL]:
-                            module = parsed.get("module", "unknown")
-                            analysis["statistics"]["errors_by_module"][module] += 1
+        self._analyze_file_source(source_name, log_path, config, analysis)
+
+    def _analyze_file_source(
+        self,
+        source_name: str,
+        log_path: Path,
+        config: Dict[str, Any],
+        analysis: Dict[str, Any],
+    ) -> None:
+        """Analyze a file-based log source. (Issue #315 - extracted)"""
+        with open(log_path, "r") as f:
+            for line in f:
+                parsed = self.parse_log_line(line, config.get("format", "text"))
+                self._update_analysis_stats(source_name, parsed, analysis)
+
+    def _update_analysis_stats(
+        self, source_name: str, parsed: Dict[str, Any], analysis: Dict[str, Any]
+    ) -> None:
+        """Update analysis statistics with parsed log entry. (Issue #315 - extracted)"""
+        analysis["statistics"]["total_entries"] += 1
+        analysis["statistics"]["by_level"][parsed["level"]] += 1
+        analysis["statistics"]["by_source"][source_name] += 1
+
+        # Track errors by module
+        if parsed["level"] in [LogLevel.ERROR, LogLevel.CRITICAL]:
+            module = parsed.get("module", "unknown")
+            analysis["statistics"]["errors_by_module"][module] += 1
 
     def export_logs(
         self,
@@ -666,26 +707,36 @@ class LogAggregator:
         self, source_name: str, config: Dict[str, Any], since_time: datetime
     ) -> List[Dict[str, Any]]:
         """Collect logs from a single source."""
+        # Early return for non-file sources (Issue #315 - refactored)
+        if config["type"] != LogSource.FILE:
+            return []
+
+        log_path = config["path"]
+        if not log_path.exists():
+            return []
+
+        return self._collect_file_logs(source_name, log_path, config, since_time)
+
+    def _collect_file_logs(
+        self,
+        source_name: str,
+        log_path: Path,
+        config: Dict[str, Any],
+        since_time: datetime,
+    ) -> List[Dict[str, Any]]:
+        """Collect logs from a file-based source. (Issue #315 - extracted)"""
         logs = []
 
-        if config["type"] == LogSource.FILE:
-            log_path = config["path"]
-            if log_path.exists():
-                with open(log_path, "r") as f:
-                    for line in f:
-                        parsed = self.parse_log_line(line, config.get("format", "text"))
-                        parsed["source"] = source_name
+        with open(log_path, "r") as f:
+            for line in f:
+                parsed = self.parse_log_line(line, config.get("format", "text"))
+                parsed["source"] = source_name
 
-                        # Check timestamp
-                        if parsed.get("timestamp"):
-                            try:
-                                log_time = datetime.fromisoformat(parsed["timestamp"])
-                                if log_time < since_time:
-                                    continue
-                            except Exception:
-                                pass  # Invalid timestamp, include log anyway
+                # Check timestamp (Issue #315 - refactored)
+                if not self._is_log_within_timeframe(parsed, since_time):
+                    continue
 
-                        logs.append(parsed)
+                logs.append(parsed)
 
         return logs
 
@@ -763,7 +814,8 @@ echo "Log rotation completed at $(date)"
         }
 
 
-async def main():
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser. (Issue #315 - extracted)"""
     parser = argparse.ArgumentParser(
         description="AutoBot Log Aggregation System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -812,20 +864,104 @@ Examples:
         "--case-sensitive", action="store_true", help="Case-sensitive search"
     )
 
+    return parser
+
+
+async def _handle_search_command(
+    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
+) -> None:
+    """Handle search command. (Issue #315 - extracted)"""
+    results = await log_aggregator.search_logs(
+        pattern=args.search,
+        sources=services,
+        last_hours=args.last_hours,
+        case_sensitive=args.case_sensitive,
+    )
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump({"results": results}, f, indent=2)
+        print(f"✅ Search results saved to: {args.output}")
+    else:
+        _print_search_results(log_aggregator, results)
+
+
+def _print_search_results(
+    log_aggregator: LogAggregator, results: List[Dict[str, Any]]
+) -> None:
+    """Print search results to console. (Issue #315 - extracted)"""
+    for result in results[:50]:  # Show first 50 results
+        log_aggregator._print_log_line(result.get("source", "unknown"), result)
+
+    if len(results) > 50:
+        print(f"\n... and {len(results) - 50} more results")
+
+
+def _handle_analyze_command(
+    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
+) -> None:
+    """Handle analyze command. (Issue #315 - extracted)"""
+    analysis = log_aggregator.analyze_logs(
+        sources=services, last_hours=args.last_hours
+    )
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(analysis, f, indent=2)
+        print(f"✅ Analysis saved to: {args.output}")
+    else:
+        _print_analysis_summary(analysis)
+
+
+def _print_analysis_summary(analysis: Dict[str, Any]) -> None:
+    """Print analysis summary to console. (Issue #315 - extracted)"""
+    print("\n📊 Log Analysis Summary:")
+    print(f"   Total entries: {analysis['statistics']['total_entries']}")
+    print("   Log levels:")
+    for level, count in analysis["statistics"]["by_level"].items():
+        print(f"     {level}: {count}")
+    print(f"   Recent alerts: {len(analysis['alerts'])}")
+
+
+def _handle_export_command(
+    log_aggregator: LogAggregator, args: argparse.Namespace, services: List[str]
+) -> None:
+    """Handle export command. (Issue #315 - extracted)"""
+    output = log_aggregator.export_logs(
+        sources=services,
+        format_type=args.format,
+        last_hours=args.last_hours,
+        output_file=args.output,
+    )
+
+    if not args.output:
+        print(output)
+
+
+def _handle_setup_command(log_aggregator: LogAggregator) -> None:
+    """Handle setup command. (Issue #315 - extracted)"""
+    result = log_aggregator.setup_centralized_logging()
+    print("\n✅ Centralized logging configured:")
+    for key, value in result.items():
+        print(f"   {key}: {value}")
+
+
+async def main():
+    parser = _create_argument_parser()
     args = parser.parse_args()
 
+    # Early return if no action specified (Issue #315 - refactored)
     if not any([args.tail, args.search, args.analyze, args.export, args.setup]):
         parser.print_help()
         return 1
 
     # Parse services list
-    services = None
-    if args.services:
-        services = [s.strip() for s in args.services.split(",")]
+    services = [s.strip() for s in args.services.split(",")] if args.services else None
 
     log_aggregator = LogAggregator()
 
     try:
+        # Command dispatch table (Issue #315 - refactored)
         if args.tail:
             await log_aggregator.tail_logs(
                 sources=services,
@@ -833,61 +969,14 @@ Examples:
                 lines=args.lines,
                 filter_level=args.filter_level,
             )
-
         elif args.search:
-            results = await log_aggregator.search_logs(
-                pattern=args.search,
-                sources=services,
-                last_hours=args.last_hours,
-                case_sensitive=args.case_sensitive,
-            )
-
-            if args.output:
-                with open(args.output, "w") as f:
-                    json.dump({"results": results}, f, indent=2)
-                print(f"✅ Search results saved to: {args.output}")
-            else:
-                for result in results[:50]:  # Show first 50 results
-                    log_aggregator._print_log_line(
-                        result.get("source", "unknown"), result
-                    )
-
-                if len(results) > 50:
-                    print(f"\n... and {len(results) - 50} more results")
-
+            await _handle_search_command(log_aggregator, args, services)
         elif args.analyze:
-            analysis = log_aggregator.analyze_logs(
-                sources=services, last_hours=args.last_hours
-            )
-
-            if args.output:
-                with open(args.output, "w") as f:
-                    json.dump(analysis, f, indent=2)
-                print(f"✅ Analysis saved to: {args.output}")
-            else:
-                print("\n📊 Log Analysis Summary:")
-                print(f"   Total entries: {analysis['statistics']['total_entries']}")
-                print("   Log levels:")
-                for level, count in analysis["statistics"]["by_level"].items():
-                    print(f"     {level}: {count}")
-                print(f"   Recent alerts: {len(analysis['alerts'])}")
-
+            _handle_analyze_command(log_aggregator, args, services)
         elif args.export:
-            output = log_aggregator.export_logs(
-                sources=services,
-                format_type=args.format,
-                last_hours=args.last_hours,
-                output_file=args.output,
-            )
-
-            if not args.output:
-                print(output)
-
+            _handle_export_command(log_aggregator, args, services)
         elif args.setup:
-            result = log_aggregator.setup_centralized_logging()
-            print("\n✅ Centralized logging configured:")
-            for key, value in result.items():
-                print(f"   {key}: {value}")
+            _handle_setup_command(log_aggregator)
 
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")

@@ -37,6 +37,27 @@ config = UnifiedConfigManager()
 logger = logging.getLogger(__name__)
 
 
+def _extract_embedding_model_from_metadata(metadata_json: bytes | str | None) -> str | None:
+    """Extract embedding model from JSON metadata (Issue #315: extracted).
+
+    Args:
+        metadata_json: JSON string or bytes containing metadata
+
+    Returns:
+        Embedding model name if found, None otherwise
+    """
+    if not metadata_json:
+        return None
+
+    try:
+        if isinstance(metadata_json, bytes):
+            metadata_json = metadata_json.decode("utf-8")
+        metadata = json.loads(metadata_json)
+        return metadata.get("embedding_model")
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+        return None
+
+
 class KnowledgeBaseCore:
     """
     Core knowledge base functionality including initialization,
@@ -455,21 +476,19 @@ class KnowledgeBaseCore:
             return 0
 
     async def _detect_stored_embedding_model(self) -> Optional[str]:
-        """Detect which embedding model was used for existing data"""
+        """Detect which embedding model was used for existing data.
+        Issue #315: Refactored to use helper for reduced nesting.
+        """
+        if not self.aioredis_client:
+            return None
+
         try:
-            if self.aioredis_client:
-                # Look for model metadata in existing facts
-                async for key in self.aioredis_client.scan_iter(
-                    match="fact:*", count=10
-                ):
-                    metadata_json = await self.aioredis_client.hget(key, "metadata")
-                    if metadata_json:
-                        try:
-                            metadata = json.loads(metadata_json)
-                            if "embedding_model" in metadata:
-                                return metadata["embedding_model"]
-                        except (json.JSONDecodeError, TypeError):
-                            continue
+            # Look for model metadata in existing facts
+            async for key in self.aioredis_client.scan_iter(match="fact:*", count=10):
+                metadata_json = await self.aioredis_client.hget(key, "metadata")
+                model = _extract_embedding_model_from_metadata(metadata_json)
+                if model:
+                    return model
         except Exception as e:
             logger.debug(f"Could not detect stored embedding model: {e}")
 

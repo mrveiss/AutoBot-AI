@@ -126,6 +126,98 @@ class CaptchaHumanLoop:
                 self.enable_auto_solve = False
         return self._auto_solver
 
+    def _can_auto_solve(self, captcha_type: str) -> bool:
+        """Check if auto-solving should be attempted (Issue #315: extracted).
+
+        Args:
+            captcha_type: Type of CAPTCHA detected
+
+        Returns:
+            True if auto-solving is enabled and type is supported
+        """
+        unsupported_types = ("recaptcha", "hcaptcha", "cloudflare")
+        return self.enable_auto_solve and captcha_type not in unsupported_types
+
+    async def _try_auto_fill(
+        self,
+        page: Page,
+        captcha_input_selector: str,
+        solution: str,
+    ) -> bool:
+        """Try to auto-fill CAPTCHA solution (Issue #315: extracted).
+
+        Args:
+            page: Playwright page
+            captcha_input_selector: CSS selector for input
+            solution: Solution to fill
+
+        Returns:
+            True if fill succeeded, False otherwise
+        """
+        try:
+            await page.fill(captcha_input_selector, solution)
+            await page.keyboard.press("Enter")
+            await asyncio.sleep(1)  # Wait for response
+            return True
+        except Exception as e:
+            logger.warning(f"Auto-fill failed, falling back: {e}")
+            return False
+
+    async def _handle_auto_solve(
+        self,
+        page: Page,
+        screenshot: bytes,
+        captcha_type: str,
+        captcha_input_selector: Optional[str],
+        captcha_id: str,
+        url: str,
+        start_time: datetime,
+    ) -> Optional[CaptchaResolutionResult]:
+        """Attempt automatic CAPTCHA solving (Issue #315: extracted).
+
+        Returns:
+            CaptchaResolutionResult if solved, None to continue to human fallback
+        """
+        if not self._can_auto_solve(captcha_type):
+            return None
+
+        auto_result = await self._attempt_auto_solve(screenshot, captcha_type)
+        if not auto_result or not auto_result.get("success"):
+            return None
+
+        solution = auto_result.get("solution")
+        confidence = auto_result.get("confidence", "medium")
+        logger.info(f"CAPTCHA auto-solved with {confidence} confidence: {solution}")
+
+        # Try auto-fill if selector provided
+        if captcha_input_selector and solution:
+            if await self._try_auto_fill(page, captcha_input_selector, solution):
+                duration = (datetime.utcnow() - start_time).total_seconds()
+                return CaptchaResolutionResult(
+                    success=True,
+                    status=CaptchaResolutionStatus.AUTO_SOLVED,
+                    captcha_id=captcha_id,
+                    url=url,
+                    duration_seconds=duration,
+                    auto_solution=solution,
+                    auto_confidence=confidence,
+                )
+
+        # Return solution for caller to handle
+        if solution:
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            return CaptchaResolutionResult(
+                success=True,
+                status=CaptchaResolutionStatus.AUTO_SOLVED,
+                captcha_id=captcha_id,
+                url=url,
+                duration_seconds=duration,
+                auto_solution=solution,
+                auto_confidence=confidence,
+            )
+
+        return None
+
     async def request_human_intervention(
         self,
         page: Page,
@@ -133,11 +225,9 @@ class CaptchaHumanLoop:
         captcha_type: str = "unknown",
         captcha_input_selector: Optional[str] = None,
     ) -> CaptchaResolutionResult:
-        """
-        Handle CAPTCHA with automatic solving attempt, then human fallback.
+        """Handle CAPTCHA with automatic solving attempt, then human fallback.
 
-        First attempts OCR-based automatic solving for simple CAPTCHAs.
-        Falls back to WebSocket notification for human intervention if needed.
+        Issue #315: Refactored to use helper methods for reduced nesting.
 
         Args:
             page: Playwright page with CAPTCHA
@@ -159,60 +249,12 @@ class CaptchaHumanLoop:
             screenshot_b64 = base64.b64encode(screenshot).decode("utf-8")
 
             # === STEP 1: Attempt automatic solving ===
-            if self.enable_auto_solve and captcha_type not in (
-                "recaptcha",
-                "hcaptcha",
-                "cloudflare",
-            ):
-                auto_result = await self._attempt_auto_solve(
-                    screenshot, captcha_type
-                )
-
-                if auto_result and auto_result.get("success"):
-                    solution = auto_result.get("solution")
-                    confidence = auto_result.get("confidence", "medium")
-
-                    logger.info(
-                        f"CAPTCHA auto-solved with {confidence} confidence: {solution}"
-                    )
-
-                    # If we have an input selector, try to fill it
-                    if captcha_input_selector and solution:
-                        try:
-                            await page.fill(captcha_input_selector, solution)
-                            await page.keyboard.press("Enter")
-                            await asyncio.sleep(1)  # Wait for response
-
-                            # Check if CAPTCHA was accepted
-                            # (simple check - more sophisticated needed for production)
-                            duration = (
-                                datetime.utcnow() - start_time
-                            ).total_seconds()
-
-                            return CaptchaResolutionResult(
-                                success=True,
-                                status=CaptchaResolutionStatus.AUTO_SOLVED,
-                                captcha_id=captcha_id,
-                                url=url,
-                                duration_seconds=duration,
-                                auto_solution=solution,
-                                auto_confidence=confidence,
-                            )
-                        except Exception as e:
-                            logger.warning(f"Auto-fill failed, falling back: {e}")
-
-                    # Return solution for caller to handle
-                    if solution:
-                        duration = (datetime.utcnow() - start_time).total_seconds()
-                        return CaptchaResolutionResult(
-                            success=True,
-                            status=CaptchaResolutionStatus.AUTO_SOLVED,
-                            captcha_id=captcha_id,
-                            url=url,
-                            duration_seconds=duration,
-                            auto_solution=solution,
-                            auto_confidence=confidence,
-                        )
+            auto_result = await self._handle_auto_solve(
+                page, screenshot, captcha_type, captcha_input_selector,
+                captcha_id, url, start_time
+            )
+            if auto_result:
+                return auto_result
 
             # === STEP 2: Fall back to human intervention ===
             logger.info(f"Requesting human intervention for CAPTCHA at {url}")

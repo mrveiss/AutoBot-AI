@@ -56,7 +56,7 @@ class PayloadOptimizer:
         chunk_size: int = 15000,
         overlap_size: int = 500,
     ):
-
+        """Initialize payload optimizer with size thresholds."""
         self.max_size = max_size
         self.warning_size = warning_size
         self.chunk_size = chunk_size

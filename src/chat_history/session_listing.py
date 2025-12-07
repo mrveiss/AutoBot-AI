@@ -22,6 +22,38 @@ import aiofiles
 logger = logging.getLogger(__name__)
 
 
+def _extract_chat_id_from_filename(filename: str) -> str | None:
+    """Extract chat ID from filename (Issue #315: extracted).
+
+    Args:
+        filename: Chat filename to parse
+
+    Returns:
+        Chat ID string or None if not a valid chat file
+    """
+    if filename.startswith("chat_") and filename.endswith(".json"):
+        return filename.replace("chat_", "").replace(".json", "")
+    if filename.endswith("_chat.json"):
+        return filename.replace("_chat.json", "")
+    return None
+
+
+def _generate_chat_name(chat_id: str) -> str:
+    """Generate a display name for a chat (Issue #315: extracted).
+
+    Args:
+        chat_id: The chat's unique identifier
+
+    Returns:
+        Human-readable chat name
+    """
+    if chat_id.startswith("chat-") and len(chat_id) > 15:
+        return f"Chat {chat_id[-8:]}"
+    if len(chat_id) >= 8:
+        return f"Chat {chat_id[:8]}"
+    return f"Chat {chat_id}"
+
+
 class SessionListingMixin:
     """
     Mixin providing session listing operations for chat history.
@@ -96,8 +128,76 @@ class SessionListingMixin:
             logger.error(f"Error listing chat sessions: {str(e)}")
             return []
 
+    async def _read_chat_file_metadata(
+        self, chat_path: str
+    ) -> tuple[str | None, int]:
+        """Read chat name and message count from file (Issue #315: extracted).
+
+        Args:
+            chat_path: Path to chat JSON file
+
+        Returns:
+            Tuple of (chat_name or None, message_count)
+        """
+        try:
+            async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                content = await f.read()
+                chat_data = json.loads(content)
+                chat_name = chat_data.get("name", "").strip() or None
+                messages = chat_data.get("messages", [])
+                message_count = len(messages) if isinstance(messages, list) else 0
+                return chat_name, message_count
+        except Exception as read_err:
+            logger.debug(f"Could not read chat file content: {read_err}")
+            return None, 0
+
+    async def _build_session_entry(
+        self, chat_id: str, chat_path: str, filename: str
+    ) -> Dict[str, Any] | None:
+        """Build a session entry from file metadata (Issue #315: extracted).
+
+        Args:
+            chat_id: Chat identifier
+            chat_path: Full path to chat file
+            filename: Filename for error logging
+
+        Returns:
+            Session dict or None on error
+        """
+        try:
+            stat = await asyncio.to_thread(os.stat, chat_path)
+            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+            last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            file_size = stat.st_size
+
+            chat_name, message_count = await self._read_chat_file_metadata(chat_path)
+            if not chat_name:
+                chat_name = _generate_chat_name(chat_id)
+
+            return {
+                "id": chat_id,
+                "chatId": chat_id,
+                "title": chat_name,
+                "name": chat_name,
+                "messages": [],
+                "messageCount": message_count,
+                "createdAt": created_time,
+                "createdTime": created_time,
+                "updatedAt": last_modified,
+                "lastModified": last_modified,
+                "isActive": False,
+                "fileSize": file_size,
+                "fast_mode": True,
+            }
+        except Exception as e:
+            logger.error(f"Error reading file stats for {filename}: {str(e)}")
+            return None
+
     async def list_sessions_fast(self) -> List[Dict[str, Any]]:
-        """Fast listing of chat sessions using file metadata only (no decryption)."""
+        """Fast listing of chat sessions using file metadata only (no decryption).
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
+        """
         try:
             sessions = []
             chats_directory = self._get_chats_directory()
@@ -108,74 +208,17 @@ class SessionListingMixin:
                 await asyncio.to_thread(os.makedirs, chats_directory, exist_ok=True)
                 return sessions
 
-            # Use file system metadata for performance - avoid decryption
+            # Process each chat file
             filenames = await asyncio.to_thread(os.listdir, chats_directory)
             for filename in filenames:
-                chat_id = None
-                if filename.startswith("chat_") and filename.endswith(".json"):
-                    # Old format: chat_{uuid}.json
-                    chat_id = filename.replace("chat_", "").replace(".json", "")
-                elif filename.endswith("_chat.json"):
-                    # New format: {uuid}_chat.json
-                    chat_id = filename.replace("_chat.json", "")
-
+                chat_id = _extract_chat_id_from_filename(filename)
                 if not chat_id:
                     continue
 
                 chat_path = os.path.join(chats_directory, filename)
-
-                try:
-                    # Get file stats for metadata
-                    stat = await asyncio.to_thread(os.stat, chat_path)
-                    created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                    last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    file_size = stat.st_size
-
-                    # Read chat name and message count from file (lightweight)
-                    chat_name = None
-                    message_count = 0
-                    try:
-                        async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
-                            content = await f.read()
-                            chat_data = json.loads(content)
-                            chat_name = chat_data.get("name", "").strip()
-                            messages = chat_data.get("messages", [])
-                            message_count = len(messages) if isinstance(messages, list) else 0
-                    except Exception as read_err:
-                        logger.debug(
-                            f"Could not read chat file content for {filename}: {read_err}"
-                        )
-
-                    # Create unique chat names using timestamp or full UUID
-                    if not chat_name:
-                        if chat_id.startswith("chat-") and len(chat_id) > 15:
-                            unique_part = chat_id[-8:]
-                            chat_name = f"Chat {unique_part}"
-                        elif len(chat_id) >= 8:
-                            chat_name = f"Chat {chat_id[:8]}"
-                        else:
-                            chat_name = f"Chat {chat_id}"
-
-                    sessions.append(
-                        {
-                            "id": chat_id,
-                            "chatId": chat_id,
-                            "title": chat_name,
-                            "name": chat_name,
-                            "messages": [],
-                            "messageCount": message_count,
-                            "createdAt": created_time,
-                            "createdTime": created_time,
-                            "updatedAt": last_modified,
-                            "lastModified": last_modified,
-                            "isActive": False,
-                            "fileSize": file_size,
-                            "fast_mode": True,
-                        }
-                    )
-                except Exception as e:
-                    logger.error(f"Error reading file stats for {filename}: {str(e)}")
-                    continue
+                session = await self._build_session_entry(chat_id, chat_path, filename)
+                if session:
+                    sessions.append(session)
 
             # Detect orphaned terminal files and auto-create chat sessions
             existing_chat_ids = {session["id"] for session in sessions}
@@ -191,113 +234,114 @@ class SessionListingMixin:
             logger.error(f"Error listing chat sessions (fast mode): {str(e)}")
             return []
 
+    def _extract_session_id_from_terminal_file(self, filename: str) -> str | None:
+        """Extract session ID from terminal file (Issue #315: extracted).
+
+        Args:
+            filename: Terminal filename to parse
+
+        Returns:
+            Session ID or None if not a terminal file
+        """
+        if filename.endswith("_terminal.log"):
+            return filename.replace("_terminal.log", "")
+        if filename.endswith("_terminal_transcript.txt"):
+            return filename.replace("_terminal_transcript.txt", "")
+        return None
+
+    async def _create_orphaned_session(
+        self, session_id: str, filename: str, chats_directory: str
+    ) -> Dict[str, Any] | None:
+        """Create a chat session for orphaned terminal file (Issue #315: extracted).
+
+        Args:
+            session_id: Session identifier
+            filename: Source terminal filename
+            chats_directory: Path to chats directory
+
+        Returns:
+            Session dict or None on error
+        """
+        chat_file = os.path.join(chats_directory, f"{session_id}_chat.json")
+
+        chat_file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        if chat_file_exists:
+            return None
+
+        empty_chat = {
+            "id": session_id,
+            "name": f"Terminal Session {session_id[:8]}",
+            "messages": [],
+            "created_at": datetime.now().isoformat(),
+            "metadata": {
+                "auto_created": True,
+                "reason": "orphaned_terminal_files",
+                "source": f"Found {filename}",
+            },
+        }
+
+        async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(empty_chat, indent=2, ensure_ascii=False))
+
+        stat = await asyncio.to_thread(os.stat, chat_file)
+        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+        last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+
+        logger.info(
+            f"Auto-created chat session for orphaned terminal "
+            f"file: {session_id} (from {filename})"
+        )
+
+        return {
+            "id": session_id,
+            "chatId": session_id,
+            "title": f"Terminal Session {session_id[:8]}",
+            "name": f"Terminal Session {session_id[:8]}",
+            "messages": [],
+            "messageCount": 0,
+            "createdAt": created_time,
+            "createdTime": created_time,
+            "updatedAt": last_modified,
+            "lastModified": last_modified,
+            "isActive": False,
+            "fileSize": stat.st_size,
+            "fast_mode": True,
+            "auto_created": True,
+        }
+
     async def _recover_orphaned_terminal_sessions(
         self,
         chats_directory: str,
         existing_chat_ids: set,
         sessions: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """
-        Detect and recover orphaned terminal files by creating chat sessions.
+        """Detect and recover orphaned terminal files by creating chat sessions.
 
-        Args:
-            chats_directory: Path to chats directory
-            existing_chat_ids: Set of existing chat IDs
-            sessions: Current list of sessions
-
-        Returns:
-            Updated sessions list with recovered sessions
+        Issue #315: Refactored to use helper methods for reduced nesting.
         """
         orphaned_sessions_created = 0
 
         try:
             orphan_filenames = await asyncio.to_thread(os.listdir, chats_directory)
+
             for filename in orphan_filenames:
-                session_id = None
+                session_id = self._extract_session_id_from_terminal_file(filename)
+                if not session_id or session_id in existing_chat_ids:
+                    continue
 
-                # Check for terminal log files
-                if filename.endswith("_terminal.log"):
-                    session_id = filename.replace("_terminal.log", "")
-                # Check for terminal transcript files
-                elif filename.endswith("_terminal_transcript.txt"):
-                    session_id = filename.replace("_terminal_transcript.txt", "")
-
-                # If we found a terminal file and no corresponding chat exists
-                if session_id and session_id not in existing_chat_ids:
-                    try:
-                        # Create minimal empty chat.json for this orphaned terminal session
-                        chat_file = os.path.join(
-                            chats_directory, f"{session_id}_chat.json"
-                        )
-
-                        # Only create if it doesn't already exist
-                        chat_file_exists = await asyncio.to_thread(
-                            os.path.exists, chat_file
-                        )
-                        if not chat_file_exists:
-                            empty_chat = {
-                                "id": session_id,
-                                "name": f"Terminal Session {session_id[:8]}",
-                                "messages": [],
-                                "created_at": datetime.now().isoformat(),
-                                "metadata": {
-                                    "auto_created": True,
-                                    "reason": "orphaned_terminal_files",
-                                    "source": f"Found {filename}",
-                                },
-                            }
-
-                            async with aiofiles.open(
-                                chat_file, "w", encoding="utf-8"
-                            ) as f:
-                                await f.write(
-                                    json.dumps(empty_chat, indent=2, ensure_ascii=False)
-                                )
-
-                            # Add to existing_chat_ids to prevent duplicates
-                            existing_chat_ids.add(session_id)
-                            orphaned_sessions_created += 1
-
-                            # Get file stats for the newly created chat
-                            stat = await asyncio.to_thread(os.stat, chat_file)
-                            created_time = datetime.fromtimestamp(
-                                stat.st_ctime
-                            ).isoformat()
-                            last_modified = datetime.fromtimestamp(
-                                stat.st_mtime
-                            ).isoformat()
-
-                            # Add to sessions list
-                            sessions.append(
-                                {
-                                    "id": session_id,
-                                    "chatId": session_id,
-                                    "title": f"Terminal Session {session_id[:8]}",
-                                    "name": f"Terminal Session {session_id[:8]}",
-                                    "messages": [],
-                                    "messageCount": 0,
-                                    "createdAt": created_time,
-                                    "createdTime": created_time,
-                                    "updatedAt": last_modified,
-                                    "lastModified": last_modified,
-                                    "isActive": False,
-                                    "fileSize": stat.st_size,
-                                    "fast_mode": True,
-                                    "auto_created": True,
-                                }
-                            )
-
-                            logger.info(
-                                f"Auto-created chat session for orphaned terminal "
-                                f"file: {session_id} (from {filename})"
-                            )
-
-                    except Exception as create_err:
-                        logger.error(
-                            f"Failed to auto-create chat session for orphaned "
-                            f"{filename}: {create_err}"
-                        )
-                        continue
+                try:
+                    session = await self._create_orphaned_session(
+                        session_id, filename, chats_directory
+                    )
+                    if session:
+                        existing_chat_ids.add(session_id)
+                        sessions.append(session)
+                        orphaned_sessions_created += 1
+                except Exception as create_err:
+                    logger.error(
+                        f"Failed to auto-create chat session for orphaned "
+                        f"{filename}: {create_err}"
+                    )
 
             if orphaned_sessions_created > 0:
                 logger.info(

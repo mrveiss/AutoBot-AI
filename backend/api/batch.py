@@ -23,6 +23,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch", "optimization"])
 
 
+# Helper functions for route matching (Issue #315 - extracted)
+def _find_route_handler(app, endpoint: str, method: str):
+    """Find matching route handler for given endpoint and method"""
+    for route in app.routes:
+        if hasattr(route, "path") and route.path == endpoint:
+            if method in route.methods:
+                return route.endpoint
+    return None
+
+
+def _process_session_file(filename: str, chats_directory: str) -> dict | None:
+    """Process a single session file and return session metadata (Issue #315 - extracted)"""
+    if not (filename.startswith("chat_") and filename.endswith(".json")):
+        return None
+
+    chat_id = filename.replace("chat_", "").replace(".json", "")
+    chat_path = os.path.join(chats_directory, filename)
+
+    try:
+        stat = os.stat(chat_path)
+        return {
+            "id": chat_id,
+            "title": f"Chat {chat_id[-8:] if len(chat_id) > 8 else chat_id}",
+            "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "message_count": 0,  # Skip message count for speed
+        }
+    except Exception as e:
+        logger.warning(f"Failed to get stats for {filename}: {e}")
+        return None
+
+
 class BatchRequest(BaseModel):
     """Request multiple endpoints in one call"""
 
@@ -84,6 +116,7 @@ async def batch_load(batch_request: BatchRequest):
     timing = {}
 
     async def execute_request(req: Metadata):
+        """Execute a single batch request against the specified endpoint."""
         endpoint = req.get("endpoint", "")
         method = req.get("method", "GET").upper()
         params = req.get("params", {})
@@ -91,19 +124,19 @@ async def batch_load(batch_request: BatchRequest):
         start_time = time.time()
 
         try:
-            # Get the route handler from the app
-            for route in app.routes:
-                if hasattr(route, "path") and route.path == endpoint:
-                    if method in route.methods:
-                        # Call the endpoint handler directly
-                        if method == "GET":
-                            response = await route.endpoint(**params)
-                        else:
-                            response = await route.endpoint(params)
+            # Get the route handler from the app (Issue #315 - refactored)
+            route_handler = _find_route_handler(app, endpoint, method)
 
-                        responses[endpoint] = response
-                        timing[endpoint] = time.time() - start_time
-                        return
+            if route_handler:
+                # Call the endpoint handler directly
+                if method == "GET":
+                    response = await route_handler(**params)
+                else:
+                    response = await route_handler(params)
+
+                responses[endpoint] = response
+                timing[endpoint] = time.time() - start_time
+                return
 
             # Endpoint not found
             errors[endpoint] = f"Endpoint {endpoint} not found"
@@ -212,32 +245,11 @@ def _get_sessions_sync(chat_history_manager):
             os.makedirs(chats_directory, exist_ok=True)
             return sessions
 
-        # Fast metadata-only approach
+        # Fast metadata-only approach (Issue #315 - refactored)
         for filename in os.listdir(chats_directory):
-            if filename.startswith("chat_") and filename.endswith(".json"):
-                chat_id = filename.replace("chat_", "").replace(".json", "")
-                chat_path = os.path.join(chats_directory, filename)
-
-                try:
-                    stat = os.stat(chat_path)
-                    sessions.append(
-                        {
-                            "id": chat_id,
-                            "title": (
-                                f"Chat {chat_id[-8:] if len(chat_id) > 8 else chat_id}"
-                            ),
-                            "created_at": (
-                                datetime.fromtimestamp(stat.st_ctime).isoformat()
-                            ),
-                            "updated_at": (
-                                datetime.fromtimestamp(stat.st_mtime).isoformat()
-                            ),
-                            "message_count": 0,  # Skip message count for speed
-                        }
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to get stats for {filename}: {e}")
-                    continue
+            session = _process_session_file(filename, chats_directory)
+            if session:
+                sessions.append(session)
 
         return sessions
 

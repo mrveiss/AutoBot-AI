@@ -53,20 +53,24 @@ class IndexingProgress:
     errors: List[str] = None
 
     def __post_init__(self):
+        """Initialize errors list if not provided."""
         if self.errors is None:
             self.errors = []
 
     @property
     def progress_percentage(self) -> float:
+        """Calculate progress as percentage of files processed."""
         if self.total_files == 0:
             return 0.0
         return (self.processed_files / self.total_files) * 100
 
     @property
     def is_complete(self) -> bool:
+        """Check if indexing has completed all files."""
         return self.processed_files >= self.total_files and self.total_files > 0
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert progress to dictionary with computed properties."""
         return {
             **asdict(self),
             "progress_percentage": self.progress_percentage,
@@ -93,6 +97,7 @@ class CodeChunker:
     """Intelligent code-aware chunking for different file types"""
 
     def __init__(self, max_chunk_size: int = 2000, overlap_size: int = 200):
+        """Initialize chunker with size limits for chunk generation."""
         self.max_chunk_size = max_chunk_size
         self.overlap_size = overlap_size
 

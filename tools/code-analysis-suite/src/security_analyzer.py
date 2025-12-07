@@ -177,13 +177,24 @@ class SecurityAnalyzer:
         root = Path(root_path)
 
         for pattern in patterns:
-            for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        file_vulns = await self._scan_file_for_vulnerabilities(str(file_path))
-                        vulnerabilities.extend(file_vulns)
-                    except Exception as e:
-                        logger.warning(f"Failed to scan {file_path}: {e}")
+            pattern_vulns = await self._scan_pattern_for_vulnerabilities(root, pattern)
+            vulnerabilities.extend(pattern_vulns)
+
+        return vulnerabilities
+
+    async def _scan_pattern_for_vulnerabilities(self, root: Path, pattern: str) -> List[SecurityVulnerability]:
+        """Scan files matching a pattern for vulnerabilities (Issue #315 - extracted)"""
+        vulnerabilities = []
+
+        for file_path in root.glob(pattern):
+            if not file_path.is_file() or self._should_skip_file(file_path):
+                continue
+
+            try:
+                file_vulns = await self._scan_file_for_vulnerabilities(str(file_path))
+                vulnerabilities.extend(file_vulns)
+            except Exception as e:
+                logger.warning(f"Failed to scan {file_path}: {e}")
 
         return vulnerabilities
 
@@ -201,28 +212,40 @@ class SecurityAnalyzer:
     async def _scan_file_for_vulnerabilities(self, file_path: str) -> List[SecurityVulnerability]:
         """Scan a single file for security vulnerabilities"""
 
-        vulnerabilities = []
-
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
-
-            # Regex-based scanning for each vulnerability category
-            for category, pattern_list in self.security_patterns.items():
-                for pattern, description, cwe_id in pattern_list:
-                    for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
-                        line_num = content[:match.start()].count('\n') + 1
-
-                        vuln = self._create_vulnerability(
-                            file_path, line_num, match.group(0), category,
-                            description, cwe_id, lines
-                        )
-                        if vuln:
-                            vulnerabilities.append(vuln)
-
         except Exception as e:
             logger.error(f"Error scanning {file_path}: {e}")
+            return []
+
+        vulnerabilities = []
+
+        # Regex-based scanning for each vulnerability category
+        for category, pattern_list in self.security_patterns.items():
+            category_vulns = self._scan_category_patterns(
+                file_path, content, lines, category, pattern_list
+            )
+            vulnerabilities.extend(category_vulns)
+
+        return vulnerabilities
+
+    def _scan_category_patterns(self, file_path: str, content: str, lines: List[str],
+                                category: str, pattern_list: List[tuple]) -> List[SecurityVulnerability]:
+        """Scan file content for patterns in a specific category (Issue #315 - extracted)"""
+        vulnerabilities = []
+
+        for pattern, description, cwe_id in pattern_list:
+            for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
+                line_num = content[:match.start()].count('\n') + 1
+
+                vuln = self._create_vulnerability(
+                    file_path, line_num, match.group(0), category,
+                    description, cwe_id, lines
+                )
+                if vuln:
+                    vulnerabilities.append(vuln)
 
         return vulnerabilities
 
@@ -233,20 +256,29 @@ class SecurityAnalyzer:
         root = Path(root_path)
 
         for pattern in patterns:
-            for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        file_vulns = await self._analyze_ast_security(str(file_path))
-                        vulnerabilities.extend(file_vulns)
-                    except Exception as e:
-                        logger.warning(f"Failed to analyze AST for {file_path}: {e}")
+            pattern_vulns = await self._analyze_pattern_ast_security(root, pattern)
+            vulnerabilities.extend(pattern_vulns)
+
+        return vulnerabilities
+
+    async def _analyze_pattern_ast_security(self, root: Path, pattern: str) -> List[SecurityVulnerability]:
+        """Analyze AST security for files matching a pattern (Issue #315 - extracted)"""
+        vulnerabilities = []
+
+        for file_path in root.glob(pattern):
+            if not file_path.is_file() or self._should_skip_file(file_path):
+                continue
+
+            try:
+                file_vulns = await self._analyze_ast_security(str(file_path))
+                vulnerabilities.extend(file_vulns)
+            except Exception as e:
+                logger.warning(f"Failed to analyze AST for {file_path}: {e}")
 
         return vulnerabilities
 
     async def _analyze_ast_security(self, file_path: str) -> List[SecurityVulnerability]:
         """Analyze AST for security patterns"""
-
-        vulnerabilities = []
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -254,33 +286,39 @@ class SecurityAnalyzer:
                 lines = content.splitlines()
 
             tree = ast.parse(content, filename=file_path)
-
-            for node in ast.walk(tree):
-                # Check for dangerous function calls
-                if isinstance(node, ast.Call):
-                    vuln = self._analyze_dangerous_call(node, file_path, lines)
-                    if vuln:
-                        vulnerabilities.append(vuln)
-
-                # Check for insecure assignments
-                elif isinstance(node, ast.Assign):
-                    vuln = self._analyze_insecure_assignment(node, file_path, lines)
-                    if vuln:
-                        vulnerabilities.append(vuln)
-
-                # Check for dangerous imports
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    vuln = self._analyze_dangerous_import(node, file_path, lines)
-                    if vuln:
-                        vulnerabilities.append(vuln)
-
         except SyntaxError:
             # Skip files with syntax errors
-            pass
+            return []
         except Exception as e:
             logger.error(f"AST security analysis error for {file_path}: {e}")
+            return []
+
+        vulnerabilities = []
+
+        for node in ast.walk(tree):
+            vuln = self._check_node_for_vulnerabilities(node, file_path, lines)
+            if vuln:
+                vulnerabilities.append(vuln)
 
         return vulnerabilities
+
+    def _check_node_for_vulnerabilities(self, node: ast.AST, file_path: str,
+                                        lines: List[str]) -> Optional[SecurityVulnerability]:
+        """Check a single AST node for vulnerabilities (Issue #315 - extracted)"""
+
+        # Check for dangerous function calls
+        if isinstance(node, ast.Call):
+            return self._analyze_dangerous_call(node, file_path, lines)
+
+        # Check for insecure assignments
+        if isinstance(node, ast.Assign):
+            return self._analyze_insecure_assignment(node, file_path, lines)
+
+        # Check for dangerous imports
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            return self._analyze_dangerous_import(node, file_path, lines)
+
+        return None
 
     def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze function calls for security issues"""

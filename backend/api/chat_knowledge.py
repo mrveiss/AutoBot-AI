@@ -120,6 +120,7 @@ class ChatKnowledgeManager:
     """Manager for chat-specific knowledge and file associations"""
 
     def __init__(self):
+        """Initialize manager with knowledge base and storage paths."""
         self.knowledge_base = KnowledgeBase()
         self.chat_history_manager = ChatHistoryManager()
         self.llm_interface = LLMInterface()
@@ -779,6 +780,7 @@ async def health_check():
 if __name__ == "__main__":
     # Example usage
     async def demo():
+        """Demonstrate ChatKnowledgeManager usage with test data."""
         manager = ChatKnowledgeManager()
 
         # Create context

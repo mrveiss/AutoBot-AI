@@ -30,6 +30,7 @@ try:
 except ImportError:
 
     def get_error_boundary_manager():
+        """Return None when error_boundaries module is unavailable."""
         return None
 
 
@@ -316,49 +317,55 @@ class EnhancedProjectStateTracker:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-
-                # Load recent snapshots
-                cursor.execute(
-                    """
-                    SELECT timestamp, phase_states, active_capabilities,
-                           system_metrics, configuration, validation_results, metadata
-                    FROM state_snapshots
-                    ORDER BY timestamp DESC
-                    LIMIT 100
-                """
-                )
-
-                for row in cursor.fetchall():
-                    snapshot = StateSnapshot(
-                        timestamp=datetime.fromisoformat(row[0]),
-                        phase_states=json.loads(row[1]),
-                        active_capabilities=set(json.loads(row[2])),
-                        system_metrics={
-                            TrackingMetric(k): v for k, v in json.loads(row[3]).items()
-                        },
-                        configuration=json.loads(row[4]),
-                        validation_results=json.loads(row[5]),
-                        metadata=json.loads(row[6]) if row[6] else {},
-                    )
-                    self.state_history.append(snapshot)
-
-                # Load milestones
-                cursor.execute("SELECT * FROM milestones")
-                for row in cursor.fetchall():
-                    name = row[0]
-                    if name in self.milestones:
-                        self.milestones[name].achieved = bool(row[3])
-                        if row[4]:
-                            self.milestones[name].achieved_at = datetime.fromisoformat(
-                                row[4]
-                            )
-                        if row[5]:
-                            self.milestones[name].evidence = json.loads(row[5])
-
+                self._load_snapshots_from_db(cursor)
+                self._load_milestones_from_db(cursor)
                 logger.info(f"Loaded {len(self.state_history)} state snapshots")
-
         except Exception as e:
             logger.error(f"Error loading state: {e}")
+
+    def _load_snapshots_from_db(self, cursor):  # (Issue #315 - extracted)
+        """Load recent snapshots from database cursor"""
+        cursor.execute(
+            """
+            SELECT timestamp, phase_states, active_capabilities,
+                   system_metrics, configuration, validation_results, metadata
+            FROM state_snapshots
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """
+        )
+
+        for row in cursor.fetchall():
+            snapshot = StateSnapshot(
+                timestamp=datetime.fromisoformat(row[0]),
+                phase_states=json.loads(row[1]),
+                active_capabilities=set(json.loads(row[2])),
+                system_metrics={
+                    TrackingMetric(k): v for k, v in json.loads(row[3]).items()
+                },
+                configuration=json.loads(row[4]),
+                validation_results=json.loads(row[5]),
+                metadata=json.loads(row[6]) if row[6] else {},
+            )
+            self.state_history.append(snapshot)
+
+    def _load_milestones_from_db(self, cursor):  # (Issue #315 - extracted)
+        """Load milestones from database cursor"""
+        cursor.execute("SELECT * FROM milestones")
+        for row in cursor.fetchall():
+            self._update_milestone_from_row(row)
+
+    def _update_milestone_from_row(self, row):  # (Issue #315 - extracted)
+        """Update milestone from database row"""
+        name = row[0]
+        if name not in self.milestones:
+            return
+
+        self.milestones[name].achieved = bool(row[3])
+        if row[4]:
+            self.milestones[name].achieved_at = datetime.fromisoformat(row[4])
+        if row[5]:
+            self.milestones[name].evidence = json.loads(row[5])
 
     async def capture_state_snapshot(self) -> StateSnapshot:
         """Capture current system state"""
@@ -547,53 +554,78 @@ class EnhancedProjectStateTracker:
             if milestone.achieved:
                 continue
 
-            # Check criteria
-            criteria_met = True
-            evidence = []
-
-            for criterion, target in milestone.criteria.items():
-                if criterion == "phases_completed":
-                    actual = snapshot.system_metrics[TrackingMetric.PHASE_COMPLETION]
-                    if actual >= target:
-                        evidence.append(f"Completed {actual} phases (target: {target})")
-                    else:
-                        criteria_met = False
-
-                elif criterion == "system_maturity":
-                    actual = snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]
-                    if actual >= target:
-                        evidence.append(
-                            f"System maturity: {actual}% (target: {target}%)"
-                        )
-                    else:
-                        criteria_met = False
-
-                elif criterion == "capabilities_unlocked":
-                    required_capabilities = set(target)
-                    if required_capabilities.issubset(snapshot.active_capabilities):
-                        evidence.append(
-                            f"Unlocked capabilities: {', '.join(required_capabilities)}"
-                        )
-                    else:
-                        criteria_met = False
+            criteria_met, evidence = self._evaluate_milestone_criteria(
+                milestone, snapshot
+            )
 
             if criteria_met:
-                milestone.achieved = True
-                milestone.achieved_at = datetime.now()
-                milestone.evidence = evidence
+                await self._mark_milestone_achieved(milestone_name, milestone, evidence)
 
-                # Record milestone achievement
-                await self.record_state_change(
-                    StateChangeType.MILESTONE_REACHED,
-                    f"Milestone achieved: {milestone.name}",
-                    {"milestone": milestone_name, "evidence": evidence},
-                    metadata={"milestone_description": milestone.description},
+    def _evaluate_milestone_criteria(
+        self, milestone: ProjectMilestone, snapshot: StateSnapshot
+    ) -> Tuple[bool, List[str]]:  # (Issue #315 - extracted)
+        """Evaluate if milestone criteria are met and collect evidence"""
+        criteria_met = True
+        evidence = []
+
+        for criterion, target in milestone.criteria.items():
+            met, criterion_evidence = self._check_single_criterion(
+                criterion, target, snapshot
+            )
+            if met:
+                evidence.append(criterion_evidence)
+            else:
+                criteria_met = False
+
+        return criteria_met, evidence
+
+    def _check_single_criterion(
+        self, criterion: str, target: Any, snapshot: StateSnapshot
+    ) -> Tuple[bool, str]:  # (Issue #315 - extracted)
+        """Check a single milestone criterion"""
+        if criterion == "phases_completed":
+            actual = snapshot.system_metrics[TrackingMetric.PHASE_COMPLETION]
+            if actual >= target:
+                return True, f"Completed {actual} phases (target: {target})"
+            return False, ""
+
+        if criterion == "system_maturity":
+            actual = snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]
+            if actual >= target:
+                return True, f"System maturity: {actual}% (target: {target}%)"
+            return False, ""
+
+        if criterion == "capabilities_unlocked":
+            required_capabilities = set(target)
+            if required_capabilities.issubset(snapshot.active_capabilities):
+                return (
+                    True,
+                    f"Unlocked capabilities: {', '.join(required_capabilities)}",
                 )
+            return False, ""
 
-                # Save to database
-                self._save_milestone(milestone_name, milestone)
+        return False, ""
 
-                logger.info(f"🎉 Milestone achieved: {milestone.name}")
+    async def _mark_milestone_achieved(
+        self, milestone_name: str, milestone: ProjectMilestone, evidence: List[str]
+    ):  # (Issue #315 - extracted)
+        """Mark a milestone as achieved and record the event"""
+        milestone.achieved = True
+        milestone.achieved_at = datetime.now()
+        milestone.evidence = evidence
+
+        # Record milestone achievement
+        await self.record_state_change(
+            StateChangeType.MILESTONE_REACHED,
+            f"Milestone achieved: {milestone.name}",
+            {"milestone": milestone_name, "evidence": evidence},
+            metadata={"milestone_description": milestone.description},
+        )
+
+        # Save to database
+        self._save_milestone(milestone_name, milestone)
+
+        logger.info(f"🎉 Milestone achieved: {milestone.name}")
 
     def _save_milestone(self, name: str, milestone: ProjectMilestone):
         """Save milestone to database"""
@@ -892,6 +924,7 @@ class EnhancedProjectStateTracker:
         """Start background tracking tasks"""
 
         async def tracking_loop():
+            """Capture state snapshots hourly in background."""
             while True:
                 try:
                     # Capture snapshot every hour
@@ -1179,6 +1212,7 @@ def error_tracking_decorator(func):
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
+            """Async wrapper that tracks errors before re-raising."""
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
@@ -1198,44 +1232,122 @@ def error_tracking_decorator(func):
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
+            """Sync wrapper that tracks errors before re-raising."""
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                # For sync functions, we need to run the tracking in an event loop
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # If we're in an async context, schedule the tracking
-                        asyncio.create_task(
-                            track_system_error(
-                                e,
-                                {
-                                    "function": func.__name__,
-                                    "module": func.__module__,
-                                    "args": str(args)[:200],
-                                    "kwargs": str(kwargs)[:200],
-                                },
-                            )
-                        )
-                    else:
-                        # If no loop is running, run it
-                        asyncio.run(
-                            track_system_error(
-                                e,
-                                {
-                                    "function": func.__name__,
-                                    "module": func.__module__,
-                                    "args": str(args)[:200],
-                                    "kwargs": str(kwargs)[:200],
-                                },
-                            )
-                        )
-                except Exception:
-                    # If we can't track the error, just log it
-                    logger.error(f"Error in {func.__name__}: {e}")
+                _handle_sync_error_tracking(e, func, args, kwargs)  # (Issue #315 - extracted)
                 raise
 
         return sync_wrapper
+
+
+def _handle_sync_error_tracking(
+    error: Exception, func, args, kwargs
+):  # (Issue #315 - extracted)
+    """Handle error tracking for sync functions"""
+    error_context = {
+        "function": func.__name__,
+        "module": func.__module__,
+        "args": str(args)[:200],
+        "kwargs": str(kwargs)[:200],
+    }
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            _schedule_error_tracking(error, error_context)
+        else:
+            _run_error_tracking(error, error_context)
+    except Exception:
+        logger.error(f"Error in {func.__name__}: {error}")
+
+
+def _schedule_error_tracking(
+    error: Exception, context: Dict[str, Any]
+):  # (Issue #315 - extracted)
+    """Schedule error tracking in running event loop"""
+    asyncio.create_task(track_system_error(error, context))
+
+
+def _run_error_tracking(
+    error: Exception, context: Dict[str, Any]
+):  # (Issue #315 - extracted)
+    """Run error tracking in new event loop"""
+    asyncio.run(track_system_error(error, context))
+
+
+# Command handlers (Issue #315 - extracted)
+async def _handle_snapshot_command(tracker):
+    """Handle snapshot command"""
+    print("Capturing state snapshot...")
+    snapshot = await tracker.capture_state_snapshot()
+    print(f"Snapshot captured at {snapshot.timestamp}")
+    print(
+        f"System maturity: {snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]}%"
+    )
+
+
+async def _handle_summary_command(tracker):
+    """Handle summary command"""
+    summary = await tracker.get_state_summary()
+    print(json.dumps(summary, indent=2, default=str))
+
+
+async def _handle_report_command(tracker):
+    """Handle report command"""
+    report = await tracker.generate_state_report()
+    print(report)
+
+
+async def _handle_metrics_command(tracker):
+    """Handle metrics command"""
+    metrics = await tracker.get_metrics_summary()
+    print(json.dumps(metrics, indent=2, default=str))
+
+
+async def _handle_test_tracking_command(tracker):
+    """Handle test-tracking command"""
+    print("Testing tracking functionality...")
+
+    # Test error tracking
+    test_error = ValueError("Test error for tracking")
+    await tracker.track_error(test_error, {"test": True})
+    print("✅ Error tracking tested")
+
+    # Test API call tracking
+    await tracker.track_api_call("/api/test", "POST", 200)
+    print("✅ API call tracking tested")
+
+    # Test user interaction tracking
+    await tracker.track_user_interaction(
+        "test_interaction", "test_user", {"test": True}
+    )
+    print("✅ User interaction tracking tested")
+
+    # Show updated metrics
+    metrics = await tracker.get_metrics_summary()
+    print("\nUpdated metrics:")
+    print(json.dumps(metrics, indent=2, default=str))
+
+
+async def _handle_export_command(tracker, args):
+    """Handle export command"""
+    output_path = (
+        args[2] if len(args) > 2 else "reports/state_tracking_export.json"
+    )
+    await tracker.export_state_data(output_path)
+    print(f"Data exported to {output_path}")
+
+
+# Command dispatch map (Issue #315 - refactored)
+COMMAND_HANDLERS = {
+    "snapshot": _handle_snapshot_command,
+    "summary": _handle_summary_command,
+    "report": _handle_report_command,
+    "metrics": _handle_metrics_command,
+    "test-tracking": _handle_test_tracking_command,
+}
 
 
 # Example usage and testing
@@ -1243,71 +1355,29 @@ if __name__ == "__main__":
     import sys
 
     async def main():
+        """Run state tracker CLI commands."""
         tracker = get_state_tracker()
 
-        if len(sys.argv) > 1:
-            command = sys.argv[1]
-
-            if command == "snapshot":
-                print("Capturing state snapshot...")
-                snapshot = await tracker.capture_state_snapshot()
-                print(f"Snapshot captured at {snapshot.timestamp}")
-                print(
-                    f"System maturity: {snapshot.system_metrics[TrackingMetric.SYSTEM_MATURITY]}%"
-                )
-
-            elif command == "summary":
-                summary = await tracker.get_state_summary()
-                print(json.dumps(summary, indent=2, default=str))
-
-            elif command == "report":
-                report = await tracker.generate_state_report()
-                print(report)
-
-            elif command == "metrics":
-                metrics = await tracker.get_metrics_summary()
-                print(json.dumps(metrics, indent=2, default=str))
-
-            elif command == "test-tracking":
-                print("Testing tracking functionality...")
-
-                # Test error tracking
-                test_error = ValueError("Test error for tracking")
-                await tracker.track_error(test_error, {"test": True})
-                print("✅ Error tracking tested")
-
-                # Test API call tracking
-                await tracker.track_api_call("/api/test", "POST", 200)
-                print("✅ API call tracking tested")
-
-                # Test user interaction tracking
-                await tracker.track_user_interaction(
-                    "test_interaction", "test_user", {"test": True}
-                )
-                print("✅ User interaction tracking tested")
-
-                # Show updated metrics
-                metrics = await tracker.get_metrics_summary()
-                print("\nUpdated metrics:")
-                print(json.dumps(metrics, indent=2, default=str))
-
-            elif command == "export":
-                output_path = (
-                    sys.argv[2]
-                    if len(sys.argv) > 2
-                    else "reports/state_tracking_export.json"
-                )
-                await tracker.export_state_data(output_path)
-                print(f"Data exported to {output_path}")
-
-            else:
-                print(f"Unknown command: {command}")
-                print(
-                    "Available commands: snapshot, summary, report, metrics, test-tracking, export"
-                )
-        else:
+        if len(sys.argv) <= 1:
             # Default: show summary
-            summary = await tracker.get_state_summary()
-            print(json.dumps(summary, indent=2, default=str))
+            await _handle_summary_command(tracker)
+            return
+
+        command = sys.argv[1]
+
+        # Handle export separately (needs args)
+        if command == "export":
+            await _handle_export_command(tracker, sys.argv)
+            return
+
+        # Dispatch to handler
+        handler = COMMAND_HANDLERS.get(command)
+        if handler:
+            await handler(tracker)
+        else:
+            print(f"Unknown command: {command}")
+            print(
+                "Available commands: snapshot, summary, report, metrics, test-tracking, export"
+            )
 
     asyncio.run(main())

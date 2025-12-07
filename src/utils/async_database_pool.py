@@ -112,10 +112,61 @@ class AsyncSQLiteConnectionPool:
                 f"Async connection pool initialized with {initial_size} connections"
             )
 
+    async def _acquire_connection(self) -> aiosqlite.Connection:
+        """Acquire a connection from pool or create new one (Issue #315: extracted).
+
+        Returns:
+            aiosqlite.Connection from pool or newly created
+
+        Raises:
+            asyncio.TimeoutError if unable to get connection
+        """
+        # Try to get existing connection from pool
+        try:
+            conn = await asyncio.wait_for(self._pool.get(), timeout=self.timeout)
+            self._stats.connections_reused += 1
+            logger.debug("Reused async connection from pool")
+            return conn
+        except asyncio.TimeoutError:
+            pass  # Pool empty, try to create new
+
+        # Pool exhausted, create new connection if under limit
+        async with self._lock:
+            if self._created_connections < self.pool_size:
+                return await self._create_connection()
+            self._stats.max_connections_reached += 1
+            logger.warning("Async connection pool exhausted, waiting...")
+
+        # Wait for connection from pool
+        return await asyncio.wait_for(self._pool.get(), timeout=self.timeout)
+
+    async def _return_connection(self, conn: aiosqlite.Connection) -> None:
+        """Return connection to pool (Issue #315: extracted).
+
+        Args:
+            conn: Connection to return
+        """
+        try:
+            await conn.rollback()  # Reset any uncommitted transactions
+            await self._pool.put(conn)
+        except asyncio.QueueFull:
+            await self._close_connection_safely(conn)
+        except Exception as e:
+            logger.error(f"Error returning connection to pool: {e}")
+            await self._close_connection_safely(conn)
+
+    async def _close_connection_safely(self, conn: aiosqlite.Connection) -> None:
+        """Close connection with error handling (Issue #315: extracted)."""
+        try:
+            await conn.close()
+        except Exception:
+            pass  # Best-effort cleanup
+
     @asynccontextmanager
     async def get_connection(self):
         """
         Get a connection from the async pool (context manager).
+        Issue #315: Refactored to use helpers for reduced nesting.
 
         Yields:
             aiosqlite.Connection: Async database connection
@@ -127,22 +178,7 @@ class AsyncSQLiteConnectionPool:
         conn = None
 
         try:
-            # Try to get existing connection from pool
-            try:
-                conn = await asyncio.wait_for(self._pool.get(), timeout=self.timeout)
-                self._stats.connections_reused += 1
-                logger.debug("Reused async connection from pool")
-            except asyncio.TimeoutError:
-                # Pool exhausted, create new connection if under limit
-                async with self._lock:
-                    if self._created_connections < self.pool_size:
-                        conn = await self._create_connection()
-                    else:
-                        self._stats.max_connections_reached += 1
-                        logger.warning("Async connection pool exhausted, waiting...")
-                        conn = await asyncio.wait_for(
-                            self._pool.get(), timeout=self.timeout
-                        )
+            conn = await self._acquire_connection()
 
             # Record wait time
             wait_time = (datetime.now() - start_time).total_seconds()
@@ -158,31 +194,14 @@ class AsyncSQLiteConnectionPool:
             logger.error(f"Error with async database connection: {e}")
             # Connection is bad, don't return it to pool
             if conn:
-                try:
-                    await conn.close()
-                except Exception:
-                    pass  # Best-effort cleanup - connection already failed
+                await self._close_connection_safely(conn)
                 conn = None
             raise
         finally:
             self._stats.active_connections -= 1
             # Return good connection to pool
             if conn:
-                try:
-                    await conn.rollback()  # Reset any uncommitted transactions
-                    await self._pool.put(conn)
-                except asyncio.QueueFull:
-                    # Pool is full, close connection
-                    try:
-                        await conn.close()
-                    except Exception:
-                        pass  # Best-effort cleanup during pool overflow
-                except Exception as e:
-                    logger.error(f"Error returning connection to pool: {e}")
-                    try:
-                        await conn.close()
-                    except Exception:
-                        pass  # Best-effort cleanup after pool error
+                await self._return_connection(conn)
 
     async def close_all(self):
         """Close all connections in the pool."""

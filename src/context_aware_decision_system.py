@@ -185,6 +185,7 @@ class VisualContextCollector:
     """Specialized collector for visual context information"""
 
     def __init__(self):
+        """Initialize visual context collector with time provider."""
         self.time_provider = TimeProvider()
 
     async def collect(self) -> List[ContextElement]:
@@ -267,6 +268,7 @@ class AudioContextCollector:
     """Specialized collector for audio/voice context information"""
 
     def __init__(self):
+        """Initialize audio context collector with time provider."""
         self.time_provider = TimeProvider()
 
     async def collect(self) -> List[ContextElement]:
@@ -329,6 +331,7 @@ class SystemContextCollector:
     """Specialized collector for system state context information"""
 
     def __init__(self):
+        """Initialize system context collector with time provider."""
         self.time_provider = TimeProvider()
 
     async def collect(self) -> List[ContextElement]:
@@ -417,6 +420,7 @@ class ContextCollector:
     """Collects and manages context information from various sources"""
 
     def __init__(self):
+        """Initialize context collector with cache and specialized sub-collectors."""
         self.context_cache: List[ContextElement] = []
         self.max_cache_size = 100
         self.context_relevance_decay = 0.95  # Decay factor per hour
@@ -849,6 +853,7 @@ class DecisionEngine:
     """Core decision making engine"""
 
     def __init__(self):
+        """Initialize decision engine with algorithm registry and time provider."""
         self.time_provider = TimeProvider()
         self.decision_algorithms = {
             DecisionType.AUTOMATION_ACTION: self._decide_automation_action,
@@ -1417,6 +1422,7 @@ class ContextAwareDecisionSystem:
     """Main context-aware decision making system"""
 
     def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        """Initialize decision system with memory manager, collector, and engine."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.context_collector = ContextCollector()
         self.decision_engine = DecisionEngine()

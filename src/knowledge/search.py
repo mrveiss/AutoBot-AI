@@ -24,6 +24,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _decode_redis_hash(fact_data: Dict) -> Dict[str, str]:
+    """Decode Redis hash bytes to strings (Issue #315)."""
+    decoded = {}
+    for k, v in fact_data.items():
+        dk = k.decode("utf-8") if isinstance(k, bytes) else k
+        dv = v.decode("utf-8") if isinstance(v, bytes) else v
+        decoded[dk] = dv
+    return decoded
+
+
+def _matches_category(decoded: Dict[str, str], category: Optional[str]) -> bool:
+    """Check if fact matches category filter (Issue #315)."""
+    if not category:
+        return True
+    try:
+        metadata = json.loads(decoded.get("metadata", "{}"))
+        return metadata.get("category") == category
+    except json.JSONDecodeError:
+        return False
+
+
+def _score_fact_by_terms(decoded: Dict[str, str], query_terms: Set[str]) -> float:
+    """Calculate term match score for a fact (Issue #315)."""
+    content = decoded.get("content", "").lower()
+    matches = sum(1 for term in query_terms if term in content)
+    return matches / len(query_terms) if matches > 0 else 0
+
+
+def _build_search_result(decoded: Dict[str, str], key: bytes, score: float) -> Dict[str, Any]:
+    """Build search result dict from decoded fact (Issue #315)."""
+    fact_id = (
+        key.decode("utf-8").replace("fact:", "")
+        if isinstance(key, bytes)
+        else key.replace("fact:", "")
+    )
+    try:
+        metadata = json.loads(decoded.get("metadata", "{}"))
+    except json.JSONDecodeError:
+        metadata = {}
+
+    return {
+        "content": decoded.get("content", ""),
+        "score": score,
+        "metadata": {**metadata, "fact_id": fact_id},
+        "node_id": fact_id,
+        "doc_id": fact_id,
+    }
+
+
 class SearchMixin:
     """
     Search functionality mixin for knowledge base.
@@ -495,7 +544,7 @@ class SearchMixin:
                 scanned += len(keys)
 
                 if keys:
-                    # Batch fetch
+                    # Batch fetch and process (Issue #315 - reduced nesting)
                     pipeline = self.aioredis_client.pipeline()
                     for key in keys:
                         pipeline.hgetall(key)
@@ -505,49 +554,14 @@ class SearchMixin:
                         if not fact_data:
                             continue
 
-                        # Decode
-                        decoded = {}
-                        for k, v in fact_data.items():
-                            dk = k.decode("utf-8") if isinstance(k, bytes) else k
-                            dv = v.decode("utf-8") if isinstance(v, bytes) else v
-                            decoded[dk] = dv
+                        decoded = _decode_redis_hash(fact_data)
 
-                        # Category filter
-                        if category:
-                            try:
-                                metadata = json.loads(decoded.get("metadata", "{}"))
-                                if metadata.get("category") != category:
-                                    continue
-                            except json.JSONDecodeError:
-                                continue
+                        if not _matches_category(decoded, category):
+                            continue
 
-                        # Score by term matches in content
-                        content = decoded.get("content", "").lower()
-                        matches = sum(1 for term in query_terms if term in content)
-
-                        if matches > 0:
-                            # Calculate score based on match ratio
-                            score = matches / len(query_terms)
-                            fact_id = (
-                                key.decode("utf-8").replace("fact:", "")
-                                if isinstance(key, bytes)
-                                else key.replace("fact:", "")
-                            )
-
-                            try:
-                                metadata = json.loads(decoded.get("metadata", "{}"))
-                            except json.JSONDecodeError:
-                                metadata = {}
-
-                            results.append(
-                                {
-                                    "content": decoded.get("content", ""),
-                                    "score": score,
-                                    "metadata": {**metadata, "fact_id": fact_id},
-                                    "node_id": fact_id,
-                                    "doc_id": fact_id,
-                                }
-                            )
+                        score = _score_fact_by_terms(decoded, query_terms)
+                        if score > 0:
+                            results.append(_build_search_result(decoded, key, score))
 
                 if cursor == b"0":
                     break

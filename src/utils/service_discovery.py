@@ -28,6 +28,28 @@ DEGRADED_STATUS_FIELDS = {"degraded", "warning"}
 SERVICE_UNAVAILABLE_HTTP_CODES = {503, 502, 504}
 
 
+def _parse_health_response(data: dict, service: "ServiceEndpoint") -> Optional["ServiceStatus"]:
+    """Parse health response JSON for service status (Issue #315: extracted).
+
+    Args:
+        data: Parsed JSON response from health endpoint
+        service: Service endpoint to update with metadata
+
+    Returns:
+        ServiceStatus.DEGRADED if degraded, None if healthy
+    """
+    # Extract service metadata if available
+    service.version = data.get("version")
+    service.capabilities = data.get("capabilities", [])
+
+    # Check if response indicates degraded state
+    status_field = data.get("status", "healthy").lower()
+    if status_field in DEGRADED_STATUS_FIELDS:
+        return ServiceStatus.DEGRADED
+
+    return None  # Healthy
+
+
 class ServiceStatus(Enum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
@@ -84,6 +106,7 @@ class ServiceDiscovery:
     """
 
     def __init__(self, config_file: Optional[str] = None):
+        """Initialize service discovery with config file and health checks."""
         self.services: Dict[str, ServiceEndpoint] = {}
         # Use project-relative path for config file (this file is in src/utils/)
         default_config = (
@@ -380,40 +403,46 @@ class ServiceDiscovery:
             return ServiceStatus.UNHEALTHY
 
     async def _check_http_service(self, service: ServiceEndpoint) -> ServiceStatus:
-        """Check HTTP-based service health"""
+        """Check HTTP-based service health (Issue #315: refactored for reduced nesting)."""
         try:
             async with await self._http_client.get(
                 service.health_url, timeout=aiohttp.ClientTimeout(total=service.timeout)
             ) as response:
-
-                # Check response status
-                if response.status == 200:
-                    # Try to parse response for additional health info
-                    try:
-                        data = await response.json()
-                        if isinstance(data, dict):
-                            # Extract service metadata if available
-                            service.version = data.get("version")
-                            service.capabilities = data.get("capabilities", [])
-
-                            # Check if response indicates degraded state
-                            status_field = data.get("status", "healthy").lower()
-                            if status_field in DEGRADED_STATUS_FIELDS:
-                                return ServiceStatus.DEGRADED
-                    except Exception:
-                        pass  # Ignore JSON parsing errors for simple endpoints
-
-                    return ServiceStatus.HEALTHY
-
-                elif response.status in SERVICE_UNAVAILABLE_HTTP_CODES:
-                    return ServiceStatus.DEGRADED  # Temporary issues
-                else:
-                    return ServiceStatus.UNHEALTHY
+                return await self._evaluate_http_response(response, service)
 
         except asyncio.TimeoutError:
             return ServiceStatus.UNHEALTHY
         except aiohttp.ClientError:
             return ServiceStatus.UNHEALTHY
+
+    async def _evaluate_http_response(
+        self, response: aiohttp.ClientResponse, service: ServiceEndpoint
+    ) -> ServiceStatus:
+        """Evaluate HTTP response and determine service status (Issue #315: extracted).
+
+        Args:
+            response: HTTP response from health endpoint
+            service: Service endpoint to update with metadata
+
+        Returns:
+            ServiceStatus based on response
+        """
+        if response.status != 200:
+            if response.status in SERVICE_UNAVAILABLE_HTTP_CODES:
+                return ServiceStatus.DEGRADED  # Temporary issues
+            return ServiceStatus.UNHEALTHY
+
+        # Try to parse response for additional health info
+        try:
+            data = await response.json()
+            if isinstance(data, dict):
+                degraded = _parse_health_response(data, service)
+                if degraded:
+                    return degraded
+        except Exception:
+            pass  # Ignore JSON parsing errors for simple endpoints
+
+        return ServiceStatus.HEALTHY
 
     async def _check_tcp_service(self, service: ServiceEndpoint) -> ServiceStatus:
         """Check TCP-based service health (e.g., Redis)

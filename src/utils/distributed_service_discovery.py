@@ -37,6 +37,7 @@ class ServiceEndpoint:
 
     @property
     def url(self) -> str:
+        """Return full URL for this service endpoint."""
         return f"{self.protocol}://{self.host}:{self.port}"
 
     def is_stale(self, max_age: float = 30.0) -> bool:
@@ -56,6 +57,7 @@ class DistributedServiceDiscovery:
     """
 
     def __init__(self):
+        """Initialize distributed service discovery with registry."""
         self.services: Dict[str, ServiceEndpoint] = {}
         self.backup_endpoints: Dict[str, list] = {}
         self._health_check_task = None
@@ -493,6 +495,7 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
 
     # Helper to get config value
     def get_value(svc_name, key, default_key, default_val):
+        """Get service config value with fallback to defaults."""
         if svc_name == "backend":
             val = backend_config.get(key)
         elif svc_name == "redis":

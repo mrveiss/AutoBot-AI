@@ -461,6 +461,128 @@ class ReusabilityReport(BaseModel):
 
 # Advanced Codebase Analytics Endpoints
 
+# Declaration patterns for analysis (Issue #315 - extracted)
+DECLARATION_PATTERNS = {
+    "functions": [
+        r"def\s+(\w+)\s*\(",  # Python functions
+        r"function\s+(\w+)\s*\(",  # JavaScript functions
+        r"async\s+def\s+(\w+)\s*\(",  # Python async functions
+        r"const\s+(\w+)\s*=\s*\(",  # JS arrow functions
+        r"(\w+)\s*=\s*async\s*\(",  # JS async arrow functions
+    ],
+    "classes": [
+        r"class\s+(\w+)",  # Python/JS classes
+        r"interface\s+(\w+)",  # TypeScript interfaces
+        r"type\s+(\w+)\s*=",  # Type definitions
+    ],
+    "imports": [
+        r"from\s+[\w.]+\s+import\s+(\w+)",  # Python imports
+        r"import\s+{([^}]+)}",  # JS destructured imports
+        r"import\s+(\w+)",  # Simple imports
+    ],
+    "variables": [
+        r"(\w+)\s*=\s*[^=]",  # Variable assignments
+        r"const\s+(\w+)\s*=",  # JS constants
+        r"let\s+(\w+)\s*=",  # JS variables
+        r"var\s+(\w+)\s*=",  # JS variables
+    ],
+}
+
+
+def _extract_declaration_names(match_text: str) -> List[str]:
+    """Extract declaration names from match, handling destructured imports (Issue #315)."""
+    if "," in match_text:
+        return [name.strip() for name in match_text.split(",") if name.strip()]
+    return [match_text.strip()] if match_text.strip() else []
+
+
+def _update_declaration_stats(
+    declaration_stats: dict,
+    name: str,
+    file_path: str,
+    line_number: int,
+    context_lines: str,
+) -> None:
+    """Update declaration statistics for a single name (Issue #315)."""
+    if name and len(name) > 1:  # Filter out single characters
+        declaration_stats[name]["definition_count"] += 1
+        declaration_stats[name]["files"].add(file_path)
+        declaration_stats[name]["lines"].append(line_number)
+        declaration_stats[name]["contexts"].append(context_lines)
+
+
+async def _process_pattern_matches(
+    pattern: str,
+    declaration_stats: dict,
+) -> None:
+    """Process matches for a single pattern (Issue #315)."""
+    search_results = await search_codebase(
+        query=pattern, search_type="regex", max_results=1000
+    )
+
+    for result in search_results:
+        matches = re.finditer(pattern, result.content, re.MULTILINE)
+        for match in matches:
+            match_text = match.group(1) if match.groups() else match.group(0)
+            for name in _extract_declaration_names(match_text):
+                _update_declaration_stats(
+                    declaration_stats,
+                    name,
+                    result.file_path,
+                    result.line_number,
+                    result.context_lines,
+                )
+
+
+async def _count_usages(declaration_stats: dict) -> None:
+    """Count usages for all declarations (Issue #315)."""
+    for name in list(declaration_stats.keys()):
+        usage_results = await search_codebase(
+            query=name, search_type="exact", max_results=500
+        )
+        declaration_stats[name]["usage_count"] = len(usage_results)
+
+
+def _build_type_results(
+    declaration_stats: dict, pattern_type: str
+) -> List[dict]:
+    """Build result list for a pattern type (Issue #315)."""
+    results = []
+    for name, stats in declaration_stats.items():
+        if stats["definition_count"] > 0:
+            results.append({
+                "name": name,
+                "type": pattern_type[:-1],  # Remove 's' from end
+                "definition_count": stats["definition_count"],
+                "usage_count": stats["usage_count"],
+                "files": list(stats["files"]),
+                "reusability_score": min(
+                    stats["usage_count"] / max(stats["definition_count"], 1),
+                    10.0,
+                ),
+                "lines": stats["lines"][:10],  # Limit to first 10
+            })
+    return sorted(results, key=lambda x: x["usage_count"], reverse=True)[:50]
+
+
+def _build_reusability_insights(analysis_results: dict) -> dict:
+    """Build reusability insights from analysis results (Issue #315)."""
+    all_items = [
+        item for results in analysis_results.values() for item in results
+    ]
+    return {
+        "highly_reusable": [
+            item for item in all_items if item["reusability_score"] > 5
+        ][:20],
+        "underutilized": [
+            item for item in all_items
+            if item["definition_count"] > 1 and item["usage_count"] < 3
+        ][:20],
+        "potential_duplicates": [
+            item for item in all_items if item["definition_count"] > 3
+        ][:20],
+    }
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -483,121 +605,34 @@ async def analyze_declarations(request: AnalyticsRequest):
         if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
-        # Analyze declarations across all files
-        declaration_stats = defaultdict(
-            lambda: {
-                "definition_count": 0,
-                "usage_count": 0,
-                "files": set(),
-                "lines": [],
-                "contexts": [],
-            }
-        )
-
-        # Search for common declaration patterns
-        patterns = {
-            "functions": [
-                r"def\s+(\w+)\s*\(",  # Python functions
-                r"function\s+(\w+)\s*\(",  # JavaScript functions
-                r"async\s+def\s+(\w+)\s*\(",  # Python async functions
-                r"const\s+(\w+)\s*=\s*\(",  # JS arrow functions
-                r"(\w+)\s*=\s*async\s*\(",  # JS async arrow functions
-            ],
-            "classes": [
-                r"class\s+(\w+)",  # Python/JS classes
-                r"interface\s+(\w+)",  # TypeScript interfaces
-                r"type\s+(\w+)\s*=",  # Type definitions
-            ],
-            "imports": [
-                r"from\s+[\w.]+\s+import\s+(\w+)",  # Python imports
-                r"import\s+{([^}]+)}",  # JS destructured imports
-                r"import\s+(\w+)",  # Simple imports
-            ],
-            "variables": [
-                r"(\w+)\s*=\s*[^=]",  # Variable assignments
-                r"const\s+(\w+)\s*=",  # JS constants
-                r"let\s+(\w+)\s*=",  # JS variables
-                r"var\s+(\w+)\s*=",  # JS variables
-            ],
-        }
-
-        # Analyze each pattern type
+        # Analyze each pattern type using extracted helpers (Issue #315)
         analysis_results = {}
 
-        for pattern_type, pattern_list in patterns.items():
+        for pattern_type, pattern_list in DECLARATION_PATTERNS.items():
             logger.info(f"Analyzing {pattern_type} patterns...")
-            type_results = []
 
+            # Fresh stats for each pattern type
+            declaration_stats = defaultdict(
+                lambda: {
+                    "definition_count": 0,
+                    "usage_count": 0,
+                    "files": set(),
+                    "lines": [],
+                    "contexts": [],
+                }
+            )
+
+            # Process all patterns for this type
             for pattern in pattern_list:
-                # Search for declarations using regex search
-                search_results = await search_codebase(
-                    query=pattern, search_type="regex", max_results=1000
-                )
+                await _process_pattern_matches(pattern, declaration_stats)
 
-                # Process results
-                for result in search_results:
-                    matches = re.finditer(pattern, result.content, re.MULTILINE)
-                    for match in matches:
-                        declaration_name = (
-                            match.group(1) if match.groups() else match.group(0)
-                        )
+            # Count usages after all patterns processed
+            await _count_usages(declaration_stats)
 
-                        # Clean up declaration name
-                        if "," in declaration_name:
-                            # Handle destructured imports
-                            names = [
-                                name.strip() for name in declaration_name.split(",")
-                            ]
-                        else:
-                            names = [declaration_name.strip()]
-
-                        for name in names:
-                            if name and len(name) > 1:  # Filter out single characters
-                                declaration_stats[name]["definition_count"] += 1
-                                declaration_stats[name]["files"].add(result.file_path)
-                                declaration_stats[name]["lines"].append(
-                                    result.line_number
-                                )
-                                declaration_stats[name]["contexts"].append(
-                                    result.context_lines
-                                )
-
-                # Also search for usage of these declarations
-                for declaration_name in list(declaration_stats.keys()):
-                    usage_results = await search_codebase(
-                        query=declaration_name, search_type="exact", max_results=500
-                    )
-
-                    declaration_stats[declaration_name]["usage_count"] = len(
-                        usage_results
-                    )
-
-            # Convert to structured results
-            for name, stats in declaration_stats.items():
-                if stats["definition_count"] > 0:  # Only include declared items
-                    type_results.append(
-                        {
-                            "name": name,
-                            "type": pattern_type[:-1],  # Remove 's' from end
-                            "definition_count": stats["definition_count"],
-                            "usage_count": stats["usage_count"],
-                            "files": list(stats["files"]),
-                            "reusability_score": min(
-                                stats["usage_count"]
-                                / max(stats["definition_count"], 1),
-                                10.0,
-                            ),
-                            "lines": stats["lines"][
-                                :10
-                            ],  # Limit to first 10 occurrences
-                        }
-                    )
-
-            analysis_results[pattern_type] = sorted(
-                type_results, key=lambda x: x["usage_count"], reverse=True
-            )[
-                :50
-            ]  # Top 50 most used
+            # Build results for this type
+            analysis_results[pattern_type] = _build_type_results(
+                declaration_stats, pattern_type
+            )
 
         # Generate summary statistics
         total_declarations = sum(len(results) for results in analysis_results.values())
@@ -615,29 +650,10 @@ async def analyze_declarations(request: AnalyticsRequest):
                     "most_reused_declaration": most_reused["name"],
                     "max_usage_count": most_reused["usage_count"],
                     "analysis_root": request.root_path,
-                    "pattern_types_analyzed": list(patterns.keys()),
+                    "pattern_types_analyzed": list(DECLARATION_PATTERNS.keys()),
                 },
                 "declarations_by_type": analysis_results,
-                "reusability_insights": {
-                    "highly_reusable": [
-                        item
-                        for results in analysis_results.values()
-                        for item in results
-                        if item["reusability_score"] > 5
-                    ][:20],
-                    "underutilized": [
-                        item
-                        for results in analysis_results.values()
-                        for item in results
-                        if item["definition_count"] > 1 and item["usage_count"] < 3
-                    ][:20],
-                    "potential_duplicates": [
-                        item
-                        for results in analysis_results.values()
-                        for item in results
-                        if item["definition_count"] > 3
-                    ][:20],
-                },
+                "reusability_insights": _build_reusability_insights(analysis_results),
             },
         )
 

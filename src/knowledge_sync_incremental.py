@@ -46,6 +46,68 @@ APPROVAL_KEYWORDS = {"approved", "denied", "executed", "rejected"}
 PROJECT_ROOT_FILES = {"README.md", "CLAUDE.md"}
 
 
+async def _delete_fact_safe(kb: "KnowledgeBase", fact_id: str) -> bool:
+    """Safely delete a fact from knowledge base (Issue #315 - extracted helper)."""
+    try:
+        await kb.delete_fact(fact_id)
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to delete fact {fact_id}: {e}")
+        return False
+
+
+async def _process_file_with_semaphore(
+    semaphore: asyncio.Semaphore,
+    processor: "IncrementalKnowledgeSync",
+    file_path: Path,
+) -> "FileMetadata":
+    """Process file with semaphore for concurrency control (Issue #315 - extracted helper)."""
+    async with semaphore:
+        return await processor._process_file_with_gpu_chunking(file_path)
+
+
+async def _read_file_content(file_path: Path) -> Optional[str]:
+    """Read file content with UTF-8 encoding (Issue #315 - extracted helper)."""
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            return await f.read()
+    except OSError as e:
+        logger.warning(f"Failed to read file {file_path}: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to analyze {file_path}: {e}")
+        return None
+
+
+def _classify_file_change(
+    file_metadata: Dict[str, "FileMetadata"],
+    str_path: str,
+    current_hash: str,
+    file_stat,
+    relative_path: Path,
+) -> Optional[str]:
+    """Classify file as changed, timestamp-only, or new (Issue #315 - extracted helper).
+
+    Returns: 'changed', 'timestamp', 'new', or None for no action needed.
+    """
+    if str_path not in file_metadata:
+        logger.debug(f"New file: {relative_path}")
+        return "new"
+
+    existing_metadata = file_metadata[str_path]
+
+    if existing_metadata.content_hash != current_hash:
+        logger.debug(f"Content changed: {relative_path}")
+        return "changed"
+
+    if existing_metadata.modified_time != file_stat.st_mtime:
+        existing_metadata.modified_time = file_stat.st_mtime
+        logger.debug(f"Timestamp updated: {relative_path}")
+        return "timestamp"
+
+    return None
+
+
 @dataclass
 class FileMetadata:
     """Metadata for tracking file changes and knowledge sync state."""
@@ -62,6 +124,7 @@ class FileMetadata:
     processing_time: float = 0.0
 
     def __post_init__(self):
+        """Initialize default empty lists for vector and fact ID fields."""
         if self.vector_ids is None:
             self.vector_ids = []
         if self.fact_ids is None:
@@ -102,6 +165,7 @@ class IncrementalKnowledgeSync:
     """
 
     def __init__(self, project_root: str = None):
+        """Initialize incremental sync with project root and file tracking."""
         import os
 
         if project_root is None:
@@ -243,11 +307,36 @@ class IncrementalKnowledgeSync:
 
         return unique_files
 
+    async def _classify_and_append_file(
+        self,
+        file_path: Path,
+        changed_files: List[Path],
+        new_files: List[Path],
+    ) -> None:
+        """Classify a single file and append to appropriate list (Issue #315 - extracted)."""
+        content = await _read_file_content(file_path)
+        if content is None:
+            return
+
+        current_hash = self._compute_content_hash(content)
+        file_stat = file_path.stat()
+        str_path = str(file_path)
+        relative_path = file_path.relative_to(self.project_root)
+
+        classification = _classify_file_change(
+            self.file_metadata, str_path, current_hash, file_stat, relative_path
+        )
+
+        if classification == "changed":
+            changed_files.append(file_path)
+        elif classification == "new":
+            new_files.append(file_path)
+
     async def _analyze_file_changes(
         self, files: List[Path]
     ) -> Tuple[List[Path], List[str], List[Path]]:
         """
-        Analyze files for changes using content hashing.
+        Analyze files for changes using content hashing (Issue #315 - refactored).
 
         Returns:
             (changed_files, removed_files, new_files)
@@ -258,39 +347,7 @@ class IncrementalKnowledgeSync:
 
         for file_path in files:
             current_files.add(str(file_path))
-            relative_path = file_path.relative_to(self.project_root)
-
-            try:
-                # Read file content
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    content = await f.read()
-
-                # Compute current hash
-                current_hash = self._compute_content_hash(content)
-                file_stat = file_path.stat()
-
-                # Check if file exists in metadata
-                str_path = str(file_path)
-                if str_path in self.file_metadata:
-                    existing_metadata = self.file_metadata[str_path]
-
-                    # Compare content hash (most reliable)
-                    if existing_metadata.content_hash != current_hash:
-                        changed_files.append(file_path)
-                        logger.debug(f"Content changed: {relative_path}")
-                    elif existing_metadata.modified_time != file_stat.st_mtime:
-                        # Timestamp changed but content same - update metadata only
-                        existing_metadata.modified_time = file_stat.st_mtime
-                        logger.debug(f"Timestamp updated: {relative_path}")
-                else:
-                    # New file
-                    new_files.append(file_path)
-                    logger.debug(f"New file: {relative_path}")
-
-            except OSError as e:
-                logger.warning(f"Failed to read file {file_path}: {e}")
-            except Exception as e:
-                logger.warning(f"Failed to analyze {file_path}: {e}")
+            await self._classify_and_append_file(file_path, changed_files, new_files)
 
         # Find removed files
         removed_files = []
@@ -394,58 +451,70 @@ class IncrementalKnowledgeSync:
             logger.error(f"Failed to process {file_path}: {e}")
             return None
 
+    def _get_category_keywords(self) -> dict:
+        """Get keyword mappings for category determination (Issue #315)."""
+        return {
+            "user-guide": ("user_guide", "guides"),
+            "developer-docs": ("developer", "dev"),
+            "api-docs": ("api",),
+            "architecture": ("architecture", "design"),
+            "security": ("security",),
+            "reports": ("reports",),
+            "troubleshooting": ("troubleshooting",),
+        }
+
     def _determine_category(self, relative_path: Path) -> str:
-        """Determine document category for better organization."""
+        """Determine document category for better organization (Issue #315)."""
         path_str = str(relative_path).lower()
 
-        if "user_guide" in path_str or "guides" in path_str:
-            return "user-guide"
-        elif "developer" in path_str or "dev" in path_str:
-            return "developer-docs"
-        elif "api" in path_str:
-            return "api-docs"
-        elif "architecture" in path_str or "design" in path_str:
-            return "architecture"
-        elif "security" in path_str:
-            return "security"
-        elif "reports" in path_str:
-            return "reports"
-        elif "troubleshooting" in path_str:
-            return "troubleshooting"
-        elif relative_path.name in PROJECT_ROOT_FILES:  # O(1) lookup (Issue #326)
+        # Check keyword-based categories via lookup table
+        for category, keywords in self._get_category_keywords().items():
+            if any(keyword in path_str for keyword in keywords):
+                return category
+
+        # Check special cases
+        if relative_path.name in PROJECT_ROOT_FILES:  # O(1) lookup (Issue #326)
             return "project-overview"
-        elif path_str.endswith(".py"):
+        if path_str.endswith(".py"):
             return "source-code"
-        else:
-            return "documentation"
+
+        return "documentation"
 
     async def _remove_obsolete_knowledge(self, removed_files: List[str]):
-        """Remove knowledge entries for deleted files."""
+        """Remove knowledge entries for deleted files (Issue #315 - refactored)."""
         for file_path in removed_files:
-            if file_path in self.file_metadata:
-                metadata = self.file_metadata[file_path]
+            if file_path not in self.file_metadata:
+                continue
 
-                # Remove all facts in parallel - eliminates N+1 sequential deletions
-                if metadata.fact_ids:
-                    async def delete_fact_safe(fact_id: str) -> bool:
-                        try:
-                            await self.kb.delete_fact(fact_id)
-                            return True
-                        except Exception as e:
-                            logger.warning(f"Failed to delete fact {fact_id}: {e}")
-                            return False
+            metadata = self.file_metadata[file_path]
 
-                    await asyncio.gather(
-                        *[delete_fact_safe(fid) for fid in metadata.fact_ids],
-                        return_exceptions=True
-                    )
-
-                # Remove from metadata
-                del self.file_metadata[file_path]
-
-                logger.info(
-                    f"Removed knowledge for: {Path(file_path).relative_to(self.project_root)}"
+            # Remove all facts in parallel - eliminates N+1 sequential deletions
+            if metadata.fact_ids:
+                await asyncio.gather(
+                    *[_delete_fact_safe(self.kb, fid) for fid in metadata.fact_ids],
+                    return_exceptions=True
                 )
+
+            # Remove from metadata
+            del self.file_metadata[file_path]
+
+            logger.info(
+                f"Removed knowledge for: {Path(file_path).relative_to(self.project_root)}"
+            )
+
+    def _update_metadata_from_results(
+        self,
+        changed_files: List[Path],
+        results: List[Any],
+        metrics: SyncMetrics,
+    ) -> None:
+        """Update metadata from processing results (Issue #315 - extracted helper)."""
+        for file_path, result in zip(changed_files, results):
+            if isinstance(result, FileMetadata):
+                self.file_metadata[str(file_path)] = result
+                metrics.total_chunks_processed += result.chunk_count
+            elif isinstance(result, Exception):
+                logger.error(f"Failed to process {file_path}: {result}")
 
     async def _invalidate_expired_knowledge(self):
         """Remove knowledge that has exceeded TTL."""
@@ -514,22 +583,12 @@ class IncrementalKnowledgeSync:
                 # Process files in parallel batches for maximum performance
                 semaphore = asyncio.Semaphore(self.max_concurrent_files)
 
-                async def process_file_with_semaphore(file_path):
-                    async with semaphore:
-                        return await self._process_file_with_gpu_chunking(file_path)
-
-                # Process files concurrently
-                tasks = [process_file_with_semaphore(fp) for fp in changed_files]
+                # Process files concurrently using extracted helper (Issue #315)
+                tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Update metadata for successful results
-                for file_path, result in zip(changed_files, results):
-                    if isinstance(result, FileMetadata):
-                        self.file_metadata[str(file_path)] = result
-                        metrics.total_chunks_processed += result.chunk_count
-                    elif isinstance(result, Exception):
-                        logger.error(f"Failed to process {file_path}: {result}")
-
+                self._update_metadata_from_results(changed_files, results, metrics)
                 metrics.gpu_acceleration_used = True
             else:
                 logger.info("No files to process - all up to date!")
@@ -670,6 +729,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     async def main():
+        """Run sync CLI command based on parsed arguments."""
         if args.status:
             sync = IncrementalKnowledgeSync()
             await sync.initialize()

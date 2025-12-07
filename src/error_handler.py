@@ -75,8 +75,11 @@ def with_error_handling(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Inner decorator that wraps function with error handling."""
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
+            """Sync wrapper that catches and handles exceptions."""
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -91,6 +94,7 @@ def with_error_handling(
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> T:
+            """Async wrapper that catches and handles exceptions."""
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
@@ -108,6 +112,29 @@ def with_error_handling(
         return wrapper
 
     return decorator
+
+
+# (Issue #315 - extracted) Helper function for retry logging and delay
+def _handle_retry_attempt(
+    exception: Exception,
+    attempt: int,
+    max_attempts: int,
+    func_name: str,
+    on_retry: Optional[Callable[[Exception, int], None]],
+) -> None:
+    """Handle logging and callback for retry attempt"""
+    if on_retry:
+        on_retry(exception, attempt + 1)
+    logger.warning(
+        f"Retry {attempt + 1}/{max_attempts} for "
+        f"{func_name} after {type(exception).__name__}: {exception}"
+    )
+
+
+# (Issue #315 - extracted) Helper function for max retry logging
+def _log_max_retries_exceeded(max_attempts: int, func_name: str) -> None:
+    """Log when max retries are exceeded"""
+    logger.error(f"Max retries ({max_attempts}) exceeded for {func_name}")
 
 
 def retry(
@@ -129,8 +156,11 @@ def retry(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Inner decorator that wraps function with retry logic."""
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
+            """Sync wrapper that retries function on specified exceptions."""
             last_exception = None
             current_delay = delay
 
@@ -139,25 +169,20 @@ def retry(
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if attempt < max_attempts - 1:
-                        if on_retry:
-                            on_retry(e, attempt + 1)
-                        logger.warning(
-                            f"Retry {attempt + 1}/{max_attempts} for "
-                            f"{func.__name__} after {type(e).__name__}: {e}"
-                        )
-                        time.sleep(current_delay)
-                        current_delay *= backoff
-                    else:
-                        logger.error(
-                            f"Max retries ({max_attempts}) exceeded for "
-                            f"{func.__name__}"
-                        )
+                    # (Issue #315 - refactored) Use guard clause to reduce nesting
+                    if attempt >= max_attempts - 1:
+                        _log_max_retries_exceeded(max_attempts, func.__name__)
+                        continue
+
+                    _handle_retry_attempt(e, attempt, max_attempts, func.__name__, on_retry)
+                    time.sleep(current_delay)
+                    current_delay *= backoff
 
             raise last_exception
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> T:
+            """Async wrapper that retries function on specified exceptions."""
             last_exception = None
             current_delay = delay
 
@@ -166,20 +191,14 @@ def retry(
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if attempt < max_attempts - 1:
-                        if on_retry:
-                            on_retry(e, attempt + 1)
-                        logger.warning(
-                            f"Retry {attempt + 1}/{max_attempts} for "
-                            f"{func.__name__} after {type(e).__name__}: {e}"
-                        )
-                        await asyncio.sleep(current_delay)
-                        current_delay *= backoff
-                    else:
-                        logger.error(
-                            f"Max retries ({max_attempts}) exceeded for "
-                            f"{func.__name__}"
-                        )
+                    # (Issue #315 - refactored) Use guard clause to reduce nesting
+                    if attempt >= max_attempts - 1:
+                        _log_max_retries_exceeded(max_attempts, func.__name__)
+                        continue
+
+                    _handle_retry_attempt(e, attempt, max_attempts, func.__name__, on_retry)
+                    await asyncio.sleep(current_delay)
+                    current_delay *= backoff
 
             raise last_exception
 
@@ -201,6 +220,7 @@ class CircuitBreaker:
         recovery_timeout: float = 60.0,
         expected_exception: Type[Exception] = Exception,
     ):
+        """Initialize circuit breaker with failure threshold and recovery settings."""
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.expected_exception = expected_exception
@@ -211,17 +231,25 @@ class CircuitBreaker:
 
     @property
     def state(self) -> str:
-        if self._state == "open":
-            if (
-                self.last_failure_time
-                and time.time() - self.last_failure_time >= self.recovery_timeout
-            ):
-                self._state = "half-open"
+        """Get current circuit breaker state, auto-transitioning to half-open after timeout."""
+        # (Issue #315 - refactored) Use guard clauses to reduce nesting
+        if self._state != "open":
+            return self._state
+
+        if not self.last_failure_time:
+            return self._state
+
+        if time.time() - self.last_failure_time >= self.recovery_timeout:
+            self._state = "half-open"
+
         return self._state
 
     def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
+        """Decorate a function with circuit breaker protection."""
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
+            """Sync wrapper that enforces circuit breaker state before execution."""
             if self.state == "open":
                 raise InternalError(f"Circuit breaker is open for {func.__name__}")
 
@@ -239,6 +267,7 @@ class CircuitBreaker:
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> T:
+            """Async wrapper that enforces circuit breaker state before execution."""
             if self.state == "open":
                 raise InternalError(f"Circuit breaker is open for {func.__name__}")
 
@@ -289,6 +318,16 @@ def error_context(operation: str, reraise: bool = True):
             raise
 
 
+# (Issue #315 - extracted) Helper function to build AutoBotError response
+def _build_autobot_error_response(error: AutoBotError) -> dict:
+    """Build response dictionary for AutoBotError"""
+    response = {"error": error.safe_message, "error_type": type(error).__name__}
+    # Include specific fields for certain error types
+    if hasattr(error, "field") and error.field:
+        response["field"] = error.field
+    return response
+
+
 def safe_api_error(error: Exception, request_id: Optional[str] = None) -> dict:
     """
     Convert an exception to a safe API error response.
@@ -300,11 +339,9 @@ def safe_api_error(error: Exception, request_id: Optional[str] = None) -> dict:
     Returns:
         Dictionary safe for API response
     """
+    # (Issue #315 - refactored) Extract AutoBotError handling to reduce nesting
     if isinstance(error, AutoBotError):
-        response = {"error": error.safe_message, "error_type": type(error).__name__}
-        # Include specific fields for certain error types
-        if hasattr(error, "field") and error.field:
-            response["field"] = error.field
+        response = _build_autobot_error_response(error)
     else:
         # Never expose internal error details
         response = {

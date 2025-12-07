@@ -277,6 +277,7 @@ class StreamingCommandExecutor:
         commentary_counter = 0
 
         async def read_stdout():
+            """Async generator yielding stdout chunks with periodic commentary."""
             nonlocal stdout_buffer, commentary_counter
 
             while True:
@@ -315,6 +316,7 @@ class StreamingCommandExecutor:
                     break
 
         async def read_stderr():
+            """Async generator yielding stderr chunks from process output."""
             nonlocal stderr_buffer
 
             while True:
@@ -549,6 +551,7 @@ if __name__ == "__main__":
     # Mock components for testing
     class MockLLMInterface:
         async def generate_response(self, prompt, **kwargs):
+            """Generate mock LLM response based on prompt keywords."""
             # Simple mock responses based on prompt content
             if "progress" in prompt.lower():
                 return "Processing data..."
@@ -559,11 +562,13 @@ if __name__ == "__main__":
 
     class MockCommandValidator:
         def is_command_safe(self, command):
+            """Check if command is safe by filtering dangerous patterns."""
             # Block obviously dangerous commands
             dangerous = ["rm -r", "format", "del /s"]
             return not any(danger in command.lower() for danger in dangerous)
 
     async def test_executor():
+        """Test streaming executor with mock components and sample commands."""
         # Create mock components
         llm = MockLLMInterface()
         validator = MockCommandValidator()

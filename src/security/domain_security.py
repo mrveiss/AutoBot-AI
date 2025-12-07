@@ -476,24 +476,40 @@ class DomainSecurityManager:
 
         self.last_threat_update = current_time
 
-    def _parse_threat_feed(self, content: str, format_type: str) -> Set[str]:
-        """Parse threat feed content and extract domains"""
-        domains = set()
+    def _extract_domain_from_line(self, line: str) -> str | None:
+        """Extract domain from a threat feed line (Issue #315: extracted).
 
-        if format_type == "text":
-            for line in content.split("\n"):
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    # Extract domain from URL or use as-is
-                    if line.startswith("http"):
-                        try:
-                            parsed = urlparse(line)
-                            if parsed.hostname:
-                                domains.add(parsed.hostname.lower())
-                        except Exception:
-                            continue
-                    else:
-                        domains.add(line.lower())
+        Args:
+            line: Single line from threat feed (URL or domain)
+
+        Returns:
+            Lowercase domain name or None if extraction failed
+        """
+        if line.startswith("http"):
+            try:
+                parsed = urlparse(line)
+                return parsed.hostname.lower() if parsed.hostname else None
+            except Exception:
+                return None
+        return line.lower()
+
+    def _parse_threat_feed(self, content: str, format_type: str) -> Set[str]:
+        """Parse threat feed content and extract domains.
+
+        Issue #315: Refactored to use helper method for reduced nesting.
+        """
+        if format_type != "text":
+            return set()
+
+        domains = set()
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            domain = self._extract_domain_from_line(line)
+            if domain:
+                domains.add(domain)
 
         return domains
 

@@ -73,12 +73,15 @@ except ImportError:
         """Fallback AgentManager when the real one is not available"""
 
         async def initialize(self):
+            """Initialize placeholder - no operation when unavailable."""
             pass
 
         async def cleanup(self):
+            """Cleanup placeholder - no operation when unavailable."""
             pass
 
         async def execute_agent_task(self, agent_name, task, context=None):
+            """Return error indicating agent manager is not available."""
             return {"error": "Agent manager not available", "agent_name": agent_name}
 
 
@@ -199,6 +202,7 @@ class OrchestratorConfig:
     """Configuration for the Orchestrator"""
 
     def __init__(self, config_manager):
+        """Initialize orchestrator config from config manager."""
         self.config_manager = config_manager
         self._load_config()
 
@@ -252,6 +256,7 @@ class ConsolidatedOrchestrator:
     """
 
     def __init__(self, config_mgr=None):
+        """Initialize consolidated orchestrator with all core components."""
         # Use provided config_manager or fall back to global config_manager
         from src.unified_config_manager import config_manager as global_config_manager
 
@@ -393,8 +398,58 @@ class ConsolidatedOrchestrator:
 
         logger.info(f"Initialized {len(default_agents)} default agent profiles")
 
+    async def _validate_llm_model(self, model_name: str) -> bool:
+        """Test if an LLM model is available and working (Issue #315: extracted).
+
+        Args:
+            model_name: The model name to test
+
+        Returns:
+            True if model works, False otherwise
+        """
+        try:
+            test_response = await self.llm_interface.generate_response(
+                "Test connection", model=model_name, max_tokens=10
+            )
+            return bool(test_response)
+        except Exception as e:
+            logger.debug(f"Model test failed for {model_name}: {e}")
+            return False
+
+    async def _ensure_working_llm_model(self) -> None:
+        """Ensure we have a working LLM model (Issue #315: depth reduction).
+
+        Tries the configured orchestrator model first, then falls back to default.
+
+        Raises:
+            Exception: If no working model is found
+        """
+        # Try primary model
+        if await self._validate_llm_model(self.config.orchestrator_llm_model):
+            logger.info(
+                f"✅ Orchestrator model '{self.config.orchestrator_llm_model}' is working"
+            )
+            return
+
+        logger.warning(
+            f"⚠️ Orchestrator model '{self.config.orchestrator_llm_model}' test failed"
+        )
+
+        # Try fallback model
+        fallback_model = config_manager.get_default_llm_model()
+        if await self._validate_llm_model(fallback_model):
+            logger.info(f"✅ Using fallback model: {fallback_model}")
+            self.config.orchestrator_llm_model = fallback_model
+            return
+
+        logger.error(f"❌ Fallback model '{fallback_model}' also failed")
+        raise Exception("No working LLM models available")
+
     async def initialize(self):
-        """Initialize orchestrator components"""
+        """Initialize orchestrator components.
+
+        Issue #315: Refactored to use helper methods for reduced nesting depth.
+        """
         logger.info("Initializing Consolidated Orchestrator...")
 
         try:
@@ -405,47 +460,16 @@ class ConsolidatedOrchestrator:
 
             # Validate LLM connection
             ollama_connected = await self.llm_interface.check_ollama_connection()
-            if ollama_connected:
-                logger.info("✅ Ollama connection established")
-
-                # Test orchestrator model availability
-                try:
-                    test_response = await self.llm_interface.generate_response(
-                        "Test connection",
-                        model=self.config.orchestrator_llm_model,
-                        max_tokens=10,
-                    )
-                    if test_response:
-                        logger.info(
-                            f"✅ Orchestrator model '{self.config.orchestrator_llm_model}' is working"
-                        )
-                    else:
-                        logger.warning(
-                            f"⚠️ Orchestrator model '{self.config.orchestrator_llm_model}' test failed"
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"❌ Orchestrator model '{self.config.orchestrator_llm_model}' is not available: {e}"
-                    )
-                    # Try fallback model
-                    try:
-                        fallback_model = config_manager.get_default_llm_model()
-                        test_response = await self.llm_interface.generate_response(
-                            "Test connection", model=fallback_model, max_tokens=10
-                        )
-                        if test_response:
-                            logger.info(f"✅ Using fallback model: {fallback_model}")
-                            self.config.orchestrator_llm_model = fallback_model
-                        else:
-                            raise Exception("Fallback model also failed")
-                    except Exception as fallback_error:
-                        logger.error(f"❌ Fallback model also failed: {fallback_error}")
-                        raise Exception("No working LLM models available")
-            else:
+            if not ollama_connected:
                 logger.error("❌ Failed to connect to Ollama")
                 raise Exception(
                     "Failed to connect to Ollama or configured models not found."
                 )
+
+            logger.info("✅ Ollama connection established")
+
+            # Issue #315: Use helper for model validation (reduces nesting)
+            await self._ensure_working_llm_model()
 
             self.is_running = True
             self.start_time = datetime.now()

@@ -106,6 +106,32 @@ MAX_LOG_ENTRIES = 100
 MAX_DIFF_LINES = 5000
 
 
+def _is_within_allowed_path(path: Path, allowed_path: Path) -> bool:
+    """Check if path is within allowed directory (Issue #315)."""
+    try:
+        path.relative_to(allowed_path)
+        return True
+    except ValueError:
+        return False
+
+
+def _find_git_root(path: Path, allowed_path: Path) -> bool:
+    """Find git root and verify it's within allowed path (Issue #315)."""
+    # Check if path itself is a git repo
+    git_dir = path / ".git"
+    if git_dir.exists() and git_dir.is_dir():
+        return True
+
+    # Walk up to find git repo
+    current = path
+    while current != current.parent:
+        if (current / ".git").exists():
+            return _is_within_allowed_path(current, allowed_path)
+        current = current.parent
+
+    return False
+
+
 def is_repository_allowed(repo_path: str) -> bool:
     """
     Validate repository path against whitelist
@@ -115,48 +141,33 @@ def is_repository_allowed(repo_path: str) -> bool:
     - Prevent path traversal
     - Verify git repository exists
     - Prevent symlink attacks
+
+    Refactored for Issue #315 - reduced nesting depth from 7 to 3
     """
     try:
         raw_path = Path(repo_path)
         path = raw_path.resolve()
-
-        # Check against whitelist
-        for allowed in ALLOWED_REPOSITORIES:
-            allowed_path = Path(allowed).resolve()
-            if path == allowed_path or str(path).startswith(str(allowed_path) + "/"):
-                # Security: Verify resolved path stays within allowed directory
-                # This prevents symlink escape attacks
-                try:
-                    path.relative_to(allowed_path)
-                except ValueError:
-                    # Path is not relative to allowed_path (symlink escape)
-                    logger.warning(
-                        f"Symlink escape attempt detected: {repo_path} -> {path}"
-                    )
-                    continue
-
-                # Verify it's actually a git repository
-                git_dir = path / ".git"
-                if git_dir.exists() and git_dir.is_dir():
-                    return True
-                # Check if we're in a subdirectory of a git repo
-                current = path
-                while current != current.parent:
-                    if (current / ".git").exists():
-                        # Also verify this parent is within allowed_path
-                        try:
-                            current.relative_to(allowed_path)
-                            return True
-                        except ValueError:
-                            break
-                    current = current.parent
-
-        logger.warning(f"Repository not in whitelist: {repo_path}")
-        return False
-
     except Exception as e:
         logger.error(f"Repository validation error for {repo_path}: {e}")
         return False
+
+    # Check against whitelist
+    for allowed in ALLOWED_REPOSITORIES:
+        allowed_path = Path(allowed).resolve()
+        if path != allowed_path and not str(path).startswith(str(allowed_path) + "/"):
+            continue
+
+        # Security: Verify resolved path stays within allowed directory
+        if not _is_within_allowed_path(path, allowed_path):
+            logger.warning(f"Symlink escape attempt detected: {repo_path} -> {path}")
+            continue
+
+        # Verify it's actually a git repository (or subdirectory of one)
+        if _find_git_root(path, allowed_path):
+            return True
+
+    logger.warning(f"Repository not in whitelist: {repo_path}")
+    return False
 
 
 def sanitize_git_args(args: List[str]) -> bool:

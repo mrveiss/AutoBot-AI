@@ -237,56 +237,74 @@ class MCPManualService:
 
     async def _real_manual_lookup(self, command: str) -> Optional[Dict[str, Any]]:
         """
-        Real manual lookup using MCP filesystem server and system commands.
+        Real manual lookup using MCP filesystem server and system commands (Issue #315 - refactored).
 
         This replaces the mock implementation with actual manual page retrieval.
         """
         try:
             # First, try to get from existing command manager
-            if self.command_manager:
-                existing_manual = self.command_manager.get_manual(command)
-                if existing_manual:
-                    return {
-                        "name": existing_manual.command_name,
-                        "section": str(existing_manual.section),
-                        "description": existing_manual.description,
-                        "synopsis": existing_manual.syntax,
-                        "content": existing_manual.manual_text,
-                        "source": "command_manager",
-                        "risk_level": existing_manual.risk_level,
-                        "category": existing_manual.category,
-                        "examples": existing_manual.examples,
-                        "related_commands": existing_manual.related_commands,
-                    }
+            existing_manual = await self._try_get_from_command_manager(command)
+            if existing_manual:
+                return existing_manual
 
             # If not in command manager, try to execute man command
-            manual_text = await self._execute_man_command(command)
-            if manual_text:
-                # Parse the manual text into structured format
-                manual_data = self._parse_manual_text(command, manual_text)
-
-                # Store in command manager if available
-                if self.command_manager and manual_data:
-                    try:
-                        self.command_manager.store_manual(manual_data)
-                    except Exception as e:
-                        logger.warning(f"Failed to store manual for {command}: {e}")
-
-                return {
-                    "name": command,
-                    "section": "1",  # Default section
-                    "description": self._extract_description(command, manual_text),
-                    "synopsis": self._extract_synopsis(command, manual_text),
-                    "content": manual_text,
-                    "source": "system_manual",
-                }
-
-            return None
+            return await self._try_execute_and_parse_man(command)
 
         except Exception as e:
             logger.error(f"Real manual lookup failed for command '{command}': {e}")
             # Fallback to mock data for critical commands
             return await self._fallback_manual_lookup(command)
+
+    async def _try_get_from_command_manager(
+        self, command: str
+    ) -> Optional[Dict[str, Any]]:
+        """Try to get manual from command manager (Issue #315 - extracted)."""
+        if not self.command_manager:
+            return None
+
+        existing_manual = self.command_manager.get_manual(command)
+        if not existing_manual:
+            return None
+
+        return {
+            "name": existing_manual.command_name,
+            "section": str(existing_manual.section),
+            "description": existing_manual.description,
+            "synopsis": existing_manual.syntax,
+            "content": existing_manual.manual_text,
+            "source": "command_manager",
+            "risk_level": existing_manual.risk_level,
+            "category": existing_manual.category,
+            "examples": existing_manual.examples,
+            "related_commands": existing_manual.related_commands,
+        }
+
+    async def _try_execute_and_parse_man(
+        self, command: str
+    ) -> Optional[Dict[str, Any]]:
+        """Execute man command and parse result (Issue #315 - extracted)."""
+        manual_text = await self._execute_man_command(command)
+        if not manual_text:
+            return None
+
+        # Parse the manual text into structured format
+        manual_data = self._parse_manual_text(command, manual_text)
+
+        # Store in command manager if available
+        if self.command_manager and manual_data:
+            try:
+                self.command_manager.store_manual(manual_data)
+            except Exception as e:
+                logger.warning(f"Failed to store manual for {command}: {e}")
+
+        return {
+            "name": command,
+            "section": "1",  # Default section
+            "description": self._extract_description(command, manual_text),
+            "synopsis": self._extract_synopsis(command, manual_text),
+            "content": manual_text,
+            "source": "system_manual",
+        }
 
     async def _execute_man_command(self, command: str) -> Optional[str]:
         """
@@ -850,85 +868,115 @@ class MCPManualService:
     async def _search_file_content(
         self, query: str, file_path: str
     ) -> List[Dict[str, Any]]:
-        """Search content of a specific file."""
-        results = []
-
+        """Search content of a specific file (Issue #315 - refactored)."""
         try:
             # Read file content directly
             file_exists = await asyncio.to_thread(os.path.exists, file_path)
             is_file = await asyncio.to_thread(os.path.isfile, file_path)
-            if file_exists and is_file:
-                try:
-                    async with aiofiles.open(
-                        file_path, "r", encoding="utf-8", errors="ignore"
-                    ) as f:
-                        content = await f.read()
 
-                    if content:
-                        # Search for query in content
-                        matches = self._find_query_matches(query, content, file_path)
-                        results.extend(matches)
+            # Early return if file doesn't exist
+            if not (file_exists and is_file):
+                return []
 
-                except UnicodeDecodeError:
-                    # Try with different encoding for binary files
-                    try:
-                        async with aiofiles.open(
-                            file_path, "r", encoding="latin-1", errors="ignore"
-                        ) as f:
-                            content = await f.read()
-                        if content:
-                            matches = self._find_query_matches(
-                                query, content, file_path
-                            )
-                            results.extend(matches)
-                    except OSError as e:
-                        logger.debug(f"Failed to read file {file_path}: {e}")
-                    except Exception as e:
-                        logger.debug(f"Skipping unreadable file {file_path}: {e}")
-                except OSError as e:
-                    logger.debug(f"Failed to read file {file_path}: {e}")
+            return await self._read_and_search_file(query, file_path)
 
         except Exception as e:
             logger.warning(f"Failed to search file {file_path}: {e}")
+            return []
 
-        return results
+    async def _read_and_search_file(
+        self, query: str, file_path: str
+    ) -> List[Dict[str, Any]]:
+        """Read file with encoding fallback and search (Issue #315 - extracted)."""
+        # Try UTF-8 first
+        content = await self._try_read_file_utf8(file_path)
+        if content:
+            return self._find_query_matches(query, content, file_path)
+
+        # Fallback to latin-1 for binary files
+        content = await self._try_read_file_latin1(file_path)
+        if content:
+            return self._find_query_matches(query, content, file_path)
+
+        return []
+
+    async def _try_read_file_utf8(self, file_path: str) -> Optional[str]:
+        """Try reading file with UTF-8 encoding (Issue #315 - extracted)."""
+        try:
+            async with aiofiles.open(
+                file_path, "r", encoding="utf-8", errors="ignore"
+            ) as f:
+                return await f.read()
+        except (UnicodeDecodeError, OSError) as e:
+            logger.debug(f"UTF-8 read failed for {file_path}: {e}")
+            return None
+        except Exception as e:
+            logger.debug(f"Skipping unreadable file {file_path}: {e}")
+            return None
+
+    async def _try_read_file_latin1(self, file_path: str) -> Optional[str]:
+        """Try reading file with latin-1 encoding (Issue #315 - extracted)."""
+        try:
+            async with aiofiles.open(
+                file_path, "r", encoding="latin-1", errors="ignore"
+            ) as f:
+                return await f.read()
+        except (OSError, Exception) as e:
+            logger.debug(f"Latin-1 read failed for {file_path}: {e}")
+            return None
 
     def _find_query_matches(
         self, query: str, content: str, file_path: str
     ) -> List[Dict[str, Any]]:
-        """Find matches for query in file content."""
+        """Find matches for query in file content (Issue #315 - refactored)."""
         matches = []
         query_lower = query.lower()
         lines = content.split("\n")
 
         for i, line in enumerate(lines):
-            if query_lower in line.lower():
-                # Calculate relevance based on exact match and context
-                relevance = 0.5
-                if query_lower == line.lower().strip():
-                    relevance = 1.0
-                elif query in line:  # Case-sensitive match
-                    relevance = 0.8
-                elif len(line.strip()) < 100:  # Short lines likely more relevant
-                    relevance += 0.2
+            # Skip non-matching lines
+            if query_lower not in line.lower():
+                continue
 
-                # Get context lines
-                start_line = max(0, i - 2)
-                end_line = min(len(lines), i + 3)
-                context = "\n".join(lines[start_line:end_line])
-
-                matches.append(
-                    {
-                        "title": f"{os.path.basename(file_path)} (line {i + 1})",
-                        "content": context,
-                        "source": file_path,
-                        "line_number": i + 1,
-                        "relevance": relevance,
-                        "match_line": line.strip(),
-                    }
-                )
+            # Calculate relevance and create match entry
+            match_entry = self._create_match_entry(query, query_lower, line, i, lines, file_path)
+            matches.append(match_entry)
 
         return matches
+
+    def _create_match_entry(
+        self, query: str, query_lower: str, line: str, line_index: int, all_lines: List[str], file_path: str
+    ) -> Dict[str, Any]:
+        """Create a match entry with relevance and context (Issue #315 - extracted)."""
+        # Calculate relevance based on exact match and context
+        relevance = self._calculate_relevance(query, query_lower, line)
+
+        # Get context lines
+        start_line = max(0, line_index - 2)
+        end_line = min(len(all_lines), line_index + 3)
+        context = "\n".join(all_lines[start_line:end_line])
+
+        return {
+            "title": f"{os.path.basename(file_path)} (line {line_index + 1})",
+            "content": context,
+            "source": file_path,
+            "line_number": line_index + 1,
+            "relevance": relevance,
+            "match_line": line.strip(),
+        }
+
+    def _calculate_relevance(self, query: str, query_lower: str, line: str) -> float:
+        """Calculate relevance score for a match (Issue #315 - extracted)."""
+        relevance = 0.5
+
+        if query_lower == line.lower().strip():
+            relevance = 1.0
+        elif query in line:  # Case-sensitive match
+            relevance = 0.8
+        elif len(line.strip()) < 100:  # Short lines likely more relevant
+            relevance += 0.2
+
+        return relevance
 
     async def _search_command_manuals(self, query: str) -> List[Dict[str, Any]]:
         """Search through stored command manuals."""

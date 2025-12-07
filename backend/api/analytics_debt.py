@@ -355,6 +355,87 @@ def _get_business_impact(severity: DebtSeverity) -> str:
     return mapping.get(severity, "medium")
 
 
+def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract problem data from metadata (Issue #315 - extracted helper)."""
+    return {
+        "type": meta.get("problem_type", "unknown"),
+        "severity": meta.get("severity", "medium"),
+        "file_path": meta.get("file_path", "unknown"),
+        "line_number": int(meta.get("line_number", 0)) if meta.get("line_number") else None,
+        "description": meta.get("description", ""),
+        "suggestion": meta.get("suggestion", ""),
+    }
+
+
+def _get_problems_from_chromadb(code_collection) -> List[Dict[str, Any]]:
+    """Get problems from ChromaDB collection (Issue #315 - extracted helper)."""
+    if not code_collection:
+        return []
+    try:
+        problems_result = code_collection.get(where={"type": "problem"}, include=["metadatas"])
+        if not problems_result.get("metadatas"):
+            return []
+        return [_extract_problem_from_meta(meta) for meta in problems_result["metadatas"]]
+    except Exception as e:
+        logger.warning(f"ChromaDB query failed: {e}")
+        return []
+
+
+async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
+    """Get anti-patterns from Redis (Issue #315 - extracted helper)."""
+    if not redis_client:
+        return []
+    try:
+        ap_data = redis_client.get("antipattern:latest_results")
+        if not ap_data:
+            return []
+        if isinstance(ap_data, bytes):
+            ap_data = ap_data.decode("utf-8")
+        ap_results = json.loads(ap_data)
+        return ap_results.get("anti_patterns", [])
+    except Exception as e:
+        logger.warning(f"Redis anti-pattern fetch failed: {e}")
+        return []
+
+
+def _store_debt_result(debt_result: Dict[str, Any]) -> None:
+    """Store debt calculation result in Redis (Issue #315 - extracted helper)."""
+    debt_redis = get_debt_redis()
+    if not debt_redis:
+        return
+    try:
+        key = f"{DEBT_PREFIX}calculation:{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        debt_redis.set(key, json.dumps(debt_result), ex=86400 * 30)  # Keep 30 days
+        debt_redis.set(f"{DEBT_PREFIX}latest", key)
+    except Exception as e:
+        logger.warning(f"Failed to store debt calculation: {e}")
+
+
+def _decode_redis_value(value: Any) -> Optional[str]:
+    """Decode Redis value to string if bytes (Issue #315 - extracted helper)."""
+    if value is None:
+        return None
+    return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
+def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
+    """Get latest debt data from Redis (Issue #315 - extracted helper)."""
+    redis_client = get_debt_redis()
+    if not redis_client:
+        return None
+    try:
+        latest_key = _decode_redis_value(redis_client.get(f"{DEBT_PREFIX}latest"))
+        if not latest_key:
+            return None
+        debt_data = _decode_redis_value(redis_client.get(latest_key))
+        if not debt_data:
+            return None
+        return json.loads(debt_data)
+    except Exception as e:
+        logger.warning(f"Redis fetch failed: {e}")
+        return None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="calculate_debt",
@@ -363,74 +444,25 @@ def _get_business_impact(severity: DebtSeverity) -> str:
 @router.post("/calculate")
 async def calculate_technical_debt(request: DebtCalculationRequest):
     """
-    Calculate technical debt for the codebase.
+    Calculate technical debt for the codebase (Issue #315 - refactored).
 
     Analyzes code quality issues and estimates remediation cost.
     """
     try:
-        # Try to get analysis data from codebase analytics
-        from backend.api.codebase_analytics import (
-            get_code_collection,
-            get_redis_connection,
-        )
+        from backend.api.codebase_analytics import get_code_collection, get_redis_connection
 
-        analysis_data = {"anti_patterns": [], "problems": [], "hardcodes": [], "complexity": {}}
-
-        # Get problems from ChromaDB
         code_collection = get_code_collection()
-        if code_collection:
-            try:
-                # Query problems
-                problems_result = code_collection.get(
-                    where={"type": "problem"}, include=["metadatas"]
-                )
-                if problems_result.get("metadatas"):
-                    for meta in problems_result["metadatas"]:
-                        analysis_data["problems"].append(
-                            {
-                                "type": meta.get("problem_type", "unknown"),
-                                "severity": meta.get("severity", "medium"),
-                                "file_path": meta.get("file_path", "unknown"),
-                                "line_number": (
-                                    int(meta.get("line_number", 0))
-                                    if meta.get("line_number")
-                                    else None
-                                ),
-                                "description": meta.get("description", ""),
-                                "suggestion": meta.get("suggestion", ""),
-                            }
-                        )
-            except Exception as e:
-                logger.warning(f"ChromaDB query failed: {e}")
-
-        # Get anti-patterns from Redis if available
         redis_client = await get_redis_connection()
-        if redis_client:
-            try:
-                # Check for cached anti-pattern analysis
-                ap_data = redis_client.get("antipattern:latest_results")
-                if ap_data:
-                    if isinstance(ap_data, bytes):
-                        ap_data = ap_data.decode("utf-8")
-                    ap_results = json.loads(ap_data)
-                    analysis_data["anti_patterns"] = ap_results.get("anti_patterns", [])
-            except Exception as e:
-                logger.warning(f"Redis anti-pattern fetch failed: {e}")
 
-        # Calculate debt
+        analysis_data = {
+            "anti_patterns": await _get_antipatterns_from_redis(redis_client),
+            "problems": _get_problems_from_chromadb(code_collection),
+            "hardcodes": [],
+            "complexity": {},
+        }
+
         debt_result = await calculate_debt_from_analysis(analysis_data, request.hourly_rate)
-
-        # Store result in Redis for tracking
-        debt_redis = get_debt_redis()
-        if debt_redis:
-            try:
-                key = f"{DEBT_PREFIX}calculation:{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                debt_redis.set(key, json.dumps(debt_result), ex=86400 * 30)  # Keep 30 days
-
-                # Update latest pointer
-                debt_redis.set(f"{DEBT_PREFIX}latest", key)
-            except Exception as e:
-                logger.warning(f"Failed to store debt calculation: {e}")
+        _store_debt_result(debt_result)
 
         return JSONResponse(
             {"status": "success", "data": debt_result, "target_path": request.target_path}
@@ -451,50 +483,33 @@ async def calculate_technical_debt(request: DebtCalculationRequest):
 @router.get("/summary")
 async def get_debt_summary():
     """
-    Get summary of current technical debt.
+    Get summary of current technical debt (Issue #315 - refactored).
 
     Returns high-level metrics for dashboard display.
     """
-    redis_client = get_debt_redis()
+    data = _get_latest_debt_data()
 
-    if redis_client:
-        try:
-            # Get latest calculation
-            latest_key = redis_client.get(f"{DEBT_PREFIX}latest")
-            if latest_key:
-                if isinstance(latest_key, bytes):
-                    latest_key = latest_key.decode("utf-8")
-                debt_data = redis_client.get(latest_key)
-                if debt_data:
-                    if isinstance(debt_data, bytes):
-                        debt_data = debt_data.decode("utf-8")
-                    data = json.loads(debt_data)
-                    return JSONResponse(
-                        {
-                            "status": "success",
-                            "summary": data.get("summary", {}),
-                            "top_files": data.get("top_files", [])[:5],
-                            "roi_ranking": data.get("roi_ranking", [])[:5],
-                            "timestamp": data.get("timestamp"),
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Redis fetch failed: {e}")
+    if data:
+        return JSONResponse({
+            "status": "success",
+            "summary": data.get("summary", {}),
+            "top_files": data.get("top_files", [])[:5],
+            "roi_ranking": data.get("roi_ranking", [])[:5],
+            "timestamp": data.get("timestamp"),
+        })
 
     # Return demo data if no real data available
-    return JSONResponse(
-        {
-            "status": "demo",
-            "message": "No debt analysis found. Run POST /calculate first.",
-            "summary": {
-                "total_items": 0,
-                "total_hours": 0,
-                "total_cost_usd": 0,
-                "by_category": {},
-                "by_severity": {},
-            },
-        }
-    )
+    return JSONResponse({
+        "status": "demo",
+        "message": "No debt analysis found. Run POST /calculate first.",
+        "summary": {
+            "total_items": 0,
+            "total_hours": 0,
+            "total_cost_usd": 0,
+            "by_category": {},
+            "by_severity": {},
+        },
+    })
 
 
 @with_error_handling(
@@ -505,43 +520,66 @@ async def get_debt_summary():
 @router.get("/by-category/{category}")
 async def get_debt_by_category(category: str):
     """
-    Get technical debt items filtered by category.
+    Get technical debt items filtered by category (Issue #315 - refactored).
 
     Args:
         category: Debt category to filter by
     """
-    redis_client = get_debt_redis()
+    data = _get_latest_debt_data()
 
-    if redis_client:
-        try:
-            latest_key = redis_client.get(f"{DEBT_PREFIX}latest")
-            if latest_key:
-                if isinstance(latest_key, bytes):
-                    latest_key = latest_key.decode("utf-8")
-                debt_data = redis_client.get(latest_key)
-                if debt_data:
-                    if isinstance(debt_data, bytes):
-                        debt_data = debt_data.decode("utf-8")
-                    data = json.loads(debt_data)
-                    items = [
-                        item
-                        for item in data.get("items", [])
-                        if item.get("category") == category
-                    ]
-                    return JSONResponse(
-                        {
-                            "status": "success",
-                            "category": category,
-                            "items": items,
-                            "count": len(items),
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Redis fetch failed: {e}")
+    if data:
+        items = [item for item in data.get("items", []) if item.get("category") == category]
+        return JSONResponse({
+            "status": "success",
+            "category": category,
+            "items": items,
+            "count": len(items),
+        })
 
     return JSONResponse(
         {"status": "no_data", "message": "No debt analysis found", "items": []}
     )
+
+
+def _get_debt_trend_data() -> List[Dict[str, Any]]:
+    """Get historical debt trend data from Redis (Issue #315 - extracted helper)."""
+    redis_client = get_debt_redis()
+    if not redis_client:
+        return []
+
+    trend_data = []
+    try:
+        for key in redis_client.scan_iter(match=f"{DEBT_PREFIX}calculation:*"):
+            key_str = _decode_redis_value(key)
+            data = _decode_redis_value(redis_client.get(key_str))
+            if not data:
+                continue
+            calc = json.loads(data)
+            summary = calc.get("summary", {})
+            trend_data.append({
+                "timestamp": calc.get("timestamp"),
+                "total_items": summary.get("total_items", 0),
+                "total_hours": summary.get("total_hours", 0),
+                "total_cost_usd": summary.get("total_cost_usd", 0),
+            })
+    except Exception as e:
+        logger.warning(f"Redis trend fetch failed: {e}")
+    return trend_data
+
+
+def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
+    """Calculate trend change direction (Issue #315 - extracted helper)."""
+    if len(trend_data) < 2:
+        return {"items": 0, "hours": 0, "cost": 0}, "unknown"
+
+    first, last = trend_data[0], trend_data[-1]
+    change = {
+        "items": last["total_items"] - first["total_items"],
+        "hours": round(last["total_hours"] - first["total_hours"], 1),
+        "cost": round(last["total_cost_usd"] - first["total_cost_usd"], 2),
+    }
+    direction = "improving" if change["items"] < 0 else "worsening" if change["items"] > 0 else "stable"
+    return change, direction
 
 
 @with_error_handling(
@@ -552,62 +590,22 @@ async def get_debt_by_category(category: str):
 @router.get("/trends")
 async def get_debt_trends(days: int = Query(default=30, ge=1, le=365)):
     """
-    Get technical debt trends over time.
+    Get technical debt trends over time (Issue #315 - refactored).
 
     Shows how debt has changed over the specified period.
     """
-    redis_client = get_debt_redis()
-    trend_data = []
-
-    if redis_client:
-        try:
-            # Scan for historical calculations
-            for key in redis_client.scan_iter(match=f"{DEBT_PREFIX}calculation:*"):
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                data = redis_client.get(key)
-                if data:
-                    if isinstance(data, bytes):
-                        data = data.decode("utf-8")
-                    calc = json.loads(data)
-                    trend_data.append(
-                        {
-                            "timestamp": calc.get("timestamp"),
-                            "total_items": calc.get("summary", {}).get("total_items", 0),
-                            "total_hours": calc.get("summary", {}).get("total_hours", 0),
-                            "total_cost_usd": calc.get("summary", {}).get("total_cost_usd", 0),
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Redis trend fetch failed: {e}")
-
-    # Sort by timestamp
+    trend_data = _get_debt_trend_data()
     trend_data.sort(key=lambda x: x.get("timestamp", ""))
 
-    if len(trend_data) >= 2:
-        first = trend_data[0]
-        last = trend_data[-1]
-        change = {
-            "items": last["total_items"] - first["total_items"],
-            "hours": round(last["total_hours"] - first["total_hours"], 1),
-            "cost": round(last["total_cost_usd"] - first["total_cost_usd"], 2),
-        }
-        direction = (
-            "improving" if change["items"] < 0 else "worsening" if change["items"] > 0 else "stable"
-        )
-    else:
-        change = {"items": 0, "hours": 0, "cost": 0}
-        direction = "unknown"
+    change, direction = _calculate_trend_change(trend_data)
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "trends": trend_data,
-            "data_points": len(trend_data),
-            "change": change,
-            "direction": direction,
-        }
-    )
+    return JSONResponse({
+        "status": "success",
+        "trends": trend_data,
+        "data_points": len(trend_data),
+        "change": change,
+        "direction": direction,
+    })
 
 
 @with_error_handling(
@@ -618,32 +616,19 @@ async def get_debt_trends(days: int = Query(default=30, ge=1, le=365)):
 @router.get("/roi-priorities")
 async def get_roi_priorities(limit: int = Query(default=20, ge=1, le=100)):
     """
-    Get debt items prioritized by ROI (Return on Investment).
+    Get debt items prioritized by ROI (Issue #315 - refactored).
 
     Quick wins (high impact, low effort) are ranked first.
     """
-    redis_client = get_debt_redis()
+    data = _get_latest_debt_data()
 
-    if redis_client:
-        try:
-            latest_key = redis_client.get(f"{DEBT_PREFIX}latest")
-            if latest_key:
-                if isinstance(latest_key, bytes):
-                    latest_key = latest_key.decode("utf-8")
-                debt_data = redis_client.get(latest_key)
-                if debt_data:
-                    if isinstance(debt_data, bytes):
-                        debt_data = debt_data.decode("utf-8")
-                    data = json.loads(debt_data)
-                    return JSONResponse(
-                        {
-                            "status": "success",
-                            "priorities": data.get("roi_ranking", [])[:limit],
-                            "total_available": len(data.get("roi_ranking", [])),
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Redis fetch failed: {e}")
+    if data:
+        roi_ranking = data.get("roi_ranking", [])
+        return JSONResponse({
+            "status": "success",
+            "priorities": roi_ranking[:limit],
+            "total_available": len(roi_ranking),
+        })
 
     return JSONResponse(
         {"status": "no_data", "message": "No debt analysis found", "priorities": []}
@@ -658,26 +643,11 @@ async def get_roi_priorities(limit: int = Query(default=20, ge=1, le=100)):
 @router.get("/report")
 async def get_debt_report(format: str = Query(default="json", description="json or markdown")):
     """
-    Generate a comprehensive debt report.
+    Generate a comprehensive debt report (Issue #315 - refactored).
 
     Useful for stakeholder presentations and planning.
     """
-    redis_client = get_debt_redis()
-    debt_data = None
-
-    if redis_client:
-        try:
-            latest_key = redis_client.get(f"{DEBT_PREFIX}latest")
-            if latest_key:
-                if isinstance(latest_key, bytes):
-                    latest_key = latest_key.decode("utf-8")
-                raw_data = redis_client.get(latest_key)
-                if raw_data:
-                    if isinstance(raw_data, bytes):
-                        raw_data = raw_data.decode("utf-8")
-                    debt_data = json.loads(raw_data)
-        except Exception as e:
-            logger.warning(f"Redis fetch failed: {e}")
+    debt_data = _get_latest_debt_data()
 
     if not debt_data:
         return JSONResponse(

@@ -22,6 +22,37 @@ from src.constants.path_constants import PATH
 logger = logging.getLogger(__name__)
 
 
+def _terminate_process_with_fallback(process: subprocess.Popen) -> None:
+    """Terminate process gracefully with kill fallback (Issue #315 - extracted)."""
+    if not process:
+        return
+    try:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=1)
+    except Exception as e:
+        logger.warning(f"Error terminating process: {e}")
+
+
+def _decode_and_process_output(
+    data: bytes, output_processor: Optional[Callable[[str], str]]
+) -> str:
+    """Decode PTY output and apply optional processing (Issue #315 - extracted)."""
+    output = data.decode("utf-8", errors="replace")
+    if output_processor:
+        output = output_processor(output)
+    return output
+
+
+def _increment_stat_sync(stats_lock, stats: Dict[str, int], key: str) -> None:
+    """Increment a stat counter with thread-safe locking (Issue #315)."""
+    with stats_lock:
+        stats[key] += 1
+
+
 class TerminalState(Enum):
     """Terminal session states"""
 
@@ -255,27 +286,8 @@ class TerminalWebSocketManager:
                             logger.debug("PTY EOF detected")
                             break
 
-                        # Decode and process output
-                        try:
-                            output = data.decode("utf-8", errors="replace")
-
-                            # Apply custom processing if available
-                            if self.output_processor:
-                                output = self.output_processor(output)
-
-                            # Queue message for async delivery
-                            message = {
-                                "type": "output",
-                                "content": output,
-                                "timestamp": time.time(),
-                            }
-
-                            self._queue_message_safely(message)
-
-                        except Exception as e:
-                            logger.error(f"Error processing PTY output: {e}")
-                            with self._stats_lock:
-                                self.stats["errors"] += 1
+                        # Decode and process output (Issue #315 - use helper)
+                        self._process_pty_data(data)
 
                 except OSError as e:
                     if e.errno in (9, 5):  # Bad file descriptor or I/O error
@@ -285,8 +297,7 @@ class TerminalWebSocketManager:
                     break
                 except Exception as e:
                     logger.error(f"Unexpected error in PTY reader: {e}")
-                    with self._stats_lock:
-                        self.stats["errors"] += 1
+                    _increment_stat_sync(self._stats_lock, self.stats, "errors")
                     break
 
         except Exception as e:
@@ -299,6 +310,20 @@ class TerminalWebSocketManager:
     def _get_state_sync(self) -> TerminalState:
         """Get state synchronously for use in threads."""
         return self._state
+
+    def _process_pty_data(self, data: bytes) -> None:
+        """Process PTY data and queue output message (Issue #315: extracted)."""
+        try:
+            output = _decode_and_process_output(data, self.output_processor)
+            message = {
+                "type": "output",
+                "content": output,
+                "timestamp": time.time(),
+            }
+            self._queue_message_safely(message)
+        except Exception as e:
+            logger.error(f"Error processing PTY output: {e}")
+            _increment_stat_sync(self._stats_lock, self.stats, "errors")
 
     def _queue_message_safely(self, message: Dict[str, Any]):
         """Queue message with proper overflow handling."""
@@ -313,8 +338,41 @@ class TerminalWebSocketManager:
             except queue.Empty:
                 logger.debug("Queue empty during overflow handling")
 
+    async def _send_websocket_message(self, message: Dict[str, Any], state: TerminalState) -> None:
+        """Send message via WebSocket if conditions are met (Issue #315: extracted).
+
+        Args:
+            message: Message to send
+            state: Current terminal state
+        """
+        if not (self.message_sender and self.websocket and state == TerminalState.RUNNING):
+            return
+
+        try:
+            await self.message_sender(message)
+            _increment_stat_sync(self._stats_lock, self.stats, "messages_sent")
+        except Exception as e:
+            logger.error(f"Error sending message: {e}")
+            _increment_stat_sync(self._stats_lock, self.stats, "errors")
+
+    async def _get_next_queue_message(self) -> Optional[Dict[str, Any]]:
+        """Get next message from queue with timeout (Issue #315: extracted).
+
+        Returns:
+            Message dict or None if timeout/empty
+        """
+        try:
+            return await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None, self.output_queue.get, True, 0.1
+                ),
+                timeout=0.2,
+            )
+        except (asyncio.TimeoutError, queue.Empty):
+            return None
+
     async def _output_sender_loop(self):
-        """Async loop to send queued messages to WebSocket."""
+        """Async loop to send queued messages to WebSocket (Issue #315: reduced nesting)."""
         logger.debug("Output sender loop started")
 
         try:
@@ -324,41 +382,19 @@ class TerminalWebSocketManager:
                     break
 
                 try:
-                    # Wait for message with timeout
-                    message = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None, self.output_queue.get, True, 0.1
-                        ),
-                        timeout=0.2,
-                    )
+                    message = await self._get_next_queue_message()
+                    if message is None:
+                        continue
 
                     if message.get("type") == "pty_stopped":
                         logger.debug("PTY stopped signal received")
                         break
 
-                    # Send message if we have a sender and are active
-                    if (
-                        self.message_sender
-                        and self.websocket
-                        and state == TerminalState.RUNNING
-                    ):
-                        try:
-                            await self.message_sender(message)
-                            with self._stats_lock:
-                                self.stats["messages_sent"] += 1
-                        except Exception as e:
-                            logger.error(f"Error sending message: {e}")
-                            with self._stats_lock:
-                                self.stats["errors"] += 1
+                    await self._send_websocket_message(message, state)
 
-                except asyncio.TimeoutError:
-                    continue
-                except queue.Empty:
-                    continue
                 except Exception as e:
                     logger.error(f"Error in output sender loop: {e}")
-                    with self._stats_lock:
-                        self.stats["errors"] += 1
+                    _increment_stat_sync(self._stats_lock, self.stats, "errors")
 
         except Exception as e:
             logger.error(f"Output sender loop crashed: {e}")
@@ -439,21 +475,10 @@ class TerminalWebSocketManager:
                 logger.debug("PTY fd close error: %s", e)
             self.pty_fd = None
 
-        # Clean up process
+        # Clean up process (Issue #315 - use helper)
         if self.process:
-            try:
-                # Try graceful termination first
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    # Force kill if needed
-                    self.process.kill()
-                    self.process.wait(timeout=1)
-            except Exception as e:
-                logger.warning(f"Error terminating process: {e}")
-            finally:
-                self.process = None
+            _terminate_process_with_fallback(self.process)
+            self.process = None
 
         # Clear output queue
         while not self.output_queue.empty():

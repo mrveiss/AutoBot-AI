@@ -70,40 +70,50 @@ class InMemoryStorage:
     """In-memory storage fallback when Redis is unavailable"""
 
     def __init__(self):
+        """Initialize empty in-memory data store."""
         self.data = {}
 
     def set(self, key: str, value: str):
+        """Store a string value at the given key."""
         self.data[key] = value
 
     def get(self, key: str):
+        """Retrieve a value by key, returns None if not found."""
         return self.data.get(key)
 
     def hset(self, key: str, mapping: dict):
+        """Set hash fields from a dictionary mapping."""
         if key not in self.data:
             self.data[key] = {}
         self.data[key].update(mapping)
 
     def hgetall(self, key: str):
+        """Get all hash fields and values for a key."""
         return self.data.get(key, {})
 
     def sadd(self, key: str, value: str):
+        """Add a member to a set stored at key."""
         if key not in self.data:
             self.data[key] = set()
         self.data[key].add(value)
 
     def smembers(self, key: str):
+        """Get all members of the set stored at key."""
         return self.data.get(key, set())
 
     def scan_iter(self, match: str):
+        """Iterate over keys matching a glob-style pattern."""
         pattern = match.replace("*", ".*")
         for key in self.data.keys():
             if re.match(pattern, key):
                 yield key
 
     def delete(self, *keys):
+        """Delete one or more keys from storage."""
         for key in keys:
             self.data.pop(key, None)
         return len(keys)
 
     def exists(self, key: str):
+        """Check if a key exists in storage."""
         return key in self.data

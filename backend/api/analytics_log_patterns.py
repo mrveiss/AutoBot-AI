@@ -458,8 +458,25 @@ pattern_miner = LogPatternMiner()
 
 
 # =============================================================================
-# Log Processing Helpers (Issue #298 - Reduce Deep Nesting)
+# Log Processing Helpers (Issue #298, #315 - Reduce Deep Nesting)
 # =============================================================================
+
+
+def _filter_log_line(
+    line: str,
+    cutoff_time: Optional[datetime],
+) -> Optional[Tuple[str, datetime]]:
+    """Filter a single log line by timestamp (Issue #315 - extracted)."""
+    if not line.strip():
+        return None
+
+    ts = pattern_miner.extract_timestamp(line)
+    if cutoff_time and ts and ts < cutoff_time:
+        return None
+
+    if ts:
+        return (line.strip(), ts)
+    return None
 
 
 async def _read_log_lines(
@@ -481,15 +498,9 @@ async def _read_log_lines(
                 lines = lines[-max_lines:]
 
             for line in lines:
-                if not line.strip():
-                    continue
-
-                ts = pattern_miner.extract_timestamp(line)
-                if cutoff_time and ts and ts < cutoff_time:
-                    continue
-
-                if ts:
-                    result.append((line.strip(), ts))
+                filtered = _filter_log_line(line, cutoff_time)
+                if filtered:
+                    result.append(filtered)
 
     except OSError as e:
         logger.warning(f"Failed to read {file_path}: {e}")
@@ -497,6 +508,71 @@ async def _read_log_lines(
         logger.warning(f"Error reading {file_path}: {e}")
 
     return result
+
+
+async def _read_log_lines_with_source(
+    file_path: Path,
+    cutoff_time: Optional[datetime] = None,
+    source_filter: Optional[set] = None,
+    pattern_filter: Optional[str] = None,
+) -> List[Tuple[str, str, str]]:
+    """
+    Read log lines with source info, optional pattern filtering (Issue #315).
+
+    Returns list of (line, source, raw_timestamp) tuples.
+    """
+    file_name = file_path.stem
+    if source_filter and file_name not in source_filter:
+        return []
+
+    result = []
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+            for line in content.splitlines():
+                if not line.strip():
+                    continue
+
+                ts = pattern_miner.extract_timestamp(line)
+                if cutoff_time and ts and ts < cutoff_time:
+                    continue
+
+                # Optional pattern filtering
+                if pattern_filter:
+                    normalized = pattern_miner.normalize_message(line)
+                    pid, _ = pattern_miner.categorize_pattern(normalized)
+                    if pid != pattern_filter:
+                        continue
+
+                result.append((line.strip(), file_name, ""))
+
+    except OSError as e:
+        logger.warning(f"Failed to read {file_path}: {e}")
+    except Exception as e:
+        logger.warning(f"Error reading {file_path}: {e}")
+
+    return result
+
+
+async def _collect_all_log_lines(
+    log_dir: Path,
+    cutoff_time: datetime,
+    source_filter: Optional[set] = None,
+    pattern_filter: Optional[str] = None,
+) -> List[Tuple[str, str, str]]:
+    """Collect log lines from all log files in directory (Issue #315)."""
+    all_lines: List[Tuple[str, str, str]] = []
+
+    if not log_dir.exists():
+        return all_lines
+
+    for file_path in log_dir.glob("*.log"):
+        file_lines = await _read_log_lines_with_source(
+            file_path, cutoff_time, source_filter, pattern_filter
+        )
+        all_lines.extend(file_lines)
+
+    return all_lines
 
 
 def _process_error_hotspot_line(
@@ -545,6 +621,44 @@ async def _collect_log_files(
 # ============================================================================
 
 
+def _build_empty_mining_result(analysis_time_ms: float) -> PatternMiningResult:
+    """Build empty result for when no logs are found (Issue #315)."""
+    return PatternMiningResult(
+        patterns=[],
+        anomalies=[],
+        trends=[],
+        summary={
+            "total_logs": 0,
+            "unique_patterns": 0,
+            "error_patterns": 0,
+            "anomalies_detected": 0,
+        },
+        analysis_time_ms=analysis_time_ms,
+        logs_analyzed=0,
+    )
+
+
+def _build_mining_summary(
+    log_lines: List[Tuple[str, str, str]],
+    patterns: List[LogPattern],
+    anomalies: List[LogAnomaly],
+    trends: List[LogTrend],
+    hours: int,
+) -> Dict[str, Any]:
+    """Build summary dict for pattern mining result (Issue #315)."""
+    error_patterns = len([p for p in patterns if p.is_error_pattern])
+    return {
+        "total_logs": len(log_lines),
+        "unique_patterns": len(patterns),
+        "error_patterns": error_patterns,
+        "warning_patterns": len([p for p in patterns if "WARNING" in p.log_levels]),
+        "anomalies_detected": len(anomalies),
+        "trends_detected": len(trends),
+        "sources_analyzed": list(set(line[1] for line in log_lines)),
+        "time_range_hours": hours,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mine_log_patterns",
@@ -569,81 +683,26 @@ async def mine_log_patterns(
     start_time = time.time()
 
     try:
-        log_lines: List[Tuple[str, str, str]] = []
         cutoff_time = datetime.now() - timedelta(hours=hours)
+        source_filter = set(sources.split(",")) if sources else None
 
-        # Parse sources filter
-        source_filter = set()
-        if sources:
-            source_filter = set(sources.split(","))
-
-        # Read log files
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                file_name = file_path.stem
-                if source_filter and file_name not in source_filter:
-                    continue
-
-                try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        for line in content.splitlines():
-                            if not line.strip():
-                                continue
-
-                            # Check if line is within time window
-                            ts = pattern_miner.extract_timestamp(line)
-                            if ts and ts < cutoff_time:
-                                continue
-
-                            log_lines.append((line.strip(), file_name, ""))
-                except OSError as e:
-                    logger.warning(f"Failed to read log file {file_path}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error reading log file {file_path}: {e}")
+        # Use extracted helper for log collection (Issue #315)
+        log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time, source_filter)
 
         if not log_lines:
-            return PatternMiningResult(
-                patterns=[],
-                anomalies=[],
-                trends=[],
-                summary={
-                    "total_logs": 0,
-                    "unique_patterns": 0,
-                    "error_patterns": 0,
-                    "anomalies_detected": 0,
-                },
-                analysis_time_ms=round((time.time() - start_time) * 1000, 2),
-                logs_analyzed=0,
-            )
+            return _build_empty_mining_result(round((time.time() - start_time) * 1000, 2))
 
         # Mine patterns
         patterns = await pattern_miner.mine_patterns(log_lines, min_occurrences)
 
         # Detect anomalies
-        anomalies = []
-        if include_anomalies:
-            anomalies = pattern_miner.detect_anomalies(log_lines, patterns)
+        anomalies = pattern_miner.detect_anomalies(log_lines, patterns) if include_anomalies else []
 
         # Analyze trends
-        trends = []
-        if include_trends:
-            trends = pattern_miner.analyze_trends(log_lines)
+        trends = pattern_miner.analyze_trends(log_lines) if include_trends else []
 
-        # Build summary
-        error_patterns = len([p for p in patterns if p.is_error_pattern])
-        summary = {
-            "total_logs": len(log_lines),
-            "unique_patterns": len(patterns),
-            "error_patterns": error_patterns,
-            "warning_patterns": len(
-                [p for p in patterns if "WARNING" in p.log_levels]
-            ),
-            "anomalies_detected": len(anomalies),
-            "trends_detected": len(trends),
-            "sources_analyzed": list(set(line[1] for line in log_lines)),
-            "time_range_hours": hours,
-        }
+        # Build summary using extracted helper
+        summary = _build_mining_summary(log_lines, patterns, anomalies, trends, hours)
 
         return PatternMiningResult(
             patterns=patterns[:50],  # Limit to top 50 patterns
@@ -659,6 +718,27 @@ async def mine_log_patterns(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _analyze_pattern_lines(
+    log_lines: List[Tuple[str, str, str]],
+) -> Tuple[List[datetime], Counter, Counter, Counter]:
+    """Analyze matching log lines for pattern details (Issue #315)."""
+    timestamps = []
+    levels: Counter = Counter()
+    sources: Counter = Counter()
+    hourly_dist: Counter = Counter()
+
+    for line, source, _ in log_lines:
+        ts = pattern_miner.extract_timestamp(line)
+        if ts:
+            timestamps.append(ts)
+            hourly_dist[ts.strftime("%Y-%m-%d %H:00")] += 1
+
+        levels[pattern_miner.extract_log_level(line)] += 1
+        sources[source] += 1
+
+    return timestamps, levels, sources, hourly_dist
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pattern_details",
@@ -671,52 +751,20 @@ async def get_pattern_details(
 ):
     """Get detailed information about a specific pattern"""
     try:
-        log_lines: List[Tuple[str, str, str]] = []
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
-        # Read all log files
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        for line in content.splitlines():
-                            if not line.strip():
-                                continue
-
-                            ts = pattern_miner.extract_timestamp(line)
-                            if ts and ts < cutoff_time:
-                                continue
-
-                            # Check if this line matches the pattern
-                            normalized = pattern_miner.normalize_message(line)
-                            pid, _ = pattern_miner.categorize_pattern(normalized)
-                            if pid == pattern_id:
-                                log_lines.append((line.strip(), file_path.stem, ""))
-                except OSError as e:
-                    logger.warning(f"Failed to read {file_path}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error reading {file_path}: {e}")
+        # Use extracted helper with pattern filter (Issue #315)
+        log_lines = await _collect_all_log_lines(
+            LOG_DIR, cutoff_time, pattern_filter=pattern_id
+        )
 
         if not log_lines:
             raise HTTPException(
                 status_code=404, detail=f"Pattern '{pattern_id}' not found"
             )
 
-        # Analyze matching lines
-        timestamps = []
-        levels = Counter()
-        sources = Counter()
-        hourly_dist = Counter()
-
-        for line, source, _ in log_lines:
-            ts = pattern_miner.extract_timestamp(line)
-            if ts:
-                timestamps.append(ts)
-                hourly_dist[ts.strftime("%Y-%m-%d %H:00")] += 1
-
-            levels[pattern_miner.extract_log_level(line)] += 1
-            sources[source] += 1
+        # Analyze matching lines using extracted helper
+        timestamps, levels, sources, hourly_dist = _analyze_pattern_lines(log_lines)
 
         return {
             "pattern_id": pattern_id,
@@ -788,6 +836,28 @@ async def get_error_hotspots(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _aggregate_log_stats(
+    log_lines: List[Tuple[str, str, str]],
+) -> Tuple[int, Counter, Counter, Counter, List[datetime]]:
+    """Aggregate statistics from log lines (Issue #315)."""
+    total = 0
+    by_level: Counter = Counter()
+    by_source: Counter = Counter()
+    by_hour: Counter = Counter()
+    timestamps = []
+
+    for line, source, _ in log_lines:
+        ts = pattern_miner.extract_timestamp(line)
+        if ts:
+            total += 1
+            by_level[pattern_miner.extract_log_level(line)] += 1
+            by_source[source] += 1
+            by_hour[ts.strftime("%H:00")] += 1
+            timestamps.append(ts)
+
+    return total, by_level, by_source, by_hour, timestamps
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_log_stats",
@@ -799,54 +869,26 @@ async def get_log_stats(
 ):
     """Get overall log statistics"""
     try:
-        stats = {
-            "total_logs": 0,
-            "by_level": Counter(),
-            "by_source": Counter(),
-            "by_hour": Counter(),
-            "earliest": None,
-            "latest": None,
-        }
-
         cutoff_time = datetime.now() - timedelta(hours=hours)
-        timestamps = []
 
-        if LOG_DIR.exists():
-            for file_path in LOG_DIR.glob("*.log"):
-                try:
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                        for line in content.splitlines():
-                            if not line.strip():
-                                continue
+        # Use extracted helper for log collection (Issue #315)
+        log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time)
 
-                            ts = pattern_miner.extract_timestamp(line)
-                            if ts and ts >= cutoff_time:
-                                stats["total_logs"] += 1
-                                stats["by_level"][pattern_miner.extract_log_level(line)] += 1
-                                stats["by_source"][file_path.stem] += 1
-                                stats["by_hour"][ts.strftime("%H:00")] += 1
-                                timestamps.append(ts)
-                except OSError as e:
-                    logger.warning(f"Failed to read {file_path}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error reading {file_path}: {e}")
+        # Aggregate stats using extracted helper
+        total, by_level, by_source, by_hour, timestamps = _aggregate_log_stats(log_lines)
 
-        if timestamps:
-            stats["earliest"] = min(timestamps).isoformat()
-            stats["latest"] = max(timestamps).isoformat()
+        earliest = min(timestamps).isoformat() if timestamps else None
+        latest = max(timestamps).isoformat() if timestamps else None
 
         return {
-            "total_logs": stats["total_logs"],
-            "level_distribution": dict(stats["by_level"]),
-            "source_distribution": dict(stats["by_source"]),
-            "hourly_distribution": dict(sorted(stats["by_hour"].items())),
-            "earliest_log": stats["earliest"],
-            "latest_log": stats["latest"],
+            "total_logs": total,
+            "level_distribution": dict(by_level),
+            "source_distribution": dict(by_source),
+            "hourly_distribution": dict(sorted(by_hour.items())),
+            "earliest_log": earliest,
+            "latest_log": latest,
             "time_range_hours": hours,
-            "avg_logs_per_hour": (
-                round(stats["total_logs"] / hours, 1) if stats["total_logs"] > 0 else 0
-            ),
+            "avg_logs_per_hour": round(total / hours, 1) if total > 0 else 0,
         }
 
     except Exception as e:

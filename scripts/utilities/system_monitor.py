@@ -20,6 +20,58 @@ import requests
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 
+def _check_cpu_for_npu() -> bool:
+    """Check if CPU model has NPU support (Issue #315 - extracted)."""
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpuinfo = f.read()
+            return "Intel(R) Core(TM) Ultra" in cpuinfo
+    except Exception:
+        return False
+
+
+def _check_wsl_environment() -> bool:
+    """Check if running in WSL environment (Issue #315 - extracted)."""
+    try:
+        with open("/proc/version", "r") as f:
+            version_info = f.read()
+            return "WSL" in version_info or "Microsoft" in version_info
+    except Exception:
+        return False
+
+
+def _check_openvino_npu() -> tuple:
+    """Check OpenVINO NPU support (Issue #315 - extracted).
+
+    Returns: (openvino_support, driver_available)
+    """
+    try:
+        from openvino.runtime import Core
+        core = Core()
+        devices = core.available_devices
+        npu_devices = [d for d in devices if "NPU" in d]
+        if npu_devices:
+            return (True, True)
+        return (False, False)
+    except ImportError:
+        return (False, False)
+    except Exception:
+        return (False, False)
+
+
+def _get_model_purpose_map() -> dict:
+    """Get model purpose keyword mappings (Issue #315 - extracted)."""
+    return {
+        "embed": "Embedding/Vector Search",
+        "uncensored": "General Purpose (Uncensored)",
+        "1b": "Fast Chat/Commands (1B)",
+        "3b": "Balanced Chat/Analysis (3B)",
+        "14b": "Advanced Reasoning (14B)",
+        "13b": "Advanced Reasoning (14B)",
+        "instruct": "Instruction Following",
+    }
+
+
 class AutoBotMonitor:
     def __init__(self):
         self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT)
@@ -69,84 +121,60 @@ class AutoBotMonitor:
             return {"available": False, "error": str(e)}
 
     def get_npu_status(self) -> Dict[str, Any]:
-        """Get Intel NPU status and utilization."""
+        """Get Intel NPU status and utilization (Issue #315 - refactored)."""
         try:
             npu_status = {
-                "hardware_detected": False,
+                "hardware_detected": _check_cpu_for_npu(),
                 "driver_available": False,
                 "openvino_support": False,
                 "utilization_percent": 0,
-                "wsl_limitation": False,
+                "wsl_limitation": _check_wsl_environment(),
             }
 
-            # Check CPU model for NPU support
-            try:
-                with open("/proc/cpuinfo", "r") as f:
-                    cpuinfo = f.read()
-                    if "Intel(R) Core(TM) Ultra" in cpuinfo:
-                        npu_status["hardware_detected"] = True
-            except Exception:
-                pass  # cpuinfo unavailable
-
-            # Check if running in WSL
-            try:
-                with open("/proc/version", "r") as f:
-                    version_info = f.read()
-                    if "WSL" in version_info or "Microsoft" in version_info:
-                        npu_status["wsl_limitation"] = True
-            except Exception:
-                pass  # /proc/version unavailable
-
             # Check OpenVINO NPU support
-            try:
-                from openvino.runtime import Core
-
-                core = Core()
-                devices = core.available_devices
-                npu_devices = [d for d in devices if "NPU" in d]
-                if npu_devices:
-                    npu_status["openvino_support"] = True
-                    npu_status["driver_available"] = True
-                    # Could attempt to get utilization here if NPU was available
-            except ImportError:
-                pass  # OpenVINO not installed
-            except Exception:
-                pass  # OpenVINO initialization error
+            openvino_support, driver_avail = _check_openvino_npu()
+            npu_status["openvino_support"] = openvino_support
+            if driver_avail:
+                npu_status["driver_available"] = True
 
             # Check for Intel NPU device files (Linux native)
-            try:
-                import os
+            self._check_npu_device_files(npu_status)
 
-                npu_devices = []
-                if os.path.exists("/dev"):
-                    for device in os.listdir("/dev"):
-                        if "intel_npu" in device or "npu" in device.lower():
-                            npu_devices.append(device)
-                            npu_status["driver_available"] = True
-            except Exception:
-                pass
-
-            # Try to get NPU utilization from Intel GPU Top (if available)
-            try:
-                result = subprocess.run(
-                    ["intel_gpu_top", "-l", "-n", "1"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    # Parse intel_gpu_top output for NPU info
-                    output = result.stdout
-                    if "NPU" in output or "Neural" in output:
-                        npu_status["driver_available"] = True
-                        # Parse utilization if available
-            except Exception:
-                pass
+            # Try to get NPU utilization from Intel GPU Top
+            self._check_intel_gpu_top(npu_status)
 
             return npu_status
 
         except Exception as e:
             return {"error": str(e), "hardware_detected": False}
+
+    def _check_npu_device_files(self, npu_status: Dict[str, Any]) -> None:
+        """Check for NPU device files in /dev (Issue #315 - extracted)."""
+        try:
+            if not os.path.exists("/dev"):
+                return
+            for device in os.listdir("/dev"):
+                if "intel_npu" in device or "npu" in device.lower():
+                    npu_status["driver_available"] = True
+                    return
+        except Exception:
+            pass
+
+    def _check_intel_gpu_top(self, npu_status: Dict[str, Any]) -> None:
+        """Check Intel GPU Top for NPU info (Issue #315 - extracted)."""
+        try:
+            result = subprocess.run(
+                ["intel_gpu_top", "-l", "-n", "1"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                output = result.stdout
+                if "NPU" in output or "Neural" in output:
+                    npu_status["driver_available"] = True
+        except Exception:
+            pass
 
     def get_system_resources(self) -> Dict[str, Any]:
         """Get system resource utilization."""
@@ -189,61 +217,56 @@ class AutoBotMonitor:
             return {"available": False, "error": str(e)}
 
     def get_ollama_models(self) -> Dict[str, Any]:
-        """Get available Ollama models with accessibility testing."""
+        """Get available Ollama models with accessibility testing (Issue #315 - refactored)."""
         try:
             response = requests.get("ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                models = []
-                for model in data.get("models", []):
-                    model_info = {
-                        "name": model.get("name"),
-                        "size_gb": round(model.get("size", 0) / (1024**3), 2),
-                        "modified": model.get("modified_at"),
-                        "accessible": False,
-                        "purpose": self.get_model_purpose(model.get("name", "")),
-                    }
+            if response.status_code != 200:
+                return {"available": False, "error": f"HTTP {response.status_code}"}
 
-                    # Test model accessibility
-                    try:
-                        test_response = requests.post(
-                            "ServiceURLs.OLLAMA_LOCAL/api/generate",
-                            json={
-                                "model": model.get("name"),
-                                "prompt": "test",
-                                "stream": False,
-                                "options": {"num_predict": 1},
-                            },
-                            timeout=10,
-                        )
-                        model_info["accessible"] = test_response.status_code == 200
-                    except Exception:
-                        model_info["accessible"] = False
-
-                    models.append(model_info)
-
-                return {"available": True, "models": models, "count": len(models)}
-            return {"available": False, "error": f"HTTP {response.status_code}"}
+            data = response.json()
+            models = [self._build_model_info(model) for model in data.get("models", [])]
+            return {"available": True, "models": models, "count": len(models)}
         except Exception as e:
             return {"available": False, "error": str(e)}
 
+    def _build_model_info(self, model: dict) -> dict:
+        """Build model info dict with accessibility test (Issue #315 - extracted)."""
+        model_info = {
+            "name": model.get("name"),
+            "size_gb": round(model.get("size", 0) / (1024**3), 2),
+            "modified": model.get("modified_at"),
+            "accessible": self._test_model_accessibility(model.get("name")),
+            "purpose": self.get_model_purpose(model.get("name", "")),
+        }
+        return model_info
+
+    def _test_model_accessibility(self, model_name: str) -> bool:
+        """Test if model is accessible (Issue #315 - extracted)."""
+        try:
+            test_response = requests.post(
+                "ServiceURLs.OLLAMA_LOCAL/api/generate",
+                json={
+                    "model": model_name,
+                    "prompt": "test",
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+                timeout=10,
+            )
+            return test_response.status_code == 200
+        except Exception:
+            return False
+
     def get_model_purpose(self, model_name: str) -> str:
-        """Determine the purpose/use case of a model based on its name."""
+        """Determine purpose/use case of a model based on its name (Issue #315 - refactored)."""
         name_lower = model_name.lower()
-        if "embed" in name_lower:
-            return "Embedding/Vector Search"
-        elif "uncensored" in name_lower:
-            return "General Purpose (Uncensored)"
-        elif "1b" in name_lower:
-            return "Fast Chat/Commands (1B)"
-        elif "3b" in name_lower:
-            return "Balanced Chat/Analysis (3B)"
-        elif "14b" in name_lower or "13b" in name_lower:
-            return "Advanced Reasoning (14B)"
-        elif "instruct" in name_lower:
-            return "Instruction Following"
-        else:
-            return "General Purpose"
+        purpose_map = _get_model_purpose_map()
+
+        for keyword, purpose in purpose_map.items():
+            if keyword in name_lower:
+                return purpose
+
+        return "General Purpose"
 
     def get_service_status(self) -> Dict[str, Any]:
         """Get status of all AutoBot services."""

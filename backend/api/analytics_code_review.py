@@ -206,45 +206,64 @@ REVIEW_PATTERNS = {
 # ============================================================================
 
 
+def _parse_hunk_header(line: str) -> dict[str, Any] | None:
+    """Parse a diff hunk header line (Issue #315)."""
+    match = re.match(r"@@ -(\d+),?\d* \+(\d+),?\d* @@", line)
+    if match:
+        return {
+            "old_start": int(match.group(1)),
+            "new_start": int(match.group(2)),
+            "lines": [],
+        }
+    return None
+
+
+def _classify_diff_line(line: str) -> tuple[str, str]:
+    """Classify a diff line and extract content (Issue #315)."""
+    if line.startswith("+") and not line.startswith("+++"):
+        return "add", line[1:]
+    elif line.startswith("-") and not line.startswith("---"):
+        return "delete", line[1:]
+    return "context", line[1:] if line else ""
+
+
 def parse_diff(diff_content: str) -> list[dict[str, Any]]:
-    """Parse unified diff format into structured data."""
+    """Parse unified diff format into structured data (Issue #315: depth 7→3)."""
     files = []
     current_file = None
     current_hunks = []
     current_hunk = None
 
     for line in diff_content.split("\n"):
+        # Handle new file marker
         if line.startswith("diff --git"):
             if current_file:
                 current_file["hunks"] = current_hunks
                 files.append(current_file)
-            # Extract file path
             parts = line.split(" b/")
             file_path = parts[-1] if len(parts) > 1 else "unknown"
             current_file = {"path": file_path, "hunks": [], "additions": 0, "deletions": 0}
             current_hunks = []
-        elif line.startswith("@@"):
+            current_hunk = None
+            continue
+
+        # Handle hunk header
+        if line.startswith("@@"):
             if current_hunk:
                 current_hunks.append(current_hunk)
-            # Parse hunk header
-            match = re.match(r"@@ -(\d+),?\d* \+(\d+),?\d* @@", line)
-            if match:
-                current_hunk = {
-                    "old_start": int(match.group(1)),
-                    "new_start": int(match.group(2)),
-                    "lines": [],
-                }
-        elif current_hunk is not None:
-            if line.startswith("+") and not line.startswith("+++"):
-                current_hunk["lines"].append({"type": "add", "content": line[1:]})
-                if current_file:
-                    current_file["additions"] += 1
-            elif line.startswith("-") and not line.startswith("---"):
-                current_hunk["lines"].append({"type": "delete", "content": line[1:]})
-                if current_file:
-                    current_file["deletions"] += 1
-            else:
-                current_hunk["lines"].append({"type": "context", "content": line[1:] if line else ""})
+            current_hunk = _parse_hunk_header(line)
+            continue
+
+        # Handle content lines within a hunk
+        if current_hunk is None:
+            continue
+
+        line_type, content = _classify_diff_line(line)
+        current_hunk["lines"].append({"type": line_type, "content": content})
+        if current_file and line_type == "add":
+            current_file["additions"] += 1
+        elif current_file and line_type == "delete":
+            current_file["deletions"] += 1
 
     # Add last file and hunk
     if current_hunk:

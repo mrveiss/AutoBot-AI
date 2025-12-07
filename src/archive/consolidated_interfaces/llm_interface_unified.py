@@ -132,6 +132,7 @@ class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     def __init__(self, config: ProviderConfig):
+        """Initialize LLM provider with config and request tracking counters."""
         self.config = config
         self.provider_type = config.provider_type
         self._active_requests = 0
@@ -167,6 +168,7 @@ class OllamaProvider(LLMProvider):
     """Ollama LLM provider implementation."""
 
     def __init__(self, config: ProviderConfig):
+        """Initialize Ollama provider with base URL from config or service registry."""
         super().__init__(config)
         self.base_url = config.base_url or get_service_url("ollama")
 
@@ -300,6 +302,7 @@ class OpenAIProvider(LLMProvider):
     """OpenAI LLM provider implementation."""
 
     def __init__(self, config: ProviderConfig):
+        """Initialize OpenAI provider with API key and async client."""
         super().__init__(config)
         self.api_key = config.api_key
         if not self.api_key:
@@ -387,6 +390,7 @@ class MockProvider(LLMProvider):
     """Mock LLM provider for testing."""
 
     def __init__(self, config: ProviderConfig):
+        """Initialize mock provider with base configuration."""
         super().__init__(config)
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:

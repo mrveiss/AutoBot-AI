@@ -36,6 +36,37 @@ memory_manager = None
 markdown_system = None
 
 
+def _apply_task_status_update(
+    task_id: str,
+    status_enum: TaskStatus,
+    outputs: dict | None,
+    error_message: str | None,
+) -> bool:
+    """Apply task status update based on status type (Issue #315: extracted).
+
+    Returns:
+        True if update succeeded, False otherwise
+
+    Raises:
+        HTTPException: If required fields are missing
+    """
+    if status_enum == TaskStatus.IN_PROGRESS:
+        return memory_manager.start_task(task_id)
+
+    if status_enum in TERMINAL_TASK_STATUSES:
+        return memory_manager.complete_task(task_id, outputs, status_enum)
+
+    if status_enum == TaskStatus.FAILED:
+        if not error_message:
+            raise HTTPException(
+                status_code=400,
+                detail="error_message required for failed status",
+            )
+        return memory_manager.fail_task(task_id, error_message)
+
+    return False
+
+
 def get_memory_manager():
     """Lazy initialization of memory manager to prevent startup blocking"""
     global memory_manager, markdown_system
@@ -219,7 +250,10 @@ async def create_task(request: TaskCreateRequest):
 )
 @router.put("/tasks/{task_id}")
 async def update_task(task_id: str, request: TaskUpdateRequest):
-    """Update task status and information"""
+    """Update task status and information.
+
+    Issue #315: Refactored to use helper function for reduced nesting depth.
+    """
     try:
         success = False
 
@@ -231,19 +265,10 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
                     status_code=400, detail=f"Invalid status: {request.status}"
                 )
 
-            if status_enum == TaskStatus.IN_PROGRESS:
-                success = memory_manager.start_task(task_id)
-            elif status_enum in TERMINAL_TASK_STATUSES:
-                success = memory_manager.complete_task(
-                    task_id, request.outputs, status_enum
-                )
-            elif status_enum == TaskStatus.FAILED:
-                if not request.error_message:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="error_message required for failed status",
-                    )
-                success = memory_manager.fail_task(task_id, request.error_message)
+            # Use helper for status-specific logic (Issue #315)
+            success = _apply_task_status_update(
+                task_id, status_enum, request.outputs, request.error_message
+            )
 
         if not success:
             raise HTTPException(

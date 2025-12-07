@@ -136,6 +136,7 @@ class FileOperation(BaseModel):
     @field_validator("path")
     @classmethod
     def validate_path(cls, v):
+        """Validate path to prevent directory traversal attacks."""
         if not v or ".." in v or v.startswith("/"):
             raise ValueError("Invalid path")
         return v

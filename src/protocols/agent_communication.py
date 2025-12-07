@@ -29,6 +29,30 @@ sys.path.insert(
 
 from src.utils.error_boundaries import error_boundary  # noqa: E402
 
+
+def _parse_message_type(msg_type: Any) -> "MessageType":
+    """Parse message type from various formats (Issue #315 - extracted)."""
+    if isinstance(msg_type, str) and msg_type.startswith("MessageType."):
+        msg_type = msg_type.split(".")[-1].lower()
+    if isinstance(msg_type, str):
+        return MessageType(msg_type)
+    return msg_type
+
+
+def _parse_priority(priority: Any) -> "MessagePriority":
+    """Parse message priority from various formats (Issue #315 - extracted)."""
+    if isinstance(priority, int):
+        return MessagePriority(priority)
+    if isinstance(priority, str):
+        if priority.startswith("MessagePriority."):
+            priority_name = priority.split(".")[-1]
+            return MessagePriority[priority_name]
+        try:
+            return MessagePriority(int(priority))
+        except ValueError:
+            return MessagePriority.NORMAL
+    return MessagePriority.NORMAL
+
 # noqa: E402
 from src.utils.redis_client import get_redis_client  # noqa: E402
 
@@ -126,37 +150,13 @@ class StandardMessage:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StandardMessage":
-        """Create message from dictionary"""
+        """Create message from dictionary (Issue #315 - refactored)."""
         header_data = data["header"]
         payload_data = data["payload"]
 
-        # Reconstruct enums - handle both enum values and names
-        msg_type = header_data["message_type"]
-        if isinstance(msg_type, str) and not msg_type.startswith("MessageType."):
-            # If it's just the value like 'broadcast', use it directly
-            header_data["message_type"] = MessageType(msg_type)
-        else:
-            # If it's like 'MessageType.BROADCAST', extract the value
-            if isinstance(msg_type, str) and msg_type.startswith("MessageType."):
-                msg_type = msg_type.split(".")[-1].lower()
-            header_data["message_type"] = MessageType(msg_type)
-
-        priority = header_data["priority"]
-        if isinstance(priority, int):
-            header_data["priority"] = MessagePriority(priority)
-        elif isinstance(priority, str):
-            if priority.startswith("MessagePriority."):
-                # Extract enum name like 'NORMAL' from 'MessagePriority.NORMAL'
-                priority_name = priority.split(".")[-1]
-                header_data["priority"] = MessagePriority[priority_name]
-            else:
-                # Try to convert string to int, fallback to NORMAL
-                try:
-                    header_data["priority"] = MessagePriority(int(priority))
-                except ValueError:
-                    header_data["priority"] = MessagePriority.NORMAL
-        else:
-            header_data["priority"] = MessagePriority.NORMAL
+        # Reconstruct enums using helper functions
+        header_data["message_type"] = _parse_message_type(header_data["message_type"])
+        header_data["priority"] = _parse_priority(header_data["priority"])
 
         header = MessageHeader(**header_data)
         payload = MessagePayload(**payload_data)
@@ -199,6 +199,7 @@ class RedisCommunicationChannel(CommunicationChannel):
     """Redis-based communication channel implementation"""
 
     def __init__(self, channel_id: str):
+        """Initialize Redis channel with client connection and message queue."""
         super().__init__(channel_id)
         self.redis_client = get_redis_client()
         self.channel_key = f"autobot:agent_comm:{channel_id}"
@@ -293,6 +294,7 @@ class DirectCommunicationChannel(CommunicationChannel):
     """Direct in-memory communication channel for same-process agents"""
 
     def __init__(self, channel_id: str):
+        """Initialize direct in-memory channel with message queue."""
         super().__init__(channel_id)
         self.message_queue = asyncio.Queue()
         self.is_active = True
@@ -345,6 +347,7 @@ class AgentCommunicationProtocol:
     """Main protocol handler for standardized agent communication"""
 
     def __init__(self, agent_identity: AgentIdentity):
+        """Initialize protocol handler with agent identity and empty registries."""
         self.agent_identity = agent_identity
         self.channels: Dict[str, CommunicationChannel] = {}
         self.message_handlers: Dict[MessageType, List[Callable]] = {}
@@ -631,6 +634,7 @@ class AgentCommunicationManager:
     """Manages communication protocols for multiple agents"""
 
     def __init__(self):
+        """Initialize manager with empty protocol registry and channel factory."""
         self.protocols: Dict[str, AgentCommunicationProtocol] = {}
         self.channel_factory = {
             "redis": RedisCommunicationChannel,
@@ -772,7 +776,7 @@ if __name__ == "__main__":
     import argparse
 
     async def test_communication_protocol():
-        """Test the agent communication protocol"""
+        """Run integration test for agent communication protocol."""
 
         print("🧪 Testing Agent Communication Protocol")
         print("=" * 50)
@@ -794,6 +798,7 @@ if __name__ == "__main__":
 
         # Set up message handlers
         async def handle_request(message: StandardMessage) -> StandardMessage:
+            """Handle incoming request and return response message."""
             print(f"Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(

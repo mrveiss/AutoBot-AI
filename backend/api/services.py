@@ -26,6 +26,116 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Services"])
 
 
+def _determine_redis_status(redis_status_obj) -> tuple[str, str]:
+    """Determine Redis status and message from status object (Issue #315: extracted).
+
+    Returns:
+        Tuple of (status, message)
+    """
+    if redis_status_obj is None:
+        return ("warning", "Status check needed")
+
+    status_map = {
+        "running": ("healthy", "Redis service running"),
+        "stopped": ("error", "Redis service stopped"),
+        "failed": ("error", "Redis service failed"),
+    }
+
+    return status_map.get(
+        redis_status_obj.status, ("warning", "Redis service status unknown")
+    )
+
+
+async def _get_services_from_monitoring() -> list:
+    """Get services from monitoring data (Issue #315: extracted).
+
+    Returns:
+        List of ServiceStatus objects, empty list on failure
+    """
+    if not monitoring_services_health:
+        return []
+
+    try:
+        monitoring_data = await monitoring_services_health()
+        if not isinstance(monitoring_data, dict) or "services" not in monitoring_data:
+            return []
+
+        services = []
+        for service_data in monitoring_data["services"]:
+            services.append(
+                ServiceStatus(
+                    name=service_data.get("name", "Unknown"),
+                    status=service_data.get("status", "unknown"),
+                    message=service_data.get("statusText", "No message"),
+                    response_time_ms=service_data.get("response_time_ms"),
+                )
+            )
+        return services
+    except Exception as e:
+        logger.warning(f"Could not get monitoring services data: {e}")
+        return []
+
+
+async def _get_redis_status():
+    """Get Redis service status (Issue #315: extracted).
+
+    Returns:
+        Redis status object or None on failure
+    """
+    try:
+        from backend.api.redis_service import get_service_manager
+
+        manager = await get_service_manager()
+        return await manager.get_service_status()
+    except Exception as e:
+        logger.warning(f"Could not get Redis service status: {e}")
+        return None
+
+
+def _build_default_services(redis_status_obj) -> list:
+    """Build default services list when monitoring unavailable (Issue #315: extracted).
+
+    Returns:
+        List of default ServiceStatus objects
+    """
+    from src.unified_config_manager import unified_config_manager
+
+    monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
+    default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
+
+    redis_status, redis_message = _determine_redis_status(redis_status_obj)
+
+    return [
+        ServiceStatus(
+            name="Backend API",
+            status="healthy",
+            message="API server running",
+            response_time_ms=default_response_time,
+        ),
+        ServiceStatus(
+            name="Frontend",
+            status="healthy",
+            message="Web interface accessible",
+        ),
+        ServiceStatus(name="Redis", status=redis_status, message=redis_message),
+        ServiceStatus(
+            name="LLM Service",
+            status="warning",
+            message="Connection status unknown",
+        ),
+        ServiceStatus(
+            name="NPU Worker",
+            status="healthy",
+            message="Hardware acceleration ready",
+        ),
+        ServiceStatus(
+            name="Browser Service",
+            status="healthy",
+            message="Automation services running",
+        ),
+    ]
+
+
 class ServiceStatus(BaseModel):
     """Service status model"""
 
@@ -74,99 +184,20 @@ class ServicesResponse(BaseModel):
 )
 @router.get("/services", response_model=ServicesResponse)
 async def get_services():
-    """Get list of all available services with their status"""
+    """Get list of all available services with their status.
+
+    Issue #315: Refactored to use helper functions for reduced nesting depth.
+    """
     try:
-        # Try to get monitoring data first
-        services = []
+        # Get services from monitoring (uses helper)
+        services = await _get_services_from_monitoring()
 
-        if monitoring_services_health:
-            try:
-                monitoring_data = await monitoring_services_health()
+        # Get Redis status for fallback services
+        redis_status_obj = await _get_redis_status()
 
-                # Convert monitoring data to our format
-                if isinstance(monitoring_data, dict) and "services" in monitoring_data:
-                    for service_data in monitoring_data["services"]:
-                        services.append(
-                            ServiceStatus(
-                                name=service_data.get("name", "Unknown"),
-                                status=service_data.get("status", "unknown"),
-                                message=service_data.get("statusText", "No message"),
-                                response_time_ms=service_data.get("response_time_ms"),
-                            )
-                        )
-            except Exception as e:
-                logger.warning(f"Could not get monitoring services data: {e}")
-
-        # Get Redis service status from RedisServiceManager
-        redis_status_obj = None
-        try:
-            from backend.api.redis_service import get_service_manager
-
-            manager = await get_service_manager()
-            redis_status_obj = await manager.get_service_status()
-        except Exception as e:
-            logger.warning(f"Could not get Redis service status: {e}")
-
-        # Add default/fallback services if monitoring data unavailable
+        # Use default services if monitoring unavailable
         if not services:
-            # Get configuration for default response time
-            from src.unified_config_manager import unified_config_manager
-
-            monitoring_config = (
-                unified_config_manager.get_config_section("monitoring") or {}
-            )
-            default_response_time = monitoring_config.get(
-                "default_response_time_ms", 10.0
-            )
-
-            # Determine Redis status based on actual service status
-            if redis_status_obj:
-                if redis_status_obj.status == "running":
-                    redis_status = "healthy"
-                    redis_message = "Redis service running"
-                elif redis_status_obj.status == "stopped":
-                    redis_status = "error"
-                    redis_message = "Redis service stopped"
-                elif redis_status_obj.status == "failed":
-                    redis_status = "error"
-                    redis_message = "Redis service failed"
-                else:
-                    redis_status = "warning"
-                    redis_message = "Redis service status unknown"
-            else:
-                redis_status = "warning"
-                redis_message = "Status check needed"
-
-            default_services = [
-                ServiceStatus(
-                    name="Backend API",
-                    status="healthy",
-                    message="API server running",
-                    response_time_ms=default_response_time,
-                ),
-                ServiceStatus(
-                    name="Frontend",
-                    status="healthy",
-                    message="Web interface accessible",
-                ),
-                ServiceStatus(name="Redis", status=redis_status, message=redis_message),
-                ServiceStatus(
-                    name="LLM Service",
-                    status="warning",
-                    message="Connection status unknown",
-                ),
-                ServiceStatus(
-                    name="NPU Worker",
-                    status="healthy",
-                    message="Hardware acceleration ready",
-                ),
-                ServiceStatus(
-                    name="Browser Service",
-                    status="healthy",
-                    message="Automation services running",
-                ),
-            ]
-            services = default_services
+            services = _build_default_services(redis_status_obj)
 
         # Calculate counts
         healthy_count = sum(1 for s in services if s.status == "healthy")

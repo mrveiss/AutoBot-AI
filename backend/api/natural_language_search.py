@@ -334,6 +334,23 @@ def _generate_intent_query(intent: QueryIntent, entity: str) -> Optional[str]:
     return None
 
 
+async def _add_explanation_to_result(
+    result_dict: Dict[str, Any], code_explainer: "CodeExplainer"
+) -> None:
+    """Add LLM explanation to search result (Issue #315 - extracted)."""
+    try:
+        explanation = await code_explainer.explain_code(
+            result_dict["content"],
+            result_dict["file_path"],
+            result_dict["line_number"],
+        )
+        result_dict["summary"] = explanation.summary
+        result_dict["explanation"] = explanation.detailed_explanation
+        result_dict["key_concepts"] = explanation.key_concepts
+    except Exception as e:
+        logger.warning(f"Explanation generation failed: {e}")
+
+
 # =============================================================================
 # Query Parser
 # =============================================================================
@@ -343,6 +360,7 @@ class NaturalLanguageQueryParser:
     """Parses natural language queries into structured search parameters."""
 
     def __init__(self):
+        """Initialize parser with stopwords and pattern matchers."""
         self.stopwords = {
             "the",
             "a",
@@ -569,6 +587,7 @@ class QuerySuggestionGenerator:
     """Generates related and refined query suggestions."""
 
     def __init__(self):
+        """Initialize suggestion generator with query parser."""
         self.parser = NaturalLanguageQueryParser()
 
     def generate_suggestions(
@@ -734,6 +753,7 @@ class CodeExplainer:
     """Generates explanations for code snippets."""
 
     def __init__(self):
+        """Initialize code explainer with LLM availability check."""
         self.llm_available = self._check_llm_availability()
 
     def _check_llm_availability(self) -> bool:
@@ -1001,18 +1021,9 @@ async def natural_language_search(request: NLSearchRequest):
                 "confidence": result.confidence if hasattr(result, "confidence") else result.get("confidence", 0.0),
             }
 
+            # Issue #315: Use helper for explanation generation
             if request.include_explanations:
-                try:
-                    explanation = await _code_explainer.explain_code(
-                        result_dict["content"],
-                        result_dict["file_path"],
-                        result_dict["line_number"],
-                    )
-                    result_dict["summary"] = explanation.summary
-                    result_dict["explanation"] = explanation.detailed_explanation
-                    result_dict["key_concepts"] = explanation.key_concepts
-                except Exception as e:
-                    logger.warning(f"Explanation generation failed: {e}")
+                await _add_explanation_to_result(result_dict, _code_explainer)
 
             results_with_explanations.append(SearchResultWithExplanation(**result_dict))
 

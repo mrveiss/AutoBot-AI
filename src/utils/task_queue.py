@@ -39,7 +39,8 @@ ErrorCategory = None
 #     from src.utils.logging_config import log_performance_metric
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
-    """Temporary implementation until logging_config module is created"""
+    """Log performance metric placeholder until logging_config module is created."""
+    pass
 
 
 class TaskStatus(Enum):
@@ -116,6 +117,7 @@ class Task:
     metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
+        """Initialize default values for kwargs, created_at, and metadata."""
         if self.kwargs is None:
             self.kwargs = {}
         if self.created_at is None:
@@ -220,6 +222,7 @@ class TaskQueue:
         """
 
         def decorator(func: Callable):
+            """Register function with task name and return it unchanged."""
             task_name = name or func.__name__
             self.register_task(task_name, func)
             return func
@@ -762,6 +765,7 @@ def task(name: Optional[str] = None, **task_kwargs):
     """
 
     def decorator(func: Callable):
+        """Register function as task and add enqueue method."""
         task_queue = get_task_queue()
         task_name = name or func.__name__
         task_queue.register_task(task_name, func)

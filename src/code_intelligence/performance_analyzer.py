@@ -913,22 +913,25 @@ def get_performance_issue_types() -> List[Dict[str, str]]:
     ]
 
 
+def _get_category_keywords() -> list:
+    """Get keyword to category mapping (Issue #315)."""
+    return [
+        (("QUERY", "INSERT"), "Database"),
+        (("LOOP", "COMPLEXITY"), "Algorithm"),
+        (("ASYNC", "AWAIT", "SYNC"), "Async/Await"),
+        (("MEMORY", "COLLECTION", "STRING"), "Memory"),
+        (("CACHE", "COMPUTATION"), "Caching"),
+        (("FILE", "IO"), "I/O"),
+        (("API", "HTTP", "CONNECTION"), "Network"),
+    ]
+
+
 def _get_category(issue_type: PerformanceIssueType) -> str:
-    """Get category for issue type."""
+    """Get category for issue type (Issue #315 - reduced nesting)."""
     type_name = issue_type.name
-    if "QUERY" in type_name or "INSERT" in type_name:
-        return "Database"
-    elif "LOOP" in type_name or "COMPLEXITY" in type_name:
-        return "Algorithm"
-    elif "ASYNC" in type_name or "AWAIT" in type_name or "SYNC" in type_name:
-        return "Async/Await"
-    elif "MEMORY" in type_name or "COLLECTION" in type_name or "STRING" in type_name:
-        return "Memory"
-    elif "CACHE" in type_name or "COMPUTATION" in type_name:
-        return "Caching"
-    elif "FILE" in type_name or "IO" in type_name:
-        return "I/O"
-    elif "API" in type_name or "HTTP" in type_name or "CONNECTION" in type_name:
-        return "Network"
-    else:
-        return "General"
+
+    for keywords, category in _get_category_keywords():
+        if any(kw in type_name for kw in keywords):
+            return category
+
+    return "General"

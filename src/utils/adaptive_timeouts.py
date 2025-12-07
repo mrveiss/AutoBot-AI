@@ -98,6 +98,7 @@ class AdaptiveTimeout:
     """
 
     def __init__(self, category: TimeoutCategory):
+        """Initialize adaptive timeout handler for given category."""
         self.category = category
         self.config = AdaptiveTimeoutConfig()
         self.start_time = None
@@ -374,6 +375,7 @@ if __name__ == "__main__":
 
         # Test user interaction timeout (was 600s, now 30s)
         async def mock_user_permission():
+            """Simulate slow user permission request for timeout testing."""
             await asyncio.sleep(35)  # Will timeout
             return True
 
@@ -384,6 +386,7 @@ if __name__ == "__main__":
 
         # Test installation timeout (was 600s, now 120s with background)
         async def mock_installation():
+            """Simulate slow package installation for background execution test."""
             await asyncio.sleep(150)  # Will timeout but go background
             return {"installed": True}
 

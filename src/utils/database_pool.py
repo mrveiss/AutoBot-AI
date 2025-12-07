@@ -88,10 +88,60 @@ class SQLiteConnectionPool:
         logger.debug(f"Created new SQLite connection #{self._created_connections}")
         return conn
 
+    def _acquire_connection(self) -> sqlite3.Connection:
+        """Acquire a connection from pool or create new one (Issue #315: extracted).
+
+        Returns:
+            sqlite3.Connection from pool or newly created
+
+        Raises:
+            Exception if unable to get connection
+        """
+        # Try to get existing connection from pool
+        try:
+            conn = self._pool.get(timeout=self.timeout)
+            with self._lock:
+                self._stats["connections_reused"] += 1
+            logger.debug("Reused connection from pool")
+            return conn
+        except Exception:
+            pass  # Pool empty, try to create new
+
+        # Pool exhausted, create new connection if under limit
+        with self._lock:
+            if self._created_connections < self.pool_size:
+                return self._create_connection()
+            self._stats["pool_exhausted_count"] += 1
+            logger.warning("Connection pool exhausted, waiting...")
+
+        # Wait for connection from pool
+        return self._pool.get(timeout=self.timeout)
+
+    def _return_connection(self, conn: sqlite3.Connection) -> None:
+        """Return connection to pool (Issue #315: extracted).
+
+        Args:
+            conn: Connection to return
+        """
+        try:
+            conn.rollback()  # Reset any uncommitted transactions
+            self._pool.put(conn)
+        except Exception:
+            # Pool is full, close connection
+            self._close_connection_safely(conn)
+
+    def _close_connection_safely(self, conn: sqlite3.Connection) -> None:
+        """Close connection with error handling (Issue #315: extracted)."""
+        try:
+            conn.close()
+        except Exception:
+            pass  # Best-effort cleanup
+
     @contextmanager
     def get_connection(self):
         """
         Get a connection from the pool (context manager, thread-safe).
+        Issue #315: Refactored to use helpers for reduced nesting.
 
         Yields:
             sqlite3.Connection: Database connection
@@ -100,23 +150,7 @@ class SQLiteConnectionPool:
         conn = None
 
         try:
-            # Try to get existing connection from pool
-            try:
-                conn = self._pool.get(timeout=self.timeout)
-                with self._lock:
-                    self._stats["connections_reused"] += 1
-                logger.debug("Reused connection from pool")
-            except Exception:
-                # Pool exhausted, create new connection if under limit
-                with self._lock:
-                    if self._created_connections < self.pool_size:
-                        conn = self._create_connection()
-                    else:
-                        self._stats["pool_exhausted_count"] += 1
-                        logger.warning("Connection pool exhausted, waiting...")
-                # Get connection without holding lock (may block)
-                if conn is None:
-                    conn = self._pool.get(timeout=self.timeout)
+            conn = self._acquire_connection()
 
             # Record wait time (thread-safe)
             wait_time = (datetime.now() - start_time).total_seconds()
@@ -132,24 +166,13 @@ class SQLiteConnectionPool:
             logger.error(f"Error with database connection: {e}")
             # Connection is bad, don't return it to pool
             if conn:
-                try:
-                    conn.close()
-                except Exception:
-                    pass  # Best-effort cleanup - connection already failed
+                self._close_connection_safely(conn)
                 conn = None
             raise
         finally:
             # Return good connection to pool
             if conn:
-                try:
-                    conn.rollback()  # Reset any uncommitted transactions
-                    self._pool.put(conn)
-                except Exception:
-                    # Pool is full, close connection
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass  # Best-effort cleanup during pool overflow
+                self._return_connection(conn)
 
     def close_all(self):
         """Close all connections in the pool (thread-safe)."""

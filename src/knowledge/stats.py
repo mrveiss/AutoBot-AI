@@ -274,8 +274,50 @@ class StatsMixin:
             logger.warning(f"Could not get ChromaDB stats: {e}")
             stats["index_available"] = False
 
+    async def _get_counts_with_fallback(self) -> tuple[int, int]:
+        """Get fact and vector counts with ChromaDB fallback (Issue #315)."""
+        try:
+            stat_counters = await self._get_all_stats()
+            if stat_counters:
+                return stat_counters.get("total_facts", 0), stat_counters.get("total_vectors", 0)
+        except Exception as e:
+            logger.warning(f"Error getting stats counters: {e}")
+
+        # Fallback to ChromaDB count
+        logger.warning("Stats counters not initialized, using ChromaDB fallback")
+        if not self.vector_store:
+            return 0, 0
+        try:
+            chroma_collection = self.vector_store._collection
+            vector_count = chroma_collection.count()
+            return 0, vector_count
+        except Exception as e:
+            logger.error(f"Error getting ChromaDB count: {e}")
+            return 0, 0
+
+    async def _sample_fact_keys(self, limit: int = 10) -> List[bytes]:
+        """Sample fact keys for category extraction (Issue #315)."""
+        fact_keys = []
+        try:
+            async for key in self.aioredis_client.scan_iter(match="fact:*", count=limit):
+                fact_keys.append(key)
+                if len(fact_keys) >= limit:
+                    break
+        except Exception as e:
+            logger.warning(f"Error sampling facts: {e}")
+        return fact_keys
+
+    async def _get_redis_memory_size(self) -> int:
+        """Get Redis memory usage (Issue #315)."""
+        try:
+            info = await self.aioredis_client.info("memory")
+            return info.get("used_memory", 0)
+        except Exception as e:
+            logger.debug(f"Could not get Redis memory info: {e}")
+            return 0
+
     async def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive knowledge base statistics (async version)"""
+        """Get comprehensive knowledge base statistics (Issue #315: depth 7→3)"""
         # Import here to avoid circular import
         from src.knowledge.embedding_cache import get_embedding_cache
 
@@ -300,69 +342,21 @@ class StatsMixin:
             }
 
             if self.aioredis_client:
-                # Issue #71: O(1) stats lookup using incremental counters
-                try:
-                    # Get counts from kb:stats hash (O(1) operation)
-                    stat_counters = await self._get_all_stats()
-
-                    fact_count = stat_counters.get("total_facts", 0)
-                    vector_count = stat_counters.get("total_vectors", 0)
-
-                    # If counters are not initialized, fall back to ChromaDB count
-                    if not stat_counters:
-                        logger.warning(
-                            "Stats counters not initialized, using ChromaDB fallback"
-                        )
-                        fact_count = 0
-                        vector_count = 0
-                        if self.vector_store:
-                            try:
-                                chroma_collection = self.vector_store._collection
-                                vector_count = chroma_collection.count()
-                            except Exception as e:
-                                logger.error(f"Error getting ChromaDB count: {e}")
-
-                    logger.debug(
-                        f"O(1) stats lookup: facts={fact_count}, vectors={vector_count}"
-                    )
-
-                except Exception as count_error:
-                    logger.warning(
-                        f"Error getting stats counters, using fallback: {count_error}"
-                    )
-                    fact_count = 0
-                    vector_count = 0
+                # Get counts using helper with fallback (Issue #315)
+                fact_count, vector_count = await self._get_counts_with_fallback()
+                logger.debug(f"O(1) stats lookup: facts={fact_count}, vectors={vector_count}")
 
                 stats["total_facts"] = fact_count
                 stats["total_documents"] = vector_count
                 stats["total_vectors"] = vector_count
                 stats["total_chunks"] = vector_count
+                stats["db_size"] = await self._get_redis_memory_size()
 
-                # Sample a few facts for category extraction (limit to 10 for speed)
-                fact_keys_sample = []
-                try:
-                    count = 0
-                    async for key in self.aioredis_client.scan_iter(
-                        match="fact:*", count=10
-                    ):
-                        fact_keys_sample.append(key)
-                        count += 1
-                        if count >= 10:  # Only sample 10 facts maximum
-                            break
-                except Exception as sample_error:
-                    logger.warning(f"Error sampling facts: {sample_error}")
-
-                # Get database size
-                try:
-                    info = await self.aioredis_client.info("memory")
-                    stats["db_size"] = info.get("used_memory", 0)
-                except Exception as e:
-                    logger.debug(f"Could not get Redis memory info: {e}")
-
-                # Extract categories using helper (Issue #298 - reduced nesting)
+                # Sample facts and extract categories
+                fact_keys_sample = await self._sample_fact_keys(limit=10)
                 stats["categories"] = await self._get_fact_categories(fact_keys_sample)
 
-            # Get ChromaDB stats using helper (Issue #298 - reduced nesting)
+            # Get ChromaDB stats using helper (Issue #298)
             await self._get_chromadb_stats(stats)
 
             # Add embedding cache statistics (P0 optimization monitoring)
@@ -384,13 +378,67 @@ class StatsMixin:
                 "last_updated": datetime.now().isoformat(),
             }
 
-    async def get_detailed_stats(self) -> Dict[str, Any]:
-        """
-        Get comprehensive statistics about the knowledge base.
+    async def _get_memory_stats(self) -> Dict[str, float]:
+        """Get Redis memory statistics (Issue #315: extracted).
 
-        This method provides detailed insights including database size,
-        category distribution, recent activity, and performance metrics.
-        This is more computationally intensive than get_stats().
+        Returns:
+            Dict with memory_usage_mb and peak_memory_mb, or empty dict on error
+        """
+        try:
+            info = await asyncio.to_thread(self.redis_client.info, "memory")
+            return {
+                "memory_usage_mb": round(info.get("used_memory", 0) / (1024 * 1024), 2),
+                "peak_memory_mb": round(info.get("used_memory_peak", 0) / (1024 * 1024), 2),
+            }
+        except Exception as e:
+            logger.warning(f"Could not get memory stats: {e}")
+            return {}
+
+    async def _get_recent_activity_stats(self) -> Dict[str, Any]:
+        """Get recent activity statistics (Issue #315: extracted).
+
+        Returns:
+            Dict with recent_activity data, or empty dict on error
+        """
+        try:
+            fact_keys = await self._scan_redis_keys_async("fact:*")
+            if not fact_keys:
+                return {}
+
+            recent_facts = await self._sample_fact_timestamps(fact_keys[:10])
+            return {
+                "recent_activity": {
+                    "total_facts": len(fact_keys),
+                    "sample_timestamps": recent_facts[:5],
+                }
+            }
+        except Exception as e:
+            logger.warning(f"Could not get recent activity: {e}")
+            return {}
+
+    async def _sample_fact_timestamps(self, fact_keys: List[str]) -> List[str]:
+        """Sample timestamps from fact keys (Issue #315: extracted).
+
+        Args:
+            fact_keys: List of Redis keys to sample
+
+        Returns:
+            List of timestamp strings
+        """
+        timestamps = []
+        for fact_key in fact_keys:
+            try:
+                fact_data = await self.aioredis_client.hgetall(fact_key)
+                if fact_data and "timestamp" in fact_data:
+                    timestamps.append(fact_data["timestamp"])
+            except Exception:
+                continue
+        return timestamps
+
+    async def get_detailed_stats(self) -> Dict[str, Any]:
+        """Get comprehensive statistics about the knowledge base.
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
 
         Returns:
             Dict containing detailed statistics and analytics
@@ -409,49 +457,13 @@ class StatsMixin:
         try:
             detailed = {**basic_stats}
 
-            # Database size analysis
-            try:
-                # Get approximate database size
-                info = await asyncio.to_thread(self.redis_client.info, "memory")
-                detailed["memory_usage_mb"] = round(
-                    info.get("used_memory", 0) / (1024 * 1024), 2
-                )
-                detailed["peak_memory_mb"] = round(
-                    info.get("used_memory_peak", 0) / (1024 * 1024), 2
-                )
-            except Exception as e:
-                logger.warning(f"Could not get memory stats: {e}")
+            # Collect stats from helper methods
+            detailed.update(await self._get_memory_stats())
+            detailed.update(await self._get_recent_activity_stats())
 
-            # Recent activity analysis
-            try:
-                fact_keys = await self._scan_redis_keys_async("fact:*")
-                if fact_keys:
-                    # Sample recent facts for activity analysis
-                    recent_facts = []
-                    sample_size = min(10, len(fact_keys))
-
-                    for fact_key in fact_keys[:sample_size]:
-                        try:
-                            fact_data = await self.aioredis_client.hgetall(fact_key)
-                            if fact_data and "timestamp" in fact_data:
-                                recent_facts.append(fact_data["timestamp"])
-                        except Exception:
-                            continue
-
-                    detailed["recent_activity"] = {
-                        "total_facts": len(fact_keys),
-                        "sample_timestamps": recent_facts[:5],  # Show 5 most recent
-                    }
-            except Exception as e:
-                logger.warning(f"Could not get recent activity: {e}")
-
-            # Vector store health
-            try:
-                detailed["vector_store_health"] = "healthy"
-                detailed["vector_backend"] = "chromadb"
-            except Exception as e:
-                logger.warning(f"Could not assess vector store health: {e}")
-
+            # Vector store health (simple assignment, no nesting needed)
+            detailed["vector_store_health"] = "healthy"
+            detailed["vector_backend"] = "chromadb"
             detailed["detailed_stats"] = True
             detailed["generated_at"] = datetime.now().isoformat()
 

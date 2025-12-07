@@ -67,6 +67,7 @@ class CircuitBreakerOpenError(Exception):
     """Raised when circuit breaker is open and blocking calls"""
 
     def __init__(self, service_name: str, failure_count: int, last_failure_time: float):
+        """Initialize with service name, failure count, and last failure timestamp."""
         self.service_name = service_name
         self.failure_count = failure_count
         self.last_failure_time = last_failure_time
@@ -90,6 +91,7 @@ class CircuitBreaker:
     """Circuit breaker implementation with performance monitoring"""
 
     def __init__(self, name: str, config: Optional[CircuitBreakerConfig] = None):
+        """Initialize circuit breaker with name and optional configuration."""
         self.name = name
         self.config = config or CircuitBreakerConfig()
         self.state = CircuitState.CLOSED
@@ -443,6 +445,7 @@ class CircuitBreakerManager:
     """Manages multiple circuit breakers for different services"""
 
     def __init__(self):
+        """Initialize circuit breaker manager with empty registry."""
         self.circuit_breakers: Dict[str, CircuitBreaker] = {}
         self._lock = Lock()
 
@@ -499,6 +502,7 @@ def circuit_breaker_async(
     """
 
     def decorator(func):
+        """Inner decorator that configures circuit breaker for async function."""
         config = CircuitBreakerConfig(
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
@@ -515,6 +519,7 @@ def circuit_breaker_async(
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Async wrapper that executes function through circuit breaker."""
             return await circuit_breaker.call_async(func, *args, **kwargs)
 
         wrapper.circuit_breaker = circuit_breaker  # Allow access to circuit breaker
@@ -544,6 +549,7 @@ def circuit_breaker_sync(
     """
 
     def decorator(func):
+        """Inner decorator that configures circuit breaker for sync function."""
         config = CircuitBreakerConfig(
             failure_threshold=failure_threshold,
             recovery_timeout=recovery_timeout,
@@ -560,6 +566,7 @@ def circuit_breaker_sync(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            """Sync wrapper that executes function through circuit breaker."""
             return circuit_breaker.call_sync(func, *args, **kwargs)
 
         wrapper.circuit_breaker = circuit_breaker  # Allow access to circuit breaker
@@ -624,6 +631,7 @@ if __name__ == "__main__":
             "flaky_service", failure_threshold=3, recovery_timeout=5.0
         )
         async def flaky_service_call():
+            """Example flaky service that fails 60% of the time."""
             import random
 
             if random.random() < 0.6:  # 60% chance of failure

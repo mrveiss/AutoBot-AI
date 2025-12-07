@@ -34,6 +34,7 @@ class NPUWorkerClient:
     """Client for communicating with NPU inference worker"""
 
     def __init__(self, npu_endpoint: str = None):
+        """Initialize NPU client with endpoint and HTTP client."""
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._http_client = get_http_client()
         self.available = False
@@ -179,6 +180,7 @@ class NPUTaskQueue:
     """Queue for managing NPU processing tasks"""
 
     def __init__(self, npu_client: NPUWorkerClient, max_concurrent: int = 3):
+        """Initialize task queue with NPU client and worker pool."""
         self.npu_client = npu_client
         self.max_concurrent = max_concurrent
         self.queue = asyncio.Queue()

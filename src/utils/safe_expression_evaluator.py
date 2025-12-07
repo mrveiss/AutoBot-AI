@@ -58,89 +58,103 @@ class SafeExpressionEvaluator:
         except Exception as e:
             raise ValueError(f"Invalid expression: {e}")
 
+    def _eval_constant(self, node: ast.Constant, context: Dict[str, Any]) -> Any:
+        """Evaluate constant node (Issue #315 - extracted method)."""
+        return node.value
+
+    def _eval_num(self, node: ast.Num, context: Dict[str, Any]) -> Any:
+        """Evaluate legacy Num node (Issue #315 - extracted method)."""
+        return node.n
+
+    def _eval_str(self, node: ast.Str, context: Dict[str, Any]) -> Any:
+        """Evaluate legacy Str node (Issue #315 - extracted method)."""
+        return node.s
+
     def _eval_node(self, node: ast.AST, context: Dict[str, Any]) -> Any:
-        """Recursively evaluate an AST node"""
+        """Recursively evaluate an AST node (Issue #315 - dispatch table)."""
+        # O(1) dispatch table lookup
+        dispatch = {
+            ast.Constant: self._eval_constant,
+            ast.Name: self._eval_name,
+            ast.Compare: self._eval_compare,
+            ast.BinOp: self._eval_binop,
+            ast.UnaryOp: self._eval_unaryop,
+            ast.BoolOp: self._eval_boolop,
+            # Backwards compatibility with older Python AST
+            ast.Num: self._eval_num,
+            ast.Str: self._eval_str,
+        }
 
-        if isinstance(node, ast.Constant):
-            # Python 3.8+ uses ast.Constant
-            return node.value
+        handler = dispatch.get(type(node))
+        if handler:
+            return handler(node, context)
 
-        elif isinstance(node, ast.Num):
-            # Backwards compatibility
-            return node.n
+        raise ValueError(f"Unsupported node type: {type(node).__name__}")
 
-        elif isinstance(node, ast.Str):
-            # Backwards compatibility
-            return node.s
+    def _eval_name(self, node: ast.Name, context: Dict[str, Any]) -> Any:
+        """Evaluate variable name (Issue #315 - extracted method)"""
+        if node.id not in context:
+            raise ValueError(f"Unknown variable: {node.id}")
+        return context[node.id]
 
-        elif isinstance(node, ast.Name):
-            # Variable lookup
-            if node.id in context:
-                return context[node.id]
-            else:
-                raise ValueError(f"Unknown variable: {node.id}")
+    def _eval_compare(self, node: ast.Compare, context: Dict[str, Any]) -> bool:
+        """Evaluate comparison (Issue #315 - extracted method)"""
+        left = self._eval_node(node.left, context)
 
-        elif isinstance(node, ast.Compare):
-            # Comparison operations
-            left = self._eval_node(node.left, context)
-
-            for op_node, comparator in zip(node.ops, node.comparators):
-                op_type = type(op_node)
-                if op_type not in self.OPERATORS:
-                    raise ValueError(f"Unsupported operator: {op_type.__name__}")
-
-                right = self._eval_node(comparator, context)
-
-                if not self.OPERATORS[op_type](left, right):
-                    return False
-
-                left = right
-
-            return True
-
-        elif isinstance(node, ast.BinOp):
-            # Binary operations
-            op_type = type(node.op)
+        for op_node, comparator in zip(node.ops, node.comparators):
+            op_type = type(op_node)
             if op_type not in self.OPERATORS:
                 raise ValueError(f"Unsupported operator: {op_type.__name__}")
 
-            left = self._eval_node(node.left, context)
-            right = self._eval_node(node.right, context)
+            right = self._eval_node(comparator, context)
 
-            return self.OPERATORS[op_type](left, right)
-
-        elif isinstance(node, ast.UnaryOp):
-            # Unary operations
-            op_type = type(node.op)
-            if op_type not in self.OPERATORS:
-                raise ValueError(f"Unsupported operator: {op_type.__name__}")
-
-            operand = self._eval_node(node.operand, context)
-
-            return self.OPERATORS[op_type](operand)
-
-        elif isinstance(node, ast.BoolOp):
-            # Boolean operations (and, or)
-            op_type = type(node.op)
-            if op_type not in self.OPERATORS:
-                raise ValueError(f"Unsupported operator: {op_type.__name__}")
-
-            # Evaluate with short-circuit behavior
-            if isinstance(node.op, ast.And):
-                for value in node.values:
-                    result = self._eval_node(value, context)
-                    if not result:
-                        return False
-                return True
-            else:  # ast.Or
-                for value in node.values:
-                    result = self._eval_node(value, context)
-                    if result:
-                        return True
+            if not self.OPERATORS[op_type](left, right):
                 return False
 
-        else:
-            raise ValueError(f"Unsupported node type: {type(node).__name__}")
+            left = right
+
+        return True
+
+    def _eval_binop(self, node: ast.BinOp, context: Dict[str, Any]) -> Any:
+        """Evaluate binary operation (Issue #315 - extracted method)"""
+        op_type = type(node.op)
+        if op_type not in self.OPERATORS:
+            raise ValueError(f"Unsupported operator: {op_type.__name__}")
+
+        left = self._eval_node(node.left, context)
+        right = self._eval_node(node.right, context)
+
+        return self.OPERATORS[op_type](left, right)
+
+    def _eval_unaryop(self, node: ast.UnaryOp, context: Dict[str, Any]) -> Any:
+        """Evaluate unary operation (Issue #315 - extracted method)"""
+        op_type = type(node.op)
+        if op_type not in self.OPERATORS:
+            raise ValueError(f"Unsupported operator: {op_type.__name__}")
+
+        operand = self._eval_node(node.operand, context)
+
+        return self.OPERATORS[op_type](operand)
+
+    def _eval_boolop(self, node: ast.BoolOp, context: Dict[str, Any]) -> bool:
+        """Evaluate boolean operation with short-circuit (Issue #315 - extracted method)"""
+        op_type = type(node.op)
+        if op_type not in self.OPERATORS:
+            raise ValueError(f"Unsupported operator: {op_type.__name__}")
+
+        # Short-circuit evaluation
+        if isinstance(node.op, ast.And):
+            for value in node.values:
+                result = self._eval_node(value, context)
+                if not result:
+                    return False
+            return True
+        else:  # ast.Or
+            for value in node.values:
+                result = self._eval_node(value, context)
+                if result:
+                    return True
+            return False
 
 
 # Singleton instance

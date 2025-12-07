@@ -16,6 +16,57 @@ logger = logging.getLogger(__name__)
 class FileWatcherMixin:
     """Mixin providing file watching and change callback functionality"""
 
+    async def _handle_config_file_change(
+        self, config_type: str, file_path: Any, new_data: Any
+    ) -> None:
+        """Handle detected config file change (Issue #315: extracted to reduce nesting).
+
+        Args:
+            config_type: Type of config (e.g., 'main', 'settings')
+            file_path: Path to the changed file
+            new_data: Newly loaded config data
+        """
+        import time
+
+        logger.info(f"Config file {file_path} changed, reloading")
+
+        # Update cache for main config
+        if config_type == "main":
+            self._config = new_data
+            self._sync_cache_timestamp = time.time()
+
+        # Save to Redis cache
+        await self._save_to_redis_cache(config_type, new_data)
+
+        # Notify callbacks
+        await self._notify_callbacks(config_type, new_data)
+
+    async def _check_file_change(
+        self, config_type: str, file_path: Any, last_modified: float | None
+    ) -> float | None:
+        """Check for file changes and reload if needed (Issue #315: extracted).
+
+        Args:
+            config_type: Type of config being watched
+            file_path: Path to the config file
+            last_modified: Last known modification time
+
+        Returns:
+            Current modification time (or None if file doesn't exist)
+        """
+        if not file_path.exists():
+            return None
+
+        current_modified = file_path.stat().st_mtime
+
+        # Detect change and reload
+        if last_modified is not None and current_modified != last_modified:
+            new_data = await self._read_file_async(file_path)
+            if new_data:
+                await self._handle_config_file_change(config_type, file_path, new_data)
+
+        return current_modified
+
     def add_change_callback(self, config_type: str, callback: Callable) -> None:
         """Add callback for config changes"""
         if config_type not in self._callbacks:
@@ -51,37 +102,14 @@ class FileWatcherMixin:
             file_path = self.config_dir / f"{config_type}.json"
 
         async def watch_file():
-            import time
-
+            """Watch file for changes (Issue #315: refactored to reduce nesting)."""
             last_modified = None
 
             while True:
                 try:
-                    if file_path.exists():
-                        current_modified = file_path.stat().st_mtime
-
-                        if (
-                            last_modified is not None
-                            and current_modified != last_modified
-                        ):
-                            logger.info(f"Config file {file_path} changed, reloading")
-
-                            # Reload config
-                            new_data = await self._read_file_async(file_path)
-                            if new_data:
-                                # Update cache
-                                if config_type == "main":
-                                    self._config = new_data
-                                    self._sync_cache_timestamp = time.time()
-
-                                # Save to Redis cache
-                                await self._save_to_redis_cache(config_type, new_data)
-
-                                # Notify callbacks
-                                await self._notify_callbacks(config_type, new_data)
-
-                        last_modified = current_modified
-
+                    last_modified = await self._check_file_change(
+                        config_type, file_path, last_modified
+                    )
                     await asyncio.sleep(1.0)  # Check every second
 
                 except asyncio.CancelledError:

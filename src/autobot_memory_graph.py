@@ -908,22 +908,10 @@ class AutoBotMemoryGraph:
                     "$.observations",
                 )
 
-                # Parse results
-                entities = []
-                if results and len(results) > 1:
-                    for i in range(1, len(results), 2):
-                        if i + 1 < len(results):
-                            entity_key = results[i]
-                            if isinstance(entity_key, bytes):
-                                entity_key = entity_key.decode()
-
-                            # Get full entity data
-                            entity = await self.redis_client.json().get(entity_key)
-                            if entity:
-                                entities.append(entity)
-
+                # Parse results using helper (Issue #315: depth reduction)
+                entities = await self._parse_search_results(results, limit)
                 logger.info(f"Search query '{query}' returned {len(entities)} results")
-                return entities[:limit]
+                return entities
 
             except Exception as search_error:
                 # Fallback: manual search if RediSearch not available
@@ -933,6 +921,36 @@ class AutoBotMemoryGraph:
         except Exception as e:
             logger.error(f"Search failed: {e}")
             return []
+
+    async def _parse_search_results(
+        self, results: list, limit: int
+    ) -> List[Dict[str, Any]]:
+        """Parse RediSearch results and fetch full entities (Issue #315: extracted).
+
+        Args:
+            results: Raw RediSearch FT.SEARCH results
+            limit: Maximum entities to return
+
+        Returns:
+            List of parsed entity dictionaries
+        """
+        entities = []
+        if not results or len(results) <= 1:
+            return entities
+
+        for i in range(1, len(results), 2):
+            if i + 1 >= len(results):
+                continue
+
+            entity_key = results[i]
+            if isinstance(entity_key, bytes):
+                entity_key = entity_key.decode()
+
+            entity = await self.redis_client.json().get(entity_key)
+            if entity:
+                entities.append(entity)
+
+        return entities[:limit]
 
     async def _fallback_search(
         self, query: str, entity_type: Optional[str], limit: int

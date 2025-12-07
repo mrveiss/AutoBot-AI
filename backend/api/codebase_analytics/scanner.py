@@ -21,6 +21,43 @@ from .storage import get_code_collection
 
 logger = logging.getLogger(__name__)
 
+# File extension categories (Issue #315)
+PYTHON_EXTENSIONS = {".py"}
+JS_EXTENSIONS = {".js", ".ts"}
+VUE_EXTENSIONS = {".vue"}
+CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".ini", ".conf"}
+
+# Directories to skip during scanning (Issue #315)
+SKIP_DIRS = {
+    "node_modules", ".git", "__pycache__", ".pytest_cache",
+    "dist", "build", ".venv", "venv", ".DS_Store", "logs", "temp", "archives",
+}
+
+
+async def _get_file_analysis(
+    file_path: Path, extension: str, stats: dict
+) -> Optional[dict]:
+    """Get analysis for a file based on its type (Issue #315)."""
+    if extension in PYTHON_EXTENSIONS:
+        stats["python_files"] += 1
+        return await analyze_python_file(str(file_path))
+
+    if extension in JS_EXTENSIONS:
+        stats["javascript_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
+
+    if extension in VUE_EXTENSIONS:
+        stats["vue_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
+
+    if extension in CONFIG_EXTENSIONS:
+        stats["config_files"] += 1
+        return None
+
+    stats["other_files"] += 1
+    return None
+
+
 # In-memory storage fallback
 _in_memory_storage = {}
 
@@ -161,6 +198,34 @@ def _aggregate_file_analysis(
         analysis_results["all_hardcodes"].append(hardcode)
 
 
+async def _process_file_problems(
+    file_analysis: Dict,
+    relative_path: str,
+    analysis_results: Dict,
+    immediate_store_collection,
+) -> None:
+    """Process problems from file analysis and store to ChromaDB (Issue #315: extracted).
+
+    This helper extracts problem processing logic to reduce nesting depth in scan_codebase.
+    """
+    file_problems = file_analysis.get("problems", [])
+    if not file_problems:
+        return
+
+    # Track starting index for batch operation
+    start_idx = len(analysis_results["all_problems"])
+
+    # Add file_path to each problem and collect for batch storage
+    for problem in file_problems:
+        problem["file_path"] = relative_path
+        analysis_results["all_problems"].append(problem)
+
+    # Batch store all problems from this file in a single operation
+    await _store_problems_batch_to_chromadb(
+        immediate_store_collection, file_problems, start_idx
+    )
+
+
 # =============================================================================
 # End of Helper Functions
 # =============================================================================
@@ -171,17 +236,11 @@ async def scan_codebase(
     progress_callback: Optional[callable] = None,
     immediate_store_collection=None,
 ) -> Metadata:
-    """Scan the entire codebase using MCP-like file operations"""
+    """Scan the entire codebase using MCP-like file operations (Issue #315 - reduced nesting)."""
     # Use project-relative path if not specified
     if root_path is None:
         project_root = Path(__file__).parent.parent.parent
         root_path = str(project_root)
-
-    # File extensions to analyze
-    PYTHON_EXTENSIONS = {".py"}
-    JS_EXTENSIONS = {".js", ".ts"}
-    VUE_EXTENSIONS = {".vue"}
-    CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".ini", ".conf"}
 
     analysis_results = {
         "files": {},
@@ -200,22 +259,6 @@ async def scan_codebase(
         "all_classes": [],
         "all_hardcodes": [],
         "all_problems": [],
-    }
-
-    # Directories to skip
-    SKIP_DIRS = {
-        "node_modules",
-        ".git",
-        "__pycache__",
-        ".pytest_cache",
-        "dist",
-        "build",
-        ".venv",
-        "venv",
-        ".DS_Store",
-        "logs",
-        "temp",
-        "archives",  # Exclude archived/old code
     }
 
     try:
@@ -260,45 +303,19 @@ async def scan_codebase(
                         current_file=relative_path,
                     )
 
-                file_analysis = None
-
-                if extension in PYTHON_EXTENSIONS:
-                    analysis_results["stats"]["python_files"] += 1
-                    file_analysis = await analyze_python_file(str(file_path))
-
-                elif extension in JS_EXTENSIONS:
-                    analysis_results["stats"]["javascript_files"] += 1
-                    file_analysis = analyze_javascript_vue_file(str(file_path))
-
-                elif extension in VUE_EXTENSIONS:
-                    analysis_results["stats"]["vue_files"] += 1
-                    file_analysis = analyze_javascript_vue_file(str(file_path))
-
-                elif extension in CONFIG_EXTENSIONS:
-                    analysis_results["stats"]["config_files"] += 1
-
-                else:
-                    analysis_results["stats"]["other_files"] += 1
+                # Get file analysis using type dispatch (Issue #315)
+                file_analysis = await _get_file_analysis(
+                    file_path, extension, analysis_results["stats"]
+                )
 
                 if file_analysis:
                     # Aggregate functions, classes, and hardcodes
                     _aggregate_file_analysis(analysis_results, file_analysis, relative_path)
 
-                    # Process problems separately for ChromaDB storage
-                    file_problems = file_analysis.get("problems", [])
-                    if file_problems:
-                        # Track starting index for batch operation
-                        start_idx = len(analysis_results["all_problems"])
-
-                        # Add file_path to each problem and collect for batch storage
-                        for problem in file_problems:
-                            problem["file_path"] = relative_path
-                            analysis_results["all_problems"].append(problem)
-
-                        # Batch store all problems from this file in a single operation
-                        await _store_problems_batch_to_chromadb(
-                            immediate_store_collection, file_problems, start_idx
-                        )
+                    # Process and store problems (Issue #315: uses helper to reduce nesting)
+                    await _process_file_problems(
+                        file_analysis, relative_path, analysis_results, immediate_store_collection
+                    )
 
         # Calculate average file size
         if analysis_results["stats"]["total_files"] > 0:
@@ -376,6 +393,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
         # Helper to update phase status
         def update_phase(phase_id: str, status: str):
+            """Update phase status and track completion in task state."""
             phases = indexing_tasks[task_id]["phases"]
             phases["current_phase"] = phase_id
             for phase in phases["phase_list"]:
@@ -387,6 +405,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
         # Helper to update batch info
         def update_batch_info(current_batch: int, total_batches: int, items_in_batch: int = 0):
+            """Update batch progress tracking for indexing task."""
             batches = indexing_tasks[task_id]["batches"]
             batches["current_batch"] = current_batch
             batches["total_batches"] = total_batches
@@ -395,6 +414,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
         # Helper to update stats
         def update_stats(**kwargs):
+            """Update task statistics with provided key-value pairs."""
             for key, value in kwargs.items():
                 if key in indexing_tasks[task_id]["stats"]:
                     indexing_tasks[task_id]["stats"][key] = value

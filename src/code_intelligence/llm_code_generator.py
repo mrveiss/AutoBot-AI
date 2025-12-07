@@ -328,24 +328,36 @@ class CodeValidator:
 
         return warnings
 
+    @staticmethod
+    def _get_node_complexity(child: ast.AST) -> float:
+        """Get complexity contribution of a single AST node (Issue #315: extracted).
+
+        Args:
+            child: AST node to analyze
+
+        Returns:
+            Complexity value for this node
+        """
+        # Decision points that add 1 to complexity
+        if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+            return 1.0
+        # Boolean operators add (n-1) for n operands
+        if isinstance(child, ast.BoolOp):
+            return float(len(child.values) - 1)
+        # Comprehensions with filters
+        if isinstance(child, ast.comprehension):
+            return 1.0 + len(child.ifs) if child.ifs else 1.0
+        return 0.0
+
     @classmethod
     def _calculate_complexity(cls, node: ast.AST) -> float:
-        """Calculate cyclomatic complexity of the code."""
+        """Calculate cyclomatic complexity of the code.
+
+        Issue #315: Refactored to use helper method for reduced nesting.
+        """
         complexity = 1.0  # Base complexity
-
         for child in ast.walk(node):
-            # Each decision point adds to complexity
-            if isinstance(child, (ast.If, ast.While, ast.For)):
-                complexity += 1
-            elif isinstance(child, ast.ExceptHandler):
-                complexity += 1
-            elif isinstance(child, ast.BoolOp):
-                complexity += len(child.values) - 1
-            elif isinstance(child, ast.comprehension):
-                complexity += 1
-                if child.ifs:
-                    complexity += len(child.ifs)
-
+            complexity += cls._get_node_complexity(child)
         return complexity
 
     @classmethod

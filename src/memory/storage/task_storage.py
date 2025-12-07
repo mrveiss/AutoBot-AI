@@ -18,6 +18,48 @@ from ..models import TaskExecutionRecord
 
 logger = logging.getLogger(__name__)
 
+# Field categories for update_task (Issue #315: extracted to reduce nesting)
+_ENUM_FIELDS = {"status": TaskStatus, "priority": TaskPriority}
+_JSON_FIELDS = {"inputs", "outputs", "metadata", "markdown_references", "subtask_ids"}
+_DIRECT_FIELDS = {
+    "started_at",
+    "completed_at",
+    "duration_seconds",
+    "retry_count",
+    "error_message",
+    "agent_type",
+}
+
+
+def _process_update_field(
+    key: str, value: Any
+) -> tuple[Optional[str], Optional[Any]]:
+    """Process a single update field into SQL clause and value (Issue #315: extracted).
+
+    Args:
+        key: Field name
+        value: Field value
+
+    Returns:
+        Tuple of (set_clause, processed_value) or (None, None) if field not recognized
+    """
+    # Handle enum fields
+    if key in _ENUM_FIELDS:
+        expected_type = _ENUM_FIELDS[key]
+        if isinstance(value, expected_type):
+            return f"{key} = ?", value.value
+        return None, None
+
+    # Handle JSON fields
+    if key in _JSON_FIELDS:
+        return f"{key}_json = ?", json.dumps(value) if value else None
+
+    # Handle direct fields
+    if key in _DIRECT_FIELDS:
+        return f"{key} = ?", value
+
+    return None, None
+
 
 class TaskStorage:
     """
@@ -136,41 +178,22 @@ class TaskStorage:
             raise RuntimeError(f"Failed to log task: {e}")
 
     async def update_task(self, task_id: str, **updates) -> bool:
-        """Update task fields dynamically"""
+        """Update task fields dynamically.
+
+        Issue #315: Refactored to use helper function for reduced nesting.
+        """
         if not updates:
             return False
 
-        # Build dynamic UPDATE query
+        # Build dynamic UPDATE query using helper
         set_clauses = []
         values = []
 
         for key, value in updates.items():
-            if key == "status" and isinstance(value, TaskStatus):
-                set_clauses.append("status = ?")
-                values.append(value.value)
-            elif key == "priority" and isinstance(value, TaskPriority):
-                set_clauses.append("priority = ?")
-                values.append(value.value)
-            elif key in {
-                "inputs",
-                "outputs",
-                "metadata",
-                "markdown_references",
-                "subtask_ids",
-            }:
-                set_clauses.append(f"{key}_json = ?")
-                values.append(json.dumps(value) if value else None)
-            elif key in {"started_at", "completed_at"}:
-                set_clauses.append(f"{key} = ?")
-                values.append(value)
-            elif key in {
-                "duration_seconds",
-                "retry_count",
-                "error_message",
-                "agent_type",
-            }:
-                set_clauses.append(f"{key} = ?")
-                values.append(value)
+            clause, processed_value = _process_update_field(key, value)
+            if clause:
+                set_clauses.append(clause)
+                values.append(processed_value)
 
         if not set_clauses:
             return False

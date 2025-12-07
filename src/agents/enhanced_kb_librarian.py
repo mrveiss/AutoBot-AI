@@ -804,8 +804,9 @@ class InstructionParser:
 
 class ToolInfoData:
     """Data class for tool information - encapsulates tool data with methods"""
-    
+
     def __init__(self, name: str, tool_type: str = "command-line tool"):
+        """Initialize tool info with name, type, and default metadata fields."""
         self.name = name
         self.type = tool_type
         self.category = "general"
@@ -865,8 +866,9 @@ class ToolInfoData:
 
 class ResearchResultsProcessor:
     """Processes web research results into structured tool information"""
-    
+
     def __init__(self, tool_name: str, results: Dict[str, Any]):
+        """Initialize processor with tool name and raw research results."""
         self.tool_name = tool_name
         self.results = results
     
@@ -956,6 +958,7 @@ class EnhancedKBLibrarian:
     """
 
     def __init__(self, knowledge_base: KnowledgeBase):
+        """Initialize discoverer with knowledge base, web assistant, and cache."""
         self.knowledge_base = knowledge_base
         self.web_assistant = WebResearchAssistant()
         self.tool_cache = {}  # Cache for frequently requested tools

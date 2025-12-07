@@ -74,6 +74,7 @@ class EntityCreateRequest(BaseModel):
 
     @validator("entity_type")
     def validate_entity_type(cls, v):
+        """Validate entity type against allowed values."""
         valid_types = {
             "conversation",
             "bug_fix",
@@ -117,6 +118,7 @@ class RelationCreateRequest(BaseModel):
 
     @validator("relation_type")
     def validate_relation_type(cls, v):
+        """Validate relation type against allowed values."""
         valid_types = {
             "relates_to",
             "depends_on",
