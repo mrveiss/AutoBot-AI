@@ -22,6 +22,7 @@ class OllamaHealth(BaseProviderHealth):
     """Health checker for Ollama (local LLM provider)"""
 
     def __init__(self):
+        """Initialize Ollama health checker with host configuration."""
         super().__init__("ollama")
         # Get Ollama configuration from environment
         from src.unified_config_manager import (
@@ -104,6 +105,7 @@ class OpenAIHealth(BaseProviderHealth):
     """Health checker for OpenAI API"""
 
     def __init__(self):
+        """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.base_url = "https://api.openai.com/v1"
@@ -214,6 +216,7 @@ class AnthropicHealth(BaseProviderHealth):
     """Health checker for Anthropic Claude API"""
 
     def __init__(self):
+        """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
         self.base_url = "https://api.anthropic.com/v1"

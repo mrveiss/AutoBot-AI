@@ -20,7 +20,7 @@ const getDefaultSettings = (): DisplaySettings => ({
   showThoughts: true,
   showJson: true,
   showUtility: false,
-  showPlanning: false,
+  showPlanning: true, // Issue #352: Enable by default for multi-step task visibility
   showDebug: false,
   showSources: false,
   autoScroll: true

@@ -280,6 +280,7 @@ class PerformanceVisitor(ast.NodeVisitor):
     """AST visitor for detecting performance issues."""
 
     def __init__(self, filename: str):
+        """Initialize visitor with filename and tracking state."""
         self.filename = filename
         self.issues: list[PerformanceIssue] = []
         self.in_async_function = False
@@ -288,6 +289,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.current_function = ""
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        """Visit async function and track async context for blocking call detection."""
         old_state = self.in_async_function
         self.in_async_function = True
         self.current_function = node.name
@@ -295,6 +297,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.in_async_function = old_state
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
+        """Visit function and detect mutable default argument issues."""
         self.current_function = node.name
         # Check for mutable default arguments
         for default in node.args.defaults:
@@ -315,6 +318,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_For(self, node: ast.For):
+        """Visit for loop and detect nested loop performance issues."""
         old_in_loop = self.in_loop
         old_depth = self.loop_depth
         self.in_loop = True
@@ -342,9 +346,11 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.loop_depth = old_depth
 
     def visit_While(self, node: ast.While):
+        """Visit while loop using same nested loop detection as for loops."""
         self.visit_For(node)  # Same logic for while loops
 
     def visit_Call(self, node: ast.Call):
+        """Visit function call and detect blocking calls in async context."""
         # Check for sync calls in async function
         if self.in_async_function:
             func_name = ""

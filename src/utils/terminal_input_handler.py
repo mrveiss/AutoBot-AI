@@ -57,6 +57,7 @@ class TerminalInputHandler:
     """
 
     def __init__(self):
+        """Initialize terminal input handler with testing detection."""
         self.is_testing = self._detect_testing_environment()
         self.default_responses: Dict[str, str] = {}
         self.input_queue = queue.Queue()
@@ -157,51 +158,43 @@ class TerminalInputHandler:
         # Intelligent defaults based on prompt content
         return self._generate_intelligent_default(prompt)
 
+    def _get_prompt_pattern_defaults(self) -> list:
+        """Get prompt pattern to default value mappings (Issue #315)."""
+        return [
+            # (keywords_to_match, env_var, config_key, fallback)
+            (("yes", "no", "y/n"), None, None, "y"),
+            (("command",), "AUTOBOT_DEFAULT_COMMAND", "default_command", "help"),
+            (("file", "path"), "AUTOBOT_TEST_FILE_PATH", "test_file_path", "/tmp/test_file"),
+            (("name",), "AUTOBOT_TEST_USER_NAME", "test_user_name", "test_user"),
+            (("port",), "AUTOBOT_DEFAULT_PORT", "default_port", str(NetworkConstants.AI_STACK_PORT)),
+            (("host",), "AUTOBOT_DEFAULT_HOST", "default_host", "localhost"),
+        ]
+
     def _generate_intelligent_default(self, prompt: str) -> str:
-        """Generate intelligent default responses based on prompt content."""
+        """Generate intelligent default responses based on prompt content (Issue #315)."""
         prompt_lower = prompt.lower()
 
-        # Common prompt patterns and their defaults
+        # Check yes/no pattern first
         if any(word in prompt_lower for word in ["yes", "no", "y/n"]):
             return "y"
-        elif "choice" in prompt_lower and any(char.isdigit() for char in prompt):
-            # Extract numbers from prompt and return the first one
+
+        # Check choice pattern with digits
+        if "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             numbers = [char for char in prompt if char.isdigit()]
-            return (
-                numbers[0]
-                if numbers
-                else os.getenv(
-                    "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
-                )
+            return numbers[0] if numbers else os.getenv(
+                "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
             )
-        elif "enter" in prompt_lower and "command" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_DEFAULT_COMMAND",
-                _get_config_default("default_command", "help"),
-            )
-        elif "file" in prompt_lower or "path" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_TEST_FILE_PATH",
-                _get_config_default("test_file_path", "/tmp/test_file"),
-            )
-        elif "name" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_TEST_USER_NAME",
-                _get_config_default("test_user_name", "test_user"),
-            )
-        elif "port" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_DEFAULT_PORT",
-                _get_config_default(
-                    "default_port", str(NetworkConstants.AI_STACK_PORT)
-                ),
-            )
-        elif "host" in prompt_lower:
-            return os.getenv(
-                "AUTOBOT_DEFAULT_HOST", _get_config_default("default_host", "localhost")
-            )
-        else:
-            return ""  # Empty string for unknown prompts
+
+        # Check command pattern (requires both keywords)
+        if "enter" in prompt_lower and "command" in prompt_lower:
+            return os.getenv("AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help"))
+
+        # Check other patterns via lookup table (Issue #315)
+        for keywords, env_var, config_key, fallback in self._get_prompt_pattern_defaults():
+            if env_var and any(kw in prompt_lower for kw in keywords):
+                return os.getenv(env_var, _get_config_default(config_key, fallback))
+
+        return ""  # Empty string for unknown prompts
 
     def _get_interactive_input(self, prompt: str, timeout: float, default: str) -> str:
         """Get input in interactive mode with timeout."""
@@ -217,6 +210,7 @@ class TerminalInputHandler:
         input_queue = queue.Queue()
 
         def input_thread():
+            """Threaded input handler with queue communication."""
             try:
                 response = input(prompt).strip()
                 input_queue.put(response if response else default)
@@ -469,6 +463,7 @@ def patch_builtin_input():
     original_input = builtins.input
 
     def patched_input(prompt=""):
+        """Replacement input function with timeout support."""
         timeout = float(
             os.getenv(
                 "AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")

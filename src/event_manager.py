@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class EventManager:
+    """Manages event publishing and subscription with WebSocket support."""
+
     def __init__(self):
+        """Initialize event manager with empty listeners and no WebSocket callback."""
         self._listeners: Dict[
             str, list[Callable[[Dict[str, Any]], Awaitable[None]]]
         ] = {}
@@ -23,6 +26,7 @@ class EventManager:
         self._config = self._load_config()  # Load config on init
 
     def _load_config(self):
+        """Load configuration from YAML file or return defaults."""
         # Get absolute path to config file
         from pathlib import Path
 
@@ -45,6 +49,7 @@ class EventManager:
             return {"agent_behavior": {"debug_mode": False}}
 
     def _is_debug_mode(self):
+        """Check if debug mode is enabled in configuration."""
         return self._config.get("agent_behavior", {}).get("debug_mode", False)
 
     def register_websocket_broadcast(
@@ -101,14 +106,17 @@ event_manager = EventManager()
 if __name__ == "__main__":
 
     async def test_listener(event):
+        """Example listener that prints received event data."""
         print(f"Local Listener received: {event}")
 
     async def main():
+        """Main test function demonstrating EventManager usage."""
         event_manager.subscribe("task_update", test_listener)
         event_manager.subscribe("log_message", test_listener)
 
         # Simulate WebSocket broadcast callback
         async def mock_websocket_broadcast(event):
+            """Mock callback that simulates WebSocket event broadcast."""
             print(f"WebSocket Broadcast: {event}")
 
         event_manager.register_websocket_broadcast(mock_websocket_broadcast)

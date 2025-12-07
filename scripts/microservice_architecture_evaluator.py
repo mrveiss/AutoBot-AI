@@ -89,26 +89,29 @@ class MicroserviceArchitectureEvaluator:
 
         for item in directory.rglob("*"):
             if item.is_file():
-                info["file_count"] += 1
-                suffix = item.suffix.lower()
-
-                if suffix == ".py":
-                    info["python_files"] += 1
-                    info["total_loc"] += self._count_lines_of_code(item)
-                    if item.name in ["main.py", "app.py", "__init__.py", "router.py"]:
-                        info["main_files"].append(str(item.relative_to(self.project_root)))
-
-                elif suffix in [".js", ".ts", ".vue"]:
-                    info["javascript_files"] += 1
-                    info["total_loc"] += self._count_lines_of_code(item)
-
-                elif suffix in [".json", ".yaml", ".yml", ".toml", ".ini"]:
-                    info["config_files"] += 1
-
+                self._process_file_for_directory_analysis(item, info)
             elif item.is_dir() and item != directory:
                 info["subdirectories"].append(item.name)
 
         return info
+
+    def _process_file_for_directory_analysis(self, item: Path, info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a single file for directory analysis"""
+        info["file_count"] += 1
+        suffix = item.suffix.lower()
+
+        if suffix == ".py":
+            info["python_files"] += 1
+            info["total_loc"] += self._count_lines_of_code(item)
+            if item.name in ["main.py", "app.py", "__init__.py", "router.py"]:
+                info["main_files"].append(str(item.relative_to(self.project_root)))
+
+        elif suffix in [".js", ".ts", ".vue"]:
+            info["javascript_files"] += 1
+            info["total_loc"] += self._count_lines_of_code(item)
+
+        elif suffix in [".json", ".yaml", ".yml", ".toml", ".ini"]:
+            info["config_files"] += 1
 
     def _count_lines_of_code(self, file_path: Path) -> int:
         """Count non-empty, non-comment lines of code"""
@@ -148,53 +151,61 @@ class MicroserviceArchitectureEvaluator:
 
         # Analyze backend API files
         backend_api_dir = self.project_root / "backend" / "api"
-        if backend_api_dir.exists():
-            for api_file in backend_api_dir.glob("*.py"):
-                if api_file.name == "__init__.py":
-                    continue
+        if not backend_api_dir.exists():
+            return endpoints
 
-                router_info = {
-                    "file": str(api_file.relative_to(self.project_root)),
-                    "name": api_file.stem,
-                    "endpoints": [],
-                    "dependencies": []
-                }
-
-                # Parse the file for endpoint definitions
-                try:
-                    with open(api_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    # Find FastAPI route decorators
-                    route_pattern = r'@router\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']'
-                    routes = re.findall(route_pattern, content)
-
-                    for method, path in routes:
-                        router_info["endpoints"].append({
-                            "method": method.upper(),
-                            "path": path
-                        })
-
-                    # Find imports to understand dependencies
-                    import_pattern = r'from\s+([^\\s]+)\s+import|import\s+([^\\s]+)'
-                    imports = re.findall(import_pattern, content)
-
-                    for imp1, imp2 in imports:
-                        dep = imp1 or imp2
-                        if dep and not dep.startswith(('fastapi', 'pydantic', 'typing')):
-                            router_info["dependencies"].append(dep)
-
-                    endpoints["routers"].append(router_info)
-                    endpoints["total_endpoints"] += len(router_info["endpoints"])
-
-                    # Group endpoints by domain
-                    domain = api_file.stem
-                    endpoints["endpoint_groups"][domain] = router_info["endpoints"]
-
-                except Exception as e:
-                    logger.warning(f"Could not analyze API file {api_file}: {e}")
+        for api_file in backend_api_dir.glob("*.py"):
+            if api_file.name == "__init__.py":
+                continue
+            self._process_api_file(api_file, endpoints)
 
         return endpoints
+
+    def _process_api_file(self, api_file: Path, endpoints: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a single API file for endpoint analysis"""
+        router_info = {
+            "file": str(api_file.relative_to(self.project_root)),
+            "name": api_file.stem,
+            "endpoints": [],
+            "dependencies": []
+        }
+
+        try:
+            with open(api_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Extract routes and dependencies
+            self._extract_routes(content, router_info)
+            self._extract_dependencies(content, router_info)
+
+            # Update endpoints collection
+            endpoints["routers"].append(router_info)
+            endpoints["total_endpoints"] += len(router_info["endpoints"])
+            endpoints["endpoint_groups"][api_file.stem] = router_info["endpoints"]
+
+        except Exception as e:
+            logger.warning(f"Could not analyze API file {api_file}: {e}")
+
+    def _extract_routes(self, content: str, router_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract FastAPI routes from file content"""
+        route_pattern = r'@router\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']'
+        routes = re.findall(route_pattern, content)
+
+        for method, path in routes:
+            router_info["endpoints"].append({
+                "method": method.upper(),
+                "path": path
+            })
+
+    def _extract_dependencies(self, content: str, router_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract import dependencies from file content"""
+        import_pattern = r'from\s+([^\\s]+)\s+import|import\s+([^\\s]+)'
+        imports = re.findall(import_pattern, content)
+
+        for imp1, imp2 in imports:
+            dep = imp1 or imp2
+            if dep and not dep.startswith(('fastapi', 'pydantic', 'typing')):
+                router_info["dependencies"].append(dep)
 
     def _analyze_data_models(self) -> Dict[str, Any]:
         """Analyze data models and database interactions"""
@@ -206,50 +217,70 @@ class MicroserviceArchitectureEvaluator:
 
         # Look for database-related files
         for py_file in self.project_root.rglob("*.py"):
-            if any(keyword in py_file.name.lower() for keyword in
-                   ["model", "db", "database", "schema", "table"]):
-
-                try:
-                    with open(py_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    # Check for database frameworks
-                    if any(framework in content for framework in
-                           ["sqlite3", "SQLAlchemy", "peewee", "asyncpg", "aiomysql"]):
-
-                        model_info = {
-                            "file": str(py_file.relative_to(self.project_root)),
-                            "classes": [],
-                            "database_type": None
-                        }
-
-                        # Identify database type
-                        if "sqlite3" in content or ".db" in content or ".sqlite" in content:
-                            model_info["database_type"] = "SQLite"
-                            models["database_types"].add("SQLite")
-                        elif "postgres" in content or "asyncpg" in content:
-                            model_info["database_type"] = "PostgreSQL"
-                            models["database_types"].add("PostgreSQL")
-                        elif "mysql" in content or "aiomysql" in content:
-                            model_info["database_type"] = "MySQL"
-                            models["database_types"].add("MySQL")
-                        elif "redis" in content.lower():
-                            model_info["database_type"] = "Redis"
-                            models["database_types"].add("Redis")
-
-                        # Find class definitions
-                        tree = ast.parse(content)
-                        for node in ast.walk(tree):
-                            if isinstance(node, ast.ClassDef):
-                                model_info["classes"].append(node.name)
-
-                        models["database_files"].append(model_info)
-                        models["model_classes"].extend(model_info["classes"])
-
-                except Exception as e:
-                    logger.debug(f"Could not analyze model file {py_file}: {e}")
+            if self._is_database_related_file(py_file):
+                self._process_model_file(py_file, models)
 
         return models
+
+    def _is_database_related_file(self, py_file: Path) -> bool:
+        """(Issue #315 - extracted) Check if file is database-related"""
+        keywords = ["model", "db", "database", "schema", "table"]
+        return any(keyword in py_file.name.lower() for keyword in keywords)
+
+    def _process_model_file(self, py_file: Path, models: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a database model file"""
+        try:
+            with open(py_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Early return if no database framework detected
+            if not self._has_database_framework(content):
+                return
+
+            model_info = {
+                "file": str(py_file.relative_to(self.project_root)),
+                "classes": [],
+                "database_type": None
+            }
+
+            # Identify database type and extract classes
+            model_info["database_type"] = self._identify_database_type(content, models)
+            self._extract_model_classes(content, model_info)
+
+            # Update models collection
+            models["database_files"].append(model_info)
+            models["model_classes"].extend(model_info["classes"])
+
+        except Exception as e:
+            logger.debug(f"Could not analyze model file {py_file}: {e}")
+
+    def _has_database_framework(self, content: str) -> bool:
+        """(Issue #315 - extracted) Check if content uses database frameworks"""
+        frameworks = ["sqlite3", "SQLAlchemy", "peewee", "asyncpg", "aiomysql"]
+        return any(framework in content for framework in frameworks)
+
+    def _identify_database_type(self, content: str, models: Dict[str, Any]) -> str:
+        """(Issue #315 - extracted) Identify database type from content"""
+        if "sqlite3" in content or ".db" in content or ".sqlite" in content:
+            models["database_types"].add("SQLite")
+            return "SQLite"
+        elif "postgres" in content or "asyncpg" in content:
+            models["database_types"].add("PostgreSQL")
+            return "PostgreSQL"
+        elif "mysql" in content or "aiomysql" in content:
+            models["database_types"].add("MySQL")
+            return "MySQL"
+        elif "redis" in content.lower():
+            models["database_types"].add("Redis")
+            return "Redis"
+        return None
+
+    def _extract_model_classes(self, content: str, model_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract class definitions from model file"""
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                model_info["classes"].append(node.name)
 
     def _analyze_agents(self) -> Dict[str, Any]:
         """Analyze AI agents for potential service boundaries"""
@@ -260,67 +291,88 @@ class MicroserviceArchitectureEvaluator:
         }
 
         agents_dir = self.project_root / "src" / "agents"
-        if agents_dir.exists():
-            for agent_file in agents_dir.glob("*.py"):
-                if agent_file.name == "__init__.py":
-                    continue
+        if not agents_dir.exists():
+            return agents
 
-                try:
-                    with open(agent_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    agent_info = {
-                        "file": str(agent_file.relative_to(self.project_root)),
-                        "name": agent_file.stem,
-                        "classes": [],
-                        "functions": [],
-                        "dependencies": [],
-                        "agent_type": "unknown"
-                    }
-
-                    # Parse AST to find classes and functions
-                    tree = ast.parse(content)
-                    for node in ast.walk(tree):
-                        if isinstance(node, ast.ClassDef):
-                            agent_info["classes"].append(node.name)
-                            # Determine agent type based on name
-                            name_lower = node.name.lower()
-                            if any(keyword in name_lower for keyword in ["research", "web", "search"]):
-                                agent_info["agent_type"] = "research"
-                            elif any(keyword in name_lower for keyword in ["chat", "conversation", "dialogue"]):
-                                agent_info["agent_type"] = "chat"
-                            elif any(keyword in name_lower for keyword in ["knowledge", "kb", "memory"]):
-                                agent_info["agent_type"] = "knowledge"
-                            elif any(keyword in name_lower for keyword in ["terminal", "command", "shell"]):
-                                agent_info["agent_type"] = "execution"
-                            elif any(keyword in name_lower for keyword in ["file", "project", "code"]):
-                                agent_info["agent_type"] = "file_management"
-
-                        elif isinstance(node, ast.FunctionDef):
-                            if not node.name.startswith('_'):  # Skip private functions
-                                agent_info["functions"].append(node.name)
-
-                    # Find imports
-                    import_pattern = r'from\s+([^\\s]+)\s+import|import\s+([^\\s]+)'
-                    imports = re.findall(import_pattern, content)
-                    for imp1, imp2 in imports:
-                        dep = imp1 or imp2
-                        if dep and dep.startswith(('src.', 'backend.')):
-                            agent_info["dependencies"].append(dep)
-
-                    agents["agent_files"].append(agent_info)
-                    agents["total_agents"] += len(agent_info["classes"])
-
-                    # Group by agent type
-                    agent_type = agent_info["agent_type"]
-                    if agent_type not in agents["agent_types"]:
-                        agents["agent_types"][agent_type] = []
-                    agents["agent_types"][agent_type].append(agent_info["name"])
-
-                except Exception as e:
-                    logger.warning(f"Could not analyze agent file {agent_file}: {e}")
+        for agent_file in agents_dir.glob("*.py"):
+            if agent_file.name == "__init__.py":
+                continue
+            self._process_agent_file(agent_file, agents)
 
         return agents
+
+    def _process_agent_file(self, agent_file: Path, agents: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a single agent file"""
+        try:
+            with open(agent_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            agent_info = {
+                "file": str(agent_file.relative_to(self.project_root)),
+                "name": agent_file.stem,
+                "classes": [],
+                "functions": [],
+                "dependencies": [],
+                "agent_type": "unknown"
+            }
+
+            # Parse AST and extract information
+            tree = ast.parse(content)
+            self._extract_agent_classes_and_functions(tree, agent_info)
+            self._extract_agent_dependencies(content, agent_info)
+
+            # Update agents collection
+            agents["agent_files"].append(agent_info)
+            agents["total_agents"] += len(agent_info["classes"])
+            self._group_agent_by_type(agent_info, agents)
+
+        except Exception as e:
+            logger.warning(f"Could not analyze agent file {agent_file}: {e}")
+
+    def _extract_agent_classes_and_functions(self, tree: ast.AST, agent_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract classes and functions from agent AST"""
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                agent_info["classes"].append(node.name)
+                agent_info["agent_type"] = self._determine_agent_type(node.name)
+            elif isinstance(node, ast.FunctionDef):
+                if not node.name.startswith('_'):  # Skip private functions
+                    agent_info["functions"].append(node.name)
+
+    def _determine_agent_type(self, class_name: str) -> str:
+        """(Issue #315 - extracted) Determine agent type from class name"""
+        name_lower = class_name.lower()
+
+        type_keywords = {
+            "research": ["research", "web", "search"],
+            "chat": ["chat", "conversation", "dialogue"],
+            "knowledge": ["knowledge", "kb", "memory"],
+            "execution": ["terminal", "command", "shell"],
+            "file_management": ["file", "project", "code"]
+        }
+
+        for agent_type, keywords in type_keywords.items():
+            if any(keyword in name_lower for keyword in keywords):
+                return agent_type
+
+        return "unknown"
+
+    def _extract_agent_dependencies(self, content: str, agent_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract dependencies from agent file"""
+        import_pattern = r'from\s+([^\\s]+)\s+import|import\s+([^\\s]+)'
+        imports = re.findall(import_pattern, content)
+
+        for imp1, imp2 in imports:
+            dep = imp1 or imp2
+            if dep and dep.startswith(('src.', 'backend.')):
+                agent_info["dependencies"].append(dep)
+
+    def _group_agent_by_type(self, agent_info: Dict[str, Any], agents: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Group agent by its type"""
+        agent_type = agent_info["agent_type"]
+        if agent_type not in agents["agent_types"]:
+            agents["agent_types"][agent_type] = []
+        agents["agent_types"][agent_type].append(agent_info["name"])
 
     def _analyze_utilities(self) -> Dict[str, Any]:
         """Analyze utility modules for shared services potential"""
@@ -337,76 +389,90 @@ class MicroserviceArchitectureEvaluator:
         ]
 
         for utils_dir in utils_dirs:
-            if not utils_dir.exists():
-                continue
-
-            for util_file in utils_dir.glob("*.py"):
-                if util_file.name == "__init__.py":
-                    continue
-
-                try:
-                    with open(util_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    util_info = {
-                        "file": str(util_file.relative_to(self.project_root)),
-                        "name": util_file.stem,
-                        "functions": [],
-                        "classes": [],
-                        "utility_type": self._categorize_utility(util_file.stem, content)
-                    }
-
-                    # Parse functions and classes
-                    tree = ast.parse(content)
-                    for node in ast.walk(tree):
-                        if isinstance(node, ast.FunctionDef):
-                            if not node.name.startswith('_'):
-                                util_info["functions"].append(node.name)
-                        elif isinstance(node, ast.ClassDef):
-                            util_info["classes"].append(node.name)
-
-                    utilities["util_files"].append(util_info)
-
-                    # Categorize utilities
-                    util_type = util_info["utility_type"]
-                    if util_type not in utilities["utility_types"]:
-                        utilities["utility_types"][util_type] = []
-                    utilities["utility_types"][util_type].append(util_info["name"])
-
-                    # Mark as shared if used across multiple modules
-                    if len(util_info["functions"]) > 3 or len(util_info["classes"]) > 1:
-                        utilities["shared_utilities"].append(util_info["name"])
-
-                except Exception as e:
-                    logger.debug(f"Could not analyze utility file {util_file}: {e}")
+            if utils_dir.exists():
+                self._process_utils_directory(utils_dir, utilities)
 
         return utilities
 
+    def _process_utils_directory(self, utils_dir: Path, utilities: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a utilities directory"""
+        for util_file in utils_dir.glob("*.py"):
+            if util_file.name == "__init__.py":
+                continue
+            self._process_utility_file(util_file, utilities)
+
+    def _process_utility_file(self, util_file: Path, utilities: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a single utility file"""
+        try:
+            with open(util_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            util_info = {
+                "file": str(util_file.relative_to(self.project_root)),
+                "name": util_file.stem,
+                "functions": [],
+                "classes": [],
+                "utility_type": self._categorize_utility(util_file.stem, content)
+            }
+
+            # Parse functions and classes
+            self._extract_utility_functions_and_classes(content, util_info)
+
+            # Update utilities collection
+            utilities["util_files"].append(util_info)
+            self._categorize_and_group_utility(util_info, utilities)
+
+        except Exception as e:
+            logger.debug(f"Could not analyze utility file {util_file}: {e}")
+
+    def _extract_utility_functions_and_classes(self, content: str, util_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract functions and classes from utility"""
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                if not node.name.startswith('_'):
+                    util_info["functions"].append(node.name)
+            elif isinstance(node, ast.ClassDef):
+                util_info["classes"].append(node.name)
+
+    def _categorize_and_group_utility(self, util_info: Dict[str, Any], utilities: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Categorize and group utility by type"""
+        util_type = util_info["utility_type"]
+        if util_type not in utilities["utility_types"]:
+            utilities["utility_types"][util_type] = []
+        utilities["utility_types"][util_type].append(util_info["name"])
+
+        # Mark as shared if used across multiple modules
+        if len(util_info["functions"]) > 3 or len(util_info["classes"]) > 1:
+            utilities["shared_utilities"].append(util_info["name"])
+
     def _categorize_utility(self, filename: str, content: str) -> str:
-        """Categorize utility based on filename and content"""
+        """(Issue #315 - refactored) Categorize utility based on filename and content"""
         filename_lower = filename.lower()
         content_lower = content.lower()
 
-        if any(keyword in filename_lower for keyword in ["config", "settings"]):
-            return "configuration"
-        elif any(keyword in filename_lower for keyword in ["db", "database", "sql"]):
-            return "database"
-        elif any(keyword in filename_lower for keyword in ["http", "client", "request", "api"]):
-            return "http_client"
-        elif any(keyword in filename_lower for keyword in ["cache", "redis"]):
-            return "caching"
-        elif any(keyword in filename_lower for keyword in ["log", "logging"]):
-            return "logging"
-        elif any(keyword in filename_lower for keyword in ["memory", "optimization"]):
-            return "performance"
-        elif any(keyword in filename_lower for keyword in ["terminal", "websocket"]):
-            return "communication"
-        elif any(keyword in filename_lower for keyword in ["file", "io"]):
-            return "file_operations"
-        elif any(keyword in content_lower for keyword in ["encrypt", "security", "auth"]):
+        # Dictionary mapping categories to their filename keywords
+        filename_categories = {
+            "configuration": ["config", "settings"],
+            "database": ["db", "database", "sql"],
+            "http_client": ["http", "client", "request", "api"],
+            "caching": ["cache", "redis"],
+            "logging": ["log", "logging"],
+            "performance": ["memory", "optimization"],
+            "communication": ["terminal", "websocket"],
+            "file_operations": ["file", "io"]
+        }
+
+        # Check filename-based categories first
+        for category, keywords in filename_categories.items():
+            if any(keyword in filename_lower for keyword in keywords):
+                return category
+
+        # Check content-based categories
+        if any(keyword in content_lower for keyword in ["encrypt", "security", "auth"]):
             return "security"
-        else:
-            return "general"
+
+        return "general"
 
     def _analyze_services(self) -> Dict[str, Any]:
         """Analyze existing service-like modules"""
@@ -420,44 +486,57 @@ class MicroserviceArchitectureEvaluator:
         service_patterns = ["service", "manager", "handler", "processor", "worker"]
 
         for pattern in service_patterns:
-            # Search in main directories
-            for py_file in self.project_root.rglob(f"*{pattern}*.py"):
-                if py_file.name == "__init__.py":
-                    continue
-
-                try:
-                    with open(py_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-
-                    service_info = {
-                        "file": str(py_file.relative_to(self.project_root)),
-                        "name": py_file.stem,
-                        "classes": [],
-                        "functions": [],
-                        "service_type": pattern
-                    }
-
-                    # Parse classes and functions
-                    tree = ast.parse(content)
-                    for node in ast.walk(tree):
-                        if isinstance(node, ast.ClassDef):
-                            service_info["classes"].append(node.name)
-                        elif isinstance(node, ast.FunctionDef):
-                            if not node.name.startswith('_'):
-                                service_info["functions"].append(node.name)
-
-                    services["service_files"].append(service_info)
-                    services["total_services"] += 1
-
-                    # Group by service type
-                    if pattern not in services["service_types"]:
-                        services["service_types"][pattern] = []
-                    services["service_types"][pattern].append(service_info["name"])
-
-                except Exception as e:
-                    logger.debug(f"Could not analyze service file {py_file}: {e}")
+            self._process_service_pattern(pattern, services)
 
         return services
+
+    def _process_service_pattern(self, pattern: str, services: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process files matching a service pattern"""
+        for py_file in self.project_root.rglob(f"*{pattern}*.py"):
+            if py_file.name == "__init__.py":
+                continue
+            self._process_service_file(py_file, pattern, services)
+
+    def _process_service_file(self, py_file: Path, pattern: str, services: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Process a single service file"""
+        try:
+            with open(py_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            service_info = {
+                "file": str(py_file.relative_to(self.project_root)),
+                "name": py_file.stem,
+                "classes": [],
+                "functions": [],
+                "service_type": pattern
+            }
+
+            # Parse classes and functions
+            self._extract_service_classes_and_functions(content, service_info)
+
+            # Update services collection
+            services["service_files"].append(service_info)
+            services["total_services"] += 1
+            self._group_service_by_type(pattern, service_info, services)
+
+        except Exception as e:
+            logger.debug(f"Could not analyze service file {py_file}: {e}")
+
+    def _extract_service_classes_and_functions(self, content: str, service_info: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Extract classes and functions from service file"""
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                service_info["classes"].append(node.name)
+            elif isinstance(node, ast.FunctionDef):
+                if not node.name.startswith('_'):
+                    service_info["functions"].append(node.name)
+
+    def _group_service_by_type(self, pattern: str, service_info: Dict[str, Any], services: Dict[str, Any]) -> None:
+        """(Issue #315 - extracted) Group service by its type"""
+        if pattern not in services["service_types"]:
+            services["service_types"][pattern] = []
+        services["service_types"][pattern].append(service_info["name"])
 
     def _get_file_statistics(self) -> Dict[str, Any]:
         """Get overall file statistics"""
@@ -473,33 +552,40 @@ class MicroserviceArchitectureEvaluator:
         files_info = []
 
         for file_path in self.project_root.rglob("*"):
-            if file_path.is_file():
-                stats["total_files"] += 1
-                size = file_path.stat().st_size
-                suffix = file_path.suffix.lower()
-
-                loc = self._count_lines_of_code(file_path)
-                stats["total_loc"] += loc
-
-                if suffix == ".py":
-                    stats["python_files"] += 1
-                elif suffix in [".js", ".ts", ".vue"]:
-                    stats["javascript_files"] += 1
-                elif suffix in [".json", ".yaml", ".yml", ".toml", ".ini"]:
-                    stats["config_files"] += 1
-
-                if loc > 100:  # Files with significant code
-                    files_info.append({
-                        "file": str(file_path.relative_to(self.project_root)),
-                        "loc": loc,
-                        "size_kb": round(size / 1024, 2)
-                    })
+            if not file_path.is_file():
+                continue
+            self._process_file_for_statistics(file_path, stats, files_info)
 
         # Sort by LOC and get top 10
         files_info.sort(key=lambda x: x["loc"], reverse=True)
         stats["largest_files"] = files_info[:10]
 
         return stats
+
+    def _process_file_for_statistics(self, file_path: Path, stats: Dict[str, Any], files_info: list) -> None:
+        """(Issue #315 - extracted) Process a file for statistics collection"""
+        stats["total_files"] += 1
+        size = file_path.stat().st_size
+        suffix = file_path.suffix.lower()
+
+        loc = self._count_lines_of_code(file_path)
+        stats["total_loc"] += loc
+
+        # Count by file type
+        if suffix == ".py":
+            stats["python_files"] += 1
+        elif suffix in [".js", ".ts", ".vue"]:
+            stats["javascript_files"] += 1
+        elif suffix in [".json", ".yaml", ".yml", ".toml", ".ini"]:
+            stats["config_files"] += 1
+
+        # Track large files
+        if loc > 100:  # Files with significant code
+            files_info.append({
+                "file": str(file_path.relative_to(self.project_root)),
+                "loc": loc,
+                "size_kb": round(size / 1024, 2)
+            })
 
     def _identify_architecture_patterns(self) -> Dict[str, Any]:
         """Identify current architecture patterns"""

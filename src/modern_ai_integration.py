@@ -99,6 +99,7 @@ class BaseAIProvider(ABC):
     """Base class for AI providers"""
 
     def __init__(self, config: AIModelConfig):
+        """Initialize AI provider with configuration and rate limiting."""
         self.config = config
         self.request_count = 0
         self.last_request_time = 0
@@ -564,6 +565,7 @@ class LocalModelProvider(BaseAIProvider):
     """Local model provider (fallback)"""
 
     def __init__(self, config: AIModelConfig):
+        """Initialize local model provider with config."""
         super().__init__(config)
 
     async def generate_text(self, request: AIRequest) -> AIResponse:
@@ -608,6 +610,7 @@ class ModernAIIntegration:
     """Main integration system for modern AI models"""
 
     def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        """Initialize modern AI integration with memory and providers."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.providers: Dict[AIProvider, BaseAIProvider] = {}
         self.model_configs = self._load_model_configurations()
@@ -702,19 +705,36 @@ class ModernAIIntegration:
 
         return configs
 
+    def _get_provider_class(self, provider_enum: AIProvider):
+        """Get provider class for enum (Issue #315: extracted for depth reduction).
+
+        Args:
+            provider_enum: The AI provider enum value
+
+        Returns:
+            Provider class or None if not found
+        """
+        provider_classes = {
+            AIProvider.OPENAI_GPT4V: OpenAIGPT4VProvider,
+            AIProvider.ANTHROPIC_CLAUDE: AnthropicClaudeProvider,
+            AIProvider.GOOGLE_GEMINI: GoogleGeminiProvider,
+            AIProvider.LOCAL_MODEL: LocalModelProvider,
+        }
+        return provider_classes.get(provider_enum)
+
     def _initialize_providers(self):
-        """Initialize AI providers based on configuration"""
+        """Initialize AI providers based on configuration.
+
+        Issue #315: Refactored to use dispatch pattern for reduced nesting.
+        """
         for provider_enum, config in self.model_configs.items():
             try:
-                if provider_enum == AIProvider.OPENAI_GPT4V:
-                    self.providers[provider_enum] = OpenAIGPT4VProvider(config)
-                elif provider_enum == AIProvider.ANTHROPIC_CLAUDE:
-                    self.providers[provider_enum] = AnthropicClaudeProvider(config)
-                elif provider_enum == AIProvider.GOOGLE_GEMINI:
-                    self.providers[provider_enum] = GoogleGeminiProvider(config)
-                elif provider_enum == AIProvider.LOCAL_MODEL:
-                    self.providers[provider_enum] = LocalModelProvider(config)
+                provider_class = self._get_provider_class(provider_enum)
+                if provider_class is None:
+                    logger.warning(f"Unknown provider type: {provider_enum.value}")
+                    continue
 
+                self.providers[provider_enum] = provider_class(config)
                 logger.info(f"Initialized provider: {provider_enum.value}")
 
             except Exception as e:

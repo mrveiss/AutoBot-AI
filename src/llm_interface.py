@@ -256,6 +256,7 @@ class MockPalm:
 
         class MockQuotaStatus:
             def __init__(self, remaining_tokens):
+                """Initialize mock quota status with remaining token count."""
                 self.remaining_tokens = remaining_tokens
 
         mock_status = MockQuotaStatus(50000)
@@ -308,6 +309,7 @@ class LLMInterface:
     """
 
     def __init__(self, settings: Optional[LLMSettings] = None):
+        """Initialize LLM interface with optional settings and configure providers."""
         # Initialize settings
         self.settings = settings or LLMSettings()
 
@@ -505,6 +507,7 @@ class LLMInterface:
 
     # Legacy method loading methods (preserved for backward compatibility)
     async def _load_prompt_from_file(self, file_path: str) -> str:
+        """Load prompt content from a file asynchronously."""
         try:
             # ROOT CAUSE FIX: Use async file operations instead of blocking sync I/O
             from src.utils.async_file_operations import read_file_async
@@ -519,7 +522,10 @@ class LLMInterface:
             return ""
 
     def _resolve_includes(self, content: str, base_path: str) -> str:
+        """Resolve @include directives in prompt content recursively."""
+
         def replace_include(match):
+            """Replace include directive with file content."""
             included_file = match.group(1)
             included_path = os.path.join(base_path, included_file)
             if os.path.exists(included_path):
@@ -535,6 +541,7 @@ class LLMInterface:
         return re.sub(r"@include\s*\(([^)]+)\)", replace_include, content)
 
     def _load_composite_prompt(self, base_file_path: str) -> str:
+        """Load and resolve a composite prompt with include directives."""
         try:
             base_dir = os.path.dirname(base_file_path)
             with open(base_file_path, "r") as f:
@@ -567,6 +574,7 @@ class LLMInterface:
         try:
 
             async def make_request():
+                """Execute HTTP request to check Ollama connection."""
                 # Use singleton HTTP client for connection pooling
                 http_client = get_http_client()
                 async with await http_client.get(

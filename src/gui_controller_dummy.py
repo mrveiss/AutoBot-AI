@@ -18,6 +18,7 @@ class GUIController:
     """
 
     def __init__(self):
+        """Initialize dummy GUI controller for non-GUI environments."""
         logger.info(
             "Initializing Dummy GUIController for Linux environment. "
             "GUI automation features will be skipped."
@@ -26,6 +27,7 @@ class GUIController:
     async def _screenshot(
         self, region: Optional[Tuple[int, int, int, int]] = None
     ) -> Any:
+        """Return None as screenshot is not supported in dummy controller."""
         logger.debug("Dummy GUIController: _screenshot skipped.")
         await asyncio.sleep(0)
         # Return a dummy image or None, depending on downstream usage
@@ -39,6 +41,7 @@ class GUIController:
         clicks: int = 1,
         interval: float = 0.0,
     ) -> Dict[str, Any]:
+        """Return success status without performing click in dummy mode."""
         logger.debug(f"Dummy GUIController: click_element('{image_path}') skipped.")
         await asyncio.sleep(0)
         return {"status": "success", "message": "GUI click skipped (Dummy Controller)."}
@@ -46,6 +49,7 @@ class GUIController:
     async def read_text_from_region(
         self, x: int, y: int, width: int, height: int
     ) -> Dict[str, Any]:
+        """Return empty text as OCR is not supported in dummy mode."""
         logger.debug(
             "Dummy GUIController: read_text_from_region("
             f"{x}, {y}, {width}, {height}) skipped."
@@ -58,6 +62,7 @@ class GUIController:
         }
 
     async def type_text(self, text: str, interval: float = 0.0) -> Dict[str, Any]:
+        """Return success status without typing text in dummy mode."""
         logger.debug(f"Dummy GUIController: type_text('{text}') skipped.")
         await asyncio.sleep(0)
         return {
@@ -66,6 +71,7 @@ class GUIController:
         }
 
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
+        """Return success status without moving mouse in dummy mode."""
         logger.debug(f"Dummy GUIController: move_mouse({x}, {y}) skipped.")
         await asyncio.sleep(0)
         return {
@@ -74,6 +80,7 @@ class GUIController:
         }
 
     async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
+        """Return success status without window management in dummy mode."""
         logger.debug(
             f"Dummy GUIController: bring_window_to_front('{app_title}') skipped."
         )

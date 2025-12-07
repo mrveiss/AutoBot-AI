@@ -51,6 +51,7 @@ class HTTPClientManager:
             self._pool_adjustment_interval = 60  # Adjust every 60s
             self._last_adjustment_time = 0
             self._active_requests = 0  # Track concurrent requests
+            self._pending_pool_recreation = False  # Issue #352: Track deferred recreation
 
     async def get_session(self) -> ClientSession:
         """
@@ -159,10 +160,19 @@ class HTTPClientManager:
 
             self._last_adjustment_time = current_time
 
-            # Recreate session if pool size changed
+            # Recreate session if pool size changed AND no active requests
+            # Issue #352: Fixed race condition - don't recreate while requests in flight
             if adjusted and self._session and not self._session.closed:
-                logger.info("Recreating session with new pool size")
-                await self._create_session()
+                if self._active_requests > 0:
+                    self._pending_pool_recreation = True
+                    logger.info(
+                        f"Pool size changed to {self._current_pool_size} but "
+                        f"deferring session recreation ({self._active_requests} active requests)"
+                    )
+                else:
+                    self._pending_pool_recreation = False
+                    logger.info("Recreating session with new pool size")
+                    await self._create_session()
 
     async def request(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
         """
@@ -195,9 +205,27 @@ class HTTPClientManager:
             logger.error(f"HTTP request failed: {e}")
             raise
         finally:
-            # Decrement active request count
+            # Decrement active request count and check for pending pool recreation
+            should_recreate = False
             async with self._counter_lock:
                 self._active_requests = max(0, self._active_requests - 1)
+                # Issue #352: Check if we should apply deferred pool recreation
+                if (
+                    self._active_requests == 0
+                    and self._pending_pool_recreation
+                    and self._session
+                    and not self._session.closed
+                ):
+                    self._pending_pool_recreation = False
+                    should_recreate = True
+
+            # Issue #352: Apply deferred recreation outside of lock to avoid deadlock
+            if should_recreate:
+                logger.info(
+                    "Applying deferred session recreation "
+                    f"(new pool size: {self._current_pool_size})"
+                )
+                await self._create_session()
 
     async def get(self, url: str, **kwargs) -> aiohttp.ClientResponse:
         """Convenience method for GET requests."""

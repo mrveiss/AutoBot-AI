@@ -48,6 +48,7 @@ class CaptchaSolver:
     """Integration with CAPTCHA solving services"""
 
     def __init__(self, config: Dict[str, Any]):
+        """Initialize CAPTCHA solver with API key and service configuration."""
         self.api_key = config.get("api_key")
         self.service = config.get("service", "2captcha")  # 2captcha, anticaptcha, etc.
         self.timeout = config.get("timeout", 120)  # 2 minutes default
@@ -155,6 +156,7 @@ class BrowserFingerprint:
     ]
 
     def __init__(self):
+        """Initialize fingerprint manager with randomized browser fingerprint."""
         self.current_fingerprint = self._generate_fingerprint()
 
     def _generate_fingerprint(self) -> Dict[str, Any]:
@@ -177,11 +179,11 @@ class BrowserFingerprint:
         }
 
     def get_fingerprint(self) -> Dict[str, Any]:
-        """Get current fingerprint"""
+        """Get current fingerprint."""
         return self.current_fingerprint
 
     def randomize(self):
-        """Generate new random fingerprint"""
+        """Generate new random fingerprint."""
         self.current_fingerprint = self._generate_fingerprint()
 
 
@@ -189,6 +191,7 @@ class AdvancedWebResearcher:
     """Advanced web research with anti-detection and automation"""
 
     def __init__(self, config: Dict[str, Any] = None):
+        """Initialize researcher with browser automation and anti-detection config."""
         self.config = config or {}
         self.fingerprint = BrowserFingerprint()
         self.captcha_solver = CaptchaSolver(self.config.get("captcha", {}))
@@ -845,10 +848,12 @@ class AdvancedWebResearcher:
             await self.browser.close()
 
     async def __aenter__(self):
+        """Initialize browser and return self for context manager usage."""
         await self.initialize()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Clean up browser resources when exiting context."""
         await self.close()
 
 

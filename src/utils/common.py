@@ -17,6 +17,35 @@ from typing import Any, Dict, Optional, Union
 logger = logging.getLogger(__name__)
 
 
+def _is_path_in_allowed_dir(path_obj: Path, allowed_dirs: list) -> bool:
+    """Check if path is within any allowed directory (Issue #315 - extracted)."""
+    for allowed_dir in allowed_dirs:
+        allowed_path = Path(allowed_dir).resolve()
+        try:
+            path_obj.relative_to(allowed_path)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _try_delete_old_file(file_path: Path, current_time: float, max_age_seconds: int) -> bool:
+    """Try to delete file if older than max age (Issue #315 - extracted)."""
+    if not file_path.is_file():
+        return False
+
+    file_age = current_time - file_path.stat().st_mtime
+    if file_age <= max_age_seconds:
+        return False
+
+    try:
+        file_path.unlink()
+        return True
+    except Exception as e:
+        logging.warning(f"Failed to delete {file_path}: {e}")
+        return False
+
+
 class CommonUtils:
     """Common utility functions used across the codebase"""
 
@@ -299,7 +328,7 @@ class CommonUtils:
     @staticmethod
     def cleanup_temp_files(temp_dir: Union[str, Path], max_age_hours: int = 24) -> int:
         """
-        Clean up temporary files older than specified age
+        Clean up temporary files older than specified age (Issue #315 - refactored).
 
         Args:
             temp_dir: Directory containing temporary files
@@ -311,24 +340,17 @@ class CommonUtils:
         import time
 
         temp_dir = Path(temp_dir)
-        cleaned_count = 0
         current_time = time.time()
         max_age_seconds = max_age_hours * 3600
 
         try:
-            for file_path in temp_dir.iterdir():
-                if file_path.is_file():
-                    file_age = current_time - file_path.stat().st_mtime
-                    if file_age > max_age_seconds:
-                        try:
-                            file_path.unlink()
-                            cleaned_count += 1
-                        except Exception as e:
-                            logging.warning(f"Failed to delete {file_path}: {e}")
+            return sum(
+                1 for file_path in temp_dir.iterdir()
+                if _try_delete_old_file(file_path, current_time, max_age_seconds)
+            )
         except Exception as e:
             logging.error(f"Failed to cleanup temp files in {temp_dir}: {e}")
-
-        return cleaned_count
+            return 0
 
 
 class DatabaseUtils:
@@ -559,7 +581,7 @@ class PathUtils:
         path: Union[str, Path], allowed_dirs: Optional[list] = None
     ) -> bool:
         """
-        Check if path is safe (within allowed directories)
+        Check if path is safe (within allowed directories) (Issue #315 - refactored).
 
         Args:
             path: Path to check
@@ -576,14 +598,7 @@ class PathUtils:
                 return False
 
             if allowed_dirs:
-                for allowed_dir in allowed_dirs:
-                    allowed_path = Path(allowed_dir).resolve()
-                    try:
-                        path_obj.relative_to(allowed_path)
-                        return True
-                    except ValueError:
-                        continue
-                return False
+                return _is_path_in_allowed_dir(path_obj, allowed_dirs)
 
             return True
         except Exception:

@@ -34,12 +34,15 @@ from src.worker_node import WorkerNode
 
 
 class LangChainAgentOrchestrator:
+    """Orchestrator for LangChain-based agents with AutoBot integration."""
+
     def __init__(
         self,
         config: Dict[str, Any],
         worker_node: Optional[WorkerNode],
         knowledge_base: Optional[KnowledgeBase],
     ):
+        """Initialize orchestrator with config, worker node, and knowledge base."""
         self.config = config
         self.worker_node = worker_node
         self.knowledge_base = knowledge_base

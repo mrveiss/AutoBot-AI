@@ -48,6 +48,7 @@ class ExistingOperationMigrator:
     """
 
     def __init__(self, manager: LongRunningOperationManager):
+        """Initialize migrator with operation manager instance."""
         self.manager = manager
 
     async def migrate_knowledge_base_indexing(self):
@@ -569,7 +570,10 @@ def migrate_timeout_operation(
     """
 
     def decorator(func):
+        """Wrap function with long-running operation tracking."""
+
         async def wrapper(*args, **kwargs):
+            """Execute operation with enhanced progress and timeout handling."""
             # Extract progress callback if provided
             progress_callback = kwargs.pop("progress_callback", None)
 

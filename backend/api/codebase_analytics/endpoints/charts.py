@@ -21,6 +21,53 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _aggregate_problem_data(
+    metadata: dict,
+    problem_types: Dict[str, int],
+    severity_counts: Dict[str, int],
+    race_conditions: Dict[str, int],
+    file_problems: Dict[str, int],
+) -> None:
+    """Aggregate a single problem into chart data structures (Issue #315)."""
+    # Aggregate by problem type
+    ptype = metadata.get("problem_type") or metadata.get("type", "unknown")
+    problem_types[ptype] = problem_types.get(ptype, 0) + 1
+
+    # Aggregate by severity
+    severity = metadata.get("severity", "low")
+    severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+    # Aggregate race conditions separately
+    if "race" in ptype.lower() or "thread" in ptype.lower():
+        race_conditions[ptype] = race_conditions.get(ptype, 0) + 1
+
+    # Count problems per file
+    file_path = metadata.get("file_path", "unknown")
+    file_problems[file_path] = file_problems.get(file_path, 0) + 1
+
+
+async def _aggregate_from_redis(
+    redis_client,
+    problem_types: Dict[str, int],
+    severity_counts: Dict[str, int],
+    race_conditions: Dict[str, int],
+    file_problems: Dict[str, int],
+) -> int:
+    """Aggregate problem data from Redis (Issue #315 - extracted helper)."""
+    total_problems = 0
+    for key in redis_client.scan_iter(match="codebase:problems:*"):
+        problems_data = redis_client.get(key)
+        if not problems_data:
+            continue
+        problems = json.loads(problems_data)
+        for problem in problems:
+            total_problems += 1
+            _aggregate_problem_data(
+                problem, problem_types, severity_counts, race_conditions, file_problems
+            )
+    return total_problems
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chart_data",
@@ -47,35 +94,19 @@ async def get_chart_data():
     file_problems: Dict[str, int] = {}
     total_problems = 0
 
+    # Try ChromaDB first (Issue #315: refactored depth 7→3)
     if code_collection:
         try:
-            # Query all problems from ChromaDB
             results = code_collection.get(
                 where={"type": "problem"}, include=["metadatas"]
             )
-
             for metadata in results.get("metadatas", []):
                 total_problems += 1
-
-                # Aggregate by problem type
-                ptype = metadata.get("problem_type", "unknown")
-                problem_types[ptype] = problem_types.get(ptype, 0) + 1
-
-                # Aggregate by severity
-                severity = metadata.get("severity", "low")
-                severity_counts[severity] = severity_counts.get(severity, 0) + 1
-
-                # Aggregate race conditions separately
-                if "race" in ptype.lower() or "thread" in ptype.lower():
-                    race_conditions[ptype] = race_conditions.get(ptype, 0) + 1
-
-                # Count problems per file
-                file_path = metadata.get("file_path", "unknown")
-                file_problems[file_path] = file_problems.get(file_path, 0) + 1
-
+                _aggregate_problem_data(
+                    metadata, problem_types, severity_counts, race_conditions, file_problems
+                )
             storage_type = "chromadb"
             logger.info(f"Aggregated chart data for {total_problems} problems")
-
         except Exception as chroma_error:
             logger.warning(f"ChromaDB query failed: {chroma_error}")
             code_collection = None
@@ -83,52 +114,23 @@ async def get_chart_data():
     # Fallback to Redis if ChromaDB fails
     if not code_collection:
         redis_client = await get_redis_connection()
+        if not redis_client:
+            return JSONResponse({
+                "status": "no_data",
+                "message": "No codebase data found. Run indexing first.",
+                "chart_data": None,
+            })
 
-        if redis_client:
-            try:
-                for key in redis_client.scan_iter(match="codebase:problems:*"):
-                    problems_data = redis_client.get(key)
-                    if problems_data:
-                        problems = json.loads(problems_data)
-                        for problem in problems:
-                            total_problems += 1
-
-                            ptype = problem.get("type", "unknown")
-                            problem_types[ptype] = problem_types.get(ptype, 0) + 1
-
-                            severity = problem.get("severity", "low")
-                            severity_counts[severity] = (
-                                severity_counts.get(severity, 0) + 1
-                            )
-
-                            if "race" in ptype.lower() or "thread" in ptype.lower():
-                                race_conditions[ptype] = (
-                                    race_conditions.get(ptype, 0) + 1
-                                )
-
-                            file_path = problem.get("file_path", "unknown")
-                            file_problems[file_path] = (
-                                file_problems.get(file_path, 0) + 1
-                            )
-
-                storage_type = "redis"
-            except Exception as redis_error:
-                logger.error(f"Redis query failed: {redis_error}")
-                return JSONResponse(
-                    {
-                        "status": "error",
-                        "message": "Failed to retrieve chart data",
-                        "error": str(redis_error),
-                    },
-                    status_code=500,
-                )
-        else:
+        try:
+            total_problems = await _aggregate_from_redis(
+                redis_client, problem_types, severity_counts, race_conditions, file_problems
+            )
+            storage_type = "redis"
+        except Exception as redis_error:
+            logger.error(f"Redis query failed: {redis_error}")
             return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "chart_data": None,
-                }
+                {"status": "error", "message": "Failed to retrieve chart data", "error": str(redis_error)},
+                status_code=500,
             )
 
     # Convert to chart-friendly format

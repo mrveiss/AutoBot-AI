@@ -185,6 +185,7 @@ async def download_mhtml(session_id: str, filename: str):
 
     # Stream the file asynchronously
     async def generate():
+        """Generate file chunks for streaming response."""
         try:
             async with aiofiles.open(mhtml_path, "rb") as f:
                 while chunk := await f.read(8192):

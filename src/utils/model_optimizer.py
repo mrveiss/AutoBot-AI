@@ -81,6 +81,7 @@ class SystemResourceAnalyzer:
     """Analyzes system resources for model selection (Tell Don't Ask)"""
 
     def __init__(self, logger):
+        """Initialize analyzer with logger for error reporting."""
         self._logger = logger
 
     def get_current_resources(self) -> SystemResources:
@@ -106,6 +107,7 @@ class ModelPerformanceTracker:
     """Manages performance tracking and persistence to Redis (Tell Don't Ask)"""
 
     def __init__(self, redis_client, cache_ttl: int, logger):
+        """Initialize tracker with Redis client, TTL, and logger."""
         self._redis_client = redis_client
         self._cache_ttl = cache_ttl
         self._logger = logger
@@ -460,6 +462,7 @@ class ModelSelector:
     """Handles model filtering and selection logic (Tell Don't Ask)"""
 
     def __init__(self, min_samples: int):
+        """Initialize selector with minimum sample threshold."""
         self._min_samples = min_samples
 
     def filter_by_complexity(
@@ -563,6 +566,7 @@ class ModelOptimizer:
             }
 
     def __init__(self):
+        """Initialize model optimizer with caching and performance tracking."""
         self.logger = logging.getLogger(__name__)
         self._redis_client = None
         self._models_cache = {}

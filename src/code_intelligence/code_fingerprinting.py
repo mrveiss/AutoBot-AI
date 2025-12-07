@@ -86,9 +86,24 @@ class CodeFragment:
     entity_name: str = ""
 
     def __hash__(self) -> int:
+        """
+        Generate hash for use in sets and dictionaries.
+
+        Returns:
+            Hash value based on file path and line numbers
+        """
         return hash((self.file_path, self.start_line, self.end_line))
 
     def __eq__(self, other: object) -> bool:
+        """
+        Check equality with another CodeFragment.
+
+        Args:
+            other: Object to compare with
+
+        Returns:
+            True if fragments have same file path and line range
+        """
         if not isinstance(other, CodeFragment):
             return False
         return (
@@ -148,7 +163,15 @@ class CloneInstance:
         }
 
     def _get_source_preview(self, max_lines: int = 5) -> str:
-        """Get a preview of the source code."""
+        """
+        Get a preview of the source code.
+
+        Args:
+            max_lines: Maximum number of lines to include in preview
+
+        Returns:
+            Source code preview with ellipsis if truncated
+        """
         lines = self.fragment.source_code.split("\n")[:max_lines]
         if len(self.fragment.source_code.split("\n")) > max_lines:
             lines.append("...")
@@ -232,6 +255,7 @@ class ASTNormalizer(ast.NodeTransformer):
     """
 
     def __init__(self):
+        """Initialize normalizer with counters and preserved names list."""
         self.var_counter = 0
         self.func_counter = 0
         self.name_mapping: Dict[str, str] = {}
@@ -284,7 +308,16 @@ class ASTNormalizer(ast.NodeTransformer):
         }
 
     def _get_placeholder(self, name: str, prefix: str) -> str:
-        """Get or create a placeholder for an identifier."""
+        """
+        Get or create a placeholder for an identifier.
+
+        Args:
+            name: Original identifier name
+            prefix: Placeholder prefix (VAR or FUNC)
+
+        Returns:
+            Placeholder name or preserved original name
+        """
         if name in self.preserved_names:
             return name
         if name not in self.name_mapping:
@@ -297,12 +330,28 @@ class ASTNormalizer(ast.NodeTransformer):
         return self.name_mapping[name]
 
     def visit_Name(self, node: ast.Name) -> ast.Name:
-        """Normalize variable names."""
+        """
+        Normalize variable names.
+
+        Args:
+            node: AST Name node to normalize
+
+        Returns:
+            Name node with normalized identifier
+        """
         new_name = self._get_placeholder(node.id, "VAR")
         return ast.Name(id=new_name, ctx=node.ctx)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
-        """Normalize function names (but preserve structure)."""
+        """
+        Normalize function names while preserving structure.
+
+        Args:
+            node: AST FunctionDef node to normalize
+
+        Returns:
+            FunctionDef node with normalized name and arguments
+        """
         new_name = self._get_placeholder(node.name, "FUNC")
         new_args = self._normalize_arguments(node.args)
         new_body = [self.visit(stmt) for stmt in node.body]
@@ -320,7 +369,15 @@ class ASTNormalizer(ast.NodeTransformer):
     def visit_AsyncFunctionDef(
         self, node: ast.AsyncFunctionDef
     ) -> ast.AsyncFunctionDef:
-        """Normalize async function names."""
+        """
+        Normalize async function names.
+
+        Args:
+            node: AST AsyncFunctionDef node to normalize
+
+        Returns:
+            AsyncFunctionDef node with normalized name and arguments
+        """
         new_name = self._get_placeholder(node.name, "FUNC")
         new_args = self._normalize_arguments(node.args)
         new_body = [self.visit(stmt) for stmt in node.body]
@@ -336,7 +393,15 @@ class ASTNormalizer(ast.NodeTransformer):
         )
 
     def _normalize_arguments(self, args: ast.arguments) -> ast.arguments:
-        """Normalize function arguments."""
+        """
+        Normalize function arguments.
+
+        Args:
+            args: AST arguments object to normalize
+
+        Returns:
+            Normalized arguments with placeholder names
+        """
         new_args = []
         for arg in args.args:
             new_name = self._get_placeholder(arg.arg, "VAR")
@@ -378,7 +443,15 @@ class ASTNormalizer(ast.NodeTransformer):
         )
 
     def visit_Constant(self, node: ast.Constant) -> ast.Constant:
-        """Normalize constants (but preserve type information)."""
+        """
+        Normalize constants while preserving type information.
+
+        Args:
+            node: AST Constant node to normalize
+
+        Returns:
+            Constant node with normalized value
+        """
         # Keep type but normalize value for string/number comparisons
         if isinstance(node.value, str):
             return ast.Constant(value="$STRING$")
@@ -387,7 +460,15 @@ class ASTNormalizer(ast.NodeTransformer):
         return node
 
     def visit_arg(self, node: ast.arg) -> ast.arg:
-        """Normalize argument names."""
+        """
+        Normalize argument names.
+
+        Args:
+            node: AST arg node to normalize
+
+        Returns:
+            arg node with normalized name
+        """
         new_name = self._get_placeholder(node.arg, "VAR")
         return ast.arg(
             arg=new_name,
@@ -410,6 +491,7 @@ class ASTHasher:
     """
 
     def __init__(self):
+        """Initialize AST hasher with normalizer for identifier normalization."""
         self.normalizer = ASTNormalizer()
 
     def hash_structural(self, node: ast.AST) -> str:
@@ -429,7 +511,16 @@ class ASTHasher:
         return self._hash_node(node, normalize=True)
 
     def _hash_node(self, node: ast.AST, normalize: bool = False) -> str:
-        """Hash an AST node with optional normalization."""
+        """
+        Hash an AST node with optional normalization.
+
+        Args:
+            node: AST node to hash
+            normalize: Whether to normalize identifiers
+
+        Returns:
+            SHA-256 hash (first 32 characters) of the node structure
+        """
         if normalize:
             # Create a fresh normalizer for each hash to ensure consistency
             normalizer = ASTNormalizer()
@@ -446,7 +537,15 @@ class ASTHasher:
         return hashlib.sha256(structure_str.encode("utf-8")).hexdigest()[:32]
 
     def _node_to_structure(self, node: ast.AST) -> Tuple[str, ...]:
-        """Convert AST node to a hashable structure tuple using dispatch table."""
+        """
+        Convert AST node to a hashable structure tuple using dispatch table.
+
+        Args:
+            node: AST node to convert
+
+        Returns:
+            Tuple representing the node structure
+        """
         if node is None:
             return ("None",)
 
@@ -466,84 +565,254 @@ class ASTHasher:
     # =========================================================================
 
     def _handle_constant(self, node: ast.Constant, node_type: str) -> Tuple:
+        """
+        Handle Constant AST nodes.
+
+        Args:
+            node: Constant node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and value type
+        """
         return (node_type, type(node.value).__name__)
 
     def _handle_name(self, node: ast.Name, node_type: str) -> Tuple:
+        """
+        Handle Name AST nodes.
+
+        Args:
+            node: Name node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, identifier, and context type
+        """
         return (node_type, node.id, type(node.ctx).__name__)
 
     def _handle_function_def(self, node: ast.FunctionDef, node_type: str) -> Tuple:
+        """
+        Handle FunctionDef AST nodes.
+
+        Args:
+            node: FunctionDef node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, name, arguments, and body
+        """
         args_tuple = self._args_to_structure(node.args)
         body_tuple = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, node.name, args_tuple, body_tuple)
 
     def _handle_async_function_def(self, node: ast.AsyncFunctionDef, node_type: str) -> Tuple:
+        """
+        Handle AsyncFunctionDef AST nodes.
+
+        Args:
+            node: AsyncFunctionDef node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, name, arguments, and body
+        """
         args_tuple = self._args_to_structure(node.args)
         body_tuple = tuple(self._node_to_structure(n) for n in node.body)
         return ("AsyncFunctionDef", node.name, args_tuple, body_tuple)
 
     def _handle_class_def(self, node: ast.ClassDef, node_type: str) -> Tuple:
+        """
+        Handle ClassDef AST nodes.
+
+        Args:
+            node: ClassDef node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, name, bases, and body
+        """
         body_tuple = tuple(self._node_to_structure(n) for n in node.body)
         bases_tuple = tuple(self._node_to_structure(b) for b in node.bases)
         return (node_type, node.name, bases_tuple, body_tuple)
 
     def _handle_binop(self, node: ast.BinOp, node_type: str) -> Tuple:
+        """
+        Handle BinOp AST nodes.
+
+        Args:
+            node: BinOp node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, operator, left, and right operands
+        """
         left = self._node_to_structure(node.left)
         right = self._node_to_structure(node.right)
         op = type(node.op).__name__
         return (node_type, op, left, right)
 
     def _handle_compare(self, node: ast.Compare, node_type: str) -> Tuple:
+        """
+        Handle Compare AST nodes.
+
+        Args:
+            node: Compare node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, left operand, operators, and comparators
+        """
         left = self._node_to_structure(node.left)
         ops = tuple(type(op).__name__ for op in node.ops)
         comparators = tuple(self._node_to_structure(c) for c in node.comparators)
         return (node_type, left, ops, comparators)
 
     def _handle_call(self, node: ast.Call, node_type: str) -> Tuple:
+        """
+        Handle Call AST nodes.
+
+        Args:
+            node: Call node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, function, and arguments
+        """
         func = self._node_to_structure(node.func)
         args = tuple(self._node_to_structure(a) for a in node.args)
         return (node_type, func, args)
 
     def _handle_attribute(self, node: ast.Attribute, node_type: str) -> Tuple:
+        """
+        Handle Attribute AST nodes.
+
+        Args:
+            node: Attribute node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, value, and attribute name
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value, node.attr)
 
     def _handle_if(self, node: ast.If, node_type: str) -> Tuple:
+        """
+        Handle If AST nodes.
+
+        Args:
+            node: If node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, test condition, body, and orelse
+        """
         test = self._node_to_structure(node.test)
         body = tuple(self._node_to_structure(n) for n in node.body)
         orelse = tuple(self._node_to_structure(n) for n in node.orelse)
         return (node_type, test, body, orelse)
 
     def _handle_for(self, node: ast.For, node_type: str) -> Tuple:
+        """
+        Handle For AST nodes.
+
+        Args:
+            node: For node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, target, iterator, and body
+        """
         target = self._node_to_structure(node.target)
         iter_node = self._node_to_structure(node.iter)
         body = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, target, iter_node, body)
 
     def _handle_while(self, node: ast.While, node_type: str) -> Tuple:
+        """
+        Handle While AST nodes.
+
+        Args:
+            node: While node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, test condition, and body
+        """
         test = self._node_to_structure(node.test)
         body = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, test, body)
 
     def _handle_return(self, node: ast.Return, node_type: str) -> Tuple:
+        """
+        Handle Return AST nodes.
+
+        Args:
+            node: Return node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and return value
+        """
         value = self._node_to_structure(node.value) if node.value else ("None",)
         return (node_type, value)
 
     def _handle_assign(self, node: ast.Assign, node_type: str) -> Tuple:
+        """
+        Handle Assign AST nodes.
+
+        Args:
+            node: Assign node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, targets, and value
+        """
         targets = tuple(self._node_to_structure(t) for t in node.targets)
         value = self._node_to_structure(node.value)
         return (node_type, targets, value)
 
     def _handle_aug_assign(self, node: ast.AugAssign, node_type: str) -> Tuple:
+        """
+        Handle AugAssign AST nodes.
+
+        Args:
+            node: AugAssign node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, target, operator, and value
+        """
         target = self._node_to_structure(node.target)
         op = type(node.op).__name__
         value = self._node_to_structure(node.value)
         return (node_type, target, op, value)
 
     def _handle_expr(self, node: ast.Expr, node_type: str) -> Tuple:
+        """
+        Handle Expr AST nodes.
+
+        Args:
+            node: Expr node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and expression value
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value)
 
     def _handle_try(self, node: ast.Try, node_type: str) -> Tuple:
+        """
+        Handle Try AST nodes.
+
+        Args:
+            node: Try node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, body, handlers, orelse, and finalbody
+        """
         body = tuple(self._node_to_structure(n) for n in node.body)
         handlers = tuple(self._node_to_structure(h) for h in node.handlers)
         orelse = tuple(self._node_to_structure(n) for n in node.orelse)
@@ -551,16 +820,46 @@ class ASTHasher:
         return (node_type, body, handlers, orelse, finalbody)
 
     def _handle_except_handler(self, node: ast.ExceptHandler, node_type: str) -> Tuple:
+        """
+        Handle ExceptHandler AST nodes.
+
+        Args:
+            node: ExceptHandler node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, exception type, name, and body
+        """
         handler_type = self._node_to_structure(node.type) if node.type else ("None",)
         body = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, handler_type, node.name, body)
 
     def _handle_with(self, node: ast.With, node_type: str) -> Tuple:
+        """
+        Handle With AST nodes.
+
+        Args:
+            node: With node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, items, and body
+        """
         items = tuple(self._node_to_structure(i) for i in node.items)
         body = tuple(self._node_to_structure(n) for n in node.body)
         return (node_type, items, body)
 
     def _handle_withitem(self, node: ast.withitem, node_type: str) -> Tuple:
+        """
+        Handle withitem AST nodes.
+
+        Args:
+            node: withitem node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with context expression and optional vars
+        """
         context = self._node_to_structure(node.context_expr)
         optional_vars = (
             self._node_to_structure(node.optional_vars)
@@ -570,118 +869,377 @@ class ASTHasher:
         return ("withitem", context, optional_vars)
 
     def _handle_list(self, node: ast.List, node_type: str) -> Tuple:
+        """
+        Handle List AST nodes.
+
+        Args:
+            node: List node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and list elements
+        """
         elts = tuple(self._node_to_structure(e) for e in node.elts)
         return (node_type, elts)
 
     def _handle_dict(self, node: ast.Dict, node_type: str) -> Tuple:
+        """
+        Handle Dict AST nodes.
+
+        Args:
+            node: Dict node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, keys, and values
+        """
         keys = tuple(self._node_to_structure(k) if k else ("None",) for k in node.keys)
         values = tuple(self._node_to_structure(v) for v in node.values)
         return (node_type, keys, values)
 
     def _handle_tuple(self, node: ast.Tuple, node_type: str) -> Tuple:
+        """
+        Handle Tuple AST nodes.
+
+        Args:
+            node: Tuple node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and tuple elements
+        """
         elts = tuple(self._node_to_structure(e) for e in node.elts)
         return (node_type, elts)
 
     def _handle_set(self, node: ast.Set, node_type: str) -> Tuple:
+        """
+        Handle Set AST nodes.
+
+        Args:
+            node: Set node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and set elements
+        """
         elts = tuple(self._node_to_structure(e) for e in node.elts)
         return (node_type, elts)
 
     def _handle_list_comp(self, node: ast.ListComp, node_type: str) -> Tuple:
+        """
+        Handle ListComp AST nodes.
+
+        Args:
+            node: ListComp node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, element, and generators
+        """
         elt = self._node_to_structure(node.elt)
         generators = tuple(self._node_to_structure(g) for g in node.generators)
         return (node_type, elt, generators)
 
     def _handle_comprehension(self, node: ast.comprehension, node_type: str) -> Tuple:
+        """
+        Handle comprehension AST nodes.
+
+        Args:
+            node: comprehension node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with target, iterator, conditions, and async flag
+        """
         target = self._node_to_structure(node.target)
         iter_node = self._node_to_structure(node.iter)
         ifs = tuple(self._node_to_structure(i) for i in node.ifs)
         return ("comprehension", target, iter_node, ifs, node.is_async)
 
     def _handle_lambda(self, node: ast.Lambda, node_type: str) -> Tuple:
+        """
+        Handle Lambda AST nodes.
+
+        Args:
+            node: Lambda node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, arguments, and body
+        """
         args = self._args_to_structure(node.args)
         body = self._node_to_structure(node.body)
         return (node_type, args, body)
 
     def _handle_unary_op(self, node: ast.UnaryOp, node_type: str) -> Tuple:
+        """
+        Handle UnaryOp AST nodes.
+
+        Args:
+            node: UnaryOp node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, operator, and operand
+        """
         op = type(node.op).__name__
         operand = self._node_to_structure(node.operand)
         return (node_type, op, operand)
 
     def _handle_bool_op(self, node: ast.BoolOp, node_type: str) -> Tuple:
+        """
+        Handle BoolOp AST nodes.
+
+        Args:
+            node: BoolOp node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, operator, and values
+        """
         op = type(node.op).__name__
         values = tuple(self._node_to_structure(v) for v in node.values)
         return (node_type, op, values)
 
     def _handle_if_exp(self, node: ast.IfExp, node_type: str) -> Tuple:
+        """
+        Handle IfExp AST nodes (ternary operator).
+
+        Args:
+            node: IfExp node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, test, body, and orelse
+        """
         test = self._node_to_structure(node.test)
         body = self._node_to_structure(node.body)
         orelse = self._node_to_structure(node.orelse)
         return (node_type, test, body, orelse)
 
     def _handle_subscript(self, node: ast.Subscript, node_type: str) -> Tuple:
+        """
+        Handle Subscript AST nodes.
+
+        Args:
+            node: Subscript node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, value, and slice
+        """
         value = self._node_to_structure(node.value)
         slice_node = self._node_to_structure(node.slice)
         return (node_type, value, slice_node)
 
     def _handle_slice(self, node: ast.Slice, node_type: str) -> Tuple:
+        """
+        Handle Slice AST nodes.
+
+        Args:
+            node: Slice node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, lower, upper, and step bounds
+        """
         lower = self._node_to_structure(node.lower) if node.lower else ("None",)
         upper = self._node_to_structure(node.upper) if node.upper else ("None",)
         step = self._node_to_structure(node.step) if node.step else ("None",)
         return (node_type, lower, upper, step)
 
     def _handle_raise(self, node: ast.Raise, node_type: str) -> Tuple:
+        """
+        Handle Raise AST nodes.
+
+        Args:
+            node: Raise node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, exception, and cause
+        """
         exc = self._node_to_structure(node.exc) if node.exc else ("None",)
         cause = self._node_to_structure(node.cause) if node.cause else ("None",)
         return (node_type, exc, cause)
 
     def _handle_assert(self, node: ast.Assert, node_type: str) -> Tuple:
+        """
+        Handle Assert AST nodes.
+
+        Args:
+            node: Assert node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, test condition, and message
+        """
         test = self._node_to_structure(node.test)
         msg = self._node_to_structure(node.msg) if node.msg else ("None",)
         return (node_type, test, msg)
 
     def _handle_import(self, node: ast.Import, node_type: str) -> Tuple:
+        """
+        Handle Import AST nodes.
+
+        Args:
+            node: Import node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and imported names
+        """
         names = tuple((alias.name, alias.asname) for alias in node.names)
         return (node_type, names)
 
     def _handle_import_from(self, node: ast.ImportFrom, node_type: str) -> Tuple:
+        """
+        Handle ImportFrom AST nodes.
+
+        Args:
+            node: ImportFrom node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, module, and imported names
+        """
         names = tuple((alias.name, alias.asname) for alias in node.names)
         return (node_type, node.module, names)
 
     def _handle_simple_stmt(self, node: ast.AST, node_type: str) -> Tuple:
-        """Handle simple statements with no children: Pass, Break, Continue."""
+        """
+        Handle simple statements with no children: Pass, Break, Continue.
+
+        Args:
+            node: Simple statement node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with only node type
+        """
         return (node_type,)
 
     def _handle_global(self, node: ast.Global, node_type: str) -> Tuple:
+        """
+        Handle Global AST nodes.
+
+        Args:
+            node: Global node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and global names
+        """
         return (node_type, tuple(node.names))
 
     def _handle_nonlocal(self, node: ast.Nonlocal, node_type: str) -> Tuple:
+        """
+        Handle Nonlocal AST nodes.
+
+        Args:
+            node: Nonlocal node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and nonlocal names
+        """
         return (node_type, tuple(node.names))
 
     def _handle_await(self, node: ast.Await, node_type: str) -> Tuple:
+        """
+        Handle Await AST nodes.
+
+        Args:
+            node: Await node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and awaited value
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value)
 
     def _handle_yield(self, node: ast.Yield, node_type: str) -> Tuple:
+        """
+        Handle Yield AST nodes.
+
+        Args:
+            node: Yield node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and yielded value
+        """
         value = self._node_to_structure(node.value) if node.value else ("None",)
         return (node_type, value)
 
     def _handle_yield_from(self, node: ast.YieldFrom, node_type: str) -> Tuple:
+        """
+        Handle YieldFrom AST nodes.
+
+        Args:
+            node: YieldFrom node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and yielded value
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value)
 
     def _handle_formatted_value(self, node: ast.FormattedValue, node_type: str) -> Tuple:
+        """
+        Handle FormattedValue AST nodes (f-string values).
+
+        Args:
+            node: FormattedValue node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, value, and conversion
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value, node.conversion)
 
     def _handle_joined_str(self, node: ast.JoinedStr, node_type: str) -> Tuple:
+        """
+        Handle JoinedStr AST nodes (f-strings).
+
+        Args:
+            node: JoinedStr node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and joined values
+        """
         values = tuple(self._node_to_structure(v) for v in node.values)
         return (node_type, values)
 
     def _handle_starred(self, node: ast.Starred, node_type: str) -> Tuple:
+        """
+        Handle Starred AST nodes (*args).
+
+        Args:
+            node: Starred node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type and starred value
+        """
         value = self._node_to_structure(node.value)
         return (node_type, value)
 
     def _handle_named_expr(self, node: ast.NamedExpr, node_type: str) -> Tuple:
+        """
+        Handle NamedExpr AST nodes (walrus operator :=).
+
+        Args:
+            node: NamedExpr node
+            node_type: String name of node type
+
+        Returns:
+            Tuple with node type, target, and value
+        """
         target = self._node_to_structure(node.target)
         value = self._node_to_structure(node.value)
         return (node_type, target, value)
@@ -739,7 +1297,15 @@ class ASTHasher:
     }
 
     def _args_to_structure(self, args: ast.arguments) -> Tuple:
-        """Convert arguments to a hashable structure."""
+        """
+        Convert arguments to a hashable structure.
+
+        Args:
+            args: AST arguments object
+
+        Returns:
+            Tuple with argument counts and flags
+        """
         return (
             len(args.args),
             len(args.kwonlyargs),
@@ -778,7 +1344,14 @@ class ASTHasher:
     def _count_features(
         self, node: ast.AST, features: Dict[str, Any], depth: int
     ) -> None:
-        """Recursively count features in an AST node."""
+        """
+        Recursively count features in an AST node.
+
+        Args:
+            node: AST node to analyze
+            features: Dictionary to accumulate feature counts
+            depth: Current recursion depth
+        """
         features["node_count"] += 1
         features["depth"] = max(features["depth"], depth)
         features["node_types"].add(type(node).__name__)
@@ -824,6 +1397,7 @@ class SemanticHasher:
     """
 
     def __init__(self):
+        """Initialize semantic hasher with AST hasher dependency."""
         self.ast_hasher = ASTHasher()
 
     def hash_semantic(self, node: ast.AST) -> str:
@@ -839,7 +1413,15 @@ class SemanticHasher:
         return hashlib.sha256(str(semantic_repr).encode("utf-8")).hexdigest()[:32]
 
     def _extract_semantic_representation(self, node: ast.AST) -> Dict[str, Any]:
-        """Extract semantic features from an AST node."""
+        """
+        Extract semantic features from an AST node.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            Dictionary of semantic features including inputs, outputs, control flow
+        """
         return {
             "input_variables": self._find_inputs(node),
             "output_variables": self._find_outputs(node),
@@ -855,7 +1437,15 @@ class SemanticHasher:
     })
 
     def _find_inputs(self, node: ast.AST) -> List[str]:
-        """Find variables that are read but not defined in the node."""
+        """
+        Find variables that are read but not defined in the node.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            Sorted list of input variable names
+        """
         defined: Set[str] = set()
         used: Set[str] = set()
 
@@ -868,7 +1458,14 @@ class SemanticHasher:
     def _process_node_for_inputs(
         self, child: ast.AST, defined: Set[str], used: Set[str]
     ) -> None:
-        """Process a single node for input/output variable tracking."""
+        """
+        Process a single node for input/output variable tracking.
+
+        Args:
+            child: AST node to process
+            defined: Set of defined variables (modified in place)
+            used: Set of used variables (modified in place)
+        """
         if isinstance(child, ast.Name):
             if isinstance(child.ctx, ast.Store):
                 defined.add(child.id)
@@ -879,7 +1476,15 @@ class SemanticHasher:
                 defined.add(arg.arg)
 
     def _find_outputs(self, node: ast.AST) -> List[str]:
-        """Find variables that are defined/modified in the node."""
+        """
+        Find variables that are defined/modified in the node.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            Sorted list of output variable names
+        """
         outputs: Set[str] = set()
 
         for child in ast.walk(node):
@@ -904,7 +1509,15 @@ class SemanticHasher:
     }
 
     def _extract_control_flow(self, node: ast.AST) -> List[str]:
-        """Extract control flow pattern as a sequence of control structures."""
+        """
+        Extract control flow pattern as a sequence of control structures.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            List of control flow keywords in order of appearance
+        """
         pattern: List[str] = []
         for child in ast.walk(node):
             label = self._CONTROL_FLOW_MAP.get(type(child))
@@ -913,7 +1526,15 @@ class SemanticHasher:
         return pattern
 
     def _extract_operations(self, node: ast.AST) -> List[str]:
-        """Extract sequence of operations/operators used."""
+        """
+        Extract sequence of operations/operators used.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            List of operation strings
+        """
         operations: List[str] = []
         for child in ast.walk(node):
             op_str = self._get_operation_string(child)
@@ -925,7 +1546,15 @@ class SemanticHasher:
         return operations
 
     def _get_operation_string(self, child: ast.AST) -> Optional[str | List[str]]:
-        """Get operation string for an AST node. Returns None if not an operation."""
+        """
+        Get operation string for an AST node.
+
+        Args:
+            child: AST node to check
+
+        Returns:
+            Operation string or list of strings, None if not an operation
+        """
         if isinstance(child, ast.BinOp):
             return f"BINOP:{type(child.op).__name__}"
         if isinstance(child, ast.UnaryOp):
@@ -939,7 +1568,15 @@ class SemanticHasher:
         return None
 
     def _extract_calls(self, node: ast.AST) -> List[str]:
-        """Extract function calls made within the node."""
+        """
+        Extract function calls made within the node.
+
+        Args:
+            node: AST node to analyze
+
+        Returns:
+            List of function call names
+        """
         calls: List[str] = []
         for child in ast.walk(node):
             if not isinstance(child, ast.Call):
@@ -950,7 +1587,15 @@ class SemanticHasher:
         return calls
 
     def _get_call_name(self, call_node: ast.Call) -> Optional[str]:
-        """Extract the function name from a Call node."""
+        """
+        Extract the function name from a Call node.
+
+        Args:
+            call_node: AST Call node
+
+        Returns:
+            Function name string or None if not extractable
+        """
         if isinstance(call_node.func, ast.Name):
             return call_node.func.id
         if isinstance(call_node.func, ast.Attribute):
@@ -974,6 +1619,7 @@ class SimilarityCalculator:
     """
 
     def __init__(self):
+        """Initialize similarity calculator with AST hasher for comparisons."""
         self.ast_hasher = ASTHasher()
 
     def calculate_similarity(
@@ -1014,7 +1660,16 @@ class SimilarityCalculator:
         return min(1.0, max(0.0, similarity))
 
     def _structural_similarity(self, node1: ast.AST, node2: ast.AST) -> float:
-        """Calculate similarity based on AST structure."""
+        """
+        Calculate similarity based on AST structure.
+
+        Args:
+            node1: First AST node
+            node2: Second AST node
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
         features1 = self.ast_hasher.extract_features(node1)
         features2 = self.ast_hasher.extract_features(node2)
 
@@ -1036,7 +1691,16 @@ class SimilarityCalculator:
         return (node_count_sim + node_type_sim + op_sim) / 3
 
     def _token_similarity(self, code1: str, code2: str) -> float:
-        """Calculate similarity based on token sequences."""
+        """
+        Calculate similarity based on token sequences.
+
+        Args:
+            code1: First code string
+            code2: Second code string
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
         tokens1 = self._tokenize(code1)
         tokens2 = self._tokenize(code2)
 
@@ -1050,7 +1714,16 @@ class SimilarityCalculator:
         return lcs_length / max_length if max_length > 0 else 0.0
 
     def _feature_similarity(self, node1: ast.AST, node2: ast.AST) -> float:
-        """Calculate similarity based on extracted features."""
+        """
+        Calculate similarity based on extracted features.
+
+        Args:
+            node1: First AST node
+            node2: Second AST node
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
         features1 = self.ast_hasher.extract_features(node1)
         features2 = self.ast_hasher.extract_features(node2)
 
@@ -1076,7 +1749,16 @@ class SimilarityCalculator:
         return sum(similarities) / len(similarities) if similarities else 0.0
 
     def _text_similarity(self, text1: str, text2: str) -> float:
-        """Calculate text-based similarity as fallback."""
+        """
+        Calculate text-based similarity as fallback.
+
+        Args:
+            text1: First text string
+            text2: Second text string
+
+        Returns:
+            Similarity score between 0.0 and 1.0
+        """
         # Normalize whitespace and compare
         normalized1 = " ".join(text1.split())
         normalized2 = " ".join(text2.split())
@@ -1091,13 +1773,30 @@ class SimilarityCalculator:
         return lcs_length / max_length if max_length > 0 else 0.0
 
     def _tokenize(self, code: str) -> List[str]:
-        """Tokenize code into meaningful tokens."""
+        """
+        Tokenize code into meaningful tokens.
+
+        Args:
+            code: Source code string
+
+        Returns:
+            List of tokens
+        """
         # Simple tokenization - split on whitespace and punctuation
         tokens = re.findall(r"[a-zA-Z_]\w*|\d+|[^\s\w]", code)
         return tokens
 
     def _jaccard_similarity(self, set1: Set, set2: Set) -> float:
-        """Calculate Jaccard similarity between two sets."""
+        """
+        Calculate Jaccard similarity between two sets.
+
+        Args:
+            set1: First set
+            set2: Second set
+
+        Returns:
+            Jaccard similarity coefficient between 0.0 and 1.0
+        """
         if not set1 and not set2:
             return 1.0
         intersection = len(set1 & set2)
@@ -1105,7 +1804,16 @@ class SimilarityCalculator:
         return intersection / union if union > 0 else 0.0
 
     def _lcs_length(self, seq1: List, seq2: List) -> int:
-        """Calculate length of longest common subsequence."""
+        """
+        Calculate length of longest common subsequence.
+
+        Args:
+            seq1: First sequence
+            seq2: Second sequence
+
+        Returns:
+            Length of longest common subsequence
+        """
         m, n = len(seq1), len(seq2)
         if m == 0 or n == 0:
             return 0
@@ -1285,7 +1993,15 @@ class CloneDetector:
         return report
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """Get all Python files in directory, excluding specified patterns."""
+        """
+        Get all Python files in directory, excluding specified patterns.
+
+        Args:
+            directory: Root directory to search
+
+        Returns:
+            Sorted list of Python file paths
+        """
         python_files = []
         dir_path = Path(directory)
 
@@ -1305,7 +2021,18 @@ class CloneDetector:
     def _create_fragment_from_node(
         self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str
     ) -> Optional[CodeFragment]:
-        """Create a CodeFragment from an AST node (Issue #335 - extracted helper)."""
+        """
+        Create a CodeFragment from an AST node.
+
+        Args:
+            node: AST node (FunctionDef, AsyncFunctionDef, or ClassDef)
+            file_path: Path to source file
+            lines: Source code lines
+            fragment_type: Type of fragment (function or class)
+
+        Returns:
+            CodeFragment if fragment meets size threshold, None otherwise
+        """
         start_line = node.lineno
         end_line = getattr(node, "end_lineno", start_line)
         line_count = end_line - start_line + 1
@@ -1325,7 +2052,15 @@ class CloneDetector:
         )
 
     def _extract_fragments(self, file_path: str) -> List[CodeFragment]:
-        """Extract code fragments (functions, classes) from a file."""
+        """
+        Extract code fragments (functions, classes) from a file.
+
+        Args:
+            file_path: Path to Python source file
+
+        Returns:
+            List of CodeFragment objects
+        """
         try:
             return self._extract_fragments_from_file(file_path)
         except SyntaxError as e:
@@ -1336,7 +2071,15 @@ class CloneDetector:
             return []
 
     def _extract_fragments_from_file(self, file_path: str) -> List[CodeFragment]:
-        """Parse file and extract code fragments."""
+        """
+        Parse file and extract code fragments.
+
+        Args:
+            file_path: Path to Python source file
+
+        Returns:
+            List of CodeFragment objects
+        """
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
         lines = source.split("\n")
@@ -1352,7 +2095,17 @@ class CloneDetector:
     def _maybe_create_fragment(
         self, node: ast.AST, file_path: str, lines: List[str]
     ) -> Optional[CodeFragment]:
-        """Create a fragment from node if it's a function or class."""
+        """
+        Create a fragment from node if it's a function or class.
+
+        Args:
+            node: AST node to check
+            file_path: Path to source file
+            lines: Source code lines
+
+        Returns:
+            CodeFragment if node is function/class and meets threshold, None otherwise
+        """
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             return self._create_fragment_from_node(node, file_path, lines, "function")
         if isinstance(node, ast.ClassDef):
@@ -1360,7 +2113,12 @@ class CloneDetector:
         return None
 
     def _generate_fingerprints(self, fragment: CodeFragment) -> None:
-        """Generate all types of fingerprints for a fragment."""
+        """
+        Generate all types of fingerprints for a fragment.
+
+        Args:
+            fragment: CodeFragment to fingerprint
+        """
         if fragment.ast_node is None:
             return
 
@@ -1396,7 +2154,12 @@ class CloneDetector:
         self._semantic_fingerprints[semantic_hash].append(semantic_fp)
 
     def _detect_type1_clones(self) -> List[CloneGroup]:
-        """Detect Type 1 (exact) clones."""
+        """
+        Detect Type 1 (exact) clones.
+
+        Returns:
+            List of CloneGroup objects for Type 1 clones
+        """
         clone_groups: List[CloneGroup] = []
 
         for hash_value, fingerprints in self._structural_fingerprints.items():
@@ -1428,7 +2191,15 @@ class CloneDetector:
     def _detect_type2_clones(
         self, type1_groups: List[CloneGroup]
     ) -> List[CloneGroup]:
-        """Detect Type 2 (renamed) clones, excluding Type 1 clones."""
+        """
+        Detect Type 2 (renamed) clones, excluding Type 1 clones.
+
+        Args:
+            type1_groups: Previously detected Type 1 clone groups
+
+        Returns:
+            List of CloneGroup objects for Type 2 clones
+        """
         # Get all fragments already in Type 1 groups
         type1_fragments: Set[Tuple[str, int, int]] = set()
         for group in type1_groups:
@@ -1503,7 +2274,17 @@ class CloneDetector:
         type1_groups: List[CloneGroup],
         type2_groups: List[CloneGroup],
     ) -> List[CloneGroup]:
-        """Detect Type 3 (near-miss) clones using fuzzy matching."""
+        """
+        Detect Type 3 (near-miss) clones using fuzzy matching.
+
+        Args:
+            fragments: All code fragments
+            type1_groups: Previously detected Type 1 clone groups
+            type2_groups: Previously detected Type 2 clone groups
+
+        Returns:
+            List of CloneGroup objects for Type 3 clones
+        """
         # Get fragments already in Type 1 or Type 2 groups
         existing_fragments: Set[Tuple[str, int, int]] = set()
         for group in type1_groups + type2_groups:
@@ -1604,7 +2385,18 @@ class CloneDetector:
         type2_groups: List[CloneGroup],
         type3_groups: List[CloneGroup],
     ) -> List[CloneGroup]:
-        """Detect Type 4 (semantic) clones."""
+        """
+        Detect Type 4 (semantic) clones.
+
+        Args:
+            fragments: All code fragments
+            type1_groups: Previously detected Type 1 clone groups
+            type2_groups: Previously detected Type 2 clone groups
+            type3_groups: Previously detected Type 3 clone groups
+
+        Returns:
+            List of CloneGroup objects for Type 4 clones
+        """
         existing_fragments = self._collect_existing_fragments(
             type1_groups + type2_groups + type3_groups
         )
@@ -1621,7 +2413,15 @@ class CloneDetector:
     def _collect_existing_fragments(
         self, groups: List[CloneGroup]
     ) -> Set[Tuple[str, int, int]]:
-        """Collect fragment identifiers from existing groups."""
+        """
+        Collect fragment identifiers from existing groups.
+
+        Args:
+            groups: List of clone groups
+
+        Returns:
+            Set of (file_path, start_line, end_line) tuples
+        """
         existing: Set[Tuple[str, int, int]] = set()
         for group in groups:
             for instance in group.instances:
@@ -1638,7 +2438,17 @@ class CloneDetector:
         fingerprints: List,
         existing_fragments: Set[Tuple[str, int, int]],
     ) -> Optional[CloneGroup]:
-        """Create a Type 4 clone group if valid."""
+        """
+        Create a Type 4 clone group if valid.
+
+        Args:
+            hash_value: Semantic hash value
+            fingerprints: List of fingerprints with same semantic hash
+            existing_fragments: Set of already classified fragments
+
+        Returns:
+            CloneGroup if valid Type 4 group, None otherwise
+        """
         if len(fingerprints) < 2:
             return None
         if self._should_skip_type4_group(fingerprints, existing_fragments):
@@ -1667,7 +2477,16 @@ class CloneDetector:
     def _should_skip_type4_group(
         self, fingerprints: List, existing_fragments: Set[Tuple[str, int, int]]
     ) -> bool:
-        """Check if this semantic group should be skipped."""
+        """
+        Check if this semantic group should be skipped.
+
+        Args:
+            fingerprints: List of fingerprints
+            existing_fragments: Set of already classified fragments
+
+        Returns:
+            True if group should be skipped, False otherwise
+        """
         # Check if all are from same structural group
         structural_hashes = {
             self.ast_hasher.hash_structural(fp.fragment.ast_node)
@@ -1685,7 +2504,16 @@ class CloneDetector:
         )
 
     def _calculate_severity(self, instance_count: int, total_lines: int) -> CloneSeverity:
-        """Calculate severity based on clone metrics."""
+        """
+        Calculate severity based on clone metrics.
+
+        Args:
+            instance_count: Number of clone instances
+            total_lines: Total duplicated lines across all instances
+
+        Returns:
+            CloneSeverity level
+        """
         if instance_count >= 7 or total_lines >= 200:
             return CloneSeverity.CRITICAL
         if instance_count >= 5 or total_lines >= 100:
@@ -1699,7 +2527,15 @@ class CloneDetector:
     def _calculate_type_distribution(
         self, groups: List[CloneGroup]
     ) -> Dict[str, int]:
-        """Calculate distribution of clone types."""
+        """
+        Calculate distribution of clone types.
+
+        Args:
+            groups: List of clone groups
+
+        Returns:
+            Dictionary mapping clone type to count
+        """
         dist: Dict[str, int] = {}
         for group in groups:
             key = group.clone_type.value
@@ -1709,7 +2545,15 @@ class CloneDetector:
     def _calculate_severity_distribution(
         self, groups: List[CloneGroup]
     ) -> Dict[str, int]:
-        """Calculate distribution of severities."""
+        """
+        Calculate distribution of severities.
+
+        Args:
+            groups: List of clone groups
+
+        Returns:
+            Dictionary mapping severity level to count
+        """
         dist: Dict[str, int] = {}
         for group in groups:
             key = group.severity.value
@@ -1719,7 +2563,16 @@ class CloneDetector:
     def _find_top_cloned_files(
         self, groups: List[CloneGroup], top_n: int = 10
     ) -> List[Dict[str, Any]]:
-        """Find files with the most clones."""
+        """
+        Find files with the most clones.
+
+        Args:
+            groups: List of clone groups
+            top_n: Number of top files to return
+
+        Returns:
+            List of dictionaries with file statistics
+        """
         file_stats: Dict[str, Dict[str, int]] = defaultdict(
             lambda: {"clone_count": 0, "duplicated_lines": 0}
         )
@@ -1749,7 +2602,16 @@ class CloneDetector:
     def _prioritize_refactoring(
         self, groups: List[CloneGroup], top_n: int = 10
     ) -> List[Dict[str, Any]]:
-        """Prioritize clone groups for refactoring."""
+        """
+        Prioritize clone groups for refactoring.
+
+        Args:
+            groups: List of clone groups
+            top_n: Number of top priorities to return
+
+        Returns:
+            List of dictionaries with refactoring priorities
+        """
         # Score based on severity, instance count, and total lines
         scored_groups = []
         for group in groups:
@@ -1811,7 +2673,15 @@ class CloneDetector:
     }
 
     def _generate_refactoring_suggestion(self, group: CloneGroup) -> str:
-        """Generate a refactoring suggestion for a clone group."""
+        """
+        Generate a refactoring suggestion for a clone group.
+
+        Args:
+            group: CloneGroup to generate suggestion for
+
+        Returns:
+            Human-readable refactoring suggestion
+        """
         template = self._REFACTORING_TEMPLATES.get(group.clone_type)
         if not template:
             return "Review and consider consolidating duplicated code."
@@ -1822,7 +2692,15 @@ class CloneDetector:
         return template.format(count=len(group.instances), fragment_type=fragment_type)
 
     def _estimate_refactoring_effort(self, group: CloneGroup) -> str:
-        """Estimate the effort required to refactor a clone group."""
+        """
+        Estimate the effort required to refactor a clone group.
+
+        Args:
+            group: CloneGroup to estimate effort for
+
+        Returns:
+            Effort estimation string
+        """
         total_lines = group.total_duplicated_lines
         instance_count = len(group.instances)
         files_affected = len(set(i.fragment.file_path for i in group.instances))

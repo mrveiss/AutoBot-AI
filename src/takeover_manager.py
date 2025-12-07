@@ -272,66 +272,70 @@ class TakeoverManager:
 
         return result
 
+    def _action_pause_task(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle pause_task action (Issue #315)."""
+        task_id = action_data.get("task_id")
+        if task_id:
+            self.paused_tasks.add(task_id)
+            return {"status": "task_paused", "task_id": task_id}
+        return {"status": "error", "reason": "No task_id provided"}
+
+    def _action_resume_task(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle resume_task action (Issue #315)."""
+        task_id = action_data.get("task_id")
+        if task_id and task_id in self.paused_tasks:
+            self.paused_tasks.remove(task_id)
+            return {"status": "task_resumed", "task_id": task_id}
+        return {"status": "error", "reason": "Task not found or not paused"}
+
+    def _action_modify_parameters(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle modify_parameters action (Issue #315)."""
+        parameter_changes = action_data.get("changes", {})
+        return {"status": "parameters_modified", "changes": parameter_changes}
+
+    def _action_approve_operation(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle approve_operation action (Issue #315)."""
+        operation_id = action_data.get("operation_id")
+        return {"status": "operation_approved", "operation_id": operation_id}
+
+    def _action_reject_operation(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle reject_operation action (Issue #315)."""
+        operation_id = action_data.get("operation_id")
+        reason = action_data.get("reason", "Rejected by human operator")
+        return {"status": "operation_rejected", "operation_id": operation_id, "reason": reason}
+
+    def _action_system_command(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle system_command action (Issue #315)."""
+        command = action_data.get("command")
+        if self._is_safe_command(command):
+            return {"status": "command_executed", "command": command}
+        return {"status": "command_rejected", "reason": "Command not in safe list"}
+
+    def _action_custom_script(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle custom_script action (Issue #315)."""
+        script_name = action_data.get("script_name")
+        script_params = action_data.get("parameters", {})
+        return {"status": "script_executed", "script": script_name, "parameters": script_params}
+
     async def _execute_action(
         self, action_type: str, action_data: Dict[str, Any], session: TakeoverSession
     ) -> Dict[str, Any]:
-        """Execute specific takeover actions"""
+        """Execute specific takeover actions (Issue #315 - dispatch table)."""
+        action_handlers = {
+            "pause_task": self._action_pause_task,
+            "resume_task": self._action_resume_task,
+            "modify_parameters": self._action_modify_parameters,
+            "approve_operation": self._action_approve_operation,
+            "reject_operation": self._action_reject_operation,
+            "system_command": self._action_system_command,
+            "custom_script": self._action_custom_script,
+        }
 
-        if action_type == "pause_task":
-            task_id = action_data.get("task_id")
-            if task_id:
-                self.paused_tasks.add(task_id)
-                return {"status": "task_paused", "task_id": task_id}
+        handler = action_handlers.get(action_type)
+        if handler:
+            return handler(action_data)
 
-        elif action_type == "resume_task":
-            task_id = action_data.get("task_id")
-            if task_id and task_id in self.paused_tasks:
-                self.paused_tasks.remove(task_id)
-                return {"status": "task_resumed", "task_id": task_id}
-
-        elif action_type == "modify_parameters":
-            # Allow human to modify system parameters
-            parameter_changes = action_data.get("changes", {})
-            return {"status": "parameters_modified", "changes": parameter_changes}
-
-        elif action_type == "approve_operation":
-            # Approve a pending operation
-            operation_id = action_data.get("operation_id")
-            return {"status": "operation_approved", "operation_id": operation_id}
-
-        elif action_type == "reject_operation":
-            # Reject a pending operation
-            operation_id = action_data.get("operation_id")
-            reason = action_data.get("reason", "Rejected by human operator")
-            return {
-                "status": "operation_rejected",
-                "operation_id": operation_id,
-                "reason": reason,
-            }
-
-        elif action_type == "system_command":
-            # Execute system-level commands (with appropriate security)
-            command = action_data.get("command")
-            if self._is_safe_command(command):
-                return {"status": "command_executed", "command": command}
-            else:
-                return {
-                    "status": "command_rejected",
-                    "reason": "Command not in safe list",
-                }
-
-        elif action_type == "custom_script":
-            # Execute custom intervention scripts
-            script_name = action_data.get("script_name")
-            script_params = action_data.get("parameters", {})
-            return {
-                "status": "script_executed",
-                "script": script_name,
-                "parameters": script_params,
-            }
-
-        else:
-            return {"status": "unknown_action", "action_type": action_type}
+        return {"status": "unknown_action", "action_type": action_type}
 
     def _is_safe_command(self, command: str) -> bool:
         """Check if a command is safe for execution during takeover"""

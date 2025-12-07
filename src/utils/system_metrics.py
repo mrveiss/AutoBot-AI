@@ -155,8 +155,106 @@ class SystemMetricsCollector:
 
         return metrics
 
+    async def _check_redis_health(self) -> float:
+        """Check Redis service health (Issue #315: extracted).
+
+        Returns:
+            1.0 if healthy, 0.0 if unhealthy
+        """
+        try:
+            redis_client = get_redis_client(database="main", async_client=True)
+            if asyncio.iscoroutine(redis_client):
+                redis_client = await redis_client
+
+            if not redis_client or not hasattr(redis_client, "ping"):
+                return 0.0
+
+            ping_result = redis_client.ping()
+            if asyncio.iscoroutine(ping_result):
+                await ping_result
+            return 1.0
+
+        except Exception as ping_error:
+            self.logger.warning(f"Redis ping failed: {ping_error}")
+            return 0.0
+
+    async def _check_http_service_health(
+        self,
+        http_client,
+        url: str,
+        timeout: aiohttp.ClientTimeout,
+    ) -> tuple[float, float | None]:
+        """Check HTTP service health (Issue #315: extracted).
+
+        Args:
+            http_client: HTTP client instance
+            url: Service URL to check
+            timeout: Request timeout
+
+        Returns:
+            Tuple of (health_value, response_time_ms or None on failure)
+        """
+        start_time = time.time()
+        async with await http_client.get(url, timeout=timeout) as response:
+            response_time = time.time() - start_time
+            health_value = 1.0 if response.status == 200 else 0.0
+            return health_value, response_time * 1000  # Convert to ms
+
+    def _create_health_metric(
+        self,
+        service_name: str,
+        health_value: float,
+        timestamp: float,
+        error: str | None = None,
+    ) -> SystemMetric:
+        """Create a health metric for a service (Issue #315: extracted).
+
+        Args:
+            service_name: Name of the service
+            health_value: Health value (1.0 = healthy, 0.0 = unhealthy)
+            timestamp: Metric timestamp
+            error: Optional error message
+
+        Returns:
+            SystemMetric instance
+        """
+        metadata = {"error": error} if error else None
+        return SystemMetric(
+            timestamp=timestamp,
+            name=f"{service_name}_health",
+            value=health_value,
+            unit="status",
+            category="services",
+            metadata=metadata,
+        )
+
+    def _update_prometheus_health(
+        self,
+        service_name: str,
+        health_value: float,
+        response_time: float | None = None,
+    ) -> None:
+        """Update Prometheus with service health (Issue #315: extracted).
+
+        Args:
+            service_name: Name of the service
+            health_value: Health value (1.0 = healthy, 0.0 = unhealthy)
+            response_time: Optional response time in seconds
+        """
+        if not self.prometheus:
+            return
+
+        status = "online" if health_value == 1.0 else "offline"
+        self.prometheus.update_service_status(service_name, status)
+
+        if response_time is not None:
+            self.prometheus.record_service_response_time(service_name, response_time)
+
     async def collect_service_health(self) -> Dict[str, SystemMetric]:
-        """Collect health metrics for AutoBot services"""
+        """Collect health metrics for AutoBot services.
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
+        """
         metrics = {}
         timestamp = time.time()
 
@@ -176,84 +274,40 @@ class SystemMetricsCollector:
 
         # Use singleton HTTP client for connection pooling
         http_client = get_http_client()
+
         for service_name, url in services.items():
+            health_value = 0.0
+            response_time_ms = None
+            error_msg = None
+
             try:
                 if service_name == "redis":
-                    # Special Redis health check using centralized client
-                    try:
-                        redis_client = get_redis_client(database="main", async_client=True)
-                        if asyncio.iscoroutine(redis_client):
-                            redis_client = await redis_client
-                        if redis_client and hasattr(redis_client, "ping"):
-                            ping_result = redis_client.ping()
-                            if asyncio.iscoroutine(ping_result):
-                                await ping_result
-                            health_value = 1.0
-                        else:
-                            health_value = 0.0
-                    except Exception as ping_error:
-                        self.logger.warning(f"Redis ping failed: {ping_error}")
-                        health_value = 0.0
-
-                    metrics[f"{service_name}_health"] = SystemMetric(
-                        timestamp=timestamp,
-                        name=f"{service_name}_health",
-                        value=health_value,
-                        unit="status",
-                        category="services",
-                    )
-
-                    # Push to Prometheus
-                    if self.prometheus:
-                        status = "online" if health_value == 1.0 else "offline"
-                        self.prometheus.update_service_status(service_name, status)
+                    health_value = await self._check_redis_health()
                 else:
-                    # HTTP health check
-                    start_time = time.time()
-                    async with await http_client.get(url, timeout=timeout) as response:
-                        response_time = time.time() - start_time
-                        health_value = 1.0 if response.status == 200 else 0.0
-
-                        # Also collect response time
-                        metrics[f"{service_name}_response_time"] = SystemMetric(
-                            timestamp=timestamp,
-                            name=f"{service_name}_response_time",
-                            value=response_time * 1000,  # Convert to ms
-                            unit="ms",
-                            category="performance",
-                        )
-
-                        metrics[f"{service_name}_health"] = SystemMetric(
-                            timestamp=timestamp,
-                            name=f"{service_name}_health",
-                            value=health_value,
-                            unit="status",
-                            category="services",
-                        )
-
-                        # Push to Prometheus
-                        if self.prometheus:
-                            status = "online" if health_value == 1.0 else "offline"
-                            self.prometheus.update_service_status(service_name, status)
-                            if f"{service_name}_response_time" in metrics:
-                                self.prometheus.record_service_response_time(
-                                    service_name, response_time
-                                )
+                    health_value, response_time_ms = await self._check_http_service_health(
+                        http_client, url, timeout
+                    )
+                    # Add response time metric for HTTP services
+                    metrics[f"{service_name}_response_time"] = SystemMetric(
+                        timestamp=timestamp,
+                        name=f"{service_name}_response_time",
+                        value=response_time_ms,
+                        unit="ms",
+                        category="performance",
+                    )
 
             except Exception as e:
                 self.logger.warning(f"Health check failed for {service_name}: {e}")
-                metrics[f"{service_name}_health"] = SystemMetric(
-                    timestamp=timestamp,
-                    name=f"{service_name}_health",
-                    value=0.0,
-                    unit="status",
-                    category="services",
-                    metadata={"error": str(e)},
-                )
+                error_msg = str(e)
 
-                # Push to Prometheus (error case)
-                if self.prometheus:
-                    self.prometheus.update_service_status(service_name, "offline")
+            # Create health metric (success or failure)
+            metrics[f"{service_name}_health"] = self._create_health_metric(
+                service_name, health_value, timestamp, error_msg
+            )
+
+            # Update Prometheus
+            response_time_sec = response_time_ms / 1000 if response_time_ms else None
+            self._update_prometheus_health(service_name, health_value, response_time_sec)
 
         return metrics
 

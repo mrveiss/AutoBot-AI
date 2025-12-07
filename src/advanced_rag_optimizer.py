@@ -88,6 +88,7 @@ class AdvancedRAGOptimizer:
     """
 
     def __init__(self):
+        """Initialize RAG optimizer with search configuration."""
         self.kb = None
         self.semantic_chunker = None
 
@@ -712,6 +713,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     async def main():
+        """Run CLI query against optimized RAG search."""
         if args.context:
             context = await get_optimized_knowledge_context(args.query)
             print("=== Optimized Context ===")

@@ -207,34 +207,50 @@ E = TypeVar("E", bound=Exception)  # Exception type
 class Cacheable(Protocol):
     """Protocol for objects that can be cached"""
 
-    def cache_key(self) -> str: ...
+    def cache_key(self) -> str:
+        """Return unique cache key for this object."""
+        ...
 
-    def cache_ttl(self) -> int: ...
+    def cache_ttl(self) -> int:
+        """Return cache TTL in seconds for this object."""
+        ...
 
 
 class Serializable(Protocol):
     """Protocol for objects that can be serialized"""
 
-    def to_dict(self) -> Dict[str, Any]: ...
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert object to dictionary representation."""
+        ...
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Serializable": ...
+    def from_dict(cls, data: Dict[str, Any]) -> "Serializable":
+        """Create instance from dictionary data."""
+        ...
 
 
 class Configurable(Protocol):
     """Protocol for configurable objects"""
 
-    def configure(self, config: ConfigDict) -> None: ...
+    def configure(self, config: ConfigDict) -> None:
+        """Apply configuration settings to this object."""
+        ...
 
-    def get_config(self) -> ConfigDict: ...
+    def get_config(self) -> ConfigDict:
+        """Return current configuration settings."""
+        ...
 
 
 class Monitorable(Protocol):
     """Protocol for objects that can be monitored"""
 
-    def get_status(self) -> Dict[str, Any]: ...
+    def get_status(self) -> Dict[str, Any]:
+        """Return current status information."""
+        ...
 
-    def get_metrics(self) -> PerformanceMetrics: ...
+    def get_metrics(self) -> PerformanceMetrics:
+        """Return performance metrics for this object."""
+        ...
 
 
 # Commonly used literals

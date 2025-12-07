@@ -63,6 +63,7 @@ class UsageTracker:
     """
 
     def __init__(self, history_limit: int = 1000):
+        """Initialize usage tracker with history limit and counters."""
         self.history_limit = history_limit
         # REMOVED (Phase 5, Issue #348): self.call_history = deque(maxlen=history_limit)
         # REMOVED (Phase 5, Issue #348): self.tool_usage = defaultdict(list)
@@ -168,6 +169,7 @@ class AlertManager:
     """
 
     def __init__(self, alert_cooldown: int = 300):  # 5 minutes
+        """Initialize alert manager with cooldown period and callbacks."""
         self.alert_cooldown = alert_cooldown
         self.last_alerts = {}
         # REMOVED (Phase 5, Issue #348): self.alert_history = deque(maxlen=100)
@@ -290,7 +292,7 @@ class ClaudeAPIMonitor:
         payload_warning_size: int = 20000,
         payload_max_size: int = 30000,
     ):
-
+        """Initialize Claude API monitor with rate limits and alert system."""
         self.rate_limit_rpm = rate_limit_rpm
         self.rate_limit_rph = rate_limit_rph
         self.payload_warning_size = payload_warning_size

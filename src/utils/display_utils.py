@@ -18,6 +18,37 @@ from typing import Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def _parse_resolution_from_part(part: str, delimiter: str = "x") -> Optional[Tuple[int, int]]:
+    """Parse resolution from a string part like '1920x1080' (Issue #315 - extracted helper)."""
+    if delimiter not in part:
+        return None
+    try:
+        width_str, height_str = part.split(delimiter)
+        # Handle trailing decimals (e.g., '1920x1080.00')
+        height_str = height_str.split(".")[0]
+        return (int(width_str), int(height_str))
+    except (ValueError, IndexError):
+        return None
+
+
+def _find_resolution_in_output(
+    output: str,
+    line_filter: callable,
+    part_filter: callable,
+) -> Optional[Tuple[int, int]]:
+    """Find resolution in subprocess output (Issue #315 - extracted helper)."""
+    for line in output.split("\n"):
+        if not line_filter(line):
+            continue
+        parts = line.strip().split()
+        for part in parts:
+            if part_filter(part):
+                resolution = _parse_resolution_from_part(part)
+                if resolution:
+                    return resolution
+    return None
+
+
 class DisplayDetector:
     """Detects current display resolution across different platforms"""
 
@@ -85,79 +116,56 @@ class DisplayDetector:
         return self.fallback_resolution
 
     def _try_xrandr(self) -> Optional[Tuple[int, int]]:
-        """Try to get resolution using xrandr (X11)"""
+        """Try to get resolution using xrandr (X11) (Issue #315 - refactored)."""
         try:
             result = subprocess.run(
                 ["xrandr", "--query"], capture_output=True, text=True, timeout=5
             )
+            if result.returncode != 0:
+                return None
 
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if (
-                        "*" in line and "+" in line
-                    ):  # Current mode with * and preferred with +
-                        parts = line.strip().split()
-                        for part in parts:
-                            if (
-                                "x" in part
-                                and part.replace("x", "").replace(".", "").isdigit()
-                            ):
-                                width, height = part.split("x")
-                                return (int(width), int(height.split(".")[0]))
-            return None
-        except (
-            subprocess.TimeoutExpired,
-            subprocess.SubprocessError,
-            FileNotFoundError,
-        ):
+            return _find_resolution_in_output(
+                result.stdout,
+                line_filter=lambda line: "*" in line and "+" in line,
+                part_filter=lambda part: "x" in part and part.replace("x", "").replace(".", "").isdigit(),
+            )
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
             return None
 
     def _try_xdpyinfo(self) -> Optional[Tuple[int, int]]:
-        """Try to get resolution using xdpyinfo (X11)"""
+        """Try to get resolution using xdpyinfo (X11) (Issue #315 - refactored)."""
         try:
             result = subprocess.run(
                 ["xdpyinfo"], capture_output=True, text=True, timeout=5
             )
+            if result.returncode != 0:
+                return None
 
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "dimensions:" in line:
-                        # Example: "  dimensions:    1920x1080 pixels (508x285 millimeters)"
-                        parts = line.split()
-                        for part in parts:
-                            if "x" in part and "pixels" not in part:
-                                width, height = part.split("x")
-                                return (int(width), int(height))
-            return None
-        except (
-            subprocess.TimeoutExpired,
-            subprocess.SubprocessError,
-            FileNotFoundError,
-        ):
+            # Example: "  dimensions:    1920x1080 pixels (508x285 millimeters)"
+            return _find_resolution_in_output(
+                result.stdout,
+                line_filter=lambda line: "dimensions:" in line,
+                part_filter=lambda part: "x" in part and "pixels" not in part,
+            )
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
             return None
 
     def _try_wayland_resolution(self) -> Optional[Tuple[int, int]]:
-        """Try to get resolution on Wayland"""
+        """Try to get resolution on Wayland (Issue #315 - refactored)."""
         try:
             # Try wlr-randr (for wlroots-based compositors)
             result = subprocess.run(
                 ["wlr-randr"], capture_output=True, text=True, timeout=5
             )
+            if result.returncode != 0:
+                return None
 
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "current" in line.lower():
-                        parts = line.split()
-                        for part in parts:
-                            if "x" in part and "@" not in part:
-                                width, height = part.split("x")
-                                return (int(width), int(height))
-            return None
-        except (
-            subprocess.TimeoutExpired,
-            subprocess.SubprocessError,
-            FileNotFoundError,
-        ):
+            return _find_resolution_in_output(
+                result.stdout,
+                line_filter=lambda line: "current" in line.lower(),
+                part_filter=lambda part: "x" in part and "@" not in part,
+            )
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
             return None
 
     def _try_framebuffer_resolution(self) -> Optional[Tuple[int, int]]:
@@ -196,7 +204,7 @@ class DisplayDetector:
         return None
 
     def _detect_macos_resolution(self) -> Tuple[int, int]:
-        """Detect resolution on macOS"""
+        """Detect resolution on macOS (Issue #315 - refactored)."""
         try:
             result = subprocess.run(
                 ["system_profiler", "SPDisplaysDataType"],
@@ -204,20 +212,27 @@ class DisplayDetector:
                 text=True,
                 timeout=10,
             )
+            if result.returncode != 0:
+                return self.fallback_resolution
 
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "Resolution:" in line:
-                        # Example: "          Resolution: 1920 x 1080"
-                        parts = line.split()
-                        if len(parts) >= 4:
-                            width = int(parts[-3])
-                            height = int(parts[-1])
-                            return (width, height)
-
-            return self.fallback_resolution
+            # Example: "          Resolution: 1920 x 1080"
+            resolution = self._parse_macos_resolution_output(result.stdout)
+            return resolution if resolution else self.fallback_resolution
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError):
             return self.fallback_resolution
+
+    def _parse_macos_resolution_output(self, output: str) -> Optional[Tuple[int, int]]:
+        """Parse macOS system_profiler output for resolution (Issue #315 - extracted)."""
+        for line in output.split("\n"):
+            if "Resolution:" not in line:
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                try:
+                    return (int(parts[-3]), int(parts[-1]))
+                except ValueError:
+                    continue
+        return None
 
     def _detect_windows_resolution(self) -> Tuple[int, int]:
         """Detect resolution on Windows"""

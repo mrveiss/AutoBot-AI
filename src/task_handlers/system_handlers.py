@@ -26,6 +26,7 @@ class SystemQueryInfoHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute system info query and log the audit result."""
         result = worker.system_integration.query_system_info()
 
         worker.security_layer.audit_log(
@@ -48,6 +49,7 @@ class SystemListServicesHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute service listing and log the audit result."""
         result = worker.system_integration.list_services()
 
         worker.security_layer.audit_log(
@@ -70,6 +72,7 @@ class SystemManageServiceHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute service management action and log the audit result."""
         service_name = task_payload["service_name"]
         action = task_payload["action"]
 
@@ -95,6 +98,7 @@ class SystemExecuteCommandHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute system command and log the audit result."""
         command = task_payload["command"]
 
         result = worker.system_integration.execute_system_command(command)
@@ -119,6 +123,7 @@ class SystemGetProcessInfoHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute process info query and log the audit result."""
         process_name = task_payload.get("process_name")
         pid = task_payload.get("pid")
 
@@ -144,6 +149,7 @@ class SystemTerminateProcessHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute process termination and log the audit result."""
         pid = task_payload["pid"]
 
         result = worker.system_integration.terminate_process(pid)
@@ -168,6 +174,7 @@ class WebFetchHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute web fetch request and log the audit result."""
         url = task_payload["url"]
 
         result = await worker.system_integration.web_fetch(url)

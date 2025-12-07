@@ -23,6 +23,39 @@ from src.task_execution_tracker import task_tracker
 logger = logging.getLogger(__name__)
 
 
+# Issue #315: Intent extraction dispatch tables to reduce nesting
+_AUTOMATION_INTENT_PATTERNS = [
+    (r"(?i)click", "click_element"),
+    (r"(?i)type|enter", "type_text"),
+    (r"(?i)open|start", "open_application"),
+    (r"(?i)scroll", "scroll_page"),
+]
+
+_NAVIGATION_INTENT_PATTERNS = [
+    (r"(?i)go to|navigate", "navigate_to"),
+    (r"(?i)back", "navigate_back"),
+    (r"(?i)search", "search_content"),
+]
+
+_QUERY_INTENT_PATTERNS = [
+    (r"(?i)what", "what_query"),
+    (r"(?i)how", "how_query"),
+    (r"(?i)status", "status_query"),
+]
+
+
+def _match_intent_from_patterns(
+    transcription: str, patterns: list, default: str
+) -> str:
+    """Match transcription against intent patterns (Issue #315 - extracted)."""
+    import re
+
+    for pattern, intent in patterns:
+        if re.search(pattern, transcription):
+            return intent
+    return default
+
+
 class VoiceCommand(Enum):
     """Types of voice commands supported"""
 
@@ -105,6 +138,7 @@ class SpeechRecognitionEngine:
     """Speech recognition and transcription engine"""
 
     def __init__(self):
+        """Initialize speech recognition engine with recognizer components."""
         self.recognizer = None
         self.language_detector = None
         self.noise_reducer = None
@@ -390,6 +424,7 @@ class NaturalLanguageProcessor:
     """Natural language processing for voice commands"""
 
     def __init__(self):
+        """Initialize NLP processor with command patterns and classifiers."""
         self.command_patterns = self._load_command_patterns()
         self.entity_extractor = None
         self.intent_classifier = None
@@ -599,47 +634,27 @@ class NaturalLanguageProcessor:
     async def _extract_intent(
         self, transcription: str, command_type: VoiceCommand
     ) -> str:
-        """Extract specific intent from transcription"""
-        import re
-
-        # Simple intent extraction based on command type
+        """Extract specific intent from transcription (Issue #315 - refactored)."""
+        # Use dispatch tables to reduce nesting
         if command_type == VoiceCommand.AUTOMATION:
-            if re.search(r"(?i)click", transcription):
-                return "click_element"
-            elif re.search(r"(?i)type|enter", transcription):
-                return "type_text"
-            elif re.search(r"(?i)open|start", transcription):
-                return "open_application"
-            elif re.search(r"(?i)scroll", transcription):
-                return "scroll_page"
-            else:
-                return "automation_action"
+            return _match_intent_from_patterns(
+                transcription, _AUTOMATION_INTENT_PATTERNS, "automation_action"
+            )
 
-        elif command_type == VoiceCommand.NAVIGATION:
-            if re.search(r"(?i)go to|navigate", transcription):
-                return "navigate_to"
-            elif re.search(r"(?i)back", transcription):
-                return "navigate_back"
-            elif re.search(r"(?i)search", transcription):
-                return "search_content"
-            else:
-                return "navigation_action"
+        if command_type == VoiceCommand.NAVIGATION:
+            return _match_intent_from_patterns(
+                transcription, _NAVIGATION_INTENT_PATTERNS, "navigation_action"
+            )
 
-        elif command_type == VoiceCommand.QUERY:
-            if re.search(r"(?i)what", transcription):
-                return "what_query"
-            elif re.search(r"(?i)how", transcription):
-                return "how_query"
-            elif re.search(r"(?i)status", transcription):
-                return "status_query"
-            else:
-                return "information_query"
+        if command_type == VoiceCommand.QUERY:
+            return _match_intent_from_patterns(
+                transcription, _QUERY_INTENT_PATTERNS, "information_query"
+            )
 
-        elif command_type == VoiceCommand.TAKEOVER:
+        if command_type == VoiceCommand.TAKEOVER:
             return "request_manual_control"
 
-        else:
-            return "unknown_intent"
+        return "unknown_intent"
 
     async def _extract_entities(
         self, transcription: str, command_type: VoiceCommand
@@ -822,6 +837,7 @@ class TextToSpeechEngine:
     """Text-to-speech synthesis engine"""
 
     def __init__(self):
+        """Initialize TTS engine with default voice settings."""
         self.tts_engine = None
         self.voice_settings = {"rate": 150, "volume": 0.8, "voice_id": "default"}
 

@@ -479,120 +479,115 @@ class ProjectStateManager:
         except sqlite3.Error as e:
             logger.error(f"Error saving project state: {e}")
 
-    def validate_capability(self, capability: PhaseCapability) -> ValidationResult:
-        """Validate a single capability"""
+    def _validate_file_exists(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate file existence (Issue #315)."""
+        file_path = self.project_root / capability.validation_target
+        exists = file_path.exists()
+        return ValidationResult(
+            capability.name,
+            ValidationStatus.PASSED if exists else ValidationStatus.FAILED,
+            1.0 if exists else 0.0,
+            f"File {'exists' if exists else 'missing'}: {file_path}",
+        )
+
+    def _validate_api_endpoint(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate API endpoint (Issue #315)."""
+        # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
+        backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        backend_localhost = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+
+        if backend_url in capability.validation_target or backend_localhost in capability.validation_target:
+            return ValidationResult(
+                capability.name, ValidationStatus.PASSED, 1.0,
+                "Self-referential endpoint validation skipped to prevent deadlock",
+            )
+
+        import requests
         try:
-            if capability.validation_method == "file_exists":
-                file_path = self.project_root / capability.validation_target
-                exists = file_path.exists()
-                return ValidationResult(
-                    capability.name,
-                    ValidationStatus.PASSED if exists else ValidationStatus.FAILED,
-                    1.0 if exists else 0.0,
-                    f"File {'exists' if exists else 'missing'}: {file_path}",
-                )
+            response = requests.get(capability.validation_target, timeout=5)
+            success = response.status_code < 400
+            return ValidationResult(
+                capability.name,
+                ValidationStatus.PASSED if success else ValidationStatus.FAILED,
+                1.0 if success else 0.0,
+                f"API endpoint {capability.validation_target}: HTTP {response.status_code}",
+            )
+        except Exception as e:
+            return ValidationResult(
+                capability.name, ValidationStatus.FAILED, 0.0,
+                f"API endpoint failed: {str(e)}",
+            )
 
-            elif capability.validation_method == "api_endpoint":
-                # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
-                backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-                backend_localhost = (
-                    f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
-                )
-                if (
-                    backend_url in capability.validation_target
-                    or backend_localhost in capability.validation_target
-                ):
-                    # Skip validation of our own endpoints to prevent deadlock
-                    return ValidationResult(
-                        capability.name,
-                        ValidationStatus.PASSED,
-                        1.0,
-                        "Self-referential endpoint validation skipped to prevent deadlock",
-                    )
+    def _validate_websocket_endpoint(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate WebSocket endpoint (Issue #315)."""
+        return ValidationResult(
+            capability.name, ValidationStatus.PASSED, 1.0,
+            "WebSocket endpoint validation not implemented yet",
+        )
 
-                import requests
+    def _validate_function_test(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate function test (Issue #315)."""
+        function_handlers = {
+            "validate_all_phases": self._validate_all_phases_test,
+            "check_phase_completion": self._validate_phase_completion_test,
+        }
 
-                try:
-                    response = requests.get(capability.validation_target, timeout=5)
-                    success = response.status_code < 400
-                    return ValidationResult(
-                        capability.name,
-                        ValidationStatus.PASSED if success else ValidationStatus.FAILED,
-                        1.0 if success else 0.0,
-                        f"API endpoint {capability.validation_target}: HTTP {response.status_code}",
-                    )
-                except Exception as e:
-                    return ValidationResult(
-                        capability.name,
-                        ValidationStatus.FAILED,
-                        0.0,
-                        f"API endpoint failed: {str(e)}",
-                    )
+        handler = function_handlers.get(capability.validation_target)
+        if handler:
+            return handler(capability)
 
-            elif capability.validation_method == "websocket_endpoint":
-                # Simple WebSocket connectivity test
-                return ValidationResult(
-                    capability.name,
-                    ValidationStatus.PASSED,  # Assume passed for now
-                    1.0,
-                    "WebSocket endpoint validation not implemented yet",
-                )
+        return ValidationResult(
+            capability.name, ValidationStatus.PENDING, 0.5,
+            f"Function test '{capability.validation_target}' not implemented",
+        )
 
-            elif capability.validation_method == "function_test":
-                # Test specific functions
-                if capability.validation_target == "validate_all_phases":
-                    # Self-referential test
-                    return ValidationResult(
-                        capability.name,
-                        ValidationStatus.PASSED,
-                        1.0,
-                        "Phase validation system is operational",
-                    )
-                elif capability.validation_target == "check_phase_completion":
-                    # Test the automated phase progression logic
-                    try:
-                        # Test that we can check phase completion for all defined phases
-                        test_results = []
-                        for test_phase in self.phases.keys():
-                            result = self.check_phase_completion(test_phase)
-                            test_results.append(
-                                f"{test_phase.value}: {'Complete' if result else 'Incomplete'}"
-                            )
+    def _validate_all_phases_test(self, capability: PhaseCapability) -> ValidationResult:
+        """Self-referential validation test (Issue #315)."""
+        return ValidationResult(
+            capability.name, ValidationStatus.PASSED, 1.0,
+            "Phase validation system is operational",
+        )
 
-                        return ValidationResult(
-                            capability.name,
-                            ValidationStatus.PASSED,
-                            1.0,
-                            f"Automated phase progression logic operational - {len(test_results)} phases tested",
-                        )
-                    except Exception as e:
-                        return ValidationResult(
-                            capability.name,
-                            ValidationStatus.FAILED,
-                            0.0,
-                            f"Phase progression logic test failed: {str(e)}",
-                        )
-                else:
-                    return ValidationResult(
-                        capability.name,
-                        ValidationStatus.PENDING,
-                        0.5,
-                        f"Function test '{capability.validation_target}' not implemented",
-                    )
+    def _validate_phase_completion_test(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate phase completion logic (Issue #315)."""
+        try:
+            test_results = []
+            for test_phase in self.phases.keys():
+                result = self.check_phase_completion(test_phase)
+                test_results.append(f"{test_phase.value}: {'Complete' if result else 'Incomplete'}")
 
-            else:
-                return ValidationResult(
-                    capability.name,
-                    ValidationStatus.SKIPPED,
-                    0.0,
-                    f"Unknown validation method: {capability.validation_method}",
-                )
+            return ValidationResult(
+                capability.name, ValidationStatus.PASSED, 1.0,
+                f"Automated phase progression logic operational - {len(test_results)} phases tested",
+            )
+        except Exception as e:
+            return ValidationResult(
+                capability.name, ValidationStatus.FAILED, 0.0,
+                f"Phase progression logic test failed: {str(e)}",
+            )
+
+    def validate_capability(self, capability: PhaseCapability) -> ValidationResult:
+        """Validate a single capability (Issue #315 - dispatch table)."""
+        validation_dispatch = {
+            "file_exists": self._validate_file_exists,
+            "api_endpoint": self._validate_api_endpoint,
+            "websocket_endpoint": self._validate_websocket_endpoint,
+            "function_test": self._validate_function_test,
+        }
+
+        try:
+            handler = validation_dispatch.get(capability.validation_method)
+            if handler:
+                return handler(capability)
+
+            return ValidationResult(
+                capability.name, ValidationStatus.SKIPPED, 0.0,
+                f"Unknown validation method: {capability.validation_method}",
+            )
 
         except Exception as e:
             return ValidationResult(
-                capability.name,
-                ValidationStatus.FAILED,
-                0.0,
+                capability.name, ValidationStatus.FAILED, 0.0,
                 f"Validation error: {str(e)}",
             )
 

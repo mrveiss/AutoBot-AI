@@ -44,6 +44,7 @@ class ClaudeAPIBatchManager:
     """Manages Claude API calls with intelligent batching and optimization"""
 
     def __init__(self, config: ClaudeAPIConfig = None):
+        """Initialize batch manager with configuration and tracking state."""
         self.config = config or ClaudeAPIConfig()
 
         # Core components
@@ -102,6 +103,107 @@ class ClaudeAPIBatchManager:
         self.is_running = False
         logger.info("Claude API Batch Manager stopped")
 
+    async def _increment_metric(self, metric_name: str) -> None:
+        """Thread-safely increment a metric (Issue #315: extracted)."""
+        async with self._lock:
+            self.metrics[metric_name] += 1
+
+    async def _try_batched_request(
+        self,
+        content: str,
+        priority: RequestPriority,
+        context_type: str,
+        timeout: float,
+        metadata: Dict[str, Any],
+    ) -> str | None:
+        """Try to process request with batching (Issue #315: extracted).
+
+        Returns:
+            Response string if successful, None if batching failed and fallback needed
+        """
+        try:
+            response = await self._process_with_batching(
+                content, priority, context_type, timeout, metadata
+            )
+            await self._increment_metric("batched_requests")
+            return response
+        except Exception as e:
+            logger.warning(f"Batching failed, falling back to individual: {e}")
+            if not self.config.fallback_to_individual:
+                raise
+            return None  # Signal to use fallback
+
+    async def _process_with_fallback(
+        self,
+        content: str,
+        priority: RequestPriority,
+        context_type: str,
+        timeout: float,
+        metadata: Dict[str, Any],
+    ) -> str:
+        """Process request with batching or fallback (Issue #315: extracted).
+
+        Returns:
+            Response string
+        """
+        # Try batching if appropriate
+        if (
+            self.config.enable_batching
+            and self.batcher
+            and self._should_batch_request(priority, context_type)
+        ):
+            response = await self._try_batched_request(
+                content, priority, context_type, timeout, metadata
+            )
+            if response is not None:
+                return response
+
+            # Fallback to individual processing
+            response = await self._process_individual_request(content, timeout)
+            await self._increment_metric("individual_requests")
+            async with self._lock:
+                self.fallback_count += 1
+            return response
+
+        # Process individually (no batching)
+        response = await self._process_individual_request(content, timeout)
+        await self._increment_metric("individual_requests")
+        return response
+
+    async def _check_and_apply_rate_limit(self) -> bool:
+        """Check rate limit and update metrics if exceeded (Issue #315: extracted).
+
+        Returns:
+            True if request can proceed, False if rate limited
+        """
+        if not self.rate_limiter:
+            return True
+
+        if await self._check_rate_limit():
+            return True
+
+        await self._increment_metric("rate_limit_hits")
+        return False
+
+    async def _optimize_payload_if_enabled(self, content: str) -> str:
+        """Optimize payload if optimizer is enabled (Issue #315: extracted).
+
+        Returns:
+            Optimized content string
+        """
+        if not self.payload_optimizer:
+            return content
+
+        optimization_result = self.payload_optimizer.optimize_payload(content)
+        if not optimization_result.optimized:
+            return content
+
+        await self._increment_metric("payload_optimizations")
+        logger.debug(
+            f"Payload optimized: {optimization_result.size_reduction}% reduction"
+        )
+        return optimization_result.optimized_content
+
     async def submit_request(
         self,
         content: str,
@@ -110,68 +212,28 @@ class ClaudeAPIBatchManager:
         timeout: float = 30.0,
         metadata: Dict[str, Any] = None,
     ) -> str:
-        """Submit a request for processing with batching optimization (thread-safe)"""
+        """Submit a request for processing with batching optimization (thread-safe).
 
+        Issue #315: Refactored to use helper methods for reduced nesting depth.
+        """
         if not self.is_running:
             await self.start()
 
         start_time = time.time()
-        async with self._lock:
-            self.metrics["total_requests"] += 1
+        await self._increment_metric("total_requests")
 
         try:
-            # Apply rate limiting
-            if self.rate_limiter:
-                if not await self._check_rate_limit():
-                    async with self._lock:
-                        self.metrics["rate_limit_hits"] += 1
-                    raise Exception("Rate limit exceeded")
+            # Apply rate limiting (uses helper)
+            if not await self._check_and_apply_rate_limit():
+                raise Exception("Rate limit exceeded")
 
-            # Optimize payload if enabled
-            optimized_content = content
-            if self.payload_optimizer:
-                optimization_result = self.payload_optimizer.optimize_payload(content)
-                if optimization_result.optimized:
-                    optimized_content = optimization_result.optimized_content
-                    async with self._lock:
-                        self.metrics["payload_optimizations"] += 1
-                    logger.debug(
-                        f"Payload optimized: {optimization_result.size_reduction}% reduction"
-                    )
+            # Optimize payload if enabled (uses helper)
+            optimized_content = await self._optimize_payload_if_enabled(content)
 
-            # Determine processing method
-            response = None
-
-            if (
-                self.config.enable_batching
-                and self.batcher
-                and self._should_batch_request(priority, context_type)
-            ):
-                # Try batching first
-                try:
-                    response = await self._process_with_batching(
-                        optimized_content, priority, context_type, timeout, metadata
-                    )
-                    async with self._lock:
-                        self.metrics["batched_requests"] += 1
-                except Exception as e:
-                    logger.warning(f"Batching failed, falling back to individual: {e}")
-                    if self.config.fallback_to_individual:
-                        response = await self._process_individual_request(
-                            optimized_content, timeout
-                        )
-                        async with self._lock:
-                            self.metrics["individual_requests"] += 1
-                            self.fallback_count += 1
-                    else:
-                        raise
-            else:
-                # Process individually
-                response = await self._process_individual_request(
-                    optimized_content, timeout
-                )
-                async with self._lock:
-                    self.metrics["individual_requests"] += 1
+            # Process request with batching or fallback (uses helper)
+            response = await self._process_with_fallback(
+                optimized_content, priority, context_type, timeout, metadata or {}
+            )
 
             # Update metrics
             response_time = time.time() - start_time
@@ -184,8 +246,7 @@ class ClaudeAPIBatchManager:
             return response
 
         except Exception as e:
-            async with self._lock:
-                self.metrics["failed_requests"] += 1
+            await self._increment_metric("failed_requests")
             logger.error(f"Request failed: {e}")
             raise
 
@@ -351,13 +412,16 @@ class ClaudeAPIContextManager:
     """Context manager for Claude API batch processing"""
 
     def __init__(self, config: ClaudeAPIConfig = None):
+        """Initialize context manager with optional configuration."""
         self.manager = ClaudeAPIBatchManager(config)
 
     async def __aenter__(self):
+        """Start the batch manager and return it for context usage."""
         await self.manager.start()
         return self.manager
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Stop the batch manager when exiting context."""
         await self.manager.stop()
 
 
@@ -404,6 +468,7 @@ class AutoBotClaudeAPIAdapter:
     """Adapter to integrate with AutoBot's existing Claude API usage"""
 
     def __init__(self):
+        """Initialize adapter with empty manager and uninitialized state."""
         self.manager: Optional[ClaudeAPIBatchManager] = None
         self._initialized = False
 

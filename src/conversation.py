@@ -47,6 +47,7 @@ class ConversationMessage:
     sources: List[Dict[str, Any]] = None
 
     def __post_init__(self):
+        """Initialize default values for metadata and sources fields."""
         if self.metadata is None:
             self.metadata = {}
         if self.sources is None:
@@ -66,6 +67,7 @@ class ConversationState:
     status: str = "active"  # active, completed, error
 
     def __post_init__(self):
+        """Initialize default values for kb_context and sources_used fields."""
         if self.kb_context is None:
             self.kb_context = []
         if self.sources_used is None:
@@ -78,6 +80,7 @@ class Conversation:
     """
 
     def __init__(self, conversation_id: str = None):
+        """Initialize conversation with unique ID and default state."""
         self.conversation_id = conversation_id or str(uuid.uuid4())
         self.messages: List[ConversationMessage] = []
         self.state = ConversationState(conversation_id=self.conversation_id)
@@ -708,6 +711,7 @@ class ConversationManager:
     """Manages multiple conversations"""
 
     def __init__(self):
+        """Initialize conversation manager with empty conversations dict."""
         self.conversations: Dict[str, Conversation] = {}
         self.max_conversations = 100  # Limit memory usage
 

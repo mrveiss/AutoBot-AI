@@ -185,12 +185,15 @@ export class ChatController {
       throw new Error('No response stream available')
     }
 
-    const assistantMessageId = this.chatStore.addMessage({
+    // Issue #352: Track multiple messages for thought/planning/response splitting
+    let currentMessageId = this.chatStore.addMessage({
       content: '',
       sender: 'assistant'
     })
-
+    let currentMessageType: string = 'response'
     let accumulatedContent = ''
+    const messageIds: string[] = [currentMessageId] // Track all message IDs for cleanup
+
     const decoder = new TextDecoder()
     let buffer = ''
 
@@ -226,15 +229,52 @@ export class ChatController {
 
               if (data.type === 'start') {
                 logger.debug('Stream started:', data.session_id)
+              } else if (data.type === 'segment_complete') {
+                // Issue #352: Segment complete - finalize current message and prepare for new one
+                logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
+
+                // Finalize current message
+                if (accumulatedContent) {
+                  this.chatStore.updateMessage(currentMessageId, {
+                    content: accumulatedContent,
+                    status: 'sent'
+                  })
+                }
+
+                // Create new message for next segment
+                currentMessageId = this.chatStore.addMessage({
+                  content: '',
+                  sender: 'assistant'
+                })
+                messageIds.push(currentMessageId)
+                accumulatedContent = ''
+                currentMessageType = 'response'
+
               } else if (data.type === 'command_approval_request') {
-                // CRITICAL FIX: Stop typing indicator when approval is requested
-                // Backend is waiting for user approval - no more streaming until approved/denied
-                logger.debug('Approval request detected - stopping typing indicator')
+                // Issue #352: Create SEPARATE bubble for approval requests
+                logger.debug('Approval request detected - creating separate bubble')
                 this.chatStore.setTyping(false)
 
-                // Add approval request message to chat
-                accumulatedContent += data.content || 'Command approval required'
-                this.chatStore.updateMessage(assistantMessageId, {
+                // Finalize current message if it has content
+                if (accumulatedContent.trim()) {
+                  this.chatStore.updateMessage(currentMessageId, {
+                    content: accumulatedContent,
+                    status: 'sent',
+                    type: currentMessageType
+                  })
+                  // Create new message for approval request
+                  currentMessageId = this.chatStore.addMessage({
+                    content: '',
+                    sender: 'assistant'
+                  })
+                  messageIds.push(currentMessageId)
+                  accumulatedContent = ''
+                }
+
+                // Add approval request as its own bubble
+                accumulatedContent = data.content || 'Command approval required'
+                currentMessageType = 'command_approval_request'
+                this.chatStore.updateMessage(currentMessageId, {
                   content: accumulatedContent,
                   type: 'command_approval_request',
                   metadata: {
@@ -243,13 +283,52 @@ export class ChatController {
                     approval_status: 'pending'
                   }
                 })
+
+              } else if (data.type === 'terminal_output' || data.type === 'terminal_command') {
+                // Issue #352: Create SEPARATE bubble for terminal output/commands
+                logger.debug(`Terminal message detected: ${data.type} - creating separate bubble`)
+
+                // Finalize current message if it has content
+                if (accumulatedContent.trim()) {
+                  this.chatStore.updateMessage(currentMessageId, {
+                    content: accumulatedContent,
+                    status: 'sent',
+                    type: currentMessageType
+                  })
+                  // Create new message for terminal output
+                  currentMessageId = this.chatStore.addMessage({
+                    content: '',
+                    sender: data.type === 'terminal_output' ? 'system' : 'assistant'
+                  })
+                  messageIds.push(currentMessageId)
+                  accumulatedContent = ''
+                }
+
+                // Add terminal output/command as its own bubble
+                accumulatedContent = data.content || ''
+                currentMessageType = data.type as 'terminal_output' | 'terminal_command'
+                this.chatStore.updateMessage(currentMessageId, {
+                  content: accumulatedContent,
+                  type: data.type,
+                  metadata: data.metadata || {}
+                })
+
+                // Create new message for any following content
+                currentMessageId = this.chatStore.addMessage({
+                  content: '',
+                  sender: 'assistant'
+                })
+                messageIds.push(currentMessageId)
+                accumulatedContent = ''
+                currentMessageType = 'response'
+
               } else if (data.type === 'end') {
                 logger.debug('Stream ended')
               } else if (data.type === 'error') {
                 // Display error as message content instead of throwing
                 logger.error('Stream error:', data.content)
                 accumulatedContent += `⚠️ Error: ${data.content || 'Stream error'}`
-                this.chatStore.updateMessage(assistantMessageId, {
+                this.chatStore.updateMessage(currentMessageId, {
                   content: accumulatedContent,
                   status: 'error'
                 })
@@ -278,11 +357,14 @@ export class ChatController {
                   // Keep 'response' as default for unknown types
                 }
 
+                // Issue #352: Track message type for this segment
+                currentMessageType = messageType
+
                 // CRITICAL FIX: Merge metadata instead of replacing to preserve terminal_session_id
-                const currentMessage = this.chatStore.currentSession?.messages.find(m => m.id === assistantMessageId)
+                const currentMessage = this.chatStore.currentSession?.messages.find(m => m.id === currentMessageId)
                 const existingMetadata = currentMessage?.metadata || {}
 
-                this.chatStore.updateMessage(assistantMessageId, {
+                this.chatStore.updateMessage(currentMessageId, {
                   content: accumulatedContent,
                   type: messageType,
                   metadata: {
@@ -298,17 +380,25 @@ export class ChatController {
         }
       }
 
-      // Final update
+      // Final update for the last message
       if (accumulatedContent) {
-        this.chatStore.updateMessage(assistantMessageId, {
+        this.chatStore.updateMessage(currentMessageId, {
           content: accumulatedContent,
           status: 'sent'
         })
       }
 
+      // Issue #352: Clean up empty messages that may have been created
+      for (const msgId of messageIds) {
+        const msg = this.chatStore.currentSession?.messages.find(m => m.id === msgId)
+        if (msg && !msg.content?.trim()) {
+          this.chatStore.removeMessage(msgId)
+        }
+      }
+
     } catch (error) {
       logger.error('Streaming response error:', error)
-      this.chatStore.updateMessage(assistantMessageId, {
+      this.chatStore.updateMessage(currentMessageId, {
         content: accumulatedContent || 'Response was interrupted due to an error.',
         status: 'error'
       })

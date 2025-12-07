@@ -27,6 +27,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
+    """Decode Redis hash bytes to strings and parse metadata (Issue #315: extracted).
+
+    Args:
+        fact_data: Raw Redis hash data with bytes keys/values
+
+    Returns:
+        Decoded dict with parsed metadata
+    """
+    decoded = {}
+    for key, value in fact_data.items():
+        k = key.decode("utf-8") if isinstance(key, bytes) else key
+        v = value.decode("utf-8") if isinstance(value, bytes) else value
+        decoded[k] = v
+
+    # Parse metadata JSON if present
+    if "metadata" in decoded:
+        try:
+            decoded["_parsed_metadata"] = json.loads(decoded["metadata"])
+        except json.JSONDecodeError:
+            decoded["_parsed_metadata"] = {}
+    else:
+        decoded["_parsed_metadata"] = {}
+
+    return decoded
+
+
 class FactsMixin:
     """
     Facts management mixin for knowledge base.
@@ -59,6 +86,7 @@ class FactsMixin:
     ) -> Optional[Dict[str, Any]]:
         """
         Find an existing fact by unique key (fast Redis SET lookup).
+        Issue #315: Refactored to use helper for reduced nesting.
 
         Args:
             unique_key: The unique key to search for (e.g., "machine:os:command:section")
@@ -71,38 +99,28 @@ class FactsMixin:
             unique_key_name = f"unique_key:man_page:{unique_key}"
             fact_id = await asyncio.to_thread(self.redis_client.get, unique_key_name)
 
-            if fact_id:
-                # Decode bytes if necessary
-                if isinstance(fact_id, bytes):
-                    fact_id = fact_id.decode("utf-8")
+            if not fact_id:
+                return None
 
-                # Get the actual fact data
-                fact_key = f"fact:{fact_id}"
-                fact_data = await asyncio.to_thread(
-                    self.redis_client.hgetall, fact_key
-                )
+            # Decode bytes if necessary
+            if isinstance(fact_id, bytes):
+                fact_id = fact_id.decode("utf-8")
 
-                if fact_data:
-                    # Decode all fields
-                    decoded_data = {}
-                    for key, value in fact_data.items():
-                        k = key.decode("utf-8") if isinstance(key, bytes) else key
-                        v = value.decode("utf-8") if isinstance(value, bytes) else value
-                        decoded_data[k] = v
+            # Get the actual fact data
+            fact_key = f"fact:{fact_id}"
+            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
 
-                    # Parse metadata
-                    metadata = {}
-                    if "metadata" in decoded_data:
-                        try:
-                            metadata = json.loads(decoded_data["metadata"])
-                        except json.JSONDecodeError:
-                            pass
+            if not fact_data:
+                return None
 
-                    return {
-                        "fact_id": fact_id,
-                        "content": decoded_data.get("content", ""),
-                        "metadata": metadata,
-                    }
+            # Use helper for decoding (Issue #315: extracted)
+            decoded_data = _decode_redis_hash(fact_data)
+
+            return {
+                "fact_id": fact_id,
+                "content": decoded_data.get("content", ""),
+                "metadata": decoded_data.get("_parsed_metadata", {}),
+            }
 
         except Exception as e:
             logger.debug(f"Error finding fact by unique key: {e}")

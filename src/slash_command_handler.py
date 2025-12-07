@@ -57,6 +57,7 @@ class SlashCommandResult:
     file_paths: List[str] = None
 
     def __post_init__(self):
+        """Initialize default file_paths if not provided."""
         if self.file_paths is None:
             self.file_paths = []
 
@@ -84,6 +85,7 @@ class DocsCommand(Command):
     """Documentation browsing command."""
 
     def __init__(self, args: Optional[str], docs_base_path: Path, doc_categories: dict):
+        """Initialize docs command with args and documentation paths."""
         self.args = args
         self.docs_base_path = docs_base_path
         self.doc_categories = doc_categories
@@ -347,6 +349,7 @@ class ScanCommand(Command):
     """Security scan initiation command."""
 
     def __init__(self, args: Optional[str]):
+        """Initialize scan command with target arguments."""
         self.args = args
 
     async def execute(self) -> SlashCommandResult:
@@ -470,6 +473,7 @@ class SecurityCommand(Command):
     """Security assessment management command."""
 
     def __init__(self, args: Optional[str]):
+        """Initialize security command with subcommand arguments."""
         self.args = args
 
     async def execute(self) -> SlashCommandResult:
@@ -550,6 +554,7 @@ class SecurityListSubcommand(Command):
     """List active security assessments."""
 
     def __init__(self, manager):
+        """Initialize list subcommand with security manager."""
         self.manager = manager
 
     async def execute(self) -> SlashCommandResult:
@@ -625,6 +630,7 @@ class SecurityStatusSubcommand(Command):
     """Get status of a specific assessment."""
 
     def __init__(self, manager, assessment_id: Optional[str]):
+        """Initialize status subcommand with manager and assessment ID."""
         self.manager = manager
         self.assessment_id = assessment_id
 
@@ -704,6 +710,7 @@ class SecurityResumeSubcommand(Command):
     """Resume a security assessment."""
 
     def __init__(self, manager, assessment_id: Optional[str]):
+        """Initialize resume subcommand with manager and assessment ID."""
         self.manager = manager
         self.assessment_id = assessment_id
 

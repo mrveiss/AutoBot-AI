@@ -33,6 +33,7 @@ class ResearchBrowserSession:
     """Manages a single research browser session with user interaction capability"""
 
     def __init__(self, session_id: str, conversation_id: str):
+        """Initialize research browser session with IDs."""
         self.session_id = session_id
         self.conversation_id = conversation_id
         self.browser: Optional[Browser] = None
@@ -389,6 +390,7 @@ class ResearchBrowserSession:
 
             # Clean up MHTML files in parallel - eliminates N+1 sequential I/O
             async def cleanup_mhtml_file(mhtml_file: str) -> None:
+                """Remove a single MHTML file asynchronously."""
                 try:
                     if await asyncio.to_thread(os.path.exists, mhtml_file):
                         await asyncio.to_thread(os.remove, mhtml_file)
@@ -412,6 +414,7 @@ class ResearchBrowserManager:
     """Manages multiple research browser sessions"""
 
     def __init__(self):
+        """Initialize research browser manager with session tracking."""
         self.sessions: Dict[str, ResearchBrowserSession] = {}
         self.conversation_sessions: Dict[str, str] = {}  # conversation_id -> session_id
         self.max_sessions = 10

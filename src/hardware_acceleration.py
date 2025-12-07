@@ -25,6 +25,42 @@ logger = logging.getLogger(__name__)
 NPU_HARDWARE_KEYWORDS = {"neural", "npu", "ai"}
 
 
+def _parse_nvidia_smi_output(output: str) -> Dict[str, Dict[str, Any]]:
+    """Parse nvidia-smi GPU status output (Issue #315: extracted).
+
+    Args:
+        output: Raw nvidia-smi CSV output
+
+    Returns:
+        Dict mapping gpu_N to status dict
+    """
+    devices = {}
+    lines = output.strip().split("\n")
+
+    for i, line in enumerate(lines):
+        if not line.strip():
+            continue
+        parts = line.split(",")
+        if len(parts) < 3:
+            continue
+
+        try:
+            util = int(parts[0].strip())
+            mem_used = int(parts[1].strip())
+            mem_total = int(parts[2].strip())
+            devices[f"gpu_{i}"] = {
+                "utilization": util,
+                "memory_used_mb": mem_used,
+                "memory_total_mb": mem_total,
+                "memory_percent": (mem_used / mem_total) * 100,
+                "status": "optimal" if util < 80 else "high_load",
+            }
+        except (ValueError, ZeroDivisionError):
+            continue
+
+    return devices
+
+
 class AccelerationType(Enum):
     """Hardware acceleration types in priority order."""
 
@@ -552,7 +588,7 @@ class HardwareAccelerationManager:
             "status": "optimal" if cpu_percent < 80 else "high_load",
         }
 
-        # Add GPU status if available
+        # Add GPU status if available (Issue #315: uses helper for parsing)
         if self.gpu_available:
             try:
                 result = subprocess.run(
@@ -566,21 +602,8 @@ class HardwareAccelerationManager:
                     timeout=5,
                 )
                 if result.returncode == 0:
-                    lines = result.stdout.strip().split("\n")
-                    for i, line in enumerate(lines):
-                        if line.strip():
-                            parts = line.split(",")
-                            if len(parts) >= 3:
-                                util = int(parts[0].strip())
-                                mem_used = int(parts[1].strip())
-                                mem_total = int(parts[2].strip())
-                                status["devices"][f"gpu_{i}"] = {
-                                    "utilization": util,
-                                    "memory_used_mb": mem_used,
-                                    "memory_total_mb": mem_total,
-                                    "memory_percent": (mem_used / mem_total) * 100,
-                                    "status": "optimal" if util < 80 else "high_load",
-                                }
+                    gpu_devices = _parse_nvidia_smi_output(result.stdout)
+                    status["devices"].update(gpu_devices)
             except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
                 status["devices"]["gpu"] = {"status": "unknown"}
 

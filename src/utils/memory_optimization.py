@@ -154,6 +154,7 @@ class MemoryPool:
         factory: Callable[[], T],
         max_size: int = int(os.getenv("AUTOBOT_MEMORY_POOL_SIZE", "100")),
     ):
+        """Initialize memory pool with object factory and maximum size."""
         self.factory = factory
         self.max_size = max_size
         self._pool: List[T] = []
@@ -191,6 +192,7 @@ class WeakCache:
     """Cache using weak references to prevent memory leaks"""
 
     def __init__(self, maxsize: int = int(os.getenv("AUTOBOT_WEAK_CACHE_SIZE", "128"))):
+        """Initialize weak reference cache with maximum size limit."""
         self.maxsize = maxsize
         self._cache: Dict[Any, Any] = {}
         self._weak_refs: Dict[Any, weakref.ReferenceType] = {}
@@ -217,6 +219,7 @@ class WeakCache:
             self.remove(oldest_key)
 
         def cleanup(ref):
+            """Remove cache entry when weak reference is garbage collected."""
             if key in self._weak_refs and self._weak_refs[key] is ref:
                 del self._weak_refs[key]
                 if key in self._cache:
@@ -250,11 +253,13 @@ def memory_efficient_cache(
     """
 
     def decorator(func: Callable) -> Callable:
+        """Inner decorator that wraps function with memory-efficient caching."""
         cache = WeakCache(maxsize)
         hits = misses = 0
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            """Wrapper that checks cache before calling function."""
             nonlocal hits, misses
 
             # Create cache key
@@ -275,9 +280,11 @@ def memory_efficient_cache(
             return result
 
         def cache_info():
+            """Return cache statistics as formatted string."""
             return f"hits={hits}, misses={misses}, current_size={len(cache._cache)}"
 
         def cache_clear():
+            """Clear all cached entries and reset hit/miss counters."""
             nonlocal hits, misses
             cache.clear()
             hits = misses = 0
@@ -296,6 +303,7 @@ class MemoryMonitor:
         self,
         threshold_mb: float = float(os.getenv("AUTOBOT_MEMORY_THRESHOLD_MB", "500.0")),
     ):
+        """Initialize memory monitor with warning threshold in megabytes."""
         self.threshold_mb = threshold_mb
         self.process = psutil.Process()
         self.peak_memory = 0.0
@@ -366,6 +374,7 @@ class SlottedClass:
     __slots__ = ()
 
     def __repr__(self):
+        """Return string representation with all slot attribute values."""
         attrs = []
         for slot in self.__slots__:
             if hasattr(self, slot):
@@ -415,6 +424,7 @@ def memory_usage_decorator(func: Callable) -> Callable:
 
     @wraps(func)
     def wrapper(*args, **kwargs):
+        """Wrapper that measures memory before and after function execution."""
         process = psutil.Process()
 
         # Memory before

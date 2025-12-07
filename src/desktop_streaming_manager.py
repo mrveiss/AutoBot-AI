@@ -27,12 +27,44 @@ ALL_VNC_PROCESS_KEYS = {"novnc_process", "vnc_process", "xvfb_process"}
 CORE_VNC_PROCESS_KEYS = {"xvfb_process", "vnc_process"}
 
 
+def _terminate_process_safely(process: subprocess.Popen, process_key: str) -> bool:
+    """Terminate a process safely with fallback to kill (Issue #315 - extracted)."""
+    if not process:
+        return False
+    try:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        return True
+    except Exception as e:
+        logger.warning(f"Error terminating {process_key}: {e}")
+        return False
+
+
+async def _run_xdotool_command(display: int, *args: str) -> bool:
+    """Run xdotool command on specified display (Issue #315 - extracted)."""
+    try:
+        env = {
+            **config_manager.get("system.environment", os.environ),
+            "DISPLAY": f":{display}",
+        }
+        proc = await asyncio.create_subprocess_exec("xdotool", *args, env=env)
+        await proc.wait()
+        return proc.returncode == 0
+    except Exception as e:
+        logger.error(f"xdotool command failed: {e}")
+        return False
+
+
 class VNCServerManager:
     """Manages VNC server instances for desktop streaming"""
 
     def __init__(
         self, display_base: int = 10, port_base: int = 5900, novnc_port_base: int = 6080
     ):
+        """Initialize VNC server manager with port configuration and availability checks."""
         self.display_base = display_base
         self.port_base = port_base
         self.novnc_port_base = novnc_port_base
@@ -247,33 +279,20 @@ class VNCServerManager:
         raise RuntimeError("No available X display numbers")
 
     async def terminate_session(self, session_id: str) -> bool:
-        """Terminate a VNC session"""
+        """Terminate a VNC session (Issue #315 - refactored to reduce nesting)."""
         if session_id not in self.active_sessions:
             return False
 
         session = self.active_sessions[session_id]
 
         try:
-            # Terminate processes
+            # Terminate all VNC processes using helper
             for process_key in ALL_VNC_PROCESS_KEYS:
-                process = session.get(process_key)
-                if process:
-                    try:
-                        process.terminate()
-                        # Wait for graceful termination
-                        try:
-                            process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                    except Exception as e:
-                        logger.warning(f"Error terminating {process_key}: {e}")
+                _terminate_process_safely(session.get(process_key), process_key)
 
-            # Remove session
             del self.active_sessions[session_id]
-
             logger.info(f"VNC session terminated: {session_id}")
             return True
-
         except Exception as e:
             logger.error(f"Error terminating session {session_id}: {e}")
             return False
@@ -332,6 +351,7 @@ class DesktopStreamingManager:
     """High-level desktop streaming manager with WebSocket integration"""
 
     def __init__(self):
+        """Initialize desktop streaming manager with VNC and WebSocket client tracking."""
         self.vnc_manager = VNCServerManager()
         self.websocket_clients: Dict[str, websockets.WebSocketServerProtocol] = {}
         self.session_clients: Dict[str, List[str]] = (
@@ -446,65 +466,28 @@ class DesktopStreamingManager:
     async def _handle_control_request(
         self, session_id: str, control_data: Dict[str, Any]
     ):
-        """Handle desktop control requests"""
+        """Handle desktop control requests (Issue #315 - refactored to reduce nesting)."""
         session_info = self.vnc_manager.get_session_info(session_id)
         if not session_info:
             return
 
         display = session_info["display_num"]
+        control_type = control_data.get("type")
 
-        try:
-            control_type = control_data.get("type")
+        if control_type == "mouse_click":
+            x, y = control_data.get("x", 0), control_data.get("y", 0)
+            button = control_data.get("button", 1)
+            await _run_xdotool_command(display, "mousemove", "--sync", str(x), str(y), "click", str(button))
 
-            if control_type == "mouse_click":
-                x, y = control_data.get("x", 0), control_data.get("y", 0)
-                button = control_data.get("button", 1)
+        elif control_type == "key_press":
+            key = control_data.get("key", "")
+            if key:
+                await _run_xdotool_command(display, "key", key)
 
-                # Use xdotool to simulate mouse click
-                env = {
-                    **config_manager.get("system.environment", os.environ),
-                    "DISPLAY": f":{display}",
-                }
-                proc = await asyncio.create_subprocess_exec(
-                    "xdotool",
-                    "mousemove",
-                    "--sync",
-                    str(x),
-                    str(y),
-                    "click",
-                    str(button),
-                    env=env,
-                )
-                await proc.wait()
-
-            elif control_type == "key_press":
-                key = control_data.get("key", "")
-                if key:
-                    env = {
-                        **config_manager.get("system.environment", os.environ),
-                        "DISPLAY": f":{display}",
-                    }
-                    proc = await asyncio.create_subprocess_exec(
-                        "xdotool", "key", key,
-                        env=env,
-                    )
-                    await proc.wait()
-
-            elif control_type == "type_text":
-                text = control_data.get("text", "")
-                if text:
-                    env = {
-                        **config_manager.get("system.environment", os.environ),
-                        "DISPLAY": f":{display}",
-                    }
-                    proc = await asyncio.create_subprocess_exec(
-                        "xdotool", "type", text,
-                        env=env,
-                    )
-                    await proc.wait()
-
-        except Exception as e:
-            logger.error(f"Control request failed: {e}")
+        elif control_type == "type_text":
+            text = control_data.get("text", "")
+            if text:
+                await _run_xdotool_command(display, "type", text)
 
     async def _get_session_screenshot(self, session_id: str) -> Optional[str]:
         """Get screenshot from desktop session"""
@@ -535,28 +518,30 @@ class DesktopStreamingManager:
         return None
 
     async def terminate_streaming_session(self, session_id: str) -> bool:
-        """Terminate a desktop streaming session"""
+        """Terminate a desktop streaming session (Issue #315 - refactored)."""
         # Notify all connected clients
         if session_id in self.session_clients:
-            for client_id in self.session_clients[session_id].copy():
-                if client_id in self.websocket_clients:
-                    try:
-                        await self.websocket_clients[client_id].send(
-                            json.dumps(
-                                {
-                                    "type": "session_terminated",
-                                    "data": {"session_id": session_id},
-                                }
-                            )
-                        )
-                        await self.websocket_clients[client_id].close()
-                    except Exception as e:
-                        logger.warning(f"Error notifying client {client_id}: {e}")
-
+            await self._notify_session_clients_terminated(session_id)
             del self.session_clients[session_id]
 
         # Terminate VNC session
         return await self.vnc_manager.terminate_session(session_id)
+
+    async def _notify_session_clients_terminated(self, session_id: str) -> None:
+        """Notify clients that session is terminated (Issue #315 - extracted)."""
+        termination_msg = json.dumps({"type": "session_terminated", "data": {"session_id": session_id}})
+        for client_id in self.session_clients[session_id].copy():
+            await self._notify_client_and_close(client_id, termination_msg)
+
+    async def _notify_client_and_close(self, client_id: str, message: str) -> None:
+        """Notify a client and close connection (Issue #315 - extracted)."""
+        if client_id not in self.websocket_clients:
+            return
+        try:
+            await self.websocket_clients[client_id].send(message)
+            await self.websocket_clients[client_id].close()
+        except Exception as e:
+            logger.warning(f"Error notifying client {client_id}: {e}")
 
     def get_system_capabilities(self) -> Dict[str, Any]:
         """Get desktop streaming system capabilities"""

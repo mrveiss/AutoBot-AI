@@ -186,20 +186,26 @@ class ArchitecturalPatternAnalyzer:
 
     async def _discover_components(self, root_path: str, patterns: List[str]) -> List[ArchitecturalComponent]:
         """Discover architectural components in the codebase"""
-
+        # (Issue #315 - refactored) Reduced nesting by extracting file processing
         components = []
         root = Path(root_path)
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        file_components = await self._extract_components_from_file(str(file_path))
-                        components.extend(file_components)
-                    except Exception as e:
-                        logger.warning(f"Failed to extract components from {file_path}: {e}")
+                await self._process_file_for_components(file_path, components)
 
         return components
+
+    async def _process_file_for_components(self, file_path: Path, components: List[ArchitecturalComponent]) -> None:
+        """Process a single file to extract components (Issue #315 - extracted)"""
+        if not file_path.is_file() or self._should_skip_file(file_path):
+            return
+
+        try:
+            file_components = await self._extract_components_from_file(str(file_path))
+            components.extend(file_components)
+        except Exception as e:
+            logger.warning(f"Failed to extract components from {file_path}: {e}")
 
     def _should_skip_file(self, file_path: Path) -> bool:
         """Check if file should be skipped"""
@@ -213,7 +219,7 @@ class ArchitecturalPatternAnalyzer:
 
     async def _extract_components_from_file(self, file_path: str) -> List[ArchitecturalComponent]:
         """Extract architectural components from a file"""
-
+        # (Issue #315 - refactored) Reduced nesting by extracting component analysis
         components = []
 
         try:
@@ -221,19 +227,7 @@ class ArchitecturalPatternAnalyzer:
                 content = f.read()
 
             tree = ast.parse(content, filename=file_path)
-
-            # Extract classes
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    component = self._analyze_class_component(node, file_path, content)
-                    if component:
-                        components.append(component)
-
-                elif isinstance(node, ast.FunctionDef) and not self._is_method(node, tree):
-                    # Top-level functions
-                    component = self._analyze_function_component(node, file_path, content)
-                    if component:
-                        components.append(component)
+            self._extract_nodes_from_tree(tree, file_path, content, components)
 
             # Module-level component
             module_component = self._analyze_module_component(file_path, tree, content)
@@ -247,6 +241,20 @@ class ArchitecturalPatternAnalyzer:
             logger.error(f"Error extracting components from {file_path}: {e}")
 
         return components
+
+    def _extract_nodes_from_tree(self, tree: ast.AST, file_path: str, content: str,
+                                 components: List[ArchitecturalComponent]) -> None:
+        """Extract class and function nodes from AST tree (Issue #315 - extracted)"""
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                component = self._analyze_class_component(node, file_path, content)
+                if component:
+                    components.append(component)
+            elif isinstance(node, ast.FunctionDef) and not self._is_method(node, tree):
+                # Top-level functions
+                component = self._analyze_function_component(node, file_path, content)
+                if component:
+                    components.append(component)
 
     def _analyze_class_component(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ArchitecturalComponent]:
         """Analyze a class as an architectural component"""
@@ -360,37 +368,39 @@ class ArchitecturalPatternAnalyzer:
 
     def _extract_class_dependencies(self, node: ast.ClassDef, content: str) -> List[str]:
         """Extract dependencies for a class"""
+        # (Issue #315 - refactored) Reduced nesting by extracting dependency extraction
         dependencies = []
 
         # Base classes
-        for base in node.bases:
-            if isinstance(base, ast.Name):
-                dependencies.append(base.id)
+        dependencies.extend(self._extract_base_class_dependencies(node))
 
         # Method calls and attribute access
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Name):
-                    dependencies.append(child.func.id)
-                elif isinstance(child.func, ast.Attribute):
-                    if isinstance(child.func.value, ast.Name):
-                        dependencies.append(child.func.value.id)
+        dependencies.extend(self._extract_call_dependencies(node))
 
         return list(set(dependencies))
+
+    def _extract_base_class_dependencies(self, node: ast.ClassDef) -> List[str]:
+        """Extract base class dependencies (Issue #315 - extracted)"""
+        return [base.id for base in node.bases if isinstance(base, ast.Name)]
+
+    def _extract_call_dependencies(self, node: ast.AST) -> List[str]:
+        """Extract dependencies from function/method calls (Issue #315 - extracted)"""
+        dependencies = []
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+
+            if isinstance(child.func, ast.Name):
+                dependencies.append(child.func.id)
+            elif isinstance(child.func, ast.Attribute) and isinstance(child.func.value, ast.Name):
+                dependencies.append(child.func.value.id)
+
+        return dependencies
 
     def _extract_function_dependencies(self, node: ast.FunctionDef, content: str) -> List[str]:
         """Extract dependencies for a function"""
-        dependencies = []
-
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Name):
-                    dependencies.append(child.func.id)
-                elif isinstance(child.func, ast.Attribute):
-                    if isinstance(child.func.value, ast.Name):
-                        dependencies.append(child.func.value.id)
-
-        return list(set(dependencies))
+        # (Issue #315 - refactored) Reuse _extract_call_dependencies to reduce nesting
+        return list(set(self._extract_call_dependencies(node)))
 
     def _is_abstract_class(self, node: ast.ClassDef) -> bool:
         """Check if a class is abstract"""
@@ -466,6 +476,7 @@ class ArchitecturalPatternAnalyzer:
 
     def _calculate_class_complexity(self, node: ast.ClassDef) -> int:
         """Calculate class complexity"""
+        # (Issue #315 - refactored) Reduced nesting by extracting attribute counting
         complexity = 0
 
         # Count methods
@@ -473,15 +484,26 @@ class ArchitecturalPatternAnalyzer:
         complexity += len(methods)
 
         # Count attributes
-        for method in methods:
-            if method.name == '__init__':
-                for child in ast.walk(method):
-                    if isinstance(child, ast.Assign):
-                        for target in child.targets:
-                            if isinstance(target, ast.Attribute):
-                                complexity += 1
+        complexity += self._count_class_attributes(methods)
 
         return complexity
+
+    def _count_class_attributes(self, methods: List[ast.FunctionDef]) -> int:
+        """Count class attributes defined in __init__ (Issue #315 - extracted)"""
+        count = 0
+        for method in methods:
+            if method.name != '__init__':
+                continue
+
+            for child in ast.walk(method):
+                if isinstance(child, ast.Assign):
+                    count += self._count_attribute_assignments(child)
+
+        return count
+
+    def _count_attribute_assignments(self, assign_node: ast.Assign) -> int:
+        """Count attribute assignments in an assign node (Issue #315 - extracted)"""
+        return sum(1 for target in assign_node.targets if isinstance(target, ast.Attribute))
 
     def _calculate_function_complexity(self, node: ast.FunctionDef) -> int:
         """Calculate function complexity"""
@@ -511,32 +533,51 @@ class ArchitecturalPatternAnalyzer:
 
     async def _detect_patterns(self, root_path: str, patterns: List[str]) -> List[Dict[str, Any]]:
         """Detect design patterns across the codebase"""
-
+        # (Issue #315 - refactored) Reduced nesting by extracting pattern scanning
         detected_patterns = []
         root = Path(root_path)
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-
-                        for pattern_name, pattern_sigs in self.pattern_signatures.items():
-                            for regex_pattern, description in pattern_sigs:
-                                for match in re.finditer(regex_pattern, content, re.MULTILINE | re.IGNORECASE):
-                                    line_num = content[:match.start()].count('\n') + 1
-                                    detected_patterns.append({
-                                        'pattern': pattern_name,
-                                        'file': str(file_path),
-                                        'line': line_num,
-                                        'description': description,
-                                        'code_snippet': match.group(0)[:100]
-                                    })
-                    except Exception as e:
-                        logger.warning(f"Failed to scan patterns in {file_path}: {e}")
+                await self._scan_file_for_patterns(file_path, detected_patterns)
 
         return detected_patterns
+
+    async def _scan_file_for_patterns(self, file_path: Path,
+                                     detected_patterns: List[Dict[str, Any]]) -> None:
+        """Scan a single file for design patterns (Issue #315 - extracted)"""
+        if not file_path.is_file() or self._should_skip_file(file_path):
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            self._find_patterns_in_content(file_path, content, detected_patterns)
+        except Exception as e:
+            logger.warning(f"Failed to scan patterns in {file_path}: {e}")
+
+    def _find_patterns_in_content(self, file_path: Path, content: str,
+                                 detected_patterns: List[Dict[str, Any]]) -> None:
+        """Find pattern matches in file content (Issue #315 - extracted)"""
+        for pattern_name, pattern_sigs in self.pattern_signatures.items():
+            for regex_pattern, description in pattern_sigs:
+                self._match_pattern(file_path, content, pattern_name, regex_pattern,
+                                  description, detected_patterns)
+
+    def _match_pattern(self, file_path: Path, content: str, pattern_name: str,
+                      regex_pattern: str, description: str,
+                      detected_patterns: List[Dict[str, Any]]) -> None:
+        """Match a single pattern and record matches (Issue #315 - extracted)"""
+        for match in re.finditer(regex_pattern, content, re.MULTILINE | re.IGNORECASE):
+            line_num = content[:match.start()].count('\n') + 1
+            detected_patterns.append({
+                'pattern': pattern_name,
+                'file': str(file_path),
+                'line': line_num,
+                'description': description,
+                'code_snippet': match.group(0)[:100]
+            })
 
     async def _analyze_dependencies(self, components: List[ArchitecturalComponent]) -> Dict[str, List[str]]:
         """Analyze dependencies between components"""

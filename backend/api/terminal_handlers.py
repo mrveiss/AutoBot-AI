@@ -34,6 +34,8 @@ from backend.services.simple_pty import simple_pty_manager
 # Import models from dedicated module (Issue #185)
 from backend.api.terminal_models import (
     CommandRiskLevel,
+    MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
     SecurityLevel,
 )
 
@@ -66,6 +68,7 @@ class ConsolidatedTerminalWebSocket:
         conversation_id: Optional[str] = None,
         redis_client=None,
     ):
+        """Initialize terminal handler with WebSocket and session config."""
         self.websocket = websocket
         self.session_id = session_id
         self.conversation_id = conversation_id  # Link to chat session
@@ -132,8 +135,42 @@ class ConsolidatedTerminalWebSocket:
             logger.error(f"Could not initialize PTY process: {e}")
             self.pty_process = None
 
+    async def _process_pty_event(self, event_type: str, content: str) -> bool:
+        """
+        Process PTY event (Issue #315 - extracted helper).
+
+        Args:
+            event_type: Type of event (output, eo, close)
+            content: Event content
+
+        Returns:
+            True if processing should continue, False if PTY is closing
+        """
+        if event_type == "output":
+            # Send output to WebSocket
+            await self.send_output(content)
+            return True
+
+        if event_type in ("eo", "close"):
+            # PTY closed
+            logger.info(f"PTY closed for session {self.session_id}")
+            await self.send_message(
+                {
+                    "type": "terminal_closed",
+                    "content": "Terminal session ended",
+                }
+            )
+            return False
+
+        # Unknown event type, continue processing
+        return True
+
     async def _read_pty_output(self):
-        """Async task to read PTY output and send to WebSocket"""
+        """
+        Async task to read PTY output and send to WebSocket.
+
+        (Issue #315 - refactored to reduce nesting depth)
+        """
         logger.info(f"Starting PTY output reader for session {self.session_id}")
 
         while self.active and self.pty_process:
@@ -141,25 +178,16 @@ class ConsolidatedTerminalWebSocket:
                 # Get output from PTY (non-blocking)
                 output = self.pty_process.get_output()
 
-                if output:
-                    event_type, content = output
-
-                    if event_type == "output":
-                        # Send output to WebSocket
-                        await self.send_output(content)
-                    elif event_type in ("eo", "close"):
-                        # PTY closed
-                        logger.info(f"PTY closed for session {self.session_id}")
-                        await self.send_message(
-                            {
-                                "type": "terminal_closed",
-                                "content": "Terminal session ended",
-                            }
-                        )
-                        break
-                else:
+                if not output:
                     # No output available, small delay to prevent CPU spinning
                     await asyncio.sleep(0.01)
+                    continue
+
+                # Process event using extracted helper
+                event_type, content = output
+                should_continue = await self._process_pty_event(event_type, content)
+                if not should_continue:
+                    break
 
             except Exception as e:
                 logger.error(f"Error reading PTY output: {e}")
@@ -522,6 +550,92 @@ class ConsolidatedTerminalWebSocket:
             except Exception as e:
                 logger.error(f"Failed to log command completion: {e}")
 
+    async def _validate_stdin_size(self, content: str) -> bool:
+        """
+        Validate stdin content size (Issue #315 - extracted helper).
+
+        Args:
+            content: Content to validate
+
+        Returns:
+            True if valid, False if oversized
+        """
+        MAX_STDIN_SIZE = 4096  # 4KB max per stdin message
+        if len(content) > MAX_STDIN_SIZE:
+            logger.warning(
+                f"[STDIN] Rejected oversized input: {len(content)} bytes (max: {MAX_STDIN_SIZE})"
+            )
+            await self.send_message(
+                {
+                    "type": "error",
+                    "content": f"Input too large (max {MAX_STDIN_SIZE} bytes)",
+                    "timestamp": time.time(),
+                }
+            )
+            return False
+        return True
+
+    async def _validate_pty_available(self) -> bool:
+        """
+        Validate PTY process is available (Issue #315 - extracted helper).
+
+        Returns:
+            True if PTY available, False otherwise
+        """
+        if not self.pty_process:
+            logger.error(f"[STDIN] No PTY process for session {self.session_id}")
+            await self.send_message(
+                {
+                    "type": "error",
+                    "content": "No terminal session available",
+                    "timestamp": time.time(),
+                }
+            )
+            return False
+        return True
+
+    async def _write_stdin_to_pty(
+        self, content: str, is_password: bool, command_id: Optional[str]
+    ) -> bool:
+        """
+        Write stdin to PTY with password echo handling (Issue #315 - extracted helper).
+
+        Args:
+            content: Content to write
+            is_password: Whether this is password input
+            command_id: Optional command ID
+
+        Returns:
+            True if successful, False otherwise
+        """
+        success = self.pty_process.write_input(content)
+
+        if not success:
+            logger.error(
+                f"[STDIN] Failed to write to PTY for session {self.session_id}"
+            )
+            await self.send_message(
+                {
+                    "type": "error",
+                    "content": "Failed to send input to terminal",
+                    "timestamp": time.time(),
+                }
+            )
+            return False
+
+        logger.info(
+            f"[STDIN] Successfully sent {len(content)} bytes to PTY "
+            f"(password: {is_password}, command_id: {command_id})"
+        )
+
+        # Re-enable echo after password (if it was disabled)
+        if is_password:
+            await asyncio.sleep(0.1)  # Wait for password to be processed
+            self.pty_process.set_echo(True)
+            logger.info("[STDIN] Re-enabled echo after password input")
+
+        return True
+
     async def _handle_terminal_stdin(self, message: dict):
         """
         Handle stdin input for interactive commands (Issue #33)
@@ -543,6 +657,8 @@ class ConsolidatedTerminalWebSocket:
             "is_password": false,  # Optional: disable echo for password input
             "command_id": "cmd-uuid"  # Optional: link to command approval
         }
+
+        (Issue #315 - refactored to reduce nesting depth)
         """
         logger.info(
             f"[STDIN] Session {self.session_id}, receiving stdin for interactive command"
@@ -553,31 +669,12 @@ class ConsolidatedTerminalWebSocket:
         is_password = message.get("is_password", False)
         command_id = message.get("command_id")  # For linking to approved command
 
-        # Security: Size limit (prevent abuse)
-        MAX_STDIN_SIZE = 4096  # 4KB max per stdin message
-        if len(content) > MAX_STDIN_SIZE:
-            logger.warning(
-                f"[STDIN] Rejected oversized input: {len(content)} bytes (max: {MAX_STDIN_SIZE})"
-            )
-            await self.send_message(
-                {
-                    "type": "error",
-                    "content": f"Input too large (max {MAX_STDIN_SIZE} bytes)",
-                    "timestamp": time.time(),
-                }
-            )
+        # Validate input size (early return)
+        if not await self._validate_stdin_size(content):
             return
 
-        # Validate PTY exists
-        if not self.pty_process:
-            logger.error(f"[STDIN] No PTY process for session {self.session_id}")
-            await self.send_message(
-                {
-                    "type": "error",
-                    "content": "No terminal session available",
-                    "timestamp": time.time(),
-                }
-            )
+        # Validate PTY exists (early return)
+        if not await self._validate_pty_available():
             return
 
         # Disable echo for password input (Issue #33 Phase 4)
@@ -588,32 +685,8 @@ class ConsolidatedTerminalWebSocket:
             self.pty_process.set_echo(False)
 
         try:
-            # Send stdin directly to PTY
-            success = self.pty_process.write_input(content)
-
-            if success:
-                logger.info(
-                    f"[STDIN] Successfully sent {len(content)} bytes to PTY "
-                    f"(password: {is_password}, command_id: {command_id})"
-                )
-
-                # Re-enable echo after password (if it was disabled)
-                if is_password:
-                    # Wait a tiny bit for password to be processed
-                    await asyncio.sleep(0.1)
-                    self.pty_process.set_echo(True)
-                    logger.info("[STDIN] Re-enabled echo after password input")
-            else:
-                logger.error(
-                    f"[STDIN] Failed to write to PTY for session {self.session_id}"
-                )
-                await self.send_message(
-                    {
-                        "type": "error",
-                        "content": "Failed to send input to terminal",
-                        "timestamp": time.time(),
-                    }
-                )
+            # Write stdin to PTY using extracted helper
+            await self._write_stdin_to_pty(content, is_password, command_id)
 
         except Exception as e:
             logger.error(f"[STDIN] Error writing to PTY: {e}")
@@ -942,6 +1015,39 @@ class ConsolidatedTerminalWebSocket:
                 },
             )
 
+    def _get_next_message_from_queue(self):
+        """
+        Get next message from output queue (Issue #315 - extracted helper).
+
+        Returns:
+            Message dict or None if queue is empty
+        """
+        import queue
+        try:
+            return self.output_queue.get_nowait()
+        except queue.Empty:
+            return None
+
+    async def _send_websocket_message(self, message: dict) -> bool:
+        """
+        Send message to WebSocket with error handling (Issue #315 - extracted helper).
+
+        Args:
+            message: Message dict to send
+
+        Returns:
+            True if successful, False if WebSocket is closed/errored
+        """
+        if not (self.websocket and self.active):
+            return False
+
+        try:
+            await self.websocket.send_text(json.dumps(message))
+            return True
+        except Exception as e:
+            logger.error(f"Error sending queued message to WebSocket: {e}")
+            return False
+
     async def _async_output_sender(self):
         """
         Phase 3 Enhancement: Async task to send queued output messages to WebSocket
@@ -949,39 +1055,34 @@ class ConsolidatedTerminalWebSocket:
         This prevents the PTY reader from blocking on slow WebSocket send operations.
         Messages are queued and sent asynchronously, improving responsiveness under
         heavy terminal load.
-        """
-        import queue
 
+        (Issue #315 - refactored to reduce nesting depth)
+        """
         logger.info(f"Starting async output sender for session {self.session_id}")
 
         try:
             while self.active:
                 try:
-                    # Non-blocking queue check
-                    try:
-                        message = self.output_queue.get_nowait()
-                    except queue.Empty:
+                    # Non-blocking queue check using extracted helper
+                    message = self._get_next_message_from_queue()
+
+                    if message is None:
                         # No messages in queue, yield control briefly
                         await asyncio.sleep(0.01)
                         continue
 
-                    # Check for stop signal
+                    # Check for stop signal (early return)
                     if message.get("type") == "stop":
                         logger.info(
                             f"Stop signal received in output sender for session {self.session_id}"
                         )
                         break
 
-                    # Send message if WebSocket is still active
-                    if self.websocket and self.active:
-                        try:
-                            await self.websocket.send_text(json.dumps(message))
-                        except Exception as e:
-                            logger.error(
-                                f"Error sending queued message to WebSocket: {e}"
-                            )
-                            # WebSocket may be closed, stop sender
-                            break
+                    # Send message using extracted helper
+                    success = await self._send_websocket_message(message)
+                    if not success:
+                        # WebSocket may be closed, stop sender
+                        break
 
                 except Exception as e:
                     logger.error(f"Error in async output sender loop: {e}")
@@ -998,6 +1099,7 @@ class ConsolidatedTerminalManager:
     """Enhanced session manager for consolidated terminal API"""
 
     def __init__(self):
+        """Initialize manager with session tracking dictionaries."""
         self.session_configs = {}  # session_id -> config
         self.active_connections = {}  # session_id -> ConsolidatedTerminalWebSocket
         self.session_stats = {}  # session_id -> statistics

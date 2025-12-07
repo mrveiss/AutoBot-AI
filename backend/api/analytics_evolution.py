@@ -38,6 +38,37 @@ METRICS_PREFIX = f"{EVOLUTION_PREFIX}metrics:"
 PATTERNS_PREFIX = f"{EVOLUTION_PREFIX}patterns:"
 
 
+def _decode_redis_value(value) -> str:
+    """Decode Redis bytes value to string (Issue #315)."""
+    return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
+def _get_pattern_snapshots(redis_client, pattern_keys: list) -> list:
+    """Get pattern snapshots from Redis keys (Issue #315)."""
+    snapshots = []
+    for key in pattern_keys:
+        key = _decode_redis_value(key)
+        if ":timeline" in key:
+            continue
+        snapshot_json = redis_client.get(key)
+        if not snapshot_json:
+            continue
+        snapshot_json = _decode_redis_value(snapshot_json)
+        snapshots.append(json.loads(snapshot_json))
+    return snapshots
+
+
+def _extract_pattern_types(all_keys: list) -> set:
+    """Extract unique pattern types from Redis keys (Issue #315)."""
+    pattern_types = set()
+    for key in all_keys:
+        key = _decode_redis_value(key)
+        parts = key.replace(PATTERNS_PREFIX, "").split(":")
+        if len(parts) >= 1 and parts[0] != "timeline":
+            pattern_types.add(parts[0])
+    return pattern_types
+
+
 class QualitySnapshot(BaseModel):
     """A point-in-time quality snapshot"""
 
@@ -249,75 +280,41 @@ async def get_pattern_evolution(
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
 ):
     """
-    Get pattern evolution data showing how anti-patterns change over time.
+    Get pattern evolution data (Issue #315: depth 6→3).
 
     Tracks adoption/removal of patterns like god_class, long_method, etc.
     """
     redis_client = get_evolution_redis()
 
     if not redis_client:
-        return JSONResponse(
-            {
-                "status": "demo",
-                "message": "Redis unavailable, returning demo pattern data",
-                "patterns": _generate_demo_patterns(),
-            }
-        )
+        return JSONResponse({
+            "status": "demo",
+            "message": "Redis unavailable, returning demo pattern data",
+            "patterns": _generate_demo_patterns(),
+        })
 
     try:
         patterns_data = {}
 
         if pattern_type:
             # Get specific pattern timeline
-            pattern_keys = redis_client.keys(f"{PATTERNS_PREFIX}{pattern_type}:*")
-            if not pattern_keys:
-                pattern_keys = []
-
-            patterns_data[pattern_type] = []
-            for key in pattern_keys:
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                if ":timeline" in key:
-                    continue  # Skip the timeline sorted set key
-
-                snapshot_json = redis_client.get(key)
-                if snapshot_json:
-                    if isinstance(snapshot_json, bytes):
-                        snapshot_json = snapshot_json.decode("utf-8")
-                    patterns_data[pattern_type].append(json.loads(snapshot_json))
+            pattern_keys = redis_client.keys(f"{PATTERNS_PREFIX}{pattern_type}:*") or []
+            patterns_data[pattern_type] = _get_pattern_snapshots(redis_client, pattern_keys)
         else:
             # Get all pattern types
             all_keys = redis_client.keys(f"{PATTERNS_PREFIX}*")
-            pattern_types = set()
-
-            for key in all_keys:
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                # Extract pattern type from key
-                parts = key.replace(PATTERNS_PREFIX, "").split(":")
-                if len(parts) >= 1 and parts[0] != "timeline":
-                    pattern_types.add(parts[0])
+            pattern_types = _extract_pattern_types(all_keys)
 
             for ptype in pattern_types:
-                patterns_data[ptype] = []
                 ptype_keys = redis_client.keys(f"{PATTERNS_PREFIX}{ptype}:2*")
-                for key in ptype_keys:
-                    if isinstance(key, bytes):
-                        key = key.decode("utf-8")
-                    snapshot_json = redis_client.get(key)
-                    if snapshot_json:
-                        if isinstance(snapshot_json, bytes):
-                            snapshot_json = snapshot_json.decode("utf-8")
-                        patterns_data[ptype].append(json.loads(snapshot_json))
+                patterns_data[ptype] = _get_pattern_snapshots(redis_client, ptype_keys)
 
-        return JSONResponse(
-            {
-                "status": "success",
-                "patterns": patterns_data,
-                "pattern_types": list(patterns_data.keys()),
-                "date_range": {"start": start_date, "end": end_date},
-            }
-        )
+        return JSONResponse({
+            "status": "success",
+            "patterns": patterns_data,
+            "pattern_types": list(patterns_data.keys()),
+            "date_range": {"start": start_date, "end": end_date},
+        })
 
     except Exception as e:
         logger.error(f"Error retrieving pattern evolution: {e}")

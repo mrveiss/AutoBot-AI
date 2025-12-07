@@ -117,6 +117,46 @@ def log_request_context(request, endpoint, request_id):
 
 
 # ====================================================================
+# Message Merge Helpers (Issue #315 - Reduced nesting)
+# ====================================================================
+
+
+def _parse_message_timestamp(msg_ts_str: str) -> Optional[datetime]:
+    """Parse message timestamp from various formats (Issue #315)."""
+    if not isinstance(msg_ts_str, str) or not msg_ts_str:
+        return None
+    try:
+        if "T" in msg_ts_str:
+            return datetime.fromisoformat(msg_ts_str.replace("Z", "+00:00"))
+        return datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+
+
+def _should_start_new_streaming_group(
+    current_ts: datetime, last_streaming_ts: Optional[datetime]
+) -> bool:
+    """Check if a new streaming group should start (Issue #315)."""
+    if last_streaming_ts is None:
+        return False
+    time_diff = abs((current_ts - last_streaming_ts).total_seconds())
+    return time_diff > 120  # 2 minutes = new streaming session
+
+
+def _has_longer_streaming_response(
+    msg: Dict, msg_sender: str, msg_content_len: int, messages: List[Dict], is_streaming_fn
+) -> bool:
+    """Check if any message has longer streaming content (Issue #315)."""
+    return any(
+        m.get("sender", "") == msg_sender
+        and is_streaming_fn(m)
+        and len(m.get("text", "") or m.get("content", "")) > msg_content_len
+        for m in messages
+        if m is not msg
+    )
+
+
+# ====================================================================
 # Router Configuration
 # ====================================================================
 
@@ -803,26 +843,16 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
             continue
 
         # For streaming responses without IDs, check if there's a longer version
-        # This handles the progressive token accumulation during streaming
-        # Issue #259: Multiple streaming states with different timestamps should be deduplicated
+        # Issue #315: Extracted to helper function to reduce nesting
         if is_streaming_response(msg):
             msg_sender = msg.get("sender", "")
             msg_content_len = len(msg.get("text", "") or msg.get("content", ""))
 
-            # Check if any message (existing or new) from same sender has longer content
-            # This keeps only the final/most complete streaming response
-            has_longer_existing = any(
-                m.get("sender", "") == msg_sender
-                and is_streaming_response(m)
-                and len(m.get("text", "") or m.get("content", "")) > msg_content_len
-                for m in existing
-                if m is not msg  # Don't compare with self
+            has_longer_existing = _has_longer_streaming_response(
+                msg, msg_sender, msg_content_len, existing, is_streaming_response
             )
-            has_longer_new = any(
-                n.get("sender", "") == msg_sender
-                and is_streaming_response(n)
-                and len(n.get("text", "") or n.get("content", "")) >= msg_content_len
-                for n in new
+            has_longer_new = _has_longer_streaming_response(
+                msg, msg_sender, msg_content_len, new, is_streaming_response
             )
             if has_longer_existing or has_longer_new:
                 continue
@@ -840,32 +870,20 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     current_group: List[Dict] = []
     last_streaming_ts = None
 
-    # First pass: separate non-streaming messages and group streaming ones
+    # First pass: separate non-streaming messages and group streaming ones (Issue #315)
     for msg in merged:
         if is_streaming_response(msg):
             msg_ts_str = msg.get("timestamp", "")
-            try:
-                # Parse timestamp
-                if isinstance(msg_ts_str, str) and msg_ts_str:
-                    if "T" in msg_ts_str:
-                        current_ts = datetime.fromisoformat(
-                            msg_ts_str.replace("Z", "+00:00")
-                        )
-                    else:
-                        current_ts = datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
+            current_ts = _parse_message_timestamp(msg_ts_str)
 
-                    # Check if this starts a new group (>2 min gap)
-                    if last_streaming_ts is not None:
-                        time_diff = abs((current_ts - last_streaming_ts).total_seconds())
-                        if time_diff > 120:  # 2 minutes = new streaming session
-                            if current_group:
-                                streaming_groups.append(current_group)
-                            current_group = []
-                    last_streaming_ts = current_ts
-            except (ValueError, TypeError) as e:
-                # Timestamp parsing failed - continue grouping without time-based breaks
-                # This is intentional: malformed timestamps should not break message grouping
-                logger.debug("Timestamp parsing failed during message grouping: %s", e)
+            if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
+                if current_group:
+                    streaming_groups.append(current_group)
+                current_group = []
+
+            if current_ts:
+                last_streaming_ts = current_ts
+
             current_group.append(msg)
         else:
             # Non-streaming message - finalize current streaming group

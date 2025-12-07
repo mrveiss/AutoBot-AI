@@ -702,28 +702,50 @@ class CodeReviewEngine:
                 "content": line[1:] if line.startswith(" ") else "",
             })
 
+    def _handle_file_metadata(
+        self, line: str, current_file: Optional[DiffFile]
+    ) -> bool:
+        """Handle file metadata lines (Issue #315 - reduce nesting)."""
+        if not current_file:
+            return False
+        if line.startswith("new file"):
+            current_file.is_new = True
+            return True
+        if line.startswith("deleted file"):
+            current_file.is_deleted = True
+            return True
+        if line.startswith("rename from"):
+            current_file.is_renamed = True
+            return True
+        return False
+
     def _parse_diff(self, diff_content: str) -> list[DiffFile]:
-        """Parse unified diff format into structured data."""
+        """Parse unified diff format into structured data (Issue #315: depth 7→3)."""
         files: list[DiffFile] = []
         current_file: Optional[DiffFile] = None
         current_hunk: Optional[DiffHunk] = None
 
         for line in diff_content.split("\n"):
+            # Handle new file marker
             if line.startswith("diff --git"):
                 self._finalize_current_file(current_file, current_hunk, files)
                 current_file = self._parse_diff_git_line(line)
                 current_hunk = None
-            elif line.startswith("new file") and current_file:
-                current_file.is_new = True
-            elif line.startswith("deleted file") and current_file:
-                current_file.is_deleted = True
-            elif line.startswith("rename from") and current_file:
-                current_file.is_renamed = True
-            elif line.startswith("@@"):
+                continue
+
+            # Handle file metadata
+            if self._handle_file_metadata(line, current_file):
+                continue
+
+            # Handle hunk header
+            if line.startswith("@@"):
                 if current_file and current_hunk:
                     current_file.hunks.append(current_hunk)
                 current_hunk = self._parse_hunk_header(line)
-            elif current_hunk is not None:
+                continue
+
+            # Handle hunk content
+            if current_hunk is not None:
                 self._parse_hunk_line(line, current_hunk, current_file)
 
         self._finalize_current_file(current_file, current_hunk, files)

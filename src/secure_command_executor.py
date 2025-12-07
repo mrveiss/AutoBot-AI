@@ -35,6 +35,7 @@ class SecurityPolicy:
     """Security policy for command execution"""
 
     def __init__(self):
+        """Initialize security policy with command classifications and path restrictions."""
         # Safe commands that can run without approval
         self.safe_commands = {
             "echo",
@@ -485,6 +486,7 @@ if __name__ == "__main__":
             return False
 
     async def test_commands():
+        """Test secure command executor with various risk-level commands."""
         # Create executor with approval callback
         executor = SecureCommandExecutor(
             require_approval_callback=example_approval_callback,

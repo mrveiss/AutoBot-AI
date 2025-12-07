@@ -67,6 +67,7 @@ async def get_call_graph():
         """AST visitor to extract function definitions and calls."""
 
         def __init__(self, file_path: str, module_path: str):
+            """Initialize visitor with file path and module context."""
             self.file_path = file_path
             self.module_path = module_path
             self.current_class = None
@@ -74,18 +75,22 @@ async def get_call_graph():
             self.function_stack = []
 
         def visit_ClassDef(self, node):
+            """Visit class definition and track current class context."""
             old_class = self.current_class
             self.current_class = node.name
             self.generic_visit(node)
             self.current_class = old_class
 
         def visit_FunctionDef(self, node):
+            """Visit synchronous function definition."""
             self._process_function(node)
 
         def visit_AsyncFunctionDef(self, node):
+            """Visit asynchronous function definition."""
             self._process_function(node)
 
         def _process_function(self, node):
+            """Process function node and register it with its call relationships."""
             # Build function ID
             if self.current_class:
                 func_id = f"{self.module_path}.{self.current_class}.{node.name}"
@@ -117,6 +122,7 @@ async def get_call_graph():
             self.current_function = old_function
 
         def _get_decorator_name(self, decorator):
+            """Extract decorator name from AST node."""
             if isinstance(decorator, ast.Name):
                 return decorator.id
             elif isinstance(decorator, ast.Attribute):
@@ -129,6 +135,7 @@ async def get_call_graph():
             return "unknown"
 
         def visit_Call(self, node):
+            """Visit function call and record caller-callee relationship."""
             if not self.current_function:
                 self.generic_visit(node)
                 return

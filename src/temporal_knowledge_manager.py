@@ -116,6 +116,7 @@ class TemporalKnowledgeManager:
     """
 
     def __init__(self):
+        """Initialize temporal manager with tracking, queues, and analytics."""
         # Temporal tracking
         self.temporal_metadata: Dict[str, TemporalMetadata] = {}
         self.invalidation_queue: List[InvalidationJob] = []
@@ -295,6 +296,7 @@ class TemporalKnowledgeManager:
 
             # Delete all facts in parallel - eliminates N+1 sequential deletions
             async def delete_content(content_id: str) -> bool:
+                """Delete a single content item and return success status."""
                 try:
                     await kb_instance.delete_fact(content_id)
                     return True

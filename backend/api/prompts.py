@@ -32,6 +32,7 @@ _cache_lock = asyncio.Lock()
 )
 @router.get("/")
 async def get_prompts():
+    """Get all prompts from filesystem with caching."""
     global _prompts_cache, _cache_timestamp
 
     try:
@@ -127,6 +128,7 @@ async def get_prompts():
             try:
                 # PERFORMANCE FIX: Use smart cancellation for the entire operation
                 async def load_all_prompts():
+                    """Load all prompt files from directory concurrently."""
                     # Collect all file read tasks
                     file_tasks = await collect_prompt_files(prompts_dir)
                     logger.info(f"Found {len(file_tasks)} prompt files to read")
@@ -204,6 +206,7 @@ async def clear_prompts_cache():
 )
 @router.post("/{prompt_id}")
 async def save_prompt(prompt_id: str, request: dict):
+    """Save or update a prompt file by ID."""
     try:
         content = request.get("content", "")
         # Derive the file path from the prompt_id, relative to project root
@@ -266,6 +269,7 @@ async def save_prompt(prompt_id: str, request: dict):
 )
 @router.post("/{prompt_id}/revert")
 async def revert_prompt(prompt_id: str):
+    """Revert a prompt to its default version."""
     try:
         prompts_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "prompts")

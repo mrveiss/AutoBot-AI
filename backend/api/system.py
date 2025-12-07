@@ -23,6 +23,49 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _check_conversation_files_db(request: Request, health_status: dict) -> None:
+    """Check conversation files database health (Issue #315 - extracted)."""
+    if not hasattr(request.app.state, "conversation_file_manager"):
+        health_status["components"]["conversation_files_db"] = "not_configured"
+        health_status["status"] = "degraded"
+        return
+
+    conversation_file_manager = request.app.state.conversation_file_manager
+    try:
+        version = await conversation_file_manager.get_schema_version()
+        if version == "unknown":
+            health_status["components"]["conversation_files_db"] = "not_initialized"
+            health_status["status"] = "degraded"
+        else:
+            health_status["components"]["conversation_files_db"] = "healthy"
+    except Exception as db_e:
+        logger.warning(f"Conversation files DB health check failed: {db_e}")
+        health_status["components"]["conversation_files_db"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+
+async def _check_detailed_conversation_db(request: Request, detailed_components: dict) -> None:
+    """Check conversation files database for detailed health (Issue #315 - extracted)."""
+    if not hasattr(request.app.state, "conversation_file_manager"):
+        detailed_components["conversation_files_db"] = "not_configured"
+        return
+
+    conversation_file_manager = request.app.state.conversation_file_manager
+    try:
+        version = await conversation_file_manager.get_schema_version()
+        if version == "unknown":
+            detailed_components["conversation_files_db"] = "not_initialized"
+            detailed_components["conversation_files_schema"] = "none"
+        else:
+            detailed_components["conversation_files_db"] = "healthy"
+            detailed_components["conversation_files_schema"] = version
+    except Exception as db_e:
+        logger.warning(f"Conversation files DB health check failed: {db_e}")
+        detailed_components["conversation_files_db"] = "unhealthy"
+        detailed_components["conversation_files_schema"] = "error"
+        detailed_components["conversation_files_error"] = str(db_e)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_config",
@@ -145,43 +188,9 @@ async def get_system_health(request: Request = None):
             health_status["components"]["config"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
 
-        # Check conversation files database if request is available
+        # Check conversation files database if request is available (Issue #315 - use helper)
         if request:
-            try:
-                if hasattr(request.app.state, "conversation_file_manager"):
-                    conversation_file_manager = (
-                        request.app.state.conversation_file_manager
-                    )
-                    # Verify database connectivity and schema
-                    try:
-                        version = await conversation_file_manager.get_schema_version()
-                        if version == "unknown":
-                            health_status["components"][
-                                "conversation_files_db"
-                            ] = "not_initialized"
-                            health_status["status"] = "degraded"
-                        else:
-                            health_status["components"][
-                                "conversation_files_db"
-                            ] = "healthy"
-                    except Exception as db_e:
-                        logger.warning(
-                            f"Conversation files DB health check failed: {db_e}"
-                        )
-                        health_status["components"][
-                            "conversation_files_db"
-                        ] = "unhealthy"
-                        health_status["status"] = "degraded"
-                else:
-                    health_status["components"][
-                        "conversation_files_db"
-                    ] = "not_configured"
-                    health_status["status"] = "degraded"
-            except Exception as e:
-                health_status["components"][
-                    "conversation_files_db"
-                ] = f"error: {str(e)}"
-                health_status["status"] = "degraded"
+            await _check_conversation_files_db(request, health_status)
 
         return health_status
 
@@ -388,28 +397,8 @@ async def get_detailed_health(request: Request):
         except Exception as e:
             detailed_components["knowledge_base"] = f"import_error: {str(e)}"
 
-        # Check Conversation Files Database
-        try:
-            if hasattr(request.app.state, "conversation_file_manager"):
-                conversation_file_manager = request.app.state.conversation_file_manager
-                # Verify database connectivity and schema
-                try:
-                    version = await conversation_file_manager.get_schema_version()
-                    if version == "unknown":
-                        detailed_components["conversation_files_db"] = "not_initialized"
-                        detailed_components["conversation_files_schema"] = "none"
-                    else:
-                        detailed_components["conversation_files_db"] = "healthy"
-                        detailed_components["conversation_files_schema"] = version
-                except Exception as db_e:
-                    logger.warning(f"Conversation files DB health check failed: {db_e}")
-                    detailed_components["conversation_files_db"] = "unhealthy"
-                    detailed_components["conversation_files_schema"] = "error"
-                    detailed_components["conversation_files_error"] = str(db_e)
-            else:
-                detailed_components["conversation_files_db"] = "not_configured"
-        except Exception as e:
-            detailed_components["conversation_files_db"] = f"error: {str(e)}"
+        # Check Conversation Files Database (Issue #315 - use helper)
+        await _check_detailed_conversation_db(request, detailed_components)
 
         # Add system resource info
         try:
@@ -511,6 +500,47 @@ async def get_cache_stats():
         }
 
 
+async def _get_key_info(redis_client, key: str, cache_prefix: str) -> dict:
+    """Get TTL info for a single cache key (Issue #315: extracted).
+
+    Returns:
+        Dict with key and ttl info
+    """
+    clean_key = key.replace(cache_prefix, "")
+    try:
+        ttl = await redis_client.ttl(key)
+        return {"key": clean_key, "ttl": ttl if ttl > 0 else "no_expiry"}
+    except Exception:
+        return {"key": clean_key, "ttl": "unknown"}
+
+
+async def _get_recent_keys(redis_client, cache_keys: list, cache_prefix: str) -> list:
+    """Get recent keys with TTL info (Issue #315: extracted).
+
+    Returns:
+        List of key info dicts
+    """
+    recent_keys = []
+    for key in cache_keys[:20]:
+        key_info = await _get_key_info(redis_client, key, cache_prefix)
+        recent_keys.append(key_info)
+    return recent_keys
+
+
+def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:
+    """Analyze cache key patterns (Issue #315: extracted).
+
+    Returns:
+        Dict of pattern counts
+    """
+    key_patterns = {}
+    for key in cache_keys:
+        clean_key = key.replace(cache_prefix, "")
+        pattern = clean_key.split(":")[0] if ":" in clean_key else "other"
+        key_patterns[pattern] = key_patterns.get(pattern, 0) + 1
+    return key_patterns
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_activity",
@@ -519,7 +549,10 @@ async def get_cache_stats():
 @router.get("/cache/activity")
 @cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 async def get_cache_activity():
-    """Get recent cache activity and key information"""
+    """Get recent cache activity and key information.
+
+    Issue #315: Refactored to use helper functions for reduced nesting depth.
+    """
     try:
         from backend.utils.cache_manager import cache_manager
 
@@ -532,47 +565,31 @@ async def get_cache_activity():
             },
         }
 
-        if cache_manager._redis_client:
-            try:
-                await cache_manager._ensure_redis_client()
-
-                # Get all cache keys
-                cache_keys = await cache_manager._redis_client.keys(
-                    f"{cache_manager.cache_prefix}*"
-                )
-                activity_response["activity"]["total_keys"] = len(cache_keys)
-
-                # Get recent keys (limit to 20 for performance)
-                recent_keys = []
-                for key in cache_keys[:20]:
-                    try:
-                        # Remove prefix for cleaner display
-                        clean_key = key.replace(cache_manager.cache_prefix, "")
-                        ttl = await cache_manager._redis_client.ttl(key)
-                        recent_keys.append(
-                            {
-                                "key": clean_key,
-                                "ttl": ttl if ttl > 0 else "no_expiry",
-                            }
-                        )
-                    except Exception:
-                        recent_keys.append({"key": clean_key, "ttl": "unknown"})
-
-                activity_response["activity"]["recent_keys"] = recent_keys
-
-                # Analyze key patterns
-                key_patterns = {}
-                for key in cache_keys:
-                    clean_key = key.replace(cache_manager.cache_prefix, "")
-                    pattern = clean_key.split(":")[0] if ":" in clean_key else "other"
-                    key_patterns[pattern] = key_patterns.get(pattern, 0) + 1
-
-                activity_response["activity"]["key_patterns"] = key_patterns
-
-            except Exception as e:
-                activity_response["activity"]["error"] = str(e)
-        else:
+        if not cache_manager._redis_client:
             activity_response["activity"]["error"] = "Redis client not available"
+            return activity_response
+
+        try:
+            await cache_manager._ensure_redis_client()
+
+            # Get all cache keys
+            cache_keys = await cache_manager._redis_client.keys(
+                f"{cache_manager.cache_prefix}*"
+            )
+            activity_response["activity"]["total_keys"] = len(cache_keys)
+
+            # Get recent keys using helper (Issue #315)
+            activity_response["activity"]["recent_keys"] = await _get_recent_keys(
+                cache_manager._redis_client, cache_keys, cache_manager.cache_prefix
+            )
+
+            # Analyze key patterns using helper (Issue #315)
+            activity_response["activity"]["key_patterns"] = _analyze_key_patterns(
+                cache_keys, cache_manager.cache_prefix
+            )
+
+        except Exception as e:
+            activity_response["activity"]["error"] = str(e)
 
         return activity_response
 

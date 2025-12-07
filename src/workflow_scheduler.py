@@ -72,6 +72,7 @@ class ScheduledWorkflow:
     metadata: Dict[str, Any] = None
 
     def __post_init__(self):
+        """Initialize default values for optional fields."""
         if self.variables is None:
             self.variables = {}
         if self.tags is None:
@@ -111,6 +112,7 @@ class QueuedWorkflow:
     queued_at: datetime
 
     def __lt__(self, other):
+        """Compare workflows by priority score for heap operations."""
         # For heapq - higher priority scores should be processed first
         return self.priority_score > other.priority_score
 
@@ -143,6 +145,7 @@ class WorkflowQueue:
     """Priority-based workflow execution queue"""
 
     def __init__(self):
+        """Initialize workflow queue with empty queues and default settings."""
         self._queue: List[QueuedWorkflow] = []
         self._running: Dict[str, ScheduledWorkflow] = {}
         self._max_concurrent = 3

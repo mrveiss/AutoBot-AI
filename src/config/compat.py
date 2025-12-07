@@ -15,13 +15,16 @@ class Config:
     """Backward compatibility wrapper for legacy code"""
 
     def __init__(self, manager):
+        """Initialize compatibility wrapper with config manager."""
         self._manager = manager
 
     @property
     def config(self) -> Dict[str, Any]:
+        """Return full configuration as dictionary."""
         return self._manager.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Get configuration value by key with optional default."""
         return self._manager.get(key, default)
 
 

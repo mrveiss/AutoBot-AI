@@ -91,6 +91,7 @@ class CachedResponseStrategy(FallbackStrategy):
     """Strategy that uses cached responses from previous successful calls"""
 
     def __init__(self, cache_dir: str = "data/cache/claude_responses"):
+        """Initialize cached response strategy with cache directory and settings."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_cache_age = 24 * 60 * 60  # 24 hours
@@ -128,6 +129,7 @@ class CachedResponseStrategy(FallbackStrategy):
         )
 
     def get_strategy_name(self) -> str:
+        """Return the strategy identifier name."""
         return "cached_response"
 
     async def cache_response(
@@ -233,6 +235,7 @@ class TemplateResponseStrategy(FallbackStrategy):
     """Strategy that uses predefined templates for common request types"""
 
     def __init__(self):
+        """Initialize template response strategy with predefined templates."""
         self.templates = {
             "code_analysis": {
                 "patterns": ["analyze", "review", "check", "code", "function", "class"],
@@ -300,6 +303,7 @@ class TemplateResponseStrategy(FallbackStrategy):
         )
 
     def get_strategy_name(self) -> str:
+        """Return the strategy identifier name."""
         return "template_response"
 
 
@@ -307,6 +311,7 @@ class StaticResponseStrategy(FallbackStrategy):
     """Strategy that provides static emergency responses"""
 
     def __init__(self):
+        """Initialize static response strategy with emergency response templates."""
         self.static_responses = {
             "service_unavailable": (
                 "AutoBot is currently experiencing technical difficulties. Please try again later."
@@ -341,6 +346,7 @@ class StaticResponseStrategy(FallbackStrategy):
         )
 
     def get_strategy_name(self) -> str:
+        """Return the strategy identifier name."""
         return "static_response"
 
 
@@ -348,6 +354,7 @@ class GracefulDegradationManager:
     """Main manager for graceful degradation strategies (thread-safe)"""
 
     def __init__(self, cache_dir: str = "data/cache/claude_responses"):
+        """Initialize degradation manager with fallback strategies and monitoring."""
         # Initialize strategies in order of preference
         self.strategies: List[FallbackStrategy] = [
             CachedResponseStrategy(cache_dir),
@@ -642,13 +649,16 @@ class GracefulDegradationContext:
     """Context manager for graceful degradation"""
 
     def __init__(self, cache_dir: str = "data/cache/claude_responses"):
+        """Initialize context manager with degradation manager."""
         self.manager = GracefulDegradationManager(cache_dir)
 
     async def __aenter__(self):
+        """Start monitoring and return the degradation manager."""
         await self.manager.start_monitoring()
         return self.manager
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Stop monitoring when exiting context."""
         await self.manager.stop_monitoring()
 
 

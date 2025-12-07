@@ -213,6 +213,7 @@ class LearningPipeline:
     """
 
     def __init__(self):
+        """Initialize learning pipeline with event tracking and statistics."""
         self.events: List[LearningEvent] = []
         self.pattern_stats: Dict[str, PatternStatistics] = {}
         self.insights: List[Insight] = []
@@ -576,6 +577,7 @@ class FileMonitor:
     """
 
     def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
+        """Initialize file monitor with base path and tracking state."""
         self.base_path = Path(base_path)
         self.state = MonitoringState.STOPPED
         self.started_at: Optional[datetime] = None
@@ -774,6 +776,7 @@ class ContinuousLearningEngine:
     """
 
     def __init__(self):
+        """Initialize learning engine with config, pipeline, and monitor."""
         self.config = LearningConfig()
         self.pipeline = LearningPipeline()
         self.monitor = FileMonitor()

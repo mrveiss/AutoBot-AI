@@ -395,37 +395,44 @@ class CFGBuilder(ast.NodeVisitor):
 
         return exit_nodes
 
+    def _process_simple_statement(self, stmt: ast.stmt) -> List[str]:
+        """Process a simple (non-control-flow) statement (Issue #315)."""
+        node = self._add_node(NodeType.STATEMENT, stmt)
+        if self._current_node_id:
+            self._add_edge(self._current_node_id, node.id, EdgeType.SEQUENTIAL)
+        self._current_node_id = node.id
+        return [node.id]
+
+    def _process_nested_function(self, stmt: ast.stmt) -> List[str]:
+        """Process a nested function definition (Issue #315)."""
+        self._build_function_cfg(stmt, isinstance(stmt, ast.AsyncFunctionDef))
+        return [self._current_node_id] if self._current_node_id else []
+
     def _process_statement(self, stmt: ast.stmt) -> List[str]:
-        """Process a single statement, return exit node IDs."""
-        if isinstance(stmt, ast.If):
-            return self._process_if(stmt)
-        elif isinstance(stmt, (ast.For, ast.AsyncFor)):
-            return self._process_for(stmt)
-        elif isinstance(stmt, ast.While):
-            return self._process_while(stmt)
-        elif isinstance(stmt, ast.Try):
-            return self._process_try(stmt)
-        elif isinstance(stmt, ast.With):
-            return self._process_with(stmt)
-        elif isinstance(stmt, ast.Return):
-            return self._process_return(stmt)
-        elif isinstance(stmt, ast.Raise):
-            return self._process_raise(stmt)
-        elif isinstance(stmt, ast.Break):
-            return self._process_break(stmt)
-        elif isinstance(stmt, ast.Continue):
-            return self._process_continue(stmt)
-        elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Nested function - process separately
-            self._build_function_cfg(stmt, isinstance(stmt, ast.AsyncFunctionDef))
-            return [self._current_node_id] if self._current_node_id else []
-        else:
-            # Simple statement
-            node = self._add_node(NodeType.STATEMENT, stmt)
-            if self._current_node_id:
-                self._add_edge(self._current_node_id, node.id, EdgeType.SEQUENTIAL)
-            self._current_node_id = node.id
-            return [node.id]
+        """Process a single statement, return exit node IDs (Issue #315 - dispatch table)."""
+        # Statement type to handler dispatch table
+        stmt_handlers = {
+            ast.If: self._process_if,
+            ast.For: self._process_for,
+            ast.AsyncFor: self._process_for,
+            ast.While: self._process_while,
+            ast.Try: self._process_try,
+            ast.With: self._process_with,
+            ast.Return: self._process_return,
+            ast.Raise: self._process_raise,
+            ast.Break: self._process_break,
+            ast.Continue: self._process_continue,
+            ast.FunctionDef: self._process_nested_function,
+            ast.AsyncFunctionDef: self._process_nested_function,
+        }
+
+        # O(1) lookup for statement handler
+        handler = stmt_handlers.get(type(stmt))
+        if handler:
+            return handler(stmt)
+
+        # Default: simple statement
+        return self._process_simple_statement(stmt)
 
     def _process_if(self, stmt: ast.If) -> List[str]:
         """Process an if statement."""
@@ -641,21 +648,27 @@ class CFGBuilder(ast.NodeVisitor):
                 names.add(child.id)
         return names
 
+    def _extract_names_from_assign(self, node: ast.Assign) -> Set[str]:
+        """Extract modified names from assignment (Issue #315)."""
+        return {t.id for t in node.targets if isinstance(t, ast.Name)}
+
+    def _extract_name_from_target(self, target: ast.expr) -> Set[str]:
+        """Extract name from assignment target if it's a Name node (Issue #315)."""
+        return {target.id} if isinstance(target, ast.Name) else set()
+
     def _get_modified_names(self, stmts: List[ast.stmt]) -> Set[str]:
-        """Get all variable names modified in a block."""
-        names = set()
+        """Get all variable names modified in a block (Issue #315 - refactored)."""
+        names: Set[str] = set()
+
         for stmt in stmts:
             for node in ast.walk(stmt):
                 if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            names.add(target.id)
+                    names.update(self._extract_names_from_assign(node))
                 elif isinstance(node, ast.AugAssign):
-                    if isinstance(node.target, ast.Name):
-                        names.add(node.target.id)
+                    names.update(self._extract_name_from_target(node.target))
                 elif isinstance(node, ast.AnnAssign) and node.value:
-                    if isinstance(node.target, ast.Name):
-                        names.add(node.target.id)
+                    names.update(self._extract_name_from_target(node.target))
+
         return names
 
     def _process_try(self, stmt: ast.Try) -> List[str]:

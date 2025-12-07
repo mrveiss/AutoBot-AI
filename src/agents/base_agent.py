@@ -131,6 +131,7 @@ class BaseAgent(ABC):
     def __init__(
         self, agent_type: str, deployment_mode: DeploymentMode = DeploymentMode.LOCAL
     ):
+        """Initialize base agent with type, deployment mode, and tracking."""
         self.agent_type = agent_type
         self.deployment_mode = deployment_mode
         self.capabilities: List[str] = []
@@ -444,6 +445,7 @@ class LocalAgent(BaseAgent):
     """
 
     def __init__(self, agent_type: str):
+        """Initialize local agent with given type in local deployment mode."""
         super().__init__(agent_type, DeploymentMode.LOCAL)
 
     def is_available(self) -> bool:
@@ -458,6 +460,7 @@ class ContainerAgent(BaseAgent):
     """
 
     def __init__(self, agent_type: str, container_url: str):
+        """Initialize container agent with type and remote container URL."""
         super().__init__(agent_type, DeploymentMode.CONTAINER)
         self.container_url = container_url
         self.session = None  # Will be initialized with aiohttp session

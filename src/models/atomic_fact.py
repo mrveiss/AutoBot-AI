@@ -41,6 +41,48 @@ class ConfidenceLevel(Enum):
     VERY_LOW = 0.2
 
 
+# Confidence thresholds for classification (Issue #315: extracted for reduced nesting)
+_CONFIDENCE_THRESHOLDS = [
+    (0.9, "very_high"),
+    (0.8, "high"),
+    (0.6, "medium"),
+    (0.4, "low"),
+    (0.0, "very_low"),
+]
+
+
+def _classify_confidence(confidence: float) -> str:
+    """Classify a confidence value into a range (Issue #315: extracted).
+
+    Args:
+        confidence: Confidence value between 0.0 and 1.0
+
+    Returns:
+        String key for the confidence range
+    """
+    for threshold, label in _CONFIDENCE_THRESHOLDS:
+        if confidence >= threshold:
+            return label
+    return "very_low"
+
+
+def _count_distribution(items: list, key_func) -> Dict[str, int]:
+    """Count distribution of items by a key function (Issue #315: extracted).
+
+    Args:
+        items: List of items to count
+        key_func: Function to extract the key from each item
+
+    Returns:
+        Dict mapping keys to counts
+    """
+    distribution = {}
+    for item in items:
+        key = key_func(item)
+        distribution[key] = distribution.get(key, 0) + 1
+    return distribution
+
+
 @dataclass
 class AtomicFact:
     """
@@ -249,40 +291,27 @@ class FactExtractionResult:
     temporal_type_distribution: Dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self):
-        """Calculate distributions after initialization."""
-        if self.facts:
-            # Calculate confidence distribution
-            confidence_ranges = {
-                "very_high": 0, "high": 0, "medium": 0, "low": 0, "very_low": 0
-            }
+        """Calculate distributions after initialization.
 
-            for fact in self.facts:
-                if fact.confidence >= 0.9:
-                    confidence_ranges["very_high"] += 1
-                elif fact.confidence >= 0.8:
-                    confidence_ranges["high"] += 1
-                elif fact.confidence >= 0.6:
-                    confidence_ranges["medium"] += 1
-                elif fact.confidence >= 0.4:
-                    confidence_ranges["low"] += 1
-                else:
-                    confidence_ranges["very_low"] += 1
+        Issue #315: Refactored to use helper functions for reduced nesting.
+        """
+        if not self.facts:
+            return
 
-            self.confidence_distribution = confidence_ranges
+        # Calculate confidence distribution using helper
+        self.confidence_distribution = _count_distribution(
+            self.facts, lambda f: _classify_confidence(f.confidence)
+        )
 
-            # Calculate fact type distribution
-            fact_types = {}
-            for fact in self.facts:
-                fact_type = fact.fact_type.value
-                fact_types[fact_type] = fact_types.get(fact_type, 0) + 1
-            self.fact_type_distribution = fact_types
+        # Calculate fact type distribution
+        self.fact_type_distribution = _count_distribution(
+            self.facts, lambda f: f.fact_type.value
+        )
 
-            # Calculate temporal type distribution
-            temporal_types = {}
-            for fact in self.facts:
-                temporal_type = fact.temporal_type.value
-                temporal_types[temporal_type] = temporal_types.get(temporal_type, 0) + 1
-            self.temporal_type_distribution = temporal_types
+        # Calculate temporal type distribution
+        self.temporal_type_distribution = _count_distribution(
+            self.facts, lambda f: f.temporal_type.value
+        )
 
     @property
     def total_facts(self) -> int:

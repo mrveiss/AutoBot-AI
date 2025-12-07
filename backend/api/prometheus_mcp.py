@@ -186,7 +186,6 @@ async def get_prometheus_mcp_tools() -> List[MCPTool]:
 async def prometheus_query(query: str) -> Metadata:
     """Execute instant Prometheus query."""
     try:
-        # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         params = {"query": query}
         async with await http_client.get(
@@ -194,15 +193,200 @@ async def prometheus_query(query: str) -> Metadata:
             params=params,
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
-                if response.status != 200:
-                    return None
-                data = await response.json()
-                if data.get("status") != "success":
-                    return None
-                return data.get("data", {})
+            if response.status != 200:
+                return None
+            data = await response.json()
+            if data.get("status") != "success":
+                return None
+            return data.get("data", {})
     except Exception as e:
         logger.error(f"Prometheus query failed: {e}")
         return None
+
+
+# Tool handler functions (Issue #315 - extracted to reduce nesting)
+async def _handle_query_metric(request: Metadata) -> Metadata:
+    """Handle query_metric tool."""
+    query = request.get("query", "")
+    data = await prometheus_query(query)
+
+    if not data or not data.get("result"):
+        return {"status": "error", "error": f"No data found for query: {query}"}
+
+    results = []
+    for result in data["result"]:
+        metric = result["metric"]
+        value = result["value"][1]
+        labels = ", ".join([f"{k}={v}" for k, v in metric.items() if k != "__name__"])
+        metric_name = metric.get("__name__", query)
+        results.append(f"{metric_name}{{{labels}}}: {value}")
+
+    return {"status": "success", "result": f"Query: {query}\n\nResults:\n" + "\n".join(results)}
+
+
+def _build_vm_metrics(load_data: Metadata, cpu_data: Metadata, memory_data: Metadata) -> dict:
+    """Build VM metrics dictionary from query results (Issue #315 - extracted)."""
+    vms = {}
+    for result in load_data.get("result", []):
+        instance = result["metric"]["instance"]
+        vms[instance] = {"load": float(result["value"][1])}
+
+    for result in cpu_data.get("result", []) if cpu_data else []:
+        instance = result["metric"]["instance"]
+        if instance in vms:
+            vms[instance]["cpu"] = float(result["value"][1])
+
+    for result in memory_data.get("result", []) if memory_data else []:
+        instance = result["metric"]["instance"]
+        if instance in vms:
+            vms[instance]["memory"] = float(result["value"][1])
+
+    return vms
+
+
+async def _handle_get_system_metrics(_request: Metadata) -> Metadata:
+    """Handle get_system_metrics tool."""
+    load_data = await prometheus_query("node_load1")
+    cpu_data = await prometheus_query(
+        "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
+    )
+    memory_data = await prometheus_query(
+        "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
+    )
+
+    if not load_data or not load_data.get("result"):
+        return {"status": "error", "error": "No system metrics available. Node exporters may not be running."}
+
+    vms = _build_vm_metrics(load_data, cpu_data, memory_data)
+    output = "System Metrics (All Machines)\n" + "=" * 50 + "\n\n"
+
+    for instance, metrics in sorted(vms.items()):
+        output += f"VM: {instance}\n"
+        output += f"  Load (1m): {metrics.get('load', 'N/A')}\n"
+        cpu_val = metrics.get('cpu', 'N/A')
+        mem_val = metrics.get('memory', 'N/A')
+        output += f"  CPU: {cpu_val:.1f}%\n" if isinstance(cpu_val, float) else f"  CPU: {cpu_val}\n"
+        output += f"  Memory: {mem_val:.1f}%\n\n" if isinstance(mem_val, float) else f"  Memory: {mem_val}\n\n"
+
+    return {"status": "success", "result": output}
+
+
+async def _handle_get_service_health(_request: Metadata) -> Metadata:
+    """Handle get_service_health tool."""
+    backend_up = await prometheus_query('up{job="autobot-backend"}')
+    node_up = await prometheus_query('up{job="node"}')
+
+    output = "Service Health Status\n" + "=" * 50 + "\n\n"
+
+    if backend_up and backend_up.get("result"):
+        for result in backend_up["result"]:
+            service = result["metric"].get("service", "unknown")
+            status = "UP" if result["value"][1] == "1" else "DOWN"
+            output += f"AutoBot Backend ({service}): {status}\n"
+    else:
+        output += "AutoBot Backend: No data\n"
+
+    if node_up and node_up.get("result"):
+        output += "\nNode Exporters:\n"
+        for result in node_up["result"]:
+            instance = result["metric"]["instance"]
+            status = "UP" if result["value"][1] == "1" else "DOWN"
+            output += f"  {instance}: {status}\n"
+
+    return {"status": "success", "result": output}
+
+
+async def _handle_get_vm_metrics(request: Metadata) -> Metadata:
+    """Handle get_vm_metrics tool."""
+    vm_ip = request.get("vm_ip", "")
+    if not vm_ip:
+        return {"status": "error", "error": "vm_ip parameter is required"}
+
+    load = await prometheus_query(f'node_load1{{instance=~"{vm_ip}:.*"}}')
+    cpu = await prometheus_query(
+        f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",instance=~"{vm_ip}:.*"}}[5m])) * 100)'
+    )
+    memory = await prometheus_query(
+        f'(1 - (node_memory_MemAvailable_bytes{{instance=~"{vm_ip}:.*"}} / node_memory_MemTotal_bytes{{instance=~"{vm_ip}:.*"}})) * 100'
+    )
+
+    output = f"VM Metrics: {vm_ip}\n" + "=" * 50 + "\n\n"
+
+    if load and load.get("result"):
+        output += f"Load Average: {load['result'][0]['value'][1]}\n"
+    if cpu and cpu.get("result"):
+        output += f"CPU Usage: {float(cpu['result'][0]['value'][1]):.1f}%\n"
+    if memory and memory.get("result"):
+        output += f"Memory Usage: {float(memory['result'][0]['value'][1]):.1f}%\n"
+
+    if output.count("\n") <= 3:
+        output += "\nNo metrics available for this VM."
+
+    return {"status": "success", "result": output}
+
+
+async def _fetch_metrics_list() -> tuple:
+    """Fetch metrics list from Prometheus (Issue #315 - extracted)."""
+    http_client = get_http_client()
+    async with await http_client.get(
+        f"{PROMETHEUS_URL}/api/v1/label/__name__/values",
+        timeout=aiohttp.ClientTimeout(total=10),
+    ) as response:
+        if response.status != 200:
+            return None, "Failed to fetch metrics list"
+        data = await response.json()
+        if data.get("status") != "success":
+            return None, "Failed to fetch metrics list"
+        return data.get("data", []), None
+
+
+def _format_metrics_output(metrics: list, filter_pattern: str) -> str:
+    """Format metrics list output (Issue #315 - extracted)."""
+    if filter_pattern:
+        metrics = [m for m in metrics if filter_pattern in m]
+
+    autobot_metrics = [m for m in metrics if m.startswith("autobot_")]
+    node_metrics = [m for m in metrics if m.startswith("node_")]
+
+    output = "Available Prometheus Metrics\n" + "=" * 50 + "\n\n"
+
+    if autobot_metrics:
+        output += f"AutoBot Metrics ({len(autobot_metrics)}):\n"
+        for metric in sorted(autobot_metrics)[:20]:
+            output += f"  - {metric}\n"
+        if len(autobot_metrics) > 20:
+            output += f"  ... and {len(autobot_metrics) - 20} more\n"
+        output += "\n"
+
+    if node_metrics:
+        output += f"Node/System Metrics ({len(node_metrics)}):\n"
+        for metric in sorted(node_metrics)[:20]:
+            output += f"  - {metric}\n"
+        if len(node_metrics) > 20:
+            output += f"  ... and {len(node_metrics) - 20} more\n"
+
+    return output
+
+
+async def _handle_list_available_metrics(request: Metadata) -> Metadata:
+    """Handle list_available_metrics tool."""
+    metrics, error = await _fetch_metrics_list()
+    if error:
+        return {"status": "error", "error": error}
+
+    filter_pattern = request.get("filter", "")
+    output = _format_metrics_output(metrics, filter_pattern)
+    return {"status": "success", "result": output}
+
+
+# Tool dispatch table (Issue #315 - reduces nesting from if-elif chain)
+TOOL_HANDLERS = {
+    "query_metric": _handle_query_metric,
+    "get_system_metrics": _handle_get_system_metrics,
+    "get_service_health": _handle_get_service_health,
+    "get_vm_metrics": _handle_get_vm_metrics,
+    "list_available_metrics": _handle_list_available_metrics,
+}
 
 
 @with_error_handling(
@@ -222,196 +406,12 @@ async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata
     Returns:
         Tool execution results with metrics data
     """
+    handler = TOOL_HANDLERS.get(tool_name)
+    if not handler:
+        return {"status": "error", "error": f"Unknown tool: {tool_name}"}
+
     try:
-        if tool_name == "query_metric":
-            query = request.get("query", "")
-            data = await prometheus_query(query)
-
-            if not data or not data.get("result"):
-                return {
-                    "status": "error",
-                    "error": f"No data found for query: {query}",
-                }
-
-            results = []
-            for result in data["result"]:
-                metric = result["metric"]
-                value = result["value"][1]
-                labels = ", ".join([f"{k}={v}" for k, v in metric.items() if k != "__name__"])
-                metric_name = metric.get("__name__", query)
-                results.append(f"{metric_name}{{{labels}}}: {value}")
-
-            return {
-                "status": "success",
-                "result": f"Query: {query}\n\nResults:\n" + "\n".join(results),
-            }
-
-        elif tool_name == "get_system_metrics":
-            # Query all VMs
-            load_data = await prometheus_query("node_load1")
-            cpu_data = await prometheus_query("100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)")
-            memory_data = await prometheus_query("(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100")
-
-            if not load_data or not load_data.get("result"):
-                return {
-                    "status": "error",
-                    "error": "No system metrics available. Node exporters may not be running.",
-                }
-
-            output = "System Metrics (All Machines)\n" + "="*50 + "\n\n"
-
-            # Build VM map
-            vms = {}
-            for result in load_data.get("result", []):
-                instance = result["metric"]["instance"]
-                load = float(result["value"][1])
-                vms[instance] = {"load": load}
-
-            # CPU usage
-            for result in cpu_data.get("result", []) if cpu_data else []:
-                instance = result["metric"]["instance"]
-                cpu = float(result["value"][1])
-                if instance in vms:
-                    vms[instance]["cpu"] = cpu
-
-            # Memory usage
-            for result in memory_data.get("result", []) if memory_data else []:
-                instance = result["metric"]["instance"]
-                memory = float(result["value"][1])
-                if instance in vms:
-                    vms[instance]["memory"] = memory
-
-            # Format output
-            for instance, metrics in sorted(vms.items()):
-                output += f"VM: {instance}\n"
-                output += f"  Load (1m): {metrics.get('load', 'N/A')}\n"
-                output += f"  CPU: {metrics.get('cpu', 'N/A'):.1f}%\n"
-                output += f"  Memory: {metrics.get('memory', 'N/A'):.1f}%\n\n"
-
-            return {
-                "status": "success",
-                "result": output,
-            }
-
-        elif tool_name == "get_service_health":
-            backend_up = await prometheus_query('up{job="autobot-backend"}')
-            node_up = await prometheus_query('up{job="node"}')
-
-            output = "Service Health Status\n" + "="*50 + "\n\n"
-
-            if backend_up and backend_up.get("result"):
-                for result in backend_up["result"]:
-                    service = result["metric"].get("service", "unknown")
-                    status = "UP" if result["value"][1] == "1" else "DOWN"
-                    output += f"AutoBot Backend ({service}): {status}\n"
-            else:
-                output += "AutoBot Backend: No data\n"
-
-            if node_up and node_up.get("result"):
-                output += "\nNode Exporters:\n"
-                for result in node_up["result"]:
-                    instance = result["metric"]["instance"]
-                    status = "UP" if result["value"][1] == "1" else "DOWN"
-                    output += f"  {instance}: {status}\n"
-
-            return {
-                "status": "success",
-                "result": output,
-            }
-
-        elif tool_name == "get_vm_metrics":
-            vm_ip = request.get("vm_ip", "")
-            if not vm_ip:
-                return {
-                    "status": "error",
-                    "error": "vm_ip parameter is required",
-                }
-
-            load = await prometheus_query(f'node_load1{{instance=~"{vm_ip}:.*"}}')
-            cpu = await prometheus_query(f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",instance=~"{vm_ip}:.*"}}[5m])) * 100)')
-            memory = await prometheus_query(f'(1 - (node_memory_MemAvailable_bytes{{instance=~"{vm_ip}:.*"}} / node_memory_MemTotal_bytes{{instance=~"{vm_ip}:.*"}})) * 100')
-
-            output = f"VM Metrics: {vm_ip}\n" + "="*50 + "\n\n"
-
-            if load and load.get("result"):
-                output += f"Load Average: {load['result'][0]['value'][1]}\n"
-
-            if cpu and cpu.get("result"):
-                output += f"CPU Usage: {float(cpu['result'][0]['value'][1]):.1f}%\n"
-
-            if memory and memory.get("result"):
-                output += f"Memory Usage: {float(memory['result'][0]['value'][1]):.1f}%\n"
-
-            if output.count("\n") <= 3:
-                output += "\nNo metrics available for this VM."
-
-            return {
-                "status": "success",
-                "result": output,
-            }
-
-        elif tool_name == "list_available_metrics":
-            filter_pattern = request.get("filter", "")
-
-            # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
-            http_client = get_http_client()
-            async with await http_client.get(
-                f"{PROMETHEUS_URL}/api/v1/label/__name__/values",
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                    if response.status != 200:
-                        return {
-                            "status": "error",
-                            "error": "Failed to fetch metrics list",
-                        }
-
-                    data = await response.json()
-                    if data.get("status") != "success":
-                        return {
-                            "status": "error",
-                            "error": "Failed to fetch metrics list",
-                        }
-
-                    metrics = data.get("data", [])
-
-                    if filter_pattern:
-                        metrics = [m for m in metrics if filter_pattern in m]
-
-                    # Categorize metrics
-                    autobot_metrics = [m for m in metrics if m.startswith("autobot_")]
-                    node_metrics = [m for m in metrics if m.startswith("node_")]
-
-                    output = "Available Prometheus Metrics\n" + "="*50 + "\n\n"
-
-                    if autobot_metrics:
-                        output += f"AutoBot Metrics ({len(autobot_metrics)}):\n"
-                        for metric in sorted(autobot_metrics)[:20]:
-                            output += f"  - {metric}\n"
-                        if len(autobot_metrics) > 20:
-                            output += f"  ... and {len(autobot_metrics) - 20} more\n"
-                        output += "\n"
-
-                    if node_metrics:
-                        output += f"Node/System Metrics ({len(node_metrics)}):\n"
-                        for metric in sorted(node_metrics)[:20]:
-                            output += f"  - {metric}\n"
-                        if len(node_metrics) > 20:
-                            output += f"  ... and {len(node_metrics) - 20} more\n"
-
-                    return {
-                        "status": "success",
-                        "result": output,
-                    }
-
-        else:
-            return {
-                "status": "error",
-                "error": f"Unknown tool: {tool_name}",
-            }
-
+        return await handler(request)
     except Exception as e:
         logger.error(f"Error executing Prometheus tool {tool_name}: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": str(e),
-        }
+        return {"status": "error", "error": str(e)}

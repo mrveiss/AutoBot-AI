@@ -449,39 +449,22 @@ class IntelligentAgent:
             commands = self._parse_llm_commands(llm_response)
 
             if commands:
+                # Process commands with safety validation (Issue #315 - reduced nesting)
                 for i, command_info in enumerate(commands, 1):
                     command = command_info.get("command")
+                    if not command:
+                        continue
+
                     explanation = command_info.get("explanation", "")
+                    yield StreamChunk(
+                        timestamp=self._get_timestamp(),
+                        chunk_type=ChunkType.COMMENTARY,
+                        content=f"➡️ Step {i}: {explanation}",
+                        metadata={"explanation": True, "step": i},
+                    )
 
-                    if command:
-                        yield StreamChunk(
-                            timestamp=self._get_timestamp(),
-                            chunk_type=ChunkType.COMMENTARY,
-                            content=f"➡️ Step {i}: {explanation}",
-                            metadata={"explanation": True, "step": i},
-                        )
-
-                        # Validate command safety
-                        if self.command_validator.is_command_safe(command):
-                            # Execute the command
-                            async for (
-                                chunk
-                            ) in self.streaming_executor.execute_with_streaming(
-                                command, user_input, timeout=300
-                            ):
-                                yield chunk
-
-                                if chunk.chunk_type == ChunkType.COMPLETE:
-                                    break
-                        else:
-                            yield StreamChunk(
-                                timestamp=self._get_timestamp(),
-                                chunk_type=ChunkType.ERROR,
-                                content=(
-                                    f"⚠️ Command blocked by security policy: {command}"
-                                ),
-                                metadata={"security_blocked": True},
-                            )
+                    async for chunk in self._execute_command_with_safety(command, user_input):
+                        yield chunk
             else:
                 yield StreamChunk(
                     timestamp=self._get_timestamp(),
@@ -500,6 +483,25 @@ class IntelligentAgent:
                 chunk_type=ChunkType.ERROR,
                 content=f"❌ Error in AI analysis: {str(e)}",
                 metadata={"llm_error": True},
+            )
+
+    async def _execute_command_with_safety(
+        self, command: str, user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Execute a command with safety validation (Issue #315)."""
+        if self.command_validator.is_command_safe(command):
+            async for chunk in self.streaming_executor.execute_with_streaming(
+                command, user_input, timeout=300
+            ):
+                yield chunk
+                if chunk.chunk_type == ChunkType.COMPLETE:
+                    break
+        else:
+            yield StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.ERROR,
+                content=f"⚠️ Command blocked by security policy: {command}",
+                metadata={"security_blocked": True},
             )
 
     async def _install_tool(
@@ -800,6 +802,7 @@ if __name__ == "__main__":
     # Mock components for testing
     class MockLLMInterface:
         async def generate_response(self, prompt, **kwargs):
+            """Return mock LLM response for testing."""
             return (
                 "COMMAND: echo 'This is a test response'\n"
                 "EXPLANATION: Testing the system"
@@ -807,6 +810,7 @@ if __name__ == "__main__":
 
     class MockKnowledgeBase:
         async def store_fact(self, content, metadata=None):
+            """Print fact content without actually storing."""
             print(f"Storing: {content[:100]}...")
 
     class MockWorkerNode:
@@ -817,6 +821,7 @@ if __name__ == "__main__":
             return True
 
     async def test_agent():
+        """Test intelligent agent with mock components."""
         # Create mock components
         llm = MockLLMInterface()
         kb = MockKnowledgeBase()

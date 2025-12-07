@@ -26,6 +26,7 @@ class GUIClickElementHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute GUI element click and log the audit result."""
         image_path = task_payload["image_path"]
         confidence = task_payload.get("confidence", 0.9)
         button = task_payload.get("button", "left")
@@ -56,6 +57,7 @@ class GUIReadTextFromRegionHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute OCR text extraction from region and log the audit result."""
         x = task_payload["x"]
         y = task_payload["y"]
         width = task_payload["width"]
@@ -83,6 +85,7 @@ class GUITypeTextHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute keyboard text input and log the audit result."""
         text = task_payload["text"]
         interval = task_payload.get("interval", 0.0)
 
@@ -108,6 +111,7 @@ class GUIMoveMouseHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute mouse movement and log the audit result."""
         x = task_payload["x"]
         y = task_payload["y"]
         duration = task_payload.get("duration", 0.0)
@@ -134,6 +138,7 @@ class GUIBringWindowToFrontHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute window focus operation and log the audit result."""
         app_title = task_payload["app_title"]
 
         result = worker.gui_controller.bring_window_to_front(app_title)

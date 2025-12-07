@@ -90,8 +90,52 @@ class MultiModalPerformanceMonitor:
                 "GPU not available - performance monitoring limited to CPU metrics"
             )
 
+    def _trim_memory_tracker_history(self) -> None:
+        """Trim memory tracker to keep only recent history (Issue #315: extracted)."""
+        for key in self.gpu_memory_tracker:
+            if len(self.gpu_memory_tracker[key]) > 100:
+                self.gpu_memory_tracker[key] = self.gpu_memory_tracker[key][-100:]
+
+    def _reduce_batch_sizes(self) -> bool:
+        """Reduce batch sizes when memory usage is high (Issue #315: extracted).
+
+        Returns:
+            True if any batch size was changed
+        """
+        optimization_applied = False
+        for modality in self.batch_sizes:
+            old_size = self.batch_sizes[modality]
+            self.batch_sizes[modality] = max(1, old_size // 2)
+            if self.batch_sizes[modality] != old_size:
+                optimization_applied = True
+                logger.info(
+                    f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                )
+        return optimization_applied
+
+    def _increase_batch_sizes(self) -> bool:
+        """Increase batch sizes when memory usage is low (Issue #315: extracted).
+
+        Returns:
+            True if any batch size was changed
+        """
+        optimization_applied = False
+        max_sizes = {"text": 64, "image": 16, "audio": 32, "combined": 8}
+        for modality in self.batch_sizes:
+            old_size = self.batch_sizes[modality]
+            self.batch_sizes[modality] = min(max_sizes[modality], old_size * 2)
+            if self.batch_sizes[modality] != old_size:
+                optimization_applied = True
+                logger.info(
+                    f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                )
+        return optimization_applied
+
     async def optimize_gpu_memory(self) -> Dict[str, Any]:
-        """Optimize GPU memory usage and adjust batch sizes (thread-safe)"""
+        """Optimize GPU memory usage and adjust batch sizes (thread-safe).
+
+        Issue #315: Refactored to use helper methods for reduced nesting depth.
+        """
         if not self.gpu_available:
             return {"status": "gpu_not_available"}
 
@@ -111,42 +155,15 @@ class MultiModalPerformanceMonitor:
                 self.gpu_memory_tracker["reserved"].append(reserved)
                 self.gpu_memory_tracker["percent"].append(memory_usage_percent)
 
-                # Keep only recent history
-                for key in self.gpu_memory_tracker:
-                    if len(self.gpu_memory_tracker[key]) > 100:
-                        self.gpu_memory_tracker[key] = self.gpu_memory_tracker[key][
-                            -100:
-                        ]
+                # Issue #315: Use helpers for reduced nesting
+                self._trim_memory_tracker_history()
 
-                # Adaptive batch size adjustment
+                # Adaptive batch size adjustment using helpers
                 optimization_applied = False
-
                 if memory_usage_percent > self.memory_high_threshold:
-                    # Reduce batch sizes to prevent OOM
-                    for modality in self.batch_sizes:
-                        old_size = self.batch_sizes[modality]
-                        self.batch_sizes[modality] = max(
-                            1, self.batch_sizes[modality] // 2
-                        )
-                        if self.batch_sizes[modality] != old_size:
-                            optimization_applied = True
-                            logger.info(
-                                f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
-                            )
-
+                    optimization_applied = self._reduce_batch_sizes()
                 elif memory_usage_percent < self.memory_low_threshold:
-                    # Increase batch sizes for better throughput
-                    for modality in self.batch_sizes:
-                        old_size = self.batch_sizes[modality]
-                        max_sizes = {"text": 64, "image": 16, "audio": 32, "combined": 8}
-                        self.batch_sizes[modality] = min(
-                            max_sizes[modality], self.batch_sizes[modality] * 2
-                        )
-                        if self.batch_sizes[modality] != old_size:
-                            optimization_applied = True
-                            logger.info(
-                                f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
-                            )
+                    optimization_applied = self._increase_batch_sizes()
 
                 self.last_optimization = time.time()
                 batch_sizes_copy = self.batch_sizes.copy()

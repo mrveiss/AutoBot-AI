@@ -13,6 +13,45 @@ from typing import Any, Dict
 logger = logging.getLogger(__name__)
 
 
+def _validate_timeout_value(
+    value: Any, path: str, issues: list, warnings: list
+) -> None:
+    """Validate a single timeout value (Issue #315: extracted).
+
+    Args:
+        value: The timeout value to validate
+        path: The configuration path for error messages
+        issues: List to append validation errors
+        warnings: List to append validation warnings
+    """
+    if not isinstance(value, (int, float)):
+        return
+
+    if value <= 0:
+        issues.append(f"Invalid timeout '{path}': {value} (must be > 0)")
+    elif value > 600:
+        warnings.append(f"Very long timeout '{path}': {value}s (> 10 minutes)")
+
+
+def _check_timeout_values_recursive(
+    config: dict, issues: list, warnings: list, path: str = ""
+) -> None:
+    """Recursively check timeout values in config (Issue #315: extracted).
+
+    Args:
+        config: Configuration dictionary to check
+        issues: List to append validation errors
+        warnings: List to append validation warnings
+        path: Current path prefix for nested keys
+    """
+    for key, value in config.items():
+        current_path = f"{path}.{key}" if path else key
+        if isinstance(value, dict):
+            _check_timeout_values_recursive(value, issues, warnings, current_path)
+        else:
+            _validate_timeout_value(value, current_path, issues, warnings)
+
+
 class TimeoutConfigMixin:
     """Mixin providing timeout configuration management"""
 
@@ -111,8 +150,9 @@ class TimeoutConfigMixin:
         return result
 
     def validate_timeouts(self) -> Dict[str, Any]:
-        """
-        Validate all timeout configurations.
+        """Validate all timeout configurations.
+
+        Issue #315: Refactored to use helper functions for reduced nesting.
 
         Returns:
             Validation report with issues and warnings
@@ -127,24 +167,8 @@ class TimeoutConfigMixin:
             if timeout_config is None:
                 issues.append(f"Missing timeout configuration for '{category}'")
 
-        # Validate timeout ranges
+        # Validate timeout ranges using extracted helper
         all_timeouts = self.get_nested("timeouts", {})
-
-        def check_timeout_values(config, path=""):
-            for key, value in config.items():
-                current_path = f"{path}.{key}" if path else key
-                if isinstance(value, dict):
-                    check_timeout_values(value, current_path)
-                elif isinstance(value, (int, float)):
-                    if value <= 0:
-                        issues.append(
-                            f"Invalid timeout '{current_path}': {value} (must be > 0)"
-                        )
-                    elif value > 600:
-                        warnings.append(
-                            f"Very long timeout '{current_path}': {value}s (> 10 minutes)"
-                        )
-
-        check_timeout_values(all_timeouts)
+        _check_timeout_values_recursive(all_timeouts, issues, warnings)
 
         return {"valid": len(issues) == 0, "issues": issues, "warnings": warnings}

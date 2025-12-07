@@ -460,6 +460,7 @@ class ArchitectureAnalyzer:
     """
 
     def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
+        """Initialize architecture analyzer with base path."""
         self.base_path = Path(base_path)
         self.file_analyses: Dict[str, FileAnalysis] = {}
         self.pattern_matches: List[PatternMatch] = []
@@ -575,6 +576,46 @@ class ArchitectureAnalyzer:
 
         return python_files
 
+    def _extract_imports_from_node(self, node: ast.AST, imports: List[str]) -> None:
+        """
+        Extract import information from an AST node.
+
+        (Issue #315 - extracted from _analyze_file to reduce nesting)
+        """
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.append(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imports.append(node.module)
+                for alias in node.names:
+                    imports.append(f"{node.module}.{alias.name}")
+
+    def _extract_class_info(self, node: ast.ClassDef) -> Dict[str, Any]:
+        """
+        Extract class information from a ClassDef node.
+
+        (Issue #315 - extracted from _analyze_file to reduce nesting)
+        """
+        class_info = {
+            "name": node.name,
+            "line": node.lineno,
+            "bases": [self._get_base_name(base) for base in node.bases],
+            "methods": [],
+            "attributes": [],
+            "decorators": [self._get_decorator_name(d) for d in node.decorator_list],
+        }
+
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                class_info["methods"].append(item.name)
+            elif isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name):
+                        class_info["attributes"].append(target.id)
+
+        return class_info
+
     async def _analyze_file(
         self, file_path: str, target_patterns: List[PatternType]
     ) -> Optional[FileAnalysis]:
@@ -596,41 +637,12 @@ class ArchitectureAnalyzer:
 
         # Extract imports
         for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    analysis.imports.append(alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    analysis.imports.append(node.module)
-                    for alias in node.names:
-                        analysis.imports.append(f"{node.module}.{alias.name}")
+            self._extract_imports_from_node(node, analysis.imports)
 
         # Extract classes
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
-                class_info = {
-                    "name": node.name,
-                    "line": node.lineno,
-                    "bases": [
-                        self._get_base_name(base) for base in node.bases
-                    ],
-                    "methods": [],
-                    "attributes": [],
-                    "decorators": [
-                        self._get_decorator_name(d) for d in node.decorator_list
-                    ],
-                }
-
-                for item in node.body:
-                    if isinstance(item, ast.FunctionDef) or isinstance(
-                        item, ast.AsyncFunctionDef
-                    ):
-                        class_info["methods"].append(item.name)
-                    elif isinstance(item, ast.Assign):
-                        for target in item.targets:
-                            if isinstance(target, ast.Name):
-                                class_info["attributes"].append(target.id)
-
+                class_info = self._extract_class_info(node)
                 analysis.classes.append(class_info)
 
         # Extract top-level functions
@@ -775,6 +787,107 @@ class ArchitectureAnalyzer:
 
         return matches
 
+    def _check_naming_consistency(
+        self,
+        pattern_type: PatternType,
+        pattern_matches: List[PatternMatch],
+    ) -> Dict[str, Any]:
+        """
+        Check naming consistency for a pattern type.
+
+        (Issue #315 - extracted from _check_consistency to reduce nesting)
+
+        Returns:
+            Dict with 'violations' and 'consistent_count' keys
+        """
+        violations = []
+        consistent_count = 0
+
+        if pattern_type not in NAMING_CONSISTENCY_PATTERN_TYPES:
+            return {"violations": violations, "consistent_count": consistent_count}
+
+        # Check suffix consistency
+        suffixes = set()
+        for m in pattern_matches:
+            if m.class_name:
+                for suffix in CLASS_SUFFIX_INDICATORS:
+                    if m.class_name.endswith(suffix):
+                        suffixes.add(suffix)
+                        break
+
+        if len(suffixes) > 1:
+            violations.append(
+                {
+                    "type": "naming_inconsistency",
+                    "description": f"Multiple naming conventions: {suffixes}",
+                    "severity": Severity.LOW.value,
+                }
+            )
+        else:
+            consistent_count = len(pattern_matches)
+
+        return {"violations": violations, "consistent_count": consistent_count}
+
+    def _process_layer_definition(
+        self, layer_def: Dict[str, Any]
+    ) -> Optional[ArchitectureLayer]:
+        """
+        Process a layer definition and extract components.
+
+        (Issue #315 - extracted from _detect_layers to reduce nesting)
+
+        Returns:
+            ArchitectureLayer if components found, None otherwise
+        """
+        components = []
+        dependencies = []
+        patterns_used = []
+
+        # Find files matching layer patterns
+        for file_path, analysis in self.file_analyses.items():
+            if not self._file_matches_layer(file_path, layer_def["path_patterns"]):
+                continue
+
+            # Add classes as components
+            for cls in analysis.classes:
+                components.append(cls["name"])
+
+            # Track patterns
+            for match in analysis.patterns_found:
+                if match.pattern_type not in patterns_used:
+                    patterns_used.append(match.pattern_type)
+
+            # Track dependencies from imports
+            for imp in analysis.imports:
+                if "." in imp:
+                    dep_module = imp.split(".")[0]
+                    if dep_module not in dependencies:
+                        dependencies.append(dep_module)
+
+        if not components:
+            return None
+
+        return ArchitectureLayer(
+            name=layer_def["name"],
+            description=layer_def["description"],
+            components=components[:20],  # Limit for readability
+            dependencies=dependencies[:10],
+            patterns_used=patterns_used[:5],
+        )
+
+    def _file_matches_layer(
+        self, file_path: str, path_patterns: List[str]
+    ) -> bool:
+        """
+        Check if a file path matches any of the layer's path patterns.
+
+        (Issue #315 - extracted from _process_layer_definition to reduce nesting)
+        """
+        for path_pattern in path_patterns:
+            if path_pattern in file_path:
+                return True
+        return False
+
     async def _check_consistency(
         self, matches: List[PatternMatch]
     ) -> List[PatternConsistency]:
@@ -794,26 +907,12 @@ class ArchitectureAnalyzer:
             consistent_count = 0
 
             # Check naming consistency
-            if pattern_type in NAMING_CONSISTENCY_PATTERN_TYPES:  # O(1) lookup (Issue #326)
-                # Check suffix consistency
-                suffixes = set()
-                for m in pattern_matches:
-                    if m.class_name:
-                        for suffix in CLASS_SUFFIX_INDICATORS:  # O(1) lookup (Issue #326)
-                            if m.class_name.endswith(suffix):
-                                suffixes.add(suffix)
-                                break
-
-                if len(suffixes) > 1:
-                    violations.append(
-                        {
-                            "type": "naming_inconsistency",
-                            "description": f"Multiple naming conventions: {suffixes}",
-                            "severity": Severity.LOW.value,
-                        }
-                    )
-                else:
-                    consistent_count += len(pattern_matches)
+            naming_result = self._check_naming_consistency(
+                pattern_type, pattern_matches
+            )
+            if naming_result["violations"]:
+                violations.extend(naming_result["violations"])
+            consistent_count += naming_result["consistent_count"]
 
             # Check confidence consistency
             low_confidence = [m for m in pattern_matches if m.confidence < 0.5]
@@ -903,41 +1002,9 @@ class ArchitectureAnalyzer:
         ]
 
         for layer_def in layer_definitions:
-            components = []
-            dependencies = []
-            patterns_used = []
-
-            # Find files matching layer patterns
-            for file_path, analysis in self.file_analyses.items():
-                for path_pattern in layer_def["path_patterns"]:
-                    if path_pattern in file_path:
-                        # Add classes as components
-                        for cls in analysis.classes:
-                            components.append(cls["name"])
-
-                        # Track patterns
-                        for match in analysis.patterns_found:
-                            if match.pattern_type not in patterns_used:
-                                patterns_used.append(match.pattern_type)
-
-                        # Track dependencies from imports
-                        for imp in analysis.imports:
-                            if "." in imp:
-                                dep_module = imp.split(".")[0]
-                                if dep_module not in dependencies:
-                                    dependencies.append(dep_module)
-                        break
-
-            if components:
-                layers.append(
-                    ArchitectureLayer(
-                        name=layer_def["name"],
-                        description=layer_def["description"],
-                        components=components[:20],  # Limit for readability
-                        dependencies=dependencies[:10],
-                        patterns_used=patterns_used[:5],
-                    )
-                )
+            layer = self._process_layer_definition(layer_def)
+            if layer:
+                layers.append(layer)
 
         return layers
 

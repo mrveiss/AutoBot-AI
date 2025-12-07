@@ -102,6 +102,7 @@ class OperationIntegrationManager:
     """Integration manager for long-running operations with AutoBot"""
 
     def __init__(self, redis_url: str = f"{ServiceURLs.REDIS_VM}/9"):
+        """Initialize operation integration manager with Redis URL."""
         self.redis_client = None
         self.redis_url = redis_url
         self.operation_manager = None
@@ -128,6 +129,7 @@ class OperationIntegrationManager:
 
         # Subscribe to progress updates for WebSocket broadcasting
         async def progress_callback(progress_data):
+            """Broadcast progress updates to connected WebSocket clients."""
             await self._broadcast_progress_update(progress_data)
 
         # Register callback for all future operations
@@ -390,6 +392,7 @@ class OperationIntegrationManager:
         """Wrapper for codebase indexing operations"""
 
         async def operation_func(exec_context):
+            """Execute codebase indexing with progress updates."""
             from pathlib import Path
 
             from ..knowledge_base import KnowledgeBase
@@ -425,6 +428,7 @@ class OperationIntegrationManager:
         """Wrapper for test suite operations"""
 
         async def operation_func(exec_context):
+            """Execute test suite with progress tracking."""
             test_path = context.get("test_path", "/home/kali/Desktop/AutoBot/tests")
             test_patterns = context.get("test_patterns", ["test_*.py"])
 
@@ -489,6 +493,7 @@ class OperationIntegrationManager:
         """Wrapper for code analysis operations"""
 
         async def operation_func(exec_context):
+            """Execute code analysis with progress tracking."""
             # Implementation would integrate with existing code analysis tools
             # This is a placeholder showing the pattern
             await exec_context.update_progress("Starting code analysis", 0, 1)
@@ -504,6 +509,7 @@ class OperationIntegrationManager:
         """Wrapper for knowledge base population operations"""
 
         async def operation_func(exec_context):
+            """Execute knowledge base population with progress tracking."""
             # Implementation would integrate with KnowledgeBase
             await exec_context.update_progress("Starting KB population", 0, 1)
 
@@ -648,11 +654,15 @@ def long_running_operation(
     """Decorator to convert regular functions into long-running operations"""
 
     def decorator(func):
+        """Inner decorator that wraps function for long-running operation tracking."""
+
         async def wrapper(*args, **kwargs):
+            """Wrapper that creates and executes the operation."""
             operation_name = name or func.__name__
 
             # Create wrapper function for the operation framework
             async def operation_func(context):
+                """Operation function that executes the decorated function."""
                 # Extract original function arguments
                 return await func(*args, **kwargs)
 
@@ -693,6 +703,7 @@ if __name__ == "__main__":
                 estimated_items=1000,
             )
             async def index_codebase():
+                """Example decorated function for codebase indexing."""
                 # Simulate existing function
                 await asyncio.sleep(2)
                 return {"indexed_files": 1000}

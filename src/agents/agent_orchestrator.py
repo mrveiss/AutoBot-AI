@@ -848,26 +848,31 @@ class AgentOrchestrator:
 
     # Agent instance getters (lazy loading)
     def _get_chat_agent(self):
+        """Lazy-load and return chat agent instance."""
         if self._chat_agent is None:
             self._chat_agent = get_chat_agent()
         return self._chat_agent
 
     def _get_system_commands_agent(self):
+        """Lazy-load and return system commands agent instance."""
         if self._system_commands_agent is None:
             self._system_commands_agent = get_enhanced_system_commands_agent()
         return self._system_commands_agent
 
     def _get_rag_agent(self):
+        """Lazy-load and return RAG agent instance."""
         if self._rag_agent is None:
             self._rag_agent = get_rag_agent()
         return self._rag_agent
 
     def _get_kb_librarian(self):
+        """Lazy-load and return knowledge base librarian agent instance."""
         if self._kb_librarian is None:
             self._kb_librarian = get_kb_librarian()
         return self._kb_librarian
 
     def _get_research_agent(self):
+        """Lazy-load and return research agent instance."""
         if self._research_agent is None:
             self._research_agent = get_containerized_librarian_assistant()
         return self._research_agent

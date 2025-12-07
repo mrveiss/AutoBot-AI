@@ -38,6 +38,12 @@ try:
 except ImportError:
     # Fallback if redis client not available
     def get_redis_client():
+        """
+        Fallback function when redis client is unavailable.
+
+        Returns:
+            None
+        """
         return None
 
 
@@ -46,6 +52,13 @@ try:
 except ImportError:
     # Fallback if error_metrics not available
     async def record_error_metric(*args, **kwargs):
+        """
+        Fallback async function when error metrics module is unavailable.
+
+        Args:
+            *args: Variable arguments
+            **kwargs: Keyword arguments
+        """
         pass
 
 
@@ -142,7 +155,12 @@ class APIErrorResponse:
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON response"""
+        """
+        Convert to dictionary for JSON response.
+
+        Returns:
+            Dictionary with error information formatted for API response
+        """
         response = {
             "error": {
                 "category": self.category.value,
@@ -161,7 +179,15 @@ class APIErrorResponse:
 
     @staticmethod
     def get_status_code_for_category(category: ErrorCategory) -> int:
-        """Map error category to HTTP status code"""
+        """
+        Map error category to HTTP status code.
+
+        Args:
+            category: Error category enum value
+
+        Returns:
+            HTTP status code appropriate for the error category
+        """
         status_map = {
             ErrorCategory.VALIDATION: 400,
             ErrorCategory.AUTHENTICATION: 401,
@@ -196,6 +222,16 @@ class ErrorBoundaryException(Exception):
         recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY,
         context: Optional[ErrorContext] = None,
     ):
+        """
+        Initialize error boundary exception.
+
+        Args:
+            message: Error message
+            severity: Error severity level (default: MEDIUM)
+            category: Error category (default: SYSTEM)
+            recovery_strategy: Recovery strategy to use (default: RETRY)
+            context: Error context information
+        """
         super().__init__(message)
         self.severity = severity
         self.category = category
@@ -208,11 +244,29 @@ class ErrorRecoveryHandler(ABC):
 
     @abstractmethod
     def can_handle(self, error: Exception, context: ErrorContext) -> bool:
-        """Check if this handler can handle the given error"""
+        """
+        Check if this handler can handle the given error.
+
+        Args:
+            error: Exception to check
+            context: Error context
+
+        Returns:
+            True if handler can handle this error
+        """
 
     @abstractmethod
     async def handle(self, error: Exception, context: ErrorContext) -> Any:
-        """Handle the error and return a recovery value or re-raise"""
+        """
+        Handle the error and return a recovery value or re-raise.
+
+        Args:
+            error: Exception to handle
+            context: Error context
+
+        Returns:
+            Recovery value or raises exception
+        """
 
 
 class RetryRecoveryHandler(ErrorRecoveryHandler):
@@ -224,15 +278,43 @@ class RetryRecoveryHandler(ErrorRecoveryHandler):
         backoff_factor: float = 1.5,
         retry_exceptions: tuple = (Exception,),
     ):
+        """
+        Initialize retry recovery handler.
+
+        Args:
+            max_retries: Maximum number of retry attempts (default: 3)
+            backoff_factor: Backoff multiplier for delays (default: 1.5)
+            retry_exceptions: Tuple of exception types to retry (default: Exception)
+        """
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.retry_exceptions = retry_exceptions
         self._retry_counts = WeakValueDictionary()
 
     def can_handle(self, error: Exception, context: ErrorContext) -> bool:
+        """
+        Check if error is in retryable exceptions list.
+
+        Args:
+            error: Exception to check
+            context: Error context
+
+        Returns:
+            True if error type is retryable
+        """
         return isinstance(error, self.retry_exceptions)
 
     async def handle(self, error: Exception, context: ErrorContext) -> Any:
+        """
+        Handle error with retry logic.
+
+        Args:
+            error: Exception to handle
+            context: Error context
+
+        Raises:
+            Exception if max retries exceeded or after delay for retry
+        """
         retry_key = f"{context.component}.{context.function}"
         current_retries = self._retry_counts.get(retry_key, 0)
 
@@ -258,13 +340,39 @@ class FallbackRecoveryHandler(ErrorRecoveryHandler):
     """Recovery handler that provides fallback values"""
 
     def __init__(self, fallback_values: Dict[str, Any]):
+        """
+        Initialize fallback recovery handler.
+
+        Args:
+            fallback_values: Dictionary mapping function keys to fallback values
+        """
         self.fallback_values = fallback_values
 
     def can_handle(self, error: Exception, context: ErrorContext) -> bool:
+        """
+        Check if fallback value exists for this function.
+
+        Args:
+            error: Exception to check
+            context: Error context
+
+        Returns:
+            True if fallback value is configured for this function
+        """
         fallback_key = f"{context.component}.{context.function}"
         return fallback_key in self.fallback_values
 
     async def handle(self, error: Exception, context: ErrorContext) -> Any:
+        """
+        Return configured fallback value.
+
+        Args:
+            error: Exception that occurred
+            context: Error context
+
+        Returns:
+            Configured fallback value for this function
+        """
         fallback_key = f"{context.component}.{context.function}"
         fallback_value = self.fallback_values[fallback_key]
 
@@ -276,13 +384,39 @@ class GracefulDegradationHandler(ErrorRecoveryHandler):
     """Handler for graceful service degradation"""
 
     def __init__(self, degraded_functions: Dict[str, Callable]):
+        """
+        Initialize graceful degradation handler.
+
+        Args:
+            degraded_functions: Dictionary mapping function keys to degraded implementations
+        """
         self.degraded_functions = degraded_functions
 
     def can_handle(self, error: Exception, context: ErrorContext) -> bool:
+        """
+        Check if degraded function exists.
+
+        Args:
+            error: Exception to check
+            context: Error context
+
+        Returns:
+            True if degraded function is configured for this function
+        """
         degraded_key = f"{context.component}.{context.function}"
         return degraded_key in self.degraded_functions
 
     async def handle(self, error: Exception, context: ErrorContext) -> Any:
+        """
+        Call degraded version of function.
+
+        Args:
+            error: Exception that occurred
+            context: Error context with original arguments
+
+        Returns:
+            Result from degraded function implementation
+        """
         degraded_key = f"{context.component}.{context.function}"
         degraded_func = self.degraded_functions[degraded_key]
 
@@ -299,6 +433,12 @@ class ErrorBoundaryManager:
     """Central error boundary management system"""
 
     def __init__(self, redis_client=None):
+        """
+        Initialize error boundary manager.
+
+        Args:
+            redis_client: Redis client instance (default: None, will auto-initialize)
+        """
         self.redis_client = redis_client or get_redis_client()
         self.recovery_handlers: List[ErrorRecoveryHandler] = []
         self.error_reports: Dict[str, ErrorReport] = {}
@@ -312,7 +452,7 @@ class ErrorBoundaryManager:
         self._setup_error_logging()
 
     def _setup_default_handlers(self):
-        """Setup default recovery handlers"""
+        """Setup default recovery handlers for common error scenarios."""
         # Retry handler for network and external service errors
         retry_handler = RetryRecoveryHandler(
             max_retries=3,
@@ -338,7 +478,7 @@ class ErrorBoundaryManager:
         self.add_recovery_handler(fallback_handler)
 
     def _setup_error_logging(self):
-        """Setup error logging configuration"""
+        """Setup error logging configuration with file handler."""
         # Create error logs directory
         log_dir = Path("logs/errors")
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -353,59 +493,78 @@ class ErrorBoundaryManager:
         logger.addHandler(error_handler)
 
     def add_recovery_handler(self, handler: ErrorRecoveryHandler):
-        """Add a custom recovery handler"""
+        """
+        Add a custom recovery handler.
+
+        Args:
+            handler: Error recovery handler instance to add
+        """
         self.recovery_handlers.append(handler)
 
     def generate_error_id(self) -> str:
-        """Generate unique error ID"""
+        """
+        Generate unique error ID.
+
+        Returns:
+            Unique error identifier string
+        """
         with self._lock:
             self._error_count += 1
             return f"ERR_{int(time.time())}_{self._error_count:06d}"
 
+    def _get_category_keywords(self) -> Dict[ErrorCategory, tuple]:
+        """
+        Get keyword mappings for error categorization.
+
+        Returns:
+            Dictionary mapping error categories to keyword tuples
+        """
+        return {
+            ErrorCategory.NETWORK: ("connection", "network", "timeout", "refused"),
+            ErrorCategory.DATABASE: ("database", "sql", "sqlite", "redis"),
+            ErrorCategory.LLM: ("llm", "openai", "ollama", "model"),
+            ErrorCategory.AGENT: ("agent", "classification", "orchestration"),
+            ErrorCategory.API: ("api", "endpoint", "request", "response"),
+            ErrorCategory.VALIDATION: ("validation", "invalid", "format"),
+            ErrorCategory.CONFIGURATION: ("config", "configuration", "setting"),
+        }
+
     def categorize_error(self, error: Exception) -> ErrorCategory:
-        """Automatically categorize errors based on type and content"""
+        """
+        Automatically categorize errors based on type and content.
+
+        Args:
+            error: Exception to categorize
+
+        Returns:
+            Error category classification
+        """
         error_str = str(error).lower()
 
-        if any(
-            keyword in error_str
-            for keyword in ["connection", "network", "timeout", "refused"]
-        ):
-            return ErrorCategory.NETWORK
-        elif any(
-            keyword in error_str for keyword in ["database", "sql", "sqlite", "redis"]
-        ):
-            return ErrorCategory.DATABASE
-        elif any(
-            keyword in error_str for keyword in ["llm", "openai", "ollama", "model"]
-        ):
-            return ErrorCategory.LLM
-        elif any(
-            keyword in error_str
-            for keyword in ["agent", "classification", "orchestration"]
-        ):
-            return ErrorCategory.AGENT
-        elif any(
-            keyword in error_str
-            for keyword in ["api", "endpoint", "request", "response"]
-        ):
-            return ErrorCategory.API
-        elif any(
-            keyword in error_str for keyword in ["validation", "invalid", "format"]
-        ):
-            return ErrorCategory.VALIDATION
-        elif any(
-            keyword in error_str for keyword in ["config", "configuration", "setting"]
-        ):
-            return ErrorCategory.CONFIGURATION
-        elif "permission" in error_str or "access" in error_str:
+        # Check keyword-based categories (O(n) where n is number of categories)
+        for category, keywords in self._get_category_keywords().items():
+            if any(keyword in error_str for keyword in keywords):
+                return category
+
+        # Check permission/access for SYSTEM category
+        if "permission" in error_str or "access" in error_str:
             return ErrorCategory.SYSTEM
-        else:
-            return ErrorCategory.SYSTEM
+
+        return ErrorCategory.SYSTEM
 
     def determine_severity(
         self, error: Exception, context: ErrorContext
     ) -> ErrorSeverity:
-        """Determine error severity based on error type and context"""
+        """
+        Determine error severity based on error type and context.
+
+        Args:
+            error: Exception to evaluate
+            context: Error context
+
+        Returns:
+            Error severity level
+        """
         if isinstance(error, (SystemExit, KeyboardInterrupt, MemoryError)):
             return ErrorSeverity.CRITICAL
         elif isinstance(error, (ConnectionError, TimeoutError, OSError)):
@@ -416,7 +575,19 @@ class ErrorBoundaryManager:
             return ErrorSeverity.LOW
 
     async def handle_error(self, error: Exception, context: ErrorContext) -> Any:
-        """Handle an error with appropriate recovery strategy"""
+        """
+        Handle an error with appropriate recovery strategy.
+
+        Args:
+            error: Exception to handle
+            context: Error context
+
+        Returns:
+            Recovery value if successful
+
+        Raises:
+            ErrorBoundaryException if recovery not possible
+        """
         # Generate error report
         error_report = self.create_error_report(error, context)
 
@@ -458,7 +629,16 @@ class ErrorBoundaryManager:
     def create_error_report(
         self, error: Exception, context: ErrorContext
     ) -> ErrorReport:
-        """Create a structured error report"""
+        """
+        Create a structured error report.
+
+        Args:
+            error: Exception to report
+            context: Error context
+
+        Returns:
+            Structured error report
+        """
         error_id = self.generate_error_id()
 
         # Determine recovery strategy
@@ -484,7 +664,12 @@ class ErrorBoundaryManager:
         return error_report
 
     def store_error_report(self, error_report: ErrorReport):
-        """Store error report for analysis"""
+        """
+        Store error report for analysis.
+
+        Args:
+            error_report: Error report to store
+        """
         try:
             # Store in memory
             self.error_reports[error_report.error_id] = error_report
@@ -514,7 +699,12 @@ class ErrorBoundaryManager:
             logger.error(f"Failed to store error report: {e}")
 
     def get_error_statistics(self) -> Dict[str, Any]:
-        """Get error statistics for monitoring"""
+        """
+        Get error statistics for monitoring.
+
+        Returns:
+            Dictionary with error statistics and recent errors
+        """
         try:
             # Get recent errors from Redis
             pattern = "autobot:errors:*"
@@ -564,7 +754,20 @@ class ErrorBoundaryManager:
 
     @contextmanager
     def error_boundary(self, component: str, function: str, **context_kwargs):
-        """Context manager for error boundaries"""
+        """
+        Context manager for error boundaries.
+
+        Args:
+            component: Component name
+            function: Function name
+            **context_kwargs: Additional context data
+
+        Yields:
+            ErrorContext object
+
+        Raises:
+            Exception after handling
+        """
         context = ErrorContext(component=component, function=function, **context_kwargs)
 
         try:
@@ -579,7 +782,20 @@ class ErrorBoundaryManager:
     async def async_error_boundary(
         self, component: str, function: str, **context_kwargs
     ):
-        """Async context manager for error boundaries"""
+        """
+        Async context manager for error boundaries.
+
+        Args:
+            component: Component name
+            function: Function name
+            **context_kwargs: Additional context data
+
+        Yields:
+            ErrorContext object
+
+        Raises:
+            Exception after handling
+        """
         context = ErrorContext(component=component, function=function, **context_kwargs)
 
         try:
@@ -597,7 +813,12 @@ _error_boundary_manager_lock = threading.Lock()
 
 
 def get_error_boundary_manager() -> ErrorBoundaryManager:
-    """Get global error boundary manager instance (thread-safe)"""
+    """
+    Get global error boundary manager instance (thread-safe).
+
+    Returns:
+        Singleton ErrorBoundaryManager instance
+    """
     global _error_boundary_manager
     if _error_boundary_manager is None:
         with _error_boundary_manager_lock:
@@ -607,15 +828,103 @@ def get_error_boundary_manager() -> ErrorBoundaryManager:
     return _error_boundary_manager
 
 
+async def _handle_async_attempt(
+    func: Callable,
+    args: tuple,
+    kwargs: dict,
+    attempt: int,
+    max_retries: int,
+    recovery_strategy: "RecoveryStrategy",
+    manager: "ErrorBoundaryManager",
+    context: "ErrorContext",
+) -> tuple:
+    """
+    Handle single async retry attempt.
+
+    Args:
+        func: Async function to call
+        args: Positional arguments
+        kwargs: Keyword arguments
+        attempt: Current attempt number
+        max_retries: Maximum retry attempts
+        recovery_strategy: Recovery strategy to use
+        manager: Error boundary manager instance
+        context: Error context
+
+    Returns:
+        Tuple of (success: bool, result: Any)
+    """
+    try:
+        result = await func(*args, **kwargs)
+        return (True, result)
+    except Exception as e:
+        if attempt == max_retries:
+            return (True, await manager.handle_error(e, context))
+        if recovery_strategy == RecoveryStrategy.RETRY:
+            await asyncio.sleep(2**attempt)
+            return (False, None)
+        return (True, await manager.handle_error(e, context))
+
+
+def _handle_sync_attempt(
+    func: Callable,
+    args: tuple,
+    kwargs: dict,
+    attempt: int,
+    max_retries: int,
+    recovery_strategy: "RecoveryStrategy",
+    manager: "ErrorBoundaryManager",
+    context: "ErrorContext",
+) -> tuple:
+    """
+    Handle single sync retry attempt.
+
+    Args:
+        func: Sync function to call
+        args: Positional arguments
+        kwargs: Keyword arguments
+        attempt: Current attempt number
+        max_retries: Maximum retry attempts
+        recovery_strategy: Recovery strategy to use
+        manager: Error boundary manager instance
+        context: Error context
+
+    Returns:
+        Tuple of (success: bool, result: Any)
+    """
+    try:
+        result = func(*args, **kwargs)
+        return (True, result)
+    except Exception as e:
+        if attempt == max_retries:
+            return (True, asyncio.run(manager.handle_error(e, context)))
+        if recovery_strategy == RecoveryStrategy.RETRY:
+            time.sleep(2**attempt)
+            return (False, None)
+        return (True, asyncio.run(manager.handle_error(e, context)))
+
+
 def error_boundary(
     component: str = None,
     function: str = None,
     recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY,
     max_retries: int = 3,
 ):
-    """Decorator for function-level error boundaries"""
+    """
+    Decorator for function-level error boundaries.
+
+    Args:
+        component: Component name (default: function module)
+        function: Function name (default: function name)
+        recovery_strategy: Recovery strategy to use (default: RETRY)
+        max_retries: Maximum retry attempts (default: 3)
+
+    Returns:
+        Decorated function with error boundary
+    """
 
     def decorator(func):
+        """Inner decorator that wraps the target function with error handling."""
         comp_name = component or func.__module__
         func_name = function or func.__name__
 
@@ -623,54 +932,102 @@ def error_boundary(
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
+                """Async wrapper that executes function with error boundary protection."""
                 manager = get_error_boundary_manager()
                 context = ErrorContext(
                     component=comp_name, function=func_name, args=args, kwargs=kwargs
                 )
 
                 for attempt in range(max_retries + 1):
-                    try:
-                        return await func(*args, **kwargs)
-                    except Exception as e:
-                        if attempt == max_retries:
-                            # Last attempt, handle error
-                            return await manager.handle_error(e, context)
-                        elif recovery_strategy == RecoveryStrategy.RETRY:
-                            # Wait before retry
-                            await asyncio.sleep(2**attempt)
-                            continue
-                        else:
-                            # Handle error immediately
-                            return await manager.handle_error(e, context)
+                    done, result = await _handle_async_attempt(
+                        func, args, kwargs, attempt, max_retries,
+                        recovery_strategy, manager, context
+                    )
+                    if done:
+                        return result
 
             return async_wrapper
         else:
 
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
+                """Sync wrapper that executes function with error boundary protection."""
                 manager = get_error_boundary_manager()
                 context = ErrorContext(
                     component=comp_name, function=func_name, args=args, kwargs=kwargs
                 )
 
                 for attempt in range(max_retries + 1):
-                    try:
-                        return func(*args, **kwargs)
-                    except Exception as e:
-                        if attempt == max_retries:
-                            # Last attempt, handle error
-                            return asyncio.run(manager.handle_error(e, context))
-                        elif recovery_strategy == RecoveryStrategy.RETRY:
-                            # Wait before retry
-                            time.sleep(2**attempt)
-                            continue
-                        else:
-                            # Handle error immediately
-                            return asyncio.run(manager.handle_error(e, context))
+                    done, result = _handle_sync_attempt(
+                        func, args, kwargs, attempt, max_retries,
+                        recovery_strategy, manager, context
+                    )
+                    if done:
+                        return result
 
             return sync_wrapper
 
     return decorator
+
+
+def _create_api_error_response(
+    e: Exception,
+    category: "ErrorCategory",
+    func_operation: str,
+    error_code_prefix: str,
+) -> "APIErrorResponse":
+    """
+    Create API error response from exception.
+
+    Args:
+        e: Exception that occurred
+        category: Error category
+        func_operation: Operation name
+        error_code_prefix: Error code prefix
+
+    Returns:
+        APIErrorResponse object
+    """
+    trace_id = f"{func_operation}_{int(time.time()*1000)}"
+    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
+    status_code = APIErrorResponse.get_status_code_for_category(category)
+
+    return APIErrorResponse(
+        category=category,
+        message=str(e),
+        code=error_code,
+        status_code=status_code,
+        details={"operation": func_operation},
+        trace_id=trace_id,
+    )
+
+
+def _raise_or_return_error(error_response: "APIErrorResponse"):
+    """
+    Raise HTTPException or return error dict.
+
+    Args:
+        error_response: API error response object
+
+    Raises:
+        HTTPException if FastAPI is available
+
+    Returns:
+        Error dictionary if FastAPI not available
+    """
+    logger.error(
+        f"Error in {error_response.details.get('operation', 'unknown')}: "
+        f"{error_response.message} "
+        f"(trace_id: {error_response.trace_id}, code: {error_response.code})"
+    )
+    try:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=error_response.status_code,
+            detail=error_response.to_dict()
+        )
+    except ImportError:
+        return error_response.to_dict()
 
 
 def with_error_handling(
@@ -694,101 +1051,41 @@ def with_error_handling(
         category: Error category (determines HTTP status code)
         operation: Operation name for logging/tracing
         error_code_prefix: Prefix for error codes (e.g., "KB", "AUTH")
+
+    Returns:
+        Decorated function with error handling
     """
 
     def decorator(func):
+        """Inner decorator that wraps function with API error handling."""
         func_operation = operation or func.__name__
 
         if asyncio.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
+                """Async wrapper that catches exceptions and converts to API errors."""
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
-                    # Generate trace ID
-                    trace_id = f"{func_operation}_{int(time.time()*1000)}"
-
-                    # Generate error code
-                    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
-
-                    # Get status code from category
-                    status_code = APIErrorResponse.get_status_code_for_category(
-                        category
+                    error_response = _create_api_error_response(
+                        e, category, func_operation, error_code_prefix
                     )
-
-                    # Create API error response
-                    error_response = APIErrorResponse(
-                        category=category,
-                        message=str(e),
-                        code=error_code,
-                        status_code=status_code,
-                        details={"operation": func_operation},
-                        trace_id=trace_id,
-                    )
-
-                    # Log the error
-                    logger.error(
-                        f"Error in {func_operation}: {e} "
-                        f"(trace_id: {trace_id}, code: {error_code})"
-                    )
-
-                    # Raise FastAPI HTTPException
-                    try:
-                        from fastapi import HTTPException
-
-                        raise HTTPException(
-                            status_code=status_code, detail=error_response.to_dict()
-                        )
-                    except ImportError:
-                        # FastAPI not available, return error dict
-                        return error_response.to_dict()
+                    return _raise_or_return_error(error_response)
 
             return async_wrapper
         else:
 
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
+                """Sync wrapper that catches exceptions and converts to API errors."""
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    # Generate trace ID
-                    trace_id = f"{func_operation}_{int(time.time()*1000)}"
-
-                    # Generate error code
-                    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
-
-                    # Get status code from category
-                    status_code = APIErrorResponse.get_status_code_for_category(
-                        category
+                    error_response = _create_api_error_response(
+                        e, category, func_operation, error_code_prefix
                     )
-
-                    # Create API error response
-                    error_response = APIErrorResponse(
-                        category=category,
-                        message=str(e),
-                        code=error_code,
-                        status_code=status_code,
-                        details={"operation": func_operation},
-                        trace_id=trace_id,
-                    )
-
-                    # Log the error
-                    logger.error(
-                        f"Error in {func_operation}: {e} "
-                        f"(trace_id: {trace_id}, code: {error_code})"
-                    )
-
-                    # Raise FastAPI HTTPException
-                    try:
-                        from fastapi import HTTPException
-
-                        raise HTTPException(
-                            status_code=status_code, detail=error_response.to_dict()
-                        )
-                    except ImportError:
-                        # FastAPI not available, return error dict
-                        return error_response.to_dict()
+                    return _raise_or_return_error(error_response)
 
             return sync_wrapper
 
@@ -797,17 +1094,40 @@ def with_error_handling(
 
 # Convenient error boundary functions
 def with_error_boundary(component: str, function: str):
-    """Context manager for error boundaries"""
+    """
+    Context manager for error boundaries.
+
+    Args:
+        component: Component name
+        function: Function name
+
+    Returns:
+        Error boundary context manager
+    """
     return get_error_boundary_manager().error_boundary(component, function)
 
 
 async def with_async_error_boundary(component: str, function: str):
-    """Async context manager for error boundaries"""
+    """
+    Async context manager for error boundaries.
+
+    Args:
+        component: Component name
+        function: Function name
+
+    Returns:
+        Async error boundary context manager
+    """
     return get_error_boundary_manager().async_error_boundary(component, function)
 
 
 def get_error_statistics():
-    """Get system error statistics"""
+    """
+    Get system error statistics.
+
+    Returns:
+        Dictionary with error statistics
+    """
     return get_error_boundary_manager().get_error_statistics()
 
 
@@ -833,6 +1153,7 @@ if __name__ == "__main__":
 
         @error_boundary(component="test", function="divide")
         def test_divide(a, b):
+            """Test division function."""
             return a / b
 
         # Test normal operation

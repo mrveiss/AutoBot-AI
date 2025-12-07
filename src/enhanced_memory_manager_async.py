@@ -72,6 +72,7 @@ class TaskEntry:
     markdown_reference: Optional[str] = None
 
     def __post_init__(self):
+        """Initialize default empty collections for task entry fields."""
         if self.tags is None:
             self.tags = []
         if self.metadata is None:
@@ -97,6 +98,7 @@ class ExecutionRecord:
     agent_context: Dict[str, Any] = None
 
     def __post_init__(self):
+        """Initialize default empty dict for agent context field."""
         if self.agent_context is None:
             self.agent_context = {}
 

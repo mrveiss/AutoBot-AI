@@ -858,6 +858,7 @@ async def list_directory_with_sizes_mcp(
 
         # Get sizes for files only (directories are 0)
         async def get_size_if_file(path: str, is_dir: bool) -> int:
+            """Get file size or return 0 for directories."""
             if is_dir:
                 return 0
             return await asyncio.to_thread(os.path.getsize, path)

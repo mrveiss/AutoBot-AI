@@ -466,9 +466,53 @@ class CaptchaSolver:
 
         return text.upper()
 
-    def _evaluate_math_expression(self, expression: str) -> Optional[int]:
+    # Math operation lookup table (Issue #315: extracted to reduce nesting)
+    _MATH_OPS = {
+        "+": lambda a, b: a + b,
+        "-": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+        "/": lambda a, b: a // b if b != 0 else None,
+    }
+
+    def _clean_math_expression(self, expression: str) -> str:
+        """Clean and normalize a math expression (Issue #315: extracted).
+
+        Args:
+            expression: Raw math expression
+
+        Returns:
+            Cleaned expression with normalized operators
         """
-        Safely evaluate a simple math expression.
+        expr = expression.upper()
+        # Remove "= ?" or "= " at the end
+        expr = re.sub(r"=\s*\??\s*$", "", expr)
+        # Replace text/symbol operators with standard operators
+        replacements = [
+            ("×", "*"), ("÷", "/"), ("X", "*"),
+            ("PLUS", "+"), ("MINUS", "-"), ("TIMES", "*"),
+        ]
+        for old, new in replacements:
+            expr = expr.replace(old, new)
+        return expr
+
+    def _apply_math_operation(self, a: int, op: str, b: int) -> Optional[int]:
+        """Apply a math operation to two operands (Issue #315: extracted).
+
+        Args:
+            a: First operand
+            op: Operator (+, -, *, /)
+            b: Second operand
+
+        Returns:
+            Result of operation, or None if invalid
+        """
+        operation = self._MATH_OPS.get(op)
+        return operation(a, b) if operation else None
+
+    def _evaluate_math_expression(self, expression: str) -> Optional[int]:
+        """Safely evaluate a simple math expression.
+
+        Issue #315: Refactored to use helpers for reduced nesting.
 
         Args:
             expression: Math expression string (e.g., "5 + 3 = ?")
@@ -477,37 +521,18 @@ class CaptchaSolver:
             Integer result or None if can't parse
         """
         try:
-            # Clean the expression
-            expr = expression.upper()
-
-            # Remove "= ?" or "= " at the end
-            expr = re.sub(r"=\s*\??\s*$", "", expr)
-
-            # Replace text operators
-            expr = expr.replace("×", "*").replace("÷", "/")
-            expr = expr.replace("X", "*").replace("PLUS", "+")
-            expr = expr.replace("MINUS", "-").replace("TIMES", "*")
-
-            # Extract just the math part
+            expr = self._clean_math_expression(expression)
             match = re.search(r"(\d+)\s*([+\-*/])\s*(\d+)", expr)
-            if match:
-                a = int(match.group(1))
-                op = match.group(2)
-                b = int(match.group(3))
+            if not match:
+                return None
 
-                if op == "+":
-                    return a + b
-                elif op == "-":
-                    return a - b
-                elif op == "*":
-                    return a * b
-                elif op == "/" and b != 0:
-                    return a // b
+            a = int(match.group(1))
+            op = match.group(2)
+            b = int(match.group(3))
+            return self._apply_math_operation(a, op, b)
 
         except Exception:
-            pass  # Regex parsing failed, return None below
-
-        return None
+            return None
 
 
 # Global solver instance (thread-safe)

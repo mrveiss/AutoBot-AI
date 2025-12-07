@@ -53,6 +53,7 @@ class BatchableRequest:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
+        """Generate unique request ID if not provided."""
         if not self.id:
             # Generate unique ID based on content and timestamp
             content_hash = hashlib.md5(self.content.encode()).hexdigest()[:8]
@@ -77,6 +78,7 @@ class RequestSimilarityAnalyzer:
     """Analyzes request similarity for intelligent batching"""
 
     def __init__(self):
+        """Initialize analyzer with default similarity threshold and context weights."""
         self.similarity_threshold = 0.7
         self.context_weights = {
             "file_operations": 0.8,
@@ -165,6 +167,7 @@ class AdaptiveBatchingEngine:
     """Adaptive engine that learns optimal batching patterns"""
 
     def __init__(self):
+        """Initialize adaptive engine with history tracking and learning parameters."""
         self.batch_history: deque = deque(maxlen=1000)
         self.strategy_performance: Dict[BatchingStrategy, List[float]] = defaultdict(
             list

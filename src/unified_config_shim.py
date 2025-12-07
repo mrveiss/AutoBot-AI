@@ -32,6 +32,7 @@ class UnifiedConfigAdapter:
     """
 
     def __init__(self):
+        """Initialize adapter with UnifiedConfigManager instance."""
         self._manager = UnifiedConfigManager()
 
     def get(self, path: str, default: Any = None) -> Any:
@@ -122,20 +123,24 @@ config = UnifiedConfigAdapter()
 
 # Convenience functions for backward compatibility
 def get_host(service: str, default: str = NetworkConstants.MAIN_MACHINE_IP) -> str:
+    """Get host IP address for a service."""
     return config.get_host(service, default)
 
 
 def get_port(service: str, default: int = 8000) -> int:
+    """Get port number for a service."""
     return config.get_port(service, default)
 
 
 def get_service_url(service: str, endpoint: str = None) -> str:
+    """Get full URL for a service with optional endpoint path."""
     return config.get_service_url(service, endpoint)
 
 
 def get_timeout(
     category: str, timeout_type: str = "default", default: float = 60.0
 ) -> float:
+    """Get timeout value for a category and type."""
     return config.get_timeout(category, timeout_type, default)
 
 
@@ -145,10 +150,12 @@ def get_timeout_for_env(
     environment: str = None,
     default: float = 60.0,
 ) -> float:
+    """Get environment-specific timeout value."""
     return config.get_timeout_for_env(category, timeout_type, environment, default)
 
 
 def get_timeout_group(category: str, environment: str = None) -> Dict[str, float]:
+    """Get all timeouts for a category as a dictionary."""
     return config.get_timeout_group(category, environment)
 
 

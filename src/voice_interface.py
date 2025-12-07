@@ -26,7 +26,10 @@ import yaml
 
 
 class VoiceInterface:
+    """Voice interface for speech-to-text and text-to-speech operations."""
+
     def __init__(self, config_path="config/config.yaml"):
+        """Initialize voice interface with configuration and speech engines."""
         self.config = self._load_config(config_path)
         self.voice_config = self.config.get("voice_interface", {})
 
@@ -54,10 +57,12 @@ class VoiceInterface:
         print(status_msg)
 
     def _load_config(self, config_path):
+        """Load YAML configuration from file path."""
         with open(config_path, "r") as f:
             return yaml.safe_load(f)
 
     def _init_tts_engine(self):
+        """Initialize pyttsx3 text-to-speech engine if available."""
         if not PYTTSX3_AVAILABLE:
             return None
         engine = pyttsx3.init()
@@ -231,6 +236,7 @@ if __name__ == "__main__":
             yaml.safe_dump(cfg, f, indent=2)
 
     async def test_voice_interface():
+        """Test voice interface with speech recognition and TTS demos."""
         # Test function placeholder - VoiceInterface initialization removed
         # to avoid unused variable warning
         pass  # Placeholder function

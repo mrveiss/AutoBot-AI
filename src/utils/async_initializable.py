@@ -223,10 +223,52 @@ class AsyncInitializable(ABC):
         partially initialized resources when initialization fails.
         """
 
+    async def _handle_init_success(self) -> bool:
+        """Handle successful initialization (Issue #315)."""
+        self._initialized = True
+        self._metrics.end_time = time.time()
+        self._metrics.success = True
+        duration = self._metrics.duration_seconds
+        logger.info(
+            f"{self._component_name} initialized successfully "
+            f"(took {duration:.2f}s, {self._metrics.retry_count} retries)"
+        )
+        return True
+
+    async def _handle_init_failure(self, attempt: int, error: Exception, current_delay: float) -> float:
+        """Handle initialization failure with retry logic (Issue #315). Returns next delay."""
+        self._metrics.last_error = str(error)
+        self._metrics.retry_count = attempt
+
+        if attempt < self._max_retries:
+            logger.warning(
+                f"{self._component_name} initialization failed "
+                f"(attempt {attempt + 1}/{self._max_retries + 1}): {error}. "
+                f"Retrying in {current_delay:.1f}s..."
+            )
+            await asyncio.sleep(current_delay)
+            return current_delay * self._retry_backoff
+
+        # Final attempt failed
+        logger.error(
+            f"{self._component_name} initialization failed after "
+            f"{self._max_retries + 1} attempts: {error}"
+        )
+        await self._safe_cleanup()
+        return current_delay
+
+    async def _safe_cleanup(self) -> None:
+        """Attempt cleanup with error handling (Issue #315)."""
+        try:
+            await self._cleanup_impl()
+            logger.info(f"{self._component_name} cleanup completed")
+        except Exception as cleanup_error:
+            logger.error(f"{self._component_name} cleanup failed: {cleanup_error}")
+
     @error_boundary(component="async_initializable", function="initialize")
     async def initialize(self) -> bool:
         """
-        Initialize the component with full pattern:
+        Initialize the component with full pattern (Issue #315: depth 7→3):
         - Idempotency check
         - Async locking
         - Double-check pattern
@@ -246,9 +288,7 @@ class AsyncInitializable(ABC):
         async with self._initialization_lock:
             # Double-check: Another coroutine may have initialized while we waited
             if self._initialized:
-                logger.debug(
-                    f"{self._component_name} was initialized by another coroutine"
-                )
+                logger.debug(f"{self._component_name} was initialized by another coroutine")
                 return True
 
             # Start metrics tracking
@@ -259,57 +299,14 @@ class AsyncInitializable(ABC):
             current_delay = self._retry_delay
             for attempt in range(self._max_retries + 1):
                 try:
-                    # Call implementation
-                    success = await self._initialize_impl()
-
-                    if success:
-                        # Mark as initialized
-                        self._initialized = True
-                        self._metrics.end_time = time.time()
-                        self._metrics.success = True
-
-                        duration = self._metrics.duration_seconds
-                        logger.info(
-                            f"{self._component_name} initialized successfully "
-                            f"(took {duration:.2f}s, {self._metrics.retry_count} retries)"
-                        )
-                        return True
-                    else:
-                        # Implementation returned False
-                        logger.warning(
-                            f"{self._component_name} initialization returned False "
-                            f"(attempt {attempt + 1}/{self._max_retries + 1})"
-                        )
-
+                    if await self._initialize_impl():
+                        return await self._handle_init_success()
+                    logger.warning(
+                        f"{self._component_name} initialization returned False "
+                        f"(attempt {attempt + 1}/{self._max_retries + 1})"
+                    )
                 except Exception as e:
-                    # Implementation raised exception
-                    self._metrics.last_error = str(e)
-                    self._metrics.retry_count = attempt
-
-                    if attempt < self._max_retries:
-                        # Retry with backoff
-                        logger.warning(
-                            f"{self._component_name} initialization failed "
-                            f"(attempt {attempt + 1}/{self._max_retries + 1}): {e}. "
-                            f"Retrying in {current_delay:.1f}s..."
-                        )
-                        await asyncio.sleep(current_delay)
-                        current_delay *= self._retry_backoff
-                    else:
-                        # Final attempt failed
-                        logger.error(
-                            f"{self._component_name} initialization failed after "
-                            f"{self._max_retries + 1} attempts: {e}"
-                        )
-
-                        # Attempt cleanup
-                        try:
-                            await self._cleanup_impl()
-                            logger.info(f"{self._component_name} cleanup completed")
-                        except Exception as cleanup_error:
-                            logger.error(
-                                f"{self._component_name} cleanup failed: {cleanup_error}"
-                            )
+                    current_delay = await self._handle_init_failure(attempt, e, current_delay)
 
             # All attempts failed
             self._metrics.end_time = time.time()
@@ -394,9 +391,52 @@ class SyncInitializable(ABC):
     def _cleanup_impl(self):
         """Optional: Cleanup resources on initialization failure"""
 
+    def _handle_sync_init_success(self) -> bool:
+        """Handle successful initialization (Issue #315)."""
+        self._initialized = True
+        self._metrics.end_time = time.time()
+        self._metrics.success = True
+        duration = self._metrics.duration_seconds
+        logger.info(
+            f"{self._component_name} initialized successfully "
+            f"(took {duration:.2f}s, {self._metrics.retry_count} retries)"
+        )
+        return True
+
+    def _handle_sync_init_failure(self, attempt: int, error: Exception, current_delay: float) -> float:
+        """Handle initialization failure with retry logic (Issue #315). Returns next delay."""
+        import time as time_module
+        self._metrics.last_error = str(error)
+        self._metrics.retry_count = attempt
+
+        if attempt < self._max_retries:
+            logger.warning(
+                f"{self._component_name} initialization failed "
+                f"(attempt {attempt + 1}/{self._max_retries + 1}): {error}. "
+                f"Retrying in {current_delay:.1f}s..."
+            )
+            time_module.sleep(current_delay)
+            return current_delay * self._retry_backoff
+
+        # Final attempt failed
+        logger.error(
+            f"{self._component_name} initialization failed after "
+            f"{self._max_retries + 1} attempts: {error}"
+        )
+        self._safe_sync_cleanup()
+        return current_delay
+
+    def _safe_sync_cleanup(self) -> None:
+        """Attempt cleanup with error handling (Issue #315)."""
+        try:
+            self._cleanup_impl()
+            logger.info(f"{self._component_name} cleanup completed")
+        except Exception as cleanup_error:
+            logger.error(f"{self._component_name} cleanup failed: {cleanup_error}")
+
     def initialize(self) -> bool:
         """
-        Initialize the component with full pattern (synchronous version).
+        Initialize the component with full pattern (Issue #315: depth 7→3).
 
         Returns:
             bool: True if initialization successful, False otherwise
@@ -410,9 +450,7 @@ class SyncInitializable(ABC):
         with self._initialization_lock:
             # Double-check
             if self._initialized:
-                logger.debug(
-                    f"{self._component_name} was initialized by another thread"
-                )
+                logger.debug(f"{self._component_name} was initialized by another thread")
                 return True
 
             # Start metrics tracking
@@ -423,58 +461,14 @@ class SyncInitializable(ABC):
             current_delay = self._retry_delay
             for attempt in range(self._max_retries + 1):
                 try:
-                    # Call implementation
-                    success = self._initialize_impl()
-
-                    if success:
-                        # Mark as initialized
-                        self._initialized = True
-                        self._metrics.end_time = time.time()
-                        self._metrics.success = True
-
-                        duration = self._metrics.duration_seconds
-                        logger.info(
-                            f"{self._component_name} initialized successfully "
-                            f"(took {duration:.2f}s, {self._metrics.retry_count} retries)"
-                        )
-                        return True
-                    else:
-                        logger.warning(
-                            f"{self._component_name} initialization returned False "
-                            f"(attempt {attempt + 1}/{self._max_retries + 1})"
-                        )
-
+                    if self._initialize_impl():
+                        return self._handle_sync_init_success()
+                    logger.warning(
+                        f"{self._component_name} initialization returned False "
+                        f"(attempt {attempt + 1}/{self._max_retries + 1})"
+                    )
                 except Exception as e:
-                    # Implementation raised exception
-                    self._metrics.last_error = str(e)
-                    self._metrics.retry_count = attempt
-
-                    if attempt < self._max_retries:
-                        # Retry with backoff
-                        logger.warning(
-                            f"{self._component_name} initialization failed "
-                            f"(attempt {attempt + 1}/{self._max_retries + 1}): {e}. "
-                            f"Retrying in {current_delay:.1f}s..."
-                        )
-                        import time as time_module
-
-                        time_module.sleep(current_delay)
-                        current_delay *= self._retry_backoff
-                    else:
-                        # Final attempt failed
-                        logger.error(
-                            f"{self._component_name} initialization failed after "
-                            f"{self._max_retries + 1} attempts: {e}"
-                        )
-
-                        # Attempt cleanup
-                        try:
-                            self._cleanup_impl()
-                            logger.info(f"{self._component_name} cleanup completed")
-                        except Exception as cleanup_error:
-                            logger.error(
-                                f"{self._component_name} cleanup failed: {cleanup_error}"
-                            )
+                    current_delay = self._handle_sync_init_failure(attempt, e, current_delay)
 
             # All attempts failed
             self._metrics.end_time = time.time()

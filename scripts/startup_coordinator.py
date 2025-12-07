@@ -49,6 +49,44 @@ class ComponentState(Enum):
     STOPPED = "stopped"
 
 
+def _restore_component_from_data(comp: "ComponentInfo", data: dict) -> None:
+    """Restore component state from saved data (Issue #315 - extracted)."""
+    comp.state = ComponentState(data.get('state', 'pending'))
+    comp.pid = data.get('pid')
+    comp.health_status = HealthStatus(data.get('health_status', 'unknown'))
+
+
+async def _check_redis_health() -> bool:
+    """Check Redis health via centralized client (Issue #315 - extracted)."""
+    try:
+        redis_client = await get_redis_client('main')
+        if redis_client:
+            await redis_client.ping()
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _terminate_process_gracefully(name: str, process: subprocess.Popen) -> bool:
+    """Terminate a process gracefully with fallback to kill (Issue #315 - extracted)."""
+    if process.poll() is not None:
+        return False  # Process already stopped
+
+    logger.info(f"Stopping {name} (PID: {process.pid})")
+    process.terminate()
+
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Force killing {name}")
+        process.kill()
+        process.wait()
+
+    logger.info(f"✅ {name} stopped")
+    return True
+
+
 class HealthStatus(Enum):
     """Health check results"""
     HEALTHY = "healthy"
@@ -148,61 +186,51 @@ class StartupCoordinator:
             logger.error(f"Failed to save startup state: {e}")
 
     def load_state(self):
-        """Load startup state from file if it exists"""
+        """Load startup state from file if it exists (Issue #315 - refactored)."""
+        if not self.startup_state_file.exists():
+            return
+
         try:
-            if self.startup_state_file.exists():
-                with open(self.startup_state_file, 'r') as f:
-                    state_data = json.load(f)
-                    for name, data in state_data.items():
-                        if name in self.components:
-                            # Restore component state
-                            comp = self.components[name]
-                            comp.state = ComponentState(data.get('state', 'pending'))
-                            comp.pid = data.get('pid')
-                            comp.health_status = HealthStatus(data.get('health_status', 'unknown'))
-                logger.info("Loaded previous startup state")
+            with open(self.startup_state_file, 'r') as f:
+                state_data = json.load(f)
+
+            for name, data in state_data.items():
+                if name in self.components:
+                    _restore_component_from_data(self.components[name], data)
+
+            logger.info("Loaded previous startup state")
         except Exception as e:
             logger.warning(f"Could not load previous startup state: {e}")
 
     async def check_health(self, component: ComponentInfo) -> bool:
-        """Check if a component is healthy"""
+        """Check if a component is healthy (Issue #315 - refactored)."""
         if not component.health_url:
-            # If no health URL, just check if process is running
             return component.pid and psutil.pid_exists(component.pid)
 
         try:
-            if component.health_url.startswith('http'):
-                # HTTP health check
-                response = requests.get(
-                    component.health_url,
-                    timeout=self.health_check_timeout
-                )
-                healthy = response.status_code == 200
-                component.health_status = HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
-                return healthy
-            elif component.health_url.startswith('redis'):
-                # Redis health check using centralized client
-                async def check_redis():
-                    try:
-                        redis_client = await get_redis_client('main')
-                        if redis_client:
-                            await redis_client.ping()
-                            return True
-                        return False
-                    except Exception:
-                        return False
-
-                # Run async check
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                healthy = loop.run_until_complete(check_redis())
-                loop.close()
-                component.health_status = HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
-                return healthy
+            healthy = await self._perform_health_check(component)
+            component.health_status = HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY
+            return healthy
         except Exception as e:
             logger.debug(f"Health check failed for {component.name}: {e}")
             component.health_status = HealthStatus.UNHEALTHY
             return False
+
+    async def _perform_health_check(self, component: "ComponentInfo") -> bool:
+        """Perform the actual health check based on URL type (Issue #315 - extracted)."""
+        if component.health_url.startswith('http'):
+            response = requests.get(
+                component.health_url,
+                timeout=self.health_check_timeout
+            )
+            return response.status_code == 200
+
+        if component.health_url.startswith('redis'):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            healthy = loop.run_until_complete(_check_redis_health())
+            loop.close()
+            return healthy
 
         return False
 
@@ -389,31 +417,18 @@ class StartupCoordinator:
         return True
 
     def stop_all(self):
-        """Stop all running processes"""
+        """Stop all running processes (Issue #315 - refactored)."""
         logger.info("🛑 Stopping all components...")
 
         for name, process in self.processes.items():
             try:
-                if process.poll() is None:  # Process still running
-                    logger.info(f"Stopping {name} (PID: {process.pid})")
-                    process.terminate()
-
-                    # Give it 5 seconds to terminate gracefully
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        logger.warning(f"Force killing {name}")
-                        process.kill()
-                        process.wait()
-
-                    logger.info(f"✅ {name} stopped")
+                if _terminate_process_gracefully(name, process):
                     self.components[name].state = ComponentState.STOPPED
             except Exception as e:
                 logger.error(f"Error stopping {name}: {e}")
 
         self.save_state()
 
-        # Clean up state file
         if self.startup_state_file.exists():
             self.startup_state_file.unlink()
 

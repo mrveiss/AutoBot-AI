@@ -101,42 +101,67 @@ class AdaptiveMemoryManager:
             }
         return stats
 
+    def _cleanup_cache_entries(self, cache: "OrderedDict", count: int) -> int:
+        """Remove oldest entries from a cache (Issue #315: extracted).
+
+        Args:
+            cache: The OrderedDict cache to clean
+            count: Number of entries to remove
+
+        Returns:
+            Number of entries actually removed
+        """
+        removed = 0
+        for _ in range(count):
+            if not cache:
+                break
+            removed_key = next(iter(cache))
+            cache.pop(removed_key)
+            removed += 1
+        return removed
+
+    def _cleanup_all_caches(self) -> int:
+        """Clean up all LRU caches by cleanup percentage (Issue #315: extracted).
+
+        Returns:
+            Total number of entries cleaned
+        """
+        total_cleaned = 0
+        for cache_name, cache_info in self.lru_caches.items():
+            cache = cache_info["cache"]
+            cleanup_count = int(len(cache) * self.cleanup_percentage)
+            if cleanup_count > 0:
+                total_cleaned += self._cleanup_cache_entries(cache, cleanup_count)
+        return total_cleaned
+
     async def adaptive_memory_cleanup(self):
-        """Adaptive memory cleanup based on system pressure"""
+        """Adaptive memory cleanup based on system pressure.
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
+        """
         try:
             memory = psutil.virtual_memory()
 
-            if memory.percent > (self.memory_threshold * 100):
-                logger.warning(
-                    f"Memory usage high: {memory.percent:.1f}%, starting cleanup"
-                )
-
-                # Clean up LRU caches
-                total_cleaned = 0
-                for cache_name, cache_info in self.lru_caches.items():
-                    cache = cache_info["cache"]
-                    cleanup_count = int(len(cache) * self.cleanup_percentage)
-                    if cleanup_count > 0:
-                        # Remove oldest entries
-                        for _ in range(cleanup_count):
-                            if cache:
-                                removed_key = next(iter(cache))
-                                cache.pop(removed_key)
-                                total_cleaned += 1
-
-                logger.info(f"Cleaned {total_cleaned} cache entries")
-
-                # Force garbage collection
-                collected = gc.collect()
-
-                # Check memory after cleanup
-                memory_after = psutil.virtual_memory()
-                logger.info(
-                    f"Memory cleanup completed: {memory.percent:.1f}% -> {memory_after.percent:.1f}%, collected {collected} objects"
-                )
-
-            else:
+            if memory.percent <= (self.memory_threshold * 100):
                 logger.debug(f"Memory usage normal: {memory.percent:.1f}%")
+                return
+
+            logger.warning(
+                f"Memory usage high: {memory.percent:.1f}%, starting cleanup"
+            )
+
+            # Clean up LRU caches using helper
+            total_cleaned = self._cleanup_all_caches()
+            logger.info(f"Cleaned {total_cleaned} cache entries")
+
+            # Force garbage collection
+            collected = gc.collect()
+
+            # Check memory after cleanup
+            memory_after = psutil.virtual_memory()
+            logger.info(
+                f"Memory cleanup completed: {memory.percent:.1f}% -> {memory_after.percent:.1f}%, collected {collected} objects"
+            )
 
         except Exception as e:
             logger.error(f"Error during memory cleanup: {e}")

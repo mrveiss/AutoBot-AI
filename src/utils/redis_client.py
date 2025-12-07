@@ -1236,9 +1236,49 @@ class RedisConnectionManager:
                 idle_connections=0,
             )
 
+    def _identify_idle_connections(self, available_conns: list) -> list:
+        """Identify connections idle longer than max_idle_time (Issue #315: extracted).
+
+        Args:
+            available_conns: List of available connections from pool
+
+        Returns:
+            List of connections that have been idle too long
+        """
+        connections_to_remove = []
+        for conn in available_conns:
+            if not hasattr(conn, "_last_use"):
+                continue
+            idle_time = (datetime.now() - conn._last_use).total_seconds()
+            if idle_time > self._max_idle_time_seconds:
+                connections_to_remove.append(conn)
+        return connections_to_remove
+
+    def _remove_idle_connection(self, pool: Any, conn: Any) -> bool:
+        """Remove a single idle connection from pool (Issue #315: extracted).
+
+        Args:
+            pool: Connection pool
+            conn: Connection to remove
+
+        Returns:
+            True if removed successfully, False otherwise
+        """
+        try:
+            pool._available_connections.remove(conn)
+            conn.disconnect()
+            return True
+        except ValueError:
+            # Connection already removed (race condition - safe to ignore)
+            return False
+        except Exception as e:
+            logger.debug(f"Could not remove idle connection: {e}")
+            return False
+
     async def cleanup_idle_connections(self):
         """
-        Clean up idle connections older than max_idle_time (thread-safe)
+        Clean up idle connections older than max_idle_time (thread-safe).
+        Issue #315: Refactored to use helpers for reduced nesting.
 
         This method removes connections that have been idle for too long
         to free up resources. Uses proper synchronization to prevent conflicts
@@ -1247,48 +1287,44 @@ class RedisConnectionManager:
         cleaned_total = 0
 
         for database_name, pool in list(self._sync_pools.items()):
-            try:
-                cleaned_count = 0
-
-                # Thread-safe access to pool internals using pool's lock
-                with pool._lock:
-                    # Build list of connections to remove first (avoid modifying during iteration)
-                    connections_to_remove = []
-                    available_conns = getattr(pool, "_available_connections", [])
-
-                    for conn in available_conns:
-                        if hasattr(conn, "_last_use"):
-                            idle_time = (
-                                datetime.now() - conn._last_use
-                            ).total_seconds()
-                            if idle_time > self._max_idle_time_seconds:
-                                connections_to_remove.append(conn)
-
-                    # Now remove connections after identifying them
-                    for conn in connections_to_remove:
-                        try:
-                            pool._available_connections.remove(conn)
-                            conn.disconnect()
-                            cleaned_count += 1
-                        except ValueError:
-                            # Connection already removed (race condition - safe to ignore)
-                            pass
-                        except Exception as e:
-                            logger.debug(f"Could not remove idle connection: {e}")
-
-                if cleaned_count > 0:
-                    logger.info(
-                        f"Cleaned up {cleaned_count} idle connections for '{database_name}'"
-                    )
-                    cleaned_total += cleaned_count
-
-            except Exception as e:
-                logger.error(
-                    f"Error cleaning idle connections for '{database_name}': {e}"
-                )
+            cleaned_count = self._cleanup_pool_idle_connections(database_name, pool)
+            cleaned_total += cleaned_count
 
         if cleaned_total > 0:
             logger.info(f"Total idle connections cleaned: {cleaned_total}")
+
+    def _cleanup_pool_idle_connections(self, database_name: str, pool: Any) -> int:
+        """Clean idle connections from a single pool (Issue #315: extracted).
+
+        Args:
+            database_name: Name of the database
+            pool: Connection pool to clean
+
+        Returns:
+            Number of connections cleaned
+        """
+        try:
+            cleaned_count = 0
+
+            # Thread-safe access to pool internals using pool's lock
+            with pool._lock:
+                available_conns = getattr(pool, "_available_connections", [])
+                connections_to_remove = self._identify_idle_connections(available_conns)
+
+                # Remove identified idle connections
+                for conn in connections_to_remove:
+                    if self._remove_idle_connection(pool, conn):
+                        cleaned_count += 1
+
+            if cleaned_count > 0:
+                logger.info(
+                    f"Cleaned up {cleaned_count} idle connections for '{database_name}'"
+                )
+            return cleaned_count
+
+        except Exception as e:
+            logger.error(f"Error cleaning idle connections for '{database_name}': {e}")
+            return 0
 
     async def _cleanup_idle_connections_task(self):
         """

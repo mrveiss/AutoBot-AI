@@ -81,6 +81,46 @@ class MultiModalSearchResult:
     fusion_confidence: Optional[float] = None
 
 
+def _convert_chroma_results(
+    search_results: Dict[str, Any], modality: str, threshold: float
+) -> List[MultiModalSearchResult]:
+    """Convert ChromaDB search results to MultiModalSearchResult objects (Issue #315).
+
+    Args:
+        search_results: Raw ChromaDB query results
+        modality: Target modality name
+        threshold: Minimum similarity threshold
+
+    Returns:
+        List of MultiModalSearchResult objects above threshold
+    """
+    results = []
+    if not search_results["ids"] or len(search_results["ids"][0]) == 0:
+        return results
+
+    for i in range(len(search_results["ids"][0])):
+        # Convert distance to similarity (ChromaDB uses L2 distance)
+        distance = search_results["distances"][0][i]
+        similarity = 1.0 / (1.0 + distance)
+
+        if similarity < threshold:
+            continue
+
+        metadata = search_results["metadatas"][0][i]
+        result = MultiModalSearchResult(
+            content=search_results["documents"][0][i],
+            modality=modality,
+            metadata=metadata,
+            score=similarity,
+            doc_id=search_results["ids"][0][i],
+            source_modality=metadata.get("source_modality"),
+            fusion_confidence=metadata.get("fusion_confidence"),
+        )
+        results.append(result)
+
+    return results
+
+
 class NPUSemanticSearch:
     """
     NPU-Enhanced Semantic Search Engine for AutoBot.
@@ -849,29 +889,10 @@ class NPUSemanticSearch:
                         include=["metadatas", "documents", "distances"],
                     )
 
-                    # Convert to MultiModalSearchResult objects
-                    modality_results = []
-                    if search_results["ids"] and len(search_results["ids"][0]) > 0:
-                        for i in range(len(search_results["ids"][0])):
-                            # Convert distance to similarity score (ChromaDB uses L2 distance)
-                            distance = search_results["distances"][0][i]
-                            similarity = 1.0 / (
-                                1.0 + distance
-                            )  # Convert distance to similarity
-
-                            if similarity >= threshold:
-                                metadata = search_results["metadatas"][0][i]
-                                result = MultiModalSearchResult(
-                                    content=search_results["documents"][0][i],
-                                    modality=modality,
-                                    metadata=metadata,
-                                    score=similarity,
-                                    doc_id=search_results["ids"][0][i],
-                                    source_modality=metadata.get("source_modality"),
-                                    fusion_confidence=metadata.get("fusion_confidence"),
-                                )
-                                modality_results.append(result)
-
+                    # Convert to MultiModalSearchResult using helper (Issue #315)
+                    modality_results = _convert_chroma_results(
+                        search_results, modality, threshold
+                    )
                     results[modality] = modality_results
                     logger.info(
                         f"Found {len(modality_results)} results in {modality} collection"

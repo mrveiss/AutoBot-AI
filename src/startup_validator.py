@@ -52,12 +52,14 @@ class ValidationResult:
     details: Dict[str, Any] = field(default_factory=dict)
 
     def add_error(self, error: str, details: Any = None):
+        """Add error to validation result and mark as failed."""
         self.errors.append(error)
         self.success = False
         if details:
             self.details[error] = details
 
     def add_warning(self, warning: str, details: Any = None):
+        """Add warning to validation result without failing."""
         self.warnings.append(warning)
         if details:
             self.details[warning] = details
@@ -67,6 +69,7 @@ class StartupValidator:
     """Comprehensive startup dependency validator"""
 
     def __init__(self):
+        """Initialize validator with default validation result and dependency lists."""
         self.result = ValidationResult(success=True)
 
         # Critical imports that must be available

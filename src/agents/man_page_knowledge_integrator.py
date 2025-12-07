@@ -44,6 +44,7 @@ class ManPageParser:
     """Parser for extracting structured data from man page content"""
 
     def __init__(self):
+        """Initialize man page parser with section regex patterns."""
         self.section_patterns = {
             "name": re.compile(r"^NAME\s*$", re.IGNORECASE | re.MULTILINE),
             "synopsis": re.compile(r"^SYNOPSIS\s*$", re.IGNORECASE | re.MULTILINE),
@@ -229,6 +230,7 @@ class ManPageKnowledgeIntegrator:
     """Main service for integrating man pages into machine-aware knowledge"""
 
     def __init__(self):
+        """Initialize knowledge integrator with parser and storage paths."""
         self.parser = ManPageParser()
         self.knowledge_base_dir = Path("data/system_knowledge")
         self.man_cache_dir = self.knowledge_base_dir / "man_pages"
@@ -679,6 +681,7 @@ if __name__ == "__main__":
     """Test the man page integration functionality"""
 
     async def test_integration():
+        """Run integration tests for man page extraction and caching."""
         integrator = await get_man_page_integrator()
 
         print("=== Man Page Integration Test ===")

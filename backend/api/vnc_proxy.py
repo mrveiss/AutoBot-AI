@@ -28,6 +28,55 @@ from src.utils.http_client import get_http_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+async def _forward_client_to_vnc(websocket: WebSocket, vnc_ws, vnc_type: str) -> None:
+    """Forward messages from frontend client to VNC server (Issue #315).
+
+    Args:
+        websocket: FastAPI WebSocket connection from client
+        vnc_ws: aiohttp WebSocket connection to VNC server
+        vnc_type: VNC type identifier for logging
+    """
+    try:
+        while True:
+            data = await websocket.receive()
+
+            if "bytes" in data:
+                await vnc_ws.send_bytes(data["bytes"])
+                logger.debug(f"[{vnc_type}] Frontend → VNC: {len(data['bytes'])} bytes")
+            elif "text" in data:
+                await vnc_ws.send_str(data["text"])
+                logger.debug(f"[{vnc_type}] Frontend → VNC: {data['text']}")
+            elif data.get("type") == "websocket.disconnect":
+                break
+    except WebSocketDisconnect:
+        logger.info(f"[{vnc_type}] Frontend disconnected")
+    except Exception as e:
+        logger.error(f"[{vnc_type}] Error forwarding to VNC: {e}")
+
+
+async def _forward_vnc_to_client(websocket: WebSocket, vnc_ws, vnc_type: str) -> None:
+    """Forward messages from VNC server to frontend client (Issue #315).
+
+    Args:
+        websocket: FastAPI WebSocket connection to client
+        vnc_ws: aiohttp WebSocket connection from VNC server
+        vnc_type: VNC type identifier for logging
+    """
+    try:
+        async for msg in vnc_ws:
+            if msg.type == aiohttp.WSMsgType.BINARY:
+                await websocket.send_bytes(msg.data)
+                logger.debug(f"[{vnc_type}] VNC → Frontend: {len(msg.data)} bytes")
+            elif msg.type == aiohttp.WSMsgType.TEXT:
+                await websocket.send_text(msg.data)
+                logger.debug(f"[{vnc_type}] VNC → Frontend: {msg.data}")
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                logger.error(f"[{vnc_type}] VNC WebSocket error: {vnc_ws.exception()}")
+                break
+    except Exception as e:
+        logger.error(f"[{vnc_type}] Error forwarding from VNC: {e}")
+
 # VNC endpoints
 VNC_ENDPOINTS = {
     "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}",
@@ -182,58 +231,10 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         http_client = get_http_client()
         session = await http_client.get_session()
         async with session.ws_connect(ws_url) as vnc_ws:
-
-            async def forward_to_vnc():
-                """Forward messages from frontend to VNC server"""
-                try:
-                    while True:
-                        data = await websocket.receive()
-
-                        if "bytes" in data:
-                            await vnc_ws.send_bytes(data["bytes"])
-                            # Agent observation point: could log binary data stats
-                            logger.debug(
-                                f"[{vnc_type}] Frontend → VNC: {len(data['bytes'])} bytes"
-                            )
-                        elif "text" in data:
-                            await vnc_ws.send_str(data["text"])
-                            # Agent observation point: could log text messages
-                            logger.debug(
-                                f"[{vnc_type}] Frontend → VNC: {data['text']}"
-                            )
-                        elif data.get("type") == "websocket.disconnect":
-                            break
-                except WebSocketDisconnect:
-                    logger.info(f"[{vnc_type}] Frontend disconnected")
-                except Exception as e:
-                    logger.error(f"[{vnc_type}] Error forwarding to VNC: {e}")
-
-            async def forward_from_vnc():
-                """Forward messages from VNC server to frontend"""
-                try:
-                    async for msg in vnc_ws:
-                        if msg.type == aiohttp.WSMsgType.BINARY:
-                            await websocket.send_bytes(msg.data)
-                            # Agent observation point: could analyze VNC protocol frames
-                            logger.debug(
-                                f"[{vnc_type}] VNC → Frontend: {len(msg.data)} bytes"
-                            )
-                        elif msg.type == aiohttp.WSMsgType.TEXT:
-                            await websocket.send_text(msg.data)
-                            # Agent observation point: could log control messages
-                            logger.debug(f"[{vnc_type}] VNC → Frontend: {msg.data}")
-                        elif msg.type == aiohttp.WSMsgType.ERROR:
-                            logger.error(
-                                f"[{vnc_type}] VNC WebSocket error: {vnc_ws.exception()}"
-                            )
-                            break
-                except Exception as e:
-                    logger.error(f"[{vnc_type}] Error forwarding from VNC: {e}")
-
-            # Run both forwarding tasks concurrently
+            # Run both forwarding tasks concurrently using extracted helpers (Issue #315)
             await asyncio.gather(
-                forward_to_vnc(),
-                forward_from_vnc(),
+                _forward_client_to_vnc(websocket, vnc_ws, vnc_type),
+                _forward_vnc_to_client(websocket, vnc_ws, vnc_type),
                 return_exceptions=True,
             )
 

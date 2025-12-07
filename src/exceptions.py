@@ -15,6 +15,7 @@ class AutoBotError(Exception):
     """Base exception class for all AutoBot-specific errors."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        """Initialize AutoBotError with message and optional details dictionary."""
         super().__init__(message)
         self.message = message
         self.details = details or {}
@@ -29,6 +30,7 @@ class ConfigurationError(AutoBotError):
     """Raised when configuration is invalid or missing."""
 
     def __init__(self, message: str, config_key: Optional[str] = None):
+        """Initialize ConfigurationError with message and optional config key."""
         super().__init__(message)
         self.config_key = config_key
         if config_key:
@@ -39,6 +41,7 @@ class LLMError(AutoBotError):
     """Base class for LLM-related errors."""
 
     def __init__(self, message: str, model: Optional[str] = None):
+        """Initialize LLMError with message and optional model name."""
         super().__init__(message)
         self.model = model
         if model:
@@ -57,6 +60,7 @@ class LLMResponseError(LLMError):
     """Raised when LLM returns invalid or unexpected response."""
 
     def __init__(self, message: str, status_code: Optional[int] = None, **kwargs):
+        """Initialize LLMResponseError with message and optional HTTP status code."""
         super().__init__(message, **kwargs)
         self.status_code = status_code
         if status_code:
@@ -72,6 +76,7 @@ class WorkflowError(AutoBotError):
         workflow_id: Optional[str] = None,
         step_id: Optional[str] = None,
     ):
+        """Initialize WorkflowError with message and optional workflow/step identifiers."""
         super().__init__(message)
         self.workflow_id = workflow_id
         self.step_id = step_id
@@ -95,6 +100,7 @@ class ValidationError(AutoBotError):
     def __init__(
         self, message: str, field: Optional[str] = None, value: Optional[Any] = None
     ):
+        """Initialize ValidationError with message and optional field/value info."""
         super().__init__(message)
         self.field = field
         self.value = value
@@ -118,6 +124,7 @@ class DatabaseError(KnowledgeBaseError):
     """Raised when database operations fail."""
 
     def __init__(self, message: str, operation: Optional[str] = None):
+        """Initialize DatabaseError with message and optional operation name."""
         super().__init__(message)
         self.operation = operation
         if operation:
@@ -132,6 +139,7 @@ class AgentError(AutoBotError):
     """Base class for agent-related errors."""
 
     def __init__(self, message: str, agent_name: Optional[str] = None):
+        """Initialize AgentError with message and optional agent name."""
         super().__init__(message)
         self.agent_name = agent_name
         if agent_name:
@@ -180,6 +188,7 @@ class ResourceNotFoundError(ResourceError):
         resource_type: Optional[str] = None,
         resource_id: Optional[str] = None,
     ):
+        """Initialize ResourceNotFoundError with message and resource identifiers."""
         super().__init__(message)
         self.resource_type = resource_type
         self.resource_id = resource_id
@@ -195,6 +204,7 @@ class ResourceLimitError(ResourceError):
     def __init__(
         self, message: str, limit: Optional[int] = None, current: Optional[int] = None
     ):
+        """Initialize ResourceLimitError with message and limit/current values."""
         super().__init__(message)
         self.limit = limit
         self.current = current
@@ -208,6 +218,7 @@ class IntegrationError(AutoBotError):
     """Base class for external integration errors."""
 
     def __init__(self, message: str, service: Optional[str] = None):
+        """Initialize IntegrationError with message and optional service name."""
         super().__init__(message)
         self.service = service
         if service:

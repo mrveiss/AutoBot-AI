@@ -569,6 +569,68 @@ async def execute_workflow(
     }
 
 
+async def _handle_approval_result(
+    approval_result: dict, step: dict, workflow: dict
+) -> bool:
+    """Handle approval result and update status (Issue #315: extracted).
+
+    Returns:
+        True if approved and should continue, False if cancelled
+    """
+    if not approval_result.get("approved", False):
+        async with _workflows_lock:
+            step["status"] = "cancelled"
+            workflow["status"] = "cancelled"
+        return False
+
+    async with _workflows_lock:
+        step["user_response"] = approval_result.get("user_input")
+    return True
+
+
+async def _wait_for_step_approval(
+    workflow_id: str, workflow: dict, step: dict
+) -> bool | None:
+    """Wait for step approval with timeout handling (Issue #315: extracted).
+
+    Returns:
+        True if approved, False if cancelled, None if timeout
+    """
+    from src.utils.async_cancellation import execute_with_cancellation
+
+    approval_key = f"{workflow_id}_{step['step_id']}"
+    approval_future = asyncio.Future()
+
+    async with _approvals_lock:
+        pending_approvals[approval_key] = approval_future
+
+    # Publish approval request event
+    await event_manager.publish(
+        "workflow_approval_required",
+        {
+            "workflow_id": workflow_id,
+            "step_id": step["step_id"],
+            "description": step["description"],
+            "context": {
+                "step_index": step.get("step_index", 0),
+                "agent_type": step["agent_type"],
+                "action": step["action"],
+            },
+        },
+    )
+
+    try:
+        approval_result = await execute_with_cancellation(
+            approval_future, f"workflow_approval_{workflow['id']}"
+        )
+        return await _handle_approval_result(approval_result, step, workflow)
+    except asyncio.TimeoutError:
+        async with _workflows_lock:
+            step["status"] = "timeout"
+            workflow["status"] = "timeout"
+        return None
+
+
 async def execute_workflow_steps(workflow_id: str, orchestrator):
     """Execute workflow steps in sequence with proper coordination."""
     async with _workflows_lock:
@@ -607,50 +669,14 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
             if requires_approval:
                 async with _workflows_lock:
                     step["status"] = "waiting_approval"
+                    step["step_index"] = step_index  # Store for helper
 
-                # Create approval request (thread-safe)
-                approval_key = f"{workflow_id}_{step['step_id']}"
-                approval_future = asyncio.Future()
-                async with _approvals_lock:
-                    pending_approvals[approval_key] = approval_future
-
-                # Publish approval request event
-                await event_manager.publish(
-                    "workflow_approval_required",
-                    {
-                        "workflow_id": workflow_id,
-                        "step_id": step["step_id"],
-                        "description": step["description"],
-                        "context": {
-                            "step_index": step_index,
-                            "agent_type": step["agent_type"],
-                            "action": step["action"],
-                        },
-                    },
+                # Wait for approval using helper (Issue #315)
+                approval_result = await _wait_for_step_approval(
+                    workflow_id, workflow, step
                 )
-
-                # Wait for approval with cancellation support
-                try:
-                    from src.utils.async_cancellation import execute_with_cancellation
-
-                    approval_result = await execute_with_cancellation(
-                        approval_future, f"workflow_approval_{workflow['id']}"
-                    )
-
-                    if not approval_result.get("approved", False):
-                        async with _workflows_lock:
-                            step["status"] = "cancelled"
-                            workflow["status"] = "cancelled"
-                        return
-
-                    async with _workflows_lock:
-                        step["user_response"] = approval_result.get("user_input")
-
-                except asyncio.TimeoutError:
-                    async with _workflows_lock:
-                        step["status"] = "timeout"
-                        workflow["status"] = "timeout"
-                    return
+                if approval_result is None or approval_result is False:
+                    return  # Timeout or cancelled
 
             # Execute the step (mock execution for demonstration)
             await execute_single_step(workflow_id, step, orchestrator)

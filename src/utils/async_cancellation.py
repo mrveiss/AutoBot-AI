@@ -33,6 +33,7 @@ class CancellationToken:
     """Cancellation token that can be checked for cancellation requests"""
 
     def __init__(self):
+        """Initialize cancellation token with default state and empty callbacks."""
         self.is_cancelled = False
         self.cancellation_reason: Optional[CancellationReason] = None
         self.cancellation_message: str = ""
@@ -79,6 +80,7 @@ class OperationCancelledException(Exception):
     """Exception raised when operation is cancelled via token"""
 
     def __init__(self, message: str):
+        """Initialize exception with message and optional cancellation reason."""
         super().__init__(message)
         self.reason: Optional[CancellationReason] = None
         self.message: str = message
@@ -88,6 +90,7 @@ class ResourceMonitor:
     """Monitor resource availability to trigger cancellation"""
 
     def __init__(self):
+        """Initialize resource monitor with default availability states."""
         self.redis_available = True
         self.llm_available = True
         self.kb_available = True
@@ -149,6 +152,7 @@ class SmartCancellationHandler:
     """Smart cancellation handler that monitors conditions and cancels appropriately"""
 
     def __init__(self):
+        """Initialize handler with empty token registry and monitor state."""
         self.active_tokens: Dict[str, CancellationToken] = {}
         self.monitor_task: Optional[asyncio.Task] = None
         self._shutdown = False
@@ -314,6 +318,7 @@ async def _execute_sync_with_cancellation(
     future = loop.create_future()
 
     def run_with_checks():
+        """Execute operation in thread and set future result on completion."""
         try:
             # Execute operation
             result = operation(*args, **kwargs)
@@ -377,13 +382,16 @@ class CancellationContext:
     """Context manager for cancellation token lifecycle"""
 
     def __init__(self, operation_id: str):
+        """Initialize context with operation identifier."""
         self.operation_id = operation_id
         self.token: Optional[CancellationToken] = None
 
     async def __aenter__(self) -> CancellationToken:
+        """Enter context and create cancellation token for the operation."""
         self.token = cancellation_handler.create_token(self.operation_id)
         return self.token
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit context and cleanup cancellation token."""
         if self.token:
             cancellation_handler.remove_token(self.operation_id)

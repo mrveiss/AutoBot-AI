@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for domain expertise keywords (Issue #326)
 DOMAIN_EXPERTISE_KEYWORDS = {"developer", "hacker", "researcher"}
 
+# Performance optimization: Lookup table for prompt type determination (Issue #315)
+PROMPT_TYPE_KEYWORDS = [
+    ("tool", "tool_guidance"),
+    ("fw.", "framework_response"),
+    ("behaviour", "behavioral_pattern"),
+    ("behavior", "behavioral_pattern"),
+    ("error", "error_handling"),
+    ("memory", "memory_pattern"),
+]
+
 
 class PromptKnowledgeSync:
     """
@@ -189,22 +199,19 @@ class PromptKnowledgeSync:
 
     def _determine_prompt_type(self, prompt_key: str, content: str) -> str:
         """
-        Determine the type of prompt based on key and content.
+        Determine the type of prompt based on key and content (Issue #315: flattened).
+        Uses lookup table to avoid deep if/elif nesting.
         """
-        if "tool" in prompt_key:
-            return "tool_guidance"
-        elif "fw." in prompt_key:
-            return "framework_response"
-        elif "behaviour" in prompt_key or "behavior" in prompt_key:
-            return "behavioral_pattern"
-        elif "error" in prompt_key:
-            return "error_handling"
-        elif "memory" in prompt_key:
-            return "memory_pattern"
-        elif any(domain in prompt_key for domain in DOMAIN_EXPERTISE_KEYWORDS):
+        # Check keyword lookup table (O(n) where n is small constant)
+        for keyword, prompt_type in PROMPT_TYPE_KEYWORDS:
+            if keyword in prompt_key:
+                return prompt_type
+
+        # Check domain expertise keywords
+        if any(domain in prompt_key for domain in DOMAIN_EXPERTISE_KEYWORDS):
             return "domain_expertise"
-        else:
-            return "operational_guidance"
+
+        return "operational_guidance"
 
     async def sync_prompts_to_knowledge(
         self, force_update: bool = False

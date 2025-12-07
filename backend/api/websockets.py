@@ -263,6 +263,96 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
         )
 
 
+async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data: dict) -> None:
+    """Add message to chat history if conditions are met (Issue #315 - extracted).
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        message_type: The message type
+        raw_data: The message data
+    """
+    text, sender = _format_event_for_chat(message_type, raw_data)
+
+    # Add to chat history if we have meaningful text and chat_history_manager is available
+    # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
+    if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
+        try:
+            await chat_history_manager.add_message(sender, text, message_type, raw_data)
+        except Exception as e:
+            logger.error(f"Failed to add message to chat history: {e}")
+
+
+async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager):
+    """Create broadcast event handler function (Issue #315 - extracted).
+
+    Args:
+        websocket: The WebSocket connection
+        chat_history_manager: Chat history manager instance
+
+    Returns:
+        Async function that broadcasts events
+    """
+    async def broadcast_event(event_data: dict):
+        """Broadcast event to WebSocket client and add to chat history."""
+        try:
+            await websocket.send_json(event_data)
+
+            # Add event to chat history manager
+            message_type = event_data.get("type", "default")
+            raw_data = event_data.get("payload", {})
+
+            await _add_to_chat_history(chat_history_manager, message_type, raw_data)
+
+        except RuntimeError as e:
+            if "websocket" in str(e).lower() or "connection" in str(e).lower():
+                logger.info(f"WebSocket connection lost during broadcast: {e}")
+            else:
+                logger.error(f"Runtime error in WebSocket broadcast: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in WebSocket broadcast: {e}")
+
+    return broadcast_event
+
+
+async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
+    """Main message receive loop for WebSocket (Issue #315 - extracted).
+
+    Args:
+        websocket: The WebSocket connection
+    """
+    while True:
+        # Check connection state before each operation
+        if websocket.client_state != WebSocketState.CONNECTED:
+            logger.info(
+                f"WebSocket state changed to {websocket.client_state}, ending loop"
+            )
+            break
+
+        try:
+            # ROOT CAUSE FIX: Replace timeout with natural message receive
+            message = await websocket.receive_text()
+            # No timeout needed - WebSocketDisconnect will be raised on disconnect
+        except WebSocketDisconnect as e:
+            logger.info(
+                f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'"
+            )
+            break
+        except Exception as e:
+            logger.error(f"Error receiving message: {e}")
+            # Check if it's a connection error vs other error
+            if "connection" in str(e).lower() or "closed" in str(e).lower():
+                logger.info(
+                    "Connection-related error detected, ending WebSocket loop"
+                )
+                break
+            else:
+                # Other errors, continue trying
+                continue
+
+        # Issue #336: Use extracted helper for message handling
+        await _handle_websocket_message(websocket, message)
+
+
 async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
     """Handle incoming WebSocket message (Issue #336 - extracted helper).
 
@@ -374,44 +464,8 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Failed to access chat_history_manager: {e}")
         # Don't send error to client here, just continue without chat history
 
-    async def broadcast_event(event_data: dict):
-        """
-        Broadcast event to WebSocket client and add to chat history.
-
-        Args:
-            event_data (dict): Event data containing type and payload
-        """
-        try:
-            await websocket.send_json(event_data)
-
-            # Add event to chat history manager
-            message_type = event_data.get("type", "default")
-            raw_data = event_data.get("payload", {})
-
-            # Issue #336: Use dispatch table instead of elif chain
-            text, sender = _format_event_for_chat(message_type, raw_data)
-
-            # Add to chat history if we have meaningful text and chat_history_manager is available
-            # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
-            # This prevents duplication from multiple persistence paths:
-            # - Streaming responses: persisted once at completion in chat_workflow_manager.py
-            # - Terminal messages: persisted by chat_integration.py and service.py
-            # - Approval requests: persisted by tool_handler.py::_persist_approval_request()
-            if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
-                try:
-                    await chat_history_manager.add_message(
-                        sender, text, message_type, raw_data
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to add message to chat history: {e}")
-
-        except RuntimeError as e:
-            if "websocket" in str(e).lower() or "connection" in str(e).lower():
-                logger.info(f"WebSocket connection lost during broadcast: {e}")
-            else:
-                logger.error(f"Runtime error in WebSocket broadcast: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error in WebSocket broadcast: {e}")
+    # Create broadcast event handler (Issue #315 - refactored)
+    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager)
 
     # Register the broadcast function with the event manager
     try:
@@ -427,38 +481,8 @@ async def websocket_endpoint(websocket: WebSocket):
         # Continue without event manager registration - this is not critical
 
     try:
-        # Keep connection alive and handle incoming messages
-        while True:
-            # Check connection state before each operation
-            if websocket.client_state != WebSocketState.CONNECTED:
-                logger.info(
-                    f"WebSocket state changed to {websocket.client_state}, ending loop"
-                )
-                break
-
-            try:
-                # ROOT CAUSE FIX: Replace timeout with natural message receive
-                message = await websocket.receive_text()
-                # No timeout needed - WebSocketDisconnect will be raised on disconnect
-            except WebSocketDisconnect as e:
-                logger.info(
-                    f"WebSocket disconnected during receive: code={e.code}, reason='{e.reason or 'no reason'}'"
-                )
-                break
-            except Exception as e:
-                logger.error(f"Error receiving message: {e}")
-                # Check if it's a connection error vs other error
-                if "connection" in str(e).lower() or "closed" in str(e).lower():
-                    logger.info(
-                        "Connection-related error detected, ending WebSocket loop"
-                    )
-                    break
-                else:
-                    # Other errors, continue trying
-                    continue
-
-            # Issue #336: Use extracted helper for message handling
-            await _handle_websocket_message(websocket, message)
+        # Keep connection alive and handle incoming messages (Issue #315 - refactored)
+        await _websocket_message_receive_loop(websocket)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected normally")
@@ -502,79 +526,11 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
         async with _ws_clients_lock:
             _npu_worker_ws_clients.append(websocket)
 
-        # Send initial worker list
-        try:
-            from backend.services.npu_worker_manager import get_worker_manager
+        # Send initial worker list (Issue #315 - refactored)
+        await _send_initial_worker_list(websocket)
 
-            worker_manager = await get_worker_manager()
-            workers = await worker_manager.list_workers()
-
-            # Convert workers to frontend format
-            workers_data = [
-                {
-                    "id": w.config.id,
-                    "name": w.config.name,
-                    "platform": w.config.platform,
-                    "ip_address": (
-                        w.config.url.split("//")[1].split(":")[0]
-                        if "://" in w.config.url
-                        else ""
-                    ),
-                    "port": (
-                        int(w.config.url.split(":")[-1]) if ":" in w.config.url else 0
-                    ),
-                    "status": w.status.status.value,
-                    "current_load": w.status.current_load,
-                    "max_capacity": w.config.max_concurrent_tasks,
-                    "uptime": f"{int(w.status.uptime_seconds)}s",
-                    "performance_metrics": w.metrics.dict() if w.metrics else {},
-                    "priority": w.config.priority,
-                    "weight": w.config.weight,
-                    "last_heartbeat": (
-                        w.status.last_heartbeat.isoformat() + "Z"
-                        if w.status.last_heartbeat
-                        else ""
-                    ),
-                    "created_at": "",  # Not tracked
-                }
-                for w in workers
-            ]
-
-            await websocket.send_json(
-                {"type": "initial_workers", "workers": workers_data}
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to send initial worker list: {e}", exc_info=True)
-
-        # Keep connection alive and handle incoming messages
-        while websocket.client_state == WebSocketState.CONNECTED:
-            try:
-                # No timeout - WebSocketDisconnect will be raised on disconnect
-                message = await websocket.receive_text()
-
-                # Handle ping/pong for connection keep-alive
-                try:
-                    data = json.loads(message)
-                    if data.get("type") == "ping":
-                        await websocket.send_json({"type": "pong"})
-                    else:
-                        logger.debug(f"Received NPU worker WebSocket message: {data}")
-                except json.JSONDecodeError:
-                    logger.warning(
-                        f"Received invalid JSON via NPU worker WebSocket: {message}"
-                    )
-
-            except WebSocketDisconnect:
-                logger.info("NPU Worker WebSocket client disconnected")
-                break
-            except Exception as e:
-                logger.error(f"Error in NPU worker WebSocket: {e}")
-                if "connection" in str(e).lower() or "closed" in str(e).lower():
-                    logger.info("Connection-related error, ending WebSocket loop")
-                    break
-                else:
-                    continue
+        # Keep connection alive and handle incoming messages (Issue #315 - refactored)
+        await _npu_message_receive_loop(websocket)
 
     except Exception as e:
         logger.error(f"NPU Worker WebSocket error: {e}", exc_info=True)
@@ -584,6 +540,46 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
             if websocket in _npu_worker_ws_clients:
                 _npu_worker_ws_clients.remove(websocket)
         logger.info("NPU Worker WebSocket connection cleanup completed")
+
+
+# Issue #315: NPU worker event type mapping (dispatch table pattern)
+_NPU_EVENT_TYPE_MAP = {
+    "worker.status.changed": lambda data: {
+        "type": "worker_update",
+        "worker": data.get("worker", {}),
+    },
+    "worker.added": lambda data: {
+        "type": "worker_added",
+        "worker": data.get("worker", {}),
+    },
+    "worker.updated": lambda data: {
+        "type": "worker_update",
+        "worker": data.get("worker", {}),
+    },
+    "worker.removed": lambda data: {
+        "type": "worker_removed",
+        "worker_id": data.get("worker_id", ""),
+    },
+    "worker.metrics.updated": lambda data: {
+        "type": "worker_metrics_update",
+        "worker_id": data.get("worker_id", ""),
+        "metrics": data.get("data", {}).get("metrics", {}),
+    },
+}
+
+
+def _prepare_npu_worker_message(event_data: dict) -> dict:
+    """Prepare WebSocket message from NPU worker event (Issue #315 - refactored).
+
+    Args:
+        event_data: Event data containing type and payload
+
+    Returns:
+        Formatted message dict, or empty dict if event type unknown
+    """
+    event_type = event_data.get("event", "")
+    formatter = _NPU_EVENT_TYPE_MAP.get(event_type)
+    return formatter(event_data) if formatter else {}
 
 
 async def broadcast_npu_worker_event(event_data: dict):
@@ -596,65 +592,163 @@ async def broadcast_npu_worker_event(event_data: dict):
     if not _npu_worker_ws_clients:
         return
 
-    # Prepare message based on event type
-    event_type = event_data.get("event", "")
-    message = {}
-
-    if event_type == "worker.status.changed":
-        message = {
-            "type": "worker_update",
-            "worker": event_data.get("worker", {}),
-        }
-    elif event_type == "worker.added":
-        message = {
-            "type": "worker_added",
-            "worker": event_data.get("worker", {}),
-        }
-    elif event_type == "worker.updated":
-        message = {
-            "type": "worker_update",
-            "worker": event_data.get("worker", {}),
-        }
-    elif event_type == "worker.removed":
-        message = {
-            "type": "worker_removed",
-            "worker_id": event_data.get("worker_id", ""),
-        }
-    elif event_type == "worker.metrics.updated":
-        message = {
-            "type": "worker_metrics_update",
-            "worker_id": event_data.get("worker_id", ""),
-            "metrics": event_data.get("data", {}).get("metrics", {}),
-        }
-
+    # Prepare message based on event type (Issue #315 - refactored)
+    message = _prepare_npu_worker_message(event_data)
     if not message:
         return
 
-    # Broadcast to all connected clients (thread-safe)
+    # Broadcast to all connected clients (thread-safe) (Issue #315 - refactored)
     disconnected_clients = []
 
     async with _ws_clients_lock:
         clients_copy = list(_npu_worker_ws_clients)
 
     for client in clients_copy:
-        try:
-            if client.client_state == WebSocketState.CONNECTED:
-                await client.send_json(message)
-            else:
-                disconnected_clients.append(client)
-        except RuntimeError as e:
-            logger.debug(f"WebSocket send failed (client disconnected): {e}")
-            disconnected_clients.append(client)
-        except Exception as e:
-            logger.error(f"Error broadcasting NPU worker event: {e}")
+        success = await _broadcast_to_client(client, message)
+        if not success:
             disconnected_clients.append(client)
 
     # Remove disconnected clients (thread-safe)
-    if disconnected_clients:
-        async with _ws_clients_lock:
-            for client in disconnected_clients:
-                if client in _npu_worker_ws_clients:
-                    _npu_worker_ws_clients.remove(client)
+    await _cleanup_disconnected_clients(disconnected_clients)
+
+
+def _format_worker_for_frontend(w) -> dict:
+    """Format worker data for frontend consumption (Issue #315 - extracted).
+
+    Args:
+        w: Worker object
+
+    Returns:
+        Formatted worker dictionary
+    """
+    return {
+        "id": w.config.id,
+        "name": w.config.name,
+        "platform": w.config.platform,
+        "ip_address": (
+            w.config.url.split("//")[1].split(":")[0]
+            if "://" in w.config.url
+            else ""
+        ),
+        "port": (
+            int(w.config.url.split(":")[-1]) if ":" in w.config.url else 0
+        ),
+        "status": w.status.status.value,
+        "current_load": w.status.current_load,
+        "max_capacity": w.config.max_concurrent_tasks,
+        "uptime": f"{int(w.status.uptime_seconds)}s",
+        "performance_metrics": w.metrics.dict() if w.metrics else {},
+        "priority": w.config.priority,
+        "weight": w.config.weight,
+        "last_heartbeat": (
+            w.status.last_heartbeat.isoformat() + "Z"
+            if w.status.last_heartbeat
+            else ""
+        ),
+        "created_at": "",  # Not tracked
+    }
+
+
+async def _send_initial_worker_list(websocket: WebSocket) -> None:
+    """Send initial worker list to newly connected client (Issue #315 - extracted).
+
+    Args:
+        websocket: The WebSocket connection
+    """
+    try:
+        from backend.services.npu_worker_manager import get_worker_manager
+
+        worker_manager = await get_worker_manager()
+        workers = await worker_manager.list_workers()
+
+        # Convert workers to frontend format
+        workers_data = [_format_worker_for_frontend(w) for w in workers]
+
+        await websocket.send_json(
+            {"type": "initial_workers", "workers": workers_data}
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to send initial worker list: {e}", exc_info=True)
+
+
+async def _npu_message_receive_loop(websocket: WebSocket) -> None:
+    """Main message receive loop for NPU worker WebSocket (Issue #315 - extracted).
+
+    Args:
+        websocket: The WebSocket connection
+    """
+    while websocket.client_state == WebSocketState.CONNECTED:
+        try:
+            # No timeout - WebSocketDisconnect will be raised on disconnect
+            message = await websocket.receive_text()
+            await _handle_npu_websocket_message(websocket, message)
+
+        except WebSocketDisconnect:
+            logger.info("NPU Worker WebSocket client disconnected")
+            break
+        except Exception as e:
+            logger.error(f"Error in NPU worker WebSocket: {e}")
+            if "connection" in str(e).lower() or "closed" in str(e).lower():
+                logger.info("Connection-related error, ending WebSocket loop")
+                break
+            else:
+                continue
+
+
+async def _handle_npu_websocket_message(websocket: WebSocket, message: str) -> None:
+    """Handle incoming NPU worker WebSocket message (Issue #315 - extracted).
+
+    Args:
+        websocket: The WebSocket connection
+        message: The raw message string
+    """
+    try:
+        data = json.loads(message)
+        if data.get("type") == "ping":
+            await websocket.send_json({"type": "pong"})
+        else:
+            logger.debug(f"Received NPU worker WebSocket message: {data}")
+    except json.JSONDecodeError:
+        logger.warning(f"Received invalid JSON via NPU worker WebSocket: {message}")
+
+
+async def _broadcast_to_client(client: WebSocket, message: dict) -> bool:
+    """Broadcast message to a single client (Issue #315 - extracted).
+
+    Args:
+        client: The WebSocket client
+        message: The message to send
+
+    Returns:
+        True if successful, False if client should be removed
+    """
+    try:
+        if client.client_state == WebSocketState.CONNECTED:
+            await client.send_json(message)
+            return True
+        return False
+    except RuntimeError as e:
+        logger.debug(f"WebSocket send failed (client disconnected): {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error broadcasting NPU worker event: {e}")
+        return False
+
+
+async def _cleanup_disconnected_clients(disconnected_clients: list) -> None:
+    """Remove disconnected clients from the global list (Issue #315 - extracted).
+
+    Args:
+        disconnected_clients: List of clients to remove
+    """
+    if not disconnected_clients:
+        return
+
+    async with _ws_clients_lock:
+        for client in disconnected_clients:
+            if client in _npu_worker_ws_clients:
+                _npu_worker_ws_clients.remove(client)
 
 
 def init_npu_worker_websocket():

@@ -29,6 +29,39 @@ SUCCESS_INDICATORS = {"thanks", "perfect", "great", "works", "solved"}
 FRUSTRATION_INDICATORS = {"not working", "still", "again", "wrong", "frustrated"}
 
 
+def _parse_timestamp(ts_value: Any) -> Optional[datetime]:
+    """Parse timestamp from various formats (Issue #315)."""
+    if not ts_value:
+        return None
+    try:
+        if isinstance(ts_value, str):
+            return datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
+        return ts_value
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_session_timestamp(created: Any) -> Optional[datetime]:
+    """Parse session timestamp from various formats (Issue #315)."""
+    if not created:
+        return None
+    try:
+        if isinstance(created, str):
+            return datetime.fromisoformat(created.replace("Z", "+00:00"))
+        return created
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_session_in_range(session: Dict[str, Any], cutoff: datetime) -> bool:
+    """Check if session is within the time range (Issue #315)."""
+    created = session.get("created_at") or session.get("timestamp")
+    ts = _parse_session_timestamp(created)
+    if ts is None:
+        return True  # Include if can't parse date
+    return ts.replace(tzinfo=None) >= cutoff
+
+
 # ============================================================================
 # Pydantic Models
 # ============================================================================
@@ -143,6 +176,7 @@ class ConversationAnalyzer:
     """Engine for analyzing conversation patterns"""
 
     def __init__(self):
+        """Initialize conversation analyzer with intent cache."""
         self.intent_cache: Dict[str, str] = {}
 
     def detect_intent(self, message: str) -> Tuple[str, str]:
@@ -428,40 +462,30 @@ conversation_analyzer = ConversationAnalyzer()
 
 
 async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
-    """Load chat sessions from storage"""
+    """Load chat sessions from storage (Issue #315 - reduced nesting)."""
+    import json
+
     sessions = []
     cutoff = datetime.now() - timedelta(hours=hours)
 
     # Try to load from chat history files
     chat_dir = PATH.DATA_DIR / "chat_history" if hasattr(PATH, "DATA_DIR") else Path("data/chat_history")
 
-    if chat_dir.exists():
-        for session_file in chat_dir.glob("*.json"):
-            try:
-                async with aiofiles.open(session_file, "r", encoding="utf-8") as f:
-                    import json
-                    content = await f.read()
-                    session = json.loads(content)
+    if not chat_dir.exists():
+        return sessions
 
-                    # Check timestamp
-                    created = session.get("created_at") or session.get("timestamp")
-                    if created:
-                        try:
-                            if isinstance(created, str):
-                                ts = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                            else:
-                                ts = created
+    for session_file in chat_dir.glob("*.json"):
+        try:
+            async with aiofiles.open(session_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+                session = json.loads(content)
 
-                            if ts.replace(tzinfo=None) >= cutoff:
-                                sessions.append(session)
-                        except (ValueError, TypeError):
-                            sessions.append(session)  # Include if can't parse date
-                    else:
-                        sessions.append(session)
-            except OSError as e:
-                logger.debug(f"Failed to read session file {session_file}: {e}")
-            except Exception as e:
-                logger.debug(f"Error loading session {session_file}: {e}")
+                if _is_session_in_range(session, cutoff):
+                    sessions.append(session)
+        except OSError as e:
+            logger.debug(f"Failed to read session file {session_file}: {e}")
+        except Exception as e:
+            logger.debug(f"Error loading session {session_file}: {e}")
 
     return sessions
 
@@ -680,7 +704,7 @@ async def get_bottlenecks(
 async def get_hourly_distribution(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
 ):
-    """Get conversation distribution by hour"""
+    """Get conversation distribution by hour (Issue #315: depth 6→3)"""
     try:
         conversations = await load_chat_sessions(hours)
 
@@ -689,18 +713,13 @@ async def get_hourly_distribution(
 
         for conv in conversations:
             messages = conv.get("messages", [])
-            if messages:
-                ts_str = messages[0].get("timestamp")
-                if ts_str:
-                    try:
-                        if isinstance(ts_str, str):
-                            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                        else:
-                            ts = ts_str
-                        hourly[ts.strftime("%H:00")] += 1
-                        daily[ts.strftime("%A")] += 1
-                    except (ValueError, TypeError) as e:
-                        logger.debug("Failed to parse message timestamp: %s", e)
+            if not messages:
+                continue
+            ts = _parse_timestamp(messages[0].get("timestamp"))
+            if not ts:
+                continue
+            hourly[ts.strftime("%H:00")] += 1
+            daily[ts.strftime("%A")] += 1
 
         return {
             "hourly_distribution": dict(sorted(hourly.items())),

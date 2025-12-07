@@ -54,6 +54,7 @@ class LongTermMemoryManager:
     """
 
     def __init__(self, config_path: Optional[str] = None):
+        """Initialize long-term memory manager with SQLite backend."""
         # Use centralized configuration manager
         self.config = global_config_manager.to_dict()
 

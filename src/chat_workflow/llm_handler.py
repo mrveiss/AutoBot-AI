@@ -232,7 +232,8 @@ NEVER teach commands - ALWAYS execute them."""
         self, command: str, stdout: str, stderr: str, return_code: int
     ) -> str:
         """Build the interpretation prompt for LLM (Issue #332 - extracted helper)."""
-        return f"""The command `{command}` was executed successfully.
+        # Issue #352: Modified to not imply task completion - just explain this step's results
+        return f"""The command `{command}` was executed.
 
 Output:
 ```
@@ -241,8 +242,8 @@ Output:
 ```
 Return code: {return_code}
 
-Please interpret this output for the user in a clear, helpful way.
-Explain what it means and answer their original question."""
+Briefly explain what this output shows. Keep it concise (2-3 sentences max).
+Do NOT conclude the task or provide a final summary - just explain this specific result."""
 
     async def _interpret_command_results(
         self,

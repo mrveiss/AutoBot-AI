@@ -62,46 +62,58 @@ class SecurityEvent:
 
     @property
     def user_id(self) -> str:
+        """Get user ID from event, defaulting to 'unknown'."""
         return self.raw_event.get("user_id", "unknown")
 
     @property
     def source_ip(self) -> str:
+        """Get source IP address from event, defaulting to 'unknown'."""
         return self.raw_event.get("source_ip", "unknown")
 
     @property
     def action(self) -> str:
+        """Get action type from event."""
         return self.raw_event.get("action", "")
 
     @property
     def resource(self) -> str:
+        """Get resource identifier from event."""
         return self.raw_event.get("resource", "")
 
     @property
     def timestamp(self) -> datetime:
+        """Get event timestamp as datetime object."""
         timestamp_str = self.raw_event.get("timestamp", datetime.utcnow().isoformat())
         return datetime.fromisoformat(timestamp_str)
 
     @property
     def details(self) -> Dict:
+        """Get event details dictionary."""
         return self.raw_event.get("details", {})
 
     @property
     def outcome(self) -> str:
+        """Get event outcome string."""
         return self.raw_event.get("outcome", "")
 
     def is_authentication_event(self) -> bool:
+        """Check if event is an authentication action."""
         return self.action == "authentication"
 
     def is_authentication_failure(self) -> bool:
+        """Check if event is a failed authentication attempt."""
         return self.is_authentication_event() and self.outcome == "failure"
 
     def is_file_operation(self) -> bool:
+        """Check if event is a file system operation."""
         return self.action in {"file_read", "file_write", "file_delete", "file_upload"}
 
     def is_api_request(self) -> bool:
+        """Check if event is an API request."""
         return self.action == "api_request"
 
     def get_timestamp_hour(self) -> int:
+        """Get the hour component of the event timestamp."""
         return self.timestamp.hour
 
     def get_command_content(self) -> str:
@@ -111,18 +123,23 @@ class SecurityEvent:
         return f"{command} {args}"
 
     def get_filename(self) -> str:
+        """Get filename from event details."""
         return self.details.get("filename", "")
 
     def get_file_content_preview(self) -> str:
+        """Get file content preview from event details."""
         return self.details.get("content_preview", "")
 
     def get_file_size(self) -> int:
+        """Get file size in bytes from event details."""
         return self.details.get("file_size", 0)
 
     def get_response_size(self) -> int:
+        """Get response size in bytes from event details."""
         return self.details.get("response_size", 0)
 
     def get_data_volume(self) -> int:
+        """Get data volume in bytes from event details."""
         return self.details.get("data_volume", 0)
 
 
@@ -880,6 +897,7 @@ class ThreatDetectionEngine:
             PATH.get_config_path("security", "threat_detection.yaml")
         ),
     ):
+        """Initialize threat detection engine with ML models and configuration."""
         self.config_path = config_path
         self.config = self._load_config()
 

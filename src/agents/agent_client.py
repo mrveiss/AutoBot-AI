@@ -36,6 +36,7 @@ class AgentClientConfig:
     """Configuration for agent deployment modes"""
 
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
+        """Initialize agent client config with deployment settings."""
         self.config = config_dict or {}
         self.default_mode = DeploymentMode.LOCAL
         self.container_base_url = get_service_url("ai-stack")
@@ -74,6 +75,7 @@ class AgentRegistry:
     """Registry for tracking available agents and their health"""
 
     def __init__(self):
+        """Initialize registry with empty agent and health tracking dicts."""
         self.agents: Dict[str, BaseAgent] = {}
         self.agent_health: Dict[str, AgentHealth] = {}
         self.last_health_check: Dict[str, datetime] = {}
@@ -135,6 +137,7 @@ class ContainerAgentProxy(BaseAgent):
     def __init__(
         self, agent_type: str, container_url: str
     ):
+        """Initialize container proxy with agent type and endpoint URL."""
         super().__init__(agent_type, DeploymentMode.CONTAINER)
         self.container_url = container_url.rstrip("/")
         self._http_client = get_http_client()  # Use singleton HTTP client
@@ -203,6 +206,7 @@ class AgentClient:
     """
 
     def __init__(self, config: Optional[AgentClientConfig] = None):
+        """Initialize unified agent client with registry and stats tracking."""
         self.config = config or AgentClientConfig()
         self.registry = AgentRegistry()
         self.container_agents: Dict[str, ContainerAgentProxy] = {}

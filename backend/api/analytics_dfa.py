@@ -453,47 +453,68 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         call_name = self._get_call_name(node)
         return call_name in SANITIZERS or any(s in call_name for s in SANITIZERS)
 
-    def _get_taint_from_expr(self, node: ast.AST) -> TaintLevel:
-        """Determine taint level of an expression."""
-        if isinstance(node, ast.Name):
-            return self.taint_map.get(node.id, TaintLevel.UNTAINTED)
-        elif isinstance(node, ast.Call):
-            # Check if it's a taint source
-            taint_info = self._check_taint_source(node)
-            if taint_info:
-                return taint_info[1]
-            # Check if it's a sanitizer
-            if self._is_sanitizer(node):
-                return TaintLevel.SANITIZED
-            # Propagate taint from arguments
-            max_taint = TaintLevel.UNTAINTED
-            for arg in node.args:
-                arg_taint = self._get_taint_from_expr(arg)
-                if arg_taint == TaintLevel.TAINTED:
-                    return TaintLevel.TAINTED
-                elif arg_taint == TaintLevel.PARTIALLY_TAINTED:
-                    max_taint = TaintLevel.PARTIALLY_TAINTED
-            return max_taint
-        elif isinstance(node, ast.BinOp):
-            # String concatenation or arithmetic
-            left_taint = self._get_taint_from_expr(node.left)
-            right_taint = self._get_taint_from_expr(node.right)
-            if left_taint == TaintLevel.TAINTED or right_taint == TaintLevel.TAINTED:
+    def _taint_from_name(self, node: ast.Name) -> TaintLevel:
+        """Get taint from Name node (Issue #315)."""
+        return self.taint_map.get(node.id, TaintLevel.UNTAINTED)
+
+    def _taint_from_call(self, node: ast.Call) -> TaintLevel:
+        """Get taint from Call node (Issue #315)."""
+        taint_info = self._check_taint_source(node)
+        if taint_info:
+            return taint_info[1]
+        if self._is_sanitizer(node):
+            return TaintLevel.SANITIZED
+        # Propagate taint from arguments
+        max_taint = TaintLevel.UNTAINTED
+        for arg in node.args:
+            arg_taint = self._get_taint_from_expr(arg)
+            if arg_taint == TaintLevel.TAINTED:
                 return TaintLevel.TAINTED
-            if left_taint == TaintLevel.PARTIALLY_TAINTED or right_taint == TaintLevel.PARTIALLY_TAINTED:
-                return TaintLevel.PARTIALLY_TAINTED
-        elif isinstance(node, ast.JoinedStr):
-            # f-strings
-            for value in node.values:
-                if isinstance(value, ast.FormattedValue):
-                    taint = self._get_taint_from_expr(value.value)
-                    if taint in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
-                        return taint
-        elif isinstance(node, (ast.Constant, ast.Num, ast.Str)):
+            if arg_taint == TaintLevel.PARTIALLY_TAINTED:
+                max_taint = TaintLevel.PARTIALLY_TAINTED
+        return max_taint
+
+    def _taint_from_binop(self, node: ast.BinOp) -> TaintLevel:
+        """Get taint from BinOp (Issue #315)."""
+        left_taint = self._get_taint_from_expr(node.left)
+        right_taint = self._get_taint_from_expr(node.right)
+        if TaintLevel.TAINTED in (left_taint, right_taint):
+            return TaintLevel.TAINTED
+        if TaintLevel.PARTIALLY_TAINTED in (left_taint, right_taint):
+            return TaintLevel.PARTIALLY_TAINTED
+        return TaintLevel.UNTAINTED
+
+    def _taint_from_joinedstr(self, node: ast.JoinedStr) -> TaintLevel:
+        """Get taint from f-string (Issue #315)."""
+        for value in node.values:
+            if isinstance(value, ast.FormattedValue):
+                taint = self._get_taint_from_expr(value.value)
+                if taint in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+                    return taint
+        return TaintLevel.UNTAINTED
+
+    def _get_taint_from_expr(self, node: ast.AST) -> TaintLevel:
+        """Determine taint level of an expression (Issue #315 - dispatch table)."""
+        # Dispatch table for taint analysis
+        taint_handlers = {
+            ast.Name: self._taint_from_name,
+            ast.Call: self._taint_from_call,
+            ast.BinOp: self._taint_from_binop,
+            ast.JoinedStr: self._taint_from_joinedstr,
+        }
+
+        handler = taint_handlers.get(type(node))
+        if handler:
+            return handler(node)
+
+        # Constants are untainted
+        if isinstance(node, (ast.Constant, ast.Num, ast.Str)):
             return TaintLevel.UNTAINTED
-        elif isinstance(node, ast.Subscript):
+
+        # Propagate through subscript/attribute
+        if isinstance(node, ast.Subscript):
             return self._get_taint_from_expr(node.value)
-        elif isinstance(node, ast.Attribute):
+        if isinstance(node, ast.Attribute):
             return self._get_taint_from_expr(node.value)
 
         return TaintLevel.UNTAINTED
@@ -780,38 +801,71 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def _extract_from_name(self, expr: ast.Name, target_var: str, target_line: int):
+        """Extract edge from Name node (Issue #315)."""
+        self._add_edge(
+            source_var=expr.id,
+            source_line=expr.lineno if hasattr(expr, "lineno") else target_line,
+            target_var=target_var,
+            target_line=target_line,
+        )
+
+    def _extract_from_binop(self, expr: ast.BinOp, target_var: str, target_line: int):
+        """Extract edges from BinOp (Issue #315)."""
+        self._extract_edges_from_expr(expr.left, target_var, target_line)
+        self._extract_edges_from_expr(expr.right, target_var, target_line)
+
+    def _extract_from_call(self, expr: ast.Call, target_var: str, target_line: int):
+        """Extract edges from Call arguments (Issue #315)."""
+        for arg in expr.args:
+            self._extract_edges_from_expr(arg, target_var, target_line)
+
+    def _extract_from_subscript(self, expr: ast.Subscript, target_var: str, target_line: int):
+        """Extract edges from Subscript (Issue #315)."""
+        self._extract_edges_from_expr(expr.value, target_var, target_line)
+
+    def _extract_from_attribute(self, expr: ast.Attribute, target_var: str, target_line: int):
+        """Extract edges from Attribute (Issue #315)."""
+        self._extract_edges_from_expr(expr.value, target_var, target_line)
+
+    def _extract_from_joinedstr(self, expr: ast.JoinedStr, target_var: str, target_line: int):
+        """Extract edges from f-string (Issue #315)."""
+        for value in expr.values:
+            if isinstance(value, ast.FormattedValue):
+                self._extract_edges_from_expr(value.value, target_var, target_line)
+
+    def _extract_from_collection(self, expr, target_var: str, target_line: int):
+        """Extract edges from List/Tuple/Set (Issue #315)."""
+        for elt in expr.elts:
+            self._extract_edges_from_expr(elt, target_var, target_line)
+
+    def _extract_from_dict(self, expr: ast.Dict, target_var: str, target_line: int):
+        """Extract edges from Dict (Issue #315)."""
+        for key in expr.keys:
+            if key:
+                self._extract_edges_from_expr(key, target_var, target_line)
+        for value in expr.values:
+            self._extract_edges_from_expr(value, target_var, target_line)
+
     def _extract_edges_from_expr(self, expr: ast.AST, target_var: str, target_line: int):
-        """Extract data flow edges from an expression to a target variable."""
-        if isinstance(expr, ast.Name):
-            self._add_edge(
-                source_var=expr.id,
-                source_line=expr.lineno if hasattr(expr, "lineno") else target_line,
-                target_var=target_var,
-                target_line=target_line,
-            )
-        elif isinstance(expr, ast.BinOp):
-            self._extract_edges_from_expr(expr.left, target_var, target_line)
-            self._extract_edges_from_expr(expr.right, target_var, target_line)
-        elif isinstance(expr, ast.Call):
-            for arg in expr.args:
-                self._extract_edges_from_expr(arg, target_var, target_line)
-        elif isinstance(expr, ast.Subscript):
-            self._extract_edges_from_expr(expr.value, target_var, target_line)
-        elif isinstance(expr, ast.Attribute):
-            self._extract_edges_from_expr(expr.value, target_var, target_line)
-        elif isinstance(expr, ast.JoinedStr):
-            for value in expr.values:
-                if isinstance(value, ast.FormattedValue):
-                    self._extract_edges_from_expr(value.value, target_var, target_line)
-        elif isinstance(expr, (ast.List, ast.Tuple, ast.Set)):
-            for elt in expr.elts:
-                self._extract_edges_from_expr(elt, target_var, target_line)
-        elif isinstance(expr, ast.Dict):
-            for key in expr.keys:
-                if key:
-                    self._extract_edges_from_expr(key, target_var, target_line)
-            for value in expr.values:
-                self._extract_edges_from_expr(value, target_var, target_line)
+        """Extract data flow edges from an expression (Issue #315 - dispatch table)."""
+        # Dispatch table for expression type handlers
+        handlers = {
+            ast.Name: self._extract_from_name,
+            ast.BinOp: self._extract_from_binop,
+            ast.Call: self._extract_from_call,
+            ast.Subscript: self._extract_from_subscript,
+            ast.Attribute: self._extract_from_attribute,
+            ast.JoinedStr: self._extract_from_joinedstr,
+            ast.List: self._extract_from_collection,
+            ast.Tuple: self._extract_from_collection,
+            ast.Set: self._extract_from_collection,
+            ast.Dict: self._extract_from_dict,
+        }
+
+        handler = handlers.get(type(expr))
+        if handler:
+            handler(expr, target_var, target_line)
 
 
 # =============================================================================

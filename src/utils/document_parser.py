@@ -78,10 +78,34 @@ class DocumentParser:
 
         return text, metadata
 
+    def _get_parser_for_extension(self, extension: str):
+        """Get parser function for extension (Issue #315 - dispatch table)."""
+        # Direct extension mapping for single-extension formats
+        single_ext_parsers = {
+            ".pdf": self._parse_pdf,
+            ".xlsx": self._parse_xlsx,
+            ".odt": self._parse_odt,
+            ".ods": self._parse_ods,
+            ".doc": self._parse_doc_fallback,
+        }
+
+        if extension in single_ext_parsers:
+            return single_ext_parsers[extension]
+
+        # Check extension sets for multi-extension formats (O(1) lookup)
+        if extension in DOCX_EXTENSIONS:
+            return self._parse_docx
+        if extension in POWERPOINT_EXTENSIONS:
+            return self._parse_pptx
+        if extension in OPENDOCUMENT_GRAPHICS_EXTENSIONS:
+            return self._parse_odp
+
+        return None
+
     def _extract_text_sync(
         self, file_path: Path, extension: str
     ) -> Tuple[str, Dict[str, any]]:
-        """Synchronous text extraction (runs in thread pool)"""
+        """Synchronous text extraction (Issue #315 - refactored to dispatch table)."""
         metadata = {
             "file_name": file_path.name,
             "file_size": file_path.stat().st_size,
@@ -89,26 +113,11 @@ class DocumentParser:
         }
 
         try:
-            if extension == ".pdf":
-                text = self._parse_pdf(file_path, metadata)
-            elif extension in DOCX_EXTENSIONS:  # O(1) lookup (Issue #326)
-                text = self._parse_docx(file_path, metadata)
-            elif extension == ".xlsx":
-                text = self._parse_xlsx(file_path, metadata)
-            elif extension in POWERPOINT_EXTENSIONS:  # O(1) lookup (Issue #326)
-                text = self._parse_pptx(file_path, metadata)
-            elif extension == ".odt":
-                text = self._parse_odt(file_path, metadata)
-            elif extension == ".ods":
-                text = self._parse_ods(file_path, metadata)
-            elif extension in OPENDOCUMENT_GRAPHICS_EXTENSIONS:  # O(1) lookup (Issue #326)
-                text = self._parse_odp(file_path, metadata)
-            elif extension == ".doc":
-                # Old Word format - requires textract or antiword
-                text = self._parse_doc_fallback(file_path, metadata)
-            else:
+            parser = self._get_parser_for_extension(extension)
+            if parser is None:
                 raise ValueError(f"No parser implemented for {extension}")
 
+            text = parser(file_path, metadata)
             metadata["extraction_success"] = True
             metadata["text_length"] = len(text)
 

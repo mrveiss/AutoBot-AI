@@ -43,6 +43,7 @@ class AsyncServiceContainer:
     """
 
     def __init__(self):
+        """Initialize container with empty service registry and core services."""
         self._services: Dict[str, ServiceDescriptor] = {}
         self._instances: Dict[str, Any] = {}
         self._initialization_lock = asyncio.Lock()
@@ -219,6 +220,7 @@ class AsyncServiceContainer:
         temp_visited = set()
 
         def visit(service_name: str):
+            """Recursively visit service and its dependencies for ordering."""
             if service_name in temp_visited:
                 raise ValueError(
                     f"Circular dependency detected involving {service_name}"
@@ -396,7 +398,10 @@ def inject_service(service_name: str):
     """Decorator to inject service into function"""
 
     def decorator(func):
+        """Inner decorator that wraps function with service injection."""
+
         async def wrapper(*args, **kwargs):
+            """Async wrapper that injects requested service before calling function."""
             service = await container.get_service(service_name)
             return await func(service, *args, **kwargs)
 
@@ -409,7 +414,10 @@ def inject_services(**service_mapping):
     """Decorator to inject multiple services"""
 
     def decorator(func):
+        """Inner decorator that wraps function with multiple service injections."""
+
         async def wrapper(*args, **kwargs):
+            """Async wrapper that injects all mapped services before calling function."""
             services = {}
             for param_name, service_name in service_mapping.items():
                 services[param_name] = await container.get_service(service_name)

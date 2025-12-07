@@ -357,21 +357,33 @@ class TestPatternAnalyzer:
     # AST Analysis Helpers
     # =========================================================================
 
+    def _is_assertion_call(self, call_node: ast.Call) -> bool:
+        """Check if a Call node is an assertion method (Issue #315: extracted).
+
+        Args:
+            call_node: AST Call node to check
+
+        Returns:
+            True if the call is an assertion method
+        """
+        func = call_node.func
+        if isinstance(func, ast.Attribute):
+            return func.attr in self.ASSERTION_METHODS
+        if isinstance(func, ast.Name):
+            return func.id in self.ASSERTION_METHODS
+        return False
+
     def _count_assertions(self, node: ast.AST) -> int:
-        """Count the number of assertions in an AST node."""
+        """Count the number of assertions in an AST node.
+
+        Issue #315: Refactored to use helper for reduced nesting.
+        """
         count = 0
         for child in ast.walk(node):
-            # Count bare assert statements
             if isinstance(child, ast.Assert):
                 count += 1
-            # Count method-based assertions (self.assertEqual, etc.)
-            elif isinstance(child, ast.Call):
-                if isinstance(child.func, ast.Attribute):
-                    if child.func.attr in self.ASSERTION_METHODS:
-                        count += 1
-                elif isinstance(child.func, ast.Name):
-                    if child.func.id in self.ASSERTION_METHODS:
-                        count += 1
+            elif isinstance(child, ast.Call) and self._is_assertion_call(child):
+                count += 1
         return count
 
     def _count_branches(self, node: ast.AST) -> int:

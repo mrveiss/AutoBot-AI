@@ -496,6 +496,60 @@ async def track_analytics_event(event: RealTimeEvent):
     }
 
 
+def _parse_historical_calls(api_calls: list, cutoff_time: datetime) -> list:
+    """Parse and filter historical API calls. (Issue #315 - extracted)
+
+    Args:
+        api_calls: Raw API call JSON strings from Redis
+        cutoff_time: Only include calls after this time
+
+    Returns:
+        List of parsed call data within time window
+    """
+    historical_calls = []
+    for call_json in api_calls:
+        try:
+            call_data = json.loads(call_json)
+            call_time = datetime.fromisoformat(call_data["timestamp"])
+            if call_time > cutoff_time:
+                historical_calls.append(call_data)
+        except Exception as e:
+            logger.debug("Failed to parse historical call data: %s", e)
+            continue
+    return historical_calls
+
+
+def _compute_hourly_stats(historical_calls: list) -> dict:
+    """Compute hourly statistics from historical calls. (Issue #315 - extracted)
+
+    Args:
+        historical_calls: List of call data dictionaries
+
+    Returns:
+        Dictionary of hourly statistics with averages computed
+    """
+    hourly_stats = defaultdict(
+        lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
+    )
+
+    for call in historical_calls:
+        hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
+        hourly_stats[hour_key]["calls"] += 1
+        hourly_stats[hour_key]["avg_response_time"] += call["response_time"]
+        if call["status_code"] >= 400:
+            hourly_stats[hour_key]["errors"] += 1
+
+    # Calculate averages
+    for hour_data in hourly_stats.values():
+        if hour_data["calls"] > 0:
+            hour_data["avg_response_time"] /= hour_data["calls"]
+            hour_data["error_rate"] = (
+                hour_data["errors"] / hour_data["calls"] * 100
+            )
+
+    return dict(hourly_stats)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_historical_trends",
@@ -512,51 +566,25 @@ async def get_historical_trends(
     redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
     historical_data = {"trends": trends}
 
-    if redis_conn:
-        try:
-            # Get historical API calls
-            cutoff_time = datetime.now() - timedelta(hours=hours)
-            api_calls = await redis_conn.lrange("analytics:api_calls", 0, -1)
+    if not redis_conn:
+        return historical_data
 
-            historical_calls = []
-            for call_json in api_calls:
-                try:
-                    call_data = json.loads(call_json)
-                    call_time = datetime.fromisoformat(call_data["timestamp"])
-                    if call_time > cutoff_time:
-                        historical_calls.append(call_data)
-                except Exception as e:
-                    logger.debug("Failed to parse historical call data: %s", e)
-                    continue
+    try:
+        # Get historical API calls (Issue #315 - refactored to reduce nesting)
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        api_calls = await redis_conn.lrange("analytics:api_calls", 0, -1)
 
-            # Analyze historical patterns
-            if historical_calls:
-                # Group by hour
-                hourly_stats = defaultdict(
-                    lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
-                )
+        historical_calls = _parse_historical_calls(api_calls, cutoff_time)
 
-                for call in historical_calls:
-                    hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
-                    hourly_stats[hour_key]["calls"] += 1
-                    hourly_stats[hour_key]["avg_response_time"] += call["response_time"]
-                    if call["status_code"] >= 400:
-                        hourly_stats[hour_key]["errors"] += 1
+        # Analyze historical patterns
+        if historical_calls:
+            hourly_patterns = _compute_hourly_stats(historical_calls)
+            historical_data["hourly_patterns"] = hourly_patterns
+            historical_data["analysis_period_hours"] = hours
+            historical_data["total_historical_calls"] = len(historical_calls)
 
-                # Calculate averages
-                for hour_data in hourly_stats.values():
-                    if hour_data["calls"] > 0:
-                        hour_data["avg_response_time"] /= hour_data["calls"]
-                        hour_data["error_rate"] = (
-                            hour_data["errors"] / hour_data["calls"] * 100
-                        )
-
-                historical_data["hourly_patterns"] = dict(hourly_stats)
-                historical_data["analysis_period_hours"] = hours
-                historical_data["total_historical_calls"] = len(historical_calls)
-
-        except Exception as e:
-            historical_data["redis_error"] = str(e)
+    except Exception as e:
+        historical_data["redis_error"] = str(e)
 
     return historical_data
 
@@ -564,6 +592,37 @@ async def get_historical_trends(
 # ============================================================================
 # WEBSOCKET REAL-TIME ANALYTICS STREAMING
 # ============================================================================
+
+
+async def _send_periodic_update_or_break(websocket: WebSocket) -> bool:
+    """Send periodic update to WebSocket client. (Issue #315 - extracted)
+
+    Returns:
+        True to continue loop, False to break
+    """
+    try:
+        current_data = await get_realtime_metrics()
+        await websocket.send_json(_build_periodic_update(current_data))
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send periodic update: {e}")
+        return False
+
+
+async def _handle_websocket_message_or_timeout(websocket: WebSocket) -> bool:
+    """Handle WebSocket message or timeout with periodic update. (Issue #315 - extracted)
+
+    Returns:
+        True to continue loop, False to break
+    """
+    try:
+        message = await asyncio.wait_for(
+            websocket.receive_text(), timeout=10.0
+        )
+        await _handle_realtime_client_command(websocket, message)
+        return True
+    except asyncio.TimeoutError:
+        return await _send_periodic_update_or_break(websocket)
 
 
 @router.websocket("/ws/realtime")
@@ -589,24 +648,12 @@ async def websocket_realtime_analytics(websocket: WebSocket):
             }
         )
 
-        # Start streaming loop
+        # Start streaming loop (Issue #315 - refactored to reduce nesting)
         while True:
             try:
-                # Wait for client message or timeout for periodic updates
-                try:
-                    message = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=10.0
-                    )
-                    await _handle_realtime_client_command(websocket, message)
-
-                except asyncio.TimeoutError:
-                    # Periodic update - send current metrics
-                    try:
-                        current_data = await get_realtime_metrics()
-                        await websocket.send_json(_build_periodic_update(current_data))
-                    except Exception as e:
-                        logger.error(f"Failed to send periodic update: {e}")
-                        break
+                should_continue = await _handle_websocket_message_or_timeout(websocket)
+                if not should_continue:
+                    break
 
             except WebSocketDisconnect:
                 logger.info("Analytics WebSocket client disconnected")
@@ -895,6 +942,72 @@ def _build_periodic_update(current_data: dict) -> dict:
 # =============================================================================
 
 
+async def _send_performance_update_if_due(
+    websocket: WebSocket, current_time: float, last_update: float
+) -> float:
+    """Send performance update if due (every 5 seconds). (Issue #315 - extracted)
+
+    Returns:
+        Updated last_update timestamp
+    """
+    if current_time - last_update > 5:
+        try:
+            perf_data = await analytics_controller.collect_performance_metrics()
+            await websocket.send_json(_build_performance_message(perf_data))
+            return current_time
+        except Exception as e:
+            logger.error(f"Performance update error: {e}")
+    return last_update
+
+
+async def _send_api_activity_update_if_due(
+    websocket: WebSocket, current_time: float, last_update: float
+) -> float:
+    """Send API activity update if due (every 2 seconds). (Issue #315 - extracted)
+
+    Returns:
+        Updated last_update timestamp
+    """
+    if current_time - last_update > 2:
+        try:
+            recent_calls = _get_recent_api_calls(cutoff_seconds=10)
+            await websocket.send_json(_build_api_activity_message(recent_calls))
+            return current_time
+        except Exception as e:
+            logger.error(f"API activity update error: {e}")
+    return last_update
+
+
+async def _send_health_update_if_due(
+    websocket: WebSocket, current_time: float, last_update: float
+) -> float:
+    """Send system health update if due (every 10 seconds). (Issue #315 - extracted)
+
+    Returns:
+        Updated last_update timestamp
+    """
+    if current_time - last_update > 10:
+        try:
+            alerts = await analytics_monitoring.get_phase9_alerts()
+            critical = [a for a in alerts if a.get("severity") == "critical"]
+            await websocket.send_json(_build_health_message(alerts, critical))
+            return current_time
+        except Exception as e:
+            logger.error(f"System health update error: {e}")
+    return last_update
+
+
+async def _handle_client_message_with_timeout(websocket: WebSocket) -> None:
+    """Handle client message with timeout, silently continuing on timeout. (Issue #315 - extracted)"""
+    try:
+        message = await asyncio.wait_for(
+            websocket.receive_text(), timeout=1.0
+        )
+        await _handle_websocket_command(websocket, message)
+    except asyncio.TimeoutError:
+        pass  # Continue with periodic updates
+
+
 @router.websocket("/ws/analytics/live")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -918,7 +1031,7 @@ async def websocket_live_analytics(websocket: WebSocket):
             }
         )
 
-        # Start streaming loop with different update frequencies
+        # Start streaming loop with different update frequencies (Issue #315 - refactored)
         last_performance_update = 0
         last_api_update = 0
         last_health_update = 0
@@ -927,42 +1040,19 @@ async def websocket_live_analytics(websocket: WebSocket):
             try:
                 current_time = time.time()
 
-                # Performance updates (every 5 seconds)
-                if current_time - last_performance_update > 5:
-                    try:
-                        perf_data = await analytics_controller.collect_performance_metrics()
-                        await websocket.send_json(_build_performance_message(perf_data))
-                        last_performance_update = current_time
-                    except Exception as e:
-                        logger.error(f"Performance update error: {e}")
+                # Send periodic updates
+                last_performance_update = await _send_performance_update_if_due(
+                    websocket, current_time, last_performance_update
+                )
+                last_api_update = await _send_api_activity_update_if_due(
+                    websocket, current_time, last_api_update
+                )
+                last_health_update = await _send_health_update_if_due(
+                    websocket, current_time, last_health_update
+                )
 
-                # API activity updates (every 2 seconds)
-                if current_time - last_api_update > 2:
-                    try:
-                        recent_calls = _get_recent_api_calls(cutoff_seconds=10)
-                        await websocket.send_json(_build_api_activity_message(recent_calls))
-                        last_api_update = current_time
-                    except Exception as e:
-                        logger.error(f"API activity update error: {e}")
-
-                # System health updates (every 10 seconds)
-                if current_time - last_health_update > 10:
-                    try:
-                        alerts = await analytics_monitoring.get_phase9_alerts()
-                        critical = [a for a in alerts if a.get("severity") == "critical"]
-                        await websocket.send_json(_build_health_message(alerts, critical))
-                        last_health_update = current_time
-                    except Exception as e:
-                        logger.error(f"System health update error: {e}")
-
-                # Wait for client message or timeout
-                try:
-                    message = await asyncio.wait_for(
-                        websocket.receive_text(), timeout=1.0
-                    )
-                    await _handle_websocket_command(websocket, message)
-                except asyncio.TimeoutError:
-                    pass  # Continue with periodic updates
+                # Handle client messages
+                await _handle_client_message_with_timeout(websocket)
 
             except WebSocketDisconnect:
                 break

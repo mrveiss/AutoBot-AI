@@ -36,6 +36,127 @@ import docker
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
+# Issue #315 - extracted helper functions to reduce deep nesting
+
+
+def _parse_log_timestamp(log_text: str) -> tuple:
+    """Parse timestamp from log text if present (Issue #315 - extracted)."""
+    timestamp_match = re.match(
+        r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(.*)$",
+        log_text,
+    )
+    if timestamp_match:
+        return timestamp_match.groups()
+    return None, log_text
+
+
+def _determine_log_level(message: str) -> str:
+    """Determine log level from message content (Issue #315 - extracted)."""
+    message_lower = message.lower()
+
+    if any(keyword in message_lower for keyword in ["error", "exception", "failed"]):
+        return "Error"
+    elif any(keyword in message_lower for keyword in ["warning", "warn"]):
+        return "Warning"
+    elif "debug" in message_lower:
+        return "Debug"
+
+    return "Information"
+
+
+def _process_docker_log_line(
+    log_line: bytes, container, send_callback, running_flag
+) -> None:
+    """Process single Docker log line (Issue #315 - extracted)."""
+    if not running_flag():
+        return
+
+    try:
+        log_text = log_line.decode("utf-8").strip()
+        if not log_text:
+            return
+
+        # Parse timestamp if present
+        timestamp, message = _parse_log_timestamp(log_text)
+
+        # Determine log level from message content
+        level = _determine_log_level(message)
+
+        # Send to Seq asynchronously
+        send_callback(
+            message,
+            level=level,
+            source=f"Docker-{container.name}",
+            properties={
+                "ContainerID": container.id[:12],
+                "ContainerName": container.name,
+                "Image": container.image.tags[0] if container.image.tags else "unknown",
+                "LogType": "DockerContainer",
+            },
+        )
+    except Exception as e:
+        print(f"❌ Error processing log line from {container.name}: {e}")
+
+
+def _process_journalctl_line(line: str, pid: str, send_callback, running_flag) -> bool:
+    """Process journalctl line and return True to continue (Issue #315 - extracted)."""
+    if not running_flag():
+        return False
+
+    if not line.strip():
+        return True
+
+    # Parse journalctl format
+    level = _determine_log_level(line)
+
+    send_callback(
+        line.strip(),
+        level=level,
+        source="Backend-Main",
+        properties={
+            "ProcessID": pid,
+            "LogType": "BackendProcess",
+        },
+    )
+    return True
+
+
+def _monitor_log_files(log_aggregator, running_flag) -> None:
+    """Monitor log files as alternative to journalctl (Issue #315 - extracted)."""
+    log_files = [
+        Path(__file__).parent.parent / "logs" / "autobot.log",
+        Path("/var/log/autobot.log"),
+        Path("./autobot.log"),
+    ]
+
+    for log_file in log_files:
+        if log_file.exists():
+            print(f"📄 Monitoring log file: {log_file}")
+            log_aggregator.tail_log_file(str(log_file), "Backend-File")
+            return
+
+    print("⚠️ No backend log files found")
+
+
+def _process_tail_log_line(line: str, source_name: str, file_path: str, send_callback, running_flag) -> bool:
+    """Process tail log line and return True to continue (Issue #315 - extracted)."""
+    if not running_flag():
+        return False
+
+    if not line.strip():
+        return True
+
+    level = _determine_log_level(line)
+
+    send_callback(
+        line.strip(),
+        level=level,
+        source=source_name,
+        properties={"FilePath": file_path, "LogType": "FileSystem"},
+    )
+    return True
+
+
 class ComprehensiveLogAggregator:
     """Comprehensive log aggregation system for AutoBot."""
 
@@ -138,8 +259,7 @@ class ComprehensiveLogAggregator:
         return containers
 
     async def stream_docker_logs(self, container_name: str):
-        """Stream logs from a Docker container to Seq."""
-
+        """Stream logs from a Docker container to Seq (Issue #315 - refactored)."""
         if not self.docker_client:
             return
 
@@ -153,60 +273,19 @@ class ComprehensiveLogAggregator:
                     for log_line in container.logs(
                         stream=True, follow=True, timestamps=True
                     ):
-                        if not self.running:
-                            break
-
-                        try:
-                            log_text = log_line.decode("utf-8").strip()
-                            if log_text:
-                                # Parse timestamp if present
-                                timestamp_match = re.match(
-                                    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(.*)$",
-                                    log_text,
-                                )
-                                if timestamp_match:
-                                    timestamp, message = timestamp_match.groups()
-                                else:
-                                    message = log_text
-
-                                # Determine log level from message content
-                                level = "Information"
-                                if any(
-                                    keyword in message.lower()
-                                    for keyword in ["error", "exception", "failed"]
-                                ):
-                                    level = "Error"
-                                elif any(
-                                    keyword in message.lower()
-                                    for keyword in ["warning", "warn"]
-                                ):
-                                    level = "Warning"
-                                elif any(
-                                    keyword in message.lower() for keyword in ["debug"]
-                                ):
-                                    level = "Debug"
-
-                                # Send to Seq asynchronously
-                                asyncio.run_coroutine_threadsafe(
-                                    self.send_to_seq(
-                                        message,
-                                        level=level,
-                                        source=f"Docker-{container.name}",
-                                        properties={
-                                            "ContainerID": container.id[:12],
-                                            "ContainerName": container.name,
-                                            "Image": container.image.tags[0]
-                                            if container.image.tags
-                                            else "unknown",
-                                            "LogType": "DockerContainer",
-                                        },
-                                    ),
-                                    asyncio.get_event_loop(),
-                                )
-                        except Exception as e:
-                            print(
-                                f"❌ Error processing log line from {container.name}: {e}"
+                        # Use extracted helper function to process log line
+                        def send_callback(*args, **kwargs):
+                            asyncio.run_coroutine_threadsafe(
+                                self.send_to_seq(*args, **kwargs),
+                                asyncio.get_event_loop(),
                             )
+
+                        _process_docker_log_line(
+                            log_line,
+                            container,
+                            send_callback,
+                            lambda: self.running,
+                        )
 
                 except Exception as e:
                     print(f"❌ Error streaming logs from {container.name}: {e}")
@@ -218,8 +297,7 @@ class ComprehensiveLogAggregator:
             print(f"❌ Error setting up log stream for {container_name}: {e}")
 
     async def stream_backend_logs(self):
-        """Stream logs from the main Python backend."""
-
+        """Stream logs from the main Python backend (Issue #315 - refactored)."""
         print("🔄 Starting backend log monitoring...")
 
         # Monitor backend process logs
@@ -230,76 +308,49 @@ class ComprehensiveLogAggregator:
                     ["pgrep", "-f", "python.*main.py"], capture_output=True, text=True
                 )
 
-                if result.returncode == 0:
-                    pid = result.stdout.strip()
-                    print(f"📍 Found backend process PID: {pid}")
-
-                    # Use journalctl to follow logs if available
-                    try:
-                        proc = subprocess.Popen(
-                            ["journalctl", "-f", "--no-pager", f"_PID={pid}"],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True,
-                        )
-
-                        for line in iter(proc.stdout.readline, ""):
-                            if not self.running:
-                                proc.terminate()
-                                break
-
-                            if line.strip():
-                                # Parse journalctl format
-                                level = "Information"
-                                if "ERROR" in line or "Exception" in line:
-                                    level = "Error"
-                                elif "WARNING" in line or "WARN" in line:
-                                    level = "Warning"
-                                elif "DEBUG" in line:
-                                    level = "Debug"
-
-                                asyncio.run_coroutine_threadsafe(
-                                    self.send_to_seq(
-                                        line.strip(),
-                                        level=level,
-                                        source="Backend-Main",
-                                        properties={
-                                            "ProcessID": pid,
-                                            "LogType": "BackendProcess",
-                                        },
-                                    ),
-                                    asyncio.get_event_loop(),
-                                )
-
-                    except FileNotFoundError:
-                        print("⚠️ journalctl not available, using alternative method")
-
-                        # Alternative: monitor log files
-                        log_files = [
-                            Path(__file__).parent.parent / "logs" / "autobot.log",
-                            Path("/var/log/autobot.log"),
-                            Path("./autobot.log"),
-                        ]
-
-                        for log_file in log_files:
-                            if log_file.exists():
-                                print(f"📄 Monitoring log file: {log_file}")
-                                self.tail_log_file(str(log_file), "Backend-File")
-                                break
-                        else:
-                            print("⚠️ No backend log files found")
-
-                else:
+                if result.returncode != 0:
                     print("⚠️ Backend process not found")
+                    return
+
+                pid = result.stdout.strip()
+                print(f"📍 Found backend process PID: {pid}")
+
+                # Use journalctl to follow logs if available
+                try:
+                    self._monitor_journalctl(pid)
+                except FileNotFoundError:
+                    print("⚠️ journalctl not available, using alternative method")
+                    _monitor_log_files(self, lambda: self.running)
 
             except Exception as e:
                 print(f"❌ Error monitoring backend logs: {e}")
 
         self.executor.submit(monitor_backend)
 
-    def tail_log_file(self, file_path: str, source_name: str):
-        """Tail a log file and send to Seq."""
+    def _monitor_journalctl(self, pid: str):
+        """Monitor journalctl for backend process (Issue #315 - extracted)."""
+        proc = subprocess.Popen(
+            ["journalctl", "-f", "--no-pager", f"_PID={pid}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
+        def send_callback(*args, **kwargs):
+            asyncio.run_coroutine_threadsafe(
+                self.send_to_seq(*args, **kwargs),
+                asyncio.get_event_loop(),
+            )
+
+        for line in iter(proc.stdout.readline, ""):
+            if not _process_journalctl_line(
+                line, pid, send_callback, lambda: self.running
+            ):
+                proc.terminate()
+                break
+
+    def tail_log_file(self, file_path: str, source_name: str):
+        """Tail a log file and send to Seq (Issue #315 - refactored)."""
         try:
             proc = subprocess.Popen(
                 ["tail", "-f", file_path],
@@ -308,34 +359,18 @@ class ComprehensiveLogAggregator:
                 text=True,
             )
 
+            def send_callback(*args, **kwargs):
+                asyncio.run_coroutine_threadsafe(
+                    self.send_to_seq(*args, **kwargs),
+                    asyncio.get_event_loop(),
+                )
+
             for line in iter(proc.stdout.readline, ""):
-                if not self.running:
+                if not _process_tail_log_line(
+                    line, source_name, file_path, send_callback, lambda: self.running
+                ):
                     proc.terminate()
                     break
-
-                if line.strip():
-                    level = "Information"
-                    if any(
-                        keyword in line.lower()
-                        for keyword in ["error", "exception", "failed"]
-                    ):
-                        level = "Error"
-                    elif any(
-                        keyword in line.lower() for keyword in ["warning", "warn"]
-                    ):
-                        level = "Warning"
-                    elif any(keyword in line.lower() for keyword in ["debug"]):
-                        level = "Debug"
-
-                    asyncio.run_coroutine_threadsafe(
-                        self.send_to_seq(
-                            line.strip(),
-                            level=level,
-                            source=source_name,
-                            properties={"FilePath": file_path, "LogType": "FileSystem"},
-                        ),
-                        asyncio.get_event_loop(),
-                    )
 
         except Exception as e:
             print(f"❌ Error tailing file {file_path}: {e}")

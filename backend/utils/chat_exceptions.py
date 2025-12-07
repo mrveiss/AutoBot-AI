@@ -23,6 +23,7 @@ class InternalError(AutoBotError):
     """Internal server error with optional details."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        """Initialize internal error with message and optional details dictionary."""
         self.message = message
         self.details = details or {}
         super().__init__(message)
@@ -48,6 +49,7 @@ class NetworkError(AutoBotError):
         url: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ):
+        """Initialize network error with message, service name, URL, and details."""
         self.message = message
         self.service = service
         self.url = url
@@ -76,6 +78,7 @@ class HTTPClientError(NetworkError):
         url: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ):
+        """Initialize HTTP client error with status code and network details."""
         super().__init__(message, service, url, details)
         self.status_code = status_code
 
@@ -91,6 +94,7 @@ class HTTPServerError(NetworkError):
         url: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ):
+        """Initialize HTTP server error with status code and network details."""
         super().__init__(message, service, url, details)
         self.status_code = status_code
 
@@ -106,6 +110,7 @@ class SubprocessError(AutoBotError):
         stdout: Optional[str] = None,
         stderr: Optional[str] = None,
     ):
+        """Initialize subprocess error with command details and output."""
         self.message = message
         self.command = command
         self.return_code = return_code
@@ -124,6 +129,7 @@ class FileOperationError(AutoBotError):
         operation: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ):
+        """Initialize file operation error with path, operation type, and details."""
         self.message = message
         self.file_path = file_path
         self.operation = operation

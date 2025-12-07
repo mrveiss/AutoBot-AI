@@ -27,6 +27,7 @@ class DistributedRedisClient:
     """Redis client optimized for distributed AutoBot architecture"""
 
     def __init__(self):
+        """Initialize distributed Redis client for AutoBot architecture."""
         self.redis_host = NetworkConstants.REDIS_VM_IP
         self.redis_port = NetworkConstants.REDIS_PORT
         self.redis_password = None  # Will be loaded from environment

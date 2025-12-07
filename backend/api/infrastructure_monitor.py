@@ -233,6 +233,7 @@ class ServiceCollector:
     """Collects service health information"""
 
     def __init__(self, http_client, config_manager: UnifiedConfigManager):
+        """Initialize service collector with HTTP client and configuration."""
         self._http_client = http_client
         self._config = config_manager
 
@@ -283,6 +284,7 @@ class StatsCollector:
     """Collects machine statistics"""
 
     def __init__(self, config_manager: UnifiedConfigManager):
+        """Initialize stats collector with configuration manager."""
         self._config = config_manager
 
     async def collect_local_stats(self) -> MachineStats:
@@ -539,6 +541,7 @@ class InfrastructureMonitor:
     """Monitors infrastructure across multiple machines using specialized collectors"""
 
     def __init__(self):
+        """Initialize infrastructure monitor with collectors and clients."""
         self.redis_client = None
         self._http_client = get_http_client()
         self._service_collector = ServiceCollector(self._http_client, config)

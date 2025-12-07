@@ -48,6 +48,7 @@ class AdvancedCacheManager:
     """Enhanced cache manager with intelligent strategies"""
 
     def __init__(self):
+        """Initialize cache manager with Redis clients and default configurations."""
         self.redis_client = None  # Will be initialized asynchronously
         self.sync_redis_client = get_redis_client(async_client=False)
         self.cache_prefix = "autobot:cache:"
@@ -289,70 +290,109 @@ class AdvancedCacheManager:
         except Exception as e:
             logger.error(f"Error updating cache stats for {data_type}: {e}")
 
+    async def _get_single_type_stats(self, data_type: str) -> Dict[str, Any]:
+        """Get stats for a specific data type (Issue #315: extracted).
+
+        Args:
+            data_type: The data type to get stats for
+
+        Returns:
+            Stats dict for the data type
+        """
+        stats_key = self._make_stats_key(data_type)
+        stats = await self.redis_client.hgetall(stats_key)
+
+        hits = int(stats.get("hits", 0))
+        misses = int(stats.get("misses", 0))
+        total = hits + misses
+        hit_rate = (hits / total * 100) if total > 0 else 0
+
+        return {
+            "data_type": data_type,
+            "hits": hits,
+            "misses": misses,
+            "hit_rate": f"{hit_rate:.1f}%",
+            "last_access": stats.get("last_access"),
+        }
+
+    async def _aggregate_stats(self, stats_keys: List[str]) -> tuple:
+        """Aggregate hits/misses from all stats keys (Issue #315: extracted).
+
+        Args:
+            stats_keys: List of stats key names
+
+        Returns:
+            Tuple of (total_hits, total_misses)
+        """
+        if not stats_keys:
+            return 0, 0
+
+        total_hits = 0
+        total_misses = 0
+
+        async with self.redis_client.pipeline() as pipe:
+            for stats_key in stats_keys:
+                await pipe.hgetall(stats_key)
+            all_stats = await pipe.execute()
+
+        for stats in all_stats:
+            total_hits += int(stats.get("hits", 0))
+            total_misses += int(stats.get("misses", 0))
+
+        return total_hits, total_misses
+
+    async def _get_redis_memory_usage(self) -> str:
+        """Get Redis memory usage safely (Issue #315: extracted).
+
+        Returns:
+            Memory usage string or 'N/A'
+        """
+        try:
+            info = await self.redis_client.info("memory")
+            return info.get("used_memory_human", "N/A")
+        except Exception:
+            return "N/A"
+
+    async def _get_global_stats(self) -> Dict[str, Any]:
+        """Get global cache statistics (Issue #315: extracted).
+
+        Returns:
+            Global stats dict
+        """
+        cache_keys = await self.redis_client.keys(f"{self.cache_prefix}*")
+        stats_keys = await self.redis_client.keys(f"{self.stats_prefix}*")
+
+        total_hits, total_misses = await self._aggregate_stats(stats_keys)
+        total_requests = total_hits + total_misses
+        global_hit_rate = (
+            (total_hits / total_requests * 100) if total_requests > 0 else 0
+        )
+
+        memory_usage = await self._get_redis_memory_usage()
+
+        return {
+            "status": "enabled",
+            "total_cache_keys": len(cache_keys),
+            "total_hits": total_hits,
+            "total_misses": total_misses,
+            "global_hit_rate": f"{global_hit_rate:.1f}%",
+            "memory_usage": memory_usage,
+            "configured_data_types": list(self.cache_configs.keys()),
+        }
+
     async def get_stats(self, data_type: Optional[str] = None) -> Dict[str, Any]:
-        """Get comprehensive cache statistics"""
+        """Get comprehensive cache statistics.
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
+        """
         await self._ensure_redis_client()
         if not self.redis_client:
             return {"status": "disabled"}
 
         try:
             if data_type:
-                # Get stats for specific data type
-                stats_key = self._make_stats_key(data_type)
-                stats = await self.redis_client.hgetall(stats_key)
-
-                hits = int(stats.get("hits", 0))
-                misses = int(stats.get("misses", 0))
-                total = hits + misses
-                hit_rate = (hits / total * 100) if total > 0 else 0
-
-                return {
-                    "data_type": data_type,
-                    "hits": hits,
-                    "misses": misses,
-                    "hit_rate": f"{hit_rate:.1f}%",
-                    "last_access": stats.get("last_access"),
-                }
-            else:
-                # Get global stats
-                cache_keys = await self.redis_client.keys(f"{self.cache_prefix}*")
-                stats_keys = await self.redis_client.keys(f"{self.stats_prefix}*")
-
-                total_hits = 0
-                total_misses = 0
-
-                # Batch fetch all stats using pipeline - eliminates N+1
-                if stats_keys:
-                    async with self.redis_client.pipeline() as pipe:
-                        for stats_key in stats_keys:
-                            await pipe.hgetall(stats_key)
-                        all_stats = await pipe.execute()
-
-                    for stats in all_stats:
-                        total_hits += int(stats.get("hits", 0))
-                        total_misses += int(stats.get("misses", 0))
-
-                total_requests = total_hits + total_misses
-                global_hit_rate = (
-                    (total_hits / total_requests * 100) if total_requests > 0 else 0
-                )
-
-                # Get memory usage
-                try:
-                    info = await self.redis_client.info("memory")
-                    memory_usage = info.get("used_memory_human", "N/A")
-                except Exception:
-                    memory_usage = "N/A"
-
-                return {
-                    "status": "enabled",
-                    "total_cache_keys": len(cache_keys),
-                    "total_hits": total_hits,
-                    "total_misses": total_misses,
-                    "global_hit_rate": f"{global_hit_rate:.1f}%",
-                    "memory_usage": memory_usage,
-                    "configured_data_types": list(self.cache_configs.keys()),
-                }
+                return await self._get_single_type_stats(data_type)
+            return await self._get_global_stats()
 
         except Exception as e:
             logger.error(f"Error getting cache stats: {e}")
@@ -440,9 +480,83 @@ class AdvancedCacheManager:
 
         return success
 
-    async def _manage_cache_size(self, data_type: str):
+    async def _collect_cache_keys(self, pattern: str) -> List[str]:
+        """Collect all cache keys matching pattern (Issue #315: extracted).
+
+        Args:
+            pattern: Redis key pattern to match
+
+        Returns:
+            List of matching keys
         """
-        Manage cache size using LRU eviction.
+        all_keys = []
+        async for key in self.redis_client.scan_iter(match=pattern):
+            all_keys.append(key)
+        return all_keys
+
+    async def _get_keys_with_timestamps(
+        self, keys: List[str]
+    ) -> List[tuple]:
+        """Get keys with their timestamps for LRU sorting (Issue #315: extracted).
+
+        Args:
+            keys: List of Redis keys to fetch
+
+        Returns:
+            List of (timestamp, key) tuples
+        """
+        if not keys:
+            return []
+
+        keys_with_time = []
+        all_cached_data = await self.redis_client.mget(keys)
+
+        for key, cached_data in zip(keys, all_cached_data):
+            if not cached_data:
+                continue
+            try:
+                entry = json.loads(cached_data)
+                timestamp = entry.get("timestamp", 0)
+                keys_with_time.append((timestamp, key))
+            except Exception:
+                continue
+
+        return keys_with_time
+
+    async def _evict_excess_keys(
+        self, keys_with_time: List[tuple], max_size: int, data_type: str
+    ) -> int:
+        """Evict excess keys using LRU policy (Issue #315: extracted).
+
+        Args:
+            keys_with_time: List of (timestamp, key) tuples
+            max_size: Maximum allowed cache size
+            data_type: Data type for logging
+
+        Returns:
+            Number of keys deleted
+        """
+        if len(keys_with_time) <= max_size:
+            return 0
+
+        # Sort by timestamp (oldest first) and remove excess
+        keys_with_time.sort()
+        excess_count = len(keys_with_time) - max_size + 100  # Buffer
+        keys_to_remove = [key for _, key in keys_with_time[:excess_count]]
+
+        if not keys_to_remove:
+            return 0
+
+        deleted_count = await self.redis_client.delete(*keys_to_remove)
+        logger.info(
+            f"LRU eviction: Removed {deleted_count} old entries from {data_type} cache"
+        )
+        return deleted_count
+
+    async def _manage_cache_size(self, data_type: str):
+        """Manage cache size using LRU eviction.
+
+        Issue #315: Refactored to use helper methods for reduced nesting.
         Implements max_size limits from CacheConfig.
         """
         await self._ensure_redis_client()
@@ -454,39 +568,13 @@ class AdvancedCacheManager:
             if not config or not config.max_size:
                 return  # No size limit configured
 
-            # Count current cache entries for this data type
+            # Collect and process cache entries
             pattern = f"{self.cache_prefix}{data_type}:*"
-            keys_with_time = []
+            all_keys = await self._collect_cache_keys(pattern)
+            keys_with_time = await self._get_keys_with_timestamps(all_keys)
 
-            # Collect all keys first
-            all_keys = []
-            async for key in self.redis_client.scan_iter(match=pattern):
-                all_keys.append(key)
-
-            # Batch fetch all cache entries using mget - eliminates N+1
-            if all_keys:
-                all_cached_data = await self.redis_client.mget(all_keys)
-                for key, cached_data in zip(all_keys, all_cached_data):
-                    if cached_data:
-                        try:
-                            entry = json.loads(cached_data)
-                            timestamp = entry.get("timestamp", 0)
-                            keys_with_time.append((timestamp, key))
-                        except Exception:
-                            continue
-
-            # Check if we exceed max_size
-            if len(keys_with_time) > config.max_size:
-                # Sort by timestamp (oldest first) and remove excess
-                keys_with_time.sort()
-                excess_count = len(keys_with_time) - config.max_size + 100  # Buffer
-                keys_to_remove = [key for _, key in keys_with_time[:excess_count]]
-
-                if keys_to_remove:
-                    deleted_count = await self.redis_client.delete(*keys_to_remove)
-                    logger.info(
-                        f"LRU eviction: Removed {deleted_count} old entries from {data_type} cache"
-                    )
+            # Evict excess entries
+            await self._evict_excess_keys(keys_with_time, config.max_size, data_type)
 
         except Exception as e:
             logger.error(f"Error managing cache size for {data_type}: {e}")
@@ -540,8 +628,11 @@ def smart_cache(
     """
 
     def decorator(func):
+        """Inner decorator that wraps function with intelligent caching."""
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Async wrapper that checks cache and computes if needed."""
             # Generate cache key
             if key_func:
                 cache_key = key_func(*args, **kwargs)
@@ -559,6 +650,7 @@ def smart_cache(
 
             # Use get_or_compute for intelligent caching
             async def compute():
+                """Execute the wrapped function asynchronously."""
                 return await func(*args, **kwargs)
 
             return await advanced_cache.get_or_compute(
@@ -667,6 +759,7 @@ class SimpleCacheManager:
     """
 
     def __init__(self, default_ttl: int = 300):
+        """Initialize simple cache manager with default TTL in seconds."""
         self.default_ttl = default_ttl
         self._cache = advanced_cache
         self.cache_prefix = "cache:"  # Match original CacheManager prefix
@@ -779,8 +872,11 @@ class SimpleCacheManager:
         actual_ttl = ttl or self.default_ttl
 
         def decorator(func):
+            """Inner decorator that wraps endpoint with response caching."""
+
             @wraps(func)
             async def wrapper(*args, **kwargs):
+                """Async wrapper that caches successful HTTP responses."""
                 from fastapi import Request
 
                 # Extract request object from FastAPI dependency injection
@@ -888,8 +984,11 @@ def cache_function(cache_key: str = None, ttl: int = 300):
     """
 
     def decorator(func):
+        """Inner decorator that wraps function with simple caching."""
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Async wrapper that caches function results by key."""
             # Generate cache key
             if cache_key:
                 key = cache_key

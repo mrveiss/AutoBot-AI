@@ -41,6 +41,52 @@ config = UnifiedConfigManager()
 
 logger = logging.getLogger(__name__)
 
+# Performance optimization: O(1) lookup for status conversion (Issue #315)
+STATUS_TO_NUMERIC = {
+    "online": 1.0,
+    "offline": 0.0,
+    "error": 0.0,
+    "warning": 0.5,
+}
+
+
+def _get_list_item(data: list, key: str) -> Any:
+    """Get item from list by index key (Issue #315: extracted).
+
+    Args:
+        data: List to access
+        key: String index (will be converted to int)
+
+    Returns:
+        List item or None if invalid index
+    """
+    try:
+        idx = int(key)
+        return data[idx]
+    except (ValueError, IndexError):
+        return None
+
+
+def _convert_status_to_numeric(value: Any) -> float | None:
+    """Convert string status or value to numeric (Issue #315: extracted).
+
+    Args:
+        value: Value to convert (string status or numeric)
+
+    Returns:
+        Float value or None
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        return STATUS_TO_NUMERIC.get(value)
+
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
 
 class AlertSeverity(Enum):
     """Alert severity levels"""
@@ -102,6 +148,7 @@ class AlertNotificationChannel:
     """Base class for notification channels"""
 
     def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize notification channel with name and configuration."""
         self.name = name
         self.config = config
         self.enabled = config.get("enabled", True)
@@ -119,7 +166,7 @@ class LogNotificationChannel(AlertNotificationChannel):
     """Log-based notification channel"""
 
     async def send_alert(self, alert: Alert) -> bool:
-        """Log the alert"""
+        """Log the alert to the application logger."""
         try:
             severity_emoji = {
                 AlertSeverity.LOW: "ℹ️",
@@ -139,7 +186,7 @@ class LogNotificationChannel(AlertNotificationChannel):
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
-        """Log the recovery"""
+        """Log the alert recovery to the application logger."""
         try:
             logger.info(
                 f"✅ RESOLVED [{alert.severity.value.upper()}] {alert.rule_name}: Alert resolved"
@@ -154,6 +201,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
     """Redis pub/sub notification channel"""
 
     def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize Redis notification channel with pub/sub configuration."""
         super().__init__(name, config)
         self.redis_client = None
         self._initialize_redis()
@@ -230,6 +278,7 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
     """WebSocket notification channel for real-time frontend alerts"""
 
     def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize WebSocket notification channel for real-time alerts."""
         super().__init__(name, config)
         self.websocket_manager = None
 
@@ -297,6 +346,7 @@ class MonitoringAlertsManager:
     """Advanced monitoring alerts and notifications manager"""
 
     def __init__(self):
+        """Initialize alerts manager with rules, channels, and Redis storage."""
         self.alert_rules: Dict[str, AlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.notification_channels: Dict[str, AlertNotificationChannel] = {}
@@ -535,37 +585,36 @@ class MonitoringAlertsManager:
             return False
 
     def _get_nested_value(self, data: Dict[str, Any], path: str) -> Optional[float]:
-        """Get nested value from dict using dot notation path"""
+        """Get nested value from dict using dot notation path.
+        Issue #315: Refactored to use helpers for reduced nesting.
+        """
         try:
-            keys = path.split(".")
             current = data
-
-            for key in keys:
-                if isinstance(current, dict) and key in current:
-                    current = current[key]
-                elif isinstance(current, list):
-                    # Handle list indices
-                    try:
-                        idx = int(key)
-                        current = current[idx]
-                    except (ValueError, IndexError):
-                        return None
-                else:
+            for key in path.split("."):
+                current = self._traverse_path_key(current, key)
+                if current is None:
                     return None
 
-            # Convert service status to numeric for comparison
-            if isinstance(current, str):
-                if current == "online":
-                    return 1.0
-                elif current in ["offline", "error"]:
-                    return 0.0
-                elif current == "warning":
-                    return 0.5
-
-            return float(current) if current is not None else None
+            return _convert_status_to_numeric(current)
         except (KeyError, ValueError, TypeError) as e:
             logger.debug(f"Could not get value for path {path}: {e}")
             return None
+
+    def _traverse_path_key(self, current: Any, key: str) -> Any:
+        """Traverse one key in a nested path (Issue #315: extracted).
+
+        Args:
+            current: Current position in data structure
+            key: Key to traverse
+
+        Returns:
+            Value at key or None if not found
+        """
+        if isinstance(current, dict):
+            return current.get(key)
+        if isinstance(current, list):
+            return _get_list_item(current, key)
+        return None
 
     async def _should_trigger_alert(self, rule: AlertRule, current_value: float) -> bool:
         """Check if alert should be triggered based on duration (thread-safe)"""
@@ -759,8 +808,36 @@ class MonitoringAlertsManager:
             except Exception as e:
                 logger.error(f"Error sending recovery via {channel_name}: {e}")
 
+    async def _handle_condition_met(
+        self, rule_id: str, rule, current_value: Any
+    ) -> None:
+        """Handle when alert condition is met (Issue #315 - extracted helper)."""
+        if not await self._should_trigger_alert(rule, current_value):
+            return
+        if await self._should_suppress_alert(rule):
+            return
+
+        # Check and update under lock
+        async with self._lock:
+            if rule_id in self.active_alerts:
+                # Update existing alert
+                alert = self.active_alerts[rule_id]
+                alert.current_value = current_value
+                alert.updated_at = datetime.now()
+                return
+
+        # Create new alert (outside lock to avoid holding it during I/O)
+        await self._create_alert(rule, current_value)
+
+    async def _handle_condition_not_met(self, rule_id: str) -> None:
+        """Handle when alert condition is not met (Issue #315 - extracted helper)."""
+        async with self._lock:
+            has_active = rule_id in self.active_alerts
+        if has_active:
+            await self._resolve_alert(rule_id)
+
     async def check_metrics(self, infrastructure_data: Dict[str, Any]):
-        """Check all metrics against alert rules (thread-safe)"""
+        """Check all metrics against alert rules (Issue #315: depth 7→3)"""
         # Copy rules under lock
         async with self._lock:
             rules_copy = [(rule_id, rule) for rule_id, rule in self.alert_rules.items()]
@@ -773,7 +850,6 @@ class MonitoringAlertsManager:
                 current_value = self._get_nested_value(
                     infrastructure_data, rule.metric_path
                 )
-
                 if current_value is None:
                     logger.debug(f"No value found for metric path: {rule.metric_path}")
                     continue
@@ -783,28 +859,9 @@ class MonitoringAlertsManager:
                 )
 
                 if condition_met:
-                    # Check if alert should be triggered based on duration
-                    if await self._should_trigger_alert(rule, current_value):
-                        # Check if we're not in cooldown period
-                        if not await self._should_suppress_alert(rule):
-                            # Check and update under lock
-                            async with self._lock:
-                                if rule_id not in self.active_alerts:
-                                    should_create = True
-                                else:
-                                    # Update existing alert under lock
-                                    should_create = False
-                                    alert = self.active_alerts[rule_id]
-                                    alert.current_value = current_value
-                                    alert.updated_at = datetime.now()
-                            if should_create:
-                                await self._create_alert(rule, current_value)
+                    await self._handle_condition_met(rule_id, rule, current_value)
                 else:
-                    # Condition not met, resolve alert if active
-                    async with self._lock:
-                        has_active = rule_id in self.active_alerts
-                    if has_active:
-                        await self._resolve_alert(rule_id)
+                    await self._handle_condition_not_met(rule_id)
 
             except Exception as e:
                 logger.error(f"Error checking rule {rule_id}: {e}")

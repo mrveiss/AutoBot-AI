@@ -180,35 +180,38 @@ def get_grade(score: float) -> str:
         return "F"
 
 
+def _get_problem_category_mapping() -> list:
+    """Get problem type keyword to category mapping (Issue #315)."""
+    return [
+        (("race",), "race_conditions"),
+        (("debug", "print"), "debug_code"),
+        (("long", "complex"), "complexity"),
+        (("smell",), "code_smells"),
+        (("perf",), "performance"),
+        (("security",), "security"),
+    ]
+
+
+def _categorize_problem_type(problem_type: str) -> str:
+    """Categorize a problem type (Issue #315)."""
+    for keywords, category in _get_problem_category_mapping():
+        if any(kw in problem_type for kw in keywords):
+            return category
+    return problem_type
+
+
 def aggregate_categories(charts_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Aggregate issues by category."""
+    """Aggregate issues by category (Issue #315 - reduced nesting)."""
     chart_data = charts_data.get("chart_data", {})
     problem_types = chart_data.get("problem_types", [])
-    severity_counts = chart_data.get("severity_counts", [])
-
-    # Severity counts available for future use if needed
-    _ = severity_counts  # Suppress unused warning
 
     categories = {}
     for problem in problem_types:
         problem_type = problem.get("type", "unknown")
         count = problem.get("count", 0)
 
-        # Map problem types to categories
-        if "race" in problem_type:
-            category = "race_conditions"
-        elif "debug" in problem_type or "print" in problem_type:
-            category = "debug_code"
-        elif "long" in problem_type or "complex" in problem_type:
-            category = "complexity"
-        elif "smell" in problem_type:
-            category = "code_smells"
-        elif "perf" in problem_type:
-            category = "performance"
-        elif "security" in problem_type:
-            category = "security"
-        else:
-            category = problem_type
+        # Map problem types to categories (Issue #315 - extracted)
+        category = _categorize_problem_type(problem_type)
 
         if category not in categories:
             categories[category] = {"count": 0, "items": []}

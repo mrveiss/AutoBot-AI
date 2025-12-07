@@ -45,6 +45,7 @@ class TaskExecutionTracker:
     """
 
     def __init__(self, memory_manager: Optional[AsyncEnhancedMemoryManager] = None):
+        """Initialize task tracker with memory manager and callback registry."""
         self.memory_manager = memory_manager or get_async_enhanced_memory_manager()
         self.active_tasks: Dict[str, Dict[str, Any]] = {}
         self.task_callbacks: Dict[str, List[Callable]] = {}
@@ -370,6 +371,7 @@ class TaskExecutionContext:
     """Context object provided during task execution for additional operations"""
 
     def __init__(self, tracker: TaskExecutionTracker, task_id: str):
+        """Initialize execution context with tracker reference and task ID."""
         self.tracker = tracker
         self.task_id = task_id
         self.outputs: Optional[Dict[str, Any]] = None

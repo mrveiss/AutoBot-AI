@@ -21,6 +21,47 @@ logger = logging.getLogger(__name__)
 VALID_SERVICE_ACTIONS = {"start", "stop", "restart"}
 
 
+def _parse_windows_systeminfo(output: str) -> Dict[str, str]:
+    """Parse Windows systeminfo CSV output (Issue #315: extracted).
+
+    Args:
+        output: Raw systeminfo CSV output
+
+    Returns:
+        Dict with windows_os_name and windows_os_version if parsed successfully
+    """
+    result = {}
+    try:
+        lines = output.splitlines()
+        if not lines:
+            return result
+        parts = lines[0].split(",")
+        if len(parts) > 1:
+            result["windows_os_name"] = parts[0].strip('"')
+            result["windows_os_version"] = parts[1].strip('"')
+    except Exception as e:
+        logger.debug(f"Failed to parse Windows systeminfo: {e}")
+    return result
+
+
+def _parse_linux_lsb_release(output: str) -> Dict[str, str]:
+    """Parse Linux lsb_release output (Issue #315: extracted).
+
+    Args:
+        output: Raw lsb_release -a output
+
+    Returns:
+        Dict with linux_distro and linux_release if found
+    """
+    result = {}
+    for line in output.splitlines():
+        if "Description:" in line:
+            result["linux_distro"] = line.split(":", 1)[1].strip()
+        elif "Release:" in line:
+            result["linux_release"] = line.split(":", 1)[1].strip()
+    return result
+
+
 class SystemIntegration:
     """
     Cross-platform system integration and process management.
@@ -79,36 +120,20 @@ class SystemIntegration:
         }
 
         if self.os_type == "Windows":
-            # Example: Get Windows version
+            # Get Windows version using helper (Issue #315: depth reduction)
             win_version_cmd = ["systeminfo", "/fo", "csv", "/nh"]
             cmd_result = self._run_command(win_version_cmd)
             if cmd_result["status"] == "success":
-                try:
-                    # Parse CSV output for OS Name and Version
-                    lines = cmd_result["output"].splitlines()
-                    if lines:
-                        parts = lines[0].split(",")
-                        # Assuming specific indices for OS Name and Version
-                        # This is fragile and depends on systeminfo output format
-                        # A more robust solution would parse the full CSV or use WMI
-                        if len(parts) > 1:
-                            info["windows_os_name"] = parts[0].strip('"')
-                            info["windows_os_version"] = parts[1].strip('"')
-                except Exception as e:
-                    logger.debug(f"Failed to parse Windows systeminfo: {e}")
+                info.update(_parse_windows_systeminfo(cmd_result["output"]))
 
         elif self.os_type == "Linux":
-            # Example: Get distribution info
+            # Get distribution info using helper (Issue #315: depth reduction)
             lsb_release_cmd = ["lsb_release", "-a"]
             cmd_result = self._run_command(lsb_release_cmd)
             if cmd_result["status"] == "success":
-                for line in cmd_result["output"].splitlines():
-                    if "Description:" in line:
-                        info["linux_distro"] = line.split(":", 1)[1].strip()
-                    elif "Release:" in line:
-                        info["linux_release"] = line.split(":", 1)[1].strip()
+                info.update(_parse_linux_lsb_release(cmd_result["output"]))
 
-            # Example: Kernel version
+            # Kernel version
             info["kernel_version"] = platform.release()
 
         return {"status": "success", "info": info}

@@ -104,8 +104,88 @@ class GPUSemanticChunker:
         logger.info(f"  - GPU Batch Size: {gpu_batch_size} (optimized for RTX 4070)")
         logger.info(f"  - GPU Memory Pooling: {enable_gpu_memory_pool}")
 
+    def _setup_gpu_optimizations(self) -> None:
+        """Configure GPU optimizations for RTX 4070 (Issue #315: extracted)."""
+        import torch
+
+        if not torch.cuda.is_available():
+            return
+
+        # RTX 4070 specific optimizations
+        torch.backends.cudnn.benchmark = True  # Optimize for consistent input sizes
+        torch.backends.cuda.matmul.allow_tf32 = True  # Enable TF32 for RTX 4070
+        torch.backends.cudnn.allow_tf32 = True
+
+    def _initialize_gpu_memory_pool(self) -> None:
+        """Initialize GPU memory pool for RTX 4070 (Issue #315: extracted)."""
+        import torch
+
+        if not self.enable_gpu_memory_pool or self._gpu_memory_pool_initialized:
+            return
+
+        try:
+            # Reserve 6GB for embedding operations, leave 2GB for system
+            torch.cuda.set_per_process_memory_fraction(0.75)  # 6GB of 8GB
+            torch.cuda.empty_cache()
+            self._gpu_memory_pool_initialized = True
+            logger.info("GPU memory pool initialized for RTX 4070 (6GB reserved)")
+        except Exception as pool_error:
+            logger.warning(f"GPU memory pool setup failed: {pool_error}")
+
+    def _apply_model_optimizations(self, model, device: str):
+        """Apply RTX 4070 specific model optimizations (Issue #315: extracted).
+
+        Args:
+            model: The SentenceTransformer model
+            device: Target device string
+
+        Returns:
+            Optimized model
+        """
+        import torch
+
+        if not device.startswith("cuda"):
+            return model
+
+        try:
+            # Enable mixed precision with aggressive optimization
+            model = model.to(device, dtype=torch.float16)
+
+            # Enable JIT compilation for repeated operations
+            if hasattr(model, "eval"):
+                model.eval()
+
+            # Warm up GPU with a small batch to optimize kernel selection
+            logger.info("Warming up GPU kernels...")
+            warmup_sentences = ["This is a warmup sentence."] * 10
+            with torch.no_grad():
+                _ = model.encode(
+                    warmup_sentences,
+                    batch_size=10,
+                    convert_to_tensor=False,
+                )
+            torch.cuda.synchronize()  # Wait for GPU operations to complete
+
+            logger.info("RTX 4070 optimizations applied:")
+            logger.info("  - FP16 mixed precision enabled")
+            logger.info("  - TF32 tensor operations enabled")
+            logger.info("  - CUDNN benchmark mode enabled")
+            logger.info("  - GPU kernel warmup completed")
+
+        except Exception as gpu_opt_error:
+            logger.warning(f"Advanced GPU optimizations failed: {gpu_opt_error}")
+            # Fallback to basic GPU usage
+            import torch
+
+            model = model.to(device, dtype=torch.float32)
+
+        return model
+
     async def _initialize_model(self):
-        """Initialize model with aggressive GPU optimizations for RTX 4070."""
+        """Initialize model with aggressive GPU optimizations for RTX 4070.
+
+        Issue #315: Refactored to use helper methods for reduced nesting depth.
+        """
         if self._embedding_model is not None:
             return
 
@@ -114,117 +194,62 @@ class GPUSemanticChunker:
                 return
 
             try:
-
-                def load_model():
-                    import torch
-                    from sentence_transformers import SentenceTransformer
-
-                    # GPU optimization setup
-                    if torch.cuda.is_available():
-                        # RTX 4070 specific optimizations
-                        torch.backends.cudnn.benchmark = (
-                            True  # Optimize for consistent input sizes
-                        )
-                        torch.backends.cuda.matmul.allow_tf32 = (
-                            True  # Enable TF32 for RTX 4070
-                        )
-                        torch.backends.cudnn.allow_tf32 = True
-
-                        # Initialize GPU memory pool for RTX 4070 (8GB VRAM)
-                        if (
-                            self.enable_gpu_memory_pool
-                            and not self._gpu_memory_pool_initialized
-                        ):
-                            try:
-                                # Reserve 6GB for embedding operations, leave 2GB for system
-                                torch.cuda.set_per_process_memory_fraction(
-                                    0.75
-                                )  # 6GB of 8GB
-                                torch.cuda.empty_cache()
-                                self._gpu_memory_pool_initialized = True
-                                logger.info(
-                                    "GPU memory pool initialized for RTX 4070 (6GB reserved)"
-                                )
-                            except Exception as pool_error:
-                                logger.warning(
-                                    f"GPU memory pool setup failed: {pool_error}"
-                                )
-
-                        device = "cuda:0"
-                        gpu_name = torch.cuda.get_device_name(0)
-                        total_memory = (
-                            torch.cuda.get_device_properties(0).total_memory / 1024**3
-                        )
-                        logger.info(
-                            f"Optimizing for GPU: {gpu_name} ({total_memory:.1f}GB)"
-                        )
-                    else:
-                        device = "cpu"
-                        logger.warning("CUDA not available - falling back to CPU")
-
-                    # Load model with optimizations
-                    logger.info("Loading model with GPU optimizations...")
-                    model = SentenceTransformer(
-                        self.embedding_model_name, device=device
-                    )
-
-                    if device.startswith("cuda"):
-                        # RTX 4070 specific optimizations
-                        try:
-                            # Enable mixed precision with aggressive optimization
-                            model = model.to(device, dtype=torch.float16)
-
-                            # Enable JIT compilation for repeated operations
-                            if hasattr(model, "eval"):
-                                model.eval()
-
-                            # Warm up GPU with a small batch to optimize kernel selection
-                            logger.info("Warming up GPU kernels...")
-                            warmup_sentences = ["This is a warmup sentence."] * 10
-                            with torch.no_grad():
-                                _ = model.encode(
-                                    warmup_sentences,
-                                    batch_size=10,
-                                    convert_to_tensor=False,
-                                )
-                            torch.cuda.synchronize()  # Wait for GPU operations to complete
-
-                            logger.info("RTX 4070 optimizations applied:")
-                            logger.info("  - FP16 mixed precision enabled")
-                            logger.info("  - TF32 tensor operations enabled")
-                            logger.info("  - CUDNN benchmark mode enabled")
-                            logger.info("  - GPU kernel warmup completed")
-
-                        except Exception as gpu_opt_error:
-                            logger.warning(
-                                f"Advanced GPU optimizations failed: {gpu_opt_error}"
-                            )
-                            # Fallback to basic GPU usage
-                            model = model.to(device, dtype=torch.float32)
-
-                    return model
-
                 # Load model in thread pool to avoid blocking
                 loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     logger.info("Loading GPU embedding model...")
                     self._embedding_model = await loop.run_in_executor(
-                        executor, load_model
+                        executor, self._load_model_with_optimizations
                     )
 
                 logger.info("GPU model loading completed")
 
             except Exception as e:
                 logger.error(f"Failed to load GPU model: {e}")
-                # Fallback to basic model
-                import torch
-                from sentence_transformers import SentenceTransformer
+                self._load_fallback_model()
 
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._embedding_model = SentenceTransformer(
-                    self.embedding_model_name, device=device
-                )
-                logger.warning("Using basic model fallback")
+    def _load_model_with_optimizations(self):
+        """Load model with GPU optimizations (Issue #315: extracted).
+
+        Returns:
+            Configured SentenceTransformer model
+        """
+        import torch
+        from sentence_transformers import SentenceTransformer
+
+        # Configure GPU optimizations using helpers
+        self._setup_gpu_optimizations()
+        self._initialize_gpu_memory_pool()
+
+        # Determine device
+        if torch.cuda.is_available():
+            device = "cuda:0"
+            gpu_name = torch.cuda.get_device_name(0)
+            total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            logger.info(f"Optimizing for GPU: {gpu_name} ({total_memory:.1f}GB)")
+        else:
+            device = "cpu"
+            logger.warning("CUDA not available - falling back to CPU")
+
+        # Load model
+        logger.info("Loading model with GPU optimizations...")
+        model = SentenceTransformer(self.embedding_model_name, device=device)
+
+        # Apply RTX 4070 specific optimizations
+        model = self._apply_model_optimizations(model, device)
+
+        return model
+
+    def _load_fallback_model(self) -> None:
+        """Load basic fallback model (Issue #315: extracted)."""
+        import torch
+        from sentence_transformers import SentenceTransformer
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._embedding_model = SentenceTransformer(
+            self.embedding_model_name, device=device
+        )
+        logger.warning("Using basic model fallback")
 
     async def chunk_text(
         self, text: str, metadata: Optional[Dict[str, Any]] = None

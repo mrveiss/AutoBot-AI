@@ -27,6 +27,7 @@ class LoginRequest(BaseModel):
 
     @validator("username")
     def validate_username(cls, v):
+        """Validate and sanitize username format."""
         if not v or len(v.strip()) == 0:
             raise ValueError("Username cannot be empty")
         if len(v) > 50:
@@ -39,6 +40,7 @@ class LoginRequest(BaseModel):
 
     @validator("password")
     def validate_password(cls, v):
+        """Validate password length constraints."""
         if not v or len(v) < 1:
             raise ValueError("Password cannot be empty")
         if len(v) > 128:

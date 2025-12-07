@@ -148,6 +148,7 @@ class BaseModalProcessor:
     """Base class for modal-specific processors"""
 
     def __init__(self, processor_type: str):
+        """Initialize base processor with type-specific logger and memory manager."""
         self.processor_type = processor_type
         self.logger = logging.getLogger(f"{__name__}.{processor_type}")
         self.memory_manager = get_async_enhanced_memory_manager()
@@ -166,6 +167,7 @@ class VisionProcessor(BaseModalProcessor):
     """Computer vision processing component with GPU acceleration"""
 
     def __init__(self):
+        """Initialize vision processor with GPU device and model configuration."""
         super().__init__("vision")
         self.config = get_config_section("multimodal.vision")
         self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
@@ -288,16 +290,117 @@ class VisionProcessor(BaseModalProcessor):
                 error_message=str(e),
             )
 
+    async def _load_image(self, data: Any) -> Image.Image:
+        """Load image from various input types (Issue #315 - extracted method)"""
+        if isinstance(data, bytes):
+            return Image.open(io.BytesIO(data)).convert("RGB")
+        elif isinstance(data, Image.Image):
+            return data.convert("RGB")
+        elif isinstance(data, str):
+            # File path - read asynchronously (Issue #291)
+            return await asyncio.to_thread(
+                lambda p: Image.open(p).convert("RGB"), data
+            )
+        else:
+            raise ValueError(f"Unsupported image data type: {type(data)}")
+
+    def _process_clip_features(self, image: Image.Image):
+        """Process CLIP features (Issue #315 - extracted method to reduce nesting)"""
+        if not self.clip_model or not self.clip_processor:
+            return None
+
+        with torch.no_grad():
+            if torch.cuda.is_available():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    clip_inputs = self.clip_processor(
+                        images=image, return_tensors="pt"
+                    )
+                    clip_inputs = {
+                        k: v.to(self.device) for k, v in clip_inputs.items()
+                    }
+                    return self.clip_model.get_image_features(**clip_inputs)
+            else:
+                clip_inputs = self.clip_processor(
+                    images=image, return_tensors="pt"
+                )
+                return self.clip_model.get_image_features(**clip_inputs)
+
+    def _generate_caption(self, image: Image.Image) -> str:
+        """Generate image caption (Issue #315 - extracted method to reduce nesting)"""
+        if not self.blip_model or not self.blip_processor:
+            return ""
+
+        with torch.no_grad():
+            if torch.cuda.is_available():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    blip_inputs = self.blip_processor(
+                        images=image, return_tensors="pt"
+                    )
+                    blip_inputs = {
+                        k: v.to(self.device) if torch.is_tensor(v) else v
+                        for k, v in blip_inputs.items()
+                    }
+                    generated_ids = self.blip_model.generate(
+                        **blip_inputs,
+                        max_length=50,
+                        num_beams=3,
+                        temperature=0.8,
+                    )
+                    return self.blip_processor.batch_decode(
+                        generated_ids, skip_special_tokens=True
+                    )[0].strip()
+            else:
+                blip_inputs = self.blip_processor(
+                    images=image, return_tensors="pt"
+                )
+                generated_ids = self.blip_model.generate(
+                    **blip_inputs, max_length=50, num_beams=3, temperature=0.8
+                )
+                return self.blip_processor.batch_decode(
+                    generated_ids, skip_special_tokens=True
+                )[0].strip()
+
+    def _answer_visual_question(self, image: Image.Image, question: str) -> str:
+        """Answer visual question (Issue #315 - extracted method to reduce nesting)"""
+        if not self.blip_model or not self.blip_processor:
+            return ""
+
+        with torch.no_grad():
+            if torch.cuda.is_available():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    vqa_inputs = self.blip_processor(
+                        images=image, text=question, return_tensors="pt"
+                    )
+                    vqa_inputs = {
+                        k: v.to(self.device) if torch.is_tensor(v) else v
+                        for k, v in vqa_inputs.items()
+                    }
+                    generated_ids = self.blip_model.generate(
+                        **vqa_inputs, max_length=30
+                    )
+                    return self.blip_processor.batch_decode(
+                        generated_ids, skip_special_tokens=True
+                    )[0].strip()
+            else:
+                vqa_inputs = self.blip_processor(
+                    images=image, text=question, return_tensors="pt"
+                )
+                generated_ids = self.blip_model.generate(
+                    **vqa_inputs, max_length=30
+                )
+                return self.blip_processor.batch_decode(
+                    generated_ids, skip_special_tokens=True
+                )[0].strip()
+
     async def _process_image(self, input_data: MultiModalInput) -> Dict[str, Any]:
         """Process single image with GPU-accelerated CLIP and BLIP-2 models"""
 
-        # Check if models are available
+        # Guard clause: Check if models are available (Issue #315 - early return)
         if (
             not VISION_MODELS_AVAILABLE
             or self.clip_model is None
             or self.blip_model is None
         ):
-            # Fallback to placeholder implementation
             self.logger.warning(
                 "Vision models not available, using placeholder implementation"
             )
@@ -311,111 +414,21 @@ class VisionProcessor(BaseModalProcessor):
             }
 
         try:
-            # Prepare image
-            if isinstance(input_data.data, bytes):
-                image = Image.open(io.BytesIO(input_data.data)).convert("RGB")
-            elif isinstance(input_data.data, Image.Image):
-                image = input_data.data.convert("RGB")
-            elif isinstance(input_data.data, str):
-                # Assume it's a file path - read asynchronously (Issue #291)
-                image = await asyncio.to_thread(
-                    lambda p: Image.open(p).convert("RGB"), input_data.data
-                )
-            else:
-                raise ValueError(
-                    f"Unsupported image data type: {type(input_data.data)}"
-                )
+            # Prepare image (Issue #315 - extracted method)
+            image = await self._load_image(input_data.data)
 
-            # Process with CLIP for embeddings
-            clip_features = None
-            if self.clip_model and self.clip_processor:
-                with torch.no_grad():
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            clip_inputs = self.clip_processor(
-                                images=image, return_tensors="pt"
-                            )
-                            # Move inputs to device
-                            clip_inputs = {
-                                k: v.to(self.device) for k, v in clip_inputs.items()
-                            }
-                            clip_features = self.clip_model.get_image_features(
-                                **clip_inputs
-                            )
-                    else:
-                        clip_inputs = self.clip_processor(
-                            images=image, return_tensors="pt"
-                        )
-                        clip_features = self.clip_model.get_image_features(
-                            **clip_inputs
-                        )
+            # Process with CLIP for embeddings (Issue #315 - extracted method)
+            clip_features = self._process_clip_features(image)
 
-            # Process with BLIP-2 for captioning
-            caption = ""
-            if self.blip_model and self.blip_processor:
-                with torch.no_grad():
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            blip_inputs = self.blip_processor(
-                                images=image, return_tensors="pt"
-                            )
-                            # Move inputs to device
-                            blip_inputs = {
-                                k: v.to(self.device) if torch.is_tensor(v) else v
-                                for k, v in blip_inputs.items()
-                            }
+            # Process with BLIP-2 for captioning (Issue #315 - extracted method)
+            caption = self._generate_caption(image)
 
-                            # Generate caption
-                            generated_ids = self.blip_model.generate(
-                                **blip_inputs,
-                                max_length=50,
-                                num_beams=3,
-                                temperature=0.8,
-                            )
-                            caption = self.blip_processor.batch_decode(
-                                generated_ids, skip_special_tokens=True
-                            )[0].strip()
-                    else:
-                        blip_inputs = self.blip_processor(
-                            images=image, return_tensors="pt"
-                        )
-                        generated_ids = self.blip_model.generate(
-                            **blip_inputs, max_length=50, num_beams=3, temperature=0.8
-                        )
-                        caption = self.blip_processor.batch_decode(
-                            generated_ids, skip_special_tokens=True
-                        )[0].strip()
-
-            # Visual Question Answering if a question is provided
+            # Visual Question Answering if a question is provided (Issue #315 - extracted method)
             vqa_answer = None
+            question = None
             if "question" in input_data.metadata and input_data.metadata["question"]:
                 question = input_data.metadata["question"]
-                with torch.no_grad():
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            vqa_inputs = self.blip_processor(
-                                images=image, text=question, return_tensors="pt"
-                            )
-                            vqa_inputs = {
-                                k: v.to(self.device) if torch.is_tensor(v) else v
-                                for k, v in vqa_inputs.items()
-                            }
-                            generated_ids = self.blip_model.generate(
-                                **vqa_inputs, max_length=30
-                            )
-                            vqa_answer = self.blip_processor.batch_decode(
-                                generated_ids, skip_special_tokens=True
-                            )[0].strip()
-                    else:
-                        vqa_inputs = self.blip_processor(
-                            images=image, text=question, return_tensors="pt"
-                        )
-                        generated_ids = self.blip_model.generate(
-                            **vqa_inputs, max_length=30
-                        )
-                        vqa_answer = self.blip_processor.batch_decode(
-                            generated_ids, skip_special_tokens=True
-                        )[0].strip()
+                vqa_answer = self._answer_visual_question(image, question)
 
             # Clear GPU cache if using CUDA
             if torch.cuda.is_available():
@@ -476,6 +489,7 @@ class VoiceProcessor(BaseModalProcessor):
     """Voice processing component with GPU acceleration"""
 
     def __init__(self):
+        """Initialize voice processor with GPU device and audio model configuration."""
         super().__init__("voice")
         self.config = get_config_section("multimodal.audio")
         self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
@@ -576,16 +590,100 @@ class VoiceProcessor(BaseModalProcessor):
                 error_message=str(e),
             )
 
+    def _prepare_audio_data(self, input_data: MultiModalInput) -> tuple:
+        """Prepare and normalize audio data (Issue #315 - extracted method)"""
+        audio_array = None
+        sampling_rate = 16000  # Standard sampling rate for speech models
+
+        if isinstance(input_data.data, bytes):
+            audio_array = np.frombuffer(input_data.data, dtype=np.float32)
+        elif isinstance(input_data.data, str):
+            audio_array, sampling_rate = librosa.load(input_data.data, sr=16000)
+        elif isinstance(input_data.data, np.ndarray):
+            audio_array = input_data.data
+        else:
+            raise ValueError(f"Unsupported audio data type: {type(input_data.data)}")
+
+        # Ensure audio is mono and normalized
+        if len(audio_array.shape) > 1:
+            audio_array = np.mean(audio_array, axis=1)
+        audio_array = audio_array.astype(np.float32)
+
+        return audio_array, sampling_rate
+
+    def _transcribe_with_whisper(
+        self, audio_array: np.ndarray, sampling_rate: int
+    ) -> str:
+        """Transcribe audio with Whisper model (Issue #315 - extracted method)"""
+        if not self.whisper_model or not self.whisper_processor:
+            return ""
+
+        with torch.no_grad():
+            input_features = self.whisper_processor(
+                audio_array, sampling_rate=sampling_rate, return_tensors="pt"
+            ).input_features
+
+            # Use CUDA with autocast if available, otherwise CPU
+            use_cuda = torch.cuda.is_available()
+            if use_cuda:
+                input_features = input_features.to(self.device)
+
+            with torch.autocast(
+                device_type="cuda", dtype=torch.float16, enabled=use_cuda
+            ):
+                predicted_ids = self.whisper_model.generate(
+                    input_features, max_length=448, num_beams=5, temperature=0.8
+                )
+                return self.whisper_processor.batch_decode(
+                    predicted_ids, skip_special_tokens=True
+                )[0].strip()
+
+    def _process_wav2vec_embeddings(
+        self, audio_array: np.ndarray, sampling_rate: int
+    ) -> tuple:
+        """Process audio with Wav2Vec2 for embeddings (Issue #315 - extracted method)"""
+        if not self.wav2vec_model or not self.wav2vec_processor:
+            return None, ""
+
+        with torch.no_grad():
+            wav2vec_inputs = self.wav2vec_processor(
+                audio_array,
+                sampling_rate=sampling_rate,
+                return_tensors="pt",
+                padding=True,
+            )
+
+            # Use CUDA with autocast if available
+            use_cuda = torch.cuda.is_available()
+            if use_cuda:
+                wav2vec_inputs = {
+                    k: v.to(self.device) for k, v in wav2vec_inputs.items()
+                }
+
+            with torch.autocast(
+                device_type="cuda", dtype=torch.float16, enabled=use_cuda
+            ):
+                logits = self.wav2vec_model(**wav2vec_inputs).logits
+                hidden_states = self.wav2vec_model.wav2vec2(
+                    **wav2vec_inputs
+                ).last_hidden_state
+                audio_embedding = torch.mean(hidden_states, dim=1).cpu().numpy()
+                predicted_ids = torch.argmax(logits, dim=-1)
+                wav2vec_transcription = self.wav2vec_processor.batch_decode(
+                    predicted_ids
+                )[0]
+
+            return audio_embedding, wav2vec_transcription
+
     async def _process_audio(self, input_data: MultiModalInput) -> Dict[str, Any]:
         """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models"""
 
-        # Check if models are available
+        # Guard clause: Check if models are available (Issue #315 - early return)
         if (
             not AUDIO_MODELS_AVAILABLE
             or self.whisper_model is None
             or self.wav2vec_model is None
         ):
-            # Fallback to placeholder implementation
             self.logger.warning(
                 "Audio models not available, using placeholder implementation"
             )
@@ -598,102 +696,16 @@ class VoiceProcessor(BaseModalProcessor):
             }
 
         try:
-            # Prepare audio data
-            audio_array = None
-            sampling_rate = 16000  # Standard sampling rate for speech models
+            # Prepare audio data (Issue #315 - extracted method)
+            audio_array, sampling_rate = self._prepare_audio_data(input_data)
 
-            if isinstance(input_data.data, bytes):
-                # Convert bytes to numpy array
-                audio_array = np.frombuffer(input_data.data, dtype=np.float32)
-            elif isinstance(input_data.data, str):
-                # Load audio file
-                audio_array, sampling_rate = librosa.load(input_data.data, sr=16000)
-            elif isinstance(input_data.data, np.ndarray):
-                audio_array = input_data.data
-            else:
-                raise ValueError(
-                    f"Unsupported audio data type: {type(input_data.data)}"
-                )
+            # Process with Whisper for transcription (Issue #315 - extracted method)
+            transcribed_text = self._transcribe_with_whisper(audio_array, sampling_rate)
 
-            # Ensure audio is mono and normalized
-            if len(audio_array.shape) > 1:
-                audio_array = np.mean(audio_array, axis=1)
-            audio_array = audio_array.astype(np.float32)
-
-            # Process with Whisper for transcription
-            transcribed_text = ""
-            if self.whisper_model and self.whisper_processor:
-                with torch.no_grad():
-                    # Prepare inputs for Whisper
-                    input_features = self.whisper_processor(
-                        audio_array, sampling_rate=sampling_rate, return_tensors="pt"
-                    ).input_features
-
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            input_features = input_features.to(self.device)
-                            # Generate token ids
-                            predicted_ids = self.whisper_model.generate(
-                                input_features,
-                                max_length=448,
-                                num_beams=5,
-                                temperature=0.8,
-                            )
-                            # Decode to text
-                            transcribed_text = self.whisper_processor.batch_decode(
-                                predicted_ids, skip_special_tokens=True
-                            )[0].strip()
-                    else:
-                        predicted_ids = self.whisper_model.generate(
-                            input_features, max_length=448, num_beams=5, temperature=0.8
-                        )
-                        transcribed_text = self.whisper_processor.batch_decode(
-                            predicted_ids, skip_special_tokens=True
-                        )[0].strip()
-
-            # Process with Wav2Vec2 for embeddings
-            audio_embedding = None
-            wav2vec_transcription = ""
-            if self.wav2vec_model and self.wav2vec_processor:
-                with torch.no_grad():
-                    # Prepare inputs for Wav2Vec2
-                    wav2vec_inputs = self.wav2vec_processor(
-                        audio_array,
-                        sampling_rate=sampling_rate,
-                        return_tensors="pt",
-                        padding=True,
-                    )
-
-                    if torch.cuda.is_available():
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            wav2vec_inputs = {
-                                k: v.to(self.device) for k, v in wav2vec_inputs.items()
-                            }
-                            # Get logits
-                            logits = self.wav2vec_model(**wav2vec_inputs).logits
-                            # Get embeddings from hidden states
-                            hidden_states = self.wav2vec_model.wav2vec2(
-                                **wav2vec_inputs
-                            ).last_hidden_state
-                            audio_embedding = (
-                                torch.mean(hidden_states, dim=1).cpu().numpy()
-                            )
-
-                            # Get predicted ids for additional transcription
-                            predicted_ids = torch.argmax(logits, dim=-1)
-                            wav2vec_transcription = self.wav2vec_processor.batch_decode(
-                                predicted_ids
-                            )[0]
-                    else:
-                        logits = self.wav2vec_model(**wav2vec_inputs).logits
-                        hidden_states = self.wav2vec_model.wav2vec2(
-                            **wav2vec_inputs
-                        ).last_hidden_state
-                        audio_embedding = torch.mean(hidden_states, dim=1).cpu().numpy()
-                        predicted_ids = torch.argmax(logits, dim=-1)
-                        wav2vec_transcription = self.wav2vec_processor.batch_decode(
-                            predicted_ids
-                        )[0]
+            # Process with Wav2Vec2 for embeddings (Issue #315 - extracted method)
+            audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(
+                audio_array, sampling_rate
+            )
 
             # Determine command type from transcription
             command_type = self._classify_command(transcribed_text)
@@ -745,38 +757,39 @@ class VoiceProcessor(BaseModalProcessor):
                 "processing_device": str(self.device),
             }
 
+    def _get_command_classification_map(self) -> list:
+        """Get command word sets to classification mapping (Issue #315)."""
+        return [
+            (LAUNCH_COMMAND_WORDS, "launch_application"),
+            (CLOSE_COMMAND_WORDS, "close_application"),
+            (SEARCH_COMMAND_WORDS, "search"),
+            (TEXT_INPUT_COMMAND_WORDS, "text_input"),
+            (INTERACTION_COMMAND_WORDS, "interaction"),
+            (NAVIGATION_COMMAND_WORDS, "navigation"),
+            (MEDIA_CONTROL_COMMAND_WORDS, "media_control"),
+            (QUERY_COMMAND_WORDS, "query"),
+        ]
+
     def _classify_command(self, text: str) -> str:
-        """Classify the command type from transcribed text"""
+        """Classify the command type from transcribed text (Issue #315)."""
         if not text:
             return "unknown"
 
         text_lower = text.lower()
 
-        # Simple rule-based classification using O(1) lookups (Issue #326)
-        if any(word in text_lower for word in LAUNCH_COMMAND_WORDS):
-            return "launch_application"
-        elif any(word in text_lower for word in CLOSE_COMMAND_WORDS):
-            return "close_application"
-        elif any(word in text_lower for word in SEARCH_COMMAND_WORDS):
-            return "search"
-        elif any(word in text_lower for word in TEXT_INPUT_COMMAND_WORDS):
-            return "text_input"
-        elif any(word in text_lower for word in INTERACTION_COMMAND_WORDS):
-            return "interaction"
-        elif any(word in text_lower for word in NAVIGATION_COMMAND_WORDS):
-            return "navigation"
-        elif any(word in text_lower for word in MEDIA_CONTROL_COMMAND_WORDS):
-            return "media_control"
-        elif any(word in text_lower for word in QUERY_COMMAND_WORDS):
-            return "query"
-        else:
-            return "general_command"
+        # Rule-based classification via lookup table (Issue #315 - reduced nesting)
+        for word_set, classification in self._get_command_classification_map():
+            if any(word in text_lower for word in word_set):
+                return classification
+
+        return "general_command"
 
 
 class ContextProcessor(BaseModalProcessor):
     """Context-aware decision processing component"""
 
     def __init__(self):
+        """Initialize context processor with base modality type."""
         super().__init__("context")
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
@@ -832,6 +845,7 @@ class UnifiedMultiModalProcessor:
     """
 
     def __init__(self):
+        """Initialize unified processor with all modal-specific processors."""
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
@@ -873,6 +887,41 @@ class UnifiedMultiModalProcessor:
         self.attention_layer = None
         self._initialize_fusion_components()
 
+    async def _route_to_processor(
+        self, input_data: MultiModalInput
+    ) -> ProcessingResult:
+        """Route input to appropriate processor (Issue #315 - extracted method)"""
+        # Use dict-based routing to reduce if-elif chain nesting
+        if input_data.modality_type in VISUAL_MODALITY_TYPES:
+            return await self.vision_processor.process(input_data)
+        if input_data.modality_type == ModalityType.AUDIO:
+            return await self.voice_processor.process(input_data)
+        if input_data.modality_type == ModalityType.TEXT:
+            return await self.context_processor.process(input_data)
+        if input_data.modality_type == ModalityType.COMBINED:
+            return await self._process_combined(input_data)
+        raise ValueError(f"Unknown modality type: {input_data.modality_type}")
+
+    def _create_error_result(
+        self,
+        input_data: MultiModalInput,
+        processing_time: float,
+        error: Exception,
+        prefix: str = "unified",
+    ) -> ProcessingResult:
+        """Create error result for failed processing (Issue #315 - extracted method)"""
+        return ProcessingResult(
+            result_id=f"{prefix}_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=False,
+            confidence=0.0,
+            result_data=None,
+            processing_time=processing_time,
+            error_message=str(error),
+        )
+
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """
         Main processing method that routes input to appropriate processor
@@ -886,17 +935,8 @@ class UnifiedMultiModalProcessor:
         await self.performance_monitor.auto_optimize()
 
         try:
-            # Route to appropriate processor based on modality (O(1) lookup - Issue #326)
-            if input_data.modality_type in VISUAL_MODALITY_TYPES:
-                result = await self.vision_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.AUDIO:
-                result = await self.voice_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.TEXT:
-                result = await self.context_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.COMBINED:
-                result = await self._process_combined(input_data)
-            else:
-                raise ValueError(f"Unknown modality type: {input_data.modality_type}")
+            # Route to appropriate processor (Issue #315 - extracted method)
+            result = await self._route_to_processor(input_data)
 
             # Record performance metrics
             processing_time = time.time() - start_time
@@ -925,17 +965,7 @@ class UnifiedMultiModalProcessor:
                 items_processed=0,
             )
 
-            return ProcessingResult(
-                result_id=f"unified_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=False,
-                confidence=0.0,
-                result_data=None,
-                processing_time=processing_time,
-                error_message=str(e),
-            )
+            return self._create_error_result(input_data, processing_time, e)
 
     async def _process_combined(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process combined multi-modal input"""
@@ -1030,101 +1060,137 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.error(f"Failed to initialize fusion components: {e}")
 
-    def _combine_results(self, results: List[ProcessingResult]) -> Dict[str, Any]:
-        """Combine results from multiple processors with attention-based fusion."""
-        # Check if we have fusion components
-        if self.fusion_network is None or self.attention_layer is None:
-            return self._simple_combination(results)
+    def _extract_embedding_from_result(
+        self, result: ProcessingResult
+    ) -> Optional[Any]:
+        """Extract embedding from a processing result (Issue #315 - extracted method)"""
+        if not result.result_data:
+            return None
 
-        # Extract embeddings and metadata
+        # Try different embedding field names
+        embedding_fields = ["clip_features", "audio_embedding", "embeddings"]
+        for field in embedding_fields:
+            if field in result.result_data:
+                return result.result_data.get(field)
+
+        return None
+
+    def _collect_embeddings_from_results(
+        self, results: List[ProcessingResult]
+    ) -> tuple:
+        """Collect and filter embeddings from results (Issue #315 - extracted method)"""
         embeddings = []
         modalities = []
         confidences = []
         result_data = []
 
         for result in results:
-            if isinstance(result, ProcessingResult) and result.success:
-                # Try to extract embeddings from different result formats
-                embedding = None
-                if result.result_data:
-                    if "clip_features" in result.result_data:
-                        # Vision embeddings
-                        embedding = result.result_data.get("clip_features")
-                    elif "audio_embedding" in result.result_data:
-                        # Audio embeddings
-                        embedding = result.result_data.get("audio_embedding")
-                    elif "embeddings" in result.result_data:
-                        # Generic embeddings
-                        embedding = result.result_data.get("embeddings")
+            # Guard clause: Skip unsuccessful or invalid results
+            if not isinstance(result, ProcessingResult) or not result.success:
+                continue
 
-                if embedding is not None:
-                    # Convert to tensor
-                    if not isinstance(embedding, torch.Tensor):
-                        embedding = torch.tensor(embedding, dtype=torch.float32)
+            # Extract embedding using helper method
+            embedding = self._extract_embedding_from_result(result)
+            if embedding is None:
+                continue
 
-                    # Ensure correct dimensions (should be 512)
-                    if embedding.numel() > 0:
-                        embeddings.append(embedding.to(self.device))
-                        modalities.append(result.modality_type.value)
-                        confidences.append(result.confidence)
-                        result_data.append(result.result_data)
+            # Convert to tensor if needed
+            if not isinstance(embedding, torch.Tensor):
+                embedding = torch.tensor(embedding, dtype=torch.float32)
 
-        # If we don't have enough embeddings for fusion, use simple combination
+            # Guard clause: Skip empty embeddings
+            if embedding.numel() == 0:
+                continue
+
+            # Collect valid embedding data
+            embeddings.append(embedding.to(self.device))
+            modalities.append(result.modality_type.value)
+            confidences.append(result.confidence)
+            result_data.append(result.result_data)
+
+        return embeddings, modalities, confidences, result_data
+
+    def _normalize_embeddings(self, embeddings: List[torch.Tensor]) -> List[torch.Tensor]:
+        """Normalize embeddings to target dimension (Issue #315 - extracted method)"""
+        normalized_embeddings = []
+        target_dim = 512
+
+        for emb in embeddings:
+            emb_flat = emb.flatten()
+            if emb_flat.shape[0] < target_dim:
+                # Pad with zeros
+                padded = torch.zeros(target_dim, device=self.device)
+                padded[: emb_flat.shape[0]] = emb_flat
+                normalized_embeddings.append(padded)
+            else:
+                # Truncate or use as is
+                normalized_embeddings.append(emb_flat[:target_dim])
+
+        return normalized_embeddings
+
+    def _apply_attention_fusion(
+        self, stacked_embeddings: torch.Tensor
+    ) -> tuple:
+        """Apply multi-head attention (Issue #315 - extracted method)"""
+        use_cuda = torch.cuda.is_available()
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
+            attended_output, attention_weights = self.attention_layer(
+                stacked_embeddings, stacked_embeddings, stacked_embeddings
+            )
+        return attended_output, attention_weights
+
+    def _compute_fused_embedding(
+        self, weighted_embeddings: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute final fused embedding (Issue #315 - extracted method)"""
+        # Prepare input for fusion network (pad to 1536 = 3 modalities * 512)
+        fusion_input = torch.zeros(1536, device=self.device)
+        flat_weighted = weighted_embeddings.flatten()
+        fusion_input[: min(flat_weighted.shape[0], 1536)] = flat_weighted[:1536]
+
+        # Apply fusion network with autocast if available
+        use_cuda = torch.cuda.is_available()
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
+            fused_embedding = self.fusion_network(fusion_input)
+
+        return fused_embedding
+
+    def _combine_results(self, results: List[ProcessingResult]) -> Dict[str, Any]:
+        """Combine results from multiple processors with attention-based fusion."""
+        # Guard clause: Check if we have fusion components (Issue #315 - early return)
+        if self.fusion_network is None or self.attention_layer is None:
+            return self._simple_combination(results)
+
+        # Extract embeddings and metadata (Issue #315 - extracted method)
+        embeddings, modalities, confidences, result_data = (
+            self._collect_embeddings_from_results(results)
+        )
+
+        # Guard clause: Not enough embeddings for fusion (Issue #315 - early return)
         if len(embeddings) < 2:
             return self._simple_combination(results)
 
         try:
             with torch.no_grad():
-                # Ensure all embeddings are the same size (pad or truncate to 512)
-                normalized_embeddings = []
-                target_dim = 512
-                for emb in embeddings:
-                    emb_flat = emb.flatten()
-                    if emb_flat.shape[0] < target_dim:
-                        # Pad with zeros
-                        padded = torch.zeros(target_dim, device=self.device)
-                        padded[: emb_flat.shape[0]] = emb_flat
-                        normalized_embeddings.append(padded)
-                    else:
-                        # Truncate or use as is
-                        normalized_embeddings.append(emb_flat[:target_dim])
+                # Normalize embeddings to target dimension (Issue #315 - extracted method)
+                normalized_embeddings = self._normalize_embeddings(embeddings)
 
                 # Stack embeddings for attention [num_modalities, 512]
-                stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(
-                    0
-                )  # [1, num_modalities, 512]
+                stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)
 
-                # Apply multi-head attention
-                if torch.cuda.is_available():
-                    with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        attended_output, attention_weights = self.attention_layer(
-                            stacked_embeddings, stacked_embeddings, stacked_embeddings
-                        )
-                else:
-                    attended_output, attention_weights = self.attention_layer(
-                        stacked_embeddings, stacked_embeddings, stacked_embeddings
-                    )
+                # Apply multi-head attention (Issue #315 - extracted method)
+                attended_output, attention_weights = self._apply_attention_fusion(
+                    stacked_embeddings
+                )
 
                 # Confidence-weighted fusion
                 confidence_weights = torch.tensor(
                     confidences, device=self.device
                 ).unsqueeze(-1)
-                weighted_embeddings = (
-                    attended_output.squeeze(0) * confidence_weights
-                )  # [num_modalities, 512]
+                weighted_embeddings = attended_output.squeeze(0) * confidence_weights
 
-                # Prepare input for fusion network
-                # Pad to fixed size (3 modalities * 512 = 1536)
-                fusion_input = torch.zeros(1536, device=self.device)
-                flat_weighted = weighted_embeddings.flatten()
-                fusion_input[: min(flat_weighted.shape[0], 1536)] = flat_weighted[:1536]
-
-                # Final fusion through neural network
-                if torch.cuda.is_available():
-                    with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        fused_embedding = self.fusion_network(fusion_input)
-                else:
-                    fused_embedding = self.fusion_network(fusion_input)
+                # Compute final fused embedding (Issue #315 - extracted method)
+                fused_embedding = self._compute_fused_embedding(weighted_embeddings)
 
                 # Calculate fusion confidence
                 fusion_confidence = torch.mean(confidence_weights).item()
@@ -1235,6 +1301,72 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.warning(f"Failed to store processing result: {e}")
 
+    def _group_inputs_by_modality(
+        self, inputs: List[MultiModalInput]
+    ) -> Dict[str, List[MultiModalInput]]:
+        """Group inputs by modality type (Issue #315 - extracted method)"""
+        modality_groups: Dict[str, List[MultiModalInput]] = {}
+        for inp in inputs:
+            modality = inp.modality_type.value
+            if modality not in modality_groups:
+                modality_groups[modality] = []
+            modality_groups[modality].append(inp)
+        return modality_groups
+
+    async def _process_single_batch(
+        self, batch: List[MultiModalInput], modality: str
+    ) -> List[ProcessingResult]:
+        """Process a single batch of inputs (Issue #315 - extracted method)"""
+        # Memory optimization before processing
+        if self.performance_monitor.should_optimize():
+            await self.performance_monitor.optimize_gpu_memory()
+
+        # Route to specialized batch processor or process individually
+        if modality == "image" and len(batch) > 1:
+            return await self._process_image_batch(batch)
+        if modality == "audio" and len(batch) > 1:
+            return await self._process_audio_batch(batch)
+
+        # Process individually for other modalities or small batches
+        return [await self.process(inp) for inp in batch]
+
+    async def _process_modality_group(
+        self, modality: str, group_inputs: List[MultiModalInput]
+    ) -> List[ProcessingResult]:
+        """Process all batches for a single modality (Issue #315 - extracted method)"""
+        results = []
+        batch_size = self.performance_monitor.get_optimal_batch_size(modality)
+
+        for i in range(0, len(group_inputs), batch_size):
+            batch = group_inputs[i : i + batch_size]
+            self.logger.debug(f"Processing batch of {len(batch)} {modality} inputs")
+            batch_results = await self._process_single_batch(batch, modality)
+            results.extend(batch_results)
+
+        return results
+
+    async def _fallback_individual_processing(
+        self, inputs: List[MultiModalInput]
+    ) -> List[ProcessingResult]:
+        """Fallback to individual processing on batch failure (Issue #315 - extracted)"""
+        results = []
+        for inp in inputs:
+            result = await self._process_input_with_fallback(inp)
+            results.append(result)
+        return results
+
+    async def _process_input_with_fallback(
+        self, inp: MultiModalInput
+    ) -> ProcessingResult:
+        """Process single input with error handling (Issue #315 - extracted method)"""
+        try:
+            return await self.process(inp)
+        except Exception as individual_error:
+            self.logger.error(
+                f"Individual processing failed for {inp.input_id}: {individual_error}"
+            )
+            return self._create_error_result(inp, 0.0, individual_error, "batch_error")
+
     async def process_batch(
         self, inputs: List[MultiModalInput]
     ) -> List[ProcessingResult]:
@@ -1251,47 +1383,14 @@ class UnifiedMultiModalProcessor:
         await self.performance_monitor.auto_optimize()
 
         try:
-            # Group inputs by modality for efficient batch processing
-            modality_groups = {}
-            for inp in inputs:
-                modality = inp.modality_type.value
-                if modality not in modality_groups:
-                    modality_groups[modality] = []
-                modality_groups[modality].append(inp)
+            # Group inputs by modality (Issue #315 - extracted method)
+            modality_groups = self._group_inputs_by_modality(inputs)
 
+            # Process each modality group (Issue #315 - extracted method)
             results = []
-
-            # Process each modality group in optimized batches
             for modality, group_inputs in modality_groups.items():
-                batch_size = self.performance_monitor.get_optimal_batch_size(modality)
-
-                # Process in chunks of optimal batch size
-                for i in range(0, len(group_inputs), batch_size):
-                    batch = group_inputs[i : i + batch_size]
-
-                    self.logger.debug(
-                        f"Processing batch of {len(batch)} {modality} inputs"
-                    )
-
-                    # Memory optimization before processing each batch
-                    if self.performance_monitor.should_optimize():
-                        await self.performance_monitor.optimize_gpu_memory()
-
-                    # Process batch with mixed precision if available
-                    if modality == "image" and len(batch) > 1:
-                        # Special handling for image batches
-                        batch_results = await self._process_image_batch(batch)
-                    elif modality == "audio" and len(batch) > 1:
-                        # Special handling for audio batches
-                        batch_results = await self._process_audio_batch(batch)
-                    else:
-                        # Process individually for other modalities or small batches
-                        batch_results = []
-                        for inp in batch:
-                            result = await self.process(inp)
-                            batch_results.append(result)
-
-                    results.extend(batch_results)
+                group_results = await self._process_modality_group(modality, group_inputs)
+                results.extend(group_results)
 
             # Record batch processing performance
             total_processing_time = time.time() - start_time
@@ -1308,31 +1407,7 @@ class UnifiedMultiModalProcessor:
 
         except Exception as e:
             self.logger.error(f"Batch processing failed: {e}")
-            # Fallback to individual processing
-            results = []
-            for inp in inputs:
-                try:
-                    result = await self.process(inp)
-                    results.append(result)
-                except Exception as individual_error:
-                    self.logger.error(
-                        f"Individual processing failed for {inp.input_id}: {individual_error}"
-                    )
-                    # Create error result
-                    error_result = ProcessingResult(
-                        result_id=f"batch_error_{inp.input_id}",
-                        input_id=inp.input_id,
-                        modality_type=inp.modality_type,
-                        intent=inp.intent,
-                        success=False,
-                        confidence=0.0,
-                        result_data=None,
-                        processing_time=0.0,
-                        error_message=str(individual_error),
-                    )
-                    results.append(error_result)
-
-            return results
+            return await self._fallback_individual_processing(inputs)
 
     async def _process_image_batch(
         self, batch: List[MultiModalInput]

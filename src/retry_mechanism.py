@@ -65,6 +65,7 @@ class RetryExhaustedError(Exception):
     """Raised when all retry attempts have been exhausted"""
 
     def __init__(self, attempts: int, last_exception: Exception):
+        """Initialize with number of attempts and the last exception raised."""
         self.attempts = attempts
         self.last_exception = last_exception
         super().__init__(
@@ -77,6 +78,7 @@ class RetryMechanism:
     """Retry mechanism with various backoff strategies"""
 
     def __init__(self, config: Optional[RetryConfig] = None):
+        """Initialize retry mechanism with optional configuration."""
         self.config = config or RetryConfig()
         self._stats_lock = threading.Lock()
         self.stats = {
@@ -331,8 +333,11 @@ def retry_async(
     """
 
     def decorator(func):
+        """Inner decorator that wraps function with async retry logic."""
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Async wrapper that executes function with retry mechanism."""
             config = RetryConfig(
                 max_attempts=max_attempts,
                 base_delay=base_delay,
@@ -378,8 +383,11 @@ def retry_sync(
     """
 
     def decorator(func):
+        """Inner decorator that wraps function with sync retry logic."""
+
         @wraps(func)
         def wrapper(*args, **kwargs):
+            """Sync wrapper that executes function with retry mechanism."""
             config = RetryConfig(
                 max_attempts=max_attempts,
                 base_delay=base_delay,
@@ -476,6 +484,7 @@ if __name__ == "__main__":
         # Example 1: Using decorator
         @retry_async(max_attempts=3, base_delay=0.5)
         async def flaky_network_call():
+            """Example flaky network call that may fail randomly."""
             import random
 
             if random.random() < 0.7:  # 70% chance of failure
@@ -494,6 +503,7 @@ if __name__ == "__main__":
         )
 
         async def another_flaky_operation():
+            """Example operation that may timeout randomly."""
             import random
 
             if random.random() < 0.5:

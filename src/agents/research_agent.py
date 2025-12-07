@@ -65,6 +65,7 @@ class ResearchAgent:
     """
 
     def __init__(self):
+        """Initialize research agent with FastAPI app and mock data."""
         self.app = FastAPI(title="AutoBot Research Agent", version="1.0.0")
         self._http_client = get_http_client()  # Use singleton HTTP client
 
@@ -115,10 +116,12 @@ class ResearchAgent:
 
         @self.app.get("/health")
         async def health_check():
+            """Return health check status for the research agent."""
             return {"status": "healthy", "agent": "research", "version": "1.0.0"}
 
         @self.app.post("/research", response_model=ResearchResponse)
         async def research_endpoint(request: ResearchRequest):
+            """Handle research requests and return structured results."""
             return await self.perform_research(request)
 
         @self.app.post("/research/tools")
@@ -128,7 +131,7 @@ class ResearchAgent:
 
         @self.app.get("/research/installation/{tool_name}")
         async def get_installation_guide(tool_name: str):
-            """Get detailed installation guide for a specific tool."""
+            """Get detailed installation guide for a specific tool by name."""
             return await self.get_tool_installation_guide(tool_name)
 
     async def perform_research(self, request: ResearchRequest) -> ResearchResponse:
