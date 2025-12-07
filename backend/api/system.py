@@ -161,7 +161,7 @@ async def get_system_health(request: Request = None):
     """Get system health status"""
     try:
         # Import app_state to get initialization status
-        from backend.app_factory import app_state
+        from backend.initialization.lifespan import app_state
 
         # Check various system components
         health_status = {
