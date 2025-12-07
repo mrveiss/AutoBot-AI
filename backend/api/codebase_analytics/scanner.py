@@ -267,10 +267,15 @@ async def scan_codebase(
         # First pass: count total files for progress tracking
         total_files = 0
         if progress_callback:
+            file_count = 0
             for file_path in root_path_obj.rglob("*"):
                 if file_path.is_file():
                     if not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
                         total_files += 1
+                        file_count += 1
+                        # Yield to event loop every 100 files during counting
+                        if file_count % 100 == 0:
+                            await asyncio.sleep(0)
 
             # Report total files discovered
             await progress_callback(
@@ -302,6 +307,9 @@ async def scan_codebase(
                         total=total_files,
                         current_file=relative_path,
                     )
+                # Yield to event loop every 5 files to prevent blocking other requests
+                elif files_processed % 5 == 0:
+                    await asyncio.sleep(0)
 
                 # Get file analysis using type dispatch (Issue #315)
                 file_analysis = await _get_file_analysis(
