@@ -233,28 +233,33 @@ class CacheBuster {
 
                 return response;
             } catch (error) {
-                // Rate-limit connection error logging to prevent console spam
-                const isConnectionError =
+                // Rate-limit connection/timeout error logging to prevent console spam
+                const isConnectionOrTimeoutError =
                     error.name === 'AbortError' ||
-                    error.message.includes('Failed to fetch') ||
-                    error.message.includes('ERR_CONNECTION_REFUSED') ||
-                    error.message.includes('NetworkError') ||
-                    error.message.includes('Network request failed') ||
-                    error.message.includes('signal is aborted');
+                    error.name === 'TimeoutError' ||
+                    error.message?.includes('Failed to fetch') ||
+                    error.message?.includes('ERR_CONNECTION_REFUSED') ||
+                    error.message?.includes('NetworkError') ||
+                    error.message?.includes('Network request failed') ||
+                    error.message?.includes('signal is aborted') ||
+                    error.message?.includes('signal timed out') ||
+                    error.message?.includes('timed out') ||
+                    error.message?.includes('timeout');
 
-                if (isConnectionError) {
+                if (isConnectionOrTimeoutError) {
                     this.connectionErrorCount++;
                     const now = Date.now();
 
                     // Only log once every cooldown period
                     if (now - this.lastConnectionErrorLog >= this.connectionErrorCooldown) {
                         logger.warn(
-                            `[CacheBuster] Backend connection error (${this.connectionErrorCount} failed requests in last ${
+                            `[CacheBuster] Backend connection/timeout error (${this.connectionErrorCount} failed requests in last ${
                                 Math.round((now - this.lastConnectionErrorLog) / 1000)
-                            }s) - Backend may be restarting`
+                            }s) - Backend may be busy or restarting`
                         );
                         this.lastConnectionErrorLog = now;
                     }
+                    // Don't log individual timeout errors - they're rate-limited
                 } else {
                     // Log non-connection errors immediately (these are unexpected)
                     logger.error('[CacheBuster] Fetch error:', error);
