@@ -333,8 +333,6 @@ export class ChatController {
                   status: 'error'
                 })
               } else if (data.content) {
-                accumulatedContent += data.content
-
                 // Map backend message type to frontend type
                 // Issue #351 Fix: Backend sends type at top level (data.type), not in metadata
                 type MessageType = 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | undefined
@@ -357,8 +355,34 @@ export class ChatController {
                   // Keep 'response' as default for unknown types
                 }
 
-                // Issue #352: Track message type for this segment
+                // Issue #352: Detect type change and create NEW bubble
+                // When message type changes (e.g., response -> thought -> response),
+                // finalize current bubble and start a new one
+                if (currentMessageType !== messageType && accumulatedContent.trim()) {
+                  logger.debug(`Message type changed: ${currentMessageType} -> ${messageType}, creating new bubble`)
+
+                  // Finalize current message with its accumulated content
+                  this.chatStore.updateMessage(currentMessageId, {
+                    content: accumulatedContent,
+                    type: currentMessageType as any,
+                    status: 'sent'
+                  })
+
+                  // Create new message for the new type
+                  currentMessageId = this.chatStore.addMessage({
+                    content: '',
+                    sender: 'assistant',
+                    type: messageType
+                  })
+                  messageIds.push(currentMessageId)
+                  accumulatedContent = ''
+                }
+
+                // Update the current message type
                 currentMessageType = messageType
+
+                // Accumulate content for current bubble
+                accumulatedContent += data.content
 
                 // CRITICAL FIX: Merge metadata instead of replacing to preserve terminal_session_id
                 const currentMessage = this.chatStore.currentSession?.messages.find(m => m.id === currentMessageId)

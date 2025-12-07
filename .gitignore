@@ -184,8 +184,8 @@ dump.rdb
 *.rdb
 redis.conf
 
-# === MODEL FILES ===
-models/
+# === MODEL FILES (AI/ML models, not code) ===
+/models/
 ollama/
 *.ggml
 *.bin
