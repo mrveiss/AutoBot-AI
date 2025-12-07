@@ -10,15 +10,22 @@ Issue: #260
 """
 
 import logging
+import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.utils.error_handler import ErrorCategory, with_error_handling
-from backend.utils.request_id import generate_request_id
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.services.security_tool_parsers import parse_tool_output
+
+
+def generate_request_id() -> str:
+    """Generate a unique request ID for tracking."""
+    return str(uuid.uuid4())
+
+
 from src.services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
     VALID_TRANSITIONS,
@@ -356,7 +363,7 @@ async def get_current_phase(
 
 @router.post("/assessments/{assessment_id}/phase")
 @with_error_handling(
-    category=ErrorCategory.VALIDATION_ERROR,
+    category=ErrorCategory.VALIDATION,
     operation="advance_phase",
     error_code_prefix="SEC",
 )
@@ -661,7 +668,7 @@ async def get_findings(
 
 @router.post("/assessments/{assessment_id}/parse")
 @with_error_handling(
-    category=ErrorCategory.VALIDATION_ERROR,
+    category=ErrorCategory.VALIDATION,
     operation="parse_tool_output",
     error_code_prefix="SEC",
 )
@@ -805,7 +812,7 @@ async def set_error_state(
 
 @router.post("/assessments/{assessment_id}/recover")
 @with_error_handling(
-    category=ErrorCategory.VALIDATION_ERROR,
+    category=ErrorCategory.VALIDATION,
     operation="recover_from_error",
     error_code_prefix="SEC",
 )
