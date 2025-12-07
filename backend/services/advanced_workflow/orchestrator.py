@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List
 
-from backend.api.workflow_automation import (
+from backend.services.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowStep,
