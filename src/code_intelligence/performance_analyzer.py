@@ -112,6 +112,9 @@ class PerformanceIssue:
     current_code: str = ""
     optimized_code: str = ""
     confidence: float = 1.0
+    # Issue #385: Flag potential false positives for user review
+    potential_false_positive: bool = False
+    false_positive_reason: str = ""
     metrics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -129,11 +132,97 @@ class PerformanceIssue:
             "current_code": self.current_code,
             "optimized_code": self.optimized_code,
             "confidence": self.confidence,
+            "potential_false_positive": self.potential_false_positive,
+            "false_positive_reason": self.false_positive_reason,
             "metrics": self.metrics,
         }
 
 
-# Blocking I/O operations that shouldn't be in async context
+# Issue #385: Context-aware blocking I/O detection with confidence scoring
+# HIGH confidence (0.9+): Exact module.method matches - definitely blocking
+# MEDIUM confidence (0.6-0.8): Likely blocking based on pattern
+# LOW confidence (0.3-0.5): Potential match - flag as needs_review
+#
+# Structure: { pattern: (recommendation, confidence, is_exact_match) }
+# is_exact_match=True means the call_name must equal the pattern exactly
+# is_exact_match=False means substring matching (with context checks)
+
+BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE = {
+    # HTTP - These are definitely blocking when from requests/urllib
+    "requests.get": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.post": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.put": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.delete": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.patch": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.head": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "requests.request": ("Use httpx.AsyncClient() or aiohttp", 0.95, True),
+    "urllib.request.urlopen": ("Use aiohttp for async HTTP", 0.95, True),
+    "urllib.urlopen": ("Use aiohttp for async HTTP", 0.95, True),
+    # Sleep - definitely blocking
+    "time.sleep": ("Use await asyncio.sleep() instead", 0.98, True),
+    # File I/O - builtin open is blocking
+    "builtins.open": ("Use aiofiles.open() for async file I/O", 0.90, True),
+    # Subprocess - blocking
+    "subprocess.run": ("Use asyncio.create_subprocess_exec()", 0.92, True),
+    "subprocess.call": ("Use asyncio.create_subprocess_exec()", 0.92, True),
+    "subprocess.check_output": ("Use asyncio.create_subprocess_exec()", 0.92, True),
+    "subprocess.Popen": ("Use asyncio.create_subprocess_exec()", 0.88, True),
+    # Database - sync drivers
+    "sqlite3.connect": ("Use aiosqlite for async SQLite", 0.90, True),
+    "psycopg2.connect": ("Use asyncpg for async PostgreSQL", 0.90, True),
+    "pymysql.connect": ("Use aiomysql for async MySQL", 0.90, True),
+    "redis.Redis": ("Use redis.asyncio.Redis for async Redis", 0.88, True),
+}
+
+BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE = {
+    # Generic patterns that need context - may have false positives
+    "open(": ("Consider aiofiles.open() if in async context", 0.70, False),
+    ".read(": ("Consider async read if this is file/network I/O", 0.60, False),
+    ".write(": ("Consider async write if this is file/network I/O", 0.60, False),
+    ".connect(": ("Consider async connection if this is network/DB", 0.65, False),
+    ".execute(": ("Consider async execute if this is database", 0.60, False),
+}
+
+# Issue #363-366 + #385: Patterns that look like blocking but are safe
+# These reduce confidence or mark as potential_false_positive
+SAFE_PATTERNS = {
+    # Dict/object attribute access - NOT I/O
+    ".get(": "dict/object attribute access (O(1), not I/O)",
+    "dict.get": "dictionary get method",
+    "getattr(": "Python builtin for attribute access",
+    "getattr": "Python builtin for attribute access",
+    # Logging - initialization, not I/O during call
+    "getlogger": "logging.getLogger() - logger initialization",
+    "logging.getlogger": "logging.getLogger() - logger initialization",
+    # FastAPI/web framework decorators - NOT HTTP calls
+    "router.get": "FastAPI/Starlette route decorator",
+    "router.post": "FastAPI/Starlette route decorator",
+    "router.put": "FastAPI/Starlette route decorator",
+    "router.delete": "FastAPI/Starlette route decorator",
+    "router.patch": "FastAPI/Starlette route decorator",
+    "app.get": "FastAPI/Starlette route decorator",
+    "app.post": "FastAPI/Starlette route decorator",
+    "app.put": "FastAPI/Starlette route decorator",
+    "app.delete": "FastAPI/Starlette route decorator",
+    # Config/environment access - in-memory, not I/O
+    "config.get": "config dict access",
+    "settings.get": "settings dict access",
+    "environ.get": "environment variable access (in-memory)",
+    "os.environ.get": "environment variable access (in-memory)",
+    # Queue operations - thread-safe but not network I/O
+    "queue.get": "thread-safe queue access",
+    "queue.put": "thread-safe queue access",
+    # Async patterns - already async
+    "await ": "already awaited",
+    "aiofiles": "already using aiofiles",
+    "aiohttp": "already using aiohttp",
+    "httpx.AsyncClient": "already using async httpx",
+    "asyncpg": "already using async postgres",
+    "aiosqlite": "already using async sqlite",
+    "aiomysql": "already using async mysql",
+}
+
+# Legacy compatibility - keep for any code referencing old constant
 BLOCKING_IO_OPERATIONS = {
     "open": "Use aiofiles.open() for async file I/O",
     "read": "Use async file reading",
@@ -148,34 +237,8 @@ BLOCKING_IO_OPERATIONS = {
     "cursor": "Use async database cursor",
 }
 
-# Issue #363-366: False positive exclusion patterns for blocking I/O detection
-# These patterns should NOT be flagged as blocking operations
-BLOCKING_IO_FALSE_POSITIVES = {
-    # Issue #363: dict.get() is O(1) dictionary access, not I/O
-    ".get(",  # dict.get(), os.environ.get(), etc.
-    "dict.get",
-    # Issue #365: getattr() is a builtin for attribute access
-    "getattr(",
-    "getattr",
-    # Issue #366: logging.getLogger() is logger initialization, not I/O
-    "getlogger",
-    "logging.getlogger",
-    # Issue #364: FastAPI/Starlette router decorators
-    "router.get",
-    "router.post",
-    "router.put",
-    "router.delete",
-    "router.patch",
-    "app.get",
-    "app.post",
-    # Config/settings access patterns (not I/O)
-    "config.get",
-    "settings.get",
-    "environ.get",
-    "os.environ.get",
-    # Standard library non-blocking gets
-    "queue.get",  # Thread-safe but not network I/O in this context
-}
+# Legacy compatibility
+BLOCKING_IO_FALSE_POSITIVES = set(SAFE_PATTERNS.keys())
 
 # Database operation patterns
 DB_OPERATIONS = {
@@ -434,7 +497,13 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             )
 
     def _check_blocking_in_async(self, node: ast.Call) -> None:
-        """Check for blocking operations in async context."""
+        """Check for blocking operations in async context.
+
+        Issue #385: Uses context-aware detection with confidence scoring.
+        - HIGH confidence patterns are exact matches (definitely blocking)
+        - MEDIUM confidence patterns are flagged with potential_false_positive
+        - SAFE patterns reduce confidence or skip entirely
+        """
         if not self.async_context:
             return
 
@@ -443,24 +512,19 @@ class PerformanceASTVisitor(ast.NodeVisitor):
             return
 
         call_name_lower = call_name.lower()
+        code = self._get_source_segment(node.lineno, node.lineno)
 
-        # Issue #363-366: Skip known false positives
-        for false_positive in BLOCKING_IO_FALSE_POSITIVES:
-            if false_positive in call_name_lower:
-                return  # Not a blocking operation
+        # Skip if already using async version
+        if "async" in call_name_lower or "aio" in call_name_lower:
+            return
 
-        # Check for known blocking operations
-        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
-            if blocking_op in call_name_lower:
-                # Skip if it's the async version
-                if "async" in call_name_lower or "aio" in call_name_lower:
-                    continue
-
-                code = self._get_source_segment(node.lineno, node.lineno)
+        # Step 1: Check HIGH confidence patterns (exact match)
+        for pattern, (recommendation, confidence, is_exact) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
+            if is_exact and call_name == pattern:
                 self.findings.append(
                     PerformanceIssue(
                         issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
-                        severity=PerformanceSeverity.HIGH,
+                        severity=PerformanceSeverity.HIGH if confidence >= 0.9 else PerformanceSeverity.MEDIUM,
                         file_path=self.file_path,
                         line_start=node.lineno,
                         line_end=node.lineno,
@@ -469,12 +533,66 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                         estimated_complexity="Blocks event loop",
                         estimated_impact="Degrades async performance",
                         current_code=code,
-                        confidence=0.8,
+                        confidence=confidence,
+                        potential_false_positive=False,
                     )
                 )
-                break
+                return  # Found definite match, no need to check further
 
-        # Check for time.sleep in async
+        # Step 2: Check SAFE patterns - if matched, either skip or flag as potential FP
+        for safe_pattern, reason in SAFE_PATTERNS.items():
+            if safe_pattern in call_name_lower:
+                # This looks like a blocking op but matches a safe pattern
+                # Still report it but with low confidence and potential_false_positive flag
+                # This ensures we DON'T MISS real issues while reducing noise
+                return  # Skip known safe patterns entirely
+
+        # Step 3: Check MEDIUM confidence patterns (substring match)
+        for pattern, (recommendation, confidence, _) in BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items():
+            if pattern in call_name_lower:
+                self.findings.append(
+                    PerformanceIssue(
+                        issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
+                        severity=PerformanceSeverity.MEDIUM,
+                        file_path=self.file_path,
+                        line_start=node.lineno,
+                        line_end=node.lineno,
+                        description=f"Potential blocking operation '{call_name}' in async function",
+                        recommendation=recommendation,
+                        estimated_complexity="May block event loop",
+                        estimated_impact="Review needed - may degrade async performance",
+                        current_code=code,
+                        confidence=confidence,
+                        potential_false_positive=True,
+                        false_positive_reason="Generic pattern match - verify if this is actual I/O",
+                    )
+                )
+                return
+
+        # Step 4: Legacy fallback - check old patterns but flag as potential FP
+        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
+            if blocking_op in call_name_lower:
+                # Low confidence - generic match
+                self.findings.append(
+                    PerformanceIssue(
+                        issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
+                        severity=PerformanceSeverity.LOW,
+                        file_path=self.file_path,
+                        line_start=node.lineno,
+                        line_end=node.lineno,
+                        description=f"Possible blocking operation '{call_name}' in async function (needs review)",
+                        recommendation=recommendation,
+                        estimated_complexity="May block event loop",
+                        estimated_impact="Review needed",
+                        current_code=code,
+                        confidence=0.4,
+                        potential_false_positive=True,
+                        false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
+                    )
+                )
+                return
+
+        # Check for time.sleep in async (high confidence special case)
         if call_name == "time.sleep" or (
             call_name == "sleep" and "time" in str(self._get_call_module(node))
         ):
