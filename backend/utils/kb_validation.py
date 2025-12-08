@@ -89,8 +89,10 @@ def require_knowledge_base(operation: str = "operation"):
     """
 
     def decorator(func: Callable):
+        """Create async wrapper that injects validated knowledge base."""
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            """Inject validated knowledge base into endpoint function."""
             # Extract Request object from args or kwargs
             req = None
             for arg in args:

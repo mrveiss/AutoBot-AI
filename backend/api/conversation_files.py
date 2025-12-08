@@ -8,6 +8,7 @@ Provides secure file management endpoints for conversation-scoped files with pro
 session ownership validation, authentication, and authorization.
 """
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime
@@ -122,6 +123,7 @@ class FileTransferRequest(BaseModel):
     @field_validator("file_ids")
     @classmethod
     def validate_file_ids(cls, v):
+        """Validate that at least one file ID is provided."""
         if not v:
             raise ValueError("At least one file ID must be provided")
         return v
@@ -513,7 +515,8 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
             raise HTTPException(status_code=404, detail="File not found")
 
         file_path = Path(file_info_dict["file_path"])
-        if not file_path.exists():
+        # Issue #358: Use asyncio.to_thread for blocking file I/O
+        if not await asyncio.to_thread(file_path.exists):
             raise HTTPException(status_code=404, detail="File not found on disk")
 
         # Audit log

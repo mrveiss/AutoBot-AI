@@ -11,8 +11,10 @@ Provides API endpoints for exporting analytics data to various formats:
 - Grafana dashboard JSON
 
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
+Issue #379: Optimized sequential awaits with asyncio.gather for concurrent data collection.
 """
 
+import asyncio
 import csv
 import io
 import json
@@ -223,11 +225,13 @@ async def export_full_json(
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
 
-    # Collect all data
-    cost_summary = await tracker.get_cost_summary(start_date, end_date)
-    cost_trends = await tracker.get_cost_trends(days)
-    agent_metrics = await analytics.get_all_agents_metrics()
-    agent_comparison = await analytics.compare_agents()
+    # Issue #379: Concurrent data collection with asyncio.gather
+    cost_summary, cost_trends, agent_metrics, agent_comparison = await asyncio.gather(
+        tracker.get_cost_summary(start_date, end_date),
+        tracker.get_cost_trends(days),
+        analytics.get_all_agents_metrics(),
+        analytics.compare_agents(),
+    )
 
     export_data = {
         "export_info": {
@@ -276,9 +280,11 @@ async def export_prometheus():
     tracker = get_cost_tracker()
     analytics = get_agent_analytics()
 
-    # Get current data
-    cost_summary = await tracker.get_cost_summary()
-    agent_metrics = await analytics.get_all_agents_metrics()
+    # Issue #379: Concurrent data collection with asyncio.gather
+    cost_summary, agent_metrics = await asyncio.gather(
+        tracker.get_cost_summary(),
+        analytics.get_all_agents_metrics(),
+    )
 
     lines = []
 

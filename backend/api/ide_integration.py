@@ -391,6 +391,37 @@ class IDEIntegrationEngine:
         self.severity_overrides: Dict[str, DiagnosticSeverity] = {}
         self.analysis_cache: Dict[str, Tuple[str, List[Diagnostic]]] = {}
         self._cache_ttl = 5.0  # 5 seconds cache
+        # Build O(1) lookup dict for rules by ID (Issue #315)
+        self._rules_by_id: Dict[str, dict] = {r["id"]: r for r in self.rules}
+
+    def _find_rule_by_id(self, rule_id: str) -> Optional[dict]:
+        """Find a rule by its ID using O(1) lookup. (Issue #315 - extracted)"""
+        return self._rules_by_id.get(rule_id)
+
+    def _is_position_in_diagnostic(
+        self, diagnostic: Diagnostic, line_num: int, character: int
+    ) -> bool:
+        """Check if a position falls within a diagnostic's range. (Issue #315 - extracted)"""
+        if diagnostic.range.start.line != line_num:
+            return False
+        return diagnostic.range.start.character <= character <= diagnostic.range.end.character
+
+    def _build_hover_contents(self, rule: dict, diagnostic: Diagnostic) -> str:
+        """Build hover markdown contents for a rule. (Issue #315 - extracted)"""
+        contents = f"""### {rule['name']}
+
+**Category:** {rule['category'].value}
+**Severity:** {diagnostic.severity.value}
+
+{rule['message']}
+
+---
+
+**Rule ID:** `{rule['id']}`
+"""
+        if rule.get("fix_template"):
+            contents += f"\n**Suggested Fix:**\n```python\n{rule['fix_template']}\n```"
+        return contents
 
     async def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
         """
@@ -668,39 +699,17 @@ class IDEIntegrationEngine:
             )
         )
 
+        # Find diagnostic at position and return hover info (Issue #315 - refactored)
         for diagnostic in analysis.diagnostics:
-            if diagnostic.range.start.line == line_num:
-                if (
-                    diagnostic.range.start.character
-                    <= request.position.character
-                    <= diagnostic.range.end.character
-                ):
-                    # Found a diagnostic at this position
-                    rule = None
-                    for r in self.rules:
-                        if r["id"] == diagnostic.code:
-                            rule = r
-                            break
-
-                    if rule:
-                        contents = f"""### {rule['name']}
-
-**Category:** {rule['category'].value}
-**Severity:** {diagnostic.severity.value}
-
-{rule['message']}
-
----
-
-**Rule ID:** `{rule['id']}`
-"""
-                        if rule.get("fix_template"):
-                            contents += f"\n**Suggested Fix:**\n```python\n{rule['fix_template']}\n```"
-
-                        return HoverResponse(
-                            contents=contents,
-                            range=diagnostic.range,
-                        )
+            if not self._is_position_in_diagnostic(
+                diagnostic, line_num, request.position.character
+            ):
+                continue
+            # Found a diagnostic at this position - use O(1) lookup
+            rule = self._find_rule_by_id(diagnostic.code)
+            if rule:
+                contents = self._build_hover_contents(rule, diagnostic)
+                return HoverResponse(contents=contents, range=diagnostic.range)
 
         return HoverResponse(contents="")
 

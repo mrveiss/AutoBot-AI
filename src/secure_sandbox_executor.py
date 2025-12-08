@@ -90,7 +90,7 @@ class SecureSandboxExecutor:
     """
 
     def __init__(self, docker_client: Optional[docker.DockerClient] = None):
-        """Initialize the secure sandbox executor"""
+        """Initialize secure sandbox executor with Docker client and Redis monitoring."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         # Docker client
@@ -290,8 +290,9 @@ class SecureSandboxExecutor:
 
         finally:
             # Clean up script file
+            # Issue #358 - avoid blocking
             try:
-                os.unlink(script_path)
+                await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
                 self.logger.debug(f"Failed to cleanup script file {script_path}: {e}")
 
@@ -485,10 +486,15 @@ class SecureSandboxExecutor:
                                 "container_id": sandbox_id,
                             }
 
-                            # Store in Redis
+                            # Store in Redis (Issue #361 - avoid blocking)
                             event_key = f"{self.security_events_key}{sandbox_id}"
-                            self.redis_client.lpush(event_key, json.dumps(event))
-                            self.redis_client.expire(event_key, 3600)  # 1 hour TTL
+                            event_json = json.dumps(event)
+                            await asyncio.to_thread(
+                                lambda: (
+                                    self.redis_client.lpush(event_key, event_json),
+                                    self.redis_client.expire(event_key, 3600),
+                                )
+                            )
 
                             self.logger.warning(
                                 f"Security event in {sandbox_id}: {event_type}"
@@ -506,8 +512,10 @@ class SecureSandboxExecutor:
             event_key = f"{self.security_events_key}{container_id}"
             events = []
 
-            # Get all events from Redis
-            raw_events = self.redis_client.lrange(event_key, 0, -1)
+            # Get all events from Redis (Issue #361 - avoid blocking)
+            raw_events = await asyncio.to_thread(
+                self.redis_client.lrange, event_key, 0, -1
+            )
 
             for raw_event in raw_events:
                 try:
@@ -535,19 +543,17 @@ class SecureSandboxExecutor:
                 "security_events_count": len(result.security_events),
             }
 
-            # Store in Redis
+            # Store in Redis (Issue #361 - avoid blocking)
             metrics_key = f"{self.metrics_key}{container_id}"
-            self.redis_client.setex(metrics_key, 3600, json.dumps(metrics))
+            metrics_json = json.dumps(metrics)
+            success = result.success
 
-            # Update aggregate metrics
-            if result.success:
-                self.redis_client.hincrby(
-                    "autobot:sandbox:stats", "successful_executions", 1
-                )
-            else:
-                self.redis_client.hincrby(
-                    "autobot:sandbox:stats", "failed_executions", 1
-                )
+            def _store_metrics():
+                self.redis_client.setex(metrics_key, 3600, metrics_json)
+                stat_key = "successful_executions" if success else "failed_executions"
+                self.redis_client.hincrby("autobot:sandbox:stats", stat_key, 1)
+
+            await asyncio.to_thread(_store_metrics)
 
         except Exception as e:
             self.logger.error(f"Failed to log metrics: {e}")
@@ -575,7 +581,10 @@ class SecureSandboxExecutor:
     async def get_sandbox_stats(self) -> Dict[str, Any]:
         """Get sandbox execution statistics"""
         try:
-            stats = self.redis_client.hgetall("autobot:sandbox:stats")
+            # Issue #361 - avoid blocking
+            stats = await asyncio.to_thread(
+                self.redis_client.hgetall, "autobot:sandbox:stats"
+            )
 
             return {
                 "successful_executions": int(stats.get(b"successful_executions", 0)),

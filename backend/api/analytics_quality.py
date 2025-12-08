@@ -8,6 +8,7 @@ Provides endpoints for real-time code quality metrics, health scores,
 pattern distribution, and quality trends.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
@@ -168,7 +169,8 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
 
         redis = get_redis_client(async_client=False, database="analytics")
         if redis:
-            data = redis.get("code_quality:latest")
+            # Issue #361 - avoid blocking
+            data = await asyncio.to_thread(redis.get, "code_quality:latest")
             if data:
                 return json.loads(data)
     except Exception as e:
@@ -238,6 +240,7 @@ class ConnectionManager:
     """Manage WebSocket connections for real-time updates."""
 
     def __init__(self):
+        """Initialize connection manager with empty active connections list."""
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
@@ -688,12 +691,37 @@ async def export_quality_report(
 # ============================================================================
 
 
+async def _handle_ws_subscribe(websocket: WebSocket, data: dict) -> None:
+    """Handle WebSocket subscribe message (Issue #315: extracted)."""
+    await websocket.send_json({"type": "subscribed", "metrics": data.get("metrics", [])})
+
+
+async def _handle_ws_refresh(websocket: WebSocket, data: dict) -> None:
+    """Handle WebSocket refresh message (Issue #315: extracted)."""
+    snapshot = await get_quality_snapshot()
+    await websocket.send_json({"type": "snapshot", "data": snapshot})
+
+
+async def _handle_ws_ping(websocket: WebSocket, data: dict) -> None:
+    """Handle WebSocket ping message (Issue #315: extracted)."""
+    await websocket.send_json({"type": "pong"})
+
+
+# WebSocket message handlers (Issue #315: dictionary dispatch pattern)
+_WS_MESSAGE_HANDLERS = {
+    "subscribe": _handle_ws_subscribe,
+    "refresh": _handle_ws_refresh,
+    "ping": _handle_ws_ping,
+}
+
+
 @router.websocket("/ws")
 async def websocket_quality_updates(websocket: WebSocket):
     """
     WebSocket endpoint for real-time quality updates.
 
     Clients receive updates when quality metrics change.
+    Issue #315: Refactored to use dictionary dispatch for message handling.
     """
     await manager.connect(websocket)
 
@@ -708,18 +736,11 @@ async def websocket_quality_updates(websocket: WebSocket):
                 message = await websocket.receive_text()
                 data = json.loads(message)
 
-                # Handle different message types
-                if data.get("type") == "subscribe":
-                    # Client wants to subscribe to specific metrics
-                    await websocket.send_json(
-                        {"type": "subscribed", "metrics": data.get("metrics", [])}
-                    )
-                elif data.get("type") == "refresh":
-                    # Client requests fresh data
-                    snapshot = await get_quality_snapshot()
-                    await websocket.send_json({"type": "snapshot", "data": snapshot})
-                elif data.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
+                # Handle message using dispatch pattern (Issue #315)
+                msg_type = data.get("type")
+                handler = _WS_MESSAGE_HANDLERS.get(msg_type)
+                if handler:
+                    await handler(websocket, data)
 
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})

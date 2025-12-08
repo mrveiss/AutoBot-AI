@@ -36,6 +36,7 @@ class AdvancedWorkflowOrchestrator:
     """AI-driven workflow orchestrator with learning capabilities"""
 
     def __init__(self):
+        """Initialize orchestrator with core and specialized components."""
         # Core components
         self.base_manager = WorkflowAutomationManager()
         self.enhanced_orchestrator = EnhancedOrchestrator()

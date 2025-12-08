@@ -35,6 +35,7 @@ class SecurityRiskJudge(BaseLLMJudge):
     """Judge for evaluating security risks, command safety, and compliance"""
 
     def __init__(self, llm_interface=None):
+        """Initialize security judge with risk thresholds and dangerous patterns."""
         super().__init__("security_risk", llm_interface)
         # Issue #318: Use centralized constants instead of magic numbers
         self.high_risk_threshold = SecurityThresholds.HIGH_RISK_THRESHOLD

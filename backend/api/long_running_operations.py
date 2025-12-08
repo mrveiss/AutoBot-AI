@@ -175,7 +175,11 @@ async def start_codebase_indexing(
         estimated_files = 0
         try:
             for pattern in request.file_patterns:
-                estimated_files += len(list(Path(request.codebase_path).rglob(pattern)))
+                # Issue #358 - avoid blocking rglob() in async context
+                pattern_files = await asyncio.to_thread(
+                    lambda p=pattern: list(Path(request.codebase_path).rglob(p))
+                )
+                estimated_files += len(pattern_files)
         except Exception:
             estimated_files = 1000  # Default estimate
 
@@ -241,7 +245,11 @@ async def start_comprehensive_testing(
         estimated_tests = 0
         try:
             for pattern in request.test_patterns:
-                estimated_tests += len(list(Path(request.test_path).rglob(pattern)))
+                # Issue #358 - avoid blocking rglob() in async context
+                pattern_files = await asyncio.to_thread(
+                    lambda p=pattern: list(Path(request.test_path).rglob(p))
+                )
+                estimated_tests += len(pattern_files)
         except Exception:
             estimated_tests = 50  # Default estimate
 

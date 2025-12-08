@@ -930,11 +930,20 @@ class DecisionEngine:
                 context, "No automation opportunities available"
             )
 
-        # Score actions based on confidence and context
-        scored_actions = []
-        for action in automation_actions:
-            score = await self._score_automation_action(action, context)
-            scored_actions.append((score, action))
+        # Issue #370: Score actions in parallel instead of sequentially
+        scores = await asyncio.gather(
+            *[self._score_automation_action(action, context) for action in automation_actions],
+            return_exceptions=True,
+        )
+        scored_actions = [
+            (score, action)
+            for score, action in zip(scores, automation_actions)
+            if not isinstance(score, Exception)
+        ]
+        if not scored_actions:
+            return await self._create_no_action_decision(
+                context, "Failed to score automation actions"
+            )
 
         # Sort by score and select best action
         scored_actions.sort(key=lambda x: x[0], reverse=True)

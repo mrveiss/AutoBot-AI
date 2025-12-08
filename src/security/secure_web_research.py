@@ -33,7 +33,7 @@ class SecureWebResearch:
         enable_query_validation: bool = True,
         enable_domain_validation: bool = True,
     ):
-
+        """Initialize secure web research with security components and filtering."""
         # Initialize security components
         self.domain_security = DomainSecurityManager(domain_config)
         self.input_validator = WebResearchInputValidator()

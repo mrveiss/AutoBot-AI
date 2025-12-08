@@ -34,10 +34,42 @@ class AIStackError(Exception):
         status_code: Optional[int] = None,
         details: Optional[Dict] = None,
     ):
+        """Initialize AI Stack error with message, status code, and details."""
         self.message = message
         self.status_code = status_code
         self.details = details or {}
         super().__init__(message)
+
+
+async def _process_ai_stack_response(
+    response, url: str, attempt: int, retry_attempts: int
+) -> tuple:
+    """Process AI Stack HTTP response (Issue #315: extracted).
+
+    Returns:
+        Tuple of (result_data, should_retry, error_or_none)
+        - result_data: Response data if successful, None otherwise
+        - should_retry: True if should retry on server error
+        - error_or_none: AIStackError if request failed, None if successful
+    """
+    response_text = await response.text()
+
+    if response.status >= 400:
+        logger.error(f"AI Stack error {response.status}: {response_text}")
+
+        if response.status >= 500 and attempt < retry_attempts - 1:
+            return None, True, None  # Retry on server errors
+
+        return None, False, AIStackError(
+            f"AI Stack request failed: {response.status}",
+            status_code=response.status,
+            details={"response": response_text, "url": url},
+        )
+
+    try:
+        return await response.json(), False, None
+    except json.JSONDecodeError:
+        return {"content": response_text}, False, None
 
 
 class AIStackClient:
@@ -49,6 +81,7 @@ class AIStackClient:
     """
 
     def __init__(self, base_url: Optional[str] = None):
+        """Initialize AI Stack client with base URL and HTTP client configuration."""
         # Get configuration
         pass
 
@@ -155,29 +188,16 @@ class AIStackClient:
                     headers=request_headers,
                     timeout=self.timeout,
                 ) as response:
-                    response_text = await response.text()
-
-                    if response.status >= 400:
-                        logger.error(
-                            f"AI Stack error {response.status}: {response_text}"
-                        )
-
-                        if response.status >= 500 and attempt < self.retry_attempts - 1:
-                            # Retry on server errors
-                            await asyncio.sleep(self.retry_delay * (attempt + 1))
-                            continue
-
-                        raise AIStackError(
-                            f"AI Stack request failed: {response.status}",
-                            status_code=response.status,
-                            details={"response": response_text, "url": url},
-                        )
-
-                    try:
-                        return await response.json()
-                    except json.JSONDecodeError:
-                        # Handle non-JSON responses
-                        return {"content": response_text}
+                    # Use helper to process response (Issue #315: reduced nesting)
+                    result, should_retry, error = await _process_ai_stack_response(
+                        response, url, attempt, self.retry_attempts
+                    )
+                    if should_retry:
+                        await asyncio.sleep(self.retry_delay * (attempt + 1))
+                        continue
+                    if error:
+                        raise error
+                    return result
 
             except aiohttp.ClientError as e:
                 logger.error(f"AI Stack client error (attempt {attempt + 1}): {e}")

@@ -425,7 +425,8 @@ class ManPageKnowledgeIntegrator:
         """Load cached man page data from disk"""
         cache_file = self.man_cache_dir / f"{command}_{section}.json"
 
-        if not cache_file.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(cache_file.exists):
             return None
 
         try:
@@ -585,7 +586,8 @@ class ManPageKnowledgeIntegrator:
             self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
         )
         man_knowledge_dir = machine_dir / "man_pages"
-        man_knowledge_dir.mkdir(parents=True, exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(man_knowledge_dir.mkdir, parents=True, exist_ok=True)
 
         # Convert to knowledge format
         knowledge_data = self.convert_to_knowledge_yaml(man_info)
@@ -612,7 +614,11 @@ class ManPageKnowledgeIntegrator:
         results = []
 
         # Search through cached man pages
-        for cache_file in self.man_cache_dir.glob("*.json"):
+        # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
+        cache_files = await asyncio.to_thread(
+            lambda: list(self.man_cache_dir.glob("*.json"))
+        )
+        for cache_file in cache_files:
             man_info = await self.load_cached_man_page(
                 cache_file.stem.split("_")[0], int(cache_file.stem.split("_")[1])
             )
@@ -621,10 +627,15 @@ class ManPageKnowledgeIntegrator:
                 continue
 
             # Simple text search in title, description, and options
-            searchable_text = f"{man_info.title} {man_info.description} ".lower()
-            searchable_text += " ".join(
+            # Issue #383 - Build searchable text with list join instead of +=
+            searchable_parts = [
+                man_info.title.lower(),
+                man_info.description.lower(),
+            ]
+            searchable_parts.extend(
                 opt["description"].lower() for opt in man_info.options
             )
+            searchable_text = " ".join(searchable_parts)
 
             if query.lower() in searchable_text:
                 results.append(man_info)
@@ -640,9 +651,15 @@ class ManPageKnowledgeIntegrator:
 
         updated_count = 0
 
-        for cache_file in self.man_cache_dir.glob("*.json"):
+        # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
+        cache_files = await asyncio.to_thread(
+            lambda: list(self.man_cache_dir.glob("*.json"))
+        )
+        for cache_file in cache_files:
             # Check file age
-            if current_time - cache_file.stat().st_mtime > max_age_seconds:
+            # Issue #358 - avoid blocking stat()
+            file_stat = await asyncio.to_thread(cache_file.stat)
+            if current_time - file_stat.st_mtime > max_age_seconds:
                 command = cache_file.stem.split("_")[0]
                 section = int(cache_file.stem.split("_")[1])
 

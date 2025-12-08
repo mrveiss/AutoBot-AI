@@ -23,6 +23,7 @@ class WorkflowStepJudge(BaseLLMJudge):
     """Judge for evaluating workflow steps before execution"""
 
     def __init__(self, llm_interface=None):
+        """Initialize workflow step judge with safety and quality thresholds."""
         super().__init__("workflow_step", llm_interface)
         # Issue #318: Use centralized constants instead of magic numbers
         self.safety_threshold = WorkflowThresholds.SAFETY_THRESHOLD

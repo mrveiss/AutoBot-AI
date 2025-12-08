@@ -545,6 +545,14 @@ class NaturalLanguageQueryParser:
                     return qtype
         return "general"
 
+    # Issue #315: Intent to keywords dispatch table
+    _INTENT_KEYWORDS = {
+        QueryIntent.FIND_DEFINITION: ["def", "class", "function", "define"],
+        QueryIntent.FIND_ERROR_HANDLING: ["try", "except", "catch", "error", "exception"],
+        QueryIntent.FIND_TESTS: ["test", "assert", "pytest", "unittest"],
+        QueryIntent.FIND_CONFIGURATION: ["config", "settings", "env", "yaml"],
+    }
+
     def _generate_search_terms(
         self,
         query: str,
@@ -553,27 +561,17 @@ class NaturalLanguageQueryParser:
         intent: QueryIntent,
     ) -> List[str]:
         """Generate optimized search terms for the search engine."""
-        terms = []
+        terms = list(entities)  # Start with entities (most specific)
 
-        # Add entities first (most specific)
-        terms.extend(entities)
-
-        # Add domain-specific keywords based on intent
-        if intent == QueryIntent.FIND_DEFINITION:
-            terms.extend(["def", "class", "function", "define"])
+        # Add domain-specific keywords based on intent (Issue #315 - use dispatch table)
+        intent_keywords = self._INTENT_KEYWORDS.get(intent)
+        if intent_keywords:
+            terms.extend(intent_keywords)
         elif intent == QueryIntent.FIND_USAGE:
             terms.extend(keywords)
-        elif intent == QueryIntent.FIND_ERROR_HANDLING:
-            terms.extend(["try", "except", "catch", "error", "exception"])
-        elif intent == QueryIntent.FIND_TESTS:
-            terms.extend(["test", "assert", "pytest", "unittest"])
-        elif intent == QueryIntent.FIND_CONFIGURATION:
-            terms.extend(["config", "settings", "env", "yaml"])
 
-        # Add remaining keywords
-        for kw in keywords:
-            if kw not in terms:
-                terms.append(kw)
+        # Add remaining keywords not already in terms
+        terms.extend(kw for kw in keywords if kw not in terms)
 
         return terms[:10]  # Limit to 10 most relevant terms
 
@@ -749,6 +747,25 @@ class QuerySuggestionGenerator:
 # =============================================================================
 
 
+def _parse_llm_explanation_response(response: str) -> dict:
+    """Parse LLM explanation response into structured dict. (Issue #315 - extracted)"""
+    result = {"summary": "", "explanation": "", "purpose": "", "concepts": []}
+    # Line prefix to result key mapping
+    prefix_map = {
+        "SUMMARY:": "summary",
+        "EXPLANATION:": "explanation",
+        "PURPOSE:": "purpose",
+    }
+    for line in response.split("\n"):
+        for prefix, key in prefix_map.items():
+            if line.startswith(prefix):
+                result[key] = line.replace(prefix, "").strip()
+                break
+        if line.startswith("CONCEPTS:"):
+            result["concepts"] = [c.strip() for c in line.replace("CONCEPTS:", "").split(",")]
+    return result
+
+
 class CodeExplainer:
     """Generates explanations for code snippets."""
 
@@ -822,31 +839,17 @@ CONCEPTS: <comma-separated list>
 
         response = await llm.generate(prompt, max_tokens=500)
 
-        # Parse response
-        lines = response.split("\n")
-        summary = ""
-        explanation = ""
-        purpose = ""
-        concepts = []
-
-        for line in lines:
-            if line.startswith("SUMMARY:"):
-                summary = line.replace("SUMMARY:", "").strip()
-            elif line.startswith("EXPLANATION:"):
-                explanation = line.replace("EXPLANATION:", "").strip()
-            elif line.startswith("PURPOSE:"):
-                purpose = line.replace("PURPOSE:", "").strip()
-            elif line.startswith("CONCEPTS:"):
-                concepts = [c.strip() for c in line.replace("CONCEPTS:", "").split(",")]
+        # Parse response using extracted helper (Issue #315 - reduced depth)
+        parsed = _parse_llm_explanation_response(response)
 
         return CodeExplanation(
             code_snippet=code[:500],
             file_path=file_path,
             line_number=line_number,
-            summary=summary or "Code snippet",
-            detailed_explanation=explanation or "No detailed explanation available",
-            purpose=purpose or "Unknown purpose",
-            key_concepts=concepts or ["code"],
+            summary=parsed.get("summary") or "Code snippet",
+            detailed_explanation=parsed.get("explanation") or "No detailed explanation available",
+            purpose=parsed.get("purpose") or "Unknown purpose",
+            key_concepts=parsed.get("concepts") or ["code"],
             related_code=[],
         )
 

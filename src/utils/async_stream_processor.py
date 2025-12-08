@@ -228,7 +228,8 @@ async def process_llm_stream(
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_event_loop().time()
 
-    accumulated_content = ""
+    # Issue #383 - Use list and join instead of string concatenation
+    content_parts = []
     chunk_count = 0
     completion_signal = None
 
@@ -266,10 +267,11 @@ async def process_llm_stream(
 
             # Add content if available
             if content_to_add:
-                accumulated_content += content_to_add
+                content_parts.append(content_to_add)
 
             # Check for completion
             if is_complete:
+                accumulated_content = "".join(content_parts)
                 if processor.is_natural_completion(chunk_data, accumulated_content):
                     completion_signal = StreamCompletionSignal.DONE_CHUNK_RECEIVED
                     logger.info(
@@ -290,7 +292,8 @@ async def process_llm_stream(
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
         logger.error(f"❌ Stream processing error: {e}")
 
-    # Final processing
+    # Final processing - join content parts
+    accumulated_content = "".join(content_parts)
     processing_time = asyncio.get_event_loop().time() - processor.start_time
     completed_successfully = completion_signal in [
         StreamCompletionSignal.DONE_CHUNK_RECEIVED,

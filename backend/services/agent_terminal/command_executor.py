@@ -23,6 +23,26 @@ from .models import AgentTerminalSession
 logger = logging.getLogger(__name__)
 
 
+def _extract_terminal_output(messages: list) -> str:
+    """Extract most recent terminal output from messages (Issue #315: extracted).
+
+    Returns:
+        Cleaned output string or empty string if none found
+    """
+    for msg in reversed(messages):
+        if msg.get("sender") != "terminal" or not msg.get("text"):
+            continue
+        terminal_text = msg["text"]
+        clean_output = strip_ansi_codes(terminal_text)
+
+        # Extract output (skip command echo)
+        lines = clean_output.split("\n")
+        if len(lines) > 1:
+            return "\n".join(lines[1:]).strip()
+        return ""
+    return ""
+
+
 class CommandExecutor:
     """Executes commands in PTY with intelligent polling"""
 
@@ -215,6 +235,25 @@ class CommandExecutor:
             logger.error(f"[CANCEL] Error during command cancellation: {e}", exc_info=True)
             return False
 
+    def _search_for_exit_marker(
+        self, messages: list, marker: str, marker_id: str
+    ) -> Optional[int]:
+        """Search messages for exit code marker. (Issue #315 - extracted)"""
+        escaped_marker = re.escape(marker)
+        for msg in reversed(messages):
+            if msg.get("sender") != "terminal" or not msg.get("text"):
+                continue
+            clean_text = strip_ansi_codes(msg["text"])
+            match = re.search(rf"{escaped_marker}(\d+)", clean_text)
+            if match:
+                return_code = int(match.group(1))
+                logger.info(
+                    f"[PTY_EXEC] Detected return code: {return_code} "
+                    f"(marker: {marker_id})"
+                )
+                return return_code
+        return None
+
     async def _detect_return_code(
         self, session: AgentTerminalSession, max_attempts: int = 10
     ) -> Optional[int]:
@@ -255,32 +294,17 @@ class CommandExecutor:
         for attempt in range(max_attempts):
             await asyncio.sleep(base_delay * (1.5**attempt))  # Exponential backoff
 
-            try:
-                if not session.conversation_id:
-                    continue
+            if not session.conversation_id:
+                continue
 
-                # Get recent messages
+            try:
                 messages = await self.chat_history_manager.get_session_messages(
                     session_id=session.conversation_id, limit=3
                 )
-
-                # Search for unique EXIT_CODE marker with UUID
-                for msg in reversed(messages):
-                    if msg.get("sender") == "terminal" and msg.get("text"):
-                        clean_text = strip_ansi_codes(msg["text"])
-
-                        # Match unique marker pattern: __EXIT_CODE_{uuid}__:N
-                        # Use re.escape to safely match the UUID
-                        escaped_marker = re.escape(marker)
-                        match = re.search(rf"{escaped_marker}(\d+)", clean_text)
-                        if match:
-                            return_code = int(match.group(1))
-                            logger.info(
-                                f"[PTY_EXEC] Detected return code: {return_code} "
-                                f"(marker: {marker_id})"
-                            )
-                            return return_code
-
+                # Use helper to search for marker (Issue #315)
+                result = self._search_for_exit_marker(messages, marker, marker_id)
+                if result is not None:
+                    return result
             except Exception as e:
                 logger.warning(
                     f"[PTY_EXEC] Error detecting return code "
@@ -292,6 +316,14 @@ class CommandExecutor:
             "[PTY_EXEC] Marker detection failed, falling back to error pattern analysis"
         )
         return await self._analyze_error_patterns(session)
+
+    def _check_error_patterns_in_text(self, clean_text: str, error_patterns: list) -> bool:
+        """Check if text contains any error patterns. (Issue #315 - extracted)"""
+        for pattern in error_patterns:
+            if re.search(pattern, clean_text):
+                logger.debug(f"[PTY_EXEC] Error pattern detected: {pattern}")
+                return True
+        return False
 
     async def _analyze_error_patterns(self, session: AgentTerminalSession) -> int:
         """
@@ -328,13 +360,12 @@ class CommandExecutor:
             )
 
             for msg in reversed(messages):
-                if msg.get("sender") == "terminal" and msg.get("text"):
-                    clean_text = strip_ansi_codes(msg["text"]).lower()
-
-                    for pattern in error_patterns:
-                        if re.search(pattern, clean_text):
-                            logger.debug(f"[PTY_EXEC] Error pattern detected: {pattern}")
-                            return 1  # Error detected
+                if msg.get("sender") != "terminal" or not msg.get("text"):
+                    continue
+                clean_text = strip_ansi_codes(msg["text"]).lower()
+                # Use helper to check patterns (Issue #315)
+                if self._check_error_patterns_in_text(clean_text, error_patterns):
+                    return 1  # Error detected
 
         except Exception as e:
             logger.warning(f"[PTY_EXEC] Error pattern analysis failed: {e}")
@@ -384,18 +415,8 @@ class CommandExecutor:
                     messages = await self.chat_history_manager.get_session_messages(
                         session_id=session.conversation_id, limit=5
                     )
-
-                    # Find most recent terminal output
-                    for msg in reversed(messages):
-                        if msg.get("sender") == "terminal" and msg.get("text"):
-                            terminal_text = msg["text"]
-                            clean_output = strip_ansi_codes(terminal_text)
-
-                            # Extract output (skip command echo)
-                            lines = clean_output.split("\n")
-                            if len(lines) > 1:
-                                current_output = "\n".join(lines[1:]).strip()
-                            break
+                    # Find most recent terminal output (Issue #315: uses helper)
+                    current_output = _extract_terminal_output(messages)
 
                 # Check output stability
                 if current_output and current_output == last_output:

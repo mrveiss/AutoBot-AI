@@ -271,6 +271,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
     """Analyzes data flow in Python code."""
 
     def __init__(self, source_code: str, file_path: str = ""):
+        """Initialize data flow analyzer with source code and tracking state."""
         self.source_code = source_code
         self.file_path = file_path
         self.graphs: List[DataFlowGraph] = []
@@ -638,6 +639,33 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def _process_assign_target(
+        self, target: ast.AST, node: ast.Assign, value_taint: TaintLevel,
+        source_type: Optional[SourceType]
+    ) -> None:
+        """Process a single assignment target. (Issue #315 - extracted)"""
+        if isinstance(target, ast.Name):
+            self._add_definition(
+                name=target.id,
+                line=node.lineno,
+                column=target.col_offset,
+                value_node=node.value,
+                taint_level=value_taint,
+                source_type=source_type,
+            )
+            self._extract_edges_from_expr(node.value, target.id, node.lineno)
+        elif isinstance(target, ast.Tuple):
+            for elt in target.elts:
+                if isinstance(elt, ast.Name):
+                    self._add_definition(
+                        name=elt.id,
+                        line=node.lineno,
+                        column=elt.col_offset,
+                        value_node=node.value,
+                        taint_level=value_taint,
+                        source_type=source_type,
+                    )
+
     def visit_Assign(self, node: ast.Assign):
         """Visit assignment statement."""
         # Determine taint level of the value
@@ -650,32 +678,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             if taint_info:
                 source_type, value_taint = taint_info
 
-        # Track each target
+        # Track each target using helper (Issue #315 - reduced depth)
         for target in node.targets:
-            if isinstance(target, ast.Name):
-                self._add_definition(
-                    name=target.id,
-                    line=node.lineno,
-                    column=target.col_offset,
-                    value_node=node.value,
-                    taint_level=value_taint,
-                    source_type=source_type,
-                )
-
-                # Add data flow edges from used variables
-                self._extract_edges_from_expr(node.value, target.id, node.lineno)
-
-            elif isinstance(target, ast.Tuple):
-                for elt in target.elts:
-                    if isinstance(elt, ast.Name):
-                        self._add_definition(
-                            name=elt.id,
-                            line=node.lineno,
-                            column=elt.col_offset,
-                            value_node=node.value,
-                            taint_level=value_taint,
-                            source_type=source_type,
-                        )
+            self._process_assign_target(target, node, value_taint, source_type)
 
         self.generic_visit(node)
 
@@ -1161,6 +1166,25 @@ async def get_vulnerabilities(request: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _aggregate_graph_taint_stats(
+    graph, tainted_vars: set, vulns_by_type: Dict[str, int],
+    vulns_by_severity: Dict[str, int], counts: Dict[str, int]
+) -> None:
+    """Aggregate taint statistics from a single graph. (Issue #315 - extracted)"""
+    for d in graph.definitions:
+        if d.taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+            tainted_vars.add(d.name)
+            if d.source_type:
+                counts["sources"] += 1
+
+    for v in graph.vulnerabilities:
+        counts["sinks"] += 1
+        vtype = v.vulnerability_type.value
+        vsev = v.severity.value
+        vulns_by_type[vtype] = vulns_by_type.get(vtype, 0) + 1
+        vulns_by_severity[vsev] = vulns_by_severity.get(vsev, 0) + 1
+
+
 @router.post("/taint-summary", response_model=TaintSummary)
 async def get_taint_summary(request: AnalyzeRequest):
     """Get summary of taint analysis."""
@@ -1168,29 +1192,20 @@ async def get_taint_summary(request: AnalyzeRequest):
         analyzer = DataFlowAnalyzer(request.source_code, request.file_path)
         graphs = analyzer.analyze()
 
-        tainted_vars = set()
+        tainted_vars: set = set()
         vulns_by_type: Dict[str, int] = {}
         vulns_by_severity: Dict[str, int] = {}
-        tainted_sources = 0
-        dangerous_sinks = 0
+        counts = {"sources": 0, "sinks": 0}
 
+        # Aggregate stats using helper (Issue #315 - reduced depth)
         for graph in graphs:
-            for d in graph.definitions:
-                if d.taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
-                    tainted_vars.add(d.name)
-                    if d.source_type:
-                        tainted_sources += 1
-
-            for v in graph.vulnerabilities:
-                dangerous_sinks += 1
-                vtype = v.vulnerability_type.value
-                vsev = v.severity.value
-                vulns_by_type[vtype] = vulns_by_type.get(vtype, 0) + 1
-                vulns_by_severity[vsev] = vulns_by_severity.get(vsev, 0) + 1
+            _aggregate_graph_taint_stats(
+                graph, tainted_vars, vulns_by_type, vulns_by_severity, counts
+            )
 
         return TaintSummary(
-            tainted_sources=tainted_sources,
-            dangerous_sinks=dangerous_sinks,
+            tainted_sources=counts["sources"],
+            dangerous_sinks=counts["sinks"],
             vulnerabilities_by_type=vulns_by_type,
             vulnerabilities_by_severity=vulns_by_severity,
             tainted_variables=list(tainted_vars),

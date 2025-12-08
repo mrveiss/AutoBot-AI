@@ -28,6 +28,46 @@ class LLMConfigurationSynchronizer:
     """Synchronizes LLM configuration across the system"""
 
     @staticmethod
+    def _get_current_llm_model(config_manager) -> str:
+        """Extract current selected model from config (Issue #315: extracted helper)."""
+        current_llm_config = config_manager.get_llm_config()
+        return (
+            current_llm_config.get("unified", {})
+            .get("local", {})
+            .get("providers", {})
+            .get("ollama", {})
+            .get("selected_model", "")
+        )
+
+    @staticmethod
+    def _collect_agent_models(config_manager, agent_configs) -> tuple:
+        """Collect models from all agents and find common model (Issue #315: extracted helper).
+
+        Returns:
+            Tuple of (agent_models dict, common_model)
+        """
+        agent_models = {}
+        common_model = None
+
+        for agent_id, config in agent_configs.items():
+            agent_model = config_manager.get_nested(
+                f"agents.{agent_id}.model", config["default_model"]
+            )
+            agent_enabled = config_manager.get_nested(
+                f"agents.{agent_id}.enabled", config["enabled"]
+            )
+
+            agent_models[agent_id] = {"model": agent_model, "enabled": agent_enabled}
+
+            if agent_enabled and agent_model:
+                if common_model is None:
+                    common_model = agent_model
+                elif common_model != agent_model:
+                    logger.warning(f"Agent {agent_id} uses different model: {agent_model}")
+
+        return agent_models, common_model
+
+    @staticmethod
     def sync_llm_config_with_agents() -> Metadata:
         """
         Synchronize global LLM configuration with agent configurations
@@ -41,47 +81,16 @@ class LLMConfigurationSynchronizer:
 
             logger.info("Starting LLM configuration synchronization...")
 
-            # Get current LLM configuration
-            current_llm_config = global_config_manager.get_llm_config()
-            current_selected_model = (
-                current_llm_config.get("unified", {})
-                .get("local", {})
-                .get("providers", {})
-                .get("ollama", {})
-                .get("selected_model", "")
+            # Get current model using helper (Issue #315: reduced nesting)
+            current_selected_model = LLMConfigurationSynchronizer._get_current_llm_model(
+                global_config_manager
             )
-
-            logger.info(f"Raw LLM config structure: {current_llm_config}")
-            logger.info("Checking path: local.providers.ollama.selected_model")
-
             logger.info(f"Current global LLM model: '{current_selected_model}'")
 
-            # Check what models agents are using
-            agent_models = {}
-            common_model = None
-
-            for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-                agent_model = global_config_manager.get_nested(
-                    f"agents.{agent_id}.model", config["default_model"]
-                )
-                agent_enabled = global_config_manager.get_nested(
-                    f"agents.{agent_id}.enabled", config["enabled"]
-                )
-
-                agent_models[agent_id] = {
-                    "model": agent_model,
-                    "enabled": agent_enabled,
-                }
-
-                # Track the most common model among enabled agents
-                if agent_enabled and agent_model:
-                    if common_model is None:
-                        common_model = agent_model
-                    elif common_model != agent_model:
-                        logger.warning(
-                            f"Agent {agent_id} uses different model: {agent_model}"
-                        )
-
+            # Collect agent models using helper
+            agent_models, common_model = LLMConfigurationSynchronizer._collect_agent_models(
+                global_config_manager, DEFAULT_AGENT_CONFIGS
+            )
             logger.info(f"Agent models: {agent_models}")
             logger.info(f"Most common agent model: {common_model}")
 
@@ -99,56 +108,44 @@ class LLMConfigurationSynchronizer:
                     f"'{common_model}'"
                 )
 
-            # Perform synchronization if needed
-            if sync_needed and common_model:
-                logger.info(f"SYNC NEEDED: {sync_reason}")
-                logger.info(f"Setting global LLM model to: {common_model}")
-
-                # Update the global configuration
-                global_config_manager.update_llm_model(common_model)
-
-                # Verify the change
-                updated_config = global_config_manager.get_llm_config()
-                updated_model = (
-                    updated_config.get("unified", {})
-                    .get("local", {})
-                    .get("providers", {})
-                    .get("ollama", {})
-                    .get("selected_model", "")
-                )
-
-                logger.info(f"Updated config structure: {updated_config}")
-                logger.info(f"Verification path result: '{updated_model}'")
-
-                if updated_model == common_model:
-                    logger.info(
-                        f"✅ Successfully synchronized global LLM model to: {common_model}"
-                    )
-                    return {
-                        "status": "synchronized",
-                        "previous_model": current_selected_model,
-                        "new_model": common_model,
-                        "reason": sync_reason,
-                        "agent_models": agent_models,
-                    }
-                else:
-                    logger.error(
-                        f"❌ Failed to update global model. Expected: {common_model}, Got: {updated_model}"
-                    )
-                    return {
-                        "status": "sync_failed",
-                        "error": "Model update verification failed",
-                        "expected": common_model,
-                        "actual": updated_model,
-                    }
-
-            else:
+            # No sync needed
+            if not (sync_needed and common_model):
                 logger.info("✅ LLM configuration is already synchronized")
                 return {
                     "status": "already_synchronized",
                     "current_model": current_selected_model,
                     "agent_models": agent_models,
                 }
+
+            # Perform synchronization
+            logger.info(f"SYNC NEEDED: {sync_reason}")
+            logger.info(f"Setting global LLM model to: {common_model}")
+            global_config_manager.update_llm_model(common_model)
+
+            # Verify the change
+            updated_model = LLMConfigurationSynchronizer._get_current_llm_model(
+                global_config_manager
+            )
+
+            if updated_model == common_model:
+                logger.info(f"✅ Successfully synchronized global LLM model to: {common_model}")
+                return {
+                    "status": "synchronized",
+                    "previous_model": current_selected_model,
+                    "new_model": common_model,
+                    "reason": sync_reason,
+                    "agent_models": agent_models,
+                }
+
+            logger.error(
+                f"❌ Failed to update global model. Expected: {common_model}, Got: {updated_model}"
+            )
+            return {
+                "status": "sync_failed",
+                "error": "Model update verification failed",
+                "expected": common_model,
+                "actual": updated_model,
+            }
 
         except Exception as e:
             logger.error(f"❌ Failed to synchronize LLM configuration: {e}")
@@ -278,6 +275,7 @@ async def sync_llm_config_async() -> Metadata:
 if __name__ == "__main__":
     # Direct execution for testing/debugging
     async def main():
+        """Test LLM configuration synchronization."""
         result = await sync_llm_configuration()
         logger.info("Synchronization result:")
         import json

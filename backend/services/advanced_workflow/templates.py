@@ -24,6 +24,7 @@ class TemplateManager:
     """Manages intelligent workflow templates"""
 
     def __init__(self):
+        """Initialize template manager with built-in workflow templates."""
         self.templates: Dict[str, WorkflowTemplate] = {}
         self._initialize_templates()
 

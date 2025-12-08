@@ -23,6 +23,7 @@ Created: 2025-01-26
 Updated: 2025-12-06 - Refactored to fix Feature Envy with Command pattern
 """
 
+import asyncio
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -92,7 +93,8 @@ class DocsCommand(Command):
 
     async def execute(self) -> SlashCommandResult:
         """Execute /docs command - list or search documentation."""
-        if not self.docs_base_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(self.docs_base_path.exists):
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.DOCS,
@@ -159,7 +161,8 @@ class DocsCommand(Command):
         """List documents in a specific category."""
         cat_path = self.docs_base_path / self.doc_categories[category]
 
-        if not cat_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(cat_path.exists):
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.DOCS,
@@ -167,7 +170,9 @@ class DocsCommand(Command):
             )
 
         files = []
-        for f in sorted(cat_path.glob("*.md")):
+        # Issue #358 - avoid blocking
+        md_files = await asyncio.to_thread(lambda: sorted(cat_path.glob("*.md")))
+        for f in md_files:
             files.append(f"  • `{f.name}` - {f.relative_to(self.docs_base_path)}")
 
         if not files:
@@ -188,7 +193,9 @@ class DocsCommand(Command):
             ])
             content = "\n".join(lines)
 
-        file_paths = [str(f.relative_to(self.docs_base_path)) for f in cat_path.glob("*.md")]
+        # Issue #358 - avoid blocking
+        all_md_files = await asyncio.to_thread(lambda: list(cat_path.glob("*.md")))
+        file_paths = [str(f.relative_to(self.docs_base_path)) for f in all_md_files]
 
         return SlashCommandResult(
             success=True,
@@ -203,7 +210,11 @@ class DocsCommand(Command):
         matches = []
 
         # Search in all markdown files
-        for md_file in self.docs_base_path.rglob("*.md"):
+        # Issue #358 - avoid blocking
+        all_md_files = await asyncio.to_thread(
+            lambda: list(self.docs_base_path.rglob("*.md"))
+        )
+        for md_file in all_md_files:
             # Skip archive directories
             if "archive" in str(md_file).lower() or "legacy" in str(md_file).lower():
                 continue

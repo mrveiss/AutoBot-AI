@@ -721,33 +721,43 @@ class ModelOptimizer:
             self.logger.error(f"Error refreshing models: {e}")
             return []
 
-    def _classify_model_performance(
-        self, name: str, parameter_size: str
-    ) -> ModelPerformanceLevel:
-        """Classify model performance level based on name and parameters"""
-        # Check explicit classifications first
+    def _classify_by_explicit_name(self, name: str) -> Optional[ModelPerformanceLevel]:
+        """Classify model by explicit name match (Issue #315 - extracted helper)."""
         for level, models in self.model_classifications.items():
             if any(model_name in name for model_name in models):
                 return level
+        return None
 
-        # Fallback to parameter size analysis
+    def _classify_by_parameter_size(self, parameter_size: str) -> Optional[ModelPerformanceLevel]:
+        """Classify model by parameter size (Issue #315 - extracted helper)."""
         try:
-            if "M" in parameter_size:  # Million parameters
+            if "M" in parameter_size:
                 param_num = float(parameter_size.replace("M", ""))
-                if param_num < 2000:  # < 2B
+                if param_num < 2000:
                     return ModelPerformanceLevel.LIGHTWEIGHT
-            elif "B" in parameter_size:  # Billion parameters
+            elif "B" in parameter_size:
                 param_num = float(parameter_size.replace("B", ""))
                 if param_num < 2:
                     return ModelPerformanceLevel.LIGHTWEIGHT
-                elif param_num < 8:
+                if param_num < 8:
                     return ModelPerformanceLevel.STANDARD
-                else:
-                    return ModelPerformanceLevel.ADVANCED
+                return ModelPerformanceLevel.ADVANCED
         except Exception:
-            pass  # Parameter parsing failed, use default below
+            pass
+        return None
 
-        # Default classification
+    def _classify_model_performance(
+        self, name: str, parameter_size: str
+    ) -> ModelPerformanceLevel:
+        """Classify model performance level (Issue #315 - refactored)."""
+        level = self._classify_by_explicit_name(name)
+        if level:
+            return level
+
+        level = self._classify_by_parameter_size(parameter_size)
+        if level:
+            return level
+
         return ModelPerformanceLevel.STANDARD
 
     async def _load_model_performance_history(self, model_info: ModelInfo):

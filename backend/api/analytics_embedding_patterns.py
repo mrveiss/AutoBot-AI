@@ -169,6 +169,7 @@ class EmbeddingPatternAnalyzer:
     """Engine for analyzing embedding usage patterns and optimization"""
 
     def __init__(self):
+        """Initialize embedding pattern analyzer with Redis storage keys."""
         self._redis = None
         self._usage_key = "autobot:embedding_patterns:usage"
         self._stats_key = "autobot:embedding_patterns:stats"
@@ -252,36 +253,45 @@ class EmbeddingPatternAnalyzer:
             return {"status": "error", "error": str(e)}
 
     async def _update_stats(self, request: EmbeddingUsageRequest, cost: float):
-        """Update aggregated statistics"""
+        """Update aggregated statistics.
+
+        Issue #379: Uses Redis pipeline to batch all HINCRBY operations,
+        eliminating 10+ sequential await round-trips.
+        """
         try:
             redis = await self._get_redis()
 
             # Update daily stats
             today = datetime.now().strftime("%Y-%m-%d")
             daily_key = f"{self._stats_key}:daily:{today}"
-
-            # Use Redis HINCRBY for atomic updates
-            await redis.hincrby(daily_key, "total_operations", 1)
-            await redis.hincrby(daily_key, "total_tokens", request.token_count)
-            await redis.hincrby(daily_key, "total_documents", request.document_count)
-            await redis.hincrbyfloat(daily_key, "total_cost", cost)
-            await redis.hincrbyfloat(
-                daily_key, "total_processing_time", request.processing_time
-            )
-            await redis.hincrby(daily_key, "total_batch_size", request.batch_size)
-
-            if request.success:
-                await redis.hincrby(daily_key, "successful_operations", 1)
-
-            # Set TTL for daily stats (90 days)
-            await redis.expire(daily_key, 90 * 24 * 3600)
-
-            # Update model-specific stats
             model_key = f"{self._model_stats_key}:{request.model}"
-            await redis.hincrby(model_key, "total_operations", 1)
-            await redis.hincrby(model_key, "total_tokens", request.token_count)
-            await redis.hincrbyfloat(model_key, "total_cost", cost)
-            await redis.expire(model_key, 90 * 24 * 3600)
+
+            # Issue #379: Batch all Redis operations using pipeline
+            async with redis.pipeline() as pipe:
+                # Daily stats updates
+                await pipe.hincrby(daily_key, "total_operations", 1)
+                await pipe.hincrby(daily_key, "total_tokens", request.token_count)
+                await pipe.hincrby(daily_key, "total_documents", request.document_count)
+                await pipe.hincrbyfloat(daily_key, "total_cost", cost)
+                await pipe.hincrbyfloat(
+                    daily_key, "total_processing_time", request.processing_time
+                )
+                await pipe.hincrby(daily_key, "total_batch_size", request.batch_size)
+
+                if request.success:
+                    await pipe.hincrby(daily_key, "successful_operations", 1)
+
+                # Set TTL for daily stats (90 days)
+                await pipe.expire(daily_key, 90 * 24 * 3600)
+
+                # Model-specific stats updates
+                await pipe.hincrby(model_key, "total_operations", 1)
+                await pipe.hincrby(model_key, "total_tokens", request.token_count)
+                await pipe.hincrbyfloat(model_key, "total_cost", cost)
+                await pipe.expire(model_key, 90 * 24 * 3600)
+
+                # Execute all operations in single round-trip
+                await pipe.execute()
 
         except Exception as e:
             logger.error(f"Failed to update embedding stats: {e}")
@@ -354,12 +364,34 @@ class EmbeddingPatternAnalyzer:
             logger.error(f"Failed to get embedding stats: {e}")
             return {"status": "error", "error": str(e)}
 
+    def _parse_model_stats(self, key: bytes, stats: dict) -> Optional[dict]:
+        """Parse model stats from Redis hash. (Issue #315 - extracted)"""
+        if not stats:
+            return None
+        key_str = key.decode() if isinstance(key, bytes) else key
+        model_name = key_str.split(":")[-1]
+        total_ops = int(stats.get(b"total_operations", 0))
+        total_tokens = int(stats.get(b"total_tokens", 0))
+        total_cost = float(stats.get(b"total_cost", 0))
+        return {
+            "model": model_name,
+            "total_operations": total_ops,
+            "total_tokens": total_tokens,
+            "total_cost": round(total_cost, 6),
+            "tokens_per_operation": total_tokens / total_ops if total_ops > 0 else 0,
+        }
+
+    async def _fetch_model_stats_batch(self, redis, keys: list) -> list:
+        """Fetch model stats in batch. (Issue #315 - extracted)"""
+        async with redis.pipeline() as pipe:
+            for key in keys:
+                await pipe.hgetall(key)
+            return await pipe.execute()
+
     async def get_model_comparison(self) -> Dict[str, Any]:
         """Get comparison of embedding model usage"""
         try:
             redis = await self._get_redis()
-
-            # Get all model stats keys
             cursor = 0
             models = []
 
@@ -368,40 +400,16 @@ class EmbeddingPatternAnalyzer:
                     cursor, match=f"{self._model_stats_key}:*", count=100
                 )
 
-                # Batch fetch all hashes using pipeline - eliminates N+1
+                # Batch fetch and parse using helper (Issue #315 - reduced depth)
                 if keys:
-                    async with redis.pipeline() as pipe:
-                        for key in keys:
-                            await pipe.hgetall(key)
-                        all_stats = await pipe.execute()
-
-                    for key, stats in zip(keys, all_stats):
-                        key_str = key.decode() if isinstance(key, bytes) else key
-                        model_name = key_str.split(":")[-1]
-
-                        if stats:
-                            total_ops = int(stats.get(b"total_operations", 0))
-                            total_tokens = int(stats.get(b"total_tokens", 0))
-                            total_cost = float(stats.get(b"total_cost", 0))
-
-                            models.append(
-                                {
-                                    "model": model_name,
-                                    "total_operations": total_ops,
-                                    "total_tokens": total_tokens,
-                                    "total_cost": round(total_cost, 6),
-                                    "tokens_per_operation": (
-                                        total_tokens / total_ops if total_ops > 0 else 0
-                                    ),
-                                }
-                            )
+                    all_stats = await self._fetch_model_stats_batch(redis, keys)
+                    parsed = [self._parse_model_stats(k, s) for k, s in zip(keys, all_stats)]
+                    models.extend(m for m in parsed if m)
 
                 if cursor == 0:
                     break
 
-            # Sort by usage
             models.sort(key=lambda x: x["total_operations"], reverse=True)
-
             return {
                 "status": "success",
                 "models": models,

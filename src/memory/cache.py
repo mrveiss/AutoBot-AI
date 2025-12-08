@@ -21,6 +21,7 @@ class LRUCacheManager:
     """
 
     def __init__(self, max_size: int = 1000):
+        """Initialize LRU cache with specified maximum size and statistics."""
         self.max_size = max_size
         self.cache: OrderedDict = OrderedDict()
         self.hits = 0

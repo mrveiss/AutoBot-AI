@@ -166,6 +166,27 @@ INTENT_PATTERNS = [
     ("clarification", r"\b(what do you mean|clarify|explain more)\b", "Clarification Request"),
 ]
 
+# O(1) lookup for intent names by ID (Issue #315 + #326)
+INTENT_ID_TO_NAME = {pid: name for pid, _, name in INTENT_PATTERNS}
+
+
+def _get_intent_name(intent_id: str) -> str:
+    """Get intent name by ID using O(1) lookup. (Issue #315 - extracted)"""
+    return INTENT_ID_TO_NAME.get(intent_id, "Unknown")
+
+
+def _collect_user_samples(
+    messages: List[Dict], intent_stats: Dict, analyzer: "ConversationAnalyzer"
+) -> None:
+    """Collect sample messages for each intent. (Issue #315 - extracted)"""
+    for msg in messages:
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        intent_id, _ = analyzer.detect_intent(content)
+        if len(intent_stats[intent_id]["samples"]) < 3:
+            intent_stats[intent_id]["samples"].append(content[:200])
+
 
 # ============================================================================
 # Conversation Analyzer Engine
@@ -471,10 +492,13 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     # Try to load from chat history files
     chat_dir = PATH.DATA_DIR / "chat_history" if hasattr(PATH, "DATA_DIR") else Path("data/chat_history")
 
-    if not chat_dir.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(chat_dir.exists):
         return sessions
 
-    for session_file in chat_dir.glob("*.json"):
+    # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
+    session_files = await asyncio.to_thread(lambda: list(chat_dir.glob("*.json")))
+    for session_file in session_files:
         try:
             async with aiofiles.open(session_file, "r", encoding="utf-8") as f:
                 content = await f.read()
@@ -571,26 +595,15 @@ async def get_intent_stats(
                 if conv_data["success_indicators"] > 0:
                     intent_stats[intent]["success_count"] += 1
 
-            # Collect samples
-            for msg in messages:
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    intent_id, _ = conversation_analyzer.detect_intent(content)
-                    if len(intent_stats[intent_id]["samples"]) < 3:
-                        intent_stats[intent_id]["samples"].append(content[:200])
+            # Collect samples using helper (Issue #315 - reduces nesting)
+            _collect_user_samples(messages, intent_stats, conversation_analyzer)
 
-        # Format results
+        # Format results using O(1) lookup (Issue #315 + #326)
         results = []
         for intent_id, stats in sorted(intent_stats.items(), key=lambda x: x[1]["count"], reverse=True):
-            intent_name = "Unknown"
-            for pid, _, name in INTENT_PATTERNS:
-                if pid == intent_id:
-                    intent_name = name
-                    break
-
             results.append({
                 "intent_id": intent_id,
-                "intent_name": intent_name,
+                "intent_name": _get_intent_name(intent_id),
                 "count": stats["count"],
                 "success_rate": round(stats["success_count"] / max(1, stats["count"]) * 100, 1),
                 "samples": stats["samples"],

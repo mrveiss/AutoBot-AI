@@ -19,6 +19,7 @@ class WorkflowMessenger:
     """Handles workflow messaging via WebSocket"""
 
     def __init__(self):
+        """Initialize messenger with empty terminal sessions dictionary."""
         # Terminal WebSocket sessions keyed by session_id
         self.terminal_sessions: Dict[str, Any] = {}
 

@@ -453,10 +453,12 @@ class ConsolidatedOrchestrator:
         logger.info("Initializing Consolidated Orchestrator...")
 
         try:
-            # Initialize core components
-            await self.llm_interface.initialize()
-            await self.memory_manager.initialize()
-            await self.agent_manager.initialize()
+            # Issue #379: Initialize core components in parallel
+            await asyncio.gather(
+                self.llm_interface.initialize(),
+                self.memory_manager.initialize(),
+                self.agent_manager.initialize(),
+            )
 
             # Validate LLM connection
             ollama_connected = await self.llm_interface.check_ollama_connection()
@@ -492,11 +494,14 @@ class ConsolidatedOrchestrator:
             )
             await asyncio.sleep(2)  # Brief wait for tasks to complete
 
-        # Cleanup components
+        # Issue #379: Cleanup components in parallel
         try:
-            await self.llm_interface.cleanup()
-            await self.memory_manager.cleanup()
-            await self.agent_manager.cleanup()
+            await asyncio.gather(
+                self.llm_interface.cleanup(),
+                self.memory_manager.cleanup(),
+                self.agent_manager.cleanup(),
+                return_exceptions=True,  # Don't fail if one cleanup fails
+            )
         except Exception as e:
             logger.warning(f"Cleanup warning: {e}")
 

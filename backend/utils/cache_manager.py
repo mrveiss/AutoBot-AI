@@ -213,10 +213,11 @@ def cache_response(cache_key: str = None, ttl: int = 300):
     """
 
     def decorator(func):
-        """Wrap endpoint function with cache lookup and storage logic."""
+        """Create async wrapper with cache lookup and storage for FastAPI endpoints."""
 
         @functools.wraps(func)  # Preserve function signature for FastAPI
         async def wrapper(*args, **kwargs):
+            """Async wrapper with cache lookup before execution and cache storage after."""
             # Extract request object from FastAPI dependency injection
             request = None
 
@@ -300,10 +301,11 @@ def cache_function(cache_key: str = None, ttl: int = 300):
     """
 
     def decorator(func):
-        """Wrap async function with cache lookup and storage logic."""
+        """Create async wrapper with cache lookup and storage for non-HTTP functions."""
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
+            """Async wrapper with cache lookup and storage for non-HTTP functions."""
             # Generate cache key
             if cache_key:
                 key = cache_key

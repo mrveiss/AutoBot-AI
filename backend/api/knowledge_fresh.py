@@ -110,28 +110,34 @@ async def debug_redis_connection():
                 "Redis client initialization returned None - check Redis configuration"
             )
 
-        # Test connection
-        redis_client.ping()
+        # Issue #361 - avoid blocking - wrap Redis ops in thread pool
+        def _debug_redis_connection():
+            # Test connection
+            redis_client.ping()
 
-        # Count vectors directly
-        vector_keys = []
-        for key in redis_client.scan_iter(match="llama_index/vector_*"):
-            vector_keys.append(
-                key.decode("utf-8") if isinstance(key, bytes) else str(key)
-            )
+            # Count vectors directly
+            vector_keys = []
+            for key in redis_client.scan_iter(match="llama_index/vector_*"):
+                vector_keys.append(
+                    key.decode("utf-8") if isinstance(key, bytes) else str(key)
+                )
 
-        # Get FT.INFO
-        try:
-            ft_info = redis_client.execute_command("FT.INFO", "llama_index")
-            indexed_docs = 0
-            for i, item in enumerate(ft_info):
-                if isinstance(item, bytes):
-                    item = item.decode()
-                if item == "num_docs" and i + 1 < len(ft_info):
-                    indexed_docs = int(ft_info[i + 1])
-                    break
-        except Exception as e:
-            indexed_docs = f"Error: {e}"
+            # Get FT.INFO
+            try:
+                ft_info = redis_client.execute_command("FT.INFO", "llama_index")
+                indexed_docs = 0
+                for i, item in enumerate(ft_info):
+                    if isinstance(item, bytes):
+                        item = item.decode()
+                    if item == "num_docs" and i + 1 < len(ft_info):
+                        indexed_docs = int(ft_info[i + 1])
+                        break
+            except Exception as e:
+                indexed_docs = f"Error: {e}"
+
+            return vector_keys, indexed_docs
+
+        vector_keys, indexed_docs = await asyncio.to_thread(_debug_redis_connection)
 
         return {
             "redis_connection": "successful",

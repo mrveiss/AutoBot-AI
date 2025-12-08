@@ -51,6 +51,7 @@ class AsyncLongTermMemoryManager:
     """
 
     def __init__(self, config_path: Optional[str] = None):
+        """Initialize async memory manager with config, database path, and retention settings."""
         # Use centralized configuration manager
         self.config = global_config_manager.to_dict()
 

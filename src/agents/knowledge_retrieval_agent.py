@@ -321,12 +321,15 @@ Guidelines:
             if not documents:
                 return "No information found."
 
-            # Combine document content
-            combined_content = ""
+            # Issue #383: Use list + join for document content combination
+            content_parts = []
+            total_len = 0
             for doc in documents[:2]:  # Limit for speed
                 content = doc.get("content", "")
-                if len(combined_content) + len(content) < 800:  # Total limit for speed
-                    combined_content += content + "\n\n"
+                if total_len + len(content) < 800:  # Total limit for speed
+                    content_parts.append(content)
+                    total_len += len(content)
+            combined_content = "\n\n".join(content_parts)
 
             system_prompt = """Extract the specific fact requested. Be direct and concise.
 If the information is not in the provided text, respond with "Information not found"."""

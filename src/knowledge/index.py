@@ -6,8 +6,10 @@ Knowledge Base Index Management Module
 
 Contains the IndexMixin class for index rebuild operations and ChromaDB management.
 Implements Issue #72 - Optimized HNSW parameters for 545K+ vectors.
+Issue #369 - All ChromaDB operations wrapped with asyncio.to_thread() to prevent blocking.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -51,6 +53,7 @@ class IndexMixin:
 
         Issue #72: This method creates a new collection with optimized parameters
         and migrates all vectors from the existing collection.
+        Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
 
         Args:
             new_collection_name: Optional new collection name. If None, uses
@@ -75,9 +78,11 @@ class IndexMixin:
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            # Get current collection
-            old_collection = chroma_client.get_collection(name=self.chromadb_collection)
-            old_count = old_collection.count()
+            # Issue #369: Wrap blocking get_collection and count() with asyncio.to_thread
+            old_collection = await asyncio.to_thread(
+                chroma_client.get_collection, name=self.chromadb_collection
+            )
+            old_count = await asyncio.to_thread(old_collection.count)
 
             if old_count == 0:
                 return {
@@ -103,17 +108,20 @@ class IndexMixin:
                 f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
             )
 
-            # Delete target collection if it exists
+            # Issue #369: Wrap blocking delete_collection with asyncio.to_thread
             try:
-                chroma_client.delete_collection(name=target_name)
+                await asyncio.to_thread(
+                    chroma_client.delete_collection, name=target_name
+                )
                 logger.info(f"Deleted existing collection: {target_name}")
             except Exception as e:
                 logger.debug(
                     f"Collection {target_name} does not exist or could not be deleted: {e}"
                 )
 
-            # Create new collection with optimized parameters
-            new_collection = chroma_client.create_collection(
+            # Issue #369: Wrap blocking create_collection with asyncio.to_thread
+            new_collection = await asyncio.to_thread(
+                chroma_client.create_collection,
                 name=target_name,
                 metadata=hnsw_metadata,
             )
@@ -124,8 +132,9 @@ class IndexMixin:
             offset = 0
 
             while offset < old_count:
-                # Get batch from old collection
-                results = old_collection.get(
+                # Issue #369: Wrap blocking get() with asyncio.to_thread
+                results = await asyncio.to_thread(
+                    old_collection.get,
                     limit=batch_size,
                     offset=offset,
                     include=["documents", "embeddings", "metadatas"],
@@ -134,8 +143,9 @@ class IndexMixin:
                 if not results["ids"]:
                     break
 
-                # Add to new collection
-                new_collection.add(
+                # Issue #369: Wrap blocking add() with asyncio.to_thread
+                await asyncio.to_thread(
+                    new_collection.add,
                     ids=results["ids"],
                     embeddings=results["embeddings"],
                     documents=results["documents"],
@@ -177,6 +187,7 @@ class IndexMixin:
         Get information about the current ChromaDB collection and HNSW parameters.
 
         Issue #72: Useful for verifying current index configuration.
+        Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
 
         Returns:
             Dict with collection info and HNSW parameters
@@ -194,13 +205,19 @@ class IndexMixin:
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            collection = chroma_client.get_collection(name=self.chromadb_collection)
+            # Issue #369: Wrap blocking get_collection with asyncio.to_thread
+            collection = await asyncio.to_thread(
+                chroma_client.get_collection, name=self.chromadb_collection
+            )
             metadata = collection.metadata or {}
+
+            # Issue #369: Wrap blocking count() with asyncio.to_thread
+            vector_count = await asyncio.to_thread(collection.count)
 
             return {
                 "status": "success",
                 "collection_name": self.chromadb_collection,
-                "vector_count": collection.count(),
+                "vector_count": vector_count,
                 "chromadb_path": str(chroma_path),
                 "hnsw_params": {
                     "space": metadata.get("hnsw:space", "unknown"),
@@ -225,6 +242,7 @@ class IndexMixin:
         Rebuild the search index to sync with actual vectors (V1 compatibility).
 
         For ChromaDB, this is mostly a no-op since ChromaDB manages its own indices.
+        Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
         """
         try:
             if not self.vector_store:
@@ -232,7 +250,8 @@ class IndexMixin:
 
             # For ChromaDB, just verify the collection is accessible
             chroma_collection = self.vector_store._collection
-            vector_count = chroma_collection.count()
+            # Issue #369: Wrap blocking count() with asyncio.to_thread
+            vector_count = await asyncio.to_thread(chroma_collection.count)
 
             return {
                 "status": "success",

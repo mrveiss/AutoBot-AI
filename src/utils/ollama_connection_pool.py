@@ -177,6 +177,32 @@ class OllamaConnectionPool:
                 self.semaphore.release()
                 logger.debug(f"[{request_id}] Released connection")
 
+    async def _execute_health_check(self, ollama_url: str) -> bool:
+        """Execute the actual health check request (Issue #315 - extracted helper).
+
+        Args:
+            ollama_url: Base URL for Ollama service
+
+        Returns:
+            bool: True if response was successful (HTTP 200)
+        """
+        async with self.acquire_connection() as session:
+            health_url = f"{ollama_url}/api/tags"
+            async with session.get(health_url) as response:
+                return response.status == 200
+
+    async def _update_health_status(self, healthy: bool, error: Optional[Exception] = None) -> None:
+        """Update health status with logging (Issue #315 - extracted helper)."""
+        async with self._stats_lock:
+            self.pool_healthy = healthy
+
+        if error:
+            logger.error(f"Ollama health check failed: {error}")
+        elif healthy:
+            logger.info("Ollama connection pool health check: HEALTHY")
+        else:
+            logger.warning("Ollama health check failed: HTTP error")
+
     async def health_check(self, ollama_url: str) -> bool:
         """
         Perform health check on Ollama service (thread-safe).
@@ -186,6 +212,8 @@ class OllamaConnectionPool:
 
         Returns:
             bool: True if healthy, False otherwise
+
+        Issue #315: Refactored to reduce nesting depth from 5 to 3.
         """
         current_time = time.time()
 
@@ -195,24 +223,10 @@ class OllamaConnectionPool:
                 return self.pool_healthy
 
         try:
-            async with self.acquire_connection() as session:
-                health_url = f"{ollama_url}/api/tags"
-                async with session.get(health_url) as response:
-                    async with self._stats_lock:
-                        if response.status == 200:
-                            self.pool_healthy = True
-                            logger.info("Ollama connection pool health check: HEALTHY")
-                        else:
-                            self.pool_healthy = False
-                            logger.warning(
-                                f"Ollama health check failed: HTTP {response.status}"
-                            )
-
+            healthy = await self._execute_health_check(ollama_url)
+            await self._update_health_status(healthy)
         except Exception as e:
-            async with self._stats_lock:
-                self.pool_healthy = False
-            logger.error(f"Ollama health check failed: {e}")
-
+            await self._update_health_status(False, e)
         finally:
             async with self._stats_lock:
                 self.last_health_check = current_time

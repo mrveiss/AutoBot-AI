@@ -23,6 +23,7 @@ class AgentResponseJudge(BaseLLMJudge):
     """Judge for evaluating agent response quality and effectiveness"""
 
     def __init__(self, llm_interface=None):
+        """Initialize agent response judge with quality evaluation thresholds."""
         super().__init__("agent_response", llm_interface)
         # Issue #318: Use centralized constants instead of magic numbers
         self.quality_threshold = AgentThresholds.QUALITY_THRESHOLD

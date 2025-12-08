@@ -26,6 +26,7 @@ class TerminalAuditLogger:
         security_level: SecurityLevel,
         user_role: str = "user",
     ):
+        """Initialize audit logger with session and security context."""
         self.session_id = session_id
         self.security_level = security_level
         self.user_role = user_role

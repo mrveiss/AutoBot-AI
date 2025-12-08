@@ -26,6 +26,7 @@ class WorkflowClassifier:
     """Manages workflow classification rules in Redis."""
 
     def __init__(self, redis_client: Optional[redis.Redis] = None):
+        """Initialize workflow classifier with Redis client and default rules."""
         self.redis_client = redis_client or get_redis_client()
         self.rules_key = "autobot:workflow:classification:rules"
         self.keywords_key = "autobot:workflow:classification:keywords"

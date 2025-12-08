@@ -397,6 +397,35 @@ class WorkflowAutomationManager:
             },
         )
 
+    async def _handle_pause_action(self, workflow, workflow_id: str) -> None:
+        """Handle pause action. (Issue #315 - extracted)"""
+        workflow.is_paused = True
+        await self._send_workflow_message(
+            workflow.session_id, {"type": "workflow_paused", "workflow_id": workflow_id}
+        )
+
+    async def _handle_resume_action(self, workflow, workflow_id: str) -> None:
+        """Handle resume action. (Issue #315 - extracted)"""
+        workflow.is_paused = False
+        await self._send_workflow_message(
+            workflow.session_id, {"type": "workflow_resumed", "workflow_id": workflow_id}
+        )
+        await self._process_next_workflow_step(workflow_id)
+
+    async def _handle_approve_step_action(self, workflow_id: str, step_id: str) -> None:
+        """Handle approve step action. (Issue #315 - extracted)"""
+        self.prometheus_metrics.record_workflow_approval(
+            workflow_type="automated_workflow", decision="approved"
+        )
+        await self._approve_and_execute_step(workflow_id, step_id)
+
+    async def _handle_skip_step_action(self, workflow_id: str, step_id: str) -> None:
+        """Handle skip step action. (Issue #315 - extracted)"""
+        self.prometheus_metrics.record_workflow_approval(
+            workflow_type="automated_workflow", decision="skipped"
+        )
+        await self._skip_workflow_step(workflow_id, step_id)
+
     async def handle_workflow_control(
         self, control_request: WorkflowControlRequest
     ) -> bool:
@@ -419,46 +448,24 @@ class WorkflowAutomationManager:
         }
         workflow.user_interventions.append(intervention)
 
-        if action == "pause":
-            workflow.is_paused = True
-            await self._send_workflow_message(
-                workflow.session_id,
-                {"type": "workflow_paused", "workflow_id": workflow_id},
-            )
+        # Issue #315: Use dispatch pattern instead of chained if/elif
+        action_handlers = {
+            "pause": lambda: self._handle_pause_action(workflow, workflow_id),
+            "resume": lambda: self._handle_resume_action(workflow, workflow_id),
+            "cancel": lambda: self._cancel_workflow(workflow_id),
+            "approve_step": lambda: self._handle_approve_step_action(workflow_id, control_request.step_id),
+            "skip_step": lambda: self._handle_skip_step_action(workflow_id, control_request.step_id),
+        }
 
-        elif action == "resume":
-            workflow.is_paused = False
-            await self._send_workflow_message(
-                workflow.session_id,
-                {"type": "workflow_resumed", "workflow_id": workflow_id},
-            )
-            await self._process_next_workflow_step(workflow_id)
+        handler = action_handlers.get(action)
+        if handler:
+            if action == "cancel":
+                workflow.is_cancelled = True
+            await handler()
+            return True
 
-        elif action == "cancel":
-            workflow.is_cancelled = True
-            await self._cancel_workflow(workflow_id)
-
-        elif action == "approve_step":
-            # Record Prometheus workflow approval metric
-            workflow_type = "automated_workflow"
-            self.prometheus_metrics.record_workflow_approval(
-                workflow_type=workflow_type, decision="approved"
-            )
-            await self._approve_and_execute_step(workflow_id, control_request.step_id)
-
-        elif action == "skip_step":
-            # Record Prometheus workflow approval metric (rejected/skipped)
-            workflow_type = "automated_workflow"
-            self.prometheus_metrics.record_workflow_approval(
-                workflow_type=workflow_type, decision="skipped"
-            )
-            await self._skip_workflow_step(workflow_id, control_request.step_id)
-
-        else:
-            logger.warning(f"Unknown workflow control action: {action}")
-            return False
-
-        return True
+        logger.warning(f"Unknown workflow control action: {action}")
+        return False
 
     async def _approve_and_execute_step(self, workflow_id: str, step_id: str):
         """Approve and execute workflow step"""

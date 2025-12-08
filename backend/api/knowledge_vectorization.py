@@ -233,7 +233,9 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     # Cache the result (TTL: 60 seconds)
     if use_cache:
         try:
-            kb_to_use.redis_client.setex(
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                kb_to_use.redis_client.setex,
                 cache_key, 60, json.dumps(result)  # 60 second TTL
             )
             logger.debug(f"Cached vectorization status for {len(fact_ids)} facts")
@@ -323,6 +325,20 @@ async def _process_single_fact(
     return False, False, None
 
 
+async def _process_single_fact_safe(
+    kb, fact_key: str, fact_data: dict, fact_id: str,
+    skip_existing: bool, vector_exists: dict
+) -> tuple:
+    """Process a single fact with exception handling. (Issue #315 - extracted)"""
+    try:
+        return await _process_single_fact(
+            kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
+        )
+    except Exception as e:
+        logger.error(f"Error processing fact {fact_key}: {e}")
+        return False, False, None
+
+
 @router.post("/vectorize_facts")
 async def vectorize_existing_facts(
     req: Request,
@@ -391,23 +407,19 @@ async def vectorize_existing_facts(
             failed_count += len(batch)
             continue
 
-        # Process each fact in batch (extracted helper reduces nesting)
+        # Process each fact in batch (Issue #315: simplified result handling)
         for fact_key, fact_data, fact_id in zip(batch, all_fact_data, fact_ids):
-            try:
-                success, skipped, result_entry = await _process_single_fact(
-                    kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
-                )
-                if success:
-                    success_count += 1
-                    if result_entry:
-                        processed_facts.append(result_entry)
-                elif skipped:
-                    skipped_count += 1
-                else:
-                    failed_count += 1
-            except Exception as e:
+            success, skipped, result_entry = await _process_single_fact_safe(
+                kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
+            )
+            if success:
+                success_count += 1
+                if result_entry:
+                    processed_facts.append(result_entry)
+            elif skipped:
+                skipped_count += 1
+            else:
                 failed_count += 1
-                logger.error(f"Error processing fact {fact_key}: {e}")
 
         # Delay between batches to prevent resource exhaustion
         if batch_num < total_batches - 1:
@@ -458,14 +470,17 @@ async def _vectorize_fact_background(
             "error": None,
             "result": None,
         }
-        kb_instance.redis_client.setex(
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
         )
         logger.info(f"Started vectorization job {job_id} for fact {fact_id}")
 
         # Get fact data from Redis - facts are stored as individual hashes with key "fact:{uuid}"
         fact_key = f"fact:{fact_id}"
-        fact_hash = kb_instance.redis_client.hgetall(fact_key)
+        # Issue #361 - avoid blocking
+        fact_hash = await asyncio.to_thread(kb_instance.redis_client.hgetall, fact_key)
 
         if not fact_hash:
             raise ValueError(f"Fact {fact_id} not found in knowledge base")
@@ -485,14 +500,18 @@ async def _vectorize_fact_background(
 
         # Update progress
         job_data["progress"] = 30
-        kb_instance.redis_client.setex(
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
         # Check if already vectorized (unless force=True)
         if not force:
             vector_key = f"llama_index/vector_{fact_id}"
-            if kb_instance.redis_client.exists(vector_key):
+            # Issue #361 - avoid blocking
+            vector_exists = await asyncio.to_thread(kb_instance.redis_client.exists, vector_key)
+            if vector_exists:
                 logger.info(
                     f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
                 )
@@ -505,14 +524,18 @@ async def _vectorize_fact_background(
                     "fact_id": fact_id,
                     "vector_indexed": True,
                 }
-                kb_instance.redis_client.setex(
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(
+                    kb_instance.redis_client.setex,
                     f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
                 )
                 return
 
         # Update progress
         job_data["progress"] = 50
-        kb_instance.redis_client.setex(
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
@@ -544,7 +567,9 @@ async def _vectorize_fact_background(
             )
 
         job_data["completed_at"] = datetime.now().isoformat()
-        kb_instance.redis_client.setex(
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
@@ -565,7 +590,9 @@ async def _vectorize_fact_background(
             "error": error_msg,
             "result": None,
         }
-        kb_instance.redis_client.setex(
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
@@ -596,7 +623,8 @@ async def vectorize_individual_fact(
 
     # Check if fact exists - facts are stored as individual Redis hashes with key "fact:{uuid}"
     fact_key = f"fact:{fact_id}"
-    fact_data = kb.redis_client.hgetall(fact_key)
+    # Issue #361 - avoid blocking
+    fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
     if not fact_data:
         raise HTTPException(
             status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
@@ -617,7 +645,9 @@ async def vectorize_individual_fact(
         "result": None,
     }
 
-    kb.redis_client.setex(
+    # Issue #361 - avoid blocking
+    await asyncio.to_thread(
+        kb.redis_client.setex,
         f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
     )
 
@@ -659,7 +689,8 @@ async def get_vectorization_job_status(job_id: str, req: Request):
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Get job data from Redis
-    job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
+    # Issue #361 - avoid blocking
+    job_json = await asyncio.to_thread(kb.redis_client.get, f"vectorization_job:{job_id}")
 
     if not job_json:
         raise HTTPException(
@@ -713,31 +744,35 @@ async def get_failed_vectorization_jobs(req: Request):
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    # Use SCAN to iterate through keys efficiently (non-blocking)
-    failed_jobs = []
-    cursor = 0
+    # Use SCAN to iterate through keys efficiently
+    # Issue #361 - avoid blocking - wrap all Redis ops in helper
+    def _scan_failed_jobs():
+        failed_jobs = []
+        cursor = 0
+        while True:
+            cursor, keys = kb.redis_client.scan(
+                cursor, match="vectorization_job:*", count=100
+            )
 
-    while True:
-        cursor, keys = kb.redis_client.scan(
-            cursor, match="vectorization_job:*", count=100
-        )
+            if not keys:
+                if cursor == 0:
+                    break
+                continue
 
-        if not keys:
+            # Use pipeline for batch operations
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            results = pipe.execute()
+
+            # Filter failed jobs (extracted helper reduces nesting)
+            failed_jobs.extend(_filter_failed_jobs(results))
+
             if cursor == 0:
                 break
-            continue
+        return failed_jobs
 
-        # Use pipeline for batch operations
-        pipe = kb.redis_client.pipeline()
-        for key in keys:
-            pipe.get(key)
-        results = pipe.execute()
-
-        # Filter failed jobs (extracted helper reduces nesting)
-        failed_jobs.extend(_filter_failed_jobs(results))
-
-        if cursor == 0:
-            break
+    failed_jobs = await asyncio.to_thread(_scan_failed_jobs)
 
     return {
         "status": "success",
@@ -771,7 +806,8 @@ async def retry_vectorization_job(
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Get old job data
-    old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
+    # Issue #361 - avoid blocking
+    old_job_json = await asyncio.to_thread(kb.redis_client.get, f"vectorization_job:{job_id}")
 
     if not old_job_json:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -796,7 +832,10 @@ async def retry_vectorization_job(
         "retry_of": job_id,  # Track that this is a retry
     }
 
-    kb.redis_client.setex(f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data))
+    # Issue #361 - avoid blocking
+    await asyncio.to_thread(
+        kb.redis_client.setex, f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
+    )
 
     # Add background task
     background_tasks.add_task(
@@ -836,7 +875,8 @@ async def delete_vectorization_job(job_id: str, req: Request):
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Delete job from Redis
-    deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")
+    # Issue #361 - avoid blocking
+    deleted = await asyncio.to_thread(kb.redis_client.delete, f"vectorization_job:{job_id}")
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -868,36 +908,39 @@ async def clear_failed_vectorization_jobs(req: Request):
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    # Use SCAN to iterate through keys efficiently (non-blocking)
-    deleted_count = 0
-    cursor = 0
+    # Issue #361 - avoid blocking - wrap all Redis ops in helper
+    def _clear_failed_jobs():
+        deleted_count = 0
+        cursor = 0
+        while True:
+            cursor, keys = kb.redis_client.scan(
+                cursor, match="vectorization_job:*", count=100
+            )
 
-    while True:
-        cursor, keys = kb.redis_client.scan(
-            cursor, match="vectorization_job:*", count=100
-        )
+            if not keys:
+                if cursor == 0:
+                    break
+                continue
 
-        if not keys:
+            # Use pipeline for batch operations
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            results = pipe.execute()
+
+            # Collect failed job keys (using extracted helper)
+            failed_keys = _collect_failed_keys(keys, results)
+
+            # Delete failed jobs in batch
+            if failed_keys:
+                kb.redis_client.delete(*failed_keys)
+                deleted_count += len(failed_keys)
+
             if cursor == 0:
                 break
-            continue
+        return deleted_count
 
-        # Use pipeline for batch operations
-        pipe = kb.redis_client.pipeline()
-        for key in keys:
-            pipe.get(key)
-        results = pipe.execute()
-
-        # Collect failed job keys (using extracted helper)
-        failed_keys = _collect_failed_keys(keys, results)
-
-        # Delete failed jobs in batch
-        if failed_keys:
-            kb.redis_client.delete(*failed_keys)
-            deleted_count += len(failed_keys)
-
-        if cursor == 0:
-            break
+    deleted_count = await asyncio.to_thread(_clear_failed_jobs)
 
     logger.info(f"Cleared {deleted_count} failed vectorization jobs")
 

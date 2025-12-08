@@ -7,6 +7,7 @@ Provides code analysis and quality assessment endpoints
 Extracted from analytics.py to maintain <20 functions per file
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -46,7 +47,8 @@ def set_analytics_dependencies(controller, state):
 async def index_codebase(request: CodeAnalysisRequest):
     """Trigger codebase indexing and analysis"""
     # Validate request
-    if not Path(request.target_path).exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(Path(request.target_path).exists):
         raise HTTPException(
             status_code=400,
             detail=f"Target path does not exist: {request.target_path}",
@@ -71,10 +73,17 @@ async def index_codebase(request: CodeAnalysisRequest):
 @router.get("/code/status")
 async def get_code_analysis_status():
     """Get current code analysis status and capabilities"""
+    # Issue #358 - avoid blocking
+    code_analysis_exists = await asyncio.to_thread(
+        analytics_controller.code_analysis_path.exists
+    )
+    code_index_exists = await asyncio.to_thread(
+        analytics_controller.code_index_path.exists
+    )
     status = {
         "tools_available": {
-            "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-            "code_index_mcp": analytics_controller.code_index_path.exists(),
+            "code_analysis_suite": code_analysis_exists,
+            "code_index_mcp": code_index_exists,
         },
         "last_analysis_time": analytics_state.get("last_analysis_time"),
         "cache_status": {
@@ -85,20 +94,24 @@ async def get_code_analysis_status():
     }
 
     # Add tool details if available
-    if analytics_controller.code_analysis_path.exists():
+    # Issue #358 - avoid blocking (reuse exists checks from above)
+    if code_analysis_exists:
+        # Issue #358 - use lambda to defer glob execution to thread
+        scripts_available = await asyncio.to_thread(
+            lambda: list(analytics_controller.code_analysis_path.glob("scripts/*.py"))
+        )
         status["code_analysis_suite"] = {
             "path": str(analytics_controller.code_analysis_path),
-            "scripts_available": list(
-                analytics_controller.code_analysis_path.glob("scripts/*.py")
-            ),
+            "scripts_available": scripts_available,
         }
 
-    if analytics_controller.code_index_path.exists():
+    if code_index_exists:
+        # Issue #358 - avoid blocking
+        config_path = analytics_controller.code_index_path / "pyproject.toml"
+        config_available = await asyncio.to_thread(config_path.exists)
         status["code_index_mcp"] = {
             "path": str(analytics_controller.code_index_path),
-            "config_available": (
-                (analytics_controller.code_index_path / "pyproject.toml").exists()
-            ),
+            "config_available": config_available,
         }
 
     return status

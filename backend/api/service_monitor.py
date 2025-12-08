@@ -40,6 +40,52 @@ LOCAL_MACHINE_IPS = {
 }
 
 
+def _parse_uptime_info(uptime_line: str) -> tuple:
+    """Parse uptime line to extract load average and display string (Issue #315).
+
+    Returns:
+        Tuple of (load_avg, uptime_display)
+    """
+    load_avg = "unknown"
+    uptime_display = "unknown"
+
+    if "load average:" not in uptime_line:
+        return load_avg, uptime_display
+
+    load_avg = uptime_line.split("load average:")[-1].strip()
+    uptime_part = uptime_line.split("load average:")[0].strip()
+
+    if "up " not in uptime_part:
+        return load_avg, uptime_display
+
+    uptime_display = uptime_part.split("up ", 1)[1].strip()
+    # Clean up extra info after the uptime (users, etc.)
+    if "," in uptime_display and ("user" in uptime_display or "load" in uptime_display):
+        uptime_display = uptime_display.split(",")[0].strip()
+
+    return load_avg, uptime_display
+
+
+def _parse_service_status(vm_name: str, service_result: str) -> tuple:
+    """Parse service status result for a VM (Issue #315: extracted).
+
+    Returns:
+        Tuple of (service_status, active_services)
+    """
+    if vm_name == "redis":
+        if service_result == "active":
+            return "Redis active", ["redis-server"]
+        return f"Redis: {service_result}", []
+
+    if service_result.isdigit():
+        service_count = int(service_result)
+        if service_count > 0:
+            return f"{service_count} processes", [f"{vm_name}_services"]
+        return "No expected services running", []
+
+    return service_result, []
+
+
 class ServiceStatus(BaseModel):
     name: str
     status: str  # "online", "offline", "warning", "error"
@@ -516,43 +562,17 @@ class ServiceMonitor:
                 hostname = output_lines[0] if len(output_lines) > 0 else "unknown"
                 uptime_line = output_lines[1] if len(output_lines) > 1 else ""
 
-                # Extract load average from uptime (FIXED parsing)
-                load_avg = "unknown"
-                uptime_display = "unknown"
-                if "load average:" in uptime_line:
-                    load_avg = uptime_line.split("load average:")[-1].strip()
-                    # Extract just the uptime part for display (before load average)
-                    uptime_part = uptime_line.split("load average:")[0].strip()
-                    # Remove the current time from the beginning
-                    if "up " in uptime_part:
-                        uptime_display = uptime_part.split("up ", 1)[1].strip()
-                        # Clean up extra info after the uptime (users, etc.)
-                        if "," in uptime_display and (
-                            "user" in uptime_display or "load" in uptime_display
-                        ):
-                            uptime_display = uptime_display.split(",")[0].strip()
+                # Extract load average from uptime (Issue #315: uses helper)
+                load_avg, uptime_display = _parse_uptime_info(uptime_line)
 
-                # Extract service status (FIXED for correct VM architecture)
+                # Extract service status (Issue #315: uses helper)
                 service_status = "unknown"
                 active_services = []
                 if len(output_lines) > 2:
                     service_result = output_lines[2].strip()
-                    # Parse service check result based on VM type
-                    if vm_name == "redis":
-                        if service_result == "active":
-                            active_services = ["redis-server"]
-                            service_status = "Redis active"
-                        else:
-                            service_status = f"Redis: {service_result}"
-                    elif service_result.isdigit():
-                        service_count = int(service_result)
-                        if service_count > 0:
-                            active_services = [f"{vm_name}_services"]
-                            service_status = f"{service_count} processes"
-                        else:
-                            service_status = "No expected services running"
-                    else:
-                        service_status = service_result
+                    service_status, active_services = _parse_service_status(
+                        vm_name, service_result
+                    )
 
                 vm_icons = {
                     "frontend": "fas fa-globe",
@@ -949,7 +969,8 @@ async def get_all_services():
             r = get_redis_client(database="main")
             if r is None:
                 raise Exception("Redis client initialization returned None")
-            r.ping()
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(r.ping)
             services["redis"]["status"] = "online"
             services["redis"]["health"] = "✅"
         except Exception:

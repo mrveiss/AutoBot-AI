@@ -241,14 +241,20 @@ class RedisNotificationChannel(AlertNotificationChannel):
             }
 
             channel = self.config.get("alert_channel", "system_alerts")
-            self.redis_client.publish(channel, json.dumps(alert_data))
+            # Issue #361: Execute sync Redis publish in thread pool
+            await asyncio.to_thread(
+                self.redis_client.publish, channel, json.dumps(alert_data)
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to send Redis alert: {e}")
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
-        """Publish recovery to Redis channel"""
+        """Publish recovery to Redis channel.
+
+        Issue #361: Uses asyncio.to_thread() to avoid blocking event loop.
+        """
         try:
             if not self.redis_client:
                 return False
@@ -267,7 +273,10 @@ class RedisNotificationChannel(AlertNotificationChannel):
             }
 
             channel = self.config.get("recovery_channel", "system_recoveries")
-            self.redis_client.publish(channel, json.dumps(recovery_data))
+            # Issue #361: Execute sync Redis publish in thread pool
+            await asyncio.to_thread(
+                self.redis_client.publish, channel, json.dumps(recovery_data)
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to send Redis recovery: {e}")
@@ -566,23 +575,24 @@ class MonitoringAlertsManager:
                 self.notification_channels["websocket"].enabled = True
         logger.info("Enabled WebSocket notifications")
 
+    # Operator dispatch table (Issue #315 - extracted to class constant)
+    _OPERATOR_DISPATCH = {
+        "gt": lambda v, t: v > t,
+        "gte": lambda v, t: v >= t,
+        "lt": lambda v, t: v < t,
+        "lte": lambda v, t: v <= t,
+        "eq": lambda v, t: v == t,
+    }
+
     def _evaluate_operator(
         self, current_value: float, threshold: float, operator: str
     ) -> bool:
-        """Evaluate if condition is met based on operator"""
-        if operator == "gt":
-            return current_value > threshold
-        elif operator == "gte":
-            return current_value >= threshold
-        elif operator == "lt":
-            return current_value < threshold
-        elif operator == "lte":
-            return current_value <= threshold
-        elif operator == "eq":
-            return current_value == threshold
-        else:
+        """Evaluate if condition is met based on operator (Issue #315 - uses dispatch)"""
+        evaluator = self._OPERATOR_DISPATCH.get(operator)
+        if evaluator is None:
             logger.warning(f"Unknown operator: {operator}")
             return False
+        return evaluator(current_value, threshold)
 
     def _get_nested_value(self, data: Dict[str, Any], path: str) -> Optional[float]:
         """Get nested value from dict using dot notation path.
@@ -695,8 +705,13 @@ class MonitoringAlertsManager:
                     "created_at": alert.created_at.isoformat(),
                     "tags": ",".join(alert.tags) if alert.tags else "",
                 }
-                self.redis_client.hset(f"alert:{rule.id}", mapping=alert_data)
-                self.redis_client.expire(f"alert:{rule.id}", 86400 * 7)  # 7 days
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(
+                    self.redis_client.hset, f"alert:{rule.id}", mapping=alert_data
+                )
+                await asyncio.to_thread(
+                    self.redis_client.expire, f"alert:{rule.id}", 86400 * 7
+                )  # 7 days
             except Exception as e:
                 logger.warning(f"Could not store alert in Redis: {e}")
 
@@ -750,7 +765,9 @@ class MonitoringAlertsManager:
         # Update in Redis (outside lock)
         if self.redis_client:
             try:
-                self.redis_client.hset(
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(
+                    self.redis_client.hset,
                     f"alert:{rule_id}",
                     mapping={
                         "status": alert_copy.status.value,
@@ -970,7 +987,9 @@ class MonitoringAlertsManager:
         # Update in Redis (outside lock)
         if self.redis_client:
             try:
-                self.redis_client.hset(
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(
+                    self.redis_client.hset,
                     f"alert:{rule_id}",
                     mapping={
                         "status": status_value,

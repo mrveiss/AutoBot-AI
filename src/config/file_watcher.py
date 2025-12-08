@@ -54,10 +54,13 @@ class FileWatcherMixin:
         Returns:
             Current modification time (or None if file doesn't exist)
         """
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_path.exists):
             return None
 
-        current_modified = file_path.stat().st_mtime
+        # Issue #358 - avoid blocking
+        file_stat = await asyncio.to_thread(file_path.stat)
+        current_modified = file_stat.st_mtime
 
         # Detect change and reload
         if last_modified is not None and current_modified != last_modified:

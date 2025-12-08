@@ -302,29 +302,30 @@ class CodeValidator:
         return warnings
 
     @classmethod
+    def _check_bare_except(cls, child: ast.AST, warnings: List[str]) -> None:
+        """Check for bare except clauses (Issue #315 - extracted helper)."""
+        if isinstance(child, ast.ExceptHandler) and child.type is None:
+            warnings.append("Bare 'except:' clause found - specify exception type")
+
+    @classmethod
+    def _check_mutable_defaults(cls, child: ast.AST, warnings: List[str]) -> None:
+        """Check for mutable default arguments (Issue #315 - extracted helper)."""
+        if not isinstance(child, ast.FunctionDef):
+            return
+        for default in child.args.defaults:
+            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+                warnings.append(
+                    f"Function '{child.name}' has mutable default argument"
+                )
+
+    @classmethod
     def _check_semantic_issues(cls, node: ast.AST) -> List[str]:
-        """Check for semantic issues in AST."""
-        warnings = []
+        """Check for semantic issues in AST (Issue #315 - refactored)."""
+        warnings: List[str] = []
 
         for child in ast.walk(node):
-            # Check for bare except
-            if isinstance(child, ast.ExceptHandler) and child.type is None:
-                warnings.append("Bare 'except:' clause found - specify exception type")
-
-            # Check for mutable default arguments
-            if isinstance(child, ast.FunctionDef):
-                for default in child.args.defaults:
-                    if isinstance(default, (ast.List, ast.Dict, ast.Set)):
-                        warnings.append(
-                            f"Function '{child.name}' has mutable default argument"
-                        )
-
-            # Check for unused variables (basic check)
-            if isinstance(child, ast.Assign):
-                for target in child.targets:
-                    if isinstance(target, ast.Name) and target.id.startswith("_"):
-                        if not target.id.startswith("__"):
-                            pass  # Single underscore is acceptable
+            cls._check_bare_except(child, warnings)
+            cls._check_mutable_defaults(child, warnings)
 
         return warnings
 

@@ -23,6 +23,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
     """Judge for arbitrating between multiple agent responses and coordinating agent interactions"""
 
     def __init__(self, llm_interface=None):
+        """Initialize arbitrator with consensus thresholds and dimension weights."""
         super().__init__("multi_agent_arbitrator", llm_interface)
         # Issue #318: Use centralized constants instead of magic numbers
         self.consensus_threshold = AgentThresholds.CONSENSUS_THRESHOLD

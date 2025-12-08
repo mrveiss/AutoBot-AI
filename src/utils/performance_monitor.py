@@ -544,10 +544,10 @@ class Phase9PerformanceMonitor:
     async def collect_multimodal_metrics(self) -> Optional[MultiModalMetrics]:
         """Collect multi-modal AI processing performance metrics"""
         try:
-            # Get multimodal processing stats from Redis
+            # Get multimodal processing stats from Redis (Issue #361 - avoid blocking)
             if self.redis_client:
-                multimodal_stats = self.redis_client.hgetall(
-                    "multimodal:performance_stats"
+                multimodal_stats = await asyncio.to_thread(
+                    self.redis_client.hgetall, "multimodal:performance_stats"
                 )
                 if multimodal_stats:
                     return MultiModalMetrics(
@@ -783,7 +783,8 @@ class Phase9PerformanceMonitor:
         if not self.redis_client:
             return "offline"
         try:
-            self.redis_client.ping()
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(self.redis_client.ping)
             return "healthy"
         except Exception:
             return "critical"
@@ -934,28 +935,27 @@ class Phase9PerformanceMonitor:
                 return
 
             timestamp = time.time()
+            retention_seconds = self.retention_hours * 3600
 
-            # Store metrics with timestamp as score in sorted sets
-            pipe = self.redis_client.pipeline()
+            # Issue #361 - run all Redis ops in thread pool to avoid blocking
+            def _persist_ops():
+                pipe = self.redis_client.pipeline()
+                for category, metric_data in metrics.items():
+                    if metric_data:
+                        key = f"performance_metrics:{category}"
+                        value = json.dumps(
+                            (
+                                asdict(metric_data)
+                                if hasattr(metric_data, "__dict__")
+                                else metric_data
+                            ),
+                            default=str,
+                        )
+                        pipe.zadd(key, {value: timestamp})
+                        pipe.expire(key, retention_seconds)
+                pipe.execute()
 
-            for category, metric_data in metrics.items():
-                if metric_data:
-                    key = f"performance_metrics:{category}"
-                    value = json.dumps(
-                        (
-                            asdict(metric_data)
-                            if hasattr(metric_data, "__dict__")
-                            else metric_data
-                        ),
-                        default=str,
-                    )
-                    pipe.zadd(key, {value: timestamp})
-
-                    # Set expiration for automatic cleanup
-                    expire_seconds = self.retention_hours * 3600
-                    pipe.expire(key, expire_seconds)
-
-            pipe.execute()
+            await asyncio.to_thread(_persist_ops)
 
         except Exception as e:
             self.logger.error(f"Error persisting metrics to Redis: {e}")
@@ -1017,10 +1017,13 @@ class Phase9PerformanceMonitor:
             # Store alerts in Redis instead of local buffer (Phase 5 Issue #348)
             if self.redis_client and alerts:
                 try:
-                    for alert in alerts:
+                    # Issue #361 - avoid blocking
+                    def _store_alerts():
                         key = "performance_alerts"
-                        self.redis_client.zadd(key, {json.dumps(alert): time.time()})
+                        for alert in alerts:
+                            self.redis_client.zadd(key, {json.dumps(alert): time.time()})
                         self.redis_client.expire(key, 3600)  # 1 hour retention
+                    await asyncio.to_thread(_store_alerts)
                 except Exception as e:
                     self.logger.debug(f"Could not store alerts in Redis: {e}")
 
@@ -1117,23 +1120,22 @@ class Phase9PerformanceMonitor:
             # Fetch latest metrics from Redis instead of local buffers
             if self.redis_client:
                 try:
-                    # Fetch latest GPU metrics
-                    gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                    # Issue #361 - avoid blocking
+                    def _fetch_dashboard_data():
+                        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
+                        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+                        alerts_data = self.redis_client.zrange("performance_alerts", -10, -1)
+                        return gpu_data, npu_data, system_data, alerts_data
+
+                    gpu_data, npu_data, system_data, alerts_data = await asyncio.to_thread(_fetch_dashboard_data)
+
                     if gpu_data:
                         dashboard["gpu"] = json.loads(gpu_data[0])
-
-                    # Fetch latest NPU metrics
-                    npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
                     if npu_data:
                         dashboard["npu"] = json.loads(npu_data[0])
-
-                    # Fetch latest system metrics
-                    system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
                     if system_data:
                         dashboard["system"] = json.loads(system_data[0])
-
-                    # Fetch latest alerts (last 10)
-                    alerts_data = self.redis_client.zrange("performance_alerts", -10, -1)
                     dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
 
                 except Exception as e:
@@ -1163,8 +1165,15 @@ class Phase9PerformanceMonitor:
                 return {"deprecation_notice": "Trends require Redis. Use Prometheus PromQL for historical analysis."}
 
             try:
-                # Fetch last 5 GPU metrics from Redis
-                gpu_data = self.redis_client.zrange("performance_metrics:gpu", -5, -1)
+                # Issue #361 - fetch all data in single thread call to avoid blocking
+                def _fetch_trend_data():
+                    gpu_data = self.redis_client.zrange("performance_metrics:gpu", -5, -1)
+                    system_data = self.redis_client.zrange("performance_metrics:system", -5, -1)
+                    return gpu_data, system_data
+
+                gpu_data, system_data = await asyncio.to_thread(_fetch_trend_data)
+
+                # Process GPU metrics
                 if gpu_data and len(gpu_data) >= 2:
                     gpu_metrics = [json.loads(d) for d in gpu_data]
                     utilizations = [g.get("utilization_percent", 0) for g in gpu_metrics]
@@ -1177,8 +1186,7 @@ class Phase9PerformanceMonitor:
                         ),
                     }
 
-                # Fetch last 5 system metrics from Redis
-                system_data = self.redis_client.zrange("performance_metrics:system", -5, -1)
+                # Process system metrics
                 if system_data and len(system_data) >= 2:
                     system_metrics = [json.loads(d) for d in system_data]
 
@@ -1234,25 +1242,25 @@ class Phase9PerformanceMonitor:
 
             if self.redis_client:
                 try:
-                    # Fetch latest GPU metrics
-                    gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                    # Issue #361 - fetch all data in single thread call to avoid blocking
+                    def _fetch_recommendation_data():
+                        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+                        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1) if self.npu_available else []
+                        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+                        return gpu_data, npu_data, system_data
+
+                    gpu_data, npu_data, system_data = await asyncio.to_thread(_fetch_recommendation_data)
+
+                    # Convert dict to object-like structure for compatibility
+                    class MetricObj:
+                        def __init__(self, d):
+                            """Initialize metric object from dict."""
+                            self.__dict__.update(d)
+
                     if gpu_data:
-                        gpu_dict = json.loads(gpu_data[0])
-                        # Convert dict to object-like structure for compatibility
-                        class MetricObj:
-                            def __init__(self, d):
-                                """Initialize metric object from dict."""
-                                self.__dict__.update(d)
-                        latest_gpu = MetricObj(gpu_dict)
-
-                    # Fetch latest NPU metrics
-                    if self.npu_available:
-                        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
-                        if npu_data:
-                            latest_npu = MetricObj(json.loads(npu_data[0]))
-
-                    # Fetch latest system metrics
-                    system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+                        latest_gpu = MetricObj(json.loads(gpu_data[0]))
+                    if npu_data:
+                        latest_npu = MetricObj(json.loads(npu_data[0]))
                     if system_data:
                         latest_system = MetricObj(json.loads(system_data[0]))
 

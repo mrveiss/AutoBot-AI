@@ -4,10 +4,13 @@
 """
 Security Policy Manager for Enterprise AutoBot
 Provides centralized security policy management, enforcement, and compliance monitoring
+
+Issue #378: Added threading locks for file operations to prevent race conditions.
 """
 
 import json
 import logging
+import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -108,6 +111,10 @@ class SecurityPolicyManager:
             PATH.get_config_path("security", "security_policies.yaml")
         ),
     ):
+        """Initialize security policy manager with config and policy storage."""
+        # Thread-safe file operations - must be initialized first (Issue #378)
+        self._file_lock = threading.Lock()
+
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -182,13 +189,14 @@ class SecurityPolicyManager:
         }
 
     def _save_config(self, config: Dict):
-        """Save configuration to file"""
-        try:
-            Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, "w") as f:
-                yaml.dump(config, f, default_flow_style=False)
-        except Exception as e:
-            logger.error(f"Failed to save policy config: {e}")
+        """Save configuration to file (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False)
+            except Exception as e:
+                logger.error(f"Failed to save policy config: {e}")
 
     def _load_policies(self):
         """Load all security policies from storage"""
@@ -237,32 +245,33 @@ class SecurityPolicyManager:
             logger.error(f"Failed to load policies: {e}")
 
     def _save_policy(self, policy: SecurityPolicy):
-        """Save a single policy to storage"""
-        try:
-            policy_file = self.policies_path / f"{policy.policy_id}.json"
+        """Save a single policy to storage (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                policy_file = self.policies_path / f"{policy.policy_id}.json"
 
-            # Convert to dict and handle datetime serialization
-            policy_dict = asdict(policy)
-            policy_dict["created_at"] = policy.created_at.isoformat()
-            policy_dict["updated_at"] = policy.updated_at.isoformat()
+                # Convert to dict and handle datetime serialization
+                policy_dict = asdict(policy)
+                policy_dict["created_at"] = policy.created_at.isoformat()
+                policy_dict["updated_at"] = policy.updated_at.isoformat()
 
-            if policy.approved_at:
-                policy_dict["approved_at"] = policy.approved_at.isoformat()
-            if policy.effective_date:
-                policy_dict["effective_date"] = policy.effective_date.isoformat()
-            if policy.expiry_date:
-                policy_dict["expiry_date"] = policy.expiry_date.isoformat()
+                if policy.approved_at:
+                    policy_dict["approved_at"] = policy.approved_at.isoformat()
+                if policy.effective_date:
+                    policy_dict["effective_date"] = policy.effective_date.isoformat()
+                if policy.expiry_date:
+                    policy_dict["expiry_date"] = policy.expiry_date.isoformat()
 
-            # Convert enums to values
-            policy_dict["policy_type"] = policy.policy_type.value
-            policy_dict["status"] = policy.status.value
-            policy_dict["enforcement_mode"] = policy.enforcement_mode.value
+                # Convert enums to values
+                policy_dict["policy_type"] = policy.policy_type.value
+                policy_dict["status"] = policy.status.value
+                policy_dict["enforcement_mode"] = policy.enforcement_mode.value
 
-            with open(policy_file, "w") as f:
-                json.dump(policy_dict, f, indent=2)
+                with open(policy_file, "w", encoding="utf-8") as f:
+                    json.dump(policy_dict, f, indent=2, ensure_ascii=False)
 
-        except Exception as e:
-            logger.error(f"Failed to save policy {policy.policy_id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to save policy {policy.policy_id}: {e}")
 
     def _load_compliance_mappings(self) -> Dict:
         """Load compliance framework mappings"""
@@ -596,9 +605,40 @@ class SecurityPolicyManager:
         logger.info(f"Deactivated policy {policy_id}")
         return True
 
-    async def enforce_policy(self, policy_type: PolicyType, context: Dict) -> Dict:
-        """Enforce policies of a specific type against a context"""
+    def _create_violation(
+        self, policy: "SecurityPolicy", check_result: Dict, context: Dict
+    ) -> "PolicyViolation":
+        """Create a PolicyViolation from check result (Issue #315 - extracted helper)."""
+        return PolicyViolation(
+            violation_id=str(uuid4()),
+            policy_id=policy.policy_id,
+            user_id=context.get("user_id", "unknown"),
+            resource=context.get("resource", ""),
+            action=context.get("action", ""),
+            violation_type=check_result["violation_type"],
+            severity=check_result["severity"],
+            timestamp=datetime.utcnow(),
+            details=check_result["details"],
+        )
 
+    def _apply_enforcement_mode(
+        self, enforcement_result: Dict, policy: "SecurityPolicy", violation: "PolicyViolation"
+    ):
+        """Apply enforcement mode to result (Issue #315 - extracted helper)."""
+        mode_actions = {
+            EnforcementMode.ENFORCE: lambda: (
+                enforcement_result.update({"allowed": False}),
+                enforcement_result["violations"].append(violation),
+            ),
+            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(violation),
+            EnforcementMode.MONITOR: lambda: None,  # Log only, no action
+        }
+        action = mode_actions.get(policy.enforcement_mode)
+        if action:
+            action()
+
+    async def enforce_policy(self, policy_type: PolicyType, context: Dict) -> Dict:
+        """Enforce policies of a specific type against a context (Issue #315 - refactored)."""
         enforcement_result = {
             "allowed": True,
             "violations": [],
@@ -606,10 +646,8 @@ class SecurityPolicyManager:
             "policy_checks": [],
         }
 
-        # Get active policies of the specified type
         active_policies = [
-            p
-            for p in self.policies.values()
+            p for p in self.policies.values()
             if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
         ]
 
@@ -617,39 +655,31 @@ class SecurityPolicyManager:
             check_result = await self._check_policy_compliance(policy, context)
             enforcement_result["policy_checks"].append(check_result)
 
-            if not check_result["compliant"]:
-                violation = PolicyViolation(
-                    violation_id=str(uuid4()),
-                    policy_id=policy.policy_id,
-                    user_id=context.get("user_id", "unknown"),
-                    resource=context.get("resource", ""),
-                    action=context.get("action", ""),
-                    violation_type=check_result["violation_type"],
-                    severity=check_result["severity"],
-                    timestamp=datetime.utcnow(),
-                    details=check_result["details"],
-                )
+            if check_result["compliant"]:
+                continue
 
-                if policy.enforcement_mode == EnforcementMode.ENFORCE:
-                    enforcement_result["allowed"] = False
-                    enforcement_result["violations"].append(violation)
-                elif policy.enforcement_mode == EnforcementMode.WARN:
-                    enforcement_result["warnings"].append(violation)
-                elif policy.enforcement_mode == EnforcementMode.MONITOR:
-                    # Log for monitoring but don't block
-                    pass
-
-                # Store violation for reporting
-                self.policy_violations.append(violation)
-                self._log_policy_violation(violation)
+            violation = self._create_violation(policy, check_result, context)
+            self._apply_enforcement_mode(enforcement_result, policy, violation)
+            self.policy_violations.append(violation)
+            self._log_policy_violation(violation)
 
         return enforcement_result
+
+    def _get_policy_checker(self, policy_type: PolicyType):
+        """Get the appropriate policy checker for type (Issue #315 - dispatch table)."""
+        policy_checkers = {
+            PolicyType.PASSWORD_POLICY: self._check_password_policy,
+            PolicyType.SESSION_MANAGEMENT: self._check_session_policy,
+            PolicyType.ACCESS_CONTROL: self._check_access_policy,
+            PolicyType.DATA_PROTECTION: self._check_data_protection_policy,
+            PolicyType.AUDIT_LOGGING: self._check_audit_policy,
+        }
+        return policy_checkers.get(policy_type)
 
     async def _check_policy_compliance(
         self, policy: SecurityPolicy, context: Dict
     ) -> Dict:
-        """Check if context complies with a specific policy"""
-
+        """Check if context complies with a specific policy (Issue #315 - refactored)."""
         result = {
             "policy_id": policy.policy_id,
             "policy_name": policy.name,
@@ -659,17 +689,10 @@ class SecurityPolicyManager:
             "details": {},
         }
 
-        # Policy-specific compliance checks
-        if policy.policy_type == PolicyType.PASSWORD_POLICY:
-            result = await self._check_password_policy(policy, context, result)
-        elif policy.policy_type == PolicyType.SESSION_MANAGEMENT:
-            result = await self._check_session_policy(policy, context, result)
-        elif policy.policy_type == PolicyType.ACCESS_CONTROL:
-            result = await self._check_access_policy(policy, context, result)
-        elif policy.policy_type == PolicyType.DATA_PROTECTION:
-            result = await self._check_data_protection_policy(policy, context, result)
-        elif policy.policy_type == PolicyType.AUDIT_LOGGING:
-            result = await self._check_audit_policy(policy, context, result)
+        # Use dispatch table for policy-specific checks
+        checker = self._get_policy_checker(policy.policy_type)
+        if checker:
+            result = await checker(policy, context, result)
 
         return result
 

@@ -320,7 +320,8 @@ class OperationCheckpointManager:
 
         # Try filesystem
         checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.pkl"
-        if checkpoint_file.exists():
+        # Issue #358 - avoid blocking
+        if await asyncio.to_thread(checkpoint_file.exists):
             try:
                 async with aiofiles.open(checkpoint_file, "rb") as f:
                     data = await f.read()
@@ -354,9 +355,11 @@ class OperationCheckpointManager:
                 logger.warning(f"Failed to list Redis checkpoints: {e}")
 
         # Search filesystem
-        for checkpoint_file in self.checkpoint_dir.glob(
-            f"checkpoint_{operation_id}_*.pkl"
-        ):
+        # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
+        checkpoint_files = await asyncio.to_thread(
+            lambda: list(self.checkpoint_dir.glob(f"checkpoint_{operation_id}_*.pkl"))
+        )
+        for checkpoint_file in checkpoint_files:
             try:
                 async with aiofiles.open(checkpoint_file, "rb") as f:
                     data = await f.read()
@@ -916,9 +919,11 @@ async def execute_codebase_indexing(
         patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
         # Count total files first
+        # Issue #358 - avoid blocking rglob() in async context
         all_files = []
         for pattern in patterns:
-            all_files.extend(path.rglob(pattern))
+            pattern_files = await asyncio.to_thread(lambda p=pattern: list(path.rglob(p)))
+            all_files.extend(pattern_files)
 
         total_files = len(all_files)
         await context.update_progress("Scanning files", 0, total_files)
@@ -930,9 +935,11 @@ async def execute_codebase_indexing(
                 await asyncio.sleep(0.1)  # Simulate processing time
 
                 # Process file (placeholder)
+                # Issue #358 - avoid blocking stat()
+                file_stat = await asyncio.to_thread(file_path.stat)
                 file_info = {
                     "path": str(file_path),
-                    "size": file_path.stat().st_size,
+                    "size": file_stat.st_size,
                     "indexed_at": datetime.now().isoformat(),
                 }
                 results.append(file_info)
@@ -996,9 +1003,11 @@ async def execute_comprehensive_test_suite(
         patterns = test_patterns or ["test_*.py", "*_test.py"]
 
         # Find all test files
+        # Issue #358 - avoid blocking rglob() in async context
         test_files = []
         for pattern in patterns:
-            test_files.extend(path.rglob(pattern))
+            pattern_files = await asyncio.to_thread(lambda p=pattern: list(path.rglob(p)))
+            test_files.extend(pattern_files)
 
         total_tests = len(test_files)
         await context.update_progress("Initializing test suite", 0, total_tests)

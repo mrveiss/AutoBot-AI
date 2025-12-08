@@ -55,10 +55,91 @@ def _parse_docker_log_line_for_unified(line: str, service: str) -> Metadata:
     pass  # Replaced at module load
 
 
+def _parse_file_content_lines(
+    content: str, file_name: str, level: Optional[str]
+) -> List[Metadata]:
+    """Parse file log content lines with optional level filter (Issue #315: extracted).
+
+    Args:
+        content: File content as string
+        file_name: Source file name for log entries
+        level: Optional log level filter
+
+    Returns:
+        List of parsed log entries
+    """
+    logs = []
+    for line in content.splitlines()[-50:]:
+        if not line.strip():
+            continue
+        parsed = parse_file_log_line(line.strip(), file_name)
+        if level and parsed.get("level", "").upper() != level.upper():
+            continue
+        parsed["source_type"] = "file"
+        logs.append(parsed)
+    return logs
+
+
+async def _tail_file_to_websocket(
+    file_path: Path, websocket: WebSocket
+) -> None:
+    """Tail a log file and send lines to WebSocket (Issue #315: extracted).
+
+    Sends last 50 lines initially, then watches for new lines.
+    """
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+        # Send last 50 lines initially
+        content = await f.read()
+        lines = content.splitlines()
+        for line in lines[-50:]:
+            await websocket.send_text(line)
+
+        # Continue watching for new lines
+        await f.seek(0, 2)  # Go to end of file
+        while True:
+            line = await f.readline()
+            if line:
+                await websocket.send_text(line.rstrip())
+            else:
+                await asyncio.sleep(0.1)
+
+
+async def _read_log_lines_from_file(
+    file_path: Path, lines: int, offset: int, tail: bool
+) -> tuple:
+    """Read lines from log file with offset/tail support (Issue #315: extracted).
+
+    Args:
+        file_path: Path to log file
+        lines: Number of lines to read
+        offset: Line offset
+        tail: If True, read from end of file
+
+    Returns:
+        Tuple of (selected_lines, total_lines)
+    """
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+        if tail:
+            content = await f.read()
+            all_lines = content.splitlines()
+            start_idx = max(0, len(all_lines) - lines - offset)
+            end_idx = len(all_lines) - offset
+            return all_lines[start_idx:end_idx], len(all_lines)
+        else:
+            all_lines = []
+            async for line in f:
+                all_lines.append(line.rstrip())
+            start_idx = offset
+            end_idx = min(offset + lines, len(all_lines))
+            return all_lines[start_idx:end_idx], len(all_lines)
+
+
 async def _collect_file_logs(
     source_filter: Set[str], level: Optional[str]
 ) -> List[Metadata]:
     """Collect logs from file sources (Issue #336 - extracted helper).
+
+    Issue #370: Optimized to read files in parallel using asyncio.gather().
 
     Args:
         source_filter: Set of source names to include (empty = all)
@@ -67,32 +148,42 @@ async def _collect_file_logs(
     Returns:
         List of parsed log entries
     """
-    logs = []
-
     log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
     if not log_dir_exists:
-        return logs
+        return []
 
-    log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
-    for file_path in log_files:
-        file_name = file_path.stem
-        if source_filter and file_name not in source_filter:
-            continue
+    # Issue #358 - use lambda for proper glob() execution in thread
+    log_files = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
 
+    # Filter files first
+    filtered_files = [
+        (fp, fp.stem) for fp in log_files
+        if not source_filter or fp.stem in source_filter
+    ]
+
+    if not filtered_files:
+        return []
+
+    # Issue #370: Read all files in parallel
+    async def read_file_logs(file_path, file_name):
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
-                for line in content.splitlines()[-50:]:
-                    if not line.strip():
-                        continue
-                    parsed = parse_file_log_line(line.strip(), file_name)
-                    if level and parsed.get("level", "").upper() != level.upper():
-                        continue
-                    parsed["source_type"] = "file"
-                    logs.append(parsed)
+                return _parse_file_content_lines(content, file_name, level)
         except OSError as e:
             logger.debug(f"Error reading file log {file_path}: {e}")
+            return []
 
+    results = await asyncio.gather(
+        *[read_file_logs(fp, fn) for fp, fn in filtered_files],
+        return_exceptions=True
+    )
+
+    # Flatten results
+    logs = []
+    for result in results:
+        if isinstance(result, list):
+            logs.extend(result)
     return logs
 
 
@@ -135,6 +226,8 @@ async def _collect_container_logs(
 ) -> List[Metadata]:
     """Collect logs from Docker containers (Issue #315 - refactored).
 
+    Issue #370: Optimized to fetch container logs in parallel using asyncio.gather().
+
     Args:
         source_filter: Set of source names to include (empty = all)
         level: Optional log level filter
@@ -142,37 +235,67 @@ async def _collect_container_logs(
     Returns:
         List of parsed log entries
     """
-    logs = []
+    # Filter containers first
+    filtered_containers = [
+        (service, container_name)
+        for service, container_name in CONTAINER_LOGS.items()
+        if not source_filter or service in source_filter
+    ]
 
-    for service, container_name in CONTAINER_LOGS.items():
-        if source_filter and service not in source_filter:
-            continue
+    if not filtered_containers:
+        return []
 
+    # Issue #370: Fetch all container logs in parallel
+    async def get_and_parse_container_logs(service, container_name):
         stdout = await _get_container_output(container_name, service)
         if stdout:
-            logs.extend(_parse_container_log_lines(stdout, service, level))
+            return _parse_container_log_lines(stdout, service, level)
+        return []
 
+    results = await asyncio.gather(
+        *[get_and_parse_container_logs(svc, cn) for svc, cn in filtered_containers],
+        return_exceptions=True
+    )
+
+    # Flatten results
+    logs = []
+    for result in results:
+        if isinstance(result, list):
+            logs.extend(result)
     return logs
 
 
 async def _get_file_log_sources() -> List[Metadata]:
-    """Get file log source information (Issue #315 - extracted helper)."""
-    file_logs = []
+    """Get file log source information (Issue #315 - extracted helper).
+
+    Issue #370: Optimized to stat files in parallel using asyncio.gather().
+    """
     log_dir_exists = await asyncio.to_thread(LOG_DIR.exists)
     if not log_dir_exists:
-        return file_logs
+        return []
 
-    log_files = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
-    for file_path in log_files:
+    # Issue #358 - use lambda for proper glob() execution in thread
+    log_files = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
+    if not log_files:
+        return []
+
+    # Issue #370: Stat all files in parallel
+    async def get_file_info(file_path):
         stat = await asyncio.to_thread(file_path.stat)
-        file_logs.append({
+        return {
             "name": file_path.name,
             "type": "file",
             "size": stat.st_size,
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "size_mb": round(stat.st_size / 1024 / 1024, 2),
-        })
-    return file_logs
+        }
+
+    results = await asyncio.gather(
+        *[get_file_info(fp) for fp in log_files],
+        return_exceptions=True
+    )
+
+    return [r for r in results if isinstance(r, dict)]
 
 
 async def _check_container_status(service: str, container_name: str) -> Optional[Metadata]:
@@ -221,8 +344,11 @@ async def _get_container_log_sources() -> List[Metadata]:
 async def get_log_sources():
     """Get all available log sources (files + Docker containers) (Issue #315 - refactored)."""
     try:
-        file_logs = await _get_file_log_sources()
-        container_logs = await _get_container_log_sources()
+        # Issue #379: Parallelize independent log source collection
+        file_logs, container_logs = await asyncio.gather(
+            _get_file_log_sources(),
+            _get_container_log_sources(),
+        )
 
         # Sort file logs by modified time
         file_logs.sort(key=lambda x: x["modified"], reverse=True)
@@ -250,6 +376,7 @@ async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
 
     # Get modification times
     def get_mtime(f):
+        """Get modification time of a file in the log directory."""
         return os.path.getmtime(os.path.join(log_dir, f))
 
     mtimes = {}
@@ -343,23 +470,10 @@ async def read_log(
             raise HTTPException(status_code=403, detail="Access denied")
 
         try:
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                if tail:
-                    # Read last N lines
-                    content = await f.read()
-                    all_lines = content.splitlines()
-                    start_idx = max(0, len(all_lines) - lines - offset)
-                    end_idx = len(all_lines) - offset
-                    selected_lines = all_lines[start_idx:end_idx]
-                else:
-                    # Read lines with offset
-                    all_lines = []
-                    async for line in f:
-                        all_lines.append(line.rstrip())
-
-                    start_idx = offset
-                    end_idx = min(offset + lines, len(all_lines))
-                    selected_lines = all_lines[start_idx:end_idx]
+            # Use extracted helper (Issue #315: reduced nesting)
+            selected_lines, total_lines = await _read_log_lines_from_file(
+                file_path, lines, offset, tail
+            )
         except OSError as e:
             logger.error(f"Failed to read log file {file_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
@@ -367,7 +481,7 @@ async def read_log(
         return {
             "filename": filename,
             "lines": selected_lines,
-            "total_lines": len(all_lines) if "all_lines" in locals() else 0,
+            "total_lines": total_lines,
             "offset": offset,
             "count": len(selected_lines),
         }
@@ -538,9 +652,11 @@ async def get_unified_logs(
         if sources:
             source_filter = set(sources.split(","))
 
-        # Issue #336: Use extracted helpers for log collection
-        file_logs = await _collect_file_logs(source_filter, level)
-        container_logs = await _collect_container_logs(source_filter, level)
+        # Issue #379: Parallelize independent log collection operations
+        file_logs, container_logs = await asyncio.gather(
+            _collect_file_logs(source_filter, level),
+            _collect_container_logs(source_filter, level),
+        )
 
         all_logs = file_logs + container_logs
 
@@ -615,6 +731,7 @@ async def stream_log(filename: str):
             raise HTTPException(status_code=403, detail="Access denied")
 
         async def generate():
+            """Generate log file content line by line for streaming response."""
             try:
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     async for line in f:
@@ -660,23 +777,9 @@ async def tail_log(websocket: WebSocket, filename: str):
             await websocket.close()
             return
 
-        # Start tailing the file
+        # Start tailing the file (Issue #315: uses extracted helper)
         try:
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                # Send last 50 lines initially
-                content = await f.read()
-                lines = content.splitlines()
-                for line in lines[-50:]:
-                    await websocket.send_text(line)
-
-                # Continue watching for new lines
-                await f.seek(0, 2)  # Go to end of file
-                while True:
-                    line = await f.readline()
-                    if line:
-                        await websocket.send_text(line.rstrip())
-                    else:
-                        await asyncio.sleep(0.1)
+            await _tail_file_to_websocket(file_path, websocket)
         except OSError as e:
             logger.error(f"Failed to tail log file {file_path}: {e}")
             await websocket.send_json({"error": f"Failed to read log file: {e}"})
@@ -696,14 +799,14 @@ async def tail_log(websocket: WebSocket, filename: str):
 
 
 def _line_matches_query(line_content: str, query: str, case_sensitive: bool) -> bool:
-    """Check if a line matches the search query."""
+    """Check if a line matches the search query with optional case sensitivity."""
     if case_sensitive:
         return query in line_content
     return query.lower() in line_content.lower()
 
 
 def _create_search_result(file_name: str, line_num: int, line_content: str) -> dict:
-    """Create a search result entry."""
+    """Create a search result entry with file, line number, and timestamp."""
     return {
         "file": file_name,
         "line": line_num,
@@ -757,7 +860,8 @@ async def search_logs(
             if file_exists:
                 files_to_search.append(file_path)
         else:
-            files_to_search = await asyncio.to_thread(list, LOG_DIR.glob("*.log"))
+            # Issue #358 - use lambda for proper glob() execution in thread
+            files_to_search = await asyncio.to_thread(lambda: list(LOG_DIR.glob("*.log")))
 
         for file_path in files_to_search:
             if len(results) >= max_results:

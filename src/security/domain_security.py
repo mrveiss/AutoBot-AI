@@ -32,6 +32,7 @@ class DomainSecurityConfig:
     """Configuration for domain security settings"""
 
     def __init__(self, config_path: Optional[str] = None):
+        """Initialize domain security config with optional custom path."""
         self.config_path = config_path or "config/security/domain_security.yaml"
         self.config = self._load_config()
 
@@ -136,6 +137,7 @@ class DomainSecurityManager:
     """Manages domain security validation and threat intelligence"""
 
     def __init__(self, config: Optional[DomainSecurityConfig] = None):
+        """Initialize domain security manager with config and compiled patterns."""
         self.config = config or DomainSecurityConfig()
         self.domain_cache = {}
         self.threat_intelligence = set()

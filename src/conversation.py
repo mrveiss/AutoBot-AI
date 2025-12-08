@@ -386,25 +386,26 @@ class Conversation:
     ) -> str:
         """Generate response with KB context and source attribution"""
         try:
-            # Build context from KB results
+            # Issue #383: Build context from KB results using list.join()
             kb_context = ""
             if kb_results:
-                kb_context = "\n\nRELEVANT KNOWLEDGE BASE INFORMATION:\n"
+                kb_lines = ["", "", "RELEVANT KNOWLEDGE BASE INFORMATION:"]
                 for i, doc in enumerate(
                     kb_results[:3], 1
                 ):  # Limit to top 3 for context
                     title = doc.get("title", f"Document {i}")
                     content = doc.get("content", "")[:300]  # Limit content length
-                    kb_context += f"\n{i}. {title}:\n{content}...\n"
+                    kb_lines.extend(["", f"{i}. {title}:", f"{content}..."])
+                kb_context = "\n".join(kb_lines)
 
-            # Build context from research results
+            # Issue #383: Build context from research results using list.join()
             research_context = ""
             if (
                 research_results
                 and research_results.get("success")
                 and research_results.get("results")
             ):
-                research_context = "\n\nEXTERNAL RESEARCH RESULTS:\n"
+                research_lines = ["", "", "EXTERNAL RESEARCH RESULTS:"]
                 for i, result in enumerate(
                     research_results["results"][:2], 1
                 ):  # Limit to top 2
@@ -413,16 +414,18 @@ class Conversation:
                         text_content = content_data.get("text_content", "")[
                             :400
                         ]  # Limit length
-                        research_context += (
-                            f"\n{i}. Research Query: {result.get('query', 'Unknown')}\n"
-                        )
-                        research_context += f"   Content: {text_content}...\n"
+                        research_lines.extend([
+                            "",
+                            f"{i}. Research Query: {result.get('query', 'Unknown')}",
+                            f"   Content: {text_content}...",
+                        ])
 
                         if result.get("interaction_required"):
-                            research_context += "   ⚠️ Browser session available for manual verification\n"
-                            research_context += (
-                                f"   🌐 Browser URL: {result.get('browser_url', '')}\n"
-                            )
+                            research_lines.extend([
+                                "   ⚠️ Browser session available for manual verification",
+                                f"   🌐 Browser URL: {result.get('browser_url', '')}",
+                            ])
+                research_context = "\n".join(research_lines)
 
             # Create enhanced prompt with KB and research context
             system_prompt = """You are AutoBot, an intelligent AI assistant. You have access to a knowledge base and can conduct external research.
@@ -435,7 +438,8 @@ IMPORTANT INSTRUCTIONS:
 5. Be conversational but accurate
 6. If you don't know something and it's not in KB or research, say so clearly"""
 
-            user_prompt = """User Message: {user_message}
+            # Issue #382: Changed to f-string so kb_context and research_context are actually substituted
+            user_prompt = f"""User Message: {user_message}
 
 {kb_context}
 
@@ -559,19 +563,31 @@ Please provide a helpful, accurate response based on the available information. 
 
             # Generate search queries based on user message
             search_queries = self._generate_search_queries(user_message)
-            research_results = []
 
-            for query in search_queries[:2]:  # Limit to 2 queries
-                # Try researching with search engine
+            # Issue #370: Research queries in parallel instead of sequentially
+            async def research_single_query(query: str) -> Optional[Dict[str, Any]]:
+                """Research a single query and return result."""
                 search_url = f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
-
-                research_result = await research_browser_manager.research_url(
-                    self.conversation_id, search_url, extract_content=True
-                )
-
-                if research_result.get("success"):
-                    research_results.append(
-                        {
+                try:
+                    research_result = await research_browser_manager.research_url(
+                        self.conversation_id, search_url, extract_content=True
+                    )
+                    if research_result.get("success"):
+                        # Track research source
+                        track_source(
+                            SourceType.WEB_SEARCH,
+                            f"External research: {query}",
+                            reliability="medium",
+                            metadata={
+                                "query": query,
+                                "url": search_url,
+                                "research_session": research_result.get("session_id"),
+                                "interaction_required": (
+                                    research_result.get("status") == "interaction_required"
+                                ),
+                            },
+                        )
+                        return {
                             "query": query,
                             "url": search_url,
                             "status": research_result.get("status"),
@@ -582,22 +598,21 @@ Please provide a helpful, accurate response based on the available information. 
                                 research_result.get("status") == "interaction_required"
                             ),
                         }
-                    )
+                except Exception as e:
+                    logger.warning(f"Research query '{query}' failed: {e}")
+                return None
 
-                    # Track research source
-                    track_source(
-                        SourceType.WEB_SEARCH,
-                        f"External research: {query}",
-                        reliability="medium",
-                        metadata={
-                            "query": query,
-                            "url": search_url,
-                            "research_session": research_result.get("session_id"),
-                            "interaction_required": (
-                                research_result.get("status") == "interaction_required"
-                            ),
-                        },
-                    )
+            # Run research queries in parallel (limit to 2)
+            results = await asyncio.gather(
+                *[research_single_query(q) for q in search_queries[:2]],
+                return_exceptions=True,
+            )
+
+            # Filter successful results
+            research_results = [
+                r for r in results
+                if r is not None and not isinstance(r, Exception)
+            ]
 
             if research_results:
                 # Add utility message about research

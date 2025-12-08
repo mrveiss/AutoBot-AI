@@ -355,7 +355,10 @@ def singleton_getter(attribute_name: str, factory: Callable):
     """
 
     def decorator(func):
+        """Create wrapper function that performs lazy singleton initialization."""
+
         def wrapper(request, *args, **kwargs):
+            """Execute original function and lazily initialize singleton from result."""
             # Execute original function to get factory (allows for imports)
             result = func(request, *args, **kwargs)
 

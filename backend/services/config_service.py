@@ -75,6 +75,7 @@ class ConfigService:
 
             # Helper function to get nested values with default
             def get_nested(path: str, default=None):
+                """Get nested config value by dot-separated path."""
                 keys = path.split(".")
                 value = full_config
                 for key in keys:

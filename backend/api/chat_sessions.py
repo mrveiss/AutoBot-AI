@@ -44,6 +44,70 @@ VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
 # ====================================================================
 
 
+async def _handle_session_file_action(
+    conversation_file_manager,
+    session_id: str,
+    file_action: str,
+    parsed_file_options: Metadata,
+) -> Metadata:
+    """Handle file action for session deletion (Issue #315: extracted).
+
+    Args:
+        conversation_file_manager: File manager instance
+        session_id: Session ID
+        file_action: Action to take ("delete", "transfer_kb", "transfer_shared")
+        parsed_file_options: Parsed options for transfer
+
+    Returns:
+        Dict with file handling result
+    """
+    if file_action == "delete":
+        deleted_count = await conversation_file_manager.delete_session_files(session_id)
+        logger.info(f"Deleted {deleted_count} files for session {session_id}")
+        return {
+            "files_handled": True,
+            "action_taken": "delete",
+            "files_deleted": deleted_count,
+        }
+
+    if file_action == "transfer_kb":
+        transfer_result = await conversation_file_manager.transfer_session_files(
+            session_id=session_id,
+            destination="kb",
+            target_path=parsed_file_options.get("target_path"),
+            tags=parsed_file_options.get("tags", ["conversation_archive"]),
+            copy=False,
+        )
+        logger.info(
+            f"Transferred {transfer_result.get('total_transferred', 0)} files "
+            f"to KB for session {session_id}"
+        )
+        return {
+            "files_handled": True,
+            "action_taken": "transfer_kb",
+            "files_transferred": transfer_result.get("total_transferred", 0),
+            "files_failed": transfer_result.get("total_failed", 0),
+        }
+
+    # file_action == "transfer_shared"
+    transfer_result = await conversation_file_manager.transfer_session_files(
+        session_id=session_id,
+        destination="shared",
+        target_path=parsed_file_options.get("target_path"),
+        copy=False,
+    )
+    logger.info(
+        f"Transferred {transfer_result.get('total_transferred', 0)} files "
+        f"to shared storage for session {session_id}"
+    )
+    return {
+        "files_handled": True,
+        "action_taken": "transfer_shared",
+        "files_transferred": transfer_result.get("total_transferred", 0),
+        "files_failed": transfer_result.get("total_failed", 0),
+    }
+
+
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
     logger.info(f"[{request_id}] {endpoint} - {request.method} {request.url.path}")
@@ -383,61 +447,10 @@ async def delete_session(
 
     if conversation_file_manager:
         try:
-            if file_action == "delete":
-                # Delete all files in conversation
-                deleted_count = await conversation_file_manager.delete_session_files(
-                    session_id
-                )
-                file_deletion_result = {
-                    "files_handled": True,
-                    "action_taken": "delete",
-                    "files_deleted": deleted_count,
-                }
-                logger.info(f"Deleted {deleted_count} files for session {session_id}")
-
-            elif file_action == "transfer_kb":
-                # Transfer files to knowledge base
-                transfer_result = (
-                    await conversation_file_manager.transfer_session_files(
-                        session_id=session_id,
-                        destination="kb",
-                        target_path=parsed_file_options.get("target_path"),
-                        tags=parsed_file_options.get("tags", ["conversation_archive"]),
-                        copy=False,  # Move, not copy
-                    )
-                )
-                file_deletion_result = {
-                    "files_handled": True,
-                    "action_taken": "transfer_kb",
-                    "files_transferred": transfer_result.get("total_transferred", 0),
-                    "files_failed": transfer_result.get("total_failed", 0),
-                }
-                logger.info(
-                    f"Transferred {transfer_result.get('total_transferred', 0)} files "
-                    f"to KB for session {session_id}"
-                )
-
-            elif file_action == "transfer_shared":
-                # Transfer files to shared storage
-                transfer_result = (
-                    await conversation_file_manager.transfer_session_files(
-                        session_id=session_id,
-                        destination="shared",
-                        target_path=parsed_file_options.get("target_path"),
-                        copy=False,  # Move, not copy
-                    )
-                )
-                file_deletion_result = {
-                    "files_handled": True,
-                    "action_taken": "transfer_shared",
-                    "files_transferred": transfer_result.get("total_transferred", 0),
-                    "files_failed": transfer_result.get("total_failed", 0),
-                }
-                logger.info(
-                    f"Transferred {transfer_result.get('total_transferred', 0)} files "
-                    f"to shared storage for session {session_id}"
-                )
-
+            # Use extracted helper for file actions (Issue #315)
+            file_deletion_result = await _handle_session_file_action(
+                conversation_file_manager, session_id, file_action, parsed_file_options
+            )
         except Exception as file_error:
             logger.error(f"Error handling files for session {session_id}: {file_error}")
             file_deletion_result = {

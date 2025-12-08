@@ -250,6 +250,7 @@ class LLMPatternAnalyzer:
     """Engine for analyzing LLM usage patterns and identifying optimizations"""
 
     def __init__(self):
+        """Initialize LLM pattern analyzer with Redis storage keys."""
         self._redis = None
         self._usage_key = "autobot:llm_patterns:usage"
         self._cache_key = "autobot:llm_patterns:cache"
@@ -455,22 +456,59 @@ class LLMPatternAnalyzer:
             raise RuntimeError(f"Failed to record LLM usage: {e}")
 
     async def _update_stats(self, model: str, cost: float, success: bool):
-        """Update aggregate statistics"""
+        """Update aggregate statistics.
+
+        Issue #379: Uses Redis pipeline to batch all HINCRBY operations,
+        eliminating 4-5 sequential await round-trips.
+        """
         try:
             redis = await self._get_redis()
             date_key = datetime.now().strftime("%Y-%m-%d")
             stats_key = f"{self._stats_key}:{date_key}"
 
-            await redis.hincrby(stats_key, "total_requests", 1)
-            await redis.hincrbyfloat(stats_key, "total_cost", cost)
-            await redis.hincrby(stats_key, f"model:{model}", 1)
+            # Issue #379: Batch all Redis operations using pipeline
+            async with redis.pipeline() as pipe:
+                await pipe.hincrby(stats_key, "total_requests", 1)
+                await pipe.hincrbyfloat(stats_key, "total_cost", cost)
+                await pipe.hincrby(stats_key, f"model:{model}", 1)
 
-            if success:
-                await redis.hincrby(stats_key, "successful_requests", 1)
+                if success:
+                    await pipe.hincrby(stats_key, "successful_requests", 1)
 
-            await redis.expire(stats_key, 30 * 24 * 60 * 60)
+                await pipe.expire(stats_key, 30 * 24 * 60 * 60)
+                await pipe.execute()
         except RedisError as e:
             logger.warning(f"Failed to update LLM stats: {e}")
+
+    def _aggregate_day_stats(
+        self, date: str, day_stats: dict, stats: Dict[str, Any]
+    ) -> None:
+        """Aggregate statistics for a single day. (Issue #315 - extracted)"""
+        if not day_stats:
+            return
+
+        day_requests = int(day_stats.get("total_requests", 0))
+        day_cost = float(day_stats.get("total_cost", 0))
+        day_success = int(day_stats.get("successful_requests", 0))
+
+        stats["total_requests"] += day_requests
+        stats["total_cost"] += day_cost
+        stats["successful_requests"] += day_success
+
+        stats["by_date"].append({
+            "date": date,
+            "requests": day_requests,
+            "cost": round(day_cost, 4),
+            "success_rate": round(day_success / day_requests * 100, 1) if day_requests > 0 else 0
+        })
+
+        # Extract model stats
+        for key, value in day_stats.items():
+            if key.startswith("model:"):
+                model = key[6:]
+                if model not in stats["by_model"]:
+                    stats["by_model"][model] = 0
+                stats["by_model"][model] += int(value)
 
     async def get_usage_stats(
         self,
@@ -499,32 +537,9 @@ class LLMPatternAnalyzer:
                     await pipe.hgetall(key)
                 all_day_stats = await pipe.execute()
 
+            # Aggregate day stats using helper (Issue #315 - reduced depth)
             for date, day_stats in zip(dates, all_day_stats):
-                if not day_stats:
-                    continue
-
-                day_requests = int(day_stats.get("total_requests", 0))
-                day_cost = float(day_stats.get("total_cost", 0))
-                day_success = int(day_stats.get("successful_requests", 0))
-
-                stats["total_requests"] += day_requests
-                stats["total_cost"] += day_cost
-                stats["successful_requests"] += day_success
-
-                stats["by_date"].append({
-                    "date": date,
-                    "requests": day_requests,
-                    "cost": round(day_cost, 4),
-                    "success_rate": round(day_success / day_requests * 100, 1) if day_requests > 0 else 0
-                })
-
-                # Extract model stats
-                for key, value in day_stats.items():
-                    if key.startswith("model:"):
-                        model = key[6:]
-                        if model not in stats["by_model"]:
-                            stats["by_model"][model] = 0
-                        stats["by_model"][model] += int(value)
+                self._aggregate_day_stats(date, day_stats, stats)
 
             # Calculate averages
             if stats["total_requests"] > 0:
@@ -545,6 +560,25 @@ class LLMPatternAnalyzer:
             logger.error(f"Failed to get usage stats: {e}")
             raise RuntimeError(f"Failed to get usage stats: {e}")
 
+    def _parse_cache_opportunity(
+        self, key: str, data: str, min_occurrences: int
+    ) -> Optional[Dict[str, Any]]:
+        """Parse a cache opportunity from Redis data. (Issue #315 - extracted)"""
+        if not data:
+            return None
+        cache_info = json.loads(data)
+        if cache_info.get("count", 0) < min_occurrences:
+            return None
+        return {
+            "prompt_hash": key.split(":")[-1],
+            "prompt_preview": cache_info.get("preview", ""),
+            "occurrence_count": cache_info["count"],
+            "total_cost": round(cache_info.get("total_cost", 0), 4),
+            "potential_savings": round(cache_info.get("total_cost", 0) * 0.9, 4),
+            "first_seen": cache_info.get("first_seen"),
+            "last_seen": cache_info.get("last_seen")
+        }
+
     async def identify_cache_opportunities(
         self,
         min_occurrences: int = 3
@@ -554,45 +588,24 @@ class LLMPatternAnalyzer:
 
         try:
             redis = await self._get_redis()
-
-            # Scan all cache tracking keys
             cursor = 0
 
             while True:
                 cursor, keys = await redis.scan(
-                    cursor,
-                    match=f"{self._cache_key}:*",
-                    count=100
+                    cursor, match=f"{self._cache_key}:*", count=100
                 )
 
-                # Batch fetch all keys using mget - eliminates N+1 queries
+                # Batch fetch and parse (Issue #315 - use list comp to reduce depth)
                 if keys:
                     all_data = await redis.mget(keys)
-                    for key, data in zip(keys, all_data):
-                        if not data:
-                            continue
-
-                        cache_info = json.loads(data)
-                        if cache_info.get("count", 0) >= min_occurrences:
-                            opportunities.append({
-                                "prompt_hash": key.split(":")[-1],
-                                "prompt_preview": cache_info.get("preview", ""),
-                                "occurrence_count": cache_info["count"],
-                                "total_cost": round(cache_info.get("total_cost", 0), 4),
-                                "potential_savings": round(
-                                    cache_info.get("total_cost", 0) * 0.9, 4
-                                ),  # 90% savings with cache
-                                "first_seen": cache_info.get("first_seen"),
-                                "last_seen": cache_info.get("last_seen")
-                            })
+                    parsed = [self._parse_cache_opportunity(k, d, min_occurrences) for k, d in zip(keys, all_data)]
+                    opportunities.extend(o for o in parsed if o)
 
                 if cursor == 0:
                     break
 
-            # Sort by potential savings
             opportunities.sort(key=lambda x: x["potential_savings"], reverse=True)
-
-            return opportunities[:20]  # Top 20
+            return opportunities[:20]
         except RedisError as e:
             logger.error(f"Failed to identify cache opportunities: {e}")
             raise RuntimeError(f"Failed to identify cache opportunities: {e}")

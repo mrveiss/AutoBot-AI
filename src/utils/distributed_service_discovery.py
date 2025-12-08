@@ -305,38 +305,37 @@ class DistributedServiceDiscovery:
             endpoint.last_check = time.time()
             return False
 
+    async def _try_health_url(
+        self, url: str, http_client, timeout, start_time: float, endpoint: ServiceEndpoint
+    ) -> bool:
+        """Try a single health URL check. (Issue #315 - extracted)"""
+        try:
+            async with await http_client.get(url, timeout=timeout) as response:
+                if response.status < 500:  # Accept 2xx, 3xx, 4xx
+                    endpoint.is_healthy = True
+                    endpoint.response_time = time.time() - start_time
+                    endpoint.last_check = time.time()
+                    return True
+        except Exception:
+            pass
+        return False
+
     async def _check_http_health(self, endpoint: ServiceEndpoint) -> bool:
-        """Quick HTTP health check"""
+        """Quick HTTP health check (Issue #315 - uses helper)"""
         try:
             timeout = aiohttp.ClientTimeout(total=0.2, connect=0.1)  # 200ms max
-
-            # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             start_time = time.time()
 
             # Try health endpoint first, then root
-            health_urls = [
-                f"{endpoint.url}/health",
-                f"{endpoint.url}/",
-                endpoint.url,
-            ]
-
+            health_urls = [f"{endpoint.url}/health", f"{endpoint.url}/", endpoint.url]
             for url in health_urls:
-                try:
-                    async with await http_client.get(url, timeout=timeout) as response:
-                        if response.status < 500:  # Accept 2xx, 3xx, 4xx
-                            response_time = time.time() - start_time
-                            endpoint.is_healthy = True
-                            endpoint.response_time = response_time
-                            endpoint.last_check = time.time()
-                            return True
-                except Exception:
-                    continue
+                if await self._try_health_url(url, http_client, timeout, start_time, endpoint):
+                    return True
 
             endpoint.is_healthy = False
             endpoint.last_check = time.time()
             return False
-
         except Exception:
             endpoint.is_healthy = False
             endpoint.last_check = time.time()

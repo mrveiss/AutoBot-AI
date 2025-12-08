@@ -4,6 +4,8 @@
 """
 Machine-Aware System Knowledge Manager for AutoBot
 Extends SystemKnowledgeManager with machine-specific adaptation
+
+Issue #379: Optimized sequential awaits with asyncio.gather for concurrent operations.
 """
 
 import asyncio
@@ -29,6 +31,7 @@ class MachineProfile:
     """Profile of a specific machine's capabilities and configuration"""
 
     def __init__(self):
+        """Initialize machine profile with default capability and configuration values."""
         self.machine_id: str = ""
         self.hostname: str = ""
         self.os_type: OSType = OSType.UNKNOWN
@@ -83,6 +86,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
     """Enhanced system knowledge manager with machine-specific adaptation"""
 
     def __init__(self, knowledge_base: KnowledgeBase):
+        """Initialize machine-aware manager with profile directory and detection lock."""
         super().__init__(knowledge_base)
 
         # Machine-specific paths
@@ -108,7 +112,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # 2. Load or create machine-specific knowledge
         machine_knowledge_dir = self._get_machine_knowledge_dir()
 
-        if force_reinstall or not machine_knowledge_dir.exists():
+        # Issue #358 - avoid blocking
+        dir_exists = await asyncio.to_thread(machine_knowledge_dir.exists)
+        if force_reinstall or not dir_exists:
             await self._create_machine_specific_knowledge()
         else:
             # Check if machine profile changed
@@ -252,13 +258,13 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_dir = self._get_machine_knowledge_dir()
         await asyncio.to_thread(machine_dir.mkdir, parents=True, exist_ok=True)
 
-        # Process each category
-        await self._adapt_tools_knowledge()
-        await self._adapt_workflows_knowledge()
-        await self._adapt_procedures_knowledge()
-
-        # Integrate man pages for available tools
-        await self._integrate_man_pages()
+        # Process each category concurrently (Issue #379: independent operations)
+        await asyncio.gather(
+            self._adapt_tools_knowledge(),
+            self._adapt_workflows_knowledge(),
+            self._adapt_procedures_knowledge(),
+            self._integrate_man_pages(),
+        )
 
     async def _adapt_tools_knowledge(self):
         """Adapt tools knowledge for current machine"""
@@ -270,7 +276,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_tools_dir = self._get_machine_knowledge_dir() / "tools"
         await asyncio.to_thread(machine_tools_dir.mkdir, parents=True, exist_ok=True)
 
-        yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info(f"Adapting tools from {yaml_file}")
 
@@ -388,7 +395,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_workflows_dir = self._get_machine_knowledge_dir() / "workflows"
         await asyncio.to_thread(machine_workflows_dir.mkdir, parents=True, exist_ok=True)
 
-        yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info(f"Adapting workflow from {yaml_file}")
 
@@ -477,7 +485,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         await asyncio.to_thread(machine_procedures_dir.mkdir, parents=True, exist_ok=True)
 
         # Simply copy procedures for now - future enhancement could adapt commands
-        yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             machine_file = machine_procedures_dir / yaml_file.name
             await asyncio.to_thread(shutil.copy2, yaml_file, machine_file)
@@ -529,7 +538,10 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         profiles_dir_exists = await asyncio.to_thread(self.machine_profiles_dir.exists)
         if profiles_dir_exists:
-            profile_files = await asyncio.to_thread(list, self.machine_profiles_dir.glob("*.json"))
+            # Issue #358 - wrap glob in lambda to avoid blocking
+            profile_files = await asyncio.to_thread(
+                lambda: list(self.machine_profiles_dir.glob("*.json"))
+            )
             for profile_file in profile_files:
                 try:
                     async with aiofiles.open(profile_file, "r", encoding="utf-8") as f:
@@ -759,7 +771,10 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             man_pages_dir = machine_dir / "man_pages"
             man_pages_exists = await asyncio.to_thread(man_pages_dir.exists)
             if man_pages_exists:
-                yaml_files = await asyncio.to_thread(list, man_pages_dir.glob("*.yaml"))
+                # Issue #358 - use lambda to avoid calling glob() in main thread
+                yaml_files = await asyncio.to_thread(
+                    lambda: list(man_pages_dir.glob("*.yaml"))
+                )
                 summary["current_man_page_files"] = len(yaml_files)
                 summary["available_commands"] = [f.stem for f in yaml_files]
             else:
@@ -785,7 +800,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         results = []
 
-        yaml_files = await asyncio.to_thread(list, man_pages_dir.glob("*.yaml"))
+        # Issue #358 - use lambda to avoid calling glob() in main thread
+        yaml_files = await asyncio.to_thread(lambda: list(man_pages_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             try:
                 async with aiofiles.open(yaml_file, "r") as f:

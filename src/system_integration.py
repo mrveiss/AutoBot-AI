@@ -72,6 +72,7 @@ class SystemIntegration:
     """
 
     def __init__(self):
+        """Initialize system integration with OS-specific configuration."""
         self.os_type = platform.system()
         logger.info(f"SystemIntegration initialized for OS: {self.os_type}")
 
@@ -138,63 +139,58 @@ class SystemIntegration:
 
         return {"status": "success", "info": info}
 
-    def list_services(self) -> Dict[str, Any]:
-        """Lists active services."""
-        if self.os_type == "Windows":
-            cmd = [
-                "powershell",
-                "Get-Service | Select-Object Name, Status | "
-                "ConvertTo-Csv -NoTypeInformation",
-            ]
-            result = self._run_command(cmd)
-            if result["status"] == "success":
-                # Parse CSV output
-                lines = result["output"].strip().split("\n")
-                services = []
-                if len(lines) > 1:
-                    headers = [h.strip('"') for h in lines[0].split(",")]
-                    for line in lines[1:]:
-                        parts = [p.strip('"') for p in line.split(",")]
-                        if len(parts) == len(headers):
-                            services.append(dict(zip(headers, parts)))
-                return {"status": "success", "services": services}
+    def _list_windows_services(self) -> Dict[str, Any]:
+        """List services on Windows (Issue #315 - extracted helper)."""
+        cmd = [
+            "powershell",
+            "Get-Service | Select-Object Name, Status | ConvertTo-Csv -NoTypeInformation",
+        ]
+        result = self._run_command(cmd)
+        if result["status"] != "success":
             return result
-        elif self.os_type == "Linux":
-            cmd = [
-                "systemctl",
-                "list-units",
-                "--type=service",
-                "--all",
-                "--no-pager",
-                "--output=json",
-            ]
-            result = self._run_command(cmd)
-            if result["status"] == "success":
-                try:
-                    services_data = json.loads(result["output"])
-                    # Extract relevant info: Name, Description, ActiveState
-                    parsed_services = []
-                    for service in services_data:
-                        parsed_services.append(
-                            {
-                                "Name": service.get("unit", "").replace(".service", ""),
-                                "Description": service.get("description", ""),
-                                "Status": service.get("activestate", ""),
-                            }
-                        )
-                    return {"status": "success", "services": parsed_services}
-                except json.JSONDecodeError:
-                    return {
-                        "status": "error",
-                        "message": "Failed to parse systemctl JSON output.",
-                        "output": result["output"],
-                    }
+
+        lines = result["output"].strip().split("\n")
+        services = []
+        if len(lines) > 1:
+            headers = [h.strip('"') for h in lines[0].split(",")]
+            for line in lines[1:]:
+                parts = [p.strip('"') for p in line.split(",")]
+                if len(parts) == len(headers):
+                    services.append(dict(zip(headers, parts)))
+        return {"status": "success", "services": services}
+
+    def _list_linux_services(self) -> Dict[str, Any]:
+        """List services on Linux (Issue #315 - extracted helper)."""
+        cmd = ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--output=json"]
+        result = self._run_command(cmd)
+        if result["status"] != "success":
             return result
-        else:
+
+        try:
+            services_data = json.loads(result["output"])
+            parsed_services = [
+                {
+                    "Name": service.get("unit", "").replace(".service", ""),
+                    "Description": service.get("description", ""),
+                    "Status": service.get("activestate", ""),
+                }
+                for service in services_data
+            ]
+            return {"status": "success", "services": parsed_services}
+        except json.JSONDecodeError:
             return {
                 "status": "error",
-                "message": "Unsupported OS for listing services.",
+                "message": "Failed to parse systemctl JSON output.",
+                "output": result["output"],
             }
+
+    def list_services(self) -> Dict[str, Any]:
+        """Lists active services (Issue #315 - refactored depth 5 to 2)."""
+        if self.os_type == "Windows":
+            return self._list_windows_services()
+        if self.os_type == "Linux":
+            return self._list_linux_services()
+        return {"status": "error", "message": "Unsupported OS for listing services."}
 
     def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Starts, stops, or restarts a system service."""

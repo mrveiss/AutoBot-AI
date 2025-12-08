@@ -97,7 +97,7 @@ class CodeChunker:
     """Intelligent code-aware chunking for different file types"""
 
     def __init__(self, max_chunk_size: int = 2000, overlap_size: int = 200):
-        """Initialize chunker with size limits for chunk generation."""
+        """Initialize code chunker with configurable size limits and overlap."""
         self.max_chunk_size = max_chunk_size
         self.overlap_size = overlap_size
 
@@ -403,6 +403,7 @@ class CodebaseIndexingService:
     """Main service for comprehensive codebase indexing"""
 
     def __init__(self, root_path: str = str(PATH.PROJECT_ROOT)):
+        """Initialize codebase indexing service with root path and file patterns."""
         self.root_path = Path(root_path)
         self.chunker = CodeChunker()
         self.progress = IndexingProgress()

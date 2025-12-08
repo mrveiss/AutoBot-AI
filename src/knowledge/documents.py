@@ -94,7 +94,8 @@ class DocumentsMixin:
         """
         try:
             output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
 
             # Export facts
             facts = await self.get_all_facts()
@@ -140,7 +141,8 @@ class DocumentsMixin:
         """
         try:
             file_path_obj = Path(file_path)
-            if not file_path_obj.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(file_path_obj.exists):
                 return {"status": "error", "message": "File not found"}
 
             # Read file content
@@ -180,17 +182,22 @@ class DocumentsMixin:
         """
         try:
             dir_path_obj = Path(dir_path)
-            if not dir_path_obj.exists() or not dir_path_obj.is_dir():
+            # Issue #358 - avoid blocking
+            exists = await asyncio.to_thread(dir_path_obj.exists)
+            is_dir = await asyncio.to_thread(dir_path_obj.is_dir) if exists else False
+            if not exists or not is_dir:
                 return {"status": "error", "message": "Directory not found"}
 
             # Find matching files
-            files = list(dir_path_obj.glob(pattern))
+            # Issue #358 - use lambda to defer glob to thread
+            files = await asyncio.to_thread(lambda: list(dir_path_obj.glob(pattern)))
             logger.info(f"Found {len(files)} files matching pattern '{pattern}'")
 
             # Process files in parallel with bounded concurrency
             semaphore = asyncio.Semaphore(10)  # Limit concurrent file operations
 
             async def process_file(file_path: Path) -> Dict[str, Any]:
+                """Process single file with semaphore-controlled concurrency."""
                 async with semaphore:
                     try:
                         return await self.add_document_from_file(

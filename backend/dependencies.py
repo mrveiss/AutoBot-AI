@@ -133,6 +133,7 @@ class DependencyCache:
     """
 
     def __init__(self):
+        """Initialize dependency cache with empty storage and thread lock."""
         self._cache = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent cache access
 
@@ -188,6 +189,7 @@ def get_cached_orchestrator(config: UnifiedConfigManager = Depends(get_config)):
 
     # Lazy import inside cache function to defer loading
     def _create_orchestrator():
+        """Create orchestrator instance with configuration manager."""
         from src.orchestrator import Orchestrator
 
         return Orchestrator(config_manager=config)

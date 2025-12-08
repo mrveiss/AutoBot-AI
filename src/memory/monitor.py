@@ -27,6 +27,7 @@ class MemoryMonitor:
     """
 
     def __init__(self):
+        """Initialize memory monitor with psutil availability check."""
         self.enabled = PSUTIL_AVAILABLE
         if not self.enabled:
             logger.warning("Memory monitoring disabled (psutil not available)")

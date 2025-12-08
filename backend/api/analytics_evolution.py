@@ -13,6 +13,7 @@ Features:
 - Export capabilities (JSON, CSV)
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
@@ -41,6 +42,21 @@ PATTERNS_PREFIX = f"{EVOLUTION_PREFIX}patterns:"
 def _decode_redis_value(value) -> str:
     """Decode Redis bytes value to string (Issue #315)."""
     return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
+def _get_snapshot_data(redis_client, keys: list) -> dict | None:
+    """Get and decode snapshot data from Redis key (Issue #315: extracted).
+
+    Returns:
+        Parsed JSON data or None if unavailable
+    """
+    if not keys:
+        return None
+    key = _decode_redis_value(keys[0])
+    json_data = redis_client.get(key)
+    if not json_data:
+        return None
+    return json.loads(_decode_redis_value(json_data))
 
 
 def _get_pattern_snapshots(redis_client, pattern_keys: list) -> list:
@@ -113,7 +129,11 @@ def get_evolution_redis():
 
 
 async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
-    """Store a quality snapshot in Redis"""
+    """Store a quality snapshot in Redis.
+
+    Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
+    when calling sync Redis operations.
+    """
     redis_client = get_evolution_redis()
     if not redis_client:
         logger.warning("Redis not available for evolution tracking")
@@ -122,13 +142,16 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
     try:
         # Store snapshot with timestamp-based key
         key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
-        redis_client.set(key, snapshot.json(), ex=86400 * 365)  # Keep for 1 year
-
-        # Add to sorted set for time-based queries
         timestamp_score = datetime.fromisoformat(
             snapshot.timestamp.replace("Z", "+00:00")
         ).timestamp()
-        redis_client.zadd(f"{EVOLUTION_PREFIX}timeline", {key: timestamp_score})
+
+        # Issue #361: Execute sync Redis ops in thread pool
+        def _store_snapshot():
+            redis_client.set(key, snapshot.json(), ex=86400 * 365)  # Keep for 1 year
+            redis_client.zadd(f"{EVOLUTION_PREFIX}timeline", {key: timestamp_score})
+
+        await asyncio.to_thread(_store_snapshot)
 
         logger.info(f"Stored quality snapshot at {snapshot.timestamp}")
         return True
@@ -139,22 +162,28 @@ async def store_quality_snapshot(snapshot: QualitySnapshot) -> bool:
 
 
 async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
-    """Store a pattern snapshot in Redis"""
+    """Store a pattern snapshot in Redis.
+
+    Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
+    when calling sync Redis operations.
+    """
     redis_client = get_evolution_redis()
     if not redis_client:
         return False
 
     try:
         key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
-        redis_client.set(key, snapshot.json(), ex=86400 * 365)
-
-        # Add to pattern-specific timeline
         timestamp_score = datetime.fromisoformat(
             snapshot.timestamp.replace("Z", "+00:00")
         ).timestamp()
-        redis_client.zadd(
-            f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline", {key: timestamp_score}
-        )
+        timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
+
+        # Issue #361: Execute sync Redis ops in thread pool
+        def _store_pattern():
+            redis_client.set(key, snapshot.json(), ex=86400 * 365)
+            redis_client.zadd(timeline_key, {key: timestamp_score})
+
+        await asyncio.to_thread(_store_pattern)
 
         return True
 
@@ -214,21 +243,23 @@ async def get_evolution_timeline(
         else:
             end_ts = datetime.now().timestamp()
 
-        # Get snapshots from Redis sorted set
-        snapshot_keys = redis_client.zrangebyscore(
-            f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-        )
+        # Issue #361 - run Redis ops in thread pool to avoid blocking
+        def _fetch_timeline():
+            snapshot_keys = redis_client.zrangebyscore(
+                f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+            )
+            results = []
+            for key in snapshot_keys:
+                if isinstance(key, bytes):
+                    key = key.decode("utf-8")
+                snapshot_json = redis_client.get(key)
+                if snapshot_json:
+                    if isinstance(snapshot_json, bytes):
+                        snapshot_json = snapshot_json.decode("utf-8")
+                    results.append(json.loads(snapshot_json))
+            return results
 
-        timeline_data = []
-        for key in snapshot_keys:
-            if isinstance(key, bytes):
-                key = key.decode("utf-8")
-            snapshot_json = redis_client.get(key)
-            if snapshot_json:
-                if isinstance(snapshot_json, bytes):
-                    snapshot_json = snapshot_json.decode("utf-8")
-                snapshot = json.loads(snapshot_json)
-                timeline_data.append(snapshot)
+        timeline_data = await asyncio.to_thread(_fetch_timeline)
 
         # Apply granularity aggregation if needed
         if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
@@ -294,20 +325,21 @@ async def get_pattern_evolution(
         })
 
     try:
-        patterns_data = {}
+        # Issue #361 - run Redis ops in thread pool to avoid blocking
+        def _fetch_patterns():
+            result = {}
+            if pattern_type:
+                pattern_keys = redis_client.keys(f"{PATTERNS_PREFIX}{pattern_type}:*") or []
+                result[pattern_type] = _get_pattern_snapshots(redis_client, pattern_keys)
+            else:
+                all_keys = redis_client.keys(f"{PATTERNS_PREFIX}*")
+                pattern_types_list = _extract_pattern_types(all_keys)
+                for ptype in pattern_types_list:
+                    ptype_keys = redis_client.keys(f"{PATTERNS_PREFIX}{ptype}:2*")
+                    result[ptype] = _get_pattern_snapshots(redis_client, ptype_keys)
+            return result
 
-        if pattern_type:
-            # Get specific pattern timeline
-            pattern_keys = redis_client.keys(f"{PATTERNS_PREFIX}{pattern_type}:*") or []
-            patterns_data[pattern_type] = _get_pattern_snapshots(redis_client, pattern_keys)
-        else:
-            # Get all pattern types
-            all_keys = redis_client.keys(f"{PATTERNS_PREFIX}*")
-            pattern_types = _extract_pattern_types(all_keys)
-
-            for ptype in pattern_types:
-                ptype_keys = redis_client.keys(f"{PATTERNS_PREFIX}{ptype}:2*")
-                patterns_data[ptype] = _get_pattern_snapshots(redis_client, ptype_keys)
+        patterns_data = await asyncio.to_thread(_fetch_patterns)
 
         return JSONResponse({
             "status": "success",
@@ -353,29 +385,32 @@ async def get_quality_trends(
         end_ts = datetime.now().timestamp()
         start_ts = (datetime.now() - timedelta(days=days)).timestamp()
 
-        snapshot_keys = redis_client.zrangebyscore(
-            f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-        )
+        # Issue #361 - run Redis ops in thread pool to avoid blocking
+        def _fetch_trend_snapshots():
+            keys = redis_client.zrangebyscore(
+                f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+            )
+            results = []
+            for key in keys:
+                if isinstance(key, bytes):
+                    key = key.decode("utf-8")
+                snapshot_json = redis_client.get(key)
+                if snapshot_json:
+                    if isinstance(snapshot_json, bytes):
+                        snapshot_json = snapshot_json.decode("utf-8")
+                    results.append(json.loads(snapshot_json))
+            return results
 
-        if len(snapshot_keys) < 2:
+        snapshots = await asyncio.to_thread(_fetch_trend_snapshots)
+
+        if len(snapshots) < 2:
             return JSONResponse(
                 {
                     "status": "insufficient_data",
-                    "message": f"Need at least 2 snapshots for trend analysis, found {len(snapshot_keys)}",
+                    "message": f"Need at least 2 snapshots for trend analysis, found {len(snapshots)}",
                     "trends": _generate_demo_trends(days),
                 }
             )
-
-        # Load snapshots
-        snapshots = []
-        for key in snapshot_keys:
-            if isinstance(key, bytes):
-                key = key.decode("utf-8")
-            snapshot_json = redis_client.get(key)
-            if snapshot_json:
-                if isinstance(snapshot_json, bytes):
-                    snapshot_json = snapshot_json.decode("utf-8")
-                snapshots.append(json.loads(snapshot_json))
 
         # Sort by timestamp
         snapshots.sort(key=lambda x: x.get("timestamp", ""))
@@ -525,18 +560,22 @@ async def export_evolution_data(
             else:
                 end_ts = datetime.now().timestamp()
 
-            snapshot_keys = redis_client.zrangebyscore(
-                f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-            )
+            # Issue #361 - avoid blocking - fetch export data in thread pool
+            def _fetch_export_data():
+                results = []
+                snapshot_keys = redis_client.zrangebyscore(
+                    f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+                )
+                for key in snapshot_keys:
+                    key = key.decode("utf-8") if isinstance(key, bytes) else key
+                    snapshot_json = redis_client.get(key)
+                    if not snapshot_json:
+                        continue
+                    snapshot_json = snapshot_json.decode("utf-8") if isinstance(snapshot_json, bytes) else snapshot_json
+                    results.append(json.loads(snapshot_json))
+                return results
 
-            for key in snapshot_keys:
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                snapshot_json = redis_client.get(key)
-                if snapshot_json:
-                    if isinstance(snapshot_json, bytes):
-                        snapshot_json = snapshot_json.decode("utf-8")
-                    timeline_data.append(json.loads(snapshot_json))
+            timeline_data = await asyncio.to_thread(_fetch_export_data)
 
         except Exception as e:
             logger.error(f"Error exporting evolution data: {e}")
@@ -601,40 +640,31 @@ async def get_evolution_summary():
 
     if redis_client:
         try:
-            # Count total snapshots
-            summary["total_snapshots"] = redis_client.zcard(f"{EVOLUTION_PREFIX}timeline")
+            # Issue #361 - avoid blocking - fetch summary data in thread pool
+            def _fetch_summary_data():
+                total = redis_client.zcard(f"{EVOLUTION_PREFIX}timeline")
+                first_data = None
+                last_data = None
+                if total > 0:
+                    first_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", 0, 0)
+                    last_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", -1, -1)
+                    first_data = _get_snapshot_data(redis_client, first_keys)
+                    last_data = _get_snapshot_data(redis_client, last_keys)
+                return total, first_data, last_data
 
-            # Get date range
-            if summary["total_snapshots"] > 0:
-                first_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", 0, 0)
-                last_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", -1, -1)
+            total_snapshots, first_data, last_data = await asyncio.to_thread(_fetch_summary_data)
+            summary["total_snapshots"] = total_snapshots
 
-                if first_keys:
-                    first_key = first_keys[0]
-                    if isinstance(first_key, bytes):
-                        first_key = first_key.decode("utf-8")
-                    first_json = redis_client.get(first_key)
-                    if first_json:
-                        if isinstance(first_json, bytes):
-                            first_json = first_json.decode("utf-8")
-                        first_data = json.loads(first_json)
-                        summary["date_range"]["first"] = first_data.get("timestamp")
+            if first_data:
+                summary["date_range"]["first"] = first_data.get("timestamp")
 
-                if last_keys:
-                    last_key = last_keys[0]
-                    if isinstance(last_key, bytes):
-                        last_key = last_key.decode("utf-8")
-                    last_json = redis_client.get(last_key)
-                    if last_json:
-                        if isinstance(last_json, bytes):
-                            last_json = last_json.decode("utf-8")
-                        last_data = json.loads(last_json)
-                        summary["date_range"]["last"] = last_data.get("timestamp")
-                        summary["latest_scores"] = {
-                            "overall_score": last_data.get("overall_score", 0),
-                            "maintainability": last_data.get("maintainability", 0),
-                            "complexity": last_data.get("complexity", 0),
-                        }
+            if last_data:
+                summary["date_range"]["last"] = last_data.get("timestamp")
+                summary["latest_scores"] = {
+                    "overall_score": last_data.get("overall_score", 0),
+                    "maintainability": last_data.get("maintainability", 0),
+                    "complexity": last_data.get("complexity", 0),
+                }
 
         except Exception as e:
             logger.error(f"Error getting evolution summary: {e}")

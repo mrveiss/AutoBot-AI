@@ -259,39 +259,38 @@ class HardwareAccelerationManager:
 
         return info
 
+    def _parse_nvidia_gpu_output(self, output: str) -> list[str]:
+        """Parse nvidia-smi output into GPU list (Issue #315 - extracted helper)."""
+        gpus = []
+        for line in output.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split(",")
+            if len(parts) >= 2:
+                name = parts[0].strip()
+                memory = parts[1].strip()
+                gpus.append(f"{name} ({memory}MB)")
+        return gpus
+
     def _get_gpu_info(self) -> Dict[str, Any]:
-        """Get GPU information."""
+        """Get GPU information (Issue #315 - refactored depth 5 to 3)."""
         info = {
             "type": "GPU",
             "available": True,
-            "recommended_models": ["3b", "7b"],  # GPU good for medium-large models
+            "recommended_models": ["3b", "7b"],
             "memory_efficient": False,
             "power_efficient": False,
         }
 
         try:
-            # Try to get NVIDIA GPU info
             result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.total",
-                    "--format=csv,noheader,nounits",
-                ],
+                ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             if result.returncode == 0:
-                lines = result.stdout.strip().split("\n")
-                gpus = []
-                for line in lines:
-                    if line.strip():
-                        parts = line.split(",")
-                        if len(parts) >= 2:
-                            name = parts[0].strip()
-                            memory = parts[1].strip()
-                            gpus.append(f"{name} ({memory}MB)")
-                info["devices"] = gpus
+                info["devices"] = self._parse_nvidia_gpu_output(result.stdout)
                 info["vendor"] = "NVIDIA"
                 return info
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:

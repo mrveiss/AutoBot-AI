@@ -359,6 +359,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         # Test mode - run sample research
         async def test_research():
+            """Run sample research tests for validation."""
             request = ResearchRequest(
                 query="network scanning tools",
                 focus="installation_usage",

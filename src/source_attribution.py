@@ -110,6 +110,7 @@ class SourceAttributionManager:
     """Manages source attribution for responses"""
 
     def __init__(self):
+        """Initialize source attribution manager with source tracking and limits."""
         self.sources: List[Source] = []
         self.current_response_sources: List[Source] = []
         # Memory leak protection - configurable limits

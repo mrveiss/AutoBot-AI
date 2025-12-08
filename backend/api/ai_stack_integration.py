@@ -531,6 +531,59 @@ async def _execute_agent_query(
     return {"error": f"Unknown agent: {agent}"}
 
 
+async def _execute_parallel_agents(
+    ai_client: Any, agents: List[str], query: str
+) -> Dict[str, Any]:
+    """Execute agents in parallel mode (Issue #315: extracted to reduce nesting).
+
+    Args:
+        ai_client: AI Stack client instance
+        agents: List of agent names to query
+        query: Query string
+
+    Returns:
+        Dict mapping agent names to their results
+    """
+    results: Dict[str, Any] = {}
+    for agent in agents:
+        if agent not in AGENT_QUERY_HANDLERS:
+            continue
+        try:
+            results[agent] = await _execute_agent_query(ai_client, agent, query)
+        except Exception as e:
+            results[agent] = {"error": str(e)}
+    return results
+
+
+async def _execute_sequential_agents(
+    ai_client: Any, agents: List[str], query: str
+) -> Dict[str, Any]:
+    """Execute agents sequentially, each building on previous (Issue #315: extracted).
+
+    Args:
+        ai_client: AI Stack client instance
+        agents: List of agent names to query
+        query: Initial query string
+
+    Returns:
+        Dict mapping agent names to their results
+    """
+    results: Dict[str, Any] = {}
+    context = query
+
+    for agent in agents:
+        try:
+            result = await _execute_agent_query(ai_client, agent, context)
+            results[agent] = result
+            # Update context for next agent
+            if result.get("content"):
+                context = f"{context}\n\nPrevious result: {result['content']}"
+        except Exception as e:
+            results[agent] = {"error": str(e)}
+
+    return results
+
+
 # ====================================================================
 # Multi-Agent Orchestration Endpoints
 # ====================================================================
@@ -554,34 +607,12 @@ async def multi_agent_query(
         coordination_mode: How to coordinate agents (parallel, sequential)
     """
     ai_client = await get_ai_stack_client()
-    results: Dict[str, Any] = {}
 
-    # Issue #336: Use dispatch table for agent queries
+    # Issue #315: Use extracted helpers to reduce nesting
     if coordination_mode == "parallel":
-        # Note: Currently runs sequentially with error handling per agent
-        # True parallel execution would use asyncio.gather() with agent_tasks
-        for agent in agents:
-            if agent in AGENT_QUERY_HANDLERS:
-                try:
-                    results[agent] = await _execute_agent_query(ai_client, agent, query)
-                except Exception as e:
-                    results[agent] = {"error": str(e)}
-
-    else:  # sequential mode
-        # Run agents sequentially, each building on previous results
-        context = query
-
-        for agent in agents:
-            try:
-                result = await _execute_agent_query(ai_client, agent, context)
-                results[agent] = result
-
-                # Update context for next agent
-                if result.get("content"):
-                    context = f"{context}\n\nPrevious result: {result['content']}"
-
-            except Exception as e:
-                results[agent] = {"error": str(e)}
+        results = await _execute_parallel_agents(ai_client, agents, query)
+    else:
+        results = await _execute_sequential_agents(ai_client, agents, query)
 
     return create_success_response(
         {

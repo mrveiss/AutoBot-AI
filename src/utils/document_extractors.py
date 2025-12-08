@@ -61,6 +61,7 @@ class NumpyJSONEncoder(json.JSONEncoder):
     """
 
     def default(self, obj):
+        """Convert NumPy types to JSON-serializable Python types."""
         if isinstance(obj, (np.integer, np.floating)):
             return obj.item()
         elif isinstance(obj, np.ndarray):
@@ -107,7 +108,8 @@ class DocumentExtractor:
         """
         file_path = Path(file_path)
 
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_path.exists):
             raise FileNotFoundError(f"PDF file not found: {file_path}")
 
         if file_path.suffix.lower() != ".pdf":
@@ -158,7 +160,8 @@ class DocumentExtractor:
         """
         file_path = Path(file_path)
 
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_path.exists):
             raise FileNotFoundError(f"DOCX file not found: {file_path}")
 
         if file_path.suffix.lower() not in DOCX_EXTENSIONS:  # O(1) lookup (Issue #326)
@@ -206,7 +209,8 @@ class DocumentExtractor:
         """
         file_path = Path(file_path)
 
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_path.exists):
             raise FileNotFoundError(f"Text file not found: {file_path}")
 
         try:
@@ -308,10 +312,12 @@ class DocumentExtractor:
         """
         directory_path = Path(directory_path)
 
-        if not directory_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(directory_path.exists):
             raise FileNotFoundError(f"Directory not found: {directory_path}")
 
-        if not directory_path.is_dir():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(directory_path.is_dir):
             raise NotADirectoryError(f"Path is not a directory: {directory_path}")
 
         # Default to all supported file types
@@ -319,24 +325,30 @@ class DocumentExtractor:
             file_types = DocumentExtractor.get_supported_extensions()
 
         # Collect all matching files
+        # Issue #358 - wrap blocking glob/is_file in sync helper
         glob_pattern = "**/*" if recursive else "*"
-        all_files = []
 
-        for file_type in file_types:
-            # Ensure file type starts with dot
-            if not file_type.startswith("."):
-                file_type = f".{file_type}"
+        def _collect_files_sync() -> List[Path]:
+            """Sync helper for collecting files to avoid blocking event loop."""
+            result_files = []
+            for ft in file_types:
+                # Ensure file type starts with dot
+                if not ft.startswith("."):
+                    ft = f".{ft}"
 
-            for file_path in directory_path.glob(f"{glob_pattern}{file_type}"):
-                if file_path.is_file():
-                    all_files.append(file_path)
+                for fp in directory_path.glob(f"{glob_pattern}{ft}"):
+                    if fp.is_file():
+                        result_files.append(fp)
 
-                    # Check max_files limit
-                    if max_files and len(all_files) >= max_files:
-                        break
+                        # Check max_files limit
+                        if max_files and len(result_files) >= max_files:
+                            break
 
-            if max_files and len(all_files) >= max_files:
-                break
+                if max_files and len(result_files) >= max_files:
+                    break
+            return result_files
+
+        all_files = await asyncio.to_thread(_collect_files_sync)
 
         logger.info(f"Found {len(all_files)} files to process in {directory_path}")
 

@@ -26,20 +26,25 @@ _alerts_manager = None
 _alerts_manager_lock = threading.Lock()
 
 
+def _try_import_alerts_manager():
+    """Try to import alerts manager. (Issue #315 - extracted)"""
+    try:
+        from src.utils.monitoring_alerts import get_alerts_manager
+        return get_alerts_manager()
+    except ImportError:
+        logger.warning("monitoring_alerts not available for alert notifications")
+        return None
+
+
 def _get_alerts_manager():
     """Lazy load alerts manager to avoid circular imports (thread-safe)."""
     global _alerts_manager
-    if _alerts_manager is None:
-        with _alerts_manager_lock:
-            # Double-check after acquiring lock
-            if _alerts_manager is None:
-                try:
-                    from src.utils.monitoring_alerts import get_alerts_manager
-
-                    _alerts_manager = get_alerts_manager()
-                except ImportError:
-                    logger.warning("monitoring_alerts not available for alert notifications")
-                    _alerts_manager = None
+    if _alerts_manager is not None:
+        return _alerts_manager
+    with _alerts_manager_lock:
+        # Double-check after acquiring lock
+        if _alerts_manager is None:
+            _alerts_manager = _try_import_alerts_manager()
     return _alerts_manager
 
 

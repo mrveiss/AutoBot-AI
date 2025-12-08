@@ -396,8 +396,9 @@ async def get_async_chromadb_client(
 
     try:
         # Ensure directory exists
+        # Issue #358 - avoid blocking
         chroma_path = Path(db_path)
-        chroma_path.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(chroma_path.mkdir, parents=True, exist_ok=True)
 
         # Create sync client (this is fast, doesn't need to_thread)
         sync_client = chromadb.PersistentClient(

@@ -130,6 +130,7 @@ class WebResearchInputValidator:
     ]
 
     def __init__(self):
+        """Initialize input validator with compiled regex patterns for security checks."""
         # Compile dangerous patterns for performance
         self.dangerous_pattern_compiled = []
         for pattern in self.DANGEROUS_PATTERNS:

@@ -7,6 +7,7 @@ Automated Phase Progression Manager for AutoBot
 Implements intelligent phase progression logic with automated promotions and self-awareness
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
@@ -48,6 +49,7 @@ class PhaseProgressionManager:
     """Manages automated phase progression and system evolution"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize phase progression manager with validator and configuration."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.validator = PhaseValidator(self.project_root)
         self.project_state = ProjectStateManager()
@@ -541,7 +543,8 @@ class PhaseProgressionManager:
                 / "phases"
                 / phase_name.lower().replace(" ", "_").replace(":", "")
             )
-            phase_dir.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(phase_dir.mkdir, parents=True, exist_ok=True)
 
             # Create phase configuration file
             phase_config = {

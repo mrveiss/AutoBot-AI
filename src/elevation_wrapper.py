@@ -46,6 +46,7 @@ class ElevationWrapper:
     """Handles command elevation through GUI dialogs instead of terminal prompts"""
 
     def __init__(self, elevation_client=None):
+        """Initialize elevation wrapper with optional client and session management."""
         self.elevation_client = elevation_client
         self.active_session = None
         self.session_commands = {}

@@ -6,6 +6,7 @@ Cache management API endpoints for clearing various cache types.
 Provides comprehensive cache clearing functionality for frontend, backend, and Redis caches.
 """
 
+import asyncio
 import json
 import logging
 
@@ -34,6 +35,35 @@ REDIS_DATABASES = {
     "websockets": 10,
     "config": 11,
 }
+
+
+def _clear_single_redis_database(db_name: str, db_number: int) -> Metadata:
+    """Clear a single Redis database and return result (Issue #315: extracted).
+
+    Returns:
+        Dict with clearing result including name, database, keys_cleared, and optional error
+    """
+    try:
+        redis_conn = get_redis_connection(db_name)
+        keys_before = redis_conn.dbsize()
+        redis_conn.flushdb()
+
+        logger.info(
+            f"Cleared Redis database {db_name} ({db_number}) - {keys_before} keys removed"
+        )
+        return {
+            "name": db_name,
+            "database": db_number,
+            "keys_cleared": keys_before,
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear Redis database {db_name} ({db_number}): {str(e)}")
+        return {
+            "name": db_name,
+            "database": db_number,
+            "error": str(e),
+            "keys_cleared": 0,
+        }
 
 
 def get_redis_connection(database: str = "main"):
@@ -132,36 +162,10 @@ async def clear_redis_cache(database: str):
         cleared_databases = []
 
         if database == "all":
-            # Clear all Redis databases
+            # Clear all Redis databases using helper (Issue #315)
             for db_name, db_number in REDIS_DATABASES.items():
-                try:
-                    redis_conn = get_redis_connection(db_name)
-                    keys_before = redis_conn.dbsize()
-                    redis_conn.flushdb()
-
-                    cleared_databases.append(
-                        {
-                            "name": db_name,
-                            "database": db_number,
-                            "keys_cleared": keys_before,
-                        }
-                    )
-                    logger.info(
-                        f"Cleared Redis database {db_name} ({db_number}) - {keys_before} keys removed"
-                    )
-
-                except Exception as e:
-                    logger.error(
-                        f"Failed to clear Redis database {db_name} ({db_number}): {str(e)}"
-                    )
-                    cleared_databases.append(
-                        {
-                            "name": db_name,
-                            "database": db_number,
-                            "error": str(e),
-                            "keys_cleared": 0,
-                        }
-                    )
+                result = _clear_single_redis_database(db_name, db_number)
+                cleared_databases.append(result)
         else:
             # Clear specific database
             if database not in REDIS_DATABASES:
@@ -271,7 +275,10 @@ async def save_cache_config(config_data: Metadata):
         # Store in Redis config database for persistence
         try:
             redis_conn = get_redis_connection("config")
-            redis_conn.set("cache_config", json.dumps(config_data))
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                redis_conn.set, "cache_config", json.dumps(config_data)
+            )
             logger.info("Cache configuration saved to Redis")
         except Exception as e:
             logger.warning(f"Could not save cache config to Redis: {str(e)}")
@@ -303,7 +310,8 @@ async def get_cache_config():
         # Try to load from Redis first
         try:
             redis_conn = get_redis_connection("config")
-            config_data = redis_conn.get("cache_config")
+            # Issue #361 - avoid blocking
+            config_data = await asyncio.to_thread(redis_conn.get, "cache_config")
             if config_data:
                 return {
                     "status": "success",

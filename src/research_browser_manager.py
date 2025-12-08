@@ -555,7 +555,8 @@ class ResearchBrowserManager:
         try:
             # For now, return basic file info
             # In production, you'd want to parse the MHTML format
-            file_size = os.path.getsize(mhtml_path)
+            # Issue #358 - avoid blocking
+            file_size = await asyncio.to_thread(os.path.getsize, mhtml_path)
 
             return {
                 "success": True,

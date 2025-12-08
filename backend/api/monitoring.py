@@ -764,6 +764,32 @@ async def export_metrics(
         )
 
 
+async def _handle_get_current_metrics(websocket: WebSocket, command: dict) -> None:
+    """Handle get_current_metrics WebSocket command (Issue #315: extracted)."""
+    metrics = await collect_phase9_metrics()
+    await websocket.send_text(
+        json.dumps({"type": "metrics_response", "data": metrics}, default=str)
+    )
+
+
+async def _handle_update_interval(websocket: WebSocket, command: dict) -> None:
+    """Handle update_interval WebSocket command (Issue #315: extracted)."""
+    new_interval = command.get("interval", 2.0)
+    if not (0.5 <= new_interval <= 30.0):
+        return
+    ws_manager.update_interval = new_interval
+    await websocket.send_text(
+        json.dumps({"type": "interval_updated", "interval": new_interval})
+    )
+
+
+# WebSocket command handlers (Issue #315: dictionary dispatch pattern)
+_MONITORING_WS_HANDLERS = {
+    "get_current_metrics": _handle_get_current_metrics,
+    "update_interval": _handle_update_interval,
+}
+
+
 @router.websocket("/realtime")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -771,36 +797,20 @@ async def export_metrics(
     error_code_prefix="MONITORING",
 )
 async def realtime_monitoring_websocket(websocket: WebSocket):
-    """WebSocket endpoint for real-time performance monitoring updates"""
+    """WebSocket endpoint for real-time performance monitoring updates.
+
+    Issue #315: Refactored to use dictionary dispatch for command handling.
+    """
     await ws_manager.connect(websocket)
     try:
         while True:
-            # Keep connection alive and handle client messages
             message = await websocket.receive_text()
-
-            # Handle client commands
             try:
                 command = json.loads(message)
-                if command.get("type") == "get_current_metrics":
-                    metrics = await collect_phase9_metrics()
-                    await websocket.send_text(
-                        json.dumps(
-                            {"type": "metrics_response", "data": metrics}, default=str
-                        )
-                    )
-
-                elif command.get("type") == "update_interval":
-                    new_interval = command.get("interval", 2.0)
-                    if 0.5 <= new_interval <= 30.0:
-                        ws_manager.update_interval = new_interval
-                        await websocket.send_text(
-                            json.dumps(
-                                {"type": "interval_updated", "interval": new_interval}
-                            )
-                        )
-
+                handler = _MONITORING_WS_HANDLERS.get(command.get("type"))
+                if handler:
+                    await handler(websocket, command)
             except json.JSONDecodeError as e:
-                # Invalid JSON messages are ignored - client may send malformed data
                 logger.debug(f"Invalid JSON in monitoring WebSocket: {e}")
 
     except WebSocketDisconnect:

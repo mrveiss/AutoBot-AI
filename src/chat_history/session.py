@@ -48,6 +48,71 @@ class SessionMixin:
     - self._extract_conversation_metadata(): method
     """
 
+    def _try_get_from_cache(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Try to get session from Redis cache. (Issue #315 - extracted)"""
+        if not self.redis_client:
+            return None
+        try:
+            cache_key = f"chat:session:{session_id}"
+            cached_data = self.redis_client.get(cache_key)
+            if not cached_data:
+                return None
+            if isinstance(cached_data, bytes):
+                cached_data = cached_data.decode("utf-8")
+            chat_data = json.loads(cached_data)
+            logger.debug(f"Cache HIT for session {session_id}")
+            return chat_data.get("messages", [])
+        except Exception as e:
+            logger.error(f"Failed to read from Redis cache: {e}")
+            return None
+
+    async def _resolve_session_file_path(
+        self, session_id: str, chats_directory: str
+    ) -> Optional[str]:
+        """Resolve session file path with backward compatibility. (Issue #315 - extracted)"""
+        # Try new naming convention first: {uuid}_chat.json
+        chat_file = f"{chats_directory}/{session_id}_chat.json"
+        file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        if file_exists:
+            return chat_file
+
+        # Backward compatibility: try old naming convention
+        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+        if old_file_exists:
+            logger.debug(f"Using legacy file format for session {session_id}")
+            return chat_file_old
+
+        logger.warning(f"Chat session {session_id} not found")
+        return None
+
+    async def _load_existing_chat_data(
+        self, session_id: str, chat_file: str, chats_directory: str
+    ) -> Dict[str, Any]:
+        """Load existing chat data with backward compatibility. (Issue #315 - extracted)"""
+        file_exists = await asyncio.to_thread(os.path.exists, chat_file)
+        if file_exists:
+            try:
+                async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                    file_content = await f.read()
+                return self._decrypt_data(file_content)
+            except Exception as e:
+                logger.warning(f"Could not load existing chat data for {session_id}: {str(e)}")
+                return {}
+
+        # Try old format for backward compatibility
+        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
+        if old_file_exists:
+            try:
+                async with aiofiles.open(chat_file_old, "r", encoding="utf-8") as f:
+                    file_content = await f.read()
+                logger.debug(f"Migrating session {session_id} from old format")
+                return self._decrypt_data(file_content)
+            except Exception as e:
+                logger.warning(f"Could not load old format data: {str(e)}")
+        return {}
+
     async def create_session(
         self,
         session_id: Optional[str] = None,
@@ -138,40 +203,18 @@ class SessionMixin:
             List of messages in the session
         """
         try:
-            # Try Redis cache first
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    cached_data = self.redis_client.get(cache_key)
-
-                    if cached_data:
-                        if isinstance(cached_data, bytes):
-                            cached_data = cached_data.decode("utf-8")
-                        chat_data = json.loads(cached_data)
-                        logger.debug(f"Cache HIT for session {session_id}")
-                        return chat_data.get("messages", [])
-                except Exception as e:
-                    logger.error(f"Failed to read from Redis cache: {e}")
+            # Try Redis cache first (Issue #315 - uses helper)
+            cached_messages = self._try_get_from_cache(session_id)
+            if cached_messages is not None:
+                return cached_messages
 
             logger.debug(f"Cache MISS for session {session_id}")
 
-            # Cache miss - read from file
+            # Cache miss - resolve file path (Issue #315 - uses helper)
             chats_directory = self._get_chats_directory()
-
-            # Try new naming convention first: {uuid}_chat.json
-            chat_file = f"{chats_directory}/{session_id}_chat.json"
-
-            # Backward compatibility: try old naming convention
-            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
-            if not file_exists:
-                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
-                if old_file_exists:
-                    chat_file = chat_file_old
-                    logger.debug(f"Using legacy file format for session {session_id}")
-                else:
-                    logger.warning(f"Chat session {session_id} not found")
-                    return []
+            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
+            if not chat_file:
+                return []
 
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
@@ -196,19 +239,42 @@ class SessionMixin:
                     logger.warning(f"Could not save cleaned session: {save_err}")
 
             # Warm up Redis cache with cleaned data
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    await self._async_cache_session(cache_key, chat_data)
-                    logger.debug(f"Warmed cache for session {session_id}")
-                except Exception as e:
-                    logger.error(f"Failed to warm cache: {e}")
+            await self._warm_cache_safe(session_id, chat_data)
 
             return cleaned_messages
 
         except Exception as e:
             logger.error(f"Error loading chat session {session_id}: {str(e)}")
             return []
+
+    async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
+        """Warm up Redis cache safely. (Issue #315 - extracted)"""
+        if not self.redis_client:
+            return
+        try:
+            cache_key = f"chat:session:{session_id}"
+            await self._async_cache_session(cache_key, chat_data)
+            logger.debug(f"Warmed cache for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to warm cache: {e}")
+
+    async def _update_redis_cache_on_save(
+        self, session_id: str, chat_data: Dict[str, Any]
+    ) -> None:
+        """Update Redis cache on session save. (Issue #315 - extracted)"""
+        if not self.redis_client:
+            return
+        try:
+            cache_key = f"chat:session:{session_id}"
+            await self._async_cache_session(cache_key, chat_data)
+            # Update recent chats sorted set for fast listing
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.zadd, "chat:recent", {session_id: time.time()}
+            )
+            logger.debug(f"Cached session {session_id} in Redis")
+        except Exception as e:
+            logger.error(f"Failed to cache session in Redis: {e}")
 
     async def save_session(
         self,
@@ -246,32 +312,10 @@ class SessionMixin:
                 )
                 session_messages = session_messages[-self.max_messages:]
 
-            # Load existing chat data if it exists to preserve metadata
-            chat_data = {}
-
-            # Check new format first, then old format for backward compatibility
-            file_exists = await asyncio.to_thread(os.path.exists, chat_file)
-            if file_exists:
-                try:
-                    async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                        file_content = await f.read()
-                    chat_data = self._decrypt_data(file_content)
-                except Exception as e:
-                    logger.warning(
-                        f"Could not load existing chat data for {session_id}: {str(e)}"
-                    )
-            else:
-                # Try old format for backward compatibility
-                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-                old_file_exists = await asyncio.to_thread(os.path.exists, chat_file_old)
-                if old_file_exists:
-                    try:
-                        async with aiofiles.open(chat_file_old, "r", encoding="utf-8") as f:
-                            file_content = await f.read()
-                        chat_data = self._decrypt_data(file_content)
-                        logger.debug(f"Migrating session {session_id} from old format")
-                    except Exception as e:
-                        logger.warning(f"Could not load old format data: {str(e)}")
+            # Load existing chat data if it exists to preserve metadata (Issue #315 - uses helper)
+            chat_data = await self._load_existing_chat_data(
+                session_id, chat_file, chats_directory
+            )
 
             # Update chat data
             chat_data.update(
@@ -296,18 +340,8 @@ class SessionMixin:
                 async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
                     await f.write(encrypted_data)
 
-            # Update Redis cache (write-through)
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    await self._async_cache_session(cache_key, chat_data)
-
-                    # Update recent chats sorted set for fast listing
-                    self.redis_client.zadd("chat:recent", {session_id: time.time()})
-
-                    logger.debug(f"Cached session {session_id} in Redis")
-                except Exception as e:
-                    logger.error(f"Failed to cache session in Redis: {e}")
+            # Update Redis cache (write-through) - Issue #315 uses helper
+            await self._update_redis_cache_on_save(session_id, chat_data)
 
             logger.info(f"Chat session '{session_id}' saved successfully")
 
@@ -446,8 +480,11 @@ class SessionMixin:
             if self.redis_client:
                 try:
                     cache_key = f"chat:session:{session_id}"
-                    self.redis_client.delete(cache_key)
-                    self.redis_client.zrem("chat:recent", session_id)
+                    # Issue #361 - avoid blocking
+                    await asyncio.to_thread(self.redis_client.delete, cache_key)
+                    await asyncio.to_thread(
+                        self.redis_client.zrem, "chat:recent", session_id
+                    )
                     logger.debug(f"Cleared Redis cache for session {session_id}")
                 except Exception as e:
                     logger.error(f"Failed to clear Redis cache: {e}")

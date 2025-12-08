@@ -38,6 +38,78 @@ class CommandApprovalPayload(BaseModel):
     user_role: str = "user"
 
 
+async def _kill_timed_out_process(
+    process: Optional[asyncio.subprocess.Process],
+) -> None:
+    """Kill a timed out subprocess safely (Issue #315: extracted)."""
+    if not process:
+        return
+    try:
+        process.kill()
+        await process.wait()
+    except ProcessLookupError:
+        pass  # Process already terminated
+
+
+def _process_tool_result(result_dict: dict) -> tuple:
+    """Process orchestrator result and extract message/output (Issue #315: extracted).
+
+    Returns:
+        Tuple of (response_message, tool_output_content, tool_name)
+    """
+    tool_name = result_dict.get("tool_name")
+    tool_args = result_dict.get("tool_args", {})
+
+    # Ensure tool_args is a dictionary
+    if not isinstance(tool_args, dict):
+        tool_args = {}
+
+    # Handle respond_conversationally tool
+    if tool_name == "respond_conversationally":
+        default_text = "No response text provided."
+        response_message = result_dict.get("response_text") or tool_args.get(
+            "response_text", default_text
+        )
+        return response_message, None, tool_name
+
+    # Handle execute_system_command tool
+    if tool_name == "execute_system_command":
+        command_output = tool_args.get("output", "")
+        command_error = tool_args.get("error", "")
+        command_status = tool_args.get("status", "unknown")
+
+        if command_status == "success":
+            response_message = (
+                f"Command executed successfully.\nOutput:\n{command_output}"
+            )
+            return response_message, command_output, tool_name
+        else:
+            response_message = (
+                f"Command failed ({command_status}).\nError:\n{command_error}"
+                f"\nOutput:\n{command_output}"
+            )
+            tool_output = f"ERROR: {command_error}\nOUTPUT: {command_output}"
+            return response_message, tool_output, tool_name
+
+    # Handle other named tools
+    if tool_name:
+        tool_output_content = tool_args.get(
+            "output", tool_args.get("message", str(tool_args))
+        )
+        response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
+        return response_message, tool_output_content, tool_name
+
+    # Handle output/message fallbacks
+    if result_dict.get("output"):
+        return result_dict["output"], result_dict["output"], None
+
+    if result_dict.get("message"):
+        return result_dict["message"], result_dict["message"], None
+
+    # Default fallback
+    return str(result_dict), str(result_dict), None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal",
@@ -140,53 +212,8 @@ async def receive_goal(request: Request, payload: GoalPayload):
     else:
         result_dict = {"message": str(orchestrator_result)}
 
-    response_message = "An unexpected response format was received."
-    tool_output_content = None
-    tool_name = None
-
-    tool_name = result_dict.get("tool_name")
-    tool_args = result_dict.get("tool_args", {})
-
-    # Ensure tool_args is a dictionary
-    if not isinstance(tool_args, dict):
-        tool_args = {}
-
-    if tool_name == "respond_conversationally":
-        default_text = "No response text provided."
-        response_message = result_dict.get("response_text") or tool_args.get(
-            "response_text", default_text
-        )
-        tool_output_content = None
-    elif tool_name == "execute_system_command":
-        command_output = tool_args.get("output", "")
-        command_error = tool_args.get("error", "")
-        command_status = tool_args.get("status", "unknown")
-
-        if command_status == "success":
-            response_message = (
-                f"Command executed successfully.\nOutput:\n{command_output}"
-            )
-            tool_output_content = command_output
-        else:
-            response_message = (
-                f"Command failed ({command_status}).\nError:\n{command_error}"
-                f"\nOutput:\n{command_output}"
-            )
-            tool_output_content = f"ERROR: {command_error}\nOUTPUT: {command_output}"
-    elif tool_name:
-        tool_output_content = tool_args.get(
-            "output", tool_args.get("message", str(tool_args))
-        )
-        response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
-    elif result_dict.get("output"):
-        response_message = result_dict["output"]
-        tool_output_content = result_dict["output"]
-    elif result_dict.get("message"):
-        response_message = result_dict["message"]
-        tool_output_content = result_dict["message"]
-    else:
-        response_message = str(result_dict)
-        tool_output_content = str(result_dict)
+    # Process tool result using helper (Issue #315: reduced nesting)
+    response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
         # Publish event (non-critical, log and continue)
@@ -347,8 +374,11 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
     if main_redis_client:
         approval_message = {"task_id": task_id, "approved": approved}
         try:
-            main_redis_client.publish(
-                f"command_approval_{task_id}", json.dumps(approval_message)
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                main_redis_client.publish,
+                f"command_approval_{task_id}",
+                json.dumps(approval_message),
             )
         except Exception as e:
             logger.error(f"Failed to publish command approval to Redis: {e}")
@@ -451,12 +481,7 @@ async def execute_command(
             timeout=300.0,  # 5 minute timeout for command execution
         )
     except asyncio.TimeoutError:
-        if process:
-            try:
-                process.kill()
-                await process.wait()
-            except ProcessLookupError:
-                pass  # Process already terminated
+        await _kill_timed_out_process(process)
         logger.error(f"Command timed out after 300s: {command[:100]}...")
         security_layer.audit_log(
             "execute_command",

@@ -211,6 +211,7 @@ class CFGBuilder(ast.NodeVisitor):
     """Builds Control Flow Graphs from Python AST."""
 
     def __init__(self, source_code: str, file_path: str = ""):
+        """Initialize CFG builder with source code and file context."""
         self.source_code = source_code
         self.source_lines = source_code.split("\n")
         self.file_path = file_path
@@ -656,19 +657,22 @@ class CFGBuilder(ast.NodeVisitor):
         """Extract name from assignment target if it's a Name node (Issue #315)."""
         return {target.id} if isinstance(target, ast.Name) else set()
 
+    def _extract_modified_names_from_node(self, node: ast.AST) -> Set[str]:
+        """Extract modified names from a single AST node. (Issue #315 - extracted)"""
+        if isinstance(node, ast.Assign):
+            return self._extract_names_from_assign(node)
+        if isinstance(node, ast.AugAssign):
+            return self._extract_name_from_target(node.target)
+        if isinstance(node, ast.AnnAssign) and node.value:
+            return self._extract_name_from_target(node.target)
+        return set()
+
     def _get_modified_names(self, stmts: List[ast.stmt]) -> Set[str]:
         """Get all variable names modified in a block (Issue #315 - refactored)."""
         names: Set[str] = set()
-
         for stmt in stmts:
             for node in ast.walk(stmt):
-                if isinstance(node, ast.Assign):
-                    names.update(self._extract_names_from_assign(node))
-                elif isinstance(node, ast.AugAssign):
-                    names.update(self._extract_name_from_target(node.target))
-                elif isinstance(node, ast.AnnAssign) and node.value:
-                    names.update(self._extract_name_from_target(node.target))
-
+                names.update(self._extract_modified_names_from_node(node))
         return names
 
     def _process_try(self, stmt: ast.Try) -> List[str]:
@@ -1102,14 +1106,16 @@ async def analyze_file_control_flow(request: AnalyzeFileRequest) -> JSONResponse
     """Analyze control flow in a Python file."""
     file_path = Path(request.file_path)
 
-    if not file_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(file_path.exists):
         raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
 
     if not file_path.suffix == ".py":
         raise HTTPException(status_code=400, detail="Only Python files are supported")
 
     try:
-        source_code = file_path.read_text(encoding="utf-8")
+        # Issue #358 - avoid blocking
+        source_code = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {e}")
 

@@ -30,6 +30,7 @@ class APIRegistry:
     """Registry to track all API endpoints across routers"""
 
     def __init__(self):
+        """Initialize API registry with empty endpoints and routers."""
         self.endpoints: Dict[str, Metadata] = {}
         self.routers: List[str] = []
 

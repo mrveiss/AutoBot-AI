@@ -296,7 +296,7 @@ class SecurityWorkflowManager:
     REDIS_TTL_DAYS = 30  # Keep assessments for 30 days
 
     def __init__(self) -> None:
-        """Initialize the workflow manager."""
+        """Initialize security workflow manager with Redis client placeholder."""
         self._redis_client: Any = None
 
     async def _get_redis(self) -> Any:
@@ -427,16 +427,51 @@ class SecurityWorkflowManager:
             logger.error(f"Failed to get assessment {assessment_id}: {e}")
             raise RuntimeError(f"Failed to get assessment: {e}")
 
+    def _parse_assessment_data(self, aid: str, data: dict) -> Optional[SecurityAssessment]:
+        """Parse raw Redis data into SecurityAssessment (Issue #315: extracted helper).
+
+        Args:
+            aid: Assessment ID
+            data: Raw Redis hash data
+
+        Returns:
+            SecurityAssessment or None on error
+        """
+        if not data:
+            return None
+
+        try:
+            # Decode bytes if needed
+            decoded = {}
+            for k, v in data.items():
+                key = k if isinstance(k, str) else k.decode("utf-8")
+                val = v if isinstance(v, str) else v.decode("utf-8")
+                decoded[key] = val
+
+            return SecurityAssessment(
+                assessment_id=decoded["assessment_id"],
+                session_id=decoded["session_id"],
+                phase=decoded["phase"],
+                status=decoded["status"],
+                created_at=decoded["created_at"],
+                updated_at=decoded["updated_at"],
+                findings=eval(decoded.get("findings", "[]")),
+                metadata=eval(decoded.get("metadata", "{}")),
+            )
+        except Exception as e:
+            logger.error(f"Error parsing assessment {aid}: {e}")
+            return None
+
     async def list_active_assessments(self) -> list[SecurityAssessment]:
         """List all active (non-complete) assessments."""
         try:
             redis = await self._get_redis()
             assessment_ids = await redis.smembers(self.REDIS_ACTIVE_INDEX)
 
-            # Batch fetch assessments using pipeline (fix N+1 query)
             if not assessment_ids:
                 return []
 
+            # Batch fetch assessments using pipeline
             pipe = redis.pipeline()
             for aid in assessment_ids:
                 key = f"{self.REDIS_KEY_PREFIX}{aid}"
@@ -444,32 +479,12 @@ class SecurityWorkflowManager:
 
             results = await pipe.execute()
 
-            # Parse results
+            # Parse results using helper (Issue #315: reduced nesting)
             assessments = []
             for aid, data in zip(assessment_ids, results):
-                if data:
-                    try:
-                        # Decode bytes if needed
-                        decoded = {}
-                        for k, v in data.items():
-                            key = k if isinstance(k, str) else k.decode("utf-8")
-                            val = v if isinstance(v, str) else v.decode("utf-8")
-                            decoded[key] = val
-
-                        assessment = SecurityAssessment(
-                            assessment_id=decoded["assessment_id"],
-                            session_id=decoded["session_id"],
-                            phase=decoded["phase"],
-                            status=decoded["status"],
-                            created_at=decoded["created_at"],
-                            updated_at=decoded["updated_at"],
-                            findings=eval(decoded.get("findings", "[]")),
-                            metadata=eval(decoded.get("metadata", "{}")),
-                        )
-                        assessments.append(assessment)
-                    except Exception as e:
-                        logger.error(f"Error parsing assessment {aid}: {e}")
-                        continue
+                assessment = self._parse_assessment_data(aid, data)
+                if assessment:
+                    assessments.append(assessment)
 
             return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
         except RedisError as e:

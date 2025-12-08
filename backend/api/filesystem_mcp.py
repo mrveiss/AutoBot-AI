@@ -52,6 +52,14 @@ ALLOWED_DIRECTORIES = [
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
+def _should_include_file(filename: str, pattern: str, exclude_patterns: list) -> bool:
+    """Check if a file should be included in search results. (Issue #315 - extracted)"""
+    import fnmatch
+    if not fnmatch.fnmatch(filename, pattern):
+        return False
+    return not any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
+
+
 def is_path_allowed(path: str) -> bool:
     """
     Validate path is within allowed directories with security checks
@@ -968,24 +976,17 @@ async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
         )
 
     try:
-        import fnmatch
-
         exclude_patterns = request.exclude_patterns or []
+        pattern = request.pattern
 
         def _search_files() -> list:
             """Blocking file search wrapped for thread executor"""
             matches = []
             for root, dirs, files in os.walk(request.path):
                 for filename in files:
-                    # Check if matches pattern
-                    if fnmatch.fnmatch(filename, request.pattern):
-                        # Check if excluded
-                        excluded = any(
-                            fnmatch.fnmatch(filename, pat) for pat in exclude_patterns
-                        )
-                        if not excluded:
-                            full_path = os.path.join(root, filename)
-                            matches.append(full_path)
+                    # Check pattern + exclusions using helper (Issue #315 - reduces nesting)
+                    if _should_include_file(filename, pattern, exclude_patterns):
+                        matches.append(os.path.join(root, filename))
             return matches
 
         matches = await asyncio.to_thread(_search_files)

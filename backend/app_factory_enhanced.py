@@ -190,6 +190,7 @@ def create_enhanced_app() -> FastAPI:
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
+        """Handle uncaught exceptions with logging and JSON response."""
         logger.error(f"Global exception: {exc}\n{traceback.format_exc()}")
         # Thread-safe access to init status
         ai_stack_status = await get_init_status("ai_stack")

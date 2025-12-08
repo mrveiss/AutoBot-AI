@@ -1032,6 +1032,7 @@ class EnhancedKBLibrarian:
         sources = web_results.get("sources", [])
 
         async def extract_from_source(source: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Extract tool information from a single web source."""
             content = source.get("content", "")
             title = source.get("title", "")
             return ResultProcessor.extract_tools_from_content(content, title, tool_type)
@@ -1203,6 +1204,7 @@ METADATA:
 
         # Execute all research queries in parallel for better performance
         async def execute_query(query_type: str, query: str) -> tuple:
+            """Execute a single research query and return typed result tuple."""
             try:
                 result = await self.web_assistant.research_query(query)
                 if result.get("status") == "success":

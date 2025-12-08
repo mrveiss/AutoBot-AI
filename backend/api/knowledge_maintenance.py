@@ -15,6 +15,7 @@ Includes:
 - Host change scanning
 """
 
+import asyncio
 import json
 import logging
 from pathlib import Path as PathLib
@@ -108,16 +109,22 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     total_facts = 0
 
     while True:
-        cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
-
-        if keys:
-            # Use pipeline for batch GET operations
+        # Issue #361 - run Redis ops in thread pool to avoid blocking
+        def _scan_and_fetch():
+            nonlocal cursor
+            cur, scanned_keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+            if not scanned_keys:
+                return cur, [], []
             pipe = kb.redis_client.pipeline()
-            for key in keys:
+            for key in scanned_keys:
                 pipe.hget(key, "metadata")
                 pipe.hget(key, "created_at")
-            results = pipe.execute()
+            pipe_results = pipe.execute()
+            return cur, scanned_keys, pipe_results
 
+        cursor, keys, results = await asyncio.to_thread(_scan_and_fetch)
+
+        if keys:
             # Group facts by category+title (Issue #315: uses helper for reduced nesting)
             for i in range(0, len(results), 2):
                 fact_info = _process_fact_metadata(
@@ -166,11 +173,11 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     if not dry_run and facts_to_delete:
         logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
 
-        # Delete in batches
+        # Delete in batches (Issue #361 - avoid blocking)
         batch_size = 100
         for i in range(0, len(facts_to_delete), batch_size):
             batch = facts_to_delete[i : i + batch_size]
-            kb.redis_client.delete(*batch)
+            await asyncio.to_thread(kb.redis_client.delete, *batch)
             deleted_count += len(batch)
 
         logger.info(f"Deleted {deleted_count} duplicate facts")
@@ -494,31 +501,37 @@ async def find_orphaned_facts(req: Request):
 
     logger.info("Scanning for orphaned facts...")
 
-    orphaned_facts = []
-    cursor = 0
-    total_checked = 0
+    # Issue #361 - avoid blocking - run scan/pipeline in thread pool
+    def _scan_for_orphans():
+        orphaned_facts = []
+        cursor = 0
+        total_checked = 0
 
-    while True:
-        cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+        while True:
+            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
 
-        if not keys:
+            if not keys:
+                if cursor == 0:
+                    break
+                continue
+
+            # Use pipeline for batch operations
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.hget(key, "metadata")
+            results = pipe.execute()
+
+            # Process batch (extracted helper reduces nesting)
+            batch_checked, batch_orphans = _process_orphan_batch(keys, results)
+            total_checked += batch_checked
+            orphaned_facts.extend(batch_orphans)
+
             if cursor == 0:
                 break
-            continue
 
-        # Use pipeline for batch operations
-        pipe = kb.redis_client.pipeline()
-        for key in keys:
-            pipe.hget(key, "metadata")
-        results = pipe.execute()
+        return total_checked, orphaned_facts
 
-        # Process batch (extracted helper reduces nesting)
-        batch_checked, batch_orphans = _process_orphan_batch(keys, results)
-        total_checked += batch_checked
-        orphaned_facts.extend(batch_orphans)
-
-        if cursor == 0:
-            break
+    total_checked, orphaned_facts = await asyncio.to_thread(_scan_for_orphans)
 
     logger.info(
         f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
@@ -568,12 +581,17 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
 
         fact_keys = [f["fact_key"] for f in orphaned_facts]
 
-        # Delete in batches
-        batch_size = 100
-        for i in range(0, len(fact_keys), batch_size):
-            batch = fact_keys[i : i + batch_size]
-            kb.redis_client.delete(*batch)
-            deleted_count += len(batch)
+        # Issue #361 - avoid blocking - delete orphans in thread pool
+        def _delete_orphan_batches():
+            count = 0
+            batch_size = 100
+            for i in range(0, len(fact_keys), batch_size):
+                batch = fact_keys[i : i + batch_size]
+                kb.redis_client.delete(*batch)
+                count += len(batch)
+            return count
+
+        deleted_count = await asyncio.to_thread(_delete_orphan_batches)
 
         logger.info(f"Deleted {deleted_count} orphaned facts")
 
@@ -604,14 +622,17 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     base_path = PathLib(__file__).parent.parent.parent
     scan_path = base_path / directory
 
-    if not scan_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(scan_path.exists):
         raise HTTPException(status_code=404, detail=f"Directory not found: {directory}")
 
     unimported = []
     needs_reimport = []
 
     # Scan for markdown files
-    for file_path in scan_path.rglob("*.md"):
+    # Issue #358 - avoid blocking with lambda for proper rglob() execution in thread
+    md_files = await asyncio.to_thread(lambda: list(scan_path.rglob("*.md")))
+    for file_path in md_files:
         if tracker.needs_reimport(str(file_path)):
             if tracker.is_imported(str(file_path)):
                 needs_reimport.append(str(file_path.relative_to(base_path)))

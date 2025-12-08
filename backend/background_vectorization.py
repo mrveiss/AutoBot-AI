@@ -37,6 +37,7 @@ class BackgroundVectorizer:
     """Background service for automatic fact vectorization"""
 
     def __init__(self):
+        """Initialize background vectorizer with default settings."""
         self.is_running = False
         self.last_run: Optional[datetime] = None
         self.check_interval = 300  # 5 minutes

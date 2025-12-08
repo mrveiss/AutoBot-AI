@@ -28,6 +28,25 @@ router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"
 CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "while "}
 
 
+def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
+    """Parse git log output to count bug fixes per file. (Issue #315 - extracted)"""
+    file_bug_counts: dict[str, int] = {}
+    current_files: list[str] = []
+
+    for line in lines:
+        if not line or line.startswith(" "):
+            continue
+        # This is either a commit hash or a file
+        if "/" in line or line.endswith(".py") or line.endswith(".vue"):
+            for f in current_files:
+                file_bug_counts[f] = file_bug_counts.get(f, 0) + 1
+            current_files = [line]
+        else:
+            current_files = []
+
+    return file_bug_counts
+
+
 # ============================================================================
 # Models
 # ============================================================================
@@ -222,22 +241,9 @@ async def get_git_bug_history() -> dict[str, Any]:
         if proc.returncode != 0:
             return {}
 
-        # Parse output to count bug fixes per file
+        # Parse output to count bug fixes per file (Issue #315 - uses helper)
         lines = stdout.decode("utf-8").strip().split("\n")
-        file_bug_counts: dict[str, int] = {}
-        current_files: list[str] = []
-
-        for line in lines:
-            if line and not line.startswith(" "):
-                # This is either a commit hash or a file
-                if "/" in line or line.endswith(".py") or line.endswith(".vue"):
-                    for f in current_files:
-                        file_bug_counts[f] = file_bug_counts.get(f, 0) + 1
-                    current_files = [line]
-                else:
-                    current_files = []
-
-        return file_bug_counts
+        return _parse_git_bug_history_lines(lines)
 
     except Exception as e:
         logger.warning(f"Failed to get git bug history: {e}")
@@ -284,10 +290,11 @@ async def analyze_file_complexity(file_path: str) -> float:
     """Estimate file complexity (0-100 score)."""
     try:
         path = Path(file_path)
-        if not path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(path.exists):
             return 30  # Default for non-existent files
 
-        content = path.read_text(encoding="utf-8", errors="ignore")
+        content = await asyncio.to_thread(path.read_text, encoding="utf-8", errors="ignore")
         lines = content.split("\n")
         line_count = len(lines)
 
@@ -474,13 +481,18 @@ async def analyze_codebase(
         change_freq = await get_file_change_frequency()
 
         # Find files to analyze
-        files_to_analyze = []
-        try:
-            root = Path(path)
-            if root.is_dir():
-                files_to_analyze = list(root.rglob(include_pattern))[:limit]
-        except Exception as e:
-            logger.debug("Path traversal error: %s", e)
+        # Issue #358 - wrap blocking operations in sync helper
+        def _find_files_sync():
+            result = []
+            try:
+                root = Path(path)
+                if root.is_dir():
+                    result = list(root.rglob(include_pattern))[:limit]
+            except Exception as e:
+                logger.debug("Path traversal error: %s", e)
+            return result
+
+        files_to_analyze = await asyncio.to_thread(_find_files_sync)
 
         if not files_to_analyze:
             # Return demo data if no files found
@@ -514,12 +526,14 @@ async def analyze_codebase(
             change_count = change_freq.get(rel_path, 0)
             bug_count = bug_history.get(rel_path, 0)
 
+            # Issue #358 - avoid blocking
+            file_stat = await asyncio.to_thread(file_path.stat)
             factors = {
                 "complexity": complexity,
                 "change_frequency": min(100, change_count * 10),
                 "bug_history": min(100, bug_count * 15),
                 "test_coverage": 50,  # Would need actual coverage data
-                "file_size": min(100, file_path.stat().st_size / 500),
+                "file_size": min(100, file_stat.st_size / 500),
             }
 
             # Calculate weighted risk score
@@ -598,17 +612,20 @@ async def get_file_risk(file_path: str) -> dict[str, Any]:
     # Check if file exists
     path = Path(file_path)
 
-    if path.exists():
+    # Issue #358 - avoid blocking
+    if await asyncio.to_thread(path.exists):
         complexity = await analyze_file_complexity(str(path))
         bug_history = await get_git_bug_history()
         change_freq = await get_file_change_frequency()
 
+        # Issue #358 - avoid blocking
+        file_stat = await asyncio.to_thread(path.stat)
         factors = {
             "complexity": complexity,
             "change_frequency": min(100, change_freq.get(file_path, 0) * 10),
             "bug_history": min(100, bug_history.get(file_path, 0) * 15),
             "test_coverage": 50,
-            "file_size": min(100, path.stat().st_size / 500),
+            "file_size": min(100, file_stat.st_size / 500),
         }
 
         risk_score = sum(
@@ -888,8 +905,13 @@ async def record_bug(
                 "severity": severity,
                 "recorded_at": datetime.now().isoformat(),
             }
-            redis.lpush("bug_prediction:recorded_bugs", json.dumps(bug_record))
-            redis.ltrim("bug_prediction:recorded_bugs", 0, 999)  # Keep last 1000
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                redis.lpush, "bug_prediction:recorded_bugs", json.dumps(bug_record)
+            )
+            await asyncio.to_thread(
+                redis.ltrim, "bug_prediction:recorded_bugs", 0, 999
+            )  # Keep last 1000
 
             return {
                 "status": "recorded",

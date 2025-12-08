@@ -147,6 +147,7 @@ class GUIController:
 
 
 async def main():
+    """Test function for GUIController with screenshot and click operations."""
     # Test the GUIController
     controller = GUIController()
     if controller.virtual_display:

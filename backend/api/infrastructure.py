@@ -11,6 +11,7 @@ Complete REST API for Infrastructure as Code (IaC) platform including:
 - Infrastructure statistics and monitoring
 """
 
+import asyncio
 import logging
 import os
 import socket
@@ -191,7 +192,8 @@ async def create_host(
         if auth_method == "key" and key_file:
             # Save uploaded key to secure location
             key_dir = "/home/autobot/.ssh/infrastructure_keys"
-            os.makedirs(key_dir, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(os.makedirs, key_dir, exist_ok=True)
 
             key_filename = f"{hostname}_{ip_address.replace('.', '_')}.pem"
             key_path = os.path.join(key_dir, key_filename)
@@ -203,7 +205,8 @@ async def create_host(
                     await f.write(content)
 
                 # Set secure permissions
-                os.chmod(key_path, 0o600)
+                # Issue #358 - avoid blocking
+                await asyncio.to_thread(os.chmod, key_path, 0o600)
 
                 host_data["ssh_key_path"] = key_path
                 key_content = content.decode("utf-8")
@@ -382,9 +385,11 @@ async def delete_host(host_id: int):
             raise HTTPException(status_code=404, detail=f"Host {host_id} not found")
 
         # Delete SSH key file if exists
-        if host.ssh_key_path and os.path.exists(host.ssh_key_path):
+        # Issue #358 - avoid blocking
+        key_exists = await asyncio.to_thread(os.path.exists, host.ssh_key_path) if host.ssh_key_path else False
+        if host.ssh_key_path and key_exists:
             try:
-                os.unlink(host.ssh_key_path)
+                await asyncio.to_thread(os.unlink, host.ssh_key_path)
                 logger.info(f"Deleted SSH key file: {host.ssh_key_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete SSH key file: {e}")

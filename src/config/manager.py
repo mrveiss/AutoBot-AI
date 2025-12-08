@@ -47,6 +47,7 @@ class UnifiedConfigManager(
         config_dir: str = "config",
         settings: Optional[UnifiedConfigSettings] = None,
     ):
+        """Initialize unified config manager with directory paths and settings."""
         # Find project root dynamically
         self.project_root = Path(__file__).parent.parent.parent
         self.config_dir = self.project_root / config_dir

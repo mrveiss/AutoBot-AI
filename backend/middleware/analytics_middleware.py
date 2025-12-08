@@ -22,6 +22,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Middleware to automatically track API calls for analytics"""
 
     def __init__(self, app, analytics_controller=None):
+        """Initialize analytics middleware with optional analytics controller."""
         super().__init__(app)
         self.analytics_controller = analytics_controller
         self.tracked_paths = {"/api/", "/docs", "/redoc"}
@@ -80,9 +81,10 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
 
 
 def create_analytics_middleware(analytics_controller=None):
-    """Factory function to create analytics middleware with controller"""
+    """Factory function to create analytics middleware with injected controller."""
 
     def middleware_factory(app):
+        """Create analytics middleware instance for the given app."""
         return AnalyticsMiddleware(app, analytics_controller)
 
     return middleware_factory

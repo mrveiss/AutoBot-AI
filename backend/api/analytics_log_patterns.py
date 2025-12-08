@@ -6,6 +6,7 @@ Dynamic Pattern Mining from Logs API (Issue #226)
 Provides endpoints for discovering patterns, anomalies, and trends in log data
 """
 
+import asyncio
 import logging
 import re
 from collections import Counter, defaultdict
@@ -132,6 +133,7 @@ class LogPatternMiner:
     ]
 
     def __init__(self):
+        """Initialize log pattern analyzer with empty pattern cache."""
         self.pattern_cache: Dict[str, LogPattern] = {}
 
     def normalize_message(self, message: str) -> str:
@@ -193,7 +195,7 @@ class LogPatternMiner:
             }
         )
 
-        for line, source, raw_ts in log_lines:
+        for line, source, _ in log_lines:  # Issue #382: raw_ts unused
             normalized = self.normalize_message(line)
             level = self.extract_log_level(line)
             timestamp = self.extract_timestamp(line)
@@ -510,6 +512,23 @@ async def _read_log_lines(
     return result
 
 
+def _should_include_log_line(
+    line: str, cutoff_time: Optional[datetime], pattern_filter: Optional[str]
+) -> bool:
+    """Check if a log line should be included. (Issue #315 - extracted)"""
+    if not line.strip():
+        return False
+    ts = pattern_miner.extract_timestamp(line)
+    if cutoff_time and ts and ts < cutoff_time:
+        return False
+    if pattern_filter:
+        normalized = pattern_miner.normalize_message(line)
+        pid, _ = pattern_miner.categorize_pattern(normalized)
+        if pid != pattern_filter:
+            return False
+    return True
+
+
 async def _read_log_lines_with_source(
     file_path: Path,
     cutoff_time: Optional[datetime] = None,
@@ -529,22 +548,10 @@ async def _read_log_lines_with_source(
     try:
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             content = await f.read()
+            # Filter lines using helper (Issue #315 - reduced depth)
             for line in content.splitlines():
-                if not line.strip():
-                    continue
-
-                ts = pattern_miner.extract_timestamp(line)
-                if cutoff_time and ts and ts < cutoff_time:
-                    continue
-
-                # Optional pattern filtering
-                if pattern_filter:
-                    normalized = pattern_miner.normalize_message(line)
-                    pid, _ = pattern_miner.categorize_pattern(normalized)
-                    if pid != pattern_filter:
-                        continue
-
-                result.append((line.strip(), file_name, ""))
+                if _should_include_log_line(line, cutoff_time, pattern_filter):
+                    result.append((line.strip(), file_name, ""))
 
     except OSError as e:
         logger.warning(f"Failed to read {file_path}: {e}")
@@ -563,10 +570,13 @@ async def _collect_all_log_lines(
     """Collect log lines from all log files in directory (Issue #315)."""
     all_lines: List[Tuple[str, str, str]] = []
 
-    if not log_dir.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(log_dir.exists):
         return all_lines
 
-    for file_path in log_dir.glob("*.log"):
+    # Issue #358 - avoid blocking with lambda for proper glob() execution in thread
+    log_files = await asyncio.to_thread(lambda: list(log_dir.glob("*.log")))
+    for file_path in log_files:
         file_lines = await _read_log_lines_with_source(
             file_path, cutoff_time, source_filter, pattern_filter
         )
@@ -606,9 +616,11 @@ async def _collect_log_files(
     pattern: str = "*.log",
 ) -> List[Path]:
     """Collect log file paths from directory."""
-    if not log_dir.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(log_dir.exists):
         return []
-    return list(log_dir.glob(pattern))
+    # Issue #358 - use lambda for proper glob() execution in thread
+    return await asyncio.to_thread(lambda: list(log_dir.glob(pattern)))
 
 
 # =============================================================================

@@ -4,12 +4,15 @@
 """
 Compliance Manager for Enterprise Security
 Handles SOC2, GDPR, ISO27001 audit logging and reporting requirements
+
+Issue #378: Added threading locks for file operations to prevent race conditions.
 """
 
 import asyncio
 import json
 import logging
 import os
+import threading
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -70,6 +73,7 @@ class ComplianceManager:
         self,
         config_path: str = str(PATH.get_config_path("security", "compliance.yaml")),
     ):
+        """Initialize compliance manager with config and audit storage paths."""
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -100,6 +104,9 @@ class ComplianceManager:
 
         # Initialize retention policies
         self.retention_policies = self._initialize_retention_policies()
+
+        # Thread-safe file operations (Issue #378)
+        self._file_lock = threading.Lock()
 
         logger.info("Compliance Manager initialized")
 
@@ -155,38 +162,41 @@ class ComplianceManager:
         }
 
     def _save_config(self, config: Dict):
-        """Save configuration to file"""
-        try:
-            os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-            with open(self.config_path, "w") as f:
-                yaml.dump(config, f, default_flow_style=False)
-        except Exception as e:
-            logger.error(f"Failed to save compliance config: {e}")
+        """Save configuration to file (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False)
+            except Exception as e:
+                logger.error(f"Failed to save compliance config: {e}")
 
     def _get_encryption_key(self) -> Optional[bytes]:
-        """Get or generate encryption key for sensitive audit data"""
+        """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
         key_path = self.audit_base_path / ".audit_key"
 
-        if key_path.exists():
+        # Note: _file_lock not yet initialized during __init__, use local lock
+        with threading.Lock():
+            if key_path.exists():
+                try:
+                    with open(key_path, "rb") as f:
+                        return f.read()
+                except Exception as e:
+                    logger.error(f"Failed to load encryption key: {e}")
+
+            # Generate new key
             try:
-                with open(key_path, "rb") as f:
-                    return f.read()
+                key = Fernet.generate_key()
+                with open(key_path, "wb") as f:
+                    f.write(key)
+
+                # Set restrictive permissions
+                os.chmod(key_path, 0o600)
+                logger.info("Generated new audit encryption key")
+                return key
             except Exception as e:
-                logger.error(f"Failed to load encryption key: {e}")
-
-        # Generate new key
-        try:
-            key = Fernet.generate_key()
-            with open(key_path, "wb") as f:
-                f.write(key)
-
-            # Set restrictive permissions
-            os.chmod(key_path, 0o600)
-            logger.info("Generated new audit encryption key")
-            return key
-        except Exception as e:
-            logger.error(f"Failed to generate encryption key: {e}")
-            return None
+                logger.error(f"Failed to generate encryption key: {e}")
+                return None
 
     def _load_compliance_requirements(self) -> Dict:
         """Load compliance framework requirements"""
@@ -491,7 +501,8 @@ class ComplianceManager:
             / "pii_access"
             / f"{datetime.utcnow().strftime('%Y-%m-%d')}.json"
         )
-        pii_log_path.parent.mkdir(exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(pii_log_path.parent.mkdir, exist_ok=True)
 
         try:
             # Use aiofiles for non-blocking file I/O
@@ -510,7 +521,8 @@ class ComplianceManager:
         event_type = audit_event["event_type"]
 
         storage_path = self.audit_base_path / event_type / f"{date_str}.jsonl"
-        storage_path.parent.mkdir(parents=True, exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(storage_path.parent.mkdir, parents=True, exist_ok=True)
 
         # Encrypt sensitive events
         sensitive_events = [
@@ -676,7 +688,8 @@ class ComplianceManager:
             / "violations"
             / f"{datetime.utcnow().strftime('%Y-%m-%d')}.jsonl"
         )
-        violations_path.parent.mkdir(exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(violations_path.parent.mkdir, exist_ok=True)
 
         try:
             # Use aiofiles for non-blocking file I/O

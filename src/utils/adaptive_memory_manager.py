@@ -25,6 +25,7 @@ class AdaptiveMemoryManager:
     """
 
     def __init__(self):
+        """Initialize memory manager with thresholds and LRU cache storage."""
         self.memory_threshold = 0.8  # 80% memory usage threshold
         self.cleanup_percentage = 0.2  # Clean up 20% of data
         self.monitoring_interval = 60  # Check every minute

@@ -195,6 +195,7 @@ class AutoBotSemanticChunker:
             import concurrent.futures
 
             def load_model():
+                """Load and optimize embedding model on detected device."""
                 device = self._detect_device()
                 model = self._load_model_with_retry(device)
                 return self._optimize_loaded_model(model, device)
@@ -293,16 +294,22 @@ class AutoBotSemanticChunker:
             r"Wed|Thu|Fri|Sat|Sun)\.(?!\s*$)"
         )
 
-        # Split on sentence endings, but not after abbreviations
+        # Issue #383 - Use regex split instead of character-by-character string building
+        # Split text by sentence endings, keeping the delimiters
+        raw_splits = re.split(f"({sentence_endings})", text)
+
+        # Recombine splits: each sentence is content + delimiter
         sentences = []
         current_sentence = ""
-
-        for char in text:
-            current_sentence += char
-            if re.search(sentence_endings, current_sentence):
+        for i, part in enumerate(raw_splits):
+            current_sentence += part
+            # Check if this part is a sentence ending (odd indices after split with group)
+            if re.match(sentence_endings, part):
                 # Check if this is likely an abbreviation
                 if not re.search(abbreviations, current_sentence):
-                    sentences.append(current_sentence.strip())
+                    stripped = current_sentence.strip()
+                    if stripped:
+                        sentences.append(stripped)
                     current_sentence = ""
 
         # Add any remaining text as a sentence

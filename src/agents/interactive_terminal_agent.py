@@ -27,6 +27,7 @@ class InteractiveTerminalAgent:
     """Agent that manages interactive terminal sessions with full I/O"""
 
     def __init__(self, chat_id: str):
+        """Initialize interactive terminal agent with PTY session management."""
         self.chat_id = chat_id
         self.master_fd: Optional[int] = None
         self.slave_fd: Optional[int] = None

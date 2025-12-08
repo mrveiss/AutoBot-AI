@@ -96,6 +96,7 @@ class SystemCommandAgent:
     ]
 
     def __init__(self):
+        """Initialize system command agent with security layer and session tracking."""
         self.security_layer = SecurityLayer()
         self.active_sessions: Dict[str, InteractiveTerminalAgent] = {}
         self.command_history: List[Dict[str, Any]] = []

@@ -34,6 +34,35 @@ IGNORE_VALUES = {
 SOURCE_DIRS = {"src/constants", "backend/constants"}
 
 
+def _extract_constant_value(node: ast.AST) -> any:
+    """Extract value from ast.Constant node (Issue #315: extracted)."""
+    return node.value
+
+
+def _extract_num_value(node: ast.AST) -> any:
+    """Extract value from ast.Num node - Python 3.7 compat (Issue #315: extracted)."""
+    return node.n
+
+
+def _extract_str_value(node: ast.AST) -> any:
+    """Extract value from ast.Str node - Python 3.7 compat (Issue #315: extracted)."""
+    return node.s
+
+
+def _extract_name_constant_value(node: ast.AST) -> any:
+    """Extract value from ast.NameConstant node - Python 3.7 compat (Issue #315)."""
+    return node.value
+
+
+# AST node type to value extractor mapping (Issue #315: dictionary dispatch)
+_AST_VALUE_EXTRACTORS = {
+    ast.Constant: _extract_constant_value,
+    ast.Num: _extract_num_value,
+    ast.Str: _extract_str_value,
+    ast.NameConstant: _extract_name_constant_value,
+}
+
+
 class ConfigDuplicationDetector:
     """Detects configuration value duplicates across codebase."""
 
@@ -90,20 +119,19 @@ class ConfigDuplicationDetector:
 
         Returns:
             Extracted value or None
+
+        Issue #315: Refactored to use dictionary dispatch for reduced nesting.
         """
-        if isinstance(node, ast.Constant):
-            return node.value
-        elif isinstance(node, ast.Num):  # Python 3.7 compat
-            return node.n
-        elif isinstance(node, ast.Str):  # Python 3.7 compat
-            return node.s
-        elif isinstance(node, ast.NameConstant):  # Python 3.7 compat
-            return node.value
-        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-            # Negative numbers
-            if isinstance(node.operand, (ast.Num, ast.Constant)):
-                val = self._extract_value(node.operand)
-                return -val if val is not None else None
+        # Try dictionary dispatch for common node types
+        extractor = _AST_VALUE_EXTRACTORS.get(type(node))
+        if extractor:
+            return extractor(node)
+
+        # Handle negative numbers separately
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            val = self._extract_value(node.operand)
+            return -val if val is not None else None
+
         return None
 
     def _process_pydantic_field(self, node: ast.Call, filepath: str) -> None:

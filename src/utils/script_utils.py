@@ -132,6 +132,7 @@ class ProgressIndicator:
     """Progress indication utilities for long-running operations"""
 
     def __init__(self, total_steps: int, description: str = "Processing"):
+        """Initialize progress indicator with total steps and description."""
         self.total_steps = total_steps
         self.current_step = 0
         self.description = description

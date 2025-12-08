@@ -29,6 +29,7 @@ class ExecuteShellCommandHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute validated shell command with security checks."""
         command = task_payload["command"]
 
         # CRITICAL SECURITY: Validate command before execution

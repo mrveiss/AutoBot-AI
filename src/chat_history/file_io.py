@@ -105,8 +105,13 @@ class FileIOMixin:
         # Also save to Redis if enabled for fast access
         if self.use_redis and self.redis_client:
             try:
-                self.redis_client.set("autobot:chat_history", json.dumps(self.history))
-                self.redis_client.expire("autobot:chat_history", 86400)  # 1 day TTL
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(
+                    self.redis_client.set, "autobot:chat_history", json.dumps(self.history)
+                )
+                await asyncio.to_thread(
+                    self.redis_client.expire, "autobot:chat_history", 86400
+                )  # 1 day TTL
             except Exception as e:
                 logger.error(f"Error saving chat history to Redis: {str(e)}")
 

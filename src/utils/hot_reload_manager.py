@@ -26,6 +26,7 @@ class ModuleReloadHandler(FileSystemEventHandler):
     """File system event handler for module reloading"""
 
     def __init__(self, reload_manager: "HotReloadManager"):
+        """Initialize handler with reload manager and debounce settings."""
         self.reload_manager = reload_manager
         self.last_reload_time = {}
         self.reload_debounce = 1.0  # 1 second debounce
@@ -60,6 +61,7 @@ class HotReloadManager:
     """
 
     def __init__(self):
+        """Initialize hot reload manager with module tracking structures."""
         self.watched_modules: Dict[str, Any] = {}
         self.module_callbacks: Dict[str, Set[Callable]] = {}
         self.observer: Optional[Observer] = None
@@ -88,7 +90,8 @@ class HotReloadManager:
 
             # Watch backend/api directory for API changes
             api_path = Path(__file__).parent.parent.parent / "backend" / "api"
-            if api_path.exists():
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(api_path.exists):
                 self.observer.schedule(handler, str(api_path), recursive=True)
                 self.watched_paths.add(api_path)
 
@@ -101,16 +104,21 @@ class HotReloadManager:
             logger.error(f"Failed to start hot reload manager: {e}")
 
     async def stop(self) -> None:
-        """Stop the hot reload manager"""
-        try:
-            if self.observer:
-                self.observer.stop()
-                self.observer.join(timeout=5)
-                self.observer = None
+        """Stop the hot reload manager.
 
-            self.watched_modules.clear()
-            self.module_callbacks.clear()
-            self.watched_paths.clear()
+        Issue #378: Uses lock to prevent race condition when stopping
+        while a reload might be in progress.
+        """
+        try:
+            async with self.reload_lock:
+                if self.observer:
+                    self.observer.stop()
+                    self.observer.join(timeout=5)
+                    self.observer = None
+
+                self.watched_modules.clear()
+                self.module_callbacks.clear()
+                self.watched_paths.clear()
 
             logger.info("Hot reload manager stopped")
 

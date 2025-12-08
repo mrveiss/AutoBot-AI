@@ -62,35 +62,46 @@ class NPUWorkerManager:
         # Initialize from config file
         self._load_workers_from_config()
 
+    def _parse_single_worker(self, worker_data: dict) -> bool:
+        """Parse and store a single worker configuration (Issue #315: extracted helper).
+
+        Args:
+            worker_data: Worker configuration dictionary
+
+        Returns:
+            True if successfully parsed, False otherwise
+        """
+        try:
+            worker = NPUWorkerConfig(**worker_data)
+            self._workers[worker.id] = worker
+            logger.info(f"Loaded worker config: {worker.id} ({worker.name})")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load worker config: {e}")
+            return False
+
     def _load_workers_from_config(self):
         """Load worker configurations from YAML file"""
         try:
-            if self.config_file.exists():
-                with open(self.config_file, "r") as f:
-                    data = yaml.safe_load(f) or {}
-
-                # Load workers
-                workers_data = data.get("workers", [])
-                for worker_data in workers_data:
-                    try:
-                        worker = NPUWorkerConfig(**worker_data)
-                        self._workers[worker.id] = worker
-                        logger.info(
-                            f"Loaded worker config: {worker.id} ({worker.name})"
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to load worker config: {e}")
-
-                # Load load balancing config
-                lb_config = data.get("load_balancing", {})
-                if lb_config:
-                    self._load_balancing_config = LoadBalancingConfig(**lb_config)
-
-                logger.info(f"Loaded {len(self._workers)} worker configurations")
-            else:
+            if not self.config_file.exists():
                 logger.warning(f"Worker config file not found: {self.config_file}")
-                # Create default config file
                 self._save_workers_to_config()
+                return
+
+            with open(self.config_file, "r") as f:
+                data = yaml.safe_load(f) or {}
+
+            # Load workers using helper (Issue #315: reduced nesting)
+            workers_data = data.get("workers", [])
+            for worker_data in workers_data:
+                self._parse_single_worker(worker_data)
+
+            # Load load balancing config
+            lb_config = data.get("load_balancing", {})
+            if lb_config:
+                self._load_balancing_config = LoadBalancingConfig(**lb_config)
+
+            logger.info(f"Loaded {len(self._workers)} worker configurations")
 
         except Exception as e:
             logger.error(f"Failed to load worker configurations: {e}")
@@ -99,7 +110,10 @@ class NPUWorkerManager:
         """Save worker configurations to YAML file"""
         try:
             # Ensure config directory exists
-            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(
+                self.config_file.parent.mkdir, parents=True, exist_ok=True
+            )
 
             # Prepare data
             data = {
@@ -151,21 +165,29 @@ class NPUWorkerManager:
 
         logger.info("Stopped NPU worker health monitoring")
 
+    async def _check_single_worker_health(self, worker_id: str) -> None:
+        """Check health of a single worker with error handling (Issue #315: extracted helper).
+
+        Args:
+            worker_id: ID of worker to check
+        """
+        try:
+            await self._check_worker_health(worker_id)
+        except Exception as e:
+            logger.error(f"Health check failed for worker {worker_id}: {e}")
+
     async def _health_check_loop(self):
         """Background task that periodically checks worker health"""
         logger.info("NPU worker health check loop started")
 
         while self._running:
             try:
-                # Check all enabled workers
-                for worker_id, worker_config in self._workers.items():
-                    if not worker_config.enabled:
-                        continue
-
-                    try:
-                        await self._check_worker_health(worker_id)
-                    except Exception as e:
-                        logger.error(f"Health check failed for worker {worker_id}: {e}")
+                # Check all enabled workers (Issue #315: reduced nesting)
+                enabled_workers = [
+                    wid for wid, cfg in self._workers.items() if cfg.enabled
+                ]
+                for worker_id in enabled_workers:
+                    await self._check_single_worker_health(worker_id)
 
                 # Wait for next check interval
                 await asyncio.sleep(self._load_balancing_config.health_check_interval)
@@ -467,11 +489,13 @@ class NPUWorkerManager:
             client = self._worker_clients.pop(worker_id)
             await client.close()
 
-        # Remove from Redis
+        # Remove from Redis (Issue #379: concurrent deletes)
         if self.redis_client:
             try:
-                await self.redis_client.delete(f"npu:worker:{worker_id}:status")
-                await self.redis_client.delete(f"npu:worker:{worker_id}:metrics")
+                await asyncio.gather(
+                    self.redis_client.delete(f"npu:worker:{worker_id}:status"),
+                    self.redis_client.delete(f"npu:worker:{worker_id}:metrics"),
+                )
             except Exception as e:
                 logger.error(f"Failed to remove worker data from Redis: {e}")
 

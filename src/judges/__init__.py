@@ -90,6 +90,7 @@ class BaseLLMJudge:
     """Base class for all LLM-based judges in AutoBot"""
 
     def __init__(self, judge_type: str, llm_interface=None):
+        """Initialize base judge with type identifier and optional LLM interface."""
         self.judge_type = judge_type
         self.llm_interface = llm_interface
         self.judgment_history: List[JudgmentResult] = []

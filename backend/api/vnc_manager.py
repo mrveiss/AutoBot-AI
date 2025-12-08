@@ -134,29 +134,35 @@ async def restart_vnc_server() -> Dict[str, str]:
         {"status": "started|error", "message": "..."}
     """
     try:
-        # Kill existing VNC server
-        process = await asyncio.create_subprocess_exec(
-            "vncserver", "-kill", ":1",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        try:
-            await asyncio.wait_for(process.communicate(), timeout=5)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+        # Issue #379: Kill VNC server and websockify in parallel
+        async def kill_vnc():
+            """Kill VNC server with timeout handling."""
+            proc = await asyncio.create_subprocess_exec(
+                "vncserver", "-kill", ":1",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=5)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
 
-        # Kill websockify
-        process = await asyncio.create_subprocess_exec(
-            "pkill", "-9", "websockify",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        try:
-            await asyncio.wait_for(process.communicate(), timeout=5)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+        async def kill_websockify():
+            """Kill websockify with timeout handling."""
+            proc = await asyncio.create_subprocess_exec(
+                "pkill", "-9", "websockify",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=5)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+
+        # Run both kill operations in parallel
+        await asyncio.gather(kill_vnc(), kill_websockify(), return_exceptions=True)
 
         # Wait a moment for cleanup (async to not block event loop)
         await asyncio.sleep(1)

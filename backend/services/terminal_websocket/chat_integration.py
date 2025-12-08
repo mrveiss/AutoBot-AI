@@ -30,6 +30,7 @@ class TerminalChatIntegrator:
         chat_history_manager: Optional[ChatHistoryManager] = None,
         data_dir: str = "data/chats",
     ):
+        """Initialize chat integrator with conversation and history manager."""
         self.conversation_id = conversation_id
         self.chat_history_manager = chat_history_manager or (
             ChatHistoryManager() if conversation_id else None

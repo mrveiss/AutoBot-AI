@@ -24,6 +24,15 @@ from src.ai_hardware_accelerator import (
     get_ai_accelerator,
 )
 
+# Issue #387: GPU-accelerated vector search
+from src.utils.gpu_vector_search import (
+    FAISS_AVAILABLE,
+    FAISS_GPU_AVAILABLE,
+    HybridVectorSearch,
+    VectorSearchConfig,
+    get_hybrid_vector_search,
+)
+
 # Import existing AutoBot components
 from src.knowledge.embedding_cache import get_embedding_cache
 from src.knowledge_base import KnowledgeBase
@@ -132,6 +141,7 @@ class NPUSemanticSearch:
     """
 
     def __init__(self):
+        """Initialize NPU semantic search with hardware detection and caching."""
         self.knowledge_base = None
         self.ai_accelerator = None
         # Use Issue #65 P0 optimized EmbeddingCache (60-80% improvement for repeated queries)
@@ -169,6 +179,10 @@ class NPUSemanticSearch:
             "multimodal": "autobot_multimodal_fused",
         }
 
+        # Issue #387: GPU-accelerated hybrid vector search
+        self.hybrid_search: Optional[HybridVectorSearch] = None
+        self.use_gpu_search = cfg.get("vector_search.use_gpu", True)
+
     async def initialize(self):
         """Initialize NPU semantic search engine."""
         logger.info("🚀 Initializing NPU Semantic Search Engine")
@@ -194,10 +208,44 @@ class NPUSemanticSearch:
         # Initialize ChromaDB for multi-modal storage
         await self._initialize_chromadb()
 
+        # Issue #387: Initialize GPU-accelerated hybrid search
+        if self.use_gpu_search and FAISS_AVAILABLE:
+            await self._initialize_hybrid_search()
+
         # Test NPU connectivity
         await self._test_npu_connectivity()
 
         logger.info("✅ NPU Semantic Search Engine initialized")
+
+    async def _initialize_hybrid_search(self):
+        """Issue #387: Initialize GPU-accelerated hybrid vector search."""
+        try:
+            config = VectorSearchConfig(
+                embedding_dim=384,  # sentence-transformers default
+                use_gpu=True,
+                index_path="data/faiss_index",
+            )
+
+            self.hybrid_search = await get_hybrid_vector_search(
+                chromadb_client=self.chroma_client, config=config
+            )
+
+            stats = self.hybrid_search.get_stats()
+            backend = stats.get("faiss_index", {}).get("backend", "unknown")
+            gpu_available = stats.get("faiss_index", {}).get("gpu_available", False)
+
+            if gpu_available:
+                logger.info(
+                    f"✅ GPU-accelerated hybrid search initialized (backend={backend})"
+                )
+            else:
+                logger.info(
+                    f"✅ Hybrid search initialized with CPU fallback (backend={backend})"
+                )
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to initialize hybrid search: {e}")
+            self.hybrid_search = None
 
     async def _test_npu_connectivity(self):
         """Test NPU Worker connectivity and capabilities."""
@@ -419,9 +467,42 @@ class NPUSemanticSearch:
         filters: Optional[Dict[str, Any]],
         device_used: str,
     ) -> List[SearchResult]:
-        """Perform vector similarity search using the knowledge base."""
+        """Perform vector similarity search using GPU-accelerated hybrid or knowledge base."""
         try:
-            # Perform retrieval using query engine
+            # Issue #387: Try GPU-accelerated hybrid search first
+            if self.hybrid_search is not None:
+                hybrid_results, hybrid_metrics = await self.hybrid_search.search(
+                    query_embedding=query_embedding,
+                    top_k=top_k,
+                    metadata_filter=filters,
+                    include_documents=True,
+                )
+
+                if hybrid_results:
+                    # Convert hybrid results to SearchResult format
+                    results = []
+                    for hr in hybrid_results:
+                        result = SearchResult(
+                            content=hr.content or "",
+                            metadata=hr.metadata,
+                            score=hr.score,
+                            doc_id=hr.doc_id,
+                            device_used=(
+                                "gpu" if hybrid_metrics.gpu_utilized else device_used
+                            ),
+                            processing_time_ms=hybrid_metrics.query_time_ms,
+                            embedding_model="hybrid_gpu",
+                        )
+                        results.append(result)
+
+                    logger.debug(
+                        f"GPU hybrid search: {len(results)} results in "
+                        f"{hybrid_metrics.query_time_ms:.2f}ms "
+                        f"(backend={hybrid_metrics.backend_used.value})"
+                    )
+                    return results
+
+            # Fallback: Perform retrieval using LlamaIndex query engine
             # Note: LlamaIndex typically handles embedding internally,
             # but we can use the query engine approach
             query_engine = self.knowledge_base.vector_index.as_query_engine(
@@ -546,6 +627,7 @@ class NPUSemanticSearch:
         semaphore = asyncio.Semaphore(10)  # Limit concurrent searches
 
         async def _search_with_semaphore(query: str):
+            """Execute single search with semaphore for concurrency control."""
             async with semaphore:
                 return await self.enhanced_search(
                     query=query,
@@ -679,6 +761,11 @@ class NPUSemanticSearch:
         """Get comprehensive search engine statistics including embedding cache."""
         embedding_stats = self.embedding_cache.get_stats()
 
+        # Issue #387: Include GPU vector search stats
+        gpu_search_stats = (
+            self.hybrid_search.get_stats() if self.hybrid_search else None
+        )
+
         return {
             "embedding_cache_stats": embedding_stats,  # Issue #65 P0 metrics
             "search_results_cache_stats": {
@@ -691,6 +778,7 @@ class NPUSemanticSearch:
                 "batch_size_gpu": self.batch_size_gpu,
                 "similarity_threshold": self.similarity_threshold,
                 "npu_worker_url": self.npu_worker_url,
+                "use_gpu_search": self.use_gpu_search,
             },
             "hardware_status": (
                 await self._get_hardware_utilization() if self.ai_accelerator else {}
@@ -700,6 +788,10 @@ class NPUSemanticSearch:
                 if self.knowledge_base
                 else False
             ),
+            # Issue #387: GPU-accelerated vector search stats
+            "gpu_vector_search": gpu_search_stats,
+            "faiss_available": FAISS_AVAILABLE,
+            "faiss_gpu_available": FAISS_GPU_AVAILABLE,
         }
 
     async def _initialize_chromadb(self):

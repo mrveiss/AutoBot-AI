@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import importlib
 import logging
 import sys
@@ -246,12 +247,14 @@ async def reload_system_config():
     # Reload configuration
     config.reload()
 
-    # Clear configuration-related caches
+    # Issue #379: Clear configuration-related caches in parallel
     # cache_manager already imported at top
 
-    await cache_manager.clear_pattern("frontend_config*")
-    await cache_manager.clear_pattern("system_*")
-    await cache_manager.clear_pattern("llm_*")
+    await asyncio.gather(
+        cache_manager.clear_pattern("frontend_config*"),
+        cache_manager.clear_pattern("system_*"),
+        cache_manager.clear_pattern("llm_*"),
+    )
 
     logger.info("System configuration reloaded and caches cleared")
 
@@ -517,14 +520,18 @@ async def _get_key_info(redis_client, key: str, cache_prefix: str) -> dict:
 async def _get_recent_keys(redis_client, cache_keys: list, cache_prefix: str) -> list:
     """Get recent keys with TTL info (Issue #315: extracted).
 
+    Issue #370: Fetch TTL info in parallel instead of sequentially.
+
     Returns:
         List of key info dicts
     """
-    recent_keys = []
-    for key in cache_keys[:20]:
-        key_info = await _get_key_info(redis_client, key, cache_prefix)
-        recent_keys.append(key_info)
-    return recent_keys
+    # Issue #370: Fetch all key info in parallel
+    key_infos = await asyncio.gather(
+        *[_get_key_info(redis_client, key, cache_prefix) for key in cache_keys[:20]],
+        return_exceptions=True,
+    )
+    # Filter out exceptions
+    return [info for info in key_infos if not isinstance(info, Exception)]
 
 
 def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:

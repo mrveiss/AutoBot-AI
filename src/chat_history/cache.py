@@ -10,6 +10,7 @@ Provides caching functionality for chat sessions:
 - TTL handling
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict
@@ -34,9 +35,12 @@ class CacheMixin:
             chat_data: Session data to cache
         """
         try:
-            # Redis sync client expects sync operations
-            self.redis_client.setex(
-                cache_key, 3600, json.dumps(chat_data, ensure_ascii=False)  # 1 hour TTL
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.setex,
+                cache_key,
+                3600,  # 1 hour TTL
+                json.dumps(chat_data, ensure_ascii=False),
             )
         except Exception as e:
             logger.error(f"Failed to cache session data: {e}")

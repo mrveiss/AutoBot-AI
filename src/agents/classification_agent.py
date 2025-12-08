@@ -6,6 +6,7 @@ Intelligent Classification Agent
 Uses LLM reasoning to understand user intent and classify workflow complexity
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ class ClassificationAgent(StandardizedAgent):
     """Intelligent agent that understands user intent for workflow classification."""
 
     def __init__(self, llm_interface: Optional[LLMInterface] = None):
+        """Initialize classification agent with LLM interface and communication protocol."""
         super().__init__("classification")
         self.llm = llm_interface or LLMInterface()
         self.redis_client = get_redis_client()
@@ -391,7 +393,10 @@ and requirements of the request.
 
             # Store in Redis for analysis
             key = f"autobot:classification:log:{hash(user_message)}"
-            self.redis_client.setex(key, 86400, json.dumps(log_data))  # 24h expiry
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.setex, key, 86400, json.dumps(log_data)
+            )  # 24h expiry
 
         except Exception as e:
             logger.error(f"Failed to log classification: {e}")
@@ -429,8 +434,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    def show_history(agent):
-        """Show classification history (Issue #334 - extracted helper)."""
+    def show_history(agent: ClassificationAgent) -> None:
+        """Display recent classification history entries."""
         history = agent.get_classification_history()
         print("📊 Classification History:")
         for entry in history:
@@ -441,8 +446,8 @@ if __name__ == "__main__":
             print(f"   Reasoning: {entry['reasoning']}")
             print()
 
-    async def run_interactive(agent):
-        """Run interactive classification mode (Issue #334 - extracted helper)."""
+    async def run_interactive(agent: ClassificationAgent) -> None:
+        """Run interactive classification mode with user input prompts."""
         print("🤖 Interactive Classification Agent")
         print("Enter messages to classify (Ctrl+C to exit)")
 
@@ -467,8 +472,8 @@ if __name__ == "__main__":
                 print("\n👋 Goodbye!")
                 break
 
-    async def classify_single(agent, message):
-        """Classify a single message (Issue #334 - extracted helper)."""
+    async def classify_single(agent: ClassificationAgent, message: str) -> None:
+        """Classify a single message and print detailed results."""
         result = await agent.classify_request(message)
         print(f"Message: {message}")
         print(f"Classification: {result.complexity.value}")
@@ -477,7 +482,8 @@ if __name__ == "__main__":
         print(f"Suggested agents: {', '.join(result.suggested_agents)}")
         print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
 
-    async def main():
+    async def main() -> None:
+        """Main entry point for CLI classification agent testing."""
         agent = ClassificationAgent()
 
         if args.history:

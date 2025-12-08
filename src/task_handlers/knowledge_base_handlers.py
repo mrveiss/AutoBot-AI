@@ -26,6 +26,7 @@ class KBAddFileHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute knowledge base file addition with metadata and audit logging."""
         file_path = task_payload["file_path"]
         file_type = task_payload["file_type"]
         metadata = task_payload.get("metadata")
@@ -52,6 +53,7 @@ class KBSearchHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute knowledge base search query with configurable result count."""
         query = task_payload["query"]
         n_results = task_payload.get("n_results", 5)
 
@@ -83,6 +85,7 @@ class KBStoreFactHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute knowledge base fact storage with optional metadata."""
         content = task_payload["content"]
         metadata = task_payload.get("metadata")
 

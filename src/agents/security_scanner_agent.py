@@ -21,6 +21,7 @@ class SecurityScannerAgent:
     """Agent for performing defensive security scans and vulnerability assessments"""
 
     def __init__(self):
+        """Initialize security scanner agent with supported scan types."""
         self.name = "security_scanner"
         self.description = (
             "Performs defensive security scans and vulnerability assessments"

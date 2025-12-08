@@ -177,7 +177,11 @@ class ChatKnowledgeManager:
 
         # Get file info
         file_name = os.path.basename(file_path)
-        size_bytes = os.path.getsize(file_path) if os.path.exists(file_path) else None
+        # Issue #358 - avoid blocking
+        file_exists = await asyncio.to_thread(os.path.exists, file_path)
+        size_bytes = (
+            await asyncio.to_thread(os.path.getsize, file_path) if file_exists else None
+        )
 
         association = ChatFileAssociation(
             file_id=file_id,

@@ -33,6 +33,7 @@ class WorkflowAutomationManager:
     """Manages automated workflow execution with user intervention points"""
 
     def __init__(self):
+        """Initialize manager with workflow state and specialized components."""
         # Core state
         self.active_workflows: Dict[str, ActiveWorkflow] = {}
 

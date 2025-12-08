@@ -25,6 +25,7 @@ DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 
 class SecurityLayer:
     def __init__(self):
+        """Initialize security layer with config, role permissions, and audit logging."""
         # Use centralized config manager instead of direct file loading
         self.security_config = global_config_manager.get("security_config", {})
 

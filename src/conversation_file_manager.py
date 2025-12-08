@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
+import aiosqlite
 import redis.asyncio as async_redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import (
@@ -189,6 +190,9 @@ class ConversationFileManager:
         """
         Create a new SQLite database connection with optimized settings.
 
+        DEPRECATED: Use _get_async_db_connection() for async contexts.
+        This method is kept for backward compatibility with sync operations.
+
         Returns:
             sqlite3.Connection: Database connection configured for async safety
 
@@ -224,6 +228,42 @@ class ConversationFileManager:
 
         # Return rows as dictionaries
         connection.row_factory = sqlite3.Row
+
+        return connection
+
+    async def _get_async_db_connection(self) -> aiosqlite.Connection:
+        """
+        Create a new async SQLite database connection with optimized settings.
+
+        Returns:
+            aiosqlite.Connection: Async database connection
+
+        Raises:
+            RuntimeError: If foreign keys cannot be enabled (data integrity requirement)
+        """
+        connection = await aiosqlite.connect(
+            str(self.db_path),
+            timeout=30.0,
+        )
+
+        # Enable foreign keys
+        await connection.execute("PRAGMA foreign_keys = ON")
+
+        # Verify foreign keys are enabled
+        async with connection.execute("PRAGMA foreign_keys") as cursor:
+            row = await cursor.fetchone()
+            if row[0] != 1:
+                await connection.close()
+                raise RuntimeError(
+                    "Failed to enable foreign keys - data integrity cannot be guaranteed."
+                )
+
+        # Performance optimizations
+        await connection.execute("PRAGMA journal_mode = WAL")
+        await connection.execute("PRAGMA synchronous = NORMAL")
+
+        # Return rows as dictionaries
+        connection.row_factory = aiosqlite.Row
 
         return connection
 
@@ -371,23 +411,21 @@ class ConversationFileManager:
             )
             file_path = self.storage_dir / stored_filename
 
-            # Database operations
-            connection = self._get_db_connection()
-            cursor = connection.cursor()
+            # Database operations using async connection
+            connection = await self._get_async_db_connection()
 
             try:
                 # Check for existing file with same hash (deduplication)
-                cursor.execute(
+                async with connection.execute(
                     """
                     SELECT file_id, stored_filename, file_path
                     FROM conversation_files
                     WHERE file_hash = ? AND is_deleted = 0
                     LIMIT 1
-                """,
+                    """,
                     (file_hash,),
-                )
-
-                existing_file = cursor.fetchone()
+                ) as cursor:
+                    existing_file = await cursor.fetchone()
 
                 if existing_file:
                     # File already exists, create association only
@@ -400,16 +438,16 @@ class ConversationFileManager:
                     )
 
                     # Create session association
-                    cursor.execute(
+                    await connection.execute(
                         """
                         INSERT INTO session_file_associations
                         (session_id, file_id, message_id, association_type)
                         VALUES (?, ?, ?, 'reference')
-                    """,
+                        """,
                         (session_id, existing_file_id, message_id),
                     )
 
-                    connection.commit()
+                    await connection.commit()
 
                     # Log access
                     await self._log_access(
@@ -449,13 +487,13 @@ class ConversationFileManager:
                 logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
 
                 # Insert file record
-                cursor.execute(
+                await connection.execute(
                     """
                     INSERT INTO conversation_files
                     (file_id, session_id, original_filename, stored_filename,
                      file_path, file_size, file_hash, mime_type, uploaded_by)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                    """,
                     (
                         file_id,
                         session_id,
@@ -470,27 +508,27 @@ class ConversationFileManager:
                 )
 
                 # Create session association
-                cursor.execute(
+                await connection.execute(
                     """
                     INSERT INTO session_file_associations
                     (session_id, file_id, message_id, association_type)
                     VALUES (?, ?, ?, 'upload')
-                """,
+                    """,
                     (session_id, file_id, message_id),
                 )
 
                 # Add metadata if provided
                 if metadata:
                     for key, value in metadata.items():
-                        cursor.execute(
+                        await connection.execute(
                             """
                             INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
                             VALUES (?, ?, ?)
-                        """,
+                            """,
                             (file_id, key, str(value)),
                         )
 
-                connection.commit()
+                await connection.commit()
 
                 logger.info(
                     f"Added file {file_id} to session {session_id}: "
@@ -514,16 +552,16 @@ class ConversationFileManager:
                 }
 
             except Exception as e:
-                connection.rollback()
+                await connection.rollback()
                 # Clean up file if database operation failed
-                if file_path.exists():
-                    file_path.unlink()
+                # Issue #358 - avoid blocking
+                if await asyncio.to_thread(file_path.exists):
+                    await asyncio.to_thread(file_path.unlink)
                 logger.error(f"Error adding file: {e}")
                 raise RuntimeError(f"Failed to add file: {e}")
 
             finally:
-                cursor.close()
-                connection.close()
+                await connection.close()
 
     async def list_files(
         self, session_id: str, page: int = 1, page_size: int = 50
@@ -542,28 +580,27 @@ class ConversationFileManager:
                 - total_files: Total number of files
                 - total_size: Total size of all files in bytes
         """
-        connection = self._get_db_connection()
-        cursor = connection.cursor()
+        connection = await self._get_async_db_connection()
 
         try:
             # Get total count
-            cursor.execute(
+            async with connection.execute(
                 """
                 SELECT COUNT(*) as total, COALESCE(SUM(cf.file_size), 0) as total_size
                 FROM conversation_files cf
                 JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                 WHERE sfa.session_id = ? AND cf.is_deleted = 0
-            """,
+                """,
                 (session_id,),
-            )
+            ) as cursor:
+                totals = await cursor.fetchone()
 
-            totals = cursor.fetchone()
             total_files = totals["total"]
             total_size = totals["total_size"]
 
             # Get paginated files
             offset = (page - 1) * page_size
-            cursor.execute(
+            async with connection.execute(
                 """
                 SELECT
                     cf.file_id,
@@ -588,12 +625,13 @@ class ConversationFileManager:
                 WHERE sfa.session_id = ? AND cf.is_deleted = 0
                 ORDER BY sfa.associated_at DESC
                 LIMIT ? OFFSET ?
-            """,
+                """,
                 (session_id, page_size, offset),
-            )
+            ) as cursor:
+                rows = await cursor.fetchall()
 
             files = []
-            for row in cursor.fetchall():
+            for row in rows:
                 file_info = dict(row)
                 files.append(file_info)
 
@@ -612,8 +650,7 @@ class ConversationFileManager:
             raise RuntimeError(f"Failed to list files: {e}")
 
         finally:
-            cursor.close()
-            connection.close()
+            await connection.close()
 
     async def get_session_files(
         self, session_id: str, include_deleted: bool = False
@@ -647,14 +684,13 @@ class ConversationFileManager:
         except Exception as e:
             logger.error(f"Unexpected error during cache lookup: {e}")
 
-        # Cache miss or error, query database
-        connection = self._get_db_connection()
-        cursor = connection.cursor()
+        # Cache miss or error, query database using async connection
+        connection = await self._get_async_db_connection()
 
         try:
             deleted_filter = "" if include_deleted else "AND cf.is_deleted = 0"
 
-            cursor.execute(
+            async with connection.execute(
                 f"""
                 SELECT
                     cf.file_id,
@@ -676,12 +712,13 @@ class ConversationFileManager:
                 JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                 WHERE sfa.session_id = ? {deleted_filter}
                 ORDER BY sfa.associated_at DESC
-            """,
+                """,
                 (session_id,),
-            )
+            ) as cursor:
+                rows = await cursor.fetchall()
 
             files = []
-            for row in cursor.fetchall():
+            for row in rows:
                 file_info = dict(row)
                 files.append(file_info)
 
@@ -697,14 +734,35 @@ class ConversationFileManager:
             return []
 
         finally:
-            cursor.close()
-            connection.close()
+            await connection.close()
+
+    async def _hard_delete_file(self, connection, file_id: str, file_path: Path) -> None:
+        """Permanently delete a file (Issue #315 - extracted helper)."""
+        await connection.execute(
+            "DELETE FROM conversation_files WHERE file_id = ?", (file_id,)
+        )
+        # Issue #358 - avoid blocking
+        if await asyncio.to_thread(file_path.exists):
+            await asyncio.to_thread(file_path.unlink)
+            logger.info(f"Hard deleted file: {file_path}")
+
+    async def _soft_delete_file(self, connection, file_id: str) -> None:
+        """Soft delete a file by marking as deleted (Issue #315 - extracted helper)."""
+        await connection.execute(
+            """
+            UPDATE conversation_files
+            SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
+            WHERE file_id = ?
+            """,
+            (file_id,),
+        )
+        logger.info(f"Soft deleted file: {file_id}")
 
     async def delete_session_files(
         self, session_id: str, hard_delete: bool = False
     ) -> int:
         """
-        Delete all files associated with a session.
+        Delete all files associated with a session (Issue #315 - refactored depth 5 to 3).
 
         Args:
             session_id: Chat session identifier
@@ -714,78 +772,48 @@ class ConversationFileManager:
             int: Number of files deleted
         """
         async with self._lock:
-            connection = self._get_db_connection()
-            cursor = connection.cursor()
+            connection = await self._get_async_db_connection()
 
             try:
                 # Get all file IDs for session
-                cursor.execute(
+                async with connection.execute(
                     """
                     SELECT DISTINCT cf.file_id, cf.file_path, cf.stored_filename
                     FROM conversation_files cf
                     JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                     WHERE sfa.session_id = ? AND cf.is_deleted = 0
-                """,
+                    """,
                     (session_id,),
-                )
+                ) as cursor:
+                    files_to_delete = await cursor.fetchall()
 
-                files_to_delete = cursor.fetchall()
                 deleted_count = 0
-
                 for file_row in files_to_delete:
                     file_id = file_row["file_id"]
                     file_path = Path(file_row["file_path"])
 
                     if hard_delete:
-                        # Permanently delete file and records
-                        # Delete from database (cascades to related tables)
-                        cursor.execute(
-                            """
-                            DELETE FROM conversation_files WHERE file_id = ?
-                        """,
-                            (file_id,),
-                        )
-
-                        # Delete physical file
-                        if file_path.exists():
-                            file_path.unlink()
-                            logger.info(f"Hard deleted file: {file_path}")
-
+                        await self._hard_delete_file(connection, file_id, file_path)
                     else:
-                        # Soft delete (mark as deleted)
-                        cursor.execute(
-                            """
-                            UPDATE conversation_files
-                            SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
-                            WHERE file_id = ?
-                        """,
-                            (file_id,),
-                        )
-
-                        logger.info(f"Soft deleted file: {file_id}")
-
+                        await self._soft_delete_file(connection, file_id)
                     deleted_count += 1
 
-                connection.commit()
-
-                # Invalidate cache
+                await connection.commit()
                 await self._invalidate_session_cache(session_id)
 
                 logger.info(
                     f"Deleted {deleted_count} files from session {session_id} "
                     f"(hard_delete={hard_delete})"
                 )
-
                 return deleted_count
 
             except Exception as e:
-                connection.rollback()
+                await connection.rollback()
                 logger.error(f"Error deleting session files: {e}")
                 raise RuntimeError(f"Failed to delete session files: {e}")
 
             finally:
-                cursor.close()
-                connection.close()
+                await connection.close()
 
     async def _log_access(
         self,
@@ -803,16 +831,15 @@ class ConversationFileManager:
             accessed_by: User identifier
             metadata: Additional metadata for log entry
         """
-        connection = self._get_db_connection()
-        cursor = connection.cursor()
+        connection = await self._get_async_db_connection()
 
         try:
-            cursor.execute(
+            await connection.execute(
                 """
                 INSERT INTO file_access_log
                 (file_id, access_type, accessed_by, access_metadata)
                 VALUES (?, ?, ?, ?)
-            """,
+                """,
                 (
                     file_id,
                     access_type,
@@ -821,14 +848,13 @@ class ConversationFileManager:
                 ),
             )
 
-            connection.commit()
+            await connection.commit()
 
         except Exception as e:
             logger.warning(f"Failed to log file access: {e}")
 
         finally:
-            cursor.close()
-            connection.close()
+            await connection.close()
 
     async def initialize(self) -> None:
         """
@@ -944,39 +970,38 @@ class ConversationFileManager:
         Returns:
             Dict[str, Any]: Storage statistics including file count, total size, etc.
         """
-        connection = self._get_db_connection()
-        cursor = connection.cursor()
+        connection = await self._get_async_db_connection()
 
         try:
             # Total active files
-            cursor.execute(
+            async with connection.execute(
                 """
                 SELECT COUNT(*) as total_files, SUM(file_size) as total_size
                 FROM conversation_files
                 WHERE is_deleted = 0
-            """
-            ),
-            totals = cursor.fetchone()
+                """
+            ) as cursor:
+                totals = await cursor.fetchone()
 
             # Files by session
-            cursor.execute(
+            async with connection.execute(
                 """
                 SELECT COUNT(DISTINCT session_id) as total_sessions
                 FROM conversation_files
                 WHERE is_deleted = 0
-            """
-            ),
-            sessions = cursor.fetchone()
+                """
+            ) as cursor:
+                sessions = await cursor.fetchone()
 
             # Deleted files
-            cursor.execute(
+            async with connection.execute(
                 """
                 SELECT COUNT(*) as deleted_files, SUM(file_size) as deleted_size
                 FROM conversation_files
                 WHERE is_deleted = 1
-            """
-            ),
-            deleted = cursor.fetchone()
+                """
+            ) as cursor:
+                deleted = await cursor.fetchone()
 
             return {
                 "total_files": totals["total_files"] or 0,
@@ -991,8 +1016,7 @@ class ConversationFileManager:
             }
 
         finally:
-            cursor.close()
-            connection.close()
+            await connection.close()
 
 
 # Global instance (singleton pattern, thread-safe)

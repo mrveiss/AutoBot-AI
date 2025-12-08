@@ -91,10 +91,11 @@ class TagsMixin:
                 json.dumps(metadata),
             )
 
-            # Add to tag index
-            for tag in normalized_tags:
-                tag_key = f"tag:{tag}"
-                await asyncio.to_thread(self.redis_client.sadd, tag_key, fact_id)
+            # Issue #370: Add to tag index in parallel
+            await asyncio.gather(*[
+                asyncio.to_thread(self.redis_client.sadd, f"tag:{tag}", fact_id)
+                for tag in normalized_tags
+            ])
 
             logger.info(f"Added tags {normalized_tags} to fact {fact_id}")
             return {"status": "success", "tags_added": normalized_tags}
@@ -152,10 +153,11 @@ class TagsMixin:
                 json.dumps(metadata),
             )
 
-            # Remove from tag index
-            for tag in normalized_tags:
-                tag_key = f"tag:{tag}"
-                await asyncio.to_thread(self.redis_client.srem, tag_key, fact_id)
+            # Issue #370: Remove from tag index in parallel
+            await asyncio.gather(*[
+                asyncio.to_thread(self.redis_client.srem, f"tag:{tag}", fact_id)
+                for tag in normalized_tags
+            ])
 
             logger.info(f"Removed tags {normalized_tags} from fact {fact_id}")
             return {"status": "success", "tags_removed": normalized_tags}
@@ -231,19 +233,22 @@ class TagsMixin:
             # Scan for all tag keys
             tag_keys = await self._scan_redis_keys_async("tag:*")
 
-            tags_info = []
-            for tag_key in tag_keys:
-                # Extract tag name
+            # Issue #370: Fetch all tag counts in parallel
+            async def get_tag_info(tag_key):
+                """Get tag name and count."""
                 tag_name = (
                     tag_key.decode("utf-8").replace("tag:", "")
                     if isinstance(tag_key, bytes)
                     else tag_key.replace("tag:", "")
                 )
-
-                # Get fact count for this tag
                 count = await asyncio.to_thread(self.redis_client.scard, tag_key)
+                return {"tag": tag_name, "fact_count": count}
 
-                tags_info.append({"tag": tag_name, "fact_count": count})
+            results = await asyncio.gather(
+                *[get_tag_info(tag_key) for tag_key in tag_keys],
+                return_exceptions=True,
+            )
+            tags_info = [r for r in results if not isinstance(r, Exception)]
 
             # Sort by fact count descending
             tags_info.sort(key=lambda x: x["fact_count"], reverse=True)
@@ -272,15 +277,17 @@ class TagsMixin:
             Dict with status and counts
         """
         try:
-            success_count = 0
-            error_count = 0
+            # Issue #370: Tag all facts in parallel instead of sequentially
+            results = await asyncio.gather(
+                *[self.add_tags_to_fact(fact_id, tags) for fact_id in fact_ids],
+                return_exceptions=True,
+            )
 
-            for fact_id in fact_ids:
-                result = await self.add_tags_to_fact(fact_id, tags)
-                if result.get("status") == "success":
-                    success_count += 1
-                else:
-                    error_count += 1
+            success_count = sum(
+                1 for r in results
+                if not isinstance(r, Exception) and r.get("status") == "success"
+            )
+            error_count = len(fact_ids) - success_count
 
             return {
                 "status": "success",

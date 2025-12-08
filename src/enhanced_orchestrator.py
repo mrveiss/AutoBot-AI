@@ -113,6 +113,7 @@ class EnhancedOrchestrator:
     """
 
     def __init__(self, base_orchestrator: Optional[Orchestrator] = None):
+        """Initialize enhanced orchestrator with auto-documentation and agent coordination."""
         # Initialize base orchestrator
         self.base_orchestrator = base_orchestrator or Orchestrator()
 

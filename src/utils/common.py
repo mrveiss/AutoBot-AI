@@ -29,6 +29,18 @@ def _is_path_in_allowed_dir(path_obj: Path, allowed_dirs: list) -> bool:
     return False
 
 
+def _parse_key_value_file(file_obj) -> Dict[str, str]:
+    """Parse key=value format config file. (Issue #315 - extracted)"""
+    config = {}
+    for line in file_obj:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        config[key.strip()] = value.strip()
+    return config
+
+
 def _try_delete_old_file(file_path: Path, current_time: float, max_age_seconds: int) -> bool:
     """Try to delete file if older than max age (Issue #315 - extracted)."""
     if not file_path.is_file():
@@ -75,15 +87,8 @@ class CommonUtils:
             with open(config_path, "r", encoding="utf-8") as f:
                 if config_path.suffix.lower() == ".json":
                     return json.load(f)
-                else:
-                    # Assume it's a simple key=value format
-                    config = {}
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            key, value = line.split("=", 1)
-                            config[key.strip()] = value.strip()
-                    return config
+                # Parse key=value format (Issue #315 - uses helper)
+                return _parse_key_value_file(f)
         except Exception as e:
             logging.warning(f"Failed to load config from {config_path}: {e}")
             return default.copy()

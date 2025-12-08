@@ -28,6 +28,7 @@ class RespondConversationallyHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute conversational response task and publish via event manager."""
         response_text = task_payload.get("response_text", "No response provided.")
 
         await event_manager.publish("llm_response", {"response": response_text})
@@ -58,6 +59,7 @@ class AskUserForManualHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute manual request task for specific program documentation."""
         program_name = task_payload["program_name"]
         question_text = task_payload["question_text"]
 
@@ -95,6 +97,7 @@ class AskUserCommandApprovalHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute command approval request task requiring user confirmation."""
         command_to_approve = task_payload["command"]
 
         await event_manager.publish(

@@ -107,6 +107,7 @@ class AsyncEnhancedMemoryManager:
     """Async enhanced memory manager with comprehensive task tracking"""
 
     def __init__(self, db_path: str = "data/enhanced_memory.db"):
+        """Initialize async enhanced memory manager with database path and lock."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -18,6 +18,25 @@ from backend.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _parse_indexing_output(output: str) -> tuple:
+    """Parse indexing script output for statistics (Issue #315: extracted helper).
+
+    Args:
+        output: Raw stdout from indexing script
+
+    Returns:
+        Tuple of (indexed_count, total_facts)
+    """
+    indexed_count = 0
+    total_facts = 0
+    for line in output.split("\n"):
+        if "Successfully indexed:" in line:
+            indexed_count = int(line.split(":")[1].strip())
+        elif "Total facts in KB:" in line:
+            total_facts = int(line.split(":")[1].strip())
+    return indexed_count, total_facts
+
+
 @celery_app.task(bind=True, name="tasks.refresh_system_knowledge")
 def refresh_system_knowledge(self) -> Metadata:
     """
@@ -51,45 +70,35 @@ def refresh_system_knowledge(self) -> Metadata:
         )
 
         # Run the comprehensive indexing script
-        # No timeout here - let it run as long as needed
         result = subprocess.run(
             [sys.executable, "scripts/utilities/index_all_man_pages.py"],
             capture_output=True,
             text=True,
         )
 
-        if result.returncode == 0:
-            # Parse output for statistics
-            output_lines = result.stdout.split("\n")
-            indexed_count = 0
-            total_facts = 0
-
-            for line in output_lines:
-                if "Successfully indexed:" in line:
-                    indexed_count = int(line.split(":")[1].strip())
-                elif "Total facts in KB:" in line:
-                    total_facts = int(line.split(":")[1].strip())
-
-            logger.info(
-                f"System knowledge refresh complete: {indexed_count} commands indexed, "
-                f"{total_facts} total facts"
-            )
-
-            return {
-                "status": "success",
-                "commands_indexed": indexed_count,
-                "total_facts": total_facts,
-                "message": "System knowledge refreshed successfully",
-            }
-        else:
+        if result.returncode != 0:
             error_msg = result.stderr[:500] if result.stderr else "Unknown error"
             logger.error(f"System knowledge refresh failed: {error_msg}")
-
             return {
                 "status": "failed",
                 "error": error_msg,
                 "message": "Knowledge refresh failed",
             }
+
+        # Parse output using helper (Issue #315: reduced nesting)
+        indexed_count, total_facts = _parse_indexing_output(result.stdout)
+
+        logger.info(
+            f"System knowledge refresh complete: {indexed_count} commands indexed, "
+            f"{total_facts} total facts"
+        )
+
+        return {
+            "status": "success",
+            "commands_indexed": indexed_count,
+            "total_facts": total_facts,
+            "message": "System knowledge refreshed successfully",
+        }
 
     except Exception as e:
         logger.exception(f"System knowledge refresh task failed: {e}")

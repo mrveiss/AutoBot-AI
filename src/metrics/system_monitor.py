@@ -22,6 +22,7 @@ class SystemResourceMonitor:
     """Monitors system resource usage during workflow execution"""
 
     def __init__(self, collection_interval: float = 5.0):
+        """Initialize system resource monitor with collection interval and history storage."""
         self.collection_interval = collection_interval
         self.monitoring_active = False
         self.resource_history: List[Dict[str, Any]] = []

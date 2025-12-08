@@ -42,6 +42,86 @@ rum_events = []
 rum_sessions = {}
 
 
+def _format_error_log(session_id: str, url: str, data: Metadata) -> str:
+    """Format error event log message (Issue #315: extracted)."""
+    return (
+        f"SESSION={session_id} URL={url} ERROR: {data.get('message', 'Unknown error')} "
+        f"FILE={data.get('filename', 'unknown')} LINE={data.get('lineno', 0)} "
+        f"CONTEXT={data.get('context', 'global')}"
+    )
+
+
+def _format_promise_rejection_log(session_id: str, url: str, data: Metadata) -> str:
+    """Format promise rejection log message (Issue #315: extracted)."""
+    return f"SESSION={session_id} URL={url} PROMISE_REJECTION: {data.get('reason', 'Unknown reason')}"
+
+
+def _format_performance_log(session_id: str, url: str, data: Metadata) -> str:
+    """Format performance event log message (Issue #315: extracted)."""
+    metric_type = data.get("metric_type", "unknown")
+    if metric_type == "api_call":
+        return (
+            f"SESSION={session_id} API_CALL: {data.get('method', 'GET')} {data.get('url', 'unknown')} "
+            f"DURATION={data.get('duration', 0):.2f}ms STATUS={data.get('status', 'unknown')}"
+        )
+    return f"SESSION={session_id} PERFORMANCE: {metric_type} {data}"
+
+
+def _format_interaction_log(session_id: str, url: str, data: Metadata) -> str:
+    """Format interaction event log message (Issue #315: extracted)."""
+    coords = data.get("coordinates", {})
+    return (
+        f"SESSION={session_id} INTERACTION: {data.get('element', 'unknown')} "
+        f"ID={data.get('id', 'none')} CLASS={data.get('className', 'none')} "
+        f"POS=({coords.get('x', 0)},{coords.get('y', 0)})"
+    )
+
+
+def _format_form_submission_log(session_id: str, url: str, data: Metadata) -> str:
+    """Format form submission log message (Issue #315: extracted)."""
+    return (
+        f"SESSION={session_id} FORM_SUBMIT: ACTION={data.get('action', 'none')} "
+        f"METHOD={data.get('method', 'GET')} FIELDS={data.get('fieldCount', 0)}"
+    )
+
+
+# Dictionary dispatch for log formatters (Issue #315: reduces nesting)
+_RUM_LOG_FORMATTERS = {
+    "error": _format_error_log,
+    "promise_rejection": _format_promise_rejection_log,
+    "performance": _format_performance_log,
+    "interaction": _format_interaction_log,
+    "form_submission": _format_form_submission_log,
+}
+
+
+def _log_rum_event_by_type(
+    event_type: str, log_message: str, interaction_tracking: bool, rum_logger
+) -> None:
+    """Log RUM event using appropriate log level (Issue #315: extracted).
+
+    Args:
+        event_type: Type of RUM event
+        log_message: Formatted log message
+        interaction_tracking: Whether interaction tracking is enabled
+        rum_logger: Logger instance to use
+    """
+    if event_type in ("error", "promise_rejection"):
+        rum_logger.error(log_message)
+        return
+
+    if event_type == "performance":
+        rum_logger.info(log_message)
+        return
+
+    if event_type == "interaction":
+        if interaction_tracking:
+            rum_logger.debug(log_message)
+        return
+
+    rum_logger.info(log_message)
+
+
 class RumEvent(BaseModel):
     type: str
     timestamp: str
@@ -174,16 +254,7 @@ async def log_rum_event(event: RumEvent):
 
         # Log to dedicated RUM log file based on event type (outside lock)
         log_message = format_rum_log_message(event_data)
-
-        if event.type == "error" or event.type == "promise_rejection":
-            rum_logger.error(log_message)
-        elif event.type == "performance":
-            rum_logger.info(log_message)
-        elif event.type == "interaction":
-            if interaction_tracking:
-                rum_logger.debug(log_message)
-        else:
-            rum_logger.info(log_message)
+        _log_rum_event_by_type(event.type, log_message, interaction_tracking, rum_logger)
 
         return {
             "status": "success",
@@ -350,44 +421,19 @@ async def get_rum_status():
 
 
 def format_rum_log_message(event_data: Metadata) -> str:
-    """Format RUM event data into a readable log message"""
+    """Format RUM event data into a readable log message.
+
+    Uses dictionary dispatch pattern to reduce nesting (Issue #315).
+    """
     event_type = event_data.get("type", "unknown")
     session_id = event_data.get("sessionId", "unknown")
     url = event_data.get("url", "unknown")
     data = event_data.get("data", {})
 
-    if event_type == "error":
-        return (
-            f"SESSION={session_id} URL={url} ERROR: {data.get('message', 'Unknown error')} "
-            f"FILE={data.get('filename', 'unknown')} LINE={data.get('lineno', 0)} "
-            f"CONTEXT={data.get('context', 'global')}"
-        )
+    # Use dictionary dispatch for known event types (Issue #315)
+    formatter = _RUM_LOG_FORMATTERS.get(event_type)
+    if formatter:
+        return formatter(session_id, url, data)
 
-    elif event_type == "promise_rejection":
-        return f"SESSION={session_id} URL={url} PROMISE_REJECTION: {data.get('reason', 'Unknown reason')}"
-
-    elif event_type == "performance":
-        metric_type = data.get("metric_type", "unknown")
-        if metric_type == "api_call":
-            return (
-                f"SESSION={session_id} API_CALL: {data.get('method', 'GET')} {data.get('url', 'unknown')} "
-                f"DURATION={data.get('duration', 0):.2f}ms STATUS={data.get('status', 'unknown')}"
-            )
-        else:
-            return f"SESSION={session_id} PERFORMANCE: {metric_type} {data}"
-
-    elif event_type == "interaction":
-        return (
-            f"SESSION={session_id} INTERACTION: {data.get('element', 'unknown')} "
-            f"ID={data.get('id', 'none')} CLASS={data.get('className', 'none')} "
-            f"POS=({data.get('coordinates', {}).get('x', 0)},{data.get('coordinates', {}).get('y', 0)})"
-        )
-
-    elif event_type == "form_submission":
-        return (
-            f"SESSION={session_id} FORM_SUBMIT: ACTION={data.get('action', 'none')} "
-            f"METHOD={data.get('method', 'GET')} FIELDS={data.get('fieldCount', 0)}"
-        )
-
-    else:
-        return f"SESSION={session_id} URL={url} {event_type.upper()}: {data}"
+    # Default format for unknown types
+    return f"SESSION={session_id} URL={url} {event_type.upper()}: {data}"

@@ -4,11 +4,14 @@
 """
 SSO Integration Framework for Enterprise AutoBot
 Provides Single Sign-On integration with SAML, OAuth2, OpenID Connect, and LDAP
+
+Issue #378: Added threading locks for file operations to prevent race conditions.
 """
 
 import base64
 import json
 import logging
+import threading
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -90,6 +93,10 @@ class SSOIntegrationFramework:
         self,
         config_path: str = str(PATH.get_config_path("security", "sso_config.yaml")),
     ):
+        """Initialize SSO integration framework with config and provider storage."""
+        # Thread-safe file operations - must be initialized first (Issue #378)
+        self._file_lock = threading.Lock()
+
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -210,13 +217,14 @@ class SSOIntegrationFramework:
         }
 
     def _save_config(self, config: Dict):
-        """Save configuration to file"""
-        try:
-            Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, "w") as f:
-                yaml.dump(config, f, default_flow_style=False)
-        except Exception as e:
-            logger.error(f"Failed to save SSO config: {e}")
+        """Save configuration to file (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False)
+            except Exception as e:
+                logger.error(f"Failed to save SSO config: {e}")
 
     def _load_providers(self):
         """Load SSO providers from storage"""
@@ -246,78 +254,80 @@ class SSOIntegrationFramework:
             logger.error(f"Failed to load SSO providers: {e}")
 
     def _save_provider(self, provider: SSOProvider):
-        """Save SSO provider to storage"""
-        try:
-            provider_file = self.providers_path / f"{provider.provider_id}.json"
+        """Save SSO provider to storage (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                provider_file = self.providers_path / f"{provider.provider_id}.json"
 
-            provider_dict = {
-                "provider_id": provider.provider_id,
-                "name": provider.name,
-                "protocol": provider.protocol.value,
-                "enabled": provider.enabled,
-                "config": provider.config,
-                "metadata": provider.metadata,
-                "created_at": provider.created_at.isoformat(),
-                "updated_at": provider.updated_at.isoformat(),
-            }
+                provider_dict = {
+                    "provider_id": provider.provider_id,
+                    "name": provider.name,
+                    "protocol": provider.protocol.value,
+                    "enabled": provider.enabled,
+                    "config": provider.config,
+                    "metadata": provider.metadata,
+                    "created_at": provider.created_at.isoformat(),
+                    "updated_at": provider.updated_at.isoformat(),
+                }
 
-            with open(provider_file, "w") as f:
-                json.dump(provider_dict, f, indent=2)
+                with open(provider_file, "w", encoding="utf-8") as f:
+                    json.dump(provider_dict, f, indent=2, ensure_ascii=False)
 
-        except Exception as e:
-            logger.error(f"Failed to save SSO provider {provider.provider_id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to save SSO provider {provider.provider_id}: {e}")
 
     def _initialize_crypto_keys(self):
-        """Initialize cryptographic keys for SAML and JWT signing"""
-        try:
-            keys_path = PATH.get_data_path("security", "sso_keys")
-            keys_path.mkdir(parents=True, exist_ok=True)
+        """Initialize cryptographic keys for SAML and JWT signing (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                keys_path = PATH.get_data_path("security", "sso_keys")
+                keys_path.mkdir(parents=True, exist_ok=True)
 
-            private_key_path = keys_path / "private_key.pem"
-            public_key_path = keys_path / "public_key.pem"
+                private_key_path = keys_path / "private_key.pem"
+                public_key_path = keys_path / "public_key.pem"
 
-            if private_key_path.exists() and public_key_path.exists():
-                # Load existing keys
-                with open(private_key_path, "rb") as f:
-                    self.private_key = load_pem_private_key(f.read(), password=None)
+                if private_key_path.exists() and public_key_path.exists():
+                    # Load existing keys
+                    with open(private_key_path, "rb") as f:
+                        self.private_key = load_pem_private_key(f.read(), password=None)
 
-                with open(public_key_path, "rb") as f:
-                    self.public_key = load_pem_public_key(f.read())
+                    with open(public_key_path, "rb") as f:
+                        self.public_key = load_pem_public_key(f.read())
 
-                logger.info("Loaded existing SSO cryptographic keys")
-            else:
-                # Generate new keys
-                self.private_key = rsa.generate_private_key(
-                    public_exponent=65537, key_size=2048
-                )
-                self.public_key = self.private_key.public_key()
-
-                # Save keys
-                with open(private_key_path, "wb") as f:
-                    f.write(
-                        self.private_key.private_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PrivateFormat.PKCS8,
-                            encryption_algorithm=serialization.NoEncryption(),
-                        )
+                    logger.info("Loaded existing SSO cryptographic keys")
+                else:
+                    # Generate new keys
+                    self.private_key = rsa.generate_private_key(
+                        public_exponent=65537, key_size=2048
                     )
+                    self.public_key = self.private_key.public_key()
 
-                with open(public_key_path, "wb") as f:
-                    f.write(
-                        self.public_key.public_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                    # Save keys
+                    with open(private_key_path, "wb") as f:
+                        f.write(
+                            self.private_key.private_bytes(
+                                encoding=serialization.Encoding.PEM,
+                                format=serialization.PrivateFormat.PKCS8,
+                                encryption_algorithm=serialization.NoEncryption(),
+                            )
                         )
-                    )
 
-                # Set secure permissions
-                private_key_path.chmod(0o600)
-                public_key_path.chmod(0o644)
+                    with open(public_key_path, "wb") as f:
+                        f.write(
+                            self.public_key.public_bytes(
+                                encoding=serialization.Encoding.PEM,
+                                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                            )
+                        )
 
-                logger.info("Generated new SSO cryptographic keys")
+                    # Set secure permissions
+                    private_key_path.chmod(0o600)
+                    public_key_path.chmod(0o644)
 
-        except Exception as e:
-            logger.error(f"Failed to initialize crypto keys: {e}")
+                    logger.info("Generated new SSO cryptographic keys")
+
+            except Exception as e:
+                logger.error(f"Failed to initialize crypto keys: {e}")
 
     def _initialize_default_providers(self):
         """Initialize default SSO providers based on configuration"""

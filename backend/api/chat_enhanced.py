@@ -413,6 +413,7 @@ async def stream_enhanced_chat(
     request_id = generate_request_id()
 
     async def generate_enhanced_stream():
+        """Generate streaming response with AI Stack and knowledge integration."""
         try:
             # Initial setup
             session_id = message.session_id or generate_chat_session_id()

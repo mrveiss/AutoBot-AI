@@ -147,6 +147,7 @@ async def execute_automated_progression(background_tasks: BackgroundTasks):
 
         # Run progression in background to avoid timeout
         def run_progression():
+            """Execute phase progression in a new event loop."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
