@@ -71,6 +71,15 @@ class SecretsService:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
+        self._create_secrets_table(cursor)
+        self._create_secrets_indexes(cursor)
+        self._create_audit_table(cursor)
+
+        conn.commit()
+        conn.close()
+
+    def _create_secrets_table(self, cursor: sqlite3.Cursor):
+        """Create the secrets table if it doesn't exist"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS secrets (
@@ -94,25 +103,20 @@ class SecretsService:
         """
         )
 
+    def _create_secrets_indexes(self, cursor: sqlite3.Cursor):
+        """Create indexes for the secrets table"""
         cursor.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope);
-        """
+            "CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name)"
         )
 
-        cursor.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id);
-        """
-        )
-
-        cursor.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name);
-        """
-        )
-
-        # Create audit log table
+    def _create_audit_table(self, cursor: sqlite3.Cursor):
+        """Create the audit log table if it doesn't exist"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS secrets_audit (
@@ -127,9 +131,6 @@ class SecretsService:
         """
         )
 
-        conn.commit()
-        conn.close()
-
     def _encrypt_value(self, value: str) -> str:
         """Encrypt a secret value"""
         return self.cipher.encrypt(value.encode()).decode()
@@ -137,6 +138,61 @@ class SecretsService:
     def _decrypt_value(self, encrypted_value: str) -> str:
         """Decrypt a secret value"""
         return self.cipher.decrypt(encrypted_value.encode()).decode()
+
+    def _row_to_secret_dict(self, row: tuple, include_encrypted: bool = False) -> Dict:
+        """Convert a database row to a secret dictionary"""
+        secret = {
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "secret_type": row[3],
+            "scope": row[5],
+            "chat_id": row[6],
+            "created_at": row[7],
+            "updated_at": row[8],
+            "expires_at": row[9],
+            "metadata": json.loads(row[10]) if row[10] else {},
+            "access_count": row[11],
+        }
+        if include_encrypted:
+            secret["_encrypted_value"] = row[4]
+        return secret
+
+    def _row_to_secret_list_item(self, row: tuple) -> Dict:
+        """Convert a database row to a secret list item (without encrypted value)"""
+        return {
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "secret_type": row[3],
+            "scope": row[4],
+            "chat_id": row[5],
+            "created_at": row[6],
+            "updated_at": row[7],
+            "expires_at": row[8],
+            "access_count": row[9],
+        }
+
+    def _is_secret_expired(self, expires_at: Optional[str]) -> bool:
+        """Check if a secret has expired"""
+        if not expires_at:
+            return False
+        return datetime.fromisoformat(expires_at) < datetime.now(timezone.utc)
+
+    def _update_access_tracking(
+        self, cursor: sqlite3.Cursor, secret_id: str, accessed_by: Optional[str]
+    ):
+        """Update access count and audit log for a secret"""
+        cursor.execute(
+            """
+            UPDATE secrets
+            SET access_count = access_count + 1,
+                last_accessed_at = ?
+            WHERE id = ?
+        """,
+            (datetime.now(timezone.utc).isoformat(), secret_id),
+        )
+        self._audit_action(cursor, secret_id, "accessed", accessed_by)
 
     def create_secret(
         self,
@@ -207,6 +263,34 @@ class SecretsService:
         finally:
             conn.close()
 
+    def _build_get_secret_query(
+        self,
+        secret_id: Optional[str],
+        name: Optional[str],
+        scope: str,
+        chat_id: Optional[str],
+    ) -> tuple[Optional[str], List]:
+        """Build query and params for get_secret. Returns (query, params) or (None, [])."""
+        base_query = """
+            SELECT id, name, description, secret_type, encrypted_value,
+                   scope, chat_id, created_at, updated_at, expires_at,
+                   metadata, access_count
+            FROM secrets
+            WHERE is_active = 1
+        """
+        params: List = []
+
+        if secret_id:
+            return base_query + " AND id = ?", [secret_id]
+        elif name:
+            query = base_query + " AND name = ? AND scope = ?"
+            params = [name, scope]
+            if scope == "chat" and chat_id:
+                query += " AND chat_id = ?"
+                params.append(chat_id)
+            return query, params
+        return None, []
+
     def get_secret(
         self,
         secret_id: Optional[str] = None,
@@ -217,80 +301,67 @@ class SecretsService:
         accessed_by: Optional[str] = None,
     ) -> Optional[Metadata]:
         """Get a secret by ID or name with optional value decryption"""
+        query, params = self._build_get_secret_query(secret_id, name, scope, chat_id)
+        if query is None:
+            return None
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
+        try:
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+
+            if not row:
+                return None
+
+            secret = self._row_to_secret_dict(row, include_encrypted=True)
+
+            # Check expiration
+            if self._is_secret_expired(secret["expires_at"]):
+                return None
+
+            # Handle value decryption and access tracking
+            if include_value:
+                secret["value"] = self._decrypt_value(secret.pop("_encrypted_value"))
+                self._update_access_tracking(cursor, secret["id"], accessed_by)
+                conn.commit()
+            else:
+                secret.pop("_encrypted_value", None)
+
+            return secret
+        finally:
+            conn.close()
+
+    def _build_list_secrets_query(
+        self,
+        scope: Optional[str],
+        chat_id: Optional[str],
+        secret_type: Optional[str],
+        include_expired: bool,
+    ) -> tuple[str, List]:
+        """Build query and params for list_secrets."""
         query = """
-            SELECT id, name, description, secret_type, encrypted_value,
-                   scope, chat_id, created_at, updated_at, expires_at,
-                   metadata, access_count
+            SELECT id, name, description, secret_type, scope, chat_id,
+                   created_at, updated_at, expires_at, access_count
             FROM secrets
             WHERE is_active = 1
         """
+        params: List = []
 
-        params = []
-
-        if secret_id:
-            query += " AND id = ?"
-            params.append(secret_id)
-        elif name:
-            query += " AND name = ? AND scope = ?"
-            params.append(name)
+        if scope:
+            query += " AND scope = ?"
             params.append(scope)
-            if scope == "chat" and chat_id:
-                query += " AND chat_id = ?"
-                params.append(chat_id)
-        else:
-            return None
+        if chat_id:
+            query += " AND chat_id = ?"
+            params.append(chat_id)
+        if secret_type:
+            query += " AND secret_type = ?"
+            params.append(secret_type)
+        if not include_expired:
+            query += " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
 
-        cursor.execute(query, params)
-        row = cursor.fetchone()
-
-        if not row:
-            conn.close()
-            return None
-
-        secret = {
-            "id": row[0],
-            "name": row[1],
-            "description": row[2],
-            "secret_type": row[3],
-            "scope": row[5],
-            "chat_id": row[6],
-            "created_at": row[7],
-            "updated_at": row[8],
-            "expires_at": row[9],
-            "metadata": json.loads(row[10]) if row[10] else {},
-            "access_count": row[11],
-        }
-
-        # Check expiration
-        if secret["expires_at"]:
-            if datetime.fromisoformat(secret["expires_at"]) < datetime.now(
-                timezone.utc
-            ):
-                conn.close()
-                return None
-
-        # Update access tracking
-        if include_value:
-            secret["value"] = self._decrypt_value(row[4])
-
-            cursor.execute(
-                """
-                UPDATE secrets
-                SET access_count = access_count + 1,
-                    last_accessed_at = ?
-                WHERE id = ?
-            """,
-                (datetime.now(timezone.utc).isoformat(), secret["id"]),
-            )
-
-            self._audit_action(cursor, secret["id"], "accessed", accessed_by)
-            conn.commit()
-
-        conn.close()
-        return secret
+        return query + " ORDER BY created_at DESC", params
 
     def list_secrets(
         self,
@@ -300,58 +371,48 @@ class SecretsService:
         include_expired: bool = False,
     ) -> List[Metadata]:
         """List secrets based on filters"""
+        query, params = self._build_list_secrets_query(
+            scope, chat_id, secret_type, include_expired
+        )
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        query = """
-            SELECT id, name, description, secret_type, scope, chat_id,
-                   created_at, updated_at, expires_at, access_count
-            FROM secrets
-            WHERE is_active = 1
-        """
+        try:
+            cursor.execute(query, params)
+            return [self._row_to_secret_list_item(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
 
-        params = []
+    def _build_update_params(
+        self,
+        name: Optional[str],
+        description: Optional[str],
+        value: Optional[str],
+        expires_at: Optional[str],
+        metadata: Optional[Dict],
+    ) -> tuple[List[str], List]:
+        """Build update clauses and params for update_secret."""
+        updates: List[str] = []
+        params: List = []
 
-        if scope:
-            query += " AND scope = ?"
-            params.append(scope)
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+        if value is not None:
+            updates.append("encrypted_value = ?")
+            params.append(self._encrypt_value(value))
+        if expires_at is not None:
+            updates.append("expires_at = ?")
+            params.append(expires_at)
+        if metadata is not None:
+            updates.append("metadata = ?")
+            params.append(json.dumps(metadata))
 
-        if chat_id:
-            query += " AND chat_id = ?"
-            params.append(chat_id)
-
-        if secret_type:
-            query += " AND secret_type = ?"
-            params.append(secret_type)
-
-        if not include_expired:
-            query += (
-                " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
-            )
-
-        query += " ORDER BY created_at DESC"
-
-        cursor.execute(query, params)
-
-        secrets = []
-        for row in cursor.fetchall():
-            secrets.append(
-                {
-                    "id": row[0],
-                    "name": row[1],
-                    "description": row[2],
-                    "secret_type": row[3],
-                    "scope": row[4],
-                    "chat_id": row[5],
-                    "created_at": row[6],
-                    "updated_at": row[7],
-                    "expires_at": row[8],
-                    "access_count": row[9],
-                }
-            )
-
-        conn.close()
-        return secrets
+        return updates, params
 
     def update_secret(
         self,
@@ -364,55 +425,31 @@ class SecretsService:
         updated_by: Optional[str] = None,
     ) -> bool:
         """Update an existing secret"""
+        updates, params = self._build_update_params(
+            name, description, value, expires_at, metadata
+        )
+        if not updates:
+            return False
+
+        # Add timestamp and secret_id
+        updates.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(secret_id)
+
+        query = f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Build update query dynamically
-        updates = []
-        params = []
-
-        if name is not None:
-            updates.append("name = ?")
-            params.append(name)
-
-        if description is not None:
-            updates.append("description = ?")
-            params.append(description)
-
-        if value is not None:
-            updates.append("encrypted_value = ?")
-            params.append(self._encrypt_value(value))
-
-        if expires_at is not None:
-            updates.append("expires_at = ?")
-            params.append(expires_at)
-
-        if metadata is not None:
-            updates.append("metadata = ?")
-            params.append(json.dumps(metadata))
-
-        if not updates:
-            conn.close()
+        try:
+            cursor.execute(query, params)
+            if cursor.rowcount > 0:
+                self._audit_action(cursor, secret_id, "updated", updated_by)
+                conn.commit()
+                return True
             return False
-
-        updates.append("updated_at = ?")
-        params.append(datetime.now(timezone.utc).isoformat())
-
-        params.append(secret_id)
-
-        query = (
-            f"UPDATE secrets SET {', '.join(updates)} WHERE id = ? AND is_active = 1"
-        )
-        cursor.execute(query, params)
-
-        if cursor.rowcount > 0:
-            self._audit_action(cursor, secret_id, "updated", updated_by)
-            conn.commit()
+        finally:
             conn.close()
-            return True
-
-        conn.close()
-        return False
 
     def delete_secret(
         self,
