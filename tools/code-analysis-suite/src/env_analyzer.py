@@ -144,21 +144,26 @@ class EnvironmentAnalyzer:
         return results
 
     async def _scan_for_hardcoded_values(self, root_path: str, patterns: List[str]) -> List[HardcodedValue]:
-        """Scan files for hardcoded values"""
-
+        """Scan files for hardcoded values (Issue #340 - refactored)"""
         hardcoded_values = []
         root = Path(root_path)
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if file_path.is_file() and not self._should_skip_file(file_path):
-                    try:
-                        values = await self._scan_file_for_hardcoded_values(str(file_path))
-                        hardcoded_values.extend(values)
-                    except Exception as e:
-                        logger.warning(f"Failed to scan {file_path}: {e}")
+                await self._process_file_for_values(file_path, hardcoded_values)
 
         return hardcoded_values
+
+    async def _process_file_for_values(self, file_path: Path, hardcoded_values: List[HardcodedValue]) -> None:
+        """Process a single file for hardcoded values (Issue #340 - extracted)"""
+        if not file_path.is_file() or self._should_skip_file(file_path):
+            return
+
+        try:
+            values = await self._scan_file_for_hardcoded_values(str(file_path))
+            hardcoded_values.extend(values)
+        except Exception as e:
+            logger.warning(f"Failed to scan {file_path}: {e}")
 
     def _should_skip_file(self, file_path: Path) -> bool:
         """Check if file should be skipped"""
@@ -203,43 +208,66 @@ class EnvironmentAnalyzer:
         return hardcoded_values
 
     async def _scan_ast_for_hardcoded_values(self, file_path: str, tree: ast.AST, lines: List[str]) -> List[HardcodedValue]:
-        """Scan AST for hardcoded values with context"""
-
+        """Scan AST for hardcoded values with context (Issue #340 - refactored)"""
         hardcoded_values = []
 
         for node in ast.walk(tree):
-            # String literals
-            if isinstance(node, ast.Str):
-                value = node.s
-                if self._is_potentially_configurable(value):
-                    hardcoded_values.append(self._create_hardcoded_value(
-                        file_path, node.lineno, None, value, lines
-                    ))
-
-            # Numeric constants that might be configurable
-            elif isinstance(node, ast.Num):
-                value = str(node.n)
-                if self._is_numeric_config_candidate(value):
-                    hardcoded_values.append(self._create_hardcoded_value(
-                        file_path, node.lineno, None, value, lines
-                    ))
-
-            # Assignment nodes to get variable names
-            elif isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and isinstance(node.value, (ast.Str, ast.Num)):
-                        var_name = target.id
-                        if isinstance(node.value, ast.Str):
-                            value = node.value.s
-                        else:
-                            value = str(node.value.n)
-
-                        if self._is_potentially_configurable(value) or self._is_numeric_config_candidate(value):
-                            hardcoded_values.append(self._create_hardcoded_value(
-                                file_path, node.lineno, var_name, value, lines
-                            ))
+            hv = self._extract_hardcoded_from_node(node, file_path, lines)
+            if hv:
+                hardcoded_values.append(hv)
 
         return hardcoded_values
+
+    def _extract_hardcoded_from_node(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
+        """Extract hardcoded value from AST node (Issue #340 - extracted)"""
+        # String literals
+        if isinstance(node, ast.Str):
+            return self._extract_from_str_node(node, file_path, lines)
+        # Numeric constants
+        if isinstance(node, ast.Num):
+            return self._extract_from_num_node(node, file_path, lines)
+        # Assignment nodes
+        if isinstance(node, ast.Assign):
+            return self._extract_from_assign_node(node, file_path, lines)
+        return None
+
+    def _extract_from_str_node(self, node: ast.Str, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
+        """Extract from string literal node (Issue #340 - extracted)"""
+        value = node.s
+        if not self._is_potentially_configurable(value):
+            return None
+        return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
+
+    def _extract_from_num_node(self, node: ast.Num, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
+        """Extract from numeric node (Issue #340 - extracted)"""
+        value = str(node.n)
+        if not self._is_numeric_config_candidate(value):
+            return None
+        return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
+
+    def _extract_from_assign_node(self, node: ast.Assign, file_path: str, lines: List[str]) -> Optional[HardcodedValue]:
+        """Extract from assignment node (Issue #340 - extracted)"""
+        for target in node.targets:
+            hv = self._try_extract_named_value(target, node.value, file_path, node.lineno, lines)
+            if hv:
+                return hv
+        return None
+
+    def _try_extract_named_value(self, target: ast.AST, value_node: ast.AST, file_path: str,
+                                 lineno: int, lines: List[str]) -> Optional[HardcodedValue]:
+        """Try to extract a named hardcoded value (Issue #340 - extracted)"""
+        if not isinstance(target, ast.Name):
+            return None
+        if not isinstance(value_node, (ast.Str, ast.Num)):
+            return None
+
+        var_name = target.id
+        value = value_node.s if isinstance(value_node, ast.Str) else str(value_node.n)
+
+        if not (self._is_potentially_configurable(value) or self._is_numeric_config_candidate(value)):
+            return None
+
+        return self._create_hardcoded_value(file_path, lineno, var_name, value, lines)
 
     async def _regex_scan_file(self, file_path: str, content: str, lines: List[str]) -> List[HardcodedValue]:
         """Scan file using regex patterns"""

@@ -244,17 +244,20 @@ class ArchitecturalPatternAnalyzer:
 
     def _extract_nodes_from_tree(self, tree: ast.AST, file_path: str, content: str,
                                  components: List[ArchitecturalComponent]) -> None:
-        """Extract class and function nodes from AST tree (Issue #315 - extracted)"""
+        """Extract class and function nodes from AST tree (Issue #340 - refactored)"""
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                component = self._analyze_class_component(node, file_path, content)
-                if component:
-                    components.append(component)
-            elif isinstance(node, ast.FunctionDef) and not self._is_method(node, tree):
-                # Top-level functions
-                component = self._analyze_function_component(node, file_path, content)
-                if component:
-                    components.append(component)
+            component = self._extract_single_node(node, tree, file_path, content)
+            if component:
+                components.append(component)
+
+    def _extract_single_node(self, node: ast.AST, tree: ast.AST, file_path: str,
+                            content: str) -> Optional[ArchitecturalComponent]:
+        """Extract a single node as a component (Issue #340 - extracted)"""
+        if isinstance(node, ast.ClassDef):
+            return self._analyze_class_component(node, file_path, content)
+        if isinstance(node, ast.FunctionDef) and not self._is_method(node, tree):
+            return self._analyze_function_component(node, file_path, content)
+        return None
 
     def _analyze_class_component(self, node: ast.ClassDef, file_path: str, content: str) -> Optional[ArchitecturalComponent]:
         """Analyze a class as an architectural component"""
@@ -328,24 +331,10 @@ class ArchitecturalPatternAnalyzer:
             return None
 
     def _analyze_module_component(self, file_path: str, tree: ast.AST, content: str) -> Optional[ArchitecturalComponent]:
-        """Analyze a module as an architectural component"""
-
+        """Analyze a module as an architectural component (Issue #340 - refactored)"""
         try:
-            # Extract imports as dependencies
-            dependencies = []
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    dependencies.extend([alias.name for alias in node.names])
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    dependencies.append(node.module)
-
-            # Public functions/classes as interfaces
-            interfaces = []
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                    if not node.name.startswith('_'):
-                        interfaces.append(node.name)
-
+            dependencies = self._extract_module_dependencies(tree)
+            interfaces = self._extract_public_interfaces(tree)
             module_name = Path(file_path).stem
 
             return ArchitecturalComponent(
@@ -361,10 +350,26 @@ class ArchitecturalPatternAnalyzer:
                 complexity_score=len(interfaces),
                 patterns=[]
             )
-
         except Exception as e:
             logger.error(f"Error analyzing module {file_path}: {e}")
             return None
+
+    def _extract_module_dependencies(self, tree: ast.AST) -> List[str]:
+        """Extract module-level dependencies (Issue #340 - extracted)"""
+        dependencies = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                dependencies.extend([alias.name for alias in node.names])
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                dependencies.append(node.module)
+        return dependencies
+
+    def _extract_public_interfaces(self, tree: ast.AST) -> List[str]:
+        """Extract public functions/classes as interfaces (Issue #340 - extracted)"""
+        return [
+            node.name for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith('_')
+        ]
 
     def _extract_class_dependencies(self, node: ast.ClassDef, content: str) -> List[str]:
         """Extract dependencies for a class"""
@@ -403,20 +408,31 @@ class ArchitecturalPatternAnalyzer:
         return list(set(self._extract_call_dependencies(node)))
 
     def _is_abstract_class(self, node: ast.ClassDef) -> bool:
-        """Check if a class is abstract"""
-        # Check for ABC inheritance
-        for base in node.bases:
-            if isinstance(base, ast.Name) and 'ABC' in base.id:
-                return True
+        """Check if a class is abstract (Issue #340 - refactored)"""
+        return self._has_abc_base(node) or self._has_abstract_method(node)
 
-        # Check for abstract methods
+    def _has_abc_base(self, node: ast.ClassDef) -> bool:
+        """Check for ABC inheritance (Issue #340 - extracted)"""
+        return any(
+            isinstance(base, ast.Name) and 'ABC' in base.id
+            for base in node.bases
+        )
+
+    def _has_abstract_method(self, node: ast.ClassDef) -> bool:
+        """Check for abstract methods (Issue #340 - extracted)"""
         for method in node.body:
-            if isinstance(method, ast.FunctionDef):
-                for decorator in method.decorator_list:
-                    if isinstance(decorator, ast.Name) and decorator.id == 'abstractmethod':
-                        return True
-
+            if not isinstance(method, ast.FunctionDef):
+                continue
+            if self._is_abstractmethod_decorated(method):
+                return True
         return False
+
+    def _is_abstractmethod_decorated(self, method: ast.FunctionDef) -> bool:
+        """Check if method has abstractmethod decorator (Issue #340 - extracted)"""
+        return any(
+            isinstance(dec, ast.Name) and dec.id == 'abstractmethod'
+            for dec in method.decorator_list
+        )
 
     def _is_method(self, node: ast.FunctionDef, tree: ast.AST) -> bool:
         """Check if a function is a method (inside a class)"""
@@ -427,28 +443,44 @@ class ArchitecturalPatternAnalyzer:
         return False
 
     def _calculate_class_cohesion(self, node: ast.ClassDef) -> float:
-        """Calculate class cohesion using method interactions"""
+        """Calculate class cohesion using method interactions (Issue #340 - refactored)"""
         methods = [n for n in node.body if isinstance(n, ast.FunctionDef)]
         if len(methods) <= 1:
             return 1.0
 
-        # Simple cohesion: methods that reference the same attributes
-        attribute_refs = {}
-        for method in methods:
-            for child in ast.walk(method):
-                if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name) and child.value.id == 'self':
-                    attr_name = child.attr
-                    if attr_name not in attribute_refs:
-                        attribute_refs[attr_name] = []
-                    attribute_refs[attr_name].append(method.name)
-
+        attribute_refs = self._collect_attribute_references(methods)
         if not attribute_refs:
             return 0.5  # Neutral cohesion
 
-        # Calculate how many methods share attributes
+        return self._compute_cohesion_ratio(attribute_refs)
+
+    def _collect_attribute_references(self, methods: List[ast.FunctionDef]) -> Dict[str, List[str]]:
+        """Collect attribute references from methods (Issue #340 - extracted)"""
+        attribute_refs: Dict[str, List[str]] = {}
+        for method in methods:
+            self._collect_self_attributes(method, attribute_refs)
+        return attribute_refs
+
+    def _collect_self_attributes(self, method: ast.FunctionDef, attribute_refs: Dict[str, List[str]]) -> None:
+        """Collect self.* attribute references (Issue #340 - extracted)"""
+        for child in ast.walk(method):
+            if not self._is_self_attribute(child):
+                continue
+            attr_name = child.attr
+            if attr_name not in attribute_refs:
+                attribute_refs[attr_name] = []
+            attribute_refs[attr_name].append(method.name)
+
+    def _is_self_attribute(self, node: ast.AST) -> bool:
+        """Check if node is a self.* attribute access (Issue #340 - extracted)"""
+        return (isinstance(node, ast.Attribute) and
+                isinstance(node.value, ast.Name) and
+                node.value.id == 'self')
+
+    def _compute_cohesion_ratio(self, attribute_refs: Dict[str, List[str]]) -> float:
+        """Compute cohesion ratio from attribute references (Issue #340 - extracted)"""
         shared_attributes = sum(1 for methods_list in attribute_refs.values() if len(methods_list) > 1)
         total_attributes = len(attribute_refs)
-
         return shared_attributes / total_attributes if total_attributes > 0 else 0.5
 
     def _calculate_module_cohesion(self, tree: ast.AST) -> float:

@@ -251,48 +251,83 @@ class CodeQualityDashboard:
             logger.error(f"Architecture analysis failed: {e}")
             return None
 
+    def _get_duplication_score(self, duplication_data: Optional[Dict]) -> float:
+        """Calculate duplication score (Issue #340: extracted helper)."""
+        if not duplication_data:
+            return 100.0
+        total_groups = duplication_data.get('total_duplicate_groups', 0)
+        return max(0, 100 - (total_groups * 2))
+
+    def _get_environment_score(self, env_data: Optional[Dict]) -> float:
+        """Calculate environment config score (Issue #340: extracted helper)."""
+        if not env_data:
+            return 100.0
+        critical_values = env_data.get('critical_hardcoded_values', 0)
+        return max(0, 100 - (critical_values * 0.5))
+
+    def _get_performance_score(self, perf_data: Optional[Dict]) -> float:
+        """Calculate performance score (Issue #340: extracted helper)."""
+        if not perf_data:
+            return 100.0
+        critical_issues = perf_data.get('critical_issues', 0)
+        high_issues = perf_data.get('high_priority_issues', 0)
+        return max(0, 100 - (critical_issues * 10 + high_issues * 5))
+
+    def _get_security_score(self, security_data: Optional[Dict]) -> float:
+        """Calculate security score (Issue #340: extracted helper)."""
+        if not security_data or 'metrics' not in security_data:
+            return 100.0
+        return security_data['metrics'].get('security_score', 50)
+
+    def _get_api_score(self, api_data: Optional[Dict]) -> float:
+        """Calculate API consistency score (Issue #340: extracted helper)."""
+        if not api_data:
+            return 100.0
+        return api_data.get('consistency_score', 50)
+
+    def _get_testing_score(self, testing_data: Optional[Dict]) -> float:
+        """Calculate test coverage score (Issue #340: extracted helper)."""
+        if not testing_data:
+            return 0.0
+        return testing_data.get('test_coverage_percentage', 0)
+
+    def _get_architecture_score(self, arch_data: Optional[Dict]) -> float:
+        """Calculate architecture score (Issue #340: extracted helper)."""
+        if not arch_data:
+            return 50.0
+        return arch_data.get('architecture_score', 50)
+
+    def _calculate_debt_factors(self, analysis_results: Dict[str, Any]) -> List[float]:
+        """Calculate technical debt factors (Issue #340: extracted helper)."""
+        debt_factors = []
+        duplication = analysis_results.get('duplication')
+        if duplication:
+            debt_factors.append(min(50, duplication.get('total_duplicate_groups', 0) * 2))
+        security = analysis_results.get('security')
+        if security:
+            debt_factors.append(min(50, security.get('critical_vulnerabilities', 0) * 10))
+        performance = analysis_results.get('performance')
+        if performance:
+            debt_factors.append(min(50, performance.get('critical_issues', 0) * 5))
+        return debt_factors
+
     def _calculate_quality_metrics(self, analysis_results: Dict[str, Any]) -> QualityMetrics:
-        """Calculate overall quality metrics"""
-
-        # Extract scores from each analysis (default to 50 if analysis failed)
-        duplication_score = 100  # Start high, reduce based on duplicates found
-        if analysis_results.get('duplication'):
-            total_groups = analysis_results['duplication'].get('total_duplicate_groups', 0)
-            duplication_score = max(0, 100 - (total_groups * 2))
-
-        env_score = 100  # Start high, reduce based on hardcoded values
-        if analysis_results.get('environment'):
-            critical_values = analysis_results['environment'].get('critical_hardcoded_values', 0)
-            env_score = max(0, 100 - (critical_values * 0.5))
-
-        performance_score = 100  # Start high, reduce based on issues
-        if analysis_results.get('performance'):
-            critical_issues = analysis_results['performance'].get('critical_issues', 0)
-            high_issues = analysis_results['performance'].get('high_priority_issues', 0)
-            performance_score = max(0, 100 - (critical_issues * 10 + high_issues * 5))
-
-        security_score = 100
-        if analysis_results.get('security') and 'metrics' in analysis_results['security']:
-            security_score = analysis_results['security']['metrics'].get('security_score', 50)
-
-        api_score = 100
-        if analysis_results.get('api_consistency'):
-            api_score = analysis_results['api_consistency'].get('consistency_score', 50)
-
-        test_coverage_score = 0
-        if analysis_results.get('testing_coverage'):
-            test_coverage_score = analysis_results['testing_coverage'].get('test_coverage_percentage', 0)
-
-        architecture_score = 50
-        if analysis_results.get('architecture'):
-            architecture_score = analysis_results['architecture'].get('architecture_score', 50)
+        """Calculate overall quality metrics (Issue #340: refactored)."""
+        # Extract scores using helper methods
+        duplication_score = self._get_duplication_score(analysis_results.get('duplication'))
+        env_score = self._get_environment_score(analysis_results.get('environment'))
+        performance_score = self._get_performance_score(analysis_results.get('performance'))
+        security_score = self._get_security_score(analysis_results.get('security'))
+        api_score = self._get_api_score(analysis_results.get('api_consistency'))
+        test_coverage_score = self._get_testing_score(analysis_results.get('testing_coverage'))
+        architecture_score = self._get_architecture_score(analysis_results.get('architecture'))
 
         # Calculate weighted overall score
         weights = {
-            'security': 0.25,      # Security is most important
-            'performance': 0.20,   # Performance is critical
-            'architecture': 0.15,  # Good architecture is key to maintainability
-            'testing': 0.15,       # Testing coverage is important
+            'security': 0.25,
+            'performance': 0.20,
+            'architecture': 0.15,
+            'testing': 0.15,
             'api_consistency': 0.10,
             'duplication': 0.10,
             'environment': 0.05,
@@ -308,20 +343,9 @@ class CodeQualityDashboard:
             env_score * weights['environment']
         )
 
-        # Calculate maintainability index (simplified)
         maintainability = (architecture_score + test_coverage_score + duplication_score) / 3
 
-        # Calculate technical debt ratio (higher is worse)
-        debt_factors = []
-        if analysis_results.get('duplication'):
-            debt_factors.append(min(50, analysis_results['duplication'].get('total_duplicate_groups', 0) * 2))
-        if analysis_results.get('security'):
-            critical_vulns = analysis_results['security'].get('critical_vulnerabilities', 0)
-            debt_factors.append(min(50, critical_vulns * 10))
-        if analysis_results.get('performance'):
-            critical_perf = analysis_results['performance'].get('critical_issues', 0)
-            debt_factors.append(min(50, critical_perf * 5))
-
+        debt_factors = self._calculate_debt_factors(analysis_results)
         technical_debt_ratio = sum(debt_factors) / len(debt_factors) if debt_factors else 0
 
         return QualityMetrics(
@@ -337,132 +361,170 @@ class CodeQualityDashboard:
             technical_debt_ratio=round(technical_debt_ratio, 2)
         )
 
+    def _extract_duplication_issues(self, duplication_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from duplication analysis (Issue #340: extracted helper)."""
+        if not duplication_data or 'duplicate_groups' not in duplication_data:
+            return []
+
+        issues = []
+        for group in duplication_data['duplicate_groups'][:10]:
+            issues.append(QualityIssue(
+                category="code_duplication",
+                severity="medium",
+                title=f"Code duplication: {group.get('similarity', 0):.1f}% similar",
+                description=f"Found {group.get('count', 0)} duplicate code blocks",
+                file_path=group.get('files', [''])[0],
+                line_number=0,
+                fix_suggestion="Extract common code into shared utility functions",
+                estimated_effort="medium",
+                priority_score=60
+            ))
+        return issues
+
+    def _extract_environment_issues(self, env_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from environment analysis (Issue #340: extracted helper)."""
+        if not env_data or 'critical_hardcoded_values' not in env_data:
+            return []
+
+        critical_categories = {'database_urls', 'api_keys', 'file_paths'}
+        issues = []
+        for value in env_data.get('hardcoded_values', [])[:20]:
+            if value.get('category') not in critical_categories:
+                continue
+            issues.append(QualityIssue(
+                category="environment_configuration",
+                severity="high",
+                title=f"Hardcoded {value.get('category', 'value')}",
+                description=f"Found hardcoded {value.get('category')}: {value.get('value', '')[:50]}",
+                file_path=value.get('file', ''),
+                line_number=value.get('line', 0),
+                fix_suggestion="Move to environment variable or configuration file",
+                estimated_effort="low",
+                priority_score=70
+            ))
+        return issues
+
+    def _extract_security_issues(self, security_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from security analysis (Issue #340: extracted helper)."""
+        if not security_data or 'vulnerability_details' not in security_data:
+            return []
+
+        priority_map = {'critical': 100, 'high': 80, 'medium': 60, 'low': 40}
+        issues = []
+        for vuln in security_data['vulnerability_details']:
+            severity = vuln.get('severity', 'low')
+            issues.append(QualityIssue(
+                category="security",
+                severity=severity,
+                title=f"Security: {vuln.get('type', 'Unknown').replace('_', ' ').title()}",
+                description=vuln.get('description', ''),
+                file_path=vuln.get('file', ''),
+                line_number=vuln.get('line', 0),
+                fix_suggestion=vuln.get('fix_suggestion', 'Review and fix security issue'),
+                estimated_effort="high" if severity == "critical" else "medium",
+                priority_score=priority_map.get(severity, 40)
+            ))
+        return issues
+
+    def _extract_performance_issues(self, perf_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from performance analysis (Issue #340: extracted helper)."""
+        if not perf_data or 'performance_details' not in perf_data:
+            return []
+
+        priority_map = {'critical': 90, 'high': 70, 'medium': 50, 'low': 30}
+        issues = []
+        for perf in perf_data['performance_details'][:15]:
+            severity = perf.get('severity', 'low')
+            issues.append(QualityIssue(
+                category="performance",
+                severity=severity,
+                title=f"Performance: {perf.get('type', 'Unknown').replace('_', ' ').title()}",
+                description=perf.get('description', ''),
+                file_path=perf.get('file', ''),
+                line_number=perf.get('line', 0),
+                fix_suggestion=perf.get('suggestion', 'Optimize performance bottleneck'),
+                estimated_effort="medium",
+                priority_score=priority_map.get(severity, 30)
+            ))
+        return issues
+
+    def _extract_api_issues(self, api_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from API consistency analysis (Issue #340: extracted helper)."""
+        if not api_data or 'inconsistencies' not in api_data:
+            return []
+
+        priority_map = {'high': 60, 'medium': 40, 'low': 20}
+        issues = []
+        for inconsistency in api_data['inconsistencies']:
+            severity = inconsistency.get('severity', 'low')
+            issues.append(QualityIssue(
+                category="api_consistency",
+                severity=severity,
+                title=f"API: {inconsistency.get('type', 'Unknown').replace('_', ' ').title()}",
+                description=inconsistency.get('description', ''),
+                file_path='Multiple files',
+                line_number=0,
+                fix_suggestion=inconsistency.get('suggestion', 'Improve API consistency'),
+                estimated_effort="medium",
+                priority_score=priority_map.get(severity, 20)
+            ))
+        return issues
+
+    def _extract_testing_issues(self, testing_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from testing coverage analysis (Issue #340: extracted helper)."""
+        if not testing_data or 'coverage_gaps' not in testing_data:
+            return []
+
+        priority_map = {'critical': 85, 'high': 65, 'medium': 45, 'low': 25}
+        issues = []
+        for gap in testing_data['coverage_gaps']:
+            severity = gap.get('severity', 'medium')
+            suggested_tests = gap.get('suggested_tests', [])[:2]
+            issues.append(QualityIssue(
+                category="testing_coverage",
+                severity=severity,
+                title=f"Testing: {gap.get('type', 'Unknown').replace('_', ' ').title()}",
+                description=gap.get('description', ''),
+                file_path='Multiple files',
+                line_number=0,
+                fix_suggestion=f"Add missing tests: {', '.join(suggested_tests)}",
+                estimated_effort="medium",
+                priority_score=priority_map.get(severity, 45)
+            ))
+        return issues
+
+    def _extract_architecture_issues(self, arch_data: Optional[Dict]) -> List[QualityIssue]:
+        """Extract issues from architectural analysis (Issue #340: extracted helper)."""
+        if not arch_data or 'architectural_issues' not in arch_data:
+            return []
+
+        priority_map = {'critical': 75, 'high': 55, 'medium': 35, 'low': 15}
+        issues = []
+        for issue in arch_data['architectural_issues']:
+            severity = issue.get('severity', 'medium')
+            issues.append(QualityIssue(
+                category="architecture",
+                severity=severity,
+                title=f"Architecture: {issue.get('type', 'Unknown').replace('_', ' ').title()}",
+                description=issue.get('description', ''),
+                file_path='Multiple files',
+                line_number=0,
+                fix_suggestion=issue.get('suggestion', 'Improve architectural design'),
+                estimated_effort=issue.get('refactoring_effort', 'medium'),
+                priority_score=priority_map.get(severity, 35)
+            ))
+        return issues
+
     def _extract_all_issues(self, analysis_results: Dict[str, Any]) -> List[QualityIssue]:
-        """Extract all issues from analysis results"""
-
+        """Extract all issues from analysis results (Issue #340: refactored)."""
         all_issues = []
-
-        # Extract duplication issues
-        if analysis_results.get('duplication') and 'duplicate_groups' in analysis_results['duplication']:
-            for group in analysis_results['duplication']['duplicate_groups'][:10]:  # Top 10 duplicate groups
-                all_issues.append(QualityIssue(
-                    category="code_duplication",
-                    severity="medium",
-                    title=f"Code duplication: {group.get('similarity', 0):.1f}% similar",
-                    description=f"Found {group.get('count', 0)} duplicate code blocks",
-                    file_path=group.get('files', [''])[0],
-                    line_number=0,
-                    fix_suggestion="Extract common code into shared utility functions",
-                    estimated_effort="medium",
-                    priority_score=60
-                ))
-
-        # Extract environment issues
-        if analysis_results.get('environment') and 'critical_hardcoded_values' in analysis_results['environment']:
-            for value in analysis_results['environment'].get('hardcoded_values', [])[:20]:  # Top 20
-                if value.get('category') in ['database_urls', 'api_keys', 'file_paths']:
-                    all_issues.append(QualityIssue(
-                        category="environment_configuration",
-                        severity="high",
-                        title=f"Hardcoded {value.get('category', 'value')}",
-                        description=f"Found hardcoded {value.get('category')}: {value.get('value', '')[:50]}",
-                        file_path=value.get('file', ''),
-                        line_number=value.get('line', 0),
-                        fix_suggestion="Move to environment variable or configuration file",
-                        estimated_effort="low",
-                        priority_score=70
-                    ))
-
-        # Extract security issues
-        if analysis_results.get('security') and 'vulnerability_details' in analysis_results['security']:
-            for vuln in analysis_results['security']['vulnerability_details']:
-                severity = vuln.get('severity', 'low')
-                priority = {'critical': 100, 'high': 80, 'medium': 60, 'low': 40}.get(severity, 40)
-
-                all_issues.append(QualityIssue(
-                    category="security",
-                    severity=severity,
-                    title=f"Security: {vuln.get('type', 'Unknown').replace('_', ' ').title()}",
-                    description=vuln.get('description', ''),
-                    file_path=vuln.get('file', ''),
-                    line_number=vuln.get('line', 0),
-                    fix_suggestion=vuln.get('fix_suggestion', 'Review and fix security issue'),
-                    estimated_effort="high" if severity == "critical" else "medium",
-                    priority_score=priority
-                ))
-
-        # Extract performance issues
-        if analysis_results.get('performance') and 'performance_details' in analysis_results['performance']:
-            for perf in analysis_results['performance']['performance_details'][:15]:  # Top 15
-                severity = perf.get('severity', 'low')
-                priority = {'critical': 90, 'high': 70, 'medium': 50, 'low': 30}.get(severity, 30)
-
-                all_issues.append(QualityIssue(
-                    category="performance",
-                    severity=severity,
-                    title=f"Performance: {perf.get('type', 'Unknown').replace('_', ' ').title()}",
-                    description=perf.get('description', ''),
-                    file_path=perf.get('file', ''),
-                    line_number=perf.get('line', 0),
-                    fix_suggestion=perf.get('suggestion', 'Optimize performance bottleneck'),
-                    estimated_effort="medium",
-                    priority_score=priority
-                ))
-
-        # Extract API consistency issues
-        if analysis_results.get('api_consistency') and 'inconsistencies' in analysis_results['api_consistency']:
-            for inconsistency in analysis_results['api_consistency']['inconsistencies']:
-                severity = inconsistency.get('severity', 'low')
-                priority = {'high': 60, 'medium': 40, 'low': 20}.get(severity, 20)
-
-                all_issues.append(QualityIssue(
-                    category="api_consistency",
-                    severity=severity,
-                    title=f"API: {inconsistency.get('type', 'Unknown').replace('_', ' ').title()}",
-                    description=inconsistency.get('description', ''),
-                    file_path='Multiple files',
-                    line_number=0,
-                    fix_suggestion=inconsistency.get('suggestion', 'Improve API consistency'),
-                    estimated_effort="medium",
-                    priority_score=priority
-                ))
-
-        # Extract testing issues
-        if analysis_results.get('testing_coverage') and 'coverage_gaps' in analysis_results['testing_coverage']:
-            for gap in analysis_results['testing_coverage']['coverage_gaps']:
-                severity = gap.get('severity', 'medium')
-                priority = {'critical': 85, 'high': 65, 'medium': 45, 'low': 25}.get(severity, 45)
-
-                all_issues.append(QualityIssue(
-                    category="testing_coverage",
-                    severity=severity,
-                    title=f"Testing: {gap.get('type', 'Unknown').replace('_', ' ').title()}",
-                    description=gap.get('description', ''),
-                    file_path='Multiple files',
-                    line_number=0,
-                    fix_suggestion=f"Add missing tests: {', '.join(gap.get('suggested_tests', [])[:2])}",
-                    estimated_effort="medium",
-                    priority_score=priority
-                ))
-
-        # Extract architectural issues
-        if analysis_results.get('architecture') and 'architectural_issues' in analysis_results['architecture']:
-            for issue in analysis_results['architecture']['architectural_issues']:
-                severity = issue.get('severity', 'medium')
-                priority = {'critical': 75, 'high': 55, 'medium': 35, 'low': 15}.get(severity, 35)
-
-                all_issues.append(QualityIssue(
-                    category="architecture",
-                    severity=severity,
-                    title=f"Architecture: {issue.get('type', 'Unknown').replace('_', ' ').title()}",
-                    description=issue.get('description', ''),
-                    file_path='Multiple files',
-                    line_number=0,
-                    fix_suggestion=issue.get('suggestion', 'Improve architectural design'),
-                    estimated_effort=issue.get('refactoring_effort', 'medium'),
-                    priority_score=priority
-                ))
-
+        all_issues.extend(self._extract_duplication_issues(analysis_results.get('duplication')))
+        all_issues.extend(self._extract_environment_issues(analysis_results.get('environment')))
+        all_issues.extend(self._extract_security_issues(analysis_results.get('security')))
+        all_issues.extend(self._extract_performance_issues(analysis_results.get('performance')))
+        all_issues.extend(self._extract_api_issues(analysis_results.get('api_consistency')))
+        all_issues.extend(self._extract_testing_issues(analysis_results.get('testing_coverage')))
+        all_issues.extend(self._extract_architecture_issues(analysis_results.get('architecture')))
         return all_issues
 
     def _prioritize_issues(self, issues: List[QualityIssue]) -> List[QualityIssue]:
