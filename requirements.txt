@@ -25,3 +25,9 @@ opentelemetry-sdk>=1.34.0
 opentelemetry-exporter-otlp>=1.34.0
 opentelemetry-instrumentation-fastapi>=0.55b0
 opentelemetry-propagator-b3>=1.34.0
+
+# FAISS - GPU-Accelerated Vector Similarity Search (Issue #387)
+# Provides 10-100x speedup for vector similarity search operations
+# Use faiss-gpu for CUDA support, faiss-cpu for CPU-only fallback
+# Note: faiss-gpu requires CUDA toolkit installation
+faiss-gpu>=1.7.4          # GPU version with CUDA support
