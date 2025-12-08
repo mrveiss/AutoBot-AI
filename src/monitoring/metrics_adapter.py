@@ -9,7 +9,7 @@ Writes to both Prometheus and legacy systems during transition.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from src.monitoring.prometheus_metrics import get_metrics_manager
 
@@ -28,6 +28,7 @@ class MetricsAdapter:
     """
 
     def __init__(self):
+        """Initialize metrics adapter bridging Prometheus and legacy systems."""
         self.prometheus = get_metrics_manager()
         self._legacy_system_metrics = None
         self._legacy_error_metrics = None

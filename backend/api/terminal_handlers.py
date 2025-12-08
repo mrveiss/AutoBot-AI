@@ -44,14 +44,85 @@ from backend.services.terminal_websocket import (
     HIGH_RISK_COMMAND_LEVELS,
     LOGGING_SECURITY_LEVELS,
     SHELL_OPERATORS,
-    TerminalAuditLogger,
-    TerminalChatIntegrator,
-    command_assessor,
 )
 from src.chat_history import ChatHistoryManager
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
+
+
+async def _flush_cleanup_buffer(
+    chat_history_manager,
+    conversation_id: str,
+    output_buffer: str,
+) -> None:
+    """Flush remaining output buffer on cleanup (Issue #315: extracted).
+
+    Strips ANSI codes and saves clean content to chat history.
+    """
+    from src.utils.encoding_utils import strip_ansi_codes
+
+    if not output_buffer.strip():
+        return
+
+    clean_content = strip_ansi_codes(output_buffer).strip()
+    logger.info(
+        f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: "
+        f"{len(output_buffer)} chars (clean: {len(clean_content)} chars)"
+    )
+    if not clean_content:
+        return
+
+    await chat_history_manager.add_message(
+        sender="terminal",
+        text=clean_content,
+        message_type="terminal_output",
+        session_id=conversation_id,
+    )
+    logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
+
+
+async def _save_buffered_output_to_chat(
+    chat_history_manager,
+    conversation_id: str,
+    output_buffer: str,
+) -> tuple:
+    """Save buffered terminal output to chat if conditions met (Issue #315: extracted).
+
+    Returns:
+        Tuple of (should_reset_buffer, skip_reason or None)
+    """
+    from src.utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
+
+    clean_content = strip_ansi_codes(output_buffer).strip()
+    is_prompt = is_terminal_prompt(clean_content)
+
+    # Check if content should be skipped
+    if not clean_content or is_prompt:
+        skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
+        logger.debug(
+            f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} "
+            f"({len(output_buffer)} chars, clean: '{clean_content[:100]}')"
+        )
+        return True, skip_reason
+
+    # Save the clean content
+    try:
+        logger.info(
+            f"[CHAT INTEGRATION] Saving output to chat: "
+            f"{len(output_buffer)} chars (clean: {len(clean_content)} chars)"
+        )
+        await chat_history_manager.add_message(
+            sender="terminal",
+            text=clean_content,
+            message_type="terminal_output",
+            session_id=conversation_id,
+        )
+        logger.info("[CHAT INTEGRATION] Output saved successfully")
+        return True, None
+    except Exception as e:
+        logger.error(f"Failed to save output to chat: {e}")
+        return False, None
 
 
 class ConsolidatedTerminalWebSocket:
@@ -266,23 +337,12 @@ class ConsolidatedTerminalWebSocket:
         if self.chat_history_manager and self.conversation_id:
             try:
                 async with self._output_lock:
-                    if self._output_buffer.strip():
-                        from src.utils.encoding_utils import strip_ansi_codes
-
-                        # Strip ANSI codes before saving to chat
-                        clean_content = strip_ansi_codes(self._output_buffer).strip()
-                        logger.info(
-                            f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
-                        )
-                        if clean_content:
-                            await self.chat_history_manager.add_message(
-                                sender="terminal",
-                                text=clean_content,  # Save cleaned output
-                                message_type="terminal_output",
-                                session_id=self.conversation_id,
-                            )
-                        self._output_buffer = ""
-                        logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
+                    await _flush_cleanup_buffer(
+                        self.chat_history_manager,
+                        self.conversation_id,
+                        self._output_buffer,
+                    )
+                    self._output_buffer = ""
             except Exception as e:
                 logger.error(f"Failed to flush output buffer: {e}")
 
@@ -636,6 +696,32 @@ class ConsolidatedTerminalWebSocket:
 
         return True
 
+    async def _handle_stdin_error(
+        self, error: Exception, is_password: bool
+    ) -> None:
+        """Handle stdin write error with echo recovery (Issue #315: extracted).
+
+        Args:
+            error: The exception that occurred
+            is_password: Whether password mode was active (echo disabled)
+        """
+        logger.error(f"[STDIN] Error writing to PTY: {error}")
+
+        # Re-enable echo if it was disabled (ensure terminal doesn't stay in silent mode)
+        if is_password:
+            try:
+                self.pty_process.set_echo(True)
+            except Exception as echo_err:
+                logger.debug(f"Failed to re-enable echo: {echo_err}")
+
+        await self.send_message(
+            {
+                "type": "error",
+                "content": f"Error sending input: {str(error)}",
+                "timestamp": time.time(),
+            }
+        )
+
     async def _handle_terminal_stdin(self, message: dict):
         """
         Handle stdin input for interactive commands (Issue #33)
@@ -687,23 +773,9 @@ class ConsolidatedTerminalWebSocket:
         try:
             # Write stdin to PTY using extracted helper
             await self._write_stdin_to_pty(content, is_password, command_id)
-
         except Exception as e:
-            logger.error(f"[STDIN] Error writing to PTY: {e}")
-            # Re-enable echo if it was disabled (ensure terminal doesn't stay in silent mode)
-            if is_password:
-                try:
-                    self.pty_process.set_echo(True)
-                except Exception as echo_err:
-                    logger.debug(f"Failed to re-enable echo: {echo_err}")
-
-            await self.send_message(
-                {
-                    "type": "error",
-                    "content": f"Error sending input: {str(e)}",
-                    "timestamp": time.time(),
-                }
-            )
+            # Use extracted error handler (Issue #315)
+            await self._handle_stdin_error(e, is_password)
 
     async def _handle_workflow_control(self, message: dict):
         """Handle workflow automation control messages"""
@@ -963,45 +1035,14 @@ class ConsolidatedTerminalWebSocket:
 
                 # CRITICAL FIX: Strip ANSI codes and detect terminal prompts before saving
                 # Prevents saving blank prompts and terminal UI elements to chat
+                # Issue #315: Uses helper to reduce nesting depth
                 if should_save and self._output_buffer.strip():
-                    from src.utils.encoding_utils import (
-                        is_terminal_prompt,
-                        strip_ansi_codes,
+                    reset_buffer, _ = await _save_buffered_output_to_chat(
+                        self.chat_history_manager,
+                        self.conversation_id,
+                        self._output_buffer,
                     )
-
-                    clean_content = strip_ansi_codes(self._output_buffer).strip()
-
-                    # Check if this is a terminal prompt (not real output)
-                    is_prompt = is_terminal_prompt(clean_content)
-
-                    # Only save if there's actual text content AND it's not a terminal prompt
-                    if clean_content and not is_prompt:
-                        try:
-                            # CRITICAL FIX: Save CLEAN content without ANSI escape codes
-                            # This prevents escape codes from leaking into chat history
-                            logger.info(
-                                f"[CHAT INTEGRATION] Saving output to chat: {len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
-                            )
-                            await self.chat_history_manager.add_message(
-                                sender="terminal",
-                                text=clean_content,  # Save cleaned output, not raw buffer
-                                message_type="terminal_output",
-                                session_id=self.conversation_id,
-                            )
-                            # Reset buffer after saving
-                            self._output_buffer = ""
-                            self._last_output_save_time = current_time
-                            logger.info("[CHAT INTEGRATION] Output saved successfully")
-                        except Exception as e:
-                            logger.error(f"Failed to save output to chat: {e}")
-                    else:
-                        # Buffer contains only ANSI codes or is a terminal prompt, skip saving
-                        skip_reason = (
-                            "terminal prompt" if is_prompt else "only ANSI codes"
-                        )
-                        logger.debug(
-                            f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} ({len(self._output_buffer)} chars, clean: '{clean_content[:100]}')"
-                        )
+                    if reset_buffer:
                         self._output_buffer = ""
                         self._last_output_save_time = current_time
 

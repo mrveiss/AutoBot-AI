@@ -3,13 +3,18 @@
 # Author: mrveiss
 """
 Storage utilities for codebase analytics (Redis and ChromaDB)
+
+Issue #369: Added async ChromaDB operations to prevent event loop blocking.
 """
 
 import logging
 import re
 from pathlib import Path
 
-from src.utils.chromadb_client import get_chromadb_client
+from src.utils.chromadb_client import (
+    get_async_chromadb_client,
+    get_chromadb_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +40,11 @@ async def get_redis_connection():
 
 
 def get_code_collection():
-    """Get ChromaDB client and autobot_code collection"""
+    """Get ChromaDB client and autobot_code collection (sync version).
+
+    Note: This function is synchronous and may block the event loop.
+    For async contexts, use get_code_collection_async() instead.
+    """
     try:
         # Get project root
         project_root = Path(__file__).parent.parent.parent.parent
@@ -63,6 +72,45 @@ def get_code_collection():
 
     except Exception as e:
         logger.error(f"ChromaDB connection failed: {e}")
+        return None
+
+
+async def get_code_collection_async():
+    """Get ChromaDB client and autobot_code collection (async version).
+
+    Issue #369: Non-blocking async version that prevents event loop blocking
+    in FastAPI endpoints and other async contexts.
+
+    Returns:
+        AsyncChromaCollection wrapper or None on failure
+    """
+    try:
+        # Get project root
+        project_root = Path(__file__).parent.parent.parent.parent
+        chroma_path = project_root / "data" / "chromadb"
+
+        # Get async ChromaDB client
+        async_client = await get_async_chromadb_client(
+            db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+        )
+
+        # Get or create the code collection (async)
+        async_collection = await async_client.get_or_create_collection(
+            name="autobot_code",
+            metadata={
+                "description": (
+                    "Codebase analytics: functions, classes, problems, duplicates"
+                )
+            },
+        )
+
+        # Get count asynchronously
+        count = await async_collection.count()
+        logger.info(f"ChromaDB autobot_code collection ready ({count} items)")
+        return async_collection
+
+    except Exception as e:
+        logger.error(f"ChromaDB async connection failed: {e}")
         return None
 
 

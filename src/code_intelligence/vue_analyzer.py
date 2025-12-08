@@ -382,8 +382,8 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         lines = section["lines"]
         attributes = section["attributes"]
 
-        # Determine if TypeScript
-        is_typescript = "lang=\"ts\"" in attributes or "lang='ts'" in attributes
+        # Determine if TypeScript (for future TypeScript-specific checks)
+        _is_typescript = "lang=\"ts\"" in attributes or "lang='ts'" in attributes  # noqa: F841
 
         # Security patterns
         self._check_patterns_in_section(
@@ -405,7 +405,6 @@ class VueAnalyzer(BaseLanguageAnalyzer):
 
     def _analyze_style(self, section: Dict[str, Any]) -> None:
         """Analyze the style section."""
-        content = section["content"]
         base_line = section["start_line"]
         lines = section["lines"]
         attributes = section["attributes"]
@@ -439,6 +438,68 @@ class VueAnalyzer(BaseLanguageAnalyzer):
             lines, base_line, STYLE_QUALITY_PATTERNS, "style-quality"
         )
 
+    def _is_comment_line(self, line: str) -> bool:
+        """Check if line is a comment (Issue #315 - extracted helper)."""
+        stripped = line.strip()
+        return (
+            stripped.startswith("//")
+            or stripped.startswith("/*")
+            or stripped.startswith("*")
+            or stripped.startswith("<!--")
+        )
+
+    def _get_vue_category_from_prefix(self, prefix: str) -> "IssueCategory":
+        """Determine category from prefix (Issue #315 - extracted helper)."""
+        if "security" in prefix:
+            return IssueCategory.SECURITY
+        if "performance" in prefix:
+            return IssueCategory.PERFORMANCE
+        if "quality" in prefix:
+            return IssueCategory.CODE_QUALITY
+        return IssueCategory.BEST_PRACTICE
+
+    def _parse_pattern_data(self, pattern_data: Tuple) -> Tuple:
+        """Parse pattern data with default severity (Issue #315 - extracted helper)."""
+        if len(pattern_data) == 4:
+            return pattern_data
+        recommendation, confidence, rule_id = pattern_data
+        return recommendation, confidence, rule_id, IssueSeverity.MEDIUM
+
+    def _create_vue_pattern_issue(
+        self, line_num: int, line: str, match, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+    ) -> "AnalysisIssue":
+        """Create AnalysisIssue from Vue pattern match (Issue #315 - extracted helper)."""
+        recommendation, confidence, rule_id, severity = self._parse_pattern_data(pattern_data)
+        return AnalysisIssue(
+            issue_id=self._generate_issue_id(prefix),
+            category=category,
+            severity=severity,
+            language=Language.VUE,
+            file_path=self.file_path,
+            line_start=line_num,
+            line_end=line_num,
+            column_start=match.start(),
+            column_end=match.end(),
+            title=f"Vue {category.value}: {rule_id}",
+            description=f"Pattern detected in {prefix.split('-')[0]} section",
+            recommendation=recommendation,
+            current_code=line.strip(),
+            confidence=confidence,
+            potential_false_positive=confidence < 0.75,
+            false_positive_reason="" if confidence >= 0.75 else "Context may make this acceptable",
+            rule_id=rule_id,
+            tags=["vue", prefix.split("-")[0], category.value],
+        )
+
+    def _check_vue_pattern_on_line(
+        self, line_num: int, line: str, pattern: str, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+    ) -> None:
+        """Check single Vue pattern on a line (Issue #315 - extracted helper)."""
+        match = re.search(pattern, line, re.IGNORECASE)
+        if match:
+            issue = self._create_vue_pattern_issue(line_num, line, match, pattern_data, prefix, category)
+            self.issues.append(issue)
+
     def _check_patterns_in_section(
         self,
         lines: List[str],
@@ -446,59 +507,16 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         patterns: Dict[str, Tuple],
         prefix: str,
     ) -> None:
-        """Check patterns in a section's lines."""
+        """Check patterns in a section's lines (Issue #315 - refactored)."""
+        category = self._get_vue_category_from_prefix(prefix)
+
         for i, line in enumerate(lines):
+            if self._is_comment_line(line):
+                continue
+
             line_num = base_line + i
-
-            # Skip comments
-            stripped = line.strip()
-            if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
-                continue
-            if stripped.startswith("<!--"):
-                continue
-
             for pattern, pattern_data in patterns.items():
-                if len(pattern_data) == 4:
-                    recommendation, confidence, rule_id, severity = pattern_data
-                else:
-                    recommendation, confidence, rule_id = pattern_data
-                    severity = IssueSeverity.MEDIUM
-
-                if re.search(pattern, line, re.IGNORECASE):
-                    match = re.search(pattern, line, re.IGNORECASE)
-                    if match:
-                        # Determine category from prefix
-                        if "security" in prefix:
-                            category = IssueCategory.SECURITY
-                        elif "performance" in prefix:
-                            category = IssueCategory.PERFORMANCE
-                        elif "quality" in prefix:
-                            category = IssueCategory.CODE_QUALITY
-                        else:
-                            category = IssueCategory.BEST_PRACTICE
-
-                        self.issues.append(
-                            AnalysisIssue(
-                                issue_id=self._generate_issue_id(prefix),
-                                category=category,
-                                severity=severity,
-                                language=Language.VUE,
-                                file_path=self.file_path,
-                                line_start=line_num,
-                                line_end=line_num,
-                                column_start=match.start(),
-                                column_end=match.end(),
-                                title=f"Vue {category.value}: {rule_id}",
-                                description=f"Pattern detected in {prefix.split('-')[0]} section",
-                                recommendation=recommendation,
-                                current_code=line.strip(),
-                                confidence=confidence,
-                                potential_false_positive=confidence < 0.75,
-                                false_positive_reason="" if confidence >= 0.75 else "Context may make this acceptable",
-                                rule_id=rule_id,
-                                tags=["vue", prefix.split("-")[0], category.value],
-                            )
-                        )
+                self._check_vue_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
 
     def _check_vfor_key(self, content: str, base_line: int) -> None:
         """Check for v-for directives without :key attribute.
@@ -511,7 +529,6 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         for match in re.finditer(vfor_pattern, content, re.DOTALL):
             element_tag = match.group(1)
             vfor_value = match.group(2)
-            rest_of_attrs = match.group(3)
 
             # Check if :key or v-bind:key is present
             has_key = ":key=" in match.group(0) or "v-bind:key=" in match.group(0)
