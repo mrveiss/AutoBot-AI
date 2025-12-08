@@ -12,6 +12,7 @@ Supports:
 - Persistent storage (Redis + SQLite)
 """
 
+import asyncio
 import json
 import logging
 from typing import List, Optional
@@ -20,6 +21,25 @@ from backend.models.command_execution import CommandExecution, CommandState
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_command_ids(command_ids: set) -> List[str]:
+    """Decode Redis set members to string list. (Issue #315 - extracted)"""
+    return [cid.decode("utf-8") for cid in command_ids]
+
+
+def _parse_command_data_safe(command_data: bytes, state_filter: Optional[CommandState] = None) -> Optional[CommandExecution]:
+    """Parse command JSON data safely. (Issue #315 - extracted)"""
+    if not command_data:
+        return None
+    try:
+        data = json.loads(command_data)
+        cmd = CommandExecution.from_dict(data)
+        if state_filter is None or cmd.state == state_filter:
+            return cmd
+    except (json.JSONDecodeError, Exception) as e:
+        logger.debug(f"Failed to parse command data: {e}")
+    return None
 
 
 class CommandExecutionQueue:
@@ -83,22 +103,22 @@ class CommandExecutionQueue:
             # Store command by ID (primary key)
             command_key = self._get_command_key(command.command_id)
             command_data = json.dumps(command.to_dict())
-            self.redis_client.setex(command_key, 86400, command_data)  # 24 hour TTL
-
-            # Add to terminal session's command list
             session_key = self._get_session_commands_key(command.terminal_session_id)
-            self.redis_client.sadd(session_key, command.command_id)
-            self.redis_client.expire(session_key, 86400)
-
-            # Add to chat's command list
             chat_key = self._get_chat_commands_key(command.chat_id)
-            self.redis_client.sadd(chat_key, command.command_id)
-            self.redis_client.expire(chat_key, 86400)
+            is_pending = command.is_pending()
+            pending_key = self._get_pending_approvals_key()
 
-            # If pending approval, add to global pending list
-            if command.is_pending():
-                pending_key = self._get_pending_approvals_key()
-                self.redis_client.sadd(pending_key, command.command_id)
+            # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
+            def _add_command_ops():
+                self.redis_client.setex(command_key, 86400, command_data)  # 24 hour TTL
+                self.redis_client.sadd(session_key, command.command_id)
+                self.redis_client.expire(session_key, 86400)
+                self.redis_client.sadd(chat_key, command.command_id)
+                self.redis_client.expire(chat_key, 86400)
+                if is_pending:
+                    self.redis_client.sadd(pending_key, command.command_id)
+
+            await asyncio.to_thread(_add_command_ops)
 
             logger.info(
                 f"✅ [QUEUE] Added command {command.command_id} to queue: "
@@ -126,7 +146,8 @@ class CommandExecutionQueue:
 
         try:
             command_key = self._get_command_key(command_id)
-            command_data = self.redis_client.get(command_key)
+            # Run Redis get in thread pool (Issue #361 - avoid blocking)
+            command_data = await asyncio.to_thread(self.redis_client.get, command_key)
 
             if not command_data:
                 return None
@@ -155,14 +176,19 @@ class CommandExecutionQueue:
             # Update command data
             command_key = self._get_command_key(command.command_id)
             command_data = json.dumps(command.to_dict())
-            self.redis_client.setex(command_key, 86400, command_data)
-
-            # Update pending approvals list
             pending_key = self._get_pending_approvals_key()
-            if command.is_pending():
-                self.redis_client.sadd(pending_key, command.command_id)
-            else:
-                self.redis_client.srem(pending_key, command.command_id)
+            is_pending = command.is_pending()
+            cmd_id = command.command_id
+
+            # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
+            def _update_command_ops():
+                self.redis_client.setex(command_key, 86400, command_data)
+                if is_pending:
+                    self.redis_client.sadd(pending_key, cmd_id)
+                else:
+                    self.redis_client.srem(pending_key, cmd_id)
+
+            await asyncio.to_thread(_update_command_ops)
 
             logger.debug(
                 f"Updated command {command.command_id} in queue: state={command.state.value}"
@@ -191,31 +217,28 @@ class CommandExecutionQueue:
 
         try:
             session_key = self._get_session_commands_key(terminal_session_id)
-            command_ids = self.redis_client.smembers(session_key)
 
-            if not command_ids:
+            # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
+            def _get_terminal_cmds():
+                cmd_ids = self.redis_client.smembers(session_key)
+                if not cmd_ids:
+                    return []
+                decoded_ids = _decode_command_ids(cmd_ids)
+                pipe = self.redis_client.pipeline()
+                for cid in decoded_ids:
+                    pipe.get(self._get_command_key(cid))
+                return pipe.execute()
+
+            results = await asyncio.to_thread(_get_terminal_cmds)
+
+            if not results:
                 return []
 
-            # Decode command IDs
-            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
-
-            # Batch fetch all commands using pipeline - eliminates N+1 queries
-            pipe = self.redis_client.pipeline()
-            for command_id in decoded_ids:
-                pipe.get(self._get_command_key(command_id))
-            results = pipe.execute()
-
-            # Process results
-            commands = []
-            for command_data in results:
-                if command_data:
-                    try:
-                        data = json.loads(command_data)
-                        cmd = CommandExecution.from_dict(data)
-                        if state_filter is None or cmd.state == state_filter:
-                            commands.append(cmd)
-                    except (json.JSONDecodeError, Exception) as e:
-                        logger.debug(f"Failed to parse command data: {e}")
+            # Process results using helper (Issue #315)
+            commands = [
+                cmd for cmd_data in results
+                if (cmd := _parse_command_data_safe(cmd_data, state_filter))
+            ]
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
@@ -245,31 +268,28 @@ class CommandExecutionQueue:
 
         try:
             chat_key = self._get_chat_commands_key(chat_id)
-            command_ids = self.redis_client.smembers(chat_key)
 
-            if not command_ids:
+            # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
+            def _get_chat_cmds():
+                cmd_ids = self.redis_client.smembers(chat_key)
+                if not cmd_ids:
+                    return []
+                decoded_ids = _decode_command_ids(cmd_ids)
+                pipe = self.redis_client.pipeline()
+                for cid in decoded_ids:
+                    pipe.get(self._get_command_key(cid))
+                return pipe.execute()
+
+            results = await asyncio.to_thread(_get_chat_cmds)
+
+            if not results:
                 return []
 
-            # Decode command IDs
-            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
-
-            # Batch fetch all commands using pipeline - eliminates N+1 queries
-            pipe = self.redis_client.pipeline()
-            for command_id in decoded_ids:
-                pipe.get(self._get_command_key(command_id))
-            results = pipe.execute()
-
-            # Process results
-            commands = []
-            for command_data in results:
-                if command_data:
-                    try:
-                        data = json.loads(command_data)
-                        cmd = CommandExecution.from_dict(data)
-                        if state_filter is None or cmd.state == state_filter:
-                            commands.append(cmd)
-                    except (json.JSONDecodeError, Exception) as e:
-                        logger.debug(f"Failed to parse command data: {e}")
+            # Process results using helper (Issue #315)
+            commands = [
+                cmd for cmd_data in results
+                if (cmd := _parse_command_data_safe(cmd_data, state_filter))
+            ]
 
             # Sort by requested_at (newest first)
             commands.sort(key=lambda c: c.requested_at, reverse=True)
@@ -291,31 +311,28 @@ class CommandExecutionQueue:
 
         try:
             pending_key = self._get_pending_approvals_key()
-            command_ids = self.redis_client.smembers(pending_key)
 
-            if not command_ids:
+            # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
+            def _get_pending():
+                cmd_ids = self.redis_client.smembers(pending_key)
+                if not cmd_ids:
+                    return []
+                decoded_ids = _decode_command_ids(cmd_ids)
+                pipe = self.redis_client.pipeline()
+                for cid in decoded_ids:
+                    pipe.get(self._get_command_key(cid))
+                return pipe.execute()
+
+            results = await asyncio.to_thread(_get_pending)
+
+            if not results:
                 return []
 
-            # Decode command IDs
-            decoded_ids = [cid.decode("utf-8") for cid in command_ids]
-
-            # Batch fetch all commands using pipeline - eliminates N+1 queries
-            pipe = self.redis_client.pipeline()
-            for command_id in decoded_ids:
-                pipe.get(self._get_command_key(command_id))
-            results = pipe.execute()
-
-            # Process results
-            commands = []
-            for command_data in results:
-                if command_data:
-                    try:
-                        data = json.loads(command_data)
-                        cmd = CommandExecution.from_dict(data)
-                        if cmd.is_pending():
-                            commands.append(cmd)
-                    except (json.JSONDecodeError, Exception) as e:
-                        logger.debug(f"Failed to parse command data: {e}")
+            # Process results, filter pending only (Issue #315)
+            commands = [
+                cmd for cmd_data in results
+                if (cmd := _parse_command_data_safe(cmd_data)) and cmd.is_pending()
+            ]
 
             # Sort by requested_at (oldest first - FIFO)
             commands.sort(key=lambda c: c.requested_at)

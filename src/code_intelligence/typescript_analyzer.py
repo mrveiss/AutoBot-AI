@@ -16,7 +16,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from src.code_intelligence.base_analyzer import (
     AnalysisIssue,
@@ -24,7 +24,6 @@ from src.code_intelligence.base_analyzer import (
     IssueCategory,
     IssueSeverity,
     Language,
-    find_pattern_in_code,
     is_in_comment,
 )
 
@@ -454,122 +453,146 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                             )
                         )
 
+    def _create_security_issue(
+        self,
+        line_num: int,
+        line: str,
+        match,
+        pattern_data: Tuple,
+        language: Language,
+        is_critical: bool,
+    ) -> "AnalysisIssue":
+        """Create security issue from pattern match (Issue #315 - extracted helper)."""
+        recommendation, confidence, rule_id = pattern_data
+        if is_critical:
+            severity = IssueSeverity.CRITICAL if confidence >= 0.90 else IssueSeverity.HIGH
+            title = f"Security Issue: {rule_id}"
+            description = "Potential security vulnerability detected"
+            false_positive = confidence < 0.85
+            fp_reason = "" if confidence >= 0.85 else "May be intentional or sanitized"
+            tags = ["security", "vulnerability"]
+        else:
+            severity = IssueSeverity.MEDIUM
+            title = f"Security Concern: {rule_id}"
+            description = "Potential security concern detected"
+            false_positive = True
+            fp_reason = "May be appropriate depending on context"
+            tags = ["security", "review-needed"]
+
+        return AnalysisIssue(
+            issue_id=self._generate_issue_id("security"),
+            category=IssueCategory.SECURITY,
+            severity=severity,
+            language=language,
+            file_path=self.file_path,
+            line_start=line_num,
+            line_end=line_num,
+            column_start=match.start(),
+            column_end=match.end(),
+            title=title,
+            description=description,
+            recommendation=recommendation,
+            current_code=line.strip(),
+            confidence=confidence,
+            potential_false_positive=false_positive,
+            false_positive_reason=fp_reason,
+            rule_id=rule_id,
+            tags=tags,
+        )
+
+    def _check_security_pattern_on_line(
+        self,
+        line_num: int,
+        line: str,
+        pattern: str,
+        pattern_data: Tuple,
+        language: Language,
+        is_critical: bool,
+    ) -> None:
+        """Check single security pattern on a line (Issue #315 - extracted helper)."""
+        match = re.search(pattern, line, re.IGNORECASE)
+        if not match:
+            return
+        if is_in_comment(self.source_code, line_num, language):
+            return
+        issue = self._create_security_issue(
+            line_num, line, match, pattern_data, language, is_critical
+        )
+        self.issues.append(issue)
+
     def _check_security_issues(self, language: Language) -> None:
-        """Check for security vulnerabilities."""
-        # Critical security issues
+        """Check for security vulnerabilities (Issue #315 - refactored)."""
         for line_num, line in enumerate(self.lines, start=1):
             if self._should_skip_line(line, line_num):
                 continue
 
-            # Critical patterns
-            for pattern, (recommendation, confidence, rule_id) in SECURITY_PATTERNS_CRITICAL.items():
-                if re.search(pattern, line, re.IGNORECASE):
-                    match = re.search(pattern, line, re.IGNORECASE)
-                    if match:
-                        # Check if it's in a comment
-                        if is_in_comment(self.source_code, line_num, language):
-                            continue
+            for pattern, pattern_data in SECURITY_PATTERNS_CRITICAL.items():
+                self._check_security_pattern_on_line(
+                    line_num, line, pattern, pattern_data, language, is_critical=True
+                )
 
-                        self.issues.append(
-                            AnalysisIssue(
-                                issue_id=self._generate_issue_id("security"),
-                                category=IssueCategory.SECURITY,
-                                severity=IssueSeverity.CRITICAL if confidence >= 0.90 else IssueSeverity.HIGH,
-                                language=language,
-                                file_path=self.file_path,
-                                line_start=line_num,
-                                line_end=line_num,
-                                column_start=match.start(),
-                                column_end=match.end(),
-                                title=f"Security Issue: {rule_id}",
-                                description=f"Potential security vulnerability detected",
-                                recommendation=recommendation,
-                                current_code=line.strip(),
-                                confidence=confidence,
-                                potential_false_positive=confidence < 0.85,
-                                false_positive_reason="" if confidence >= 0.85 else "May be intentional or sanitized",
-                                rule_id=rule_id,
-                                tags=["security", "vulnerability"],
-                            )
-                        )
+            for pattern, pattern_data in SECURITY_PATTERNS_MEDIUM.items():
+                self._check_security_pattern_on_line(
+                    line_num, line, pattern, pattern_data, language, is_critical=False
+                )
 
-            # Medium security patterns
-            for pattern, (recommendation, confidence, rule_id) in SECURITY_PATTERNS_MEDIUM.items():
-                if re.search(pattern, line, re.IGNORECASE):
-                    match = re.search(pattern, line, re.IGNORECASE)
-                    if match:
-                        if is_in_comment(self.source_code, line_num, language):
-                            continue
+    def _get_antipattern_severity(self, category: "IssueCategory", confidence: float) -> "IssueSeverity":
+        """Determine severity based on category and confidence (Issue #315 - extracted helper)."""
+        if category == IssueCategory.SECURITY:
+            return IssueSeverity.HIGH
+        if category == IssueCategory.RELIABILITY:
+            return IssueSeverity.MEDIUM
+        if confidence >= 0.80:
+            return IssueSeverity.MEDIUM
+        return IssueSeverity.LOW
 
-                        self.issues.append(
-                            AnalysisIssue(
-                                issue_id=self._generate_issue_id("security"),
-                                category=IssueCategory.SECURITY,
-                                severity=IssueSeverity.MEDIUM,
-                                language=language,
-                                file_path=self.file_path,
-                                line_start=line_num,
-                                line_end=line_num,
-                                column_start=match.start(),
-                                column_end=match.end(),
-                                title=f"Security Concern: {rule_id}",
-                                description=f"Potential security concern detected",
-                                recommendation=recommendation,
-                                current_code=line.strip(),
-                                confidence=confidence,
-                                potential_false_positive=True,
-                                false_positive_reason="May be appropriate depending on context",
-                                rule_id=rule_id,
-                                tags=["security", "review-needed"],
-                            )
-                        )
+    def _create_antipattern_issue(
+        self, line_num: int, line: str, match, pattern_data: Tuple, language: Language
+    ) -> "AnalysisIssue":
+        """Create an AnalysisIssue from anti-pattern match (Issue #315 - extracted helper)."""
+        recommendation, confidence, rule_id, category = pattern_data
+        severity = self._get_antipattern_severity(category, confidence)
+        return AnalysisIssue(
+            issue_id=self._generate_issue_id("antipattern"),
+            category=category,
+            severity=severity,
+            language=language,
+            file_path=self.file_path,
+            line_start=line_num,
+            line_end=line_num,
+            column_start=match.start(),
+            column_end=match.end(),
+            title=f"Anti-pattern: {rule_id}",
+            description="Code pattern that may indicate an issue",
+            recommendation=recommendation,
+            current_code=line.strip(),
+            confidence=confidence,
+            potential_false_positive=confidence < 0.75,
+            false_positive_reason="" if confidence >= 0.75 else "Context may make this acceptable",
+            rule_id=rule_id,
+            tags=["anti-pattern", category.value],
+        )
+
+    def _check_antipattern_on_line(
+        self, line_num: int, line: str, pattern: str, pattern_data: Tuple, language: Language
+    ) -> None:
+        """Check single anti-pattern on a line (Issue #315 - extracted helper)."""
+        match = re.search(pattern, line, re.IGNORECASE)
+        if not match:
+            return
+        if is_in_comment(self.source_code, line_num, language):
+            return
+        issue = self._create_antipattern_issue(line_num, line, match, pattern_data, language)
+        self.issues.append(issue)
 
     def _check_anti_patterns(self, language: Language) -> None:
-        """Check for anti-patterns and code quality issues."""
+        """Check for anti-patterns and code quality issues (Issue #315 - refactored)."""
         for line_num, line in enumerate(self.lines, start=1):
             if self._should_skip_line(line, line_num):
                 continue
 
-            for pattern, (recommendation, confidence, rule_id, category) in ANTI_PATTERN_DEFINITIONS.items():
-                if re.search(pattern, line, re.IGNORECASE):
-                    match = re.search(pattern, line, re.IGNORECASE)
-                    if match:
-                        # Skip if in comment
-                        if is_in_comment(self.source_code, line_num, language):
-                            continue
-
-                        # Determine severity based on category and confidence
-                        if category == IssueCategory.SECURITY:
-                            severity = IssueSeverity.HIGH
-                        elif category == IssueCategory.RELIABILITY:
-                            severity = IssueSeverity.MEDIUM
-                        elif confidence >= 0.80:
-                            severity = IssueSeverity.MEDIUM
-                        else:
-                            severity = IssueSeverity.LOW
-
-                        self.issues.append(
-                            AnalysisIssue(
-                                issue_id=self._generate_issue_id("antipattern"),
-                                category=category,
-                                severity=severity,
-                                language=language,
-                                file_path=self.file_path,
-                                line_start=line_num,
-                                line_end=line_num,
-                                column_start=match.start(),
-                                column_end=match.end(),
-                                title=f"Anti-pattern: {rule_id}",
-                                description=f"Code pattern that may indicate an issue",
-                                recommendation=recommendation,
-                                current_code=line.strip(),
-                                confidence=confidence,
-                                potential_false_positive=confidence < 0.75,
-                                false_positive_reason="" if confidence >= 0.75 else "Context may make this acceptable",
-                                rule_id=rule_id,
-                                tags=["anti-pattern", category.value],
-                            )
-                        )
+            for pattern, pattern_data in ANTI_PATTERN_DEFINITIONS.items():
+                self._check_antipattern_on_line(line_num, line, pattern, pattern_data, language)
 
     def _check_await_in_loops(self, language: Language) -> None:
         """Advanced check for sequential awaits that could be parallelized."""

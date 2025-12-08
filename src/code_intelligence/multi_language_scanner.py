@@ -23,7 +23,6 @@ from src.code_intelligence.base_analyzer import (
     AnalysisResult,
     Language,
     MultiLanguageAnalyzer,
-    detect_language,
 )
 from src.code_intelligence.typescript_analyzer import TypeScriptAnalyzer
 from src.code_intelligence.vue_analyzer import VueAnalyzer

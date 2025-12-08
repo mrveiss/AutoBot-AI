@@ -17,7 +17,7 @@ from fastapi import HTTPException
 from backend.type_defs.common import Metadata
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file
-from .storage import get_code_collection
+from .storage import get_code_collection_async
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,27 @@ SKIP_DIRS = {
     "node_modules", ".git", "__pycache__", ".pytest_cache",
     "dist", "build", ".venv", "venv", ".DS_Store", "logs", "temp", "archives",
 }
+
+
+def _should_count_file(file_path: Path) -> bool:
+    """Check if file should be counted for progress tracking (Issue #315)."""
+    if not file_path.is_file():
+        return False
+    return not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS)
+
+
+async def _count_scannable_files(root_path_obj: Path) -> int:
+    """Count files to be scanned for progress tracking (Issue #315: extracted)."""
+    total_files = 0
+    file_count = 0
+    for file_path in root_path_obj.rglob("*"):
+        if _should_count_file(file_path):
+            total_files += 1
+            file_count += 1
+            # Yield to event loop every 100 files during counting
+            if file_count % 100 == 0:
+                await asyncio.sleep(0)
+    return total_files
 
 
 async def _get_file_analysis(
@@ -264,19 +285,10 @@ async def scan_codebase(
     try:
         root_path_obj = Path(root_path)
 
-        # First pass: count total files for progress tracking
+        # First pass: count total files for progress tracking (Issue #315: uses helper)
         total_files = 0
         if progress_callback:
-            file_count = 0
-            for file_path in root_path_obj.rglob("*"):
-                if file_path.is_file():
-                    if not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
-                        total_files += 1
-                        file_count += 1
-                        # Yield to event loop every 100 files during counting
-                        if file_count % 100 == 0:
-                            await asyncio.sleep(0)
-
+            total_files = await _count_scannable_files(root_path_obj)
             # Report total files discovered
             await progress_callback(
                 operation="Scanning files",
@@ -285,45 +297,46 @@ async def scan_codebase(
                 current_file="Initializing...",
             )
 
-        # Walk through all files
+        # Walk through all files (Issue #315: restructured to reduce nesting)
         files_processed = 0
         for file_path in root_path_obj.rglob("*"):
-            if file_path.is_file():
-                # Skip if in excluded directory
-                if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
-                    continue
+            if not file_path.is_file():
+                continue
+            if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+                continue
 
-                extension = file_path.suffix.lower()
-                relative_path = str(file_path.relative_to(root_path_obj))
+            extension = file_path.suffix.lower()
+            relative_path = str(file_path.relative_to(root_path_obj))
 
-                analysis_results["stats"]["total_files"] += 1
-                files_processed += 1
+            analysis_results["stats"]["total_files"] += 1
+            files_processed += 1
 
-                # Update progress every 10 files or if callback provided
-                if progress_callback and files_processed % 10 == 0:
-                    await progress_callback(
-                        operation="Scanning files",
-                        current=files_processed,
-                        total=total_files,
-                        current_file=relative_path,
-                    )
-                # Yield to event loop every 5 files to prevent blocking other requests
-                elif files_processed % 5 == 0:
-                    await asyncio.sleep(0)
-
-                # Get file analysis using type dispatch (Issue #315)
-                file_analysis = await _get_file_analysis(
-                    file_path, extension, analysis_results["stats"]
+            # Update progress or yield to event loop
+            if progress_callback and files_processed % 10 == 0:
+                await progress_callback(
+                    operation="Scanning files",
+                    current=files_processed,
+                    total=total_files,
+                    current_file=relative_path,
                 )
+            elif files_processed % 5 == 0:
+                await asyncio.sleep(0)
 
-                if file_analysis:
-                    # Aggregate functions, classes, and hardcodes
-                    _aggregate_file_analysis(analysis_results, file_analysis, relative_path)
+            # Get file analysis using type dispatch (Issue #315)
+            file_analysis = await _get_file_analysis(
+                file_path, extension, analysis_results["stats"]
+            )
 
-                    # Process and store problems (Issue #315: uses helper to reduce nesting)
-                    await _process_file_problems(
-                        file_analysis, relative_path, analysis_results, immediate_store_collection
-                    )
+            if not file_analysis:
+                continue
+
+            # Aggregate functions, classes, and hardcodes
+            _aggregate_file_analysis(analysis_results, file_analysis, relative_path)
+
+            # Process and store problems
+            await _process_file_problems(
+                file_analysis, relative_path, analysis_results, immediate_store_collection
+            )
 
         # Calculate average file size
         if analysis_results["stats"]["total_files"] > 0:
@@ -432,6 +445,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             operation: str, current: int, total: int, current_file: str,
             phase: str = None, batch_info: dict = None
         ):
+            """Update indexing task progress with current operation status."""
             percent = int((current / total * 100)) if total > 0 else 0
             indexing_tasks[task_id]["progress"] = {
                 "current": current,
@@ -467,7 +481,8 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             phase="init",
         )
 
-        code_collection = await asyncio.to_thread(get_code_collection)
+        # Issue #369: Use native async collection to prevent event loop blocking
+        code_collection = await get_code_collection_async()
         storage_type = "chromadb" if code_collection else "memory"
 
         if code_collection:
@@ -481,10 +496,11 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             )
 
             try:
-                existing_data = await asyncio.to_thread(code_collection.get)
+                # Issue #369: Use native async methods from AsyncChromaCollection
+                existing_data = await code_collection.get()
                 existing_ids = existing_data["ids"]
                 if existing_ids:
-                    await asyncio.to_thread(code_collection.delete, ids=existing_ids)
+                    await code_collection.delete(ids=existing_ids)
                     logger.info(
                         f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB"
                     )
@@ -674,9 +690,8 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                     batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
                     batch_num = i // BATCH_SIZE + 1
 
-                    # Run blocking ChromaDB add in thread pool
-                    await asyncio.to_thread(
-                        code_collection.add,
+                    # Issue #369: Use native async add from AsyncChromaCollection
+                    await code_collection.add(
                         ids=batch_slice_ids,
                         documents=batch_slice_docs,
                         metadatas=batch_slice_metas,

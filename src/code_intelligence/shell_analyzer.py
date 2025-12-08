@@ -15,7 +15,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from src.code_intelligence.base_analyzer import (
     AnalysisIssue,
@@ -335,9 +335,6 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         if not self._load_file(file_path):
             return []
 
-        # Check for shebang and determine shell type
-        shell_type = self._detect_shell_type()
-
         # Run all checks
         self._check_security_critical()
         self._check_security_medium()
@@ -353,21 +350,6 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         logger.debug(f"Shell Analyzer found {len(self.issues)} issues in {file_path}")
         return self.issues
 
-    def _detect_shell_type(self) -> str:
-        """Detect shell type from shebang."""
-        if not self.lines:
-            return "unknown"
-
-        first_line = self.lines[0].strip()
-        if first_line.startswith("#!"):
-            if "bash" in first_line:
-                return "bash"
-            elif "zsh" in first_line:
-                return "zsh"
-            elif "sh" in first_line:
-                return "sh"
-        return "unknown"
-
     def _should_skip_line(self, line: str) -> bool:
         """Check if line should be skipped."""
         stripped = line.strip()
@@ -382,58 +364,69 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
 
         return False
 
+    def _get_category_from_prefix(self, prefix: str) -> "IssueCategory":
+        """Determine issue category from prefix (Issue #315 - extracted helper)."""
+        prefix_lower = prefix.lower()
+        if "sec" in prefix_lower:
+            return IssueCategory.SECURITY
+        if "perf" in prefix_lower:
+            return IssueCategory.PERFORMANCE
+        if "bp" in prefix_lower:
+            return IssueCategory.BEST_PRACTICE
+        return IssueCategory.CODE_QUALITY
+
+    def _create_pattern_issue(
+        self, line_num: int, line: str, match, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+    ) -> "AnalysisIssue":
+        """Create an AnalysisIssue from pattern match (Issue #315 - extracted helper)."""
+        recommendation, confidence, rule_id, severity = pattern_data
+        return AnalysisIssue(
+            issue_id=self._generate_issue_id(prefix),
+            category=category,
+            severity=severity,
+            language=Language.SHELL,
+            file_path=self.file_path,
+            line_start=line_num,
+            line_end=line_num,
+            column_start=match.start(),
+            column_end=match.end(),
+            title=f"Shell {category.value}: {rule_id}",
+            description="Pattern detected that may indicate an issue",
+            recommendation=recommendation,
+            current_code=line.strip(),
+            confidence=confidence,
+            potential_false_positive=confidence < 0.80,
+            false_positive_reason="" if confidence >= 0.80 else "Context may justify this pattern",
+            rule_id=rule_id,
+            tags=["shell", category.value],
+        )
+
+    def _check_pattern_on_line(
+        self, line_num: int, line: str, pattern: str, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+    ) -> None:
+        """Check single pattern on a line (Issue #315 - extracted helper)."""
+        try:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                issue = self._create_pattern_issue(line_num, line, match, pattern_data, prefix, category)
+                self.issues.append(issue)
+        except re.error:
+            pass  # Skip invalid regex patterns
+
     def _check_patterns(
         self,
         patterns: Dict[str, Tuple],
         prefix: str,
     ) -> None:
-        """Check a set of patterns against source code."""
+        """Check a set of patterns against source code (Issue #315 - refactored)."""
+        category = self._get_category_from_prefix(prefix)
+
         for line_num, line in enumerate(self.lines, start=1):
             if self._should_skip_line(line):
                 continue
 
             for pattern, pattern_data in patterns.items():
-                recommendation, confidence, rule_id, severity = pattern_data
-
-                try:
-                    if re.search(pattern, line, re.IGNORECASE):
-                        match = re.search(pattern, line, re.IGNORECASE)
-                        if match:
-                            # Determine category from prefix
-                            if "sec" in prefix.lower():
-                                category = IssueCategory.SECURITY
-                            elif "perf" in prefix.lower():
-                                category = IssueCategory.PERFORMANCE
-                            elif "bp" in prefix.lower():
-                                category = IssueCategory.BEST_PRACTICE
-                            else:
-                                category = IssueCategory.CODE_QUALITY
-
-                            self.issues.append(
-                                AnalysisIssue(
-                                    issue_id=self._generate_issue_id(prefix),
-                                    category=category,
-                                    severity=severity,
-                                    language=Language.SHELL,
-                                    file_path=self.file_path,
-                                    line_start=line_num,
-                                    line_end=line_num,
-                                    column_start=match.start(),
-                                    column_end=match.end(),
-                                    title=f"Shell {category.value}: {rule_id}",
-                                    description=f"Pattern detected that may indicate an issue",
-                                    recommendation=recommendation,
-                                    current_code=line.strip(),
-                                    confidence=confidence,
-                                    potential_false_positive=confidence < 0.80,
-                                    false_positive_reason="" if confidence >= 0.80 else "Context may justify this pattern",
-                                    rule_id=rule_id,
-                                    tags=["shell", category.value],
-                                )
-                            )
-                except re.error:
-                    # Skip invalid regex patterns
-                    pass
+                self._check_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
 
     def _check_security_critical(self) -> None:
         """Check for critical security issues."""

@@ -14,6 +14,7 @@ This module provides comprehensive cost tracking for all LLM API calls:
 Related Issues: #59 (Advanced Analytics & Business Intelligence)
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -158,6 +159,7 @@ class LLMCostTracker:
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
     def __init__(self):
+        """Initialize cost tracker with lazy Redis client and empty alerts."""
         self._redis_client = None
         self._budget_alerts: List[BudgetAlert] = []
         self._current_period_costs: Dict[str, float] = {}
@@ -257,11 +259,12 @@ class LLMCostTracker:
             metadata=metadata or {},
         )
 
-        # Store in Redis
-        await self._store_usage_record(record)
-
-        # Check budget alerts
-        await self._check_budget_alerts(cost)
+        # Issue #379: Parallelize independent tracking operations
+        # _store_usage_record persists to Redis, _check_budget_alerts evaluates limits
+        await asyncio.gather(
+            self._store_usage_record(record),
+            self._check_budget_alerts(cost),
+        )
 
         logger.debug(
             f"Tracked LLM usage: {provider}/{model} - "
@@ -271,34 +274,45 @@ class LLMCostTracker:
         return record
 
     async def _store_usage_record(self, record: LLMUsageRecord) -> None:
-        """Store usage record in Redis"""
+        """Store usage record in Redis.
+
+        Issue #379: Uses Redis pipeline to batch all operations,
+        eliminating 10+ sequential await round-trips.
+        """
         try:
             redis = await self.get_redis()
 
-            # Store in usage list (keep last 100k records)
-            await redis.lpush(self.USAGE_LIST_KEY, json.dumps(record.to_dict()))
-            await redis.ltrim(self.USAGE_LIST_KEY, 0, 99999)
-
-            # Update daily totals
+            # Prepare keys
             today = datetime.utcnow().strftime("%Y-%m-%d")
             daily_key = f"{self.DAILY_TOTALS_KEY}:{today}"
-            await redis.incrbyfloat(daily_key, record.cost_usd)
-            await redis.expire(daily_key, 86400 * 90)  # Keep 90 days
-
-            # Update model totals
             model_key = f"{self.MODEL_TOTALS_KEY}:{record.model}"
-            await redis.hincrby(model_key, "input_tokens", record.input_tokens)
-            await redis.hincrby(model_key, "output_tokens", record.output_tokens)
-            await redis.hincrbyfloat(model_key, "cost_usd", record.cost_usd)
-            await redis.hincrby(model_key, "call_count", 1)
 
-            # Update session totals if session provided
-            if record.session_id:
-                session_key = f"{self.SESSION_TOTALS_KEY}:{record.session_id}"
-                await redis.hincrbyfloat(session_key, "cost_usd", record.cost_usd)
-                await redis.hincrby(session_key, "input_tokens", record.input_tokens)
-                await redis.hincrby(session_key, "output_tokens", record.output_tokens)
-                await redis.expire(session_key, 86400 * 30)  # Keep 30 days
+            # Issue #379: Batch all Redis operations using pipeline
+            async with redis.pipeline() as pipe:
+                # Store in usage list (keep last 100k records)
+                await pipe.lpush(self.USAGE_LIST_KEY, json.dumps(record.to_dict()))
+                await pipe.ltrim(self.USAGE_LIST_KEY, 0, 99999)
+
+                # Update daily totals
+                await pipe.incrbyfloat(daily_key, record.cost_usd)
+                await pipe.expire(daily_key, 86400 * 90)  # Keep 90 days
+
+                # Update model totals
+                await pipe.hincrby(model_key, "input_tokens", record.input_tokens)
+                await pipe.hincrby(model_key, "output_tokens", record.output_tokens)
+                await pipe.hincrbyfloat(model_key, "cost_usd", record.cost_usd)
+                await pipe.hincrby(model_key, "call_count", 1)
+
+                # Update session totals if session provided
+                if record.session_id:
+                    session_key = f"{self.SESSION_TOTALS_KEY}:{record.session_id}"
+                    await pipe.hincrbyfloat(session_key, "cost_usd", record.cost_usd)
+                    await pipe.hincrby(session_key, "input_tokens", record.input_tokens)
+                    await pipe.hincrby(session_key, "output_tokens", record.output_tokens)
+                    await pipe.expire(session_key, 86400 * 30)  # Keep 30 days
+
+                # Execute all operations in single round-trip
+                await pipe.execute()
 
         except Exception as e:
             logger.error(f"Failed to store LLM usage record: {e}")

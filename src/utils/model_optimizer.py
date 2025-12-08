@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 import psutil
 import yaml
@@ -575,6 +575,9 @@ class ModelOptimizer:
             f"http://{config.get_host('ollama')}:{config.get_port('ollama')}"
         )
 
+        # Issue #378: Lock for Redis client initialization
+        self._redis_init_lock = asyncio.Lock()
+
         # Configuration
         self._performance_threshold = config.get(
             "llm.optimization.performance_threshold", 0.8
@@ -636,26 +639,33 @@ class ModelOptimizer:
         self._performance_tracker = None  # Initialized when Redis client is ready
 
     async def _get_redis_client(self):
-        """Get Redis client for caching performance data"""
+        """Get Redis client for caching performance data.
+
+        Issue #378: Uses double-checked locking to prevent race condition
+        when multiple coroutines try to initialize the client simultaneously.
+        """
         if self._redis_client is None:
-            try:
-                self._redis_client = get_redis_client(
-                    async_client=True, db=config.get("redis.databases.llm_cache.db", 5)
-                )
-                if asyncio.iscoroutine(self._redis_client):
-                    self._redis_client = await self._redis_client
+            async with self._redis_init_lock:
+                # Double-check after acquiring lock
+                if self._redis_client is None:
+                    try:
+                        self._redis_client = get_redis_client(
+                            async_client=True, db=config.get("redis.databases.llm_cache.db", 5)
+                        )
+                        if asyncio.iscoroutine(self._redis_client):
+                            self._redis_client = await self._redis_client
 
-                # Initialize performance tracker once Redis is ready
-                if self._redis_client and self._performance_tracker is None:
-                    self._performance_tracker = ModelPerformanceTracker(
-                        self._redis_client, self._cache_ttl, self.logger
-                    )
+                        # Initialize performance tracker once Redis is ready
+                        if self._redis_client and self._performance_tracker is None:
+                            self._performance_tracker = ModelPerformanceTracker(
+                                self._redis_client, self._cache_ttl, self.logger
+                            )
 
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to initialize Redis client for model optimization: {e}"
-                )
-                self._redis_client = None
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to initialize Redis client for model optimization: {e}"
+                        )
+                        self._redis_client = None
         return self._redis_client
 
     async def refresh_available_models(self) -> List[ModelInfo]:

@@ -7,7 +7,6 @@ Function call graph analysis endpoints
 
 import ast
 import logging
-from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
@@ -123,15 +122,17 @@ async def get_call_graph():
 
         def _get_decorator_name(self, decorator):
             """Extract decorator name from AST node."""
+            # Issue #315: Use early returns instead of chained if/elif
             if isinstance(decorator, ast.Name):
                 return decorator.id
-            elif isinstance(decorator, ast.Attribute):
+            if isinstance(decorator, ast.Attribute):
                 return decorator.attr
-            elif isinstance(decorator, ast.Call):
-                if isinstance(decorator.func, ast.Name):
-                    return decorator.func.id
-                elif isinstance(decorator.func, ast.Attribute):
-                    return decorator.func.attr
+            if isinstance(decorator, ast.Call):
+                func = decorator.func
+                if isinstance(func, ast.Name):
+                    return func.id
+                if isinstance(func, ast.Attribute):
+                    return func.attr
             return "unknown"
 
         def visit_Call(self, node):
