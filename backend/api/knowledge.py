@@ -504,11 +504,14 @@ async def get_knowledge_entries(
     try:
         # HSCAN iterates over hash fields without loading all data into memory
         # match parameter filters keys during scan (server-side filtering)
-        next_cursor, items = kb_to_use.redis_client.hscan(
-            "knowledge_base:facts",
-            cursor=current_cursor,
-            count=limit * 2,  # Scan more to account for filtering
-        )
+        # Issue #362: Wrapped sync Redis call with asyncio.to_thread
+        def _hscan():
+            return kb_to_use.redis_client.hscan(
+                "knowledge_base:facts",
+                cursor=current_cursor,
+                count=limit * 2,  # Scan more to account for filtering
+            )
+        next_cursor, items = await asyncio.to_thread(_hscan)
 
         # Parse and filter facts
         for fact_id, fact_json in items.items():

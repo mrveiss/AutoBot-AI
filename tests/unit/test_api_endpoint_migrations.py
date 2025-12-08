@@ -32009,14 +32009,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Verify update_llm_provider uses unified config
         provider_source = inspect.getsource(llm.update_llm_provider)
         self.assertIn("config.set(", provider_source)
-        self.assertIn("config.save()", provider_source)
+        # Issue #362: save_settings/save_config_to_yaml replaces deprecated config.save()
+        self.assertIn("config.save_settings", provider_source)
+        self.assertIn("config.save_config_to_yaml", provider_source)
         self.assertIn("config.get(", provider_source)
         self.assertIn("config.update_llm_model", provider_source)
 
         # Verify update_embedding_model uses unified config
         embedding_source = inspect.getsource(llm.update_embedding_model)
         self.assertIn("config.set(", embedding_source)
-        self.assertIn("config.update_embedding_model", embedding_source)
+        # Issue #362: Uses save_settings/save_config_to_yaml for proper file persistence
+        self.assertIn("config.save_settings", embedding_source)
+        self.assertIn("config.save_config_to_yaml", embedding_source)
 
     def test_batch_169_migration_preserves_model_manager_integration(self):
         """Verify migration preserves ModelManager and ConnectionTester integration"""
