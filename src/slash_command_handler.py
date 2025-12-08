@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 
@@ -778,6 +778,7 @@ class SecurityPhasesSubcommand(Command):
     """Show security workflow phases."""
 
     def __init__(self, phase_descriptions: dict):
+        """Initialize security phases subcommand with phase descriptions mapping."""
         self.phase_descriptions = phase_descriptions
 
     async def execute(self) -> SlashCommandResult:
@@ -953,25 +954,26 @@ class SlashCommandHandler:
         command = self._create_command(cmd_type, args)
         return await command.execute()
 
+    def _get_command_factories(self) -> Dict[CommandType, callable]:
+        """Get command type to factory mapping (Issue #315 - dispatch table)."""
+        return {
+            CommandType.DOCS: lambda args: DocsCommand(args, self.docs_base_path, self.doc_categories),
+            CommandType.HELP: lambda args: HelpCommand(),
+            CommandType.STATUS: lambda args: StatusCommand(),
+            CommandType.SCAN: lambda args: ScanCommand(args),
+            CommandType.SECURITY: lambda args: SecurityCommand(args),
+        }
+
     def _create_command(self, cmd_type: CommandType, args: Optional[str]) -> Command:
         """
-        Create the appropriate command object.
+        Create the appropriate command object (Issue #315 - refactored depth 5 to 2).
 
         Factory method that encapsulates command creation logic.
-        Fixes Feature Envy by delegating to command objects.
         """
-        if cmd_type == CommandType.DOCS:
-            return DocsCommand(args, self.docs_base_path, self.doc_categories)
-        elif cmd_type == CommandType.HELP:
-            return HelpCommand()
-        elif cmd_type == CommandType.STATUS:
-            return StatusCommand()
-        elif cmd_type == CommandType.SCAN:
-            return ScanCommand(args)
-        elif cmd_type == CommandType.SECURITY:
-            return SecurityCommand(args)
-        else:
-            return UnknownCommand()
+        factories = self._get_command_factories()
+        if cmd_type in factories:
+            return factories[cmd_type](args)
+        return UnknownCommand()
 
 
 # Module-level instance for easy access (thread-safe)
