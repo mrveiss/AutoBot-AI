@@ -279,244 +279,108 @@ class SystemKnowledgeManager:
         # Import procedures
         await self._import_procedures_knowledge()
 
+    def _get_steghide_tool_definition(self) -> Dict[str, Any]:
+        """Get steghide tool definition."""
+        return {
+            "name": "steghide",
+            "type": "steganography",
+            "purpose": "Extract and embed hidden data in image and audio files",
+            "installation": {"apt": "sudo apt-get install steghide", "yum": "sudo yum install steghide", "pacman": "sudo pacman -S steghide"},
+            "usage": {"extract": "steghide extract -sf {image_file}", "info": "steghide info {image_file}", "embed": "steghide embed -cf {cover_file} -ef {data_file}"},
+            "common_examples": [
+                {"description": "Extract hidden data from image", "command": "steghide extract -sf suspicious.jpg", "expected_output": "Enter passphrase: (if password protected)"},
+                {"description": "Check image capacity for hidden data", "command": "steghide info suspicious.jpg", "expected_output": "capacity: 57.8% (can hide data)"},
+            ],
+            "troubleshooting": [
+                {"problem": "could not extract any data with that passphrase", "solution": "Try empty passphrase or common passwords"},
+                {"problem": "file format is not supported", "solution": "Convert to JPEG or BMP format first"},
+            ],
+            "security_notes": ["Use strong passphrases for embedding", "Steganography can be detected by analysis tools", "Consider using multiple tools to avoid detection"],
+            "related_tools": ["binwalk", "outguess", "jsteg", "zsteg"],
+            "output_formats": ["original file format", "text output for info"],
+            "limitations": ["Only supports JPEG, BMP, WAV, AU formats", "Cannot process encrypted or corrupted images"],
+        }
+
+    def _get_binwalk_tool_definition(self) -> Dict[str, Any]:
+        """Get binwalk tool definition."""
+        return {
+            "name": "binwalk",
+            "type": "file_analysis",
+            "purpose": "Analyze and extract files from binary images",
+            "installation": {"apt": "sudo apt-get install binwalk", "yum": "sudo yum install binwalk", "pacman": "sudo pacman -S binwalk"},
+            "usage": {"analyze": "binwalk {file}", "extract": "binwalk -e {file}", "signature": "binwalk --signature {file}"},
+            "common_examples": [
+                {"description": "Scan for embedded files", "command": "binwalk suspicious.jpg", "expected_output": "List of detected file signatures and offsets"},
+                {"description": "Extract all found files", "command": "binwalk -e suspicious.jpg", "expected_output": "Creates _suspicious.jpg.extracted/ directory"},
+            ],
+            "related_tools": ["foremost", "scalpel", "photorec"],
+            "output_formats": ["extracted files", "signature analysis text"],
+        }
+
+    def _get_steganography_tools_data(self) -> Dict[str, Any]:
+        """Get steganography tools knowledge data."""
+        return {
+            "metadata": {"category": "steganography", "description": "Tools for steganography analysis and detection", "last_updated": datetime.now().isoformat(), "version": "1.0.0"},
+            "tools": [self._get_steghide_tool_definition(), self._get_binwalk_tool_definition()],
+        }
+
+    def _get_image_forensics_workflow_data(self) -> Dict[str, Any]:
+        """Get image forensics workflow data."""
+        return {
+            "metadata": {"name": "Image Steganography Analysis", "category": "forensics", "complexity": "medium", "estimated_time": "10-30 minutes", "version": "1.0.0"},
+            "objective": "Analyze images for hidden files, steganographic content, and embedded data",
+            "prerequisites": ["Target image file(s)", "Basic understanding of steganography techniques", "Sufficient disk space for extracted files"],
+            "required_tools": [
+                {"name": "steghide", "purpose": "Extract hidden data from images", "optional": False},
+                {"name": "binwalk", "purpose": "Detect and extract embedded files", "optional": False},
+                {"name": "exiftool", "purpose": "Analyze image metadata", "optional": True},
+            ],
+            "workflow_steps": [
+                {"step": 1, "action": "Initial image analysis", "details": "Gather basic information about the target image", "commands": ["file {image_file}", "ls -la {image_file}", "identify {image_file}"], "expected_output": "Image format, size, and basic properties"},
+                {"step": 2, "action": "Metadata examination", "details": "Check for hidden information in image metadata", "commands": ["exiftool {image_file}", "strings {image_file} | head -20"], "expected_output": "EXIF data, embedded comments, text strings"},
+                {"step": 3, "action": "Steganography detection", "details": "Check for steganographic content using steghide", "commands": ["steghide info {image_file}"], "expected_output": "Capacity information or error if no hidden data"},
+                {"step": 4, "action": "File signature analysis", "details": "Look for embedded files using binwalk", "commands": ["binwalk {image_file}", "binwalk -e {image_file}"], "expected_output": "List of detected files and extraction results"},
+            ],
+            "decision_points": [
+                {"condition": "steghide reports capacity > 0", "if_true": "Attempt extraction with common passwords", "if_false": "Move to alternative steganography tools"},
+                {"condition": "binwalk finds embedded files", "if_true": "Extract and analyze each file", "if_false": "Check for other steganography methods"},
+            ],
+            "quality_checks": ["Verify extracted files are not corrupted", "Check that original image wasn't modified during analysis", "Confirm all potential hiding methods were tested"],
+            "common_pitfalls": [
+                {"issue": "Assuming empty passphrase when extraction fails", "prevention": "Try common passwords and dictionary attacks"},
+                {"issue": "Missing hidden data due to format limitations", "prevention": "Test with multiple steganography tools"},
+            ],
+        }
+
+    async def _save_yaml_file(self, file_path: Path, data: Dict[str, Any]) -> bool:
+        """Save data to a YAML file."""
+        try:
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                await f.write(yaml.dump(data, default_flow_style=False, indent=2))
+            return True
+        except OSError as e:
+            logger.error(f"Failed to save YAML file {file_path}: {e}")
+            return False
+
     async def _create_default_system_knowledge(self):
-        """Create default system knowledge templates"""
+        """Create default system knowledge templates."""
         logger.info("Creating default system knowledge templates...")
 
         # Create directory structure
         tools_dir = self.system_knowledge_dir / "tools"
         workflows_dir = self.system_knowledge_dir / "workflows"
         procedures_dir = self.system_knowledge_dir / "procedures"
-        # Issue #379: Create directories in parallel
         await asyncio.gather(
             asyncio.to_thread(tools_dir.mkdir, parents=True, exist_ok=True),
             asyncio.to_thread(workflows_dir.mkdir, parents=True, exist_ok=True),
             asyncio.to_thread(procedures_dir.mkdir, parents=True, exist_ok=True),
         )
 
-        # Create default steganography tools knowledge
-        steganography_tools = {
-            "metadata": {
-                "category": "steganography",
-                "description": "Tools for steganography analysis and detection",
-                "last_updated": datetime.now().isoformat(),
-                "version": "1.0.0",
-            },
-            "tools": [
-                {
-                    "name": "steghide",
-                    "type": "steganography",
-                    "purpose": "Extract and embed hidden data in image and audio files",
-                    "installation": {
-                        "apt": "sudo apt-get install steghide",
-                        "yum": "sudo yum install steghide",
-                        "pacman": "sudo pacman -S steghide",
-                    },
-                    "usage": {
-                        "extract": "steghide extract -sf {image_file}",
-                        "info": "steghide info {image_file}",
-                        "embed": "steghide embed -cf {cover_file} -ef {data_file}",
-                    },
-                    "common_examples": [
-                        {
-                            "description": "Extract hidden data from image",
-                            "command": "steghide extract -sf suspicious.jpg",
-                            "expected_output": (
-                                "Enter passphrase: (if password protected)"
-                            ),
-                        },
-                        {
-                            "description": "Check image capacity for hidden data",
-                            "command": "steghide info suspicious.jpg",
-                            "expected_output": "capacity: 57.8% (can hide data)",
-                        },
-                    ],
-                    "troubleshooting": [
-                        {
-                            "problem": (
-                                "could not extract any data with that passphrase"
-                            ),
-                            "solution": "Try empty passphrase or common passwords",
-                        },
-                        {
-                            "problem": "file format is not supported",
-                            "solution": "Convert to JPEG or BMP format first",
-                        },
-                    ],
-                    "security_notes": [
-                        "Use strong passphrases for embedding",
-                        "Steganography can be detected by analysis tools",
-                        "Consider using multiple tools to avoid detection",
-                    ],
-                    "related_tools": ["binwalk", "outguess", "jsteg", "zsteg"],
-                    "output_formats": ["original file format", "text output for info"],
-                    "limitations": [
-                        "Only supports JPEG, BMP, WAV, AU formats",
-                        "Cannot process encrypted or corrupted images",
-                    ],
-                },
-                {
-                    "name": "binwalk",
-                    "type": "file_analysis",
-                    "purpose": "Analyze and extract files from binary images",
-                    "installation": {
-                        "apt": "sudo apt-get install binwalk",
-                        "yum": "sudo yum install binwalk",
-                        "pacman": "sudo pacman -S binwalk",
-                    },
-                    "usage": {
-                        "analyze": "binwalk {file}",
-                        "extract": "binwalk -e {file}",
-                        "signature": "binwalk --signature {file}",
-                    },
-                    "common_examples": [
-                        {
-                            "description": "Scan for embedded files",
-                            "command": "binwalk suspicious.jpg",
-                            "expected_output": (
-                                "List of detected file signatures and offsets"
-                            ),
-                        },
-                        {
-                            "description": "Extract all found files",
-                            "command": "binwalk -e suspicious.jpg",
-                            "expected_output": (
-                                "Creates _suspicious.jpg.extracted/ directory"
-                            ),
-                        },
-                    ],
-                    "related_tools": ["foremost", "scalpel", "photorec"],
-                    "output_formats": ["extracted files", "signature analysis text"],
-                },
-            ],
-        }
-
-        # Save steganography tools
-        steg_file = self.system_knowledge_dir / "tools" / "steganography.yaml"
-        try:
-            async with aiofiles.open(
-                steg_file, "w", encoding="utf-8"
-            ) as f:
-                await f.write(
-                    yaml.dump(steganography_tools, default_flow_style=False, indent=2)
-                )
-        except OSError as e:
-            logger.error(f"Failed to save steganography tools to {steg_file}: {e}")
-
-        # Create default image forensics workflow
-        image_forensics_workflow = {
-            "metadata": {
-                "name": "Image Steganography Analysis",
-                "category": "forensics",
-                "complexity": "medium",
-                "estimated_time": "10-30 minutes",
-                "version": "1.0.0",
-            },
-            "objective": (
-                "Analyze images for hidden files, steganographic content, "
-                "and embedded data"
-            ),
-            "prerequisites": [
-                "Target image file(s)",
-                "Basic understanding of steganography techniques",
-                "Sufficient disk space for extracted files",
-            ],
-            "required_tools": [
-                {
-                    "name": "steghide",
-                    "purpose": "Extract hidden data from images",
-                    "optional": False,
-                },
-                {
-                    "name": "binwalk",
-                    "purpose": "Detect and extract embedded files",
-                    "optional": False,
-                },
-                {
-                    "name": "exiftool",
-                    "purpose": "Analyze image metadata",
-                    "optional": True,
-                },
-            ],
-            "workflow_steps": [
-                {
-                    "step": 1,
-                    "action": "Initial image analysis",
-                    "details": "Gather basic information about the target image",
-                    "commands": [
-                        "file {image_file}",
-                        "ls -la {image_file}",
-                        "identify {image_file}",
-                    ],
-                    "expected_output": "Image format, size, and basic properties",
-                },
-                {
-                    "step": 2,
-                    "action": "Metadata examination",
-                    "details": "Check for hidden information in image metadata",
-                    "commands": [
-                        "exiftool {image_file}",
-                        "strings {image_file} | head -20",
-                    ],
-                    "expected_output": "EXIF data, embedded comments, text strings",
-                },
-                {
-                    "step": 3,
-                    "action": "Steganography detection",
-                    "details": "Check for steganographic content using steghide",
-                    "commands": ["steghide info {image_file}"],
-                    "expected_output": (
-                        "Capacity information or error if no hidden data"
-                    ),
-                },
-                {
-                    "step": 4,
-                    "action": "File signature analysis",
-                    "details": "Look for embedded files using binwalk",
-                    "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
-                    "expected_output": "List of detected files and extraction results",
-                },
-            ],
-            "decision_points": [
-                {
-                    "condition": "steghide reports capacity > 0",
-                    "if_true": "Attempt extraction with common passwords",
-                    "if_false": "Move to alternative steganography tools",
-                },
-                {
-                    "condition": "binwalk finds embedded files",
-                    "if_true": "Extract and analyze each file",
-                    "if_false": "Check for other steganography methods",
-                },
-            ],
-            "quality_checks": [
-                "Verify extracted files are not corrupted",
-                "Check that original image wasn't modified during analysis",
-                "Confirm all potential hiding methods were tested",
-            ],
-            "common_pitfalls": [
-                {
-                    "issue": "Assuming empty passphrase when extraction fails",
-                    "prevention": "Try common passwords and dictionary attacks",
-                },
-                {
-                    "issue": "Missing hidden data due to format limitations",
-                    "prevention": "Test with multiple steganography tools",
-                },
-            ],
-        }
-
-        # Save workflow
-        workflow_file = self.system_knowledge_dir / "workflows" / "image_forensics.yaml"
-        try:
-            async with aiofiles.open(
-                workflow_file, "w", encoding="utf-8"
-            ) as f:
-                await f.write(
-                    yaml.dump(image_forensics_workflow, default_flow_style=False, indent=2)
-                )
-        except OSError as e:
-            logger.error(f"Failed to save workflow to {workflow_file}: {e}")
+        # Save steganography tools and workflow in parallel
+        await asyncio.gather(
+            self._save_yaml_file(tools_dir / "steganography.yaml", self._get_steganography_tools_data()),
+            self._save_yaml_file(workflows_dir / "image_forensics.yaml", self._get_image_forensics_workflow_data()),
+        )
 
         logger.info("Default system knowledge templates created")
 
@@ -764,65 +628,52 @@ class SystemKnowledgeManager:
 
         logger.info("System knowledge reloaded successfully")
 
-    async def _import_from_runtime_files(self):
-        """Import system knowledge from runtime files"""
-        # Import tools
+    async def _import_runtime_tools(self):
+        """Import tools from runtime directory."""
         tools_dir = self.runtime_knowledge_dir / "tools"
-        tools_dir_exists = await asyncio.to_thread(tools_dir.exists)
-        if tools_dir_exists:
-            # Issue #358 - wrap glob in lambda to avoid blocking
-            yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
-            for yaml_file in yaml_files:
-                try:
-                    async with aiofiles.open(
-                        yaml_file, "r", encoding="utf-8"
-                    ) as f:
-                        content = await f.read()
-                        tools_data = yaml.safe_load(content)
-                except OSError as e:
-                    logger.error(f"Failed to read tools file {yaml_file}: {e}")
-                    continue
-
+        if not await asyncio.to_thread(tools_dir.exists):
+            return
+        yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
+        for yaml_file in yaml_files:
+            try:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
+                    tools_data = yaml.safe_load(await f.read())
                 for tool_data in tools_data.get("tools", []):
                     await self._import_single_tool(tool_data)
+            except OSError as e:
+                logger.error(f"Failed to read tools file {yaml_file}: {e}")
 
-        # Import workflows
+    async def _import_runtime_workflows(self):
+        """Import workflows from runtime directory."""
         workflows_dir = self.runtime_knowledge_dir / "workflows"
-        workflows_dir_exists = await asyncio.to_thread(workflows_dir.exists)
-        if workflows_dir_exists:
-            # Issue #358 - wrap glob in lambda to avoid blocking
-            yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
-            for yaml_file in yaml_files:
-                try:
-                    async with aiofiles.open(
-                        yaml_file, "r", encoding="utf-8"
-                    ) as f:
-                        content = await f.read()
-                        workflow_data = yaml.safe_load(content)
-                except OSError as e:
-                    logger.error(f"Failed to read workflow file {yaml_file}: {e}")
-                    continue
+        if not await asyncio.to_thread(workflows_dir.exists):
+            return
+        yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
+        for yaml_file in yaml_files:
+            try:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
+                    await self._import_single_workflow(yaml.safe_load(await f.read()))
+            except OSError as e:
+                logger.error(f"Failed to read workflow file {yaml_file}: {e}")
 
-                await self._import_single_workflow(workflow_data)
-
-        # Import procedures
+    async def _import_runtime_procedures(self):
+        """Import procedures from runtime directory."""
         procedures_dir = self.runtime_knowledge_dir / "procedures"
-        procedures_dir_exists = await asyncio.to_thread(procedures_dir.exists)
-        if procedures_dir_exists:
-            # Issue #358 - wrap glob in lambda to avoid blocking
-            yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
-            for yaml_file in yaml_files:
-                try:
-                    async with aiofiles.open(
-                        yaml_file, "r", encoding="utf-8"
-                    ) as f:
-                        content = await f.read()
-                        procedure_data = yaml.safe_load(content)
-                except OSError as e:
-                    logger.error(f"Failed to read procedure file {yaml_file}: {e}")
-                    continue
+        if not await asyncio.to_thread(procedures_dir.exists):
+            return
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
+        for yaml_file in yaml_files:
+            try:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
+                    await self._import_single_procedure(yaml.safe_load(await f.read()))
+            except OSError as e:
+                logger.error(f"Failed to read procedure file {yaml_file}: {e}")
 
-                await self._import_single_procedure(procedure_data)
+    async def _import_from_runtime_files(self):
+        """Import system knowledge from runtime files."""
+        await self._import_runtime_tools()
+        await self._import_runtime_workflows()
+        await self._import_runtime_procedures()
 
     def get_knowledge_categories(self) -> Dict[str, Any]:
         """
