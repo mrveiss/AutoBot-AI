@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 from backend.type_defs.common import Metadata
 
-from .analyzers import analyze_python_file, analyze_javascript_vue_file
+from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
 from .storage import get_code_collection_async
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,9 @@ PYTHON_EXTENSIONS = {".py"}
 JS_EXTENSIONS = {".js", ".ts"}
 VUE_EXTENSIONS = {".vue"}
 CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".ini", ".conf"}
+
+# Documentation file extensions (Issue #367)
+DOC_EXTENSIONS = {".md", ".rst", ".txt", ".adoc", ".asciidoc"}
 
 # Directories to skip during scanning (Issue #315)
 SKIP_DIRS = {
@@ -60,7 +63,7 @@ async def _count_scannable_files(root_path_obj: Path) -> int:
 async def _get_file_analysis(
     file_path: Path, extension: str, stats: dict
 ) -> Optional[dict]:
-    """Get analysis for a file based on its type (Issue #315)."""
+    """Get analysis for a file based on its type (Issue #315, #367)."""
     if extension in PYTHON_EXTENSIONS:
         stats["python_files"] += 1
         return await analyze_python_file(str(file_path))
@@ -76,6 +79,11 @@ async def _get_file_analysis(
     if extension in CONFIG_EXTENSIONS:
         stats["config_files"] += 1
         return None
+
+    # Issue #367: Handle documentation files separately
+    if extension in DOC_EXTENSIONS:
+        stats["doc_files"] += 1
+        return analyze_documentation_file(str(file_path))
 
     stats["other_files"] += 1
     return None
@@ -208,6 +216,15 @@ def _aggregate_file_analysis(
     analysis_results["stats"]["total_functions"] += len(file_analysis.get("functions", []))
     analysis_results["stats"]["total_classes"] += len(file_analysis.get("classes", []))
 
+    # Aggregate line type counts (Issue #368)
+    analysis_results["stats"]["code_lines"] += file_analysis.get("code_lines", 0)
+    analysis_results["stats"]["comment_lines"] += file_analysis.get("comment_lines", 0)
+    analysis_results["stats"]["docstring_lines"] += file_analysis.get("docstring_lines", 0)
+    analysis_results["stats"]["blank_lines"] += file_analysis.get("blank_lines", 0)
+
+    # Aggregate documentation lines (Issue #367)
+    analysis_results["stats"]["documentation_lines"] += file_analysis.get("documentation_lines", 0)
+
     for func in file_analysis.get("functions", []):
         func["file_path"] = relative_path
         analysis_results["all_functions"].append(func)
@@ -273,8 +290,14 @@ async def scan_codebase(
             "javascript_files": 0,
             "vue_files": 0,
             "config_files": 0,
+            "doc_files": 0,
             "other_files": 0,
             "total_lines": 0,
+            "code_lines": 0,
+            "comment_lines": 0,
+            "docstring_lines": 0,
+            "documentation_lines": 0,
+            "blank_lines": 0,
             "total_functions": 0,
             "total_classes": 0,
         },
@@ -352,6 +375,21 @@ async def scan_codebase(
             )
         else:
             analysis_results["stats"]["average_file_size"] = 0
+
+        # Calculate comment ratio (Issue #368)
+        total_lines = analysis_results["stats"]["total_lines"]
+        if total_lines > 0:
+            comment_lines = analysis_results["stats"]["comment_lines"]
+            docstring_lines = analysis_results["stats"]["docstring_lines"]
+            analysis_results["stats"]["comment_ratio"] = f"{(comment_lines / total_lines * 100):.1f}%"
+            analysis_results["stats"]["docstring_ratio"] = f"{(docstring_lines / total_lines * 100):.1f}%"
+            # Combined documentation ratio (comments + docstrings)
+            doc_total = comment_lines + docstring_lines
+            analysis_results["stats"]["documentation_ratio"] = f"{(doc_total / total_lines * 100):.1f}%"
+        else:
+            analysis_results["stats"]["comment_ratio"] = "0.0%"
+            analysis_results["stats"]["docstring_ratio"] = "0.0%"
+            analysis_results["stats"]["documentation_ratio"] = "0.0%"
 
         analysis_results["stats"]["last_indexed"] = datetime.now().isoformat()
 

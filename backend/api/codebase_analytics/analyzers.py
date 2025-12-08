@@ -749,6 +749,156 @@ def _create_empty_analysis_result() -> Metadata:
         "problems": [],
         "technical_debt": [],
         "line_count": 0,
+        "code_lines": 0,
+        "comment_lines": 0,
+        "docstring_lines": 0,
+        "blank_lines": 0,
+    }
+
+
+def _count_python_line_types(content: str, tree: ast.AST) -> Dict[str, int]:
+    """
+    Count different line types in Python code (Issue #368).
+
+    Distinguishes between:
+    - code_lines: Lines containing executable code
+    - comment_lines: Lines that are pure comments (# ...)
+    - docstring_lines: Lines inside docstrings
+    - blank_lines: Empty or whitespace-only lines
+
+    Args:
+        content: Full file content as string
+        tree: Parsed AST tree
+
+    Returns:
+        Dict with line_count, code_lines, comment_lines, docstring_lines, blank_lines
+    """
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    # Track which lines are part of docstrings
+    docstring_line_numbers: Set[int] = set()
+
+    # Find all docstrings in functions, classes, and module level
+    for node in ast.walk(tree):
+        # Check module-level docstring
+        if isinstance(node, ast.Module) and node.body:
+            first_stmt = node.body[0]
+            if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Constant):
+                if isinstance(first_stmt.value.value, str):
+                    for line_num in range(first_stmt.lineno, (first_stmt.end_lineno or first_stmt.lineno) + 1):
+                        docstring_line_numbers.add(line_num)
+
+        # Check function/class docstrings
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.body:
+                first_stmt = node.body[0]
+                if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Constant):
+                    if isinstance(first_stmt.value.value, str):
+                        for line_num in range(first_stmt.lineno, (first_stmt.end_lineno or first_stmt.lineno) + 1):
+                            docstring_line_numbers.add(line_num)
+
+    blank_lines = 0
+    comment_lines = 0
+    docstring_lines = len(docstring_line_numbers)
+
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+
+        # Skip if this line is part of a docstring
+        if i in docstring_line_numbers:
+            continue
+
+        # Check for blank lines
+        if not stripped:
+            blank_lines += 1
+            continue
+
+        # Check for pure comment lines (not inline comments)
+        if stripped.startswith("#"):
+            comment_lines += 1
+
+    # Code lines = total - comments - docstrings - blanks
+    code_lines = total_lines - comment_lines - docstring_lines - blank_lines
+
+    return {
+        "line_count": total_lines,
+        "code_lines": code_lines,
+        "comment_lines": comment_lines,
+        "docstring_lines": docstring_lines,
+        "blank_lines": blank_lines,
+    }
+
+
+def _count_js_vue_line_types(content: str) -> Dict[str, int]:
+    """
+    Count different line types in JavaScript/Vue code (Issue #368).
+
+    Distinguishes between:
+    - code_lines: Lines containing executable code
+    - comment_lines: Lines that are pure comments (// or /* */)
+    - blank_lines: Empty or whitespace-only lines
+
+    Note: JavaScript doesn't have docstrings in the Python sense,
+    so JSDoc comments are counted as comments.
+
+    Args:
+        content: Full file content as string
+
+    Returns:
+        Dict with line_count, code_lines, comment_lines, docstring_lines, blank_lines
+    """
+    lines = content.splitlines()
+    total_lines = len(lines)
+
+    blank_lines = 0
+    comment_lines = 0
+    in_multiline_comment = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Check for blank lines
+        if not stripped:
+            blank_lines += 1
+            continue
+
+        # Handle multi-line comments /* */
+        if in_multiline_comment:
+            comment_lines += 1
+            if "*/" in stripped:
+                in_multiline_comment = False
+            continue
+
+        # Check for start of multi-line comment
+        if stripped.startswith("/*"):
+            comment_lines += 1
+            if "*/" not in stripped:
+                in_multiline_comment = True
+            continue
+
+        # Check for single-line comments
+        if stripped.startswith("//"):
+            comment_lines += 1
+            continue
+
+        # Check for HTML comments in Vue files
+        if stripped.startswith("<!--"):
+            comment_lines += 1
+            if "-->" not in stripped:
+                # Simple heuristic: Vue HTML comments typically single line
+                pass
+            continue
+
+    # Code lines = total - comments - blanks (no docstrings in JS)
+    code_lines = total_lines - comment_lines - blank_lines
+
+    return {
+        "line_count": total_lines,
+        "code_lines": code_lines,
+        "comment_lines": comment_lines,
+        "docstring_lines": 0,  # JS doesn't have docstrings
+        "blank_lines": blank_lines,
     }
 
 
@@ -1029,6 +1179,9 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
         code_intel_problems = _run_code_intelligence_analyzers(file_path)
         problems.extend(code_intel_problems)
 
+        # Phase 6: Count line types (Issue #368)
+        line_counts = _count_python_line_types(content, tree)
+
         return {
             "functions": functions,
             "classes": classes,
@@ -1036,7 +1189,7 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
             "hardcodes": hardcodes,
             "problems": problems,
             "technical_debt": technical_debt,
-            "line_count": len(content.splitlines()),
+            **line_counts,
         }
 
     except OSError as e:
@@ -1129,13 +1282,16 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
                     }
                 )
 
+        # Count line types (Issue #368)
+        line_counts = _count_js_vue_line_types(content)
+
         return {
             "functions": functions,
             "classes": [],
             "imports": [],
             "hardcodes": hardcodes,
             "problems": problems,
-            "line_count": len(lines),
+            **line_counts,
         }
 
     except Exception as e:
@@ -1147,6 +1303,51 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
             "hardcodes": [],
             "problems": [],
             "line_count": 0,
+            "code_lines": 0,
+            "comment_lines": 0,
+            "docstring_lines": 0,
+            "blank_lines": 0,
         }
 
+
+def analyze_documentation_file(file_path: str) -> Metadata:
+    """
+    Analyze a documentation file (Markdown, RST, etc.) for line counts (Issue #367).
+
+    Documentation files don't have code/comments/docstrings in the programming sense,
+    so we count content lines vs blank lines.
+
+    Returns:
+        Dict with documentation_lines (content) and blank_lines
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        lines = content.splitlines()
+        total_lines = len(lines)
+
+        blank_lines = 0
+        for line in lines:
+            if not line.strip():
+                blank_lines += 1
+
+        # For documentation, all non-blank lines are "documentation lines"
+        documentation_lines = total_lines - blank_lines
+
+        return {
+            "line_count": total_lines,
+            "documentation_lines": documentation_lines,
+            "blank_lines": blank_lines,
+            "is_documentation": True,
+        }
+
+    except Exception as e:
+        logger.error(f"Error analyzing documentation file {file_path}: {e}")
+        return {
+            "line_count": 0,
+            "documentation_lines": 0,
+            "blank_lines": 0,
+            "is_documentation": True,
+        }
 
