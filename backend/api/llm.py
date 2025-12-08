@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -159,8 +160,8 @@ async def update_llm_provider(provider_data: dict):
             model_name = provider_data.get("local_model")
             logger.info(f"UNIFIED CONFIG: Updating Ollama model to: {model_name}")
 
-            # Use the unified model update method
-            config.update_llm_model(model_name)
+            # Use the unified model update method (wrapped for async - Issue #362)
+            await asyncio.to_thread(config.update_llm_model, model_name)
 
         # Handle cloud provider updates
         elif provider_data.get("provider_type") == "cloud":
@@ -179,8 +180,9 @@ async def update_llm_provider(provider_data: dict):
                     cloud_model,
                 )
 
-        # Save all changes
-        config.save()
+        # Save all changes (wrapped for async - Issue #362)
+        await asyncio.to_thread(config.save_settings)
+        await asyncio.to_thread(config.save_config_to_yaml)
 
         # Return current configuration
         current_llm_config = config.get("llm", {})
@@ -303,8 +305,9 @@ async def update_embedding_model(embedding_data: dict):
                 embedding_data["api_key"],
             )
 
-        # Use the dedicated embedding model update method
-        config.update_embedding_model(model)
+        # Save configuration changes (wrapped for async - Issue #362)
+        await asyncio.to_thread(config.save_settings)
+        await asyncio.to_thread(config.save_config_to_yaml)
 
         # Get current configuration for response
         current_config = config.get("llm", {})
