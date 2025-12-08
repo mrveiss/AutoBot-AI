@@ -184,8 +184,8 @@ Suggestion: {problem.get('suggestion', '')}
             metadatas.append(metadata)
 
         # Single batch operation instead of N individual calls
-        await asyncio.to_thread(
-            collection.add,
+        # Issue #388: Use direct await for async collections (AsyncChromaCollection)
+        await collection.add(
             ids=ids,
             documents=documents,
             metadatas=metadatas,
