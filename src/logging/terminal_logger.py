@@ -11,6 +11,7 @@ Provides detailed logging of terminal commands with:
 - Integration with chat message markers
 """
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -71,7 +72,8 @@ class TerminalLogger:
         chat_file = self.data_dir / f"{session_id}_chat.json"
 
         # Only create if it doesn't exist
-        if not chat_file.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(chat_file.exists):
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             chat_data = {
@@ -225,9 +227,11 @@ class TerminalLogger:
             # Set expiry
             await self.redis_client.expire(cache_key, self.cache_ttl)
 
-            # Update active terminal sessions set
-            await self.redis_client.sadd("chat:terminal:active", session_id)
-            await self.redis_client.expire("chat:terminal:active", self.cache_ttl)
+            # Issue #379: Update active terminal sessions set in parallel
+            await asyncio.gather(
+                self.redis_client.sadd("chat:terminal:active", session_id),
+                self.redis_client.expire("chat:terminal:active", self.cache_ttl),
+            )
 
         except Exception as e:
             logger.error(f"Failed to cache command in Redis: {e}")
@@ -274,7 +278,8 @@ class TerminalLogger:
         """Read recent commands from log file."""
         log_file = self.data_dir / f"{session_id}_terminal.log"
 
-        if not log_file.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(log_file.exists):
             return []
 
         try:
@@ -411,14 +416,17 @@ class TerminalLogger:
         try:
             # Delete file
             log_file = self.data_dir / f"{session_id}_terminal.log"
-            if log_file.exists():
-                log_file.unlink()
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(log_file.exists):
+                await asyncio.to_thread(log_file.unlink)
 
-            # Clear Redis cache
+            # Issue #379: Clear Redis cache in parallel
             if self.redis_client:
                 cache_key = f"chat:session:{session_id}:terminal"
-                await self.redis_client.delete(cache_key)
-                await self.redis_client.srem("chat:terminal:active", session_id)
+                await asyncio.gather(
+                    self.redis_client.delete(cache_key),
+                    self.redis_client.srem("chat:terminal:active", session_id),
+                )
 
             logger.info(f"Cleared terminal logs for session {session_id}")
             return True

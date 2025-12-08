@@ -403,7 +403,8 @@ class OperationIntegrationManager:
             )
 
             path = Path(codebase_path)
-            if not path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(path.exists):
                 raise ValueError(f"Codebase path does not exist: {codebase_path}")
 
             # Implementation would integrate with actual KnowledgeBase indexing
@@ -441,7 +442,11 @@ class OperationIntegrationManager:
 
             test_files = []
             for pattern in test_patterns:
-                test_files.extend(Path(test_path).rglob(pattern))
+                # Issue #358 - avoid blocking
+                pattern_files = await asyncio.to_thread(
+                    lambda p=pattern: list(Path(test_path).rglob(p))
+                )
+                test_files.extend(pattern_files)
 
             results = []
             for i, test_file in enumerate(test_files):

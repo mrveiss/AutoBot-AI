@@ -55,6 +55,7 @@ ESSENTIAL_TOOLS = [
 
 
 def discover_tools():
+    """Discover available system tools and their versions from predefined list."""
     found = {}
     for tool in ESSENTIAL_TOOLS:
         path = shutil.which(tool)

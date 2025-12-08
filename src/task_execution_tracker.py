@@ -158,15 +158,22 @@ class TaskExecutionTracker:
             cb for cb in self.task_callbacks[task_id] if cb["event_type"] == event_type
         ]
 
-        for callback_info in callbacks:
+        # Issue #370: Execute callbacks in parallel instead of sequentially
+        async def run_callback(callback_info):
+            """Execute a single callback and handle errors."""
             try:
                 callback = callback_info["callback"]
                 if asyncio.iscoroutinefunction(callback):
                     await callback(task_id)
                 else:
-                    callback(task_id)
+                    await asyncio.to_thread(callback, task_id)
             except Exception as e:
                 logger.error(f"Task callback error for {task_id}: {e}")
+
+        await asyncio.gather(
+            *[run_callback(cb_info) for cb_info in callbacks],
+            return_exceptions=True,
+        )
 
         # Clean up callbacks after execution
         self.task_callbacks.pop(task_id, None)

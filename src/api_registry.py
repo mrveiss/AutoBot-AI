@@ -19,6 +19,7 @@ class APIRegistry:
     """Simple registry to track API routers and endpoints."""
 
     def __init__(self):
+        """Initialize API registry with empty router storage."""
         self.routers: Dict[str, Dict[str, Any]] = {}
         logger.debug("APIRegistry initialized")
 

@@ -240,6 +240,7 @@ class PatternLearningEngine:
     """
 
     def __init__(self):
+        """Initialize pattern learning engine with empty patterns and stats."""
         self.patterns: Dict[str, PatternDefinition] = {}
         self.pattern_stats: Dict[str, PatternStats] = {}
         self.feedback_queue: List[FeedbackRecord] = []
@@ -263,8 +264,11 @@ class PatternLearningEngine:
                 self.redis_client = await get_redis_client(
                     async_client=True, database="analytics"
                 )
-                await self._load_patterns_from_redis()
-                await self._load_feedback_from_redis()
+                # Issue #379: Parallelize independent Redis loading operations
+                await asyncio.gather(
+                    self._load_patterns_from_redis(),
+                    self._load_feedback_from_redis(),
+                )
                 self._initialized = True
                 logger.info("Pattern Learning Engine initialized successfully")
                 return True
@@ -406,6 +410,15 @@ class PatternLearningEngine:
             "learning_triggered": should_learn,
         }
 
+    # Feedback type to counter attribute mapping (Issue #315)
+    _FEEDBACK_COUNTERS = {
+        FeedbackType.CORRECT: "correct_count",
+        FeedbackType.INCORRECT: "incorrect_count",
+        FeedbackType.MISSED: "missed_count",
+        FeedbackType.PARTIAL: "partial_count",
+        FeedbackType.IRRELEVANT: "irrelevant_count",
+    }
+
     async def _update_pattern_stats(self, record: FeedbackRecord):
         """Update pattern statistics with new feedback."""
         pattern_id = record.pattern_id
@@ -416,17 +429,10 @@ class PatternLearningEngine:
         stats = self.pattern_stats[pattern_id]
         stats.feedback_history.append(record)
 
-        # Update counts
-        if record.feedback_type == FeedbackType.CORRECT:
-            stats.correct_count += 1
-        elif record.feedback_type == FeedbackType.INCORRECT:
-            stats.incorrect_count += 1
-        elif record.feedback_type == FeedbackType.MISSED:
-            stats.missed_count += 1
-        elif record.feedback_type == FeedbackType.PARTIAL:
-            stats.partial_count += 1
-        elif record.feedback_type == FeedbackType.IRRELEVANT:
-            stats.irrelevant_count += 1
+        # Update counts using dispatch table (Issue #315 - reduced depth)
+        counter_attr = self._FEEDBACK_COUNTERS.get(record.feedback_type)
+        if counter_attr:
+            setattr(stats, counter_attr, getattr(stats, counter_attr) + 1)
 
         # Recalculate confidence
         stats.raw_score = self._calculate_raw_score(stats)

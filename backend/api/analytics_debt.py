@@ -13,6 +13,7 @@ Features:
 - Actionable recommendations
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -74,6 +75,7 @@ class DebtItem:
     tags: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert technical debt item to serializable dictionary."""
         return {
             "category": self.category.value,
             "severity": self.severity.value,
@@ -386,7 +388,8 @@ async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
     if not redis_client:
         return []
     try:
-        ap_data = redis_client.get("antipattern:latest_results")
+        # Issue #361 - avoid blocking
+        ap_data = await asyncio.to_thread(redis_client.get, "antipattern:latest_results")
         if not ap_data:
             return []
         if isinstance(ap_data, bytes):

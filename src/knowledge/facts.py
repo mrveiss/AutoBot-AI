@@ -257,9 +257,11 @@ class FactsMixin:
 
                 logger.info(f"Vectorized fact {fact_id} in ChromaDB")
 
-            # Increment stats counter (Issue #71)
-            await self._increment_stat("total_facts")
-            await self._increment_stat("total_vectors")
+            # Issue #379: Increment stats counters in parallel (Issue #71)
+            await asyncio.gather(
+                self._increment_stat("total_facts"),
+                self._increment_stat("total_vectors"),
+            )
 
             return {"status": "success", "fact_id": fact_id, "action": "created"}
 
@@ -376,6 +378,43 @@ class FactsMixin:
             logger.error(f"Error retrieving fact {fact_id}: {e}")
             return None
 
+    def _process_fact_data(
+        self,
+        key: str,
+        fact_data: Dict[bytes, bytes],
+        collection: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Process raw Redis fact data into structured dict (Issue #315: extracted helper).
+
+        Args:
+            key: Redis key for the fact
+            fact_data: Raw Redis hash data
+            collection: Optional collection filter
+
+        Returns:
+            Processed fact dict or None if filtered out
+        """
+        if not fact_data:
+            return None
+
+        # Extract fact_id from key
+        fact_id = key.split(":")[-1] if isinstance(key, str) else key.decode("utf-8").split(":")[-1]
+
+        # Decode data using helper
+        decoded = _decode_redis_hash(fact_data)
+
+        # Apply collection filter if specified
+        metadata = decoded.get("_parsed_metadata", {})
+        if collection and metadata.get("collection") != collection:
+            return None
+
+        return {
+            "fact_id": fact_id,
+            "content": decoded.get("content", ""),
+            "metadata": metadata,
+            "timestamp": decoded.get("timestamp", ""),
+        }
+
     async def get_all_facts(
         self,
         limit: Optional[int] = None,
@@ -416,43 +455,9 @@ class FactsMixin:
             facts_data = await pipeline.execute()
 
             for key, fact_data in zip(fact_keys, facts_data):
-                if not fact_data:
-                    continue
-
-                # Decode
-                decoded = {}
-                for k, v in fact_data.items():
-                    dk = k.decode("utf-8") if isinstance(k, bytes) else k
-                    dv = v.decode("utf-8") if isinstance(v, bytes) else v
-                    decoded[dk] = dv
-
-                # Extract fact_id from key
-                fact_id = (
-                    key.decode("utf-8").replace("fact:", "")
-                    if isinstance(key, bytes)
-                    else key.replace("fact:", "")
-                )
-
-                # Parse metadata
-                metadata = {}
-                if "metadata" in decoded:
-                    try:
-                        metadata = json.loads(decoded["metadata"])
-                    except json.JSONDecodeError:
-                        pass
-
-                # Apply collection filter if specified
-                if collection and metadata.get("collection") != collection:
-                    continue
-
-                facts.append(
-                    {
-                        "fact_id": fact_id,
-                        "content": decoded.get("content", ""),
-                        "metadata": metadata,
-                        "timestamp": decoded.get("timestamp", ""),
-                    }
-                )
+                fact = self._process_fact_data(key, fact_data, collection)
+                if fact:
+                    facts.append(fact)
 
             return facts
 
@@ -580,9 +585,11 @@ class FactsMixin:
                 except Exception as e:
                     logger.warning(f"Could not delete vector for fact {fact_id}: {e}")
 
-            # Decrement stats counter (Issue #71)
-            await self._decrement_stat("total_facts")
-            await self._decrement_stat("total_vectors")
+            # Issue #379: Decrement stats counters in parallel (Issue #71)
+            await asyncio.gather(
+                self._decrement_stat("total_facts"),
+                self._decrement_stat("total_vectors"),
+            )
 
             logger.info(f"Deleted fact {fact_id}")
             return {"status": "success", "fact_id": fact_id, "action": "deleted"}

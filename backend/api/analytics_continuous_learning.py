@@ -220,6 +220,20 @@ class LearningPipeline:
         self.processed_count = 0
         self.last_retrain: Optional[datetime] = None
         self.accuracy_history: List[Tuple[datetime, float]] = []
+        # Build event handler dispatch table (Issue #315)
+        self._event_handlers = {
+            LearningEventType.FILE_CHANGE: self._handle_file_change,
+            LearningEventType.PATTERN_DETECTED: self._handle_pattern_detected,
+            LearningEventType.FEEDBACK_RECEIVED: self._handle_feedback,
+            LearningEventType.THRESHOLD_CROSSED: self._handle_threshold_crossed,
+        }
+
+    async def _dispatch_event(self, event: LearningEvent) -> Optional[str]:
+        """Dispatch event to appropriate handler. (Issue #315 - extracted)"""
+        handler = self._event_handlers.get(event.event_type)
+        if handler:
+            return await handler(event)
+        return None
 
     async def process_event(self, event: LearningEvent) -> Dict[str, Any]:
         """Process a learning event."""
@@ -227,19 +241,13 @@ class LearningPipeline:
         result = {"event_id": event.event_id, "processed": False}
 
         try:
-            if event.event_type == LearningEventType.FILE_CHANGE:
-                result["action"] = await self._handle_file_change(event)
-            elif event.event_type == LearningEventType.PATTERN_DETECTED:
-                result["action"] = await self._handle_pattern_detected(event)
-            elif event.event_type == LearningEventType.FEEDBACK_RECEIVED:
-                result["action"] = await self._handle_feedback(event)
-            elif event.event_type == LearningEventType.THRESHOLD_CROSSED:
-                result["action"] = await self._handle_threshold_crossed(event)
-
+            # Use dispatch table for O(1) lookup (Issue #315 - reduced depth)
+            action = await self._dispatch_event(event)
+            if action:
+                result["action"] = action
             event.processed = True
             result["processed"] = True
             self.processed_count += 1
-
         except Exception as e:
             logger.error(f"Failed to process event {event.event_id}: {e}")
             result["error"] = str(e)
@@ -648,17 +656,23 @@ class FileMonitor:
 
         for path_str in self.watched_paths:
             path = self.base_path / path_str
-            if not path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(path.exists):
                 continue
 
-            for py_file in path.rglob("*.py"):
+            # Issue #358 - avoid blocking with lambda for proper rglob() execution in thread
+            py_files = await asyncio.to_thread(lambda: list(path.rglob("*.py")))
+            for py_file in py_files:
                 if "__pycache__" in str(py_file):
                     continue
 
                 try:
-                    content = py_file.read_text(encoding="utf-8", errors="ignore")
+                    # Issue #358 - avoid blocking
+                    content = await asyncio.to_thread(
+                        py_file.read_text, encoding="utf-8", errors="ignore"
+                    )
                     content_hash = hashlib.sha256(content.encode()).hexdigest()
-                    stat = py_file.stat()
+                    stat = await asyncio.to_thread(py_file.stat)
 
                     self.file_states[str(py_file)] = FileState(
                         path=str(py_file),
@@ -668,50 +682,60 @@ class FileMonitor:
                 except Exception as e:
                     logger.debug("File read/hash error, skipping %s: %s", py_file, e)
 
+    def _process_file_change(
+        self, py_file: Path, changes: list
+    ) -> None:
+        """Process a single file for changes. (Issue #315 - extracted)"""
+        file_path = str(py_file)
+        try:
+            content = py_file.read_text(encoding="utf-8", errors="ignore")
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            stat = py_file.stat()
+            modified = datetime.fromtimestamp(stat.st_mtime)
+
+            if file_path not in self.file_states:
+                # New file
+                changes.append(("created", file_path))
+                self.file_states[file_path] = FileState(
+                    path=file_path,
+                    content_hash=content_hash,
+                    last_modified=modified,
+                )
+            elif self.file_states[file_path].content_hash != content_hash:
+                # Modified file
+                changes.append(("modified", file_path))
+                self.file_states[file_path].content_hash = content_hash
+                self.file_states[file_path].last_modified = modified
+        except Exception as e:
+            logger.debug("File read/hash error, skipping %s: %s", file_path, e)
+
     async def _check_for_changes(self):
         """Check for file changes."""
         changes = []
 
         for path_str in self.watched_paths:
             path = self.base_path / path_str
-            if not path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(path.exists):
                 continue
-
-            for py_file in path.rglob("*.py"):
+            # Issue #358 - avoid blocking with lambda for proper rglob() execution in thread
+            py_files = await asyncio.to_thread(lambda: list(path.rglob("*.py")))
+            for py_file in py_files:
                 if "__pycache__" in str(py_file):
                     continue
-
-                file_path = str(py_file)
-
-                try:
-                    content = py_file.read_text(encoding="utf-8", errors="ignore")
-                    content_hash = hashlib.sha256(content.encode()).hexdigest()
-                    stat = py_file.stat()
-                    modified = datetime.fromtimestamp(stat.st_mtime)
-
-                    if file_path not in self.file_states:
-                        # New file
-                        changes.append(("created", file_path))
-                        self.file_states[file_path] = FileState(
-                            path=file_path,
-                            content_hash=content_hash,
-                            last_modified=modified,
-                        )
-                    elif self.file_states[file_path].content_hash != content_hash:
-                        # Modified file
-                        changes.append(("modified", file_path))
-                        self.file_states[file_path].content_hash = content_hash
-                        self.file_states[file_path].last_modified = modified
-
-                except Exception as e:
-                    logger.debug("File read/hash error, skipping %s: %s", file_path, e)
+                # Process file changes using helper (Issue #315)
+                # Issue #358 - avoid blocking
+                await asyncio.to_thread(self._process_file_change, py_file, changes)
 
         # Check for deleted files
         current_files = set()
         for path_str in self.watched_paths:
             path = self.base_path / path_str
-            if path.exists():
-                for py_file in path.rglob("*.py"):
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(path.exists):
+                # Issue #358 - avoid blocking with lambda for proper rglob() execution in thread
+                py_files = await asyncio.to_thread(lambda: list(path.rglob("*.py")))
+                for py_file in py_files:
                     current_files.add(str(py_file))
 
         for file_path in list(self.file_states.keys()):

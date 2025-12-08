@@ -637,7 +637,10 @@ async def _process_doc_file(
     file_path = autobot_base_path / doc_file
 
     # Check file exists
-    if not file_path.exists() or not file_path.is_file():
+    # Issue #358 - avoid blocking
+    file_exists = await asyncio.to_thread(file_path.exists)
+    is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+    if not file_exists or not is_file:
         logger.warning(f"File not found: {doc_file}")
         return (0, 1, 0)
 
@@ -779,8 +782,11 @@ async def populate_autobot_docs(request: dict, req: Request):
     # AutoBot documentation should ONLY include files from docs/ folder
     # Root files like CLAUDE.md, README.md are NOT documentation
     docs_path = autobot_base_path / "docs"
-    if docs_path.exists():
-        for md_file in docs_path.rglob("*.md"):
+    # Issue #358 - avoid blocking
+    if await asyncio.to_thread(docs_path.exists):
+        # Issue #358 - use lambda to defer rglob to thread
+        md_files = await asyncio.to_thread(lambda: list(docs_path.rglob("*.md")))
+        for md_file in md_files:
             rel_path = md_file.relative_to(autobot_base_path)
             # Skip if already imported and unchanged (unless force reindex)
             if not force_reindex and not tracker.needs_reimport(str(md_file)):

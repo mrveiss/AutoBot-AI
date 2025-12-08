@@ -32,6 +32,24 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+# Issue #315 - Threshold-based score calculation to reduce nesting
+def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], default: int = 10) -> int:
+    """Calculate score based on value thresholds (Issue #315 - extracted helper).
+
+    Args:
+        value: The value to check against thresholds
+        thresholds: List of (threshold, score) tuples in descending threshold order
+        default: Score to return if value is below all thresholds
+
+    Returns:
+        Score corresponding to the first matched threshold
+    """
+    for threshold, score in thresholds:
+        if value > threshold:
+            return score
+    return default
+
+
 # ============================================================================
 # Enums and Data Classes
 # ============================================================================
@@ -754,34 +772,39 @@ class BugPredictor:
         except Exception as e:
             logger.warning(f"Failed to get bug history: {e}")
 
+    # Issue #315 - File size thresholds for risk scoring
+    _FILE_SIZE_THRESHOLDS: list[tuple[int, int]] = [
+        (1000, 100),  # > 1000 lines = score 100
+        (500, 75),    # > 500 lines = score 75
+        (300, 50),    # > 300 lines = score 50
+        (100, 25),    # > 100 lines = score 25
+    ]
+
     def _calculate_file_size_score(self, path: Path) -> dict[str, Any]:
-        """Calculate risk score based on file size."""
+        """Calculate risk score based on file size (Issue #315 - refactored)."""
         try:
             if not path.exists():
                 return {"lines": 0, "score": 0}
 
             content = path.read_text(encoding="utf-8", errors="ignore")
             lines = len(content.split("\n"))
-
-            # Score: Larger files = higher risk
-            if lines > 1000:
-                score = 100
-            elif lines > 500:
-                score = 75
-            elif lines > 300:
-                score = 50
-            elif lines > 100:
-                score = 25
-            else:
-                score = 10
+            score = _calculate_threshold_score(lines, self._FILE_SIZE_THRESHOLDS)
 
             return {"lines": lines, "score": score}
 
         except Exception:
             return {"lines": 0, "score": 30}
 
+    # Issue #315 - Import count thresholds for coupling risk
+    _DEPENDENCY_THRESHOLDS: list[tuple[int, int]] = [
+        (30, 100),  # > 30 imports = score 100
+        (20, 75),   # > 20 imports = score 75
+        (10, 50),   # > 10 imports = score 50
+        (5, 25),    # > 5 imports = score 25
+    ]
+
     def _analyze_dependencies(self, path: Path) -> dict[str, Any]:
-        """Analyze import/dependency count."""
+        """Analyze import/dependency count (Issue #315 - refactored)."""
         try:
             if not path.exists():
                 return {"count": 0, "score": 0}
@@ -791,18 +814,7 @@ class BugPredictor:
             # Count import statements
             import_pattern = r"^(?:from\s+\S+\s+)?import\s+"
             imports = len(re.findall(import_pattern, content, re.MULTILINE))
-
-            # Score: More imports = higher coupling risk
-            if imports > 30:
-                score = 100
-            elif imports > 20:
-                score = 75
-            elif imports > 10:
-                score = 50
-            elif imports > 5:
-                score = 25
-            else:
-                score = 10
+            score = _calculate_threshold_score(imports, self._DEPENDENCY_THRESHOLDS)
 
             return {"count": imports, "score": score}
 

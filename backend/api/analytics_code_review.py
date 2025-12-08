@@ -517,8 +517,14 @@ async def analyze_diff(
         # Get full file content for analysis
         try:
             file_path = Path(file_info["path"])
-            if file_path.exists() and file_path.suffix in REVIEWABLE_EXTENSIONS:
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            # Issue #358 - avoid blocking
+            if (
+                await asyncio.to_thread(file_path.exists)
+                and file_path.suffix in REVIEWABLE_EXTENSIONS
+            ):
+                content = await asyncio.to_thread(
+                    file_path.read_text, encoding="utf-8", errors="ignore"
+                )
                 comments = analyze_code(content, str(file_path))
                 all_comments.extend(comments)
         except Exception as e:
@@ -551,8 +557,11 @@ async def review_file(
     if content is None:
         try:
             path = Path(file_path)
-            if path.exists():
-                content = path.read_text(encoding="utf-8", errors="ignore")
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(path.exists):
+                content = await asyncio.to_thread(
+                    path.read_text, encoding="utf-8", errors="ignore"
+                )
             else:
                 raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
         except Exception as e:
@@ -685,8 +694,13 @@ async def submit_feedback(
                 "feedback_text": feedback_text,
                 "submitted_at": datetime.now().isoformat(),
             }
-            redis.lpush("code_review:feedback", json.dumps(feedback))
-            redis.ltrim("code_review:feedback", 0, 999)  # Keep last 1000
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                redis.lpush, "code_review:feedback", json.dumps(feedback)
+            )
+            await asyncio.to_thread(
+                redis.ltrim, "code_review:feedback", 0, 999
+            )  # Keep last 1000
 
             return {"status": "recorded", "feedback": feedback}
     except Exception as e:

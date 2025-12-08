@@ -50,6 +50,7 @@ class WebSocketManager:
     """
 
     def __init__(self, config: Optional[HeartbeatConfig] = None):
+        """Initialize WebSocket manager with heartbeat configuration."""
         self.config = config or HeartbeatConfig()
         self.active_connections: Dict[str, WebSocket] = {}
         self.connection_states: Dict[str, ConnectionState] = {}

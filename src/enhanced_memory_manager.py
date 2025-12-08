@@ -73,6 +73,7 @@ class EnhancedMemoryManager:
     """
 
     def __init__(self, db_path: str = "data/enhanced_memory.db"):
+        """Initialize enhanced memory manager with SQLite database path."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()

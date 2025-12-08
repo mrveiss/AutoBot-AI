@@ -388,6 +388,7 @@ class ExampleMigratedAgent(StandardizedAgent):
         )
 
     def get_capabilities(self) -> List[str]:
+        """Return list of supported agent capabilities."""
         return ["chat", "query", "general_conversation"]
 
     async def handle_chat(self, request: AgentRequest) -> Dict[str, Any]:

@@ -206,6 +206,7 @@ class RoundRobinStrategy(LoadBalancingStrategy):
     """Round-robin load balancing strategy"""
 
     def __init__(self):
+        """Initialize round-robin strategy with starting index."""
         self._last_index = -1
 
     def select_worker(self, workers: List[Worker]) -> Optional[Worker]:

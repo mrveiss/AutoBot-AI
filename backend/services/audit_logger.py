@@ -350,9 +350,11 @@ class AuditLogger:
         try:
             audit_db = await self._get_audit_db()
             if not audit_db:
-                # Redis unavailable - fallback to file
-                for entry in entries_to_flush:
-                    await self._fallback_log(entry)
+                # Issue #370: Redis unavailable - fallback to file in parallel
+                await asyncio.gather(
+                    *[self._fallback_log(entry) for entry in entries_to_flush],
+                    return_exceptions=True,
+                )
                 return
 
             # Use pipeline for atomic batch write
@@ -365,9 +367,11 @@ class AuditLogger:
 
         except Exception as e:
             logger.error(f"Batch flush failed: {e}")
-            # Fallback to file for all entries
-            for entry in entries_to_flush:
-                await self._fallback_log(entry, error=str(e))
+            # Issue #370: Fallback to file in parallel for all entries
+            await asyncio.gather(
+                *[self._fallback_log(entry, error=str(e)) for entry in entries_to_flush],
+                return_exceptions=True,
+            )
 
     async def _write_entry_to_redis(self, pipe, entry: AuditEntry):
         """

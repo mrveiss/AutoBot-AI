@@ -27,6 +27,7 @@ class RedisCompatibilityWrapper:
     """
 
     def __init__(self, database_name: str = "main"):
+        """Initialize Redis wrapper with database name and client state."""
         self.database_name = database_name
         self._async_db = None
         self._sync_client = None

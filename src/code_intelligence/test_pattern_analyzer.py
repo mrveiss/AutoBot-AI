@@ -664,83 +664,87 @@ class TestPatternAnalyzer:
     # Coverage Gap Detection
     # =========================================================================
 
+    def _build_tested_modules(self, test_files: List[str]) -> Set[str]:
+        """Build set of module names that have tests (Issue #315 - extracted helper)."""
+        tested_modules: Set[str] = set()
+        for test_file in test_files:
+            base = os.path.basename(test_file)
+            if base.startswith("test_"):
+                tested_modules.add(base[5:-3])  # Remove "test_" and ".py"
+            elif base.endswith("_test.py"):
+                tested_modules.add(base[:-8])  # Remove "_test.py"
+        return tested_modules
+
+    def _create_module_gap(self, source_file: str, module_name: str) -> CoverageGap:
+        """Create gap for untested module (Issue #315 - extracted helper)."""
+        return CoverageGap(
+            source_file=source_file,
+            source_function="<module>",
+            source_line=1,
+            gap_type="no_test",
+            description=f"Module '{module_name}' has no corresponding test file",
+            suggestion=f"Create test_{module_name}.py with tests for public functions",
+            priority=TestPatternSeverity.MEDIUM,
+        )
+
+    def _create_function_gap(
+        self, source_file: str, node: ast.FunctionDef
+    ) -> CoverageGap:
+        """Create gap for untested function (Issue #315 - extracted helper)."""
+        return CoverageGap(
+            source_file=source_file,
+            source_function=node.name,
+            source_line=node.lineno,
+            gap_type="no_test",
+            description=f"Function '{node.name}' has no test coverage",
+            suggestion=f"Add test_{{scenario}}_{node.name} tests",
+            priority=TestPatternSeverity.MEDIUM,
+        )
+
+    def _find_untested_functions(
+        self, source_file: str, module_name: str, tested_modules: Set[str]
+    ) -> List[CoverageGap]:
+        """Find untested public functions in a source file (Issue #315 - extracted helper)."""
+        gaps: List[CoverageGap] = []
+        if module_name in tested_modules:
+            return gaps
+
+        try:
+            with open(source_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            tree = ast.parse(content)
+
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                    gaps.append(self._create_function_gap(source_file, node))
+        except Exception as e:
+            logger.debug(f"Could not parse {source_file}: {e}")
+
+        return gaps
+
     def _find_coverage_gaps(
         self,
         source_files: List[str],
         test_files: List[str],
     ) -> List[CoverageGap]:
-        """
-        Find coverage gaps by comparing source files to test files.
+        """Find coverage gaps by comparing source files to test files (Issue #315 - refactored)."""
+        gaps: List[CoverageGap] = []
+        tested_modules = self._build_tested_modules(test_files)
 
-        This is a heuristic approach that looks for:
-        - Source files without corresponding test files
-        - Public functions without test coverage
-        """
-        gaps = []
-
-        # Build a map of tested modules
-        tested_modules: Set[str] = set()
-        for test_file in test_files:
-            # Extract module name from test file (test_foo.py -> foo)
-            base = os.path.basename(test_file)
-            if base.startswith("test_"):
-                module = base[5:-3]  # Remove "test_" and ".py"
-                tested_modules.add(module)
-            elif base.endswith("_test.py"):
-                module = base[:-8]  # Remove "_test.py"
-                tested_modules.add(module)
-
-        # Check each source file
         for source_file in source_files:
             if self._should_exclude(source_file) or self.is_test_file(source_file):
                 continue
 
             module_name = os.path.basename(source_file)[:-3]  # Remove ".py"
-
-            # Skip __init__ and private modules
             if module_name.startswith("_"):
                 continue
 
             if module_name not in tested_modules:
-                gaps.append(
-                    CoverageGap(
-                        source_file=source_file,
-                        source_function="<module>",
-                        source_line=1,
-                        gap_type="no_test",
-                        description=f"Module '{module_name}' has no corresponding test file",
-                        suggestion=f"Create test_{module_name}.py with tests for public functions",
-                        priority=TestPatternSeverity.MEDIUM,
-                    )
-                )
+                gaps.append(self._create_module_gap(source_file, module_name))
 
-            # Parse source file to find untested public functions
-            try:
-                with open(source_file, "r", encoding="utf-8") as f:
-                    content = f.read()
-                tree = ast.parse(content)
-
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.FunctionDef):
-                        # Skip private functions
-                        if node.name.startswith("_"):
-                            continue
-                        # This is a simple heuristic - a real implementation would
-                        # need to check if there's actually a test for this function
-                        if module_name not in tested_modules:
-                            gaps.append(
-                                CoverageGap(
-                                    source_file=source_file,
-                                    source_function=node.name,
-                                    source_line=node.lineno,
-                                    gap_type="no_test",
-                                    description=f"Function '{node.name}' has no test coverage",
-                                    suggestion=f"Add test_{{scenario}}_{node.name} tests",
-                                    priority=TestPatternSeverity.MEDIUM,
-                                )
-                            )
-            except Exception as e:
-                logger.debug(f"Could not parse {source_file}: {e}")
+            gaps.extend(
+                self._find_untested_functions(source_file, module_name, tested_modules)
+            )
 
         return gaps
 

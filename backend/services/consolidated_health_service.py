@@ -22,6 +22,7 @@ class ConsolidatedHealthService:
     """Service to aggregate health status from all system components"""
 
     def __init__(self):
+        """Initialize health service with empty component checkers and cache."""
         self.component_checkers = {}
         self.cached_status = None
         self.cache_timestamp = None
@@ -55,41 +56,51 @@ class ConsolidatedHealthService:
         async with self._async_lock:
             checkers_snapshot = dict(self.component_checkers)
 
-        # Check each registered component (iterate over snapshot)
-        for component_name, checker in checkers_snapshot.items():
+        # Issue #379: Run all health checks in parallel using asyncio.gather()
+        async def check_component(component_name: str, checker):
+            """Check a single component's health."""
             try:
                 if hasattr(checker, "__call__"):
-                    # It's a function/method
                     if asyncio.iscoroutinefunction(checker):
-                        component_health = await checker()
+                        return component_name, await checker()
                     else:
-                        component_health = checker()
+                        return component_name, checker()
                 else:
-                    # It's already a health status dict
-                    component_health = checker
-
-                health_status["components"][component_name] = component_health
-
-                # Update summary counts
-                component_status = component_health.get("status", "unknown")
-                if component_status in {"healthy", "connected", "available"}:
-                    health_status["summary"]["healthy"] += 1
-                elif component_status in {"degraded", "warning"}:
-                    health_status["summary"]["degraded"] += 1
-                else:
-                    health_status["summary"]["unhealthy"] += 1
-
-                health_status["summary"]["total"] += 1
-
+                    return component_name, checker
             except Exception as e:
                 logger.error(f"Error checking health for {component_name}: {e}")
-                health_status["components"][component_name] = {
+                return component_name, {
                     "status": "unhealthy",
                     "error": str(e),
                     "timestamp": datetime.now().isoformat(),
                 }
+
+        # Run all health checks in parallel
+        check_tasks = [
+            check_component(name, checker)
+            for name, checker in checkers_snapshot.items()
+        ]
+        results = await asyncio.gather(*check_tasks, return_exceptions=True)
+
+        # Process results
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Health check task failed: {result}")
+                continue
+
+            component_name, component_health = result
+            health_status["components"][component_name] = component_health
+
+            # Update summary counts
+            component_status = component_health.get("status", "unknown")
+            if component_status in {"healthy", "connected", "available"}:
+                health_status["summary"]["healthy"] += 1
+            elif component_status in {"degraded", "warning"}:
+                health_status["summary"]["degraded"] += 1
+            else:
                 health_status["summary"]["unhealthy"] += 1
-                health_status["summary"]["total"] += 1
+
+            health_status["summary"]["total"] += 1
 
         # Determine overall status
         if health_status["summary"]["unhealthy"] > 0:

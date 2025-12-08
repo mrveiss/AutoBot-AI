@@ -5,6 +5,7 @@
 Chart data endpoints for analytics visualization
 """
 
+import asyncio
 import json
 import logging
 from typing import Dict
@@ -54,18 +55,22 @@ async def _aggregate_from_redis(
     file_problems: Dict[str, int],
 ) -> int:
     """Aggregate problem data from Redis (Issue #315 - extracted helper)."""
-    total_problems = 0
-    for key in redis_client.scan_iter(match="codebase:problems:*"):
-        problems_data = redis_client.get(key)
-        if not problems_data:
-            continue
-        problems = json.loads(problems_data)
-        for problem in problems:
-            total_problems += 1
-            _aggregate_problem_data(
-                problem, problem_types, severity_counts, race_conditions, file_problems
-            )
-    return total_problems
+    # Issue #361 - avoid blocking
+    def _scan_and_aggregate():
+        total_problems = 0
+        for key in redis_client.scan_iter(match="codebase:problems:*"):
+            problems_data = redis_client.get(key)
+            if not problems_data:
+                continue
+            problems = json.loads(problems_data)
+            for problem in problems:
+                total_problems += 1
+                _aggregate_problem_data(
+                    problem, problem_types, severity_counts, race_conditions, file_problems
+                )
+        return total_problems
+
+    return await asyncio.to_thread(_scan_and_aggregate)
 
 
 @with_error_handling(

@@ -58,6 +58,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
     """Middleware to inject system awareness context into LLM requests"""
 
     def __init__(self, app, enable_for_paths: Optional[list] = None):
+        """Initialize LLM awareness middleware with configurable path filtering."""
         super().__init__(app)
         self.awareness = None
         self.enable_for_paths = enable_for_paths or [
@@ -187,6 +188,7 @@ class LLMAwarenessInjector:
     """Utility class for manual awareness injection"""
 
     def __init__(self):
+        """Initialize LLM awareness injector with self-awareness module."""
         self.awareness = get_llm_self_awareness()
 
     async def inject_into_message(

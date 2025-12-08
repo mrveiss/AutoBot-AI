@@ -177,8 +177,9 @@ class ConversationHandlerMixin:
             )
         except asyncio.TimeoutError:
             logger.warning(f"File write timeout after 5s for {transcript_path}")
-            if temp_path.exists():
-                temp_path.unlink()
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(temp_path.exists):
+                await asyncio.to_thread(temp_path.unlink)
         except OSError as os_err:
             logger.error(f"Failed to write transcript file {transcript_path}: {os_err}")
 
@@ -189,12 +190,14 @@ class ConversationHandlerMixin:
         try:
             # Ensure transcript directory exists
             transcript_dir = Path(self.transcript_dir)
-            transcript_dir.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(transcript_dir.mkdir, parents=True, exist_ok=True)
 
             transcript_path = self._get_transcript_path(session_id)
 
             # Load existing transcript or create new
-            if transcript_path.exists():
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(transcript_path.exists):
                 transcript = await self._load_existing_transcript(transcript_path, session_id)
             else:
                 transcript = self._create_empty_transcript(session_id)
@@ -221,7 +224,8 @@ class ConversationHandlerMixin:
         try:
             transcript_path = self._get_transcript_path(session_id)
 
-            if not transcript_path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(transcript_path.exists):
                 return []
 
             # Async file read with timeout
@@ -304,6 +308,8 @@ class ConversationHandlerMixin:
         if len(session.conversation_history) > 10:
             session.conversation_history = session.conversation_history[-10:]
 
-        # Persist to both Redis (short-term cache) and file (long-term storage)
-        await self._save_conversation_history(session_id, session.conversation_history)
-        await self._append_to_transcript(session_id, message, llm_response)
+        # Issue #379: Persist to both Redis and file in parallel
+        await asyncio.gather(
+            self._save_conversation_history(session_id, session.conversation_history),
+            self._append_to_transcript(session_id, message, llm_response),
+        )

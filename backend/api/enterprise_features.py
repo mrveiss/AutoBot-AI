@@ -40,6 +40,27 @@ class PerformanceOptimizationRequest(BaseModel):
     optimization_level: Optional[str] = "balanced"  # conservative, balanced, aggressive
 
 
+def _process_feature_health_result(
+    name: str, feature_health, health_status: dict, counters: dict
+) -> None:
+    """Process a single feature health result. (Issue #315 - extracted)"""
+    if isinstance(feature_health, Exception):
+        feature_health = {"status": "critical", "message": str(feature_health)}
+
+    health_status["feature_health"][name] = feature_health
+
+    if feature_health.get("status") == "critical":
+        counters["critical"] += 1
+        health_status["critical_issues"].append(
+            f"{name}: {feature_health.get('message', 'Critical issue')}"
+        )
+    elif feature_health.get("status") == "warning":
+        counters["warnings"] += 1
+        health_status["warnings"].append(
+            f"{name}: {feature_health.get('message', 'Warning')}"
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enterprise_status",
@@ -350,8 +371,7 @@ async def get_enterprise_health():
             "warnings": [],
         }
 
-        critical_issues = 0
-        warnings = 0
+        counters = {"critical": 0, "warnings": 0}
 
         # Get enabled features for health check
         enabled_features = [
@@ -366,34 +386,21 @@ async def get_enterprise_health():
                 return_exceptions=True
             )
 
+            # Process results using helper (Issue #315 - reduces nesting)
             for (name, _), feature_health in zip(enabled_features, health_results):
-                if isinstance(feature_health, Exception):
-                    feature_health = {"status": "critical", "message": str(feature_health)}
-
-                health_status["feature_health"][name] = feature_health
-
-                if feature_health.get("status") == "critical":
-                    critical_issues += 1
-                    health_status["critical_issues"].append(
-                        f"{name}: {feature_health.get('message', 'Critical issue')}"
-                    )
-                elif feature_health.get("status") == "warning":
-                    warnings += 1
-                    health_status["warnings"].append(
-                        f"{name}: {feature_health.get('message', 'Warning')}"
-                    )
+                _process_feature_health_result(name, feature_health, health_status, counters)
 
         # Check for features in error state
         for name, feature in manager.features.items():
             if feature.status == FeatureStatus.ERROR:
-                critical_issues += 1
+                counters["critical"] += 1
                 health_status["critical_issues"].append(
                     f"{name}: Feature in error state"
                 )
 
-        if critical_issues > 0:
+        if counters["critical"] > 0:
             health_status["overall_health"] = "critical"
-        elif warnings > 0:
+        elif counters["warnings"] > 0:
             health_status["overall_health"] = "warning"
 
         return JSONResponse(

@@ -56,6 +56,22 @@ async def _get_detector():
     return _detector_instance
 
 
+# ============ Health Score Helpers (Issue #315) ============
+
+
+def _get_health_grade(score: float) -> tuple:
+    """Get health grade and status from score. (Issue #315 - extracted to reduce nesting)"""
+    if score >= 90:
+        return "A", "Excellent"
+    if score >= 70:
+        return "B", "Good"
+    if score >= 50:
+        return "C", "Fair"
+    if score >= 30:
+        return "D", "Poor"
+    return "F", "Critical"
+
+
 # ============ Request/Response Models ============
 
 
@@ -472,23 +488,9 @@ async def get_health_score(request: AnalysisRequest):
             exclude_patterns=request.exclude_patterns
         )
 
-        # Determine grade
+        # Determine grade using helper (Issue #315 - reduces nesting from chained if/elif)
         score = report.health_score
-        if score >= 90:
-            grade = "A"
-            status = "Excellent"
-        elif score >= 70:
-            grade = "B"
-            status = "Good"
-        elif score >= 50:
-            grade = "C"
-            status = "Fair"
-        elif score >= 30:
-            grade = "D"
-            status = "Poor"
-        else:
-            grade = "F"
-            status = "Critical"
+        grade, status = _get_health_grade(score)
 
         return JSONResponse(
             content={

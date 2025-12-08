@@ -514,7 +514,7 @@ class ToolParserRegistry:
     """Registry of available tool parsers with auto-detection."""
 
     def __init__(self) -> None:
-        """Initialize with default parsers."""
+        """Initialize tool parser registry with default security tool parsers."""
         self._parsers: list[BaseToolParser] = [
             NmapParser(),
             MasscanParser(),

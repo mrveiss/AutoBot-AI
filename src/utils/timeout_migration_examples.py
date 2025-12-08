@@ -558,6 +558,59 @@ class ExistingOperationMigrator:
             }
 
 
+# Issue #315 - Extracted helper functions to reduce nesting depth
+
+
+def _estimate_items_from_arg(arg: Any) -> int:
+    """Estimate item count from first argument (Issue #315 - extracted helper)."""
+    if isinstance(arg, (list, tuple)):
+        return len(arg)
+    if isinstance(arg, (str, Path)):
+        try:
+            path = Path(arg)
+            if path.is_dir():
+                return len(list(path.rglob("*")))
+            return 1
+        except Exception:
+            return 1
+    return 1
+
+
+def _get_estimated_items(estimated_items: Optional[int], args: tuple) -> int:
+    """Calculate estimated items for operation (Issue #315 - extracted helper)."""
+    if estimated_items is not None:
+        return estimated_items
+    if args:
+        return _estimate_items_from_arg(args[0])
+    return 1
+
+
+async def _wait_for_operation_completion(operation_id: str) -> Any:
+    """Wait for operation to complete and return result (Issue #315 - extracted helper)."""
+    terminal_states = {"completed", "failed", "timeout", "cancelled"}
+    while True:
+        operation = operation_integration_manager.operation_manager.get_operation(
+            operation_id
+        )
+        if operation.status.value in terminal_states:
+            if operation.result is not None:
+                return operation.result
+            if operation.error_info:
+                raise Exception(operation.error_info)
+            return {"status": operation.status.value}
+        await asyncio.sleep(1)
+
+
+def _create_progress_wrapper(context: OperationExecutionContext):
+    """Create progress callback wrapper for context (Issue #315 - extracted helper)."""
+
+    async def progress_wrapper(step, processed, total=None, **metrics):
+        """Wrap progress updates for timeout context."""
+        await context.update_progress(step, processed, total, metrics)
+
+    return progress_wrapper
+
+
 # Decorator-based migration helpers
 def migrate_timeout_operation(
     operation_type: OperationType,
@@ -574,87 +627,36 @@ def migrate_timeout_operation(
 
         async def wrapper(*args, **kwargs):
             """Execute operation with enhanced progress and timeout handling."""
-            # Extract progress callback if provided
             progress_callback = kwargs.pop("progress_callback", None)
 
             async def enhanced_operation(context: OperationExecutionContext):
-                """Enhanced operation with progress tracking"""
-
-                # If original function expects progress callback, provide it
-                if (
-                    progress_callback
-                    or "progress_callback" in func.__code__.co_varnames
-                ):
-
-                    async def progress_wrapper(step, processed, total=None, **metrics):
-                        await context.update_progress(step, processed, total, metrics)
-
-                    kwargs["progress_callback"] = progress_wrapper
+                """Enhanced operation with progress tracking."""
+                # Inject progress callback if function expects it
+                if progress_callback or "progress_callback" in func.__code__.co_varnames:
+                    kwargs["progress_callback"] = _create_progress_wrapper(context)
 
                 # Execute original function
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
-                else:
-                    return await asyncio.to_thread(func, *args, **kwargs)
+                return await asyncio.to_thread(func, *args, **kwargs)
 
-            # Calculate estimated items if not provided
-            items = estimated_items
-            if items is None and args:
-                # Try to estimate based on first argument (often a path or list)
-                first_arg = args[0]
-                if isinstance(first_arg, (list, tuple)):
-                    items = len(first_arg)
-                elif isinstance(first_arg, (str, Path)):
-                    try:
-                        path = Path(first_arg)
-                        if path.is_dir():
-                            items = len(list(path.rglob("*")))
-                        else:
-                            items = 1
-                    except Exception:
-                        items = 1
-                else:
-                    items = 1
+            items = _get_estimated_items(estimated_items, args)
 
-            # Create and execute operation
-            if (
-                operation_integration_manager
-                and operation_integration_manager.operation_manager
-            ):
+            # Execute with operation manager if available
+            if operation_integration_manager and operation_integration_manager.operation_manager:
                 operation_id = await operation_integration_manager.operation_manager.create_operation(
                     operation_type=operation_type,
                     name=f"Migrated: {func.__name__}",
                     description=f"Auto-migrated operation from {func.__module__}.{func.__name__}",
                     operation_function=enhanced_operation,
                     priority=priority,
-                    estimated_items=items or 1,
+                    estimated_items=items,
                     execute_immediately=True,
                 )
+                return await _wait_for_operation_completion(operation_id)
 
-                # Wait for completion and return result
-                while True:
-                    operation = (
-                        operation_integration_manager.operation_manager.get_operation(
-                            operation_id
-                        )
-                    )
-                    if operation.status.value in [
-                        "completed",
-                        "failed",
-                        "timeout",
-                        "cancelled",
-                    ]:
-                        if operation.result is not None:
-                            return operation.result
-                        elif operation.error_info:
-                            raise Exception(operation.error_info)
-                        else:
-                            return {"status": operation.status.value}
-
-                    await asyncio.sleep(1)
-            else:
-                # Fallback to direct execution
-                return await enhanced_operation(None)
+            # Fallback to direct execution
+            return await enhanced_operation(None)
 
         return wrapper
 

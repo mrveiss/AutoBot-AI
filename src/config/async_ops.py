@@ -26,10 +26,20 @@ YAML_FILE_EXTENSIONS = {".yaml", ".yml"}
 class AsyncOperationsMixin:
     """Mixin providing asynchronous config operations"""
 
+    # Class-level lock for safe async lock initialization (Issue #378)
+    _lock_init_lock = asyncio.Lock()
+
     async def _get_async_lock(self):
-        """Get async lock, creating if needed"""
+        """Get async lock, creating if needed.
+
+        Issue #378: Uses double-checked locking pattern to prevent race condition
+        when multiple coroutines try to create the lock simultaneously.
+        """
         if self._async_lock is None:
-            self._async_lock = asyncio.Lock()
+            async with AsyncOperationsMixin._lock_init_lock:
+                # Double-check after acquiring lock
+                if self._async_lock is None:
+                    self._async_lock = asyncio.Lock()
         return self._async_lock
 
     def _filter_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -139,7 +149,8 @@ class AsyncOperationsMixin:
     )
     async def _read_file_async(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """Read config file asynchronously with retry"""
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(file_path.exists):
             return None
 
         try:
@@ -168,7 +179,8 @@ class AsyncOperationsMixin:
     async def _write_file_async(self, file_path: Path, data: Dict[str, Any]) -> None:
         """Write config file asynchronously with retry"""
         try:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(file_path.parent.mkdir, parents=True, exist_ok=True)
 
             async with aiofiles.open(file_path, "w", encoding="utf-8") as file:
                 if file_path.suffix.lower() == ".json":

@@ -38,6 +38,28 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for excluded language keys (Issue #326)
 EXCLUDED_LANGUAGE_KEYS = {"total", "success", "tokens"}
 
+
+def _extract_language_stats(stats_data: dict) -> dict:
+    """Extract language statistics from Redis stats data (Issue #315: extracted).
+
+    Returns:
+        Dictionary of language -> {"total": count}
+    """
+    by_language = {}
+    for key, value in stats_data.items():
+        if ":" not in key:
+            continue
+        parts = key.split(":")
+        if len(parts) < 3:
+            continue
+        lang = parts[1]
+        if lang in EXCLUDED_LANGUAGE_KEYS:
+            continue
+        if lang not in by_language:
+            by_language[lang] = {"total": 0}
+        by_language[lang]["total"] = int(value)
+    return by_language
+
 # =============================================================================
 # Enums and Constants
 # =============================================================================
@@ -334,6 +356,20 @@ class CodeValidator:
         return [f"{module}.{alias.name}" for alias in node.names]
 
     @staticmethod
+    def _process_ast_node(
+        node: ast.AST, functions: list, classes: list, imports: list, warnings: list
+    ) -> None:
+        """Process a single AST node for validation. (Issue #315 - extracted)"""
+        if isinstance(node, ast.FunctionDef):
+            func_info, func_warnings = CodeValidator._extract_function_info(node)
+            functions.append(func_info)
+            warnings.extend(func_warnings)
+        elif isinstance(node, ast.ClassDef):
+            classes.append(CodeValidator._extract_class_info(node))
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            imports.extend(CodeValidator._extract_imports(node))
+
+    @staticmethod
     def validate_python(code: str) -> ValidationResult:
         """Validate Python code using AST parsing (Issue #315: depth 6→3)"""
         errors = []
@@ -345,15 +381,9 @@ class CodeValidator:
             classes = []
             imports = []
 
+            # Process each node using helper (Issue #315 - reduced depth)
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    func_info, func_warnings = CodeValidator._extract_function_info(node)
-                    functions.append(func_info)
-                    warnings.extend(func_warnings)
-                elif isinstance(node, ast.ClassDef):
-                    classes.append(CodeValidator._extract_class_info(node))
-                elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                    imports.extend(CodeValidator._extract_imports(node))
+                CodeValidator._process_ast_node(node, functions, classes, imports, warnings)
 
             ast_info = {
                 "functions": functions,
@@ -459,6 +489,7 @@ class CodeGenerationEngine:
     """Engine for LLM-powered code generation and refactoring"""
 
     def __init__(self):
+        """Initialize code generation engine with Redis storage keys."""
         self._redis = None
         self._versions_key = "autobot:code_generation:versions"
         self._stats_key = "autobot:code_generation:stats"
@@ -927,16 +958,8 @@ if __name__ == "__main__":
                 "by_language": {},
             }
 
-            # Extract language stats
-            for key, value in stats_data.items():
-                if ":" in key:
-                    parts = key.split(":")
-                    if len(parts) >= 3:
-                        lang = parts[1]
-                        if lang not in EXCLUDED_LANGUAGE_KEYS:
-                            if lang not in stats["by_language"]:
-                                stats["by_language"][lang] = {"total": 0}
-                            stats["by_language"][lang]["total"] = int(value)
+            # Extract language stats (Issue #315: simplified using helper pattern)
+            stats["by_language"] = _extract_language_stats(stats_data)
 
             return stats
 

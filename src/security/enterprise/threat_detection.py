@@ -4,12 +4,15 @@
 """
 Advanced Threat Detection Engine for Enterprise Security
 Provides behavioral anomaly detection, ML-based threat detection, and enhanced security monitoring
+
+Issue #378: Added threading locks for file operations to prevent race conditions.
 """
 
 import asyncio
 import logging
 import pickle
 import re
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
@@ -455,13 +458,24 @@ class ThreatAnalyzer(ABC):
         pass
 
 
+# Issue #315 - Severity priority ordering for comparison
+_SEVERITY_PRIORITY = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+
+
+def _get_max_severity(current: str, new: str) -> str:
+    """Return the higher severity between two values (Issue #315 - extracted helper)."""
+    if _SEVERITY_PRIORITY.get(new, 0) > _SEVERITY_PRIORITY.get(current, 0):
+        return new
+    return current
+
+
 class CommandInjectionAnalyzer(ThreatAnalyzer):
     """Analyzes events for command injection threats"""
 
     async def analyze(
         self, event: SecurityEvent, context: AnalysisContext
     ) -> Optional[ThreatEvent]:
-        """Detect command injection attempts"""
+        """Detect command injection attempts (Issue #315 - refactored)."""
         command_content = event.get_command_content()
 
         detected_patterns = []
@@ -470,15 +484,7 @@ class CommandInjectionAnalyzer(ThreatAnalyzer):
         for pattern_info in context.injection_patterns:
             if re.search(pattern_info["pattern"], command_content, re.IGNORECASE):
                 detected_patterns.append(pattern_info)
-                if pattern_info["severity"] == "critical":
-                    max_severity = "critical"
-                elif pattern_info["severity"] == "high" and max_severity != "critical":
-                    max_severity = "high"
-                elif pattern_info["severity"] == "medium" and max_severity not in {
-                    "critical",
-                    "high",
-                }:
-                    max_severity = "medium"
+                max_severity = _get_max_severity(max_severity, pattern_info["severity"])
 
         if detected_patterns:
             confidence = min(1.0, len(detected_patterns) * 0.3 + 0.4)
@@ -898,6 +904,9 @@ class ThreatDetectionEngine:
         ),
     ):
         """Initialize threat detection engine with ML models and configuration."""
+        # Thread-safe file operations - must be initialized first (Issue #378)
+        self._file_lock = threading.Lock()
+
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -1008,13 +1017,14 @@ class ThreatDetectionEngine:
         }
 
     def _save_config(self, config: Dict):
-        """Save configuration to file"""
-        try:
-            Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f, default_flow_style=False)
-        except Exception as e:
-            logger.error(f"Failed to save threat detection config: {e}")
+        """Save configuration to file (thread-safe, Issue #378)"""
+        with self._file_lock:
+            try:
+                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
+                with open(self.config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False)
+            except Exception as e:
+                logger.error(f"Failed to save threat detection config: {e}")
 
     def _load_injection_patterns(self) -> List[Dict]:
         """Load command injection detection patterns"""
@@ -1267,30 +1277,34 @@ class ThreatDetectionEngine:
         profile = self.user_profiles[user_id]
         profile.update_with_event(event)
 
+    def _get_response_action_handler(self, action: str, threat: ThreatEvent):
+        """Get handler and config key for action type (Issue #315 - dispatch table)."""
+        action_handlers = {
+            "block_ip": (self._block_ip_address, "auto_block_critical", threat.source_ip),
+            "quarantine_file": (self._quarantine_file, "auto_quarantine_files", threat.resource),
+            "rate_limit_user": (self._apply_rate_limiting, "rate_limit_suspicious_ips", (threat.user_id, threat.source_ip)),
+            "alert_security_team": (self._send_security_alert, "alert_security_team", threat),
+        }
+        return action_handlers.get(action)
+
     async def _execute_response_actions(self, threat: ThreatEvent):
-        """Execute automated response actions based on threat"""
+        """Execute automated response actions based on threat (Issue #315 - refactored)."""
         response_config = self.config.get("response_actions", {})
 
         for action in threat.mitigation_actions:
-            if action == "block_ip" and response_config.get(
-                "auto_block_critical", False
-            ):
-                await self._block_ip_address(threat.source_ip)
+            handler_info = self._get_response_action_handler(action, threat)
+            if not handler_info:
+                continue
 
-            elif action == "quarantine_file" and response_config.get(
-                "auto_quarantine_files", True
-            ):
-                await self._quarantine_file(threat.resource)
+            handler, config_key, args = handler_info
+            if not response_config.get(config_key, config_key != "auto_block_critical"):
+                continue
 
-            elif action == "rate_limit_user" and response_config.get(
-                "rate_limit_suspicious_ips", True
-            ):
-                await self._apply_rate_limiting(threat.user_id, threat.source_ip)
-
-            elif action == "alert_security_team" and response_config.get(
-                "alert_security_team", True
-            ):
-                await self._send_security_alert(threat)
+            # Execute with proper argument handling
+            if isinstance(args, tuple):
+                await handler(*args)
+            else:
+                await handler(args)
 
     async def _block_ip_address(self, ip_address: str):
         """Block suspicious IP address"""

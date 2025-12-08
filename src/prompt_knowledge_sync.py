@@ -41,6 +41,7 @@ class PromptKnowledgeSync:
     """
 
     def __init__(self, knowledge_base: KnowledgeBase):
+        """Initialize prompt-knowledge synchronizer with KB and import categories."""
         self.knowledge_base = knowledge_base
         self.prompt_manager = prompt_manager
 

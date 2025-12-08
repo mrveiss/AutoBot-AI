@@ -92,6 +92,7 @@ async def index_codebase():
 
     # Clean up task reference when done
     def cleanup_task(t):
+        """Remove completed task from active tasks registry."""
         global _current_indexing_task_id
         with _tasks_sync_lock:
             _active_tasks.pop(task_id, None)

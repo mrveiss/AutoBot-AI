@@ -24,6 +24,7 @@ class WorkflowController:
     """Handles workflow control actions from user"""
 
     def __init__(self, messenger: WorkflowMessenger, executor: WorkflowExecutor):
+        """Initialize controller with messenger and executor components."""
         self.messenger = messenger
         self.executor = executor
         self.prometheus_metrics = get_metrics_manager()

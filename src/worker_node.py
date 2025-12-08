@@ -252,7 +252,10 @@ class WorkerNode:
         capabilities = self.detect_capabilities()
         if self.redis_client:
             channel = "worker_capabilities"
-            self.redis_client.publish(channel, json.dumps(capabilities))
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.publish, channel, json.dumps(capabilities)
+            )
             logger.info(f"Worker capabilities reported to Redis channel '{channel}'.")
         else:
             logger.debug(f"Worker capabilities detected (local mode): {capabilities}")
@@ -365,7 +368,10 @@ class WorkerNode:
 
         if self.redis_client:
             response_channel = f"worker_results_{task_id}"
-            self.redis_client.publish(response_channel, json.dumps(result))
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.publish, response_channel, json.dumps(result)
+            )
             logger.debug(
                 f"Worker {self.worker_id} sent result for task {task_id} to "
                 f"'{response_channel}'."

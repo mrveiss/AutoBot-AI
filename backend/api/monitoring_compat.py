@@ -8,8 +8,11 @@ Phase 4: Grafana Integration (Issue #347)
 Provides backwards-compatible REST endpoints that query Prometheus
 for metrics data. These endpoints are DEPRECATED and will be removed
 in a future version. Use Grafana dashboards for visualization.
+
+Issue #379: Optimized sequential awaits with asyncio.gather for concurrent queries.
 """
 
+import asyncio
 import logging
 import warnings
 from datetime import datetime, timedelta
@@ -152,10 +155,13 @@ async def get_system_metrics_current():
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     logger.warning(f"Deprecated endpoint called: /metrics/system/current - {DEPRECATION_MSG}")
 
-    cpu = await query_prometheus_instant("autobot_cpu_usage_percent")
-    memory = await query_prometheus_instant("autobot_memory_usage_percent")
-    disk = await query_prometheus_instant('autobot_disk_usage_percent{mount_point="/"}')
-    load_1m = await query_prometheus_instant("autobot_load_average_1m")
+    # Issue #379: Concurrent queries with asyncio.gather
+    cpu, memory, disk, load_1m = await asyncio.gather(
+        query_prometheus_instant("autobot_cpu_usage_percent"),
+        query_prometheus_instant("autobot_memory_usage_percent"),
+        query_prometheus_instant('autobot_disk_usage_percent{mount_point="/"}'),
+        query_prometheus_instant("autobot_load_average_1m"),
+    )
 
     return {
         "success": True,
@@ -196,9 +202,10 @@ async def get_system_metrics_history(
     end = datetime.utcnow()
     start = end - delta
 
-    cpu_history = await query_prometheus_range("autobot_cpu_usage_percent", start, end, step)
-    memory_history = await query_prometheus_range(
-        "autobot_memory_usage_percent", start, end, step
+    # Issue #379: Concurrent queries with asyncio.gather
+    cpu_history, memory_history = await asyncio.gather(
+        query_prometheus_range("autobot_cpu_usage_percent", start, end, step),
+        query_prometheus_range("autobot_memory_usage_percent", start, end, step),
     )
 
     return {
@@ -220,14 +227,13 @@ async def get_workflow_summary():
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     logger.warning(f"Deprecated endpoint called: /metrics/workflow/summary - {DEPRECATION_MSG}")
 
-    total = await query_prometheus_instant("sum(autobot_workflow_executions_total)")
-    completed = await query_prometheus_instant(
-        'sum(autobot_workflow_executions_total{status="completed"})'
+    # Issue #379: Concurrent queries with asyncio.gather
+    total, completed, failed, active = await asyncio.gather(
+        query_prometheus_instant("sum(autobot_workflow_executions_total)"),
+        query_prometheus_instant('sum(autobot_workflow_executions_total{status="completed"})'),
+        query_prometheus_instant('sum(autobot_workflow_executions_total{status="failed"})'),
+        query_prometheus_instant("autobot_active_workflows"),
     )
-    failed = await query_prometheus_instant(
-        'sum(autobot_workflow_executions_total{status="failed"})'
-    )
-    active = await query_prometheus_instant("autobot_active_workflows")
 
     # Calculate success rate
     success_rate = None
@@ -260,9 +266,12 @@ async def get_recent_errors(
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     logger.warning(f"Deprecated endpoint called: /metrics/errors/recent - {DEPRECATION_MSG}")
 
-    total_errors = await query_prometheus_instant("sum(autobot_errors_total)")
-    error_rate_1m = await query_prometheus_instant("rate(autobot_errors_total[1m])")
-    error_rate_5m = await query_prometheus_instant("rate(autobot_errors_total[5m])")
+    # Issue #379: Concurrent queries with asyncio.gather
+    total_errors, error_rate_1m, error_rate_5m = await asyncio.gather(
+        query_prometheus_instant("sum(autobot_errors_total)"),
+        query_prometheus_instant("rate(autobot_errors_total[1m])"),
+        query_prometheus_instant("rate(autobot_errors_total[5m])"),
+    )
 
     # Get errors by category
     end = datetime.utcnow()
@@ -296,15 +305,16 @@ async def get_claude_api_status():
         f"Deprecated endpoint called: /metrics/claude-api/status - {DEPRECATION_MSG}"
     )
 
-    rate_limit = await query_prometheus_instant("autobot_claude_api_rate_limit_remaining")
-    request_rate = await query_prometheus_instant(
-        "rate(autobot_claude_api_requests_total[5m]) * 60"
-    )
-    p95_latency = await query_prometheus_instant(
-        "histogram_quantile(0.95, rate(autobot_claude_api_response_time_seconds_bucket[5m]))"
-    )
-    failure_rate = await query_prometheus_instant(
-        'rate(autobot_claude_api_requests_total{success="false"}[5m]) / rate(autobot_claude_api_requests_total[5m])'
+    # Issue #379: Concurrent queries with asyncio.gather
+    rate_limit, request_rate, p95_latency, failure_rate = await asyncio.gather(
+        query_prometheus_instant("autobot_claude_api_rate_limit_remaining"),
+        query_prometheus_instant("rate(autobot_claude_api_requests_total[5m]) * 60"),
+        query_prometheus_instant(
+            "histogram_quantile(0.95, rate(autobot_claude_api_response_time_seconds_bucket[5m]))"
+        ),
+        query_prometheus_instant(
+            'rate(autobot_claude_api_requests_total{success="false"}[5m]) / rate(autobot_claude_api_requests_total[5m])'
+        ),
     )
 
     return {

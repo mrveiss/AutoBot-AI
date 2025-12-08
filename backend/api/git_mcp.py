@@ -984,10 +984,13 @@ async def get_git_repo_info() -> Metadata:
         path = Path(repo_path)
         git_dir = path / ".git"
 
+        # Issue #358 - avoid blocking
+        path_exists = await asyncio.to_thread(path.exists)
+        git_dir_exists = await asyncio.to_thread(git_dir.exists)
         repo_info = {
             "path": repo_path,
-            "exists": path.exists(),
-            "is_git_repo": git_dir.exists(),
+            "exists": path_exists,
+            "is_git_repo": git_dir_exists,
         }
 
         # Get additional info if it's a valid repo

@@ -21,6 +21,7 @@ Usage:
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional
 
 
@@ -141,9 +142,12 @@ model_config = ModelConfig()
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+@lru_cache(maxsize=8)
 def get_default_model(provider: Optional[str] = None) -> str:
     """
     Get the default model for a specific provider or the system default.
+
+    Issue #380: Added @lru_cache since models don't change at runtime.
 
     Args:
         provider: Optional provider name (ollama, openai, anthropic, google)
@@ -163,9 +167,12 @@ def get_default_model(provider: Optional[str] = None) -> str:
         return ModelConstants.DEFAULT_OLLAMA_MODEL  # System default
 
 
+@lru_cache(maxsize=8)
 def get_model_endpoint(provider: str) -> str:
     """
     Get the endpoint URL for a specific provider.
+
+    Issue #380: Added @lru_cache since endpoints don't change at runtime.
 
     Args:
         provider: Provider name (ollama, lm_studio, etc.)

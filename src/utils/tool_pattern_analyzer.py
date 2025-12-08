@@ -959,6 +959,7 @@ async def get_optimization_insights() -> Dict[str, Any]:
 if __name__ == "__main__":
 
     async def example():
+        """Demonstrate tool pattern analyzer usage with sample data."""
         analyzer = get_tool_pattern_analyzer(
             {"analysis_window": 1800, "pattern_min_frequency": 2}  # 30 minutes
         )

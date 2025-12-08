@@ -26,6 +26,7 @@ class LLMChatCompletionHandler(TaskHandler):
         user_role: str,
         task_id: str,
     ) -> Dict[str, Any]:
+        """Execute LLM chat completion task and return response."""
         model_name = task_payload["model_name"]
         messages = task_payload["messages"]
         llm_kwargs = task_payload.get("kwargs", {})

@@ -1201,21 +1201,13 @@ class RedisConnectionManager:
         try:
             # Thread-safe access to pool internals using pool's lock
             with pool._lock:
-                # Get internal pool attributes safely
                 created = getattr(pool, "_created_connections", 0)
                 available_conns = getattr(pool, "_available_connections", [])
                 in_use_conns = getattr(pool, "_in_use_connections", [])
                 available = len(available_conns)
                 in_use = len(in_use_conns)
                 max_conn = pool.max_connections
-
-                # Calculate idle connections (available for > 60s)
-                idle_count = 0
-                for conn in available_conns:
-                    if hasattr(conn, "_last_use"):
-                        idle_time = (datetime.now() - conn._last_use).total_seconds()
-                        if idle_time > 60:
-                            idle_count += 1
+                idle_count = self._count_idle_connections(available_conns)
 
             return PoolStatistics(
                 database_name=database,
@@ -1235,6 +1227,16 @@ class RedisConnectionManager:
                 max_connections=pool.max_connections,
                 idle_connections=0,
             )
+
+    def _count_idle_connections(self, available_conns: list, threshold: int = 60) -> int:
+        """Count connections idle longer than threshold (Issue #315 - extracted helper)."""
+        idle_count = 0
+        for conn in available_conns:
+            if hasattr(conn, "_last_use"):
+                idle_time = (datetime.now() - conn._last_use).total_seconds()
+                if idle_time > threshold:
+                    idle_count += 1
+        return idle_count
 
     def _identify_idle_connections(self, available_conns: list) -> list:
         """Identify connections idle longer than max_idle_time (Issue #315: extracted).
@@ -1565,6 +1567,7 @@ class RedisDatabaseManager:
     """
 
     def __init__(self):
+        """Initialize deprecated manager with deprecation warning."""
         logger.warning(
             "DEPRECATED: RedisDatabaseManager is deprecated. "
             "Use get_redis_client() from src.utils.redis_client instead."

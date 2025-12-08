@@ -55,9 +55,33 @@ class FastDocumentScanner:
     """
 
     def __init__(self, redis_client):
+        """Initialize document scanner with Redis client for caching."""
         self.redis = redis_client
         self.CACHE_KEY_PREFIX = "file_meta:"
         self.SCAN_CACHE_KEY = "scan_cache:"
+
+    def _extract_command_from_filename(self, filename: str) -> str:
+        """Extract command name from man page filename. (Issue #315 - extracted)"""
+        # Handle .gz compression
+        command = filename[:-3] if filename.endswith(".gz") else filename
+        # Remove section suffix (.1, .2, etc.)
+        return command.rsplit(".", 1)[0]
+
+    def _scan_man_section(
+        self, section_dir: str, command_files: Dict[str, List[str]]
+    ) -> None:
+        """Scan a man section directory for pages. (Issue #315 - extracted)"""
+        if not os.path.exists(section_dir):
+            return
+        try:
+            for filename in os.listdir(section_dir):
+                command = self._extract_command_from_filename(filename)
+                full_path = os.path.join(section_dir, filename)
+                if command not in command_files:
+                    command_files[command] = []
+                command_files[command].append(full_path)
+        except PermissionError:
+            pass
 
     def _get_man_page_paths(self) -> Dict[str, List[str]]:
         """
@@ -79,32 +103,10 @@ class FastDocumentScanner:
         for base_path in man_paths:
             if not os.path.exists(base_path):
                 continue
-
-            # Walk through man1-man8 directories
+            # Walk through man1-man8 directories using helper (Issue #315)
             for section in range(1, 9):
                 section_dir = os.path.join(base_path, f"man{section}")
-                if not os.path.exists(section_dir):
-                    continue
-
-                try:
-                    for filename in os.listdir(section_dir):
-                        # Extract command name (handle .gz compression)
-                        if filename.endswith(".gz"):
-                            command = filename[:-3]  # Remove .gz
-                        else:
-                            command = filename
-
-                        # Remove section suffix (.1, .2, etc.)
-                        command = command.rsplit(".", 1)[0]
-
-                        full_path = os.path.join(section_dir, filename)
-
-                        if command not in command_files:
-                            command_files[command] = []
-                        command_files[command].append(full_path)
-
-                except PermissionError:
-                    continue
+                self._scan_man_section(section_dir, command_files)
 
         return command_files
 

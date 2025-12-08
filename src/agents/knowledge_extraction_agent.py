@@ -565,6 +565,7 @@ Respond only with valid JSON.
         semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent extractions
 
         async def process_chunk(chunk: Dict[str, Any]) -> FactExtractionResult:
+            """Extract facts from single chunk with semaphore-limited concurrency."""
             async with semaphore:
                 chunk_text = chunk.get("text", "")
                 chunk_context = str(chunk.get("metadata", {}))

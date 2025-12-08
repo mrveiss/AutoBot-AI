@@ -139,6 +139,24 @@ async def _handle_security_scanner_step(
     step["scan_results"] = result
 
 
+# Issue #315: Task type patterns for network discovery
+_NETWORK_DISCOVERY_PATTERNS = [
+    ("network scan", "network_scan"),
+    ("host discovery", "host_discovery"),
+    ("arp", "arp_scan"),
+    ("asset inventory", "asset_inventory"),
+    ("network map", "network_map"),
+]
+
+
+def _detect_network_task_type(action_lower: str) -> str | None:
+    """Detect network discovery task type from action. (Issue #315 - extracted)"""
+    for pattern, task_type in _NETWORK_DISCOVERY_PATTERNS:
+        if pattern in action_lower:
+            return task_type
+    return None
+
+
 async def _handle_network_discovery_step(
     step: Metadata, action: str, workflow_id: str, orchestrator: Any
 ) -> None:
@@ -146,18 +164,11 @@ async def _handle_network_discovery_step(
     from src.agents.network_discovery_agent import network_discovery_agent
 
     discovery_context = step.get("inputs", {})
-    action_lower = action.lower()
 
-    if "network scan" in action_lower:
-        discovery_context["task_type"] = "network_scan"
-    elif "host discovery" in action_lower:
-        discovery_context["task_type"] = "host_discovery"
-    elif "arp" in action_lower:
-        discovery_context["task_type"] = "arp_scan"
-    elif "asset inventory" in action_lower:
-        discovery_context["task_type"] = "asset_inventory"
-    elif "network map" in action_lower:
-        discovery_context["task_type"] = "network_map"
+    # Use dispatch pattern (Issue #315 - reduced depth)
+    task_type = _detect_network_task_type(action.lower())
+    if task_type:
+        discovery_context["task_type"] = task_type
 
     result = await network_discovery_agent.execute(action, discovery_context)
     status = result.get("status")

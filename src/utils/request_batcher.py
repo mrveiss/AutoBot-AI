@@ -251,6 +251,7 @@ class IntelligentRequestBatcher:
         time_window: float = 2.0,
         similarity_threshold: float = 0.7,
     ):
+        """Initialize request batcher with batch size and timing parameters."""
         self.max_batch_size = max_batch_size
         self.time_window = time_window
         self.similarity_threshold = similarity_threshold
@@ -269,6 +270,8 @@ class IntelligentRequestBatcher:
 
         # Lock for thread-safe stats access
         self._stats_lock = asyncio.Lock()
+        # Lock for task management (Issue #378)
+        self._task_lock = asyncio.Lock()
 
         # Statistics
         self.stats = {
@@ -285,17 +288,26 @@ class IntelligentRequestBatcher:
         self._shutdown = False
 
     async def start(self):
-        """Start the background batch processing"""
-        if self._processing_task is None:
-            self._processing_task = asyncio.create_task(self._batch_processing_loop())
-            logger.info("Intelligent request batcher started")
+        """Start the background batch processing.
+
+        Issue #378: Uses lock to prevent race condition when multiple
+        coroutines try to start the batcher simultaneously.
+        """
+        async with self._task_lock:
+            if self._processing_task is None:
+                self._processing_task = asyncio.create_task(self._batch_processing_loop())
+                logger.info("Intelligent request batcher started")
 
     async def stop(self):
-        """Stop the batch processing and wait for completion"""
+        """Stop the batch processing and wait for completion.
+
+        Issue #378: Uses lock to safely access _processing_task.
+        """
         self._shutdown = True
-        if self._processing_task:
-            await self._processing_task
-            self._processing_task = None
+        async with self._task_lock:
+            if self._processing_task:
+                await self._processing_task
+                self._processing_task = None
         logger.info("Intelligent request batcher stopped")
 
     async def add_request(self, request: BatchableRequest) -> str:

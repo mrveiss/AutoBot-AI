@@ -325,7 +325,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
             index_key = (
                 f"{self.index_prefix}meta:{hashlib.md5(root_path.encode()).hexdigest()}"
             )
-            if not force_reindex and self.redis_client.exists(index_key):
+            # Issue #361 - avoid blocking
+            already_indexed = await asyncio.to_thread(self.redis_client.exists, index_key)
+            if not force_reindex and already_indexed:
                 self.logger.info(
                     "Codebase already indexed, use force_reindex=True to re-index"
                 )
@@ -345,7 +347,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 "timestamp": time.time(),
                 "npu_available": self.npu_available,
             }
-            self.redis_client.setex(index_key, 86400, json.dumps(metadata))
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.setex, index_key, 86400, json.dumps(metadata)
+            )
 
             execution_time = time.time() - start_time
             self.logger.info(
@@ -393,28 +398,31 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 "indexed_at": time.time(),
             }
 
-            # Store in Redis with multiple access patterns
+            # Store in Redis with multiple access patterns (Issue #361 - avoid blocking)
             file_key = f"{self.index_prefix}file:{relative_path}"
-            self.redis_client.setex(file_key, 86400, json.dumps(index_data))
-
-            # Index by language
             language_key = f"{self.index_prefix}lang:{language}"
-            self.redis_client.sadd(language_key, relative_path)
-            self.redis_client.expire(language_key, 86400)
+            index_data_json = json.dumps(index_data)
 
-            # Index elements for fast lookup
-            for element_type, element_list in elements.items():
-                for element in element_list:
-                    element_key = (
-                        f"{self.index_prefix}element:{element_type}:{element['name']}"
-                    )
-                    element_data = {
-                        "file_path": relative_path,
-                        "line_number": element.get("line_number", 0),
-                        "context": element.get("context", ""),
-                    }
-                    self.redis_client.lpush(element_key, json.dumps(element_data))
-                    self.redis_client.expire(element_key, 86400)
+            def _store_file_index():
+                self.redis_client.setex(file_key, 86400, index_data_json)
+                self.redis_client.sadd(language_key, relative_path)
+                self.redis_client.expire(language_key, 86400)
+
+                # Index elements for fast lookup
+                for element_type, element_list in elements.items():
+                    for element in element_list:
+                        element_key = (
+                            f"{self.index_prefix}element:{element_type}:{element['name']}"
+                        )
+                        element_data = {
+                            "file_path": relative_path,
+                            "line_number": element.get("line_number", 0),
+                            "context": element.get("context", ""),
+                        }
+                        self.redis_client.lpush(element_key, json.dumps(element_data))
+                        self.redis_client.expire(element_key, 86400)
+
+            await asyncio.to_thread(_store_file_index)
 
         except OSError as e:
             raise OSError(f"Failed to read file {file_path}: {e}")
@@ -544,7 +552,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
             # Check cache first
             cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode()).hexdigest()}"
 
-            cached_result = self.redis_client.get(cache_key)
+            # Issue #361 - avoid blocking
+            cached_result = await asyncio.to_thread(self.redis_client.get, cache_key)
 
             if cached_result:
                 self.stats.redis_cache_hit = True
@@ -575,7 +584,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 }
                 for r in results
             ]
-            self.redis_client.setex(
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                self.redis_client.setex,
                 cache_key, self.cache_ttl, json.dumps(serializable_results)
             )
 
@@ -602,7 +613,10 @@ class NPUCodeSearchAgent(StandardizedAgent):
         # Search across all element types
         for element_type in ["functions", "classes", "imports", "variables"]:
             element_key = f"{self.index_prefix}element:{element_type}:{query}"
-            element_data_list = self.redis_client.lrange(element_key, 0, max_results)
+            # Issue #361 - avoid blocking
+            element_data_list = await asyncio.to_thread(
+                self.redis_client.lrange, element_key, 0, max_results
+            )
 
             for element_data in element_data_list:
                 try:
@@ -688,11 +702,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Perform exact string search"""
         results = []
         pattern = f"{self.index_prefix}file:*"
-        file_keys = self.redis_client.keys(pattern)
+        # Issue #361 - avoid blocking
+        file_keys = await asyncio.to_thread(self.redis_client.keys, pattern)
 
         for file_key in file_keys:
             try:
-                file_data = json.loads(self.redis_client.get(file_key))
+                # Issue #361 - avoid blocking
+                file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
+                file_data = json.loads(file_data_raw)
                 file_results = await self._search_file_exact(file_data, query, language)
                 results.extend(file_results)
                 if len(results) >= max_results:
@@ -767,11 +784,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         results = []
         file_pattern = f"{self.index_prefix}file:*"
-        file_keys = self.redis_client.keys(file_pattern)
+        # Issue #361 - avoid blocking
+        file_keys = await asyncio.to_thread(self.redis_client.keys, file_pattern)
 
         for file_key in file_keys:
             try:
-                file_data = json.loads(self.redis_client.get(file_key))
+                # Issue #361 - avoid blocking
+                file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
+                file_data = json.loads(file_data_raw)
                 file_results = await self._search_file_regex(
                     file_data, pattern, query, language
                 )
@@ -922,11 +942,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
             results = []
             query_words = query.lower().split()
             pattern = f"{self.index_prefix}file:*"
-            file_keys = self.redis_client.keys(pattern)
+            # Issue #361 - avoid blocking
+            file_keys = await asyncio.to_thread(self.redis_client.keys, pattern)
 
             for file_key in file_keys:
                 try:
-                    file_data = json.loads(self.redis_client.get(file_key))
+                    # Issue #361 - avoid blocking
+                    file_data_raw = await asyncio.to_thread(self.redis_client.get, file_key)
+                    file_data = json.loads(file_data_raw)
                     file_results = await self._search_file_semantic(
                         file_data, query, query_words, language
                     )
@@ -988,39 +1011,51 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Clear search cache"""
         try:
             pattern = f"{self.search_cache_prefix}*"
-            keys = self.redis_client.keys(pattern)
-            if keys:
-                deleted = self.redis_client.delete(*keys)
-                return {"status": "success", "keys_deleted": deleted}
-            else:
-                return {"status": "success", "keys_deleted": 0}
+            # Issue #361 - avoid blocking
+            def _clear_cache():
+                keys = self.redis_client.keys(pattern)
+                if keys:
+                    return self.redis_client.delete(*keys)
+                return 0
+            deleted = await asyncio.to_thread(_clear_cache)
+            return {"status": "success", "keys_deleted": deleted}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
     async def get_index_status(self) -> Dict[str, Any]:
         """Get indexing status information"""
         try:
-            # Count indexed files
-            pattern = f"{self.index_prefix}file:*"
-            file_keys = self.redis_client.keys(pattern)
+            # Issue #361 - avoid blocking - run all Redis ops in thread pool
+            def _fetch_index_status():
+                # Count indexed files
+                pattern = f"{self.index_prefix}file:*"
+                file_keys = self.redis_client.keys(pattern)
 
-            # Get language distribution
-            lang_pattern = f"{self.index_prefix}lang:*"
-            lang_keys = self.redis_client.keys(lang_pattern)
+                # Get language distribution
+                lang_pattern = f"{self.index_prefix}lang:*"
+                lang_keys = self.redis_client.keys(lang_pattern)
 
-            language_stats = {}
-            for lang_key in lang_keys:
-                language = lang_key.decode().split(":")[-1]
-                count = self.redis_client.scard(lang_key)
-                language_stats[language] = count
+                language_stats = {}
+                for lang_key in lang_keys:
+                    if isinstance(lang_key, bytes):
+                        language = lang_key.decode().split(":")[-1]
+                    else:
+                        language = lang_key.split(":")[-1]
+                    count = self.redis_client.scard(lang_key)
+                    language_stats[language] = count
+
+                cache_keys = self.redis_client.keys(f"{self.search_cache_prefix}*")
+                return len(file_keys), language_stats, len(cache_keys)
+
+            file_count, language_stats, cache_count = await asyncio.to_thread(
+                _fetch_index_status
+            )
 
             return {
-                "total_files_indexed": len(file_keys),
+                "total_files_indexed": file_count,
                 "languages": language_stats,
                 "npu_available": self.npu_available,
-                "cache_keys": len(
-                    self.redis_client.keys(f"{self.search_cache_prefix}*")
-                ),
+                "cache_keys": cache_count,
             }
 
         except Exception as e:

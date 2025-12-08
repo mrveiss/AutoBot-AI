@@ -15,7 +15,12 @@ This module provides comprehensive code analysis capabilities including:
 
 from .routes import router
 from .models import CodebaseStats, ProblemItem, HardcodeItem, DeclarationItem
-from .storage import get_redis_connection, get_code_collection, InMemoryStorage
+from .storage import (
+    get_redis_connection,
+    get_code_collection,
+    get_code_collection_async,
+    InMemoryStorage,
+)
 from .analyzers import (
     detect_hardcodes_and_debt_with_llm,
     detect_race_conditions,
@@ -35,6 +40,7 @@ __all__ = [
     # Storage
     "get_redis_connection",
     "get_code_collection",
+    "get_code_collection_async",
     "InMemoryStorage",
     # Analyzers
     "detect_hardcodes_and_debt_with_llm",

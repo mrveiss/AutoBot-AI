@@ -163,6 +163,7 @@ class AgentAnalytics:
     AGENT_HISTORY_KEY = f"{REDIS_KEY_PREFIX}history"
 
     def __init__(self):
+        """Initialize agent analytics service with lazy Redis client."""
         self._redis_client = None
 
     async def get_redis(self):
@@ -302,17 +303,16 @@ class AgentAnalytics:
             redis = await self.get_redis()
             metrics_key = f"{self.AGENT_METRICS_KEY}:{record.agent_id}"
 
-            # Increment counters
+            # Increment counters - use dispatch table to flatten if/elif chain (Issue #315)
+            status_counter_map = {
+                TaskStatus.COMPLETED.value: "completed_tasks",
+                TaskStatus.FAILED.value: "failed_tasks",
+                TaskStatus.CANCELLED.value: "cancelled_tasks",
+                TaskStatus.TIMEOUT.value: "timeout_tasks",
+            }
             await redis.hincrby(metrics_key, "total_tasks", 1)
-
-            if record.status == TaskStatus.COMPLETED.value:
-                await redis.hincrby(metrics_key, "completed_tasks", 1)
-            elif record.status == TaskStatus.FAILED.value:
-                await redis.hincrby(metrics_key, "failed_tasks", 1)
-            elif record.status == TaskStatus.CANCELLED.value:
-                await redis.hincrby(metrics_key, "cancelled_tasks", 1)
-            elif record.status == TaskStatus.TIMEOUT.value:
-                await redis.hincrby(metrics_key, "timeout_tasks", 1)
+            if counter_field := status_counter_map.get(record.status):
+                await redis.hincrby(metrics_key, counter_field, 1)
 
             if record.duration_ms:
                 await redis.hincrbyfloat(metrics_key, "total_duration_ms", record.duration_ms)

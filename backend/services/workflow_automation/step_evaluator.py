@@ -24,6 +24,7 @@ class WorkflowStepEvaluator:
     """Evaluates workflow steps using LLM judges"""
 
     def __init__(self):
+        """Initialize step evaluator with LLM judges if available."""
         self.judges_enabled = False
         self.workflow_step_judge = None
         self.security_risk_judge = None

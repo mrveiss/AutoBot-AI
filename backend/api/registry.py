@@ -48,6 +48,7 @@ class APIRegistry:
     """Central registry for all API endpoints and routers"""
 
     def __init__(self):
+        """Initialize API registry with all router configurations."""
         self.routers = self._initialize_routers()
 
     def _initialize_routers(self) -> Dict[str, RouterConfig]:

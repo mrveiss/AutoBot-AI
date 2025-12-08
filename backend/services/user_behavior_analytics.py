@@ -67,6 +67,7 @@ class UserBehaviorAnalytics:
     HEATMAP_KEY = "user_behavior:heatmap"
 
     def __init__(self):
+        """Initialize analytics service with lazy Redis client."""
         self._redis = None
 
     async def get_redis(self):
@@ -345,6 +346,21 @@ class UserBehaviorAnalytics:
             logger.error(f"Failed to get daily stats: {e}")
             return {"error": str(e), "daily_stats": {}}
 
+    def _process_heatmap_data(self, data: dict, heatmap: dict) -> None:
+        """Process heatmap data from Redis into heatmap dict. (Issue #315 - extracted)"""
+        for key, value in data.items():
+            key_str = key if isinstance(key, str) else key.decode("utf-8")
+            val = int(value if isinstance(value, str) else value.decode("utf-8"))
+            parts = key_str.split(":")
+            if len(parts) != 2:
+                continue
+            hour, feature = parts
+            if hour not in heatmap:
+                heatmap[hour] = {}
+            if feature not in heatmap[hour]:
+                heatmap[hour][feature] = 0
+            heatmap[hour][feature] += val
+
     async def get_usage_heatmap(
         self, days: int = 7
     ) -> dict:
@@ -371,18 +387,8 @@ class UserBehaviorAnalytics:
                 heatmap_key = f"{self.HEATMAP_KEY}:{date_str}"
 
                 data = await redis.hgetall(heatmap_key)
-                for key, value in data.items():
-                    key_str = key if isinstance(key, str) else key.decode("utf-8")
-                    val = int(value if isinstance(value, str) else value.decode("utf-8"))
-
-                    parts = key_str.split(":")
-                    if len(parts) == 2:
-                        hour, feature = parts
-                        if hour not in heatmap:
-                            heatmap[hour] = {}
-                        if feature not in heatmap[hour]:
-                            heatmap[hour][feature] = 0
-                        heatmap[hour][feature] += val
+                # Use helper to process data (Issue #315)
+                self._process_heatmap_data(data, heatmap)
 
                 current += timedelta(days=1)
 

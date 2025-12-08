@@ -252,6 +252,36 @@ class ClaudeAPIOptimizationSuite:
             logger.error(f"Error stopping optimization suite: {e}")
             return False
 
+    async def _handle_rate_limited_request(
+        self, request_data: Dict[str, Any], request_type: str
+    ) -> Dict[str, Any]:
+        """Handle rate-limited requests with fallback (Issue #315 - extracted helper).
+
+        Returns:
+            Fallback response or rate limited response
+        """
+        async with self._lock:
+            self.metrics.requests_rate_limited += 1
+            self.metrics.conversation_crashes_prevented += 1
+
+        # Try graceful degradation
+        if not self.degradation_manager:
+            return {"status": "rate_limited", "retry_after": 60}
+
+        fallback = await self.degradation_manager.handle_request(
+            str(request_data), {"type": request_type}
+        )
+        if not fallback.success:
+            return {"status": "rate_limited", "retry_after": 60}
+
+        async with self._lock:
+            self.metrics.requests_cached += 1
+        return {
+            "status": "fallback",
+            "data": fallback.response,
+            "source": fallback.source,
+        }
+
     async def optimize_request(
         self, request_data: Dict[str, Any], request_type: str = "general"
     ) -> Dict[str, Any]:
@@ -264,6 +294,8 @@ class ClaudeAPIOptimizationSuite:
 
         Returns:
             Optimized request data or fallback response
+
+        Issue #315: Refactored to reduce nesting depth from 5 to 3.
         """
         start_time = time.time()
         optimization_applied = []
@@ -274,25 +306,7 @@ class ClaudeAPIOptimizationSuite:
 
             # Step 1: Rate limiting check
             if self.rate_limiter and not await self._check_rate_limits(request_data):
-                async with self._lock:
-                    self.metrics.requests_rate_limited += 1
-                    self.metrics.conversation_crashes_prevented += 1
-
-                # Try graceful degradation
-                if self.degradation_manager:
-                    fallback = await self.degradation_manager.handle_request(
-                        str(request_data), {"type": request_type}
-                    )
-                    if fallback.success:
-                        async with self._lock:
-                            self.metrics.requests_cached += 1
-                        return {
-                            "status": "fallback",
-                            "data": fallback.response,
-                            "source": fallback.source,
-                        }
-
-                return {"status": "rate_limited", "retry_after": 60}
+                return await self._handle_rate_limited_request(request_data, request_type)
 
             # Step 2: TodoWrite optimization (special handling)
             if request_type == "todowrite" and self.todowrite_optimizer:
@@ -493,37 +507,37 @@ class ClaudeAPIOptimizationSuite:
             "response_time": 0.1,
         }
 
+    async def _process_pattern_analysis(self) -> None:
+        """Process pattern analysis and adjust mode if needed (Issue #315 - extracted helper)."""
+        if not self.pattern_analyzer:
+            return
+
+        # Trigger pattern analysis (force refresh)
+        self.pattern_analyzer.get_analysis_results(force_refresh=True)
+
+        # Check for critical inefficiencies
+        recommendations = self.pattern_analyzer.get_optimization_recommendations()
+        critical_recommendations = [
+            rec for rec in recommendations if rec.get("priority_score", 0) > 0.8
+        ]
+
+        if not critical_recommendations:
+            return
+
+        logger.warning(
+            f"Found {len(critical_recommendations)} critical optimization opportunities"
+        )
+
+        # Auto-adjust mode if needed
+        if len(critical_recommendations) > 3:
+            await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
+
     async def _background_pattern_analysis(self):
-        """Background task for pattern analysis"""
+        """Background task for pattern analysis (Issue #315 - refactored depth 5 to 3)."""
         while self.is_active:
             try:
                 await asyncio.sleep(self.config.pattern_analysis_interval)
-
-                if self.pattern_analyzer:
-                    # Trigger pattern analysis (force refresh)
-                    self.pattern_analyzer.get_analysis_results(force_refresh=True)
-
-                    # Check for critical inefficiencies
-                    recommendations = (
-                        self.pattern_analyzer.get_optimization_recommendations()
-                    )
-                    critical_recommendations = [
-                        rec
-                        for rec in recommendations
-                        if rec.get("priority_score", 0) > 0.8
-                    ]
-
-                    if critical_recommendations:
-                        logger.warning(
-                            f"Found {len(critical_recommendations)} critical optimization opportunities"
-                        )
-
-                        # Auto-adjust mode if needed
-                        if len(critical_recommendations) > 3:
-                            await self._adjust_optimization_mode(
-                                OptimizationMode.AGGRESSIVE
-                            )
-
+                await self._process_pattern_analysis()
             except Exception as e:
                 logger.error(f"Error in background pattern analysis: {e}")
                 await asyncio.sleep(60)  # Wait before retrying
@@ -551,25 +565,30 @@ class ClaudeAPIOptimizationSuite:
                 logger.error(f"Error in background API monitoring: {e}")
                 await asyncio.sleep(60)
 
+    # Issue #315: Degradation level to optimization mode mapping
+    _DEGRADATION_MODE_MAP: Dict[str, OptimizationMode] = {
+        "EMERGENCY": OptimizationMode.EMERGENCY,
+        "MINIMAL": OptimizationMode.AGGRESSIVE,
+    }
+
+    async def _check_degradation_status(self) -> None:
+        """Check degradation status and adjust mode if needed (Issue #315 - extracted helper)."""
+        if not self.degradation_manager:
+            return
+
+        status_obj = await self.degradation_manager.get_service_status()
+        degradation_level = status_obj.degradation_level.name
+
+        # Use dispatch table for mode adjustment
+        if degradation_level in self._DEGRADATION_MODE_MAP:
+            await self._adjust_optimization_mode(self._DEGRADATION_MODE_MAP[degradation_level])
+
     async def _background_degradation_monitoring(self):
-        """Background task for degradation monitoring (thread-safe)"""
+        """Background task for degradation monitoring (Issue #315 - refactored depth 5 to 3)."""
         while self.is_active:
             try:
                 await asyncio.sleep(30)  # Check every 30 seconds
-
-                if self.degradation_manager:
-                    # get_service_status is now async
-                    status_obj = await self.degradation_manager.get_service_status()
-                    degradation_level = status_obj.degradation_level.name
-
-                    # Adjust optimization based on service health
-                    if degradation_level == "EMERGENCY":
-                        await self._adjust_optimization_mode(OptimizationMode.EMERGENCY)
-                    elif degradation_level == "MINIMAL":
-                        await self._adjust_optimization_mode(
-                            OptimizationMode.AGGRESSIVE
-                        )
-
+                await self._check_degradation_status()
             except Exception as e:
                 logger.error(f"Error in degradation monitoring: {e}")
                 await asyncio.sleep(60)
@@ -601,31 +620,20 @@ class ClaudeAPIOptimizationSuite:
                 }
             )
 
+    # Issue #315 - Mode rate limit configurations
+    _MODE_RATE_LIMITS = {
+        OptimizationMode.CONSERVATIVE: (60, 2500),
+        OptimizationMode.BALANCED: (50, 2000),
+        OptimizationMode.AGGRESSIVE: (30, 1500),
+        OptimizationMode.EMERGENCY: (15, 800),
+    }
+
     async def _reconfigure_components_for_mode(self, mode: OptimizationMode):
-        """Reconfigure components for the new optimization mode"""
-        if mode == OptimizationMode.CONSERVATIVE:
-            # Light optimization settings
-            if self.rate_limiter:
-                self.rate_limiter.requests_per_minute = 60
-                self.rate_limiter.requests_per_hour = 2500
-
-        elif mode == OptimizationMode.BALANCED:
-            # Default settings
-            if self.rate_limiter:
-                self.rate_limiter.requests_per_minute = 50
-                self.rate_limiter.requests_per_hour = 2000
-
-        elif mode == OptimizationMode.AGGRESSIVE:
-            # Maximum optimization settings
-            if self.rate_limiter:
-                self.rate_limiter.requests_per_minute = 30
-                self.rate_limiter.requests_per_hour = 1500
-
-        elif mode == OptimizationMode.EMERGENCY:
-            # Emergency settings
-            if self.rate_limiter:
-                self.rate_limiter.requests_per_minute = 15
-                self.rate_limiter.requests_per_hour = 800
+        """Reconfigure components for the new optimization mode (Issue #315 - refactored)."""
+        if self.rate_limiter and mode in self._MODE_RATE_LIMITS:
+            per_minute, per_hour = self._MODE_RATE_LIMITS[mode]
+            self.rate_limiter.requests_per_minute = per_minute
+            self.rate_limiter.requests_per_hour = per_hour
 
     async def get_optimization_status(self) -> Dict[str, Any]:
         """Get current optimization status and metrics (thread-safe)"""

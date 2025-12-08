@@ -180,7 +180,9 @@ async def download_mhtml(session_id: str, filename: str):
             mhtml_path = path
             break
 
-    if not mhtml_path or not os.path.exists(mhtml_path):
+    # Issue #358 - avoid blocking
+    mhtml_exists = await asyncio.to_thread(os.path.exists, mhtml_path) if mhtml_path else False
+    if not mhtml_path or not mhtml_exists:
         raise HTTPException(status_code=404, detail="MHTML file not found")
 
     # Stream the file asynchronously

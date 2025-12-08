@@ -10,6 +10,7 @@ the application for consistent pattern recognition.
 
 import re
 from enum import Enum
+from functools import cached_property
 from typing import Dict, List, Pattern
 
 
@@ -108,9 +109,10 @@ class ConversationPatterns:
         compiled_pattern = re.compile(pattern, re.IGNORECASE)
         self.patterns[conversation_type].append(compiled_pattern)
 
-    def get_response_template(self, conversation_type: ConversationType) -> str:
-        """Get response template for a conversation type."""
-        templates = {
+    @cached_property
+    def _response_templates(self) -> Dict[ConversationType, str]:
+        """Issue #380: Cache templates to avoid repeated dict creation."""
+        return {
             ConversationType.GREETING: (
                 "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?"
             ),
@@ -128,7 +130,10 @@ class ConversationPatterns:
                 "No problem! Let me know if you need help with anything else."
             ),
         }
-        return templates.get(
+
+    def get_response_template(self, conversation_type: ConversationType) -> str:
+        """Get response template for a conversation type."""
+        return self._response_templates.get(
             conversation_type,
             "I'm here to help! What would you like me to assist you with today?",
         )

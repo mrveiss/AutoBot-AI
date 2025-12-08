@@ -4,6 +4,8 @@
 """
 Desktop Streaming Manager for AutoBot Phase 8
 Provides NoVNC integration and WebSocket-based desktop streaming capabilities
+
+Issue #358: Converted blocking subprocess.Popen to asyncio.create_subprocess_exec.
 """
 
 import asyncio
@@ -40,6 +42,25 @@ def _terminate_process_safely(process: subprocess.Popen, process_key: str) -> bo
         return True
     except Exception as e:
         logger.warning(f"Error terminating {process_key}: {e}")
+        return False
+
+
+async def _terminate_async_process_safely(
+    process: asyncio.subprocess.Process, process_key: str
+) -> bool:
+    """Terminate an async subprocess safely (Issue #358: async process handling)."""
+    if not process:
+        return False
+    try:
+        process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+        return True
+    except Exception as e:
+        logger.warning(f"Error terminating async {process_key}: {e}")
         return False
 
 
@@ -151,8 +172,11 @@ class VNCServerManager:
                     "96",
                 ]
 
-                xvfb_process = subprocess.Popen(
-                    xvfb_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                # Issue #358: Use async subprocess to avoid blocking event loop
+                xvfb_process = await asyncio.create_subprocess_exec(
+                    *xvfb_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
 
                 # Wait for display to be ready
@@ -172,8 +196,11 @@ class VNCServerManager:
                     "-noxcomposite",
                 ]
 
-                vnc_process = subprocess.Popen(
-                    vnc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                # Issue #358: Use async subprocess to avoid blocking event loop
+                vnc_process = await asyncio.create_subprocess_exec(
+                    *vnc_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
 
                 # Start NoVNC if available
@@ -239,8 +266,10 @@ class VNCServerManager:
 
             websockify_cmd = None
             for path in websockify_paths:
-                if Path(path).expanduser().exists():
-                    websockify_cmd = str(Path(path).expanduser())
+                # Issue #358 - avoid blocking (expanduser can access /etc/passwd)
+                expanded_path = await asyncio.to_thread(Path(path).expanduser)
+                if await asyncio.to_thread(expanded_path.exists):
+                    websockify_cmd = str(expanded_path)
                     break
 
             if not websockify_cmd:
@@ -279,16 +308,18 @@ class VNCServerManager:
         raise RuntimeError("No available X display numbers")
 
     async def terminate_session(self, session_id: str) -> bool:
-        """Terminate a VNC session (Issue #315 - refactored to reduce nesting)."""
+        """Terminate a VNC session (Issue #315, #358 - async process handling)."""
         if session_id not in self.active_sessions:
             return False
 
         session = self.active_sessions[session_id]
 
         try:
-            # Terminate all VNC processes using helper
+            # Terminate all VNC processes using async helper (Issue #358)
             for process_key in ALL_VNC_PROCESS_KEYS:
-                _terminate_process_safely(session.get(process_key), process_key)
+                process = session.get(process_key)
+                if process:
+                    await _terminate_async_process_safely(process, process_key)
 
             del self.active_sessions[session_id]
             logger.info(f"VNC session terminated: {session_id}")

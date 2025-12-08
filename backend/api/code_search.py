@@ -8,6 +8,7 @@ High-performance code search endpoints using NPU acceleration and Redis indexing
 Includes advanced codebase analytics for usage statistics and reusability detection.
 """
 
+import asyncio
 import logging
 import re
 from collections import defaultdict
@@ -804,8 +805,9 @@ async def get_codebase_statistics():
         redis_client = get_redis_client()
 
         # Get all index keys
+        # Issue #361 - avoid blocking
         index_pattern = "code_index:*"
-        index_keys = redis_client.keys(index_pattern)
+        index_keys = await asyncio.to_thread(redis_client.keys, index_pattern)
 
         stats = {
             "index_statistics": index_status,

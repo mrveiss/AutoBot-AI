@@ -73,6 +73,7 @@ class MCPToolCache:
     """
 
     def __init__(self, ttl_seconds: int = 60):
+        """Initialize MCP registry cache with configurable TTL."""
         self.ttl = timedelta(seconds=ttl_seconds)
         self._tools_cache: Optional[Metadata] = None
         self._tools_updated: Optional[datetime] = None
@@ -300,6 +301,44 @@ MCP_BRIDGES = [
 # ============================================================================
 
 
+def _build_tool_entry(
+    tool: dict, bridge_name: str, bridge_desc: str, endpoint: str, features: List[str]
+) -> dict:
+    """Build a tool entry with bridge info. (Issue #315 - extracted)"""
+    return {
+        "name": tool["name"],
+        "description": tool["description"],
+        "input_schema": tool["input_schema"],
+        "bridge": bridge_name,
+        "bridge_description": bridge_desc,
+        "endpoint": f"{endpoint.replace('/tools', '')}/{tool['name']}",
+        "features": features,
+    }
+
+
+async def _fetch_bridge_tools(
+    http_client, backend_url: str, bridge_name: str, bridge_desc: str,
+    endpoint: str, features: List[str]
+) -> tuple:
+    """Fetch tools from a single bridge. Returns (tools_list, success). (Issue #315 - extracted)"""
+    try:
+        async with await http_client.get(
+            f"{backend_url}{endpoint}",
+            timeout=aiohttp.ClientTimeout(total=3),
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"MCP bridge {bridge_name} returned status {response.status}")
+                return [], False
+            tools = await response.json()
+            entries = [_build_tool_entry(t, bridge_name, bridge_desc, endpoint, features) for t in tools]
+            return entries, True
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP error fetching tools from {bridge_name}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to fetch tools from {bridge_name}: {e}")
+    return [], False
+
+
 async def _fetch_tools_from_bridges() -> Metadata:
     """
     Fetch tools from all MCP bridges (internal helper).
@@ -311,39 +350,14 @@ async def _fetch_tools_from_bridges() -> Metadata:
     bridge_count = 0
 
     http_client = get_http_client()
+    # Use extracted helpers (Issue #315 - reduced depth)
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
-        try:
-            async with await http_client.get(
-                f"{backend_url}{endpoint}",
-                timeout=aiohttp.ClientTimeout(total=3),
-            ) as response:
-                if response.status == 200:
-                    tools = await response.json()
-                    bridge_count += 1
-
-                    # Add bridge info to each tool
-                    for tool in tools:
-                        all_tools.append(
-                            {
-                                "name": tool["name"],
-                                "description": tool["description"],
-                                "input_schema": tool["input_schema"],
-                                "bridge": bridge_name,
-                                "bridge_description": bridge_desc,
-                                "endpoint": (
-                                    f"{endpoint.replace('/tools', '')}/{tool['name']}"
-                                ),
-                                "features": features,
-                            }
-                        )
-                else:
-                    logger.warning(
-                        f"MCP bridge {bridge_name} returned status {response.status}"
-                    )
-        except aiohttp.ClientError as e:
-            logger.error(f"HTTP error fetching tools from {bridge_name}: {e}")
-        except Exception as e:
-            logger.error(f"Failed to fetch tools from {bridge_name}: {e}")
+        tools, success = await _fetch_bridge_tools(
+            http_client, backend_url, bridge_name, bridge_desc, endpoint, features
+        )
+        all_tools.extend(tools)
+        if success:
+            bridge_count += 1
 
     return {
         "status": "success",
@@ -364,6 +378,8 @@ async def _fetch_bridges_info() -> Metadata:
     """
     backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     bridges = []
+    # Issue #380: Get http_client once before loop instead of per-iteration
+    http_client = get_http_client()
 
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
         bridge_info = {
@@ -376,7 +392,6 @@ async def _fetch_bridges_info() -> Metadata:
         }
 
         try:
-            http_client = get_http_client()
             async with await http_client.get(
                 f"{backend_url}{endpoint}",
                 timeout=aiohttp.ClientTimeout(total=3),
@@ -593,7 +608,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
             status_code=404, detail=f"MCP bridge '{bridge_name}' not found"
         )
 
-    bridge_name_found, bridge_desc, endpoint, features = bridge
+    bridge_name_found, bridge_desc, endpoint, _ = bridge  # Issue #382: features unused
 
     try:
         # Fetch all tools from the bridge
@@ -662,8 +677,10 @@ async def get_mcp_registry_health() -> Metadata:
     """
     backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     health_checks = []
+    # Issue #380: Get http_client once before loop instead of per-iteration
+    http_client = get_http_client()
 
-    for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
+    for bridge_name, bridge_desc, endpoint, _ in MCP_BRIDGES:  # Issue #382: features unused
         start_time = datetime.now()
         check = {
             "bridge": bridge_name,
@@ -672,7 +689,6 @@ async def get_mcp_registry_health() -> Metadata:
         }
 
         try:
-            http_client = get_http_client()
             async with await http_client.get(
                 f"{backend_url}{endpoint}",
                 timeout=aiohttp.ClientTimeout(total=3),

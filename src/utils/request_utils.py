@@ -112,6 +112,7 @@ class RequestTracker:
     """
 
     def __init__(self):
+        """Initialize request tracker with empty active requests dict."""
         self._active_requests: Dict[str, Dict[str, Any]] = {}
 
     def start_request(self, request_id: str, operation: str, **metadata) -> None:

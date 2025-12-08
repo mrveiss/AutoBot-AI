@@ -49,6 +49,7 @@ class InvalidationRule:
         fact_types: Optional[List[FactType]] = None,
         enabled: bool = True,
     ):
+        """Initialize invalidation rule with criteria for matching facts."""
         self.rule_id = rule_id
         self.name = name
         self.temporal_types = temporal_types
@@ -416,6 +417,49 @@ class TemporalInvalidationService:
                 "processing_time": (datetime.now() - start_time).total_seconds(),
             }
 
+    def _prepare_fact_for_invalidation(
+        self, pipe, fact: AtomicFact, reasons: Dict[str, Dict[str, Any]]
+    ) -> bool:
+        """Prepare single fact for invalidation in pipeline (Issue #315: extracted helper).
+
+        Args:
+            pipe: Redis pipeline
+            fact: Fact to invalidate
+            reasons: Invalidation reasons dict
+
+        Returns:
+            True if successful, False if error
+        """
+        try:
+            fact_key = f"atomic_fact:{fact.fact_id}"
+
+            # Update fact data
+            fact.is_active = False
+            fact.valid_until = datetime.now()
+            fact.metadata = fact.metadata or {}
+            fact.metadata.update({
+                "invalidated_at": datetime.now().isoformat(),
+                "invalidation_reason": reasons.get(fact.fact_id, {}),
+                "invalidation_service": "temporal_invalidation",
+            })
+
+            # Store updated fact
+            fact_data = fact.to_dict()
+            pipe.hset(fact_key, "data", json.dumps(fact_data))
+            pipe.hset(fact_key, "is_active", "False")
+            pipe.hset(fact_key, "valid_until", fact.valid_until.isoformat())
+
+            # Update indices
+            pipe.sadd(self.invalidated_facts_key, fact.fact_id)
+            pipe.srem("atomic_facts_index", fact.fact_id)
+            pipe.srem(f"facts_by_source:{fact.source}", fact.fact_id)
+            pipe.srem(f"facts_by_type:{fact.fact_type.value}", fact.fact_id)
+            pipe.srem(f"facts_by_temporal:{fact.temporal_type.value}", fact.fact_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error preparing fact {fact.fact_id} for invalidation: {e}")
+            return False
+
     async def _invalidate_facts(
         self, facts: List[AtomicFact], reasons: Dict[str, Dict[str, Any]]
     ) -> int:
@@ -439,51 +483,11 @@ class TemporalInvalidationService:
             # Process facts in batches
             for i in range(0, len(facts), self.batch_size):
                 batch = facts[i : i + self.batch_size]
-
-                # Use Redis pipeline for batch operations
                 pipe = self.redis_client.pipeline()
 
+                # Prepare facts using helper (Issue #315: reduced nesting)
                 for fact in batch:
-                    try:
-                        # Mark fact as inactive
-                        fact_key = f"atomic_fact:{fact.fact_id}"
-
-                        # Update fact data
-                        fact.is_active = False
-                        fact.valid_until = datetime.now()
-                        fact.metadata = fact.metadata or {}
-                        fact.metadata.update(
-                            {
-                                "invalidated_at": datetime.now().isoformat(),
-                                "invalidation_reason": reasons.get(fact.fact_id, {}),
-                                "invalidation_service": "temporal_invalidation",
-                            }
-                        )
-
-                        # Store updated fact
-                        fact_data = fact.to_dict()
-                        pipe.hset(fact_key, "data", json.dumps(fact_data))
-                        pipe.hset(fact_key, "is_active", "False")
-                        pipe.hset(fact_key, "valid_until", fact.valid_until.isoformat())
-
-                        # Add to invalidated facts index
-                        pipe.sadd(self.invalidated_facts_key, fact.fact_id)
-
-                        # Remove from active facts indices
-                        pipe.srem("atomic_facts_index", fact.fact_id)
-                        pipe.srem(f"facts_by_source:{fact.source}", fact.fact_id)
-                        pipe.srem(f"facts_by_type:{fact.fact_type.value}", fact.fact_id)
-                        pipe.srem(
-                            f"facts_by_temporal:{fact.temporal_type.value}",
-                            fact.fact_id,
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error preparing fact {fact.fact_id} for "
-                            f"invalidation: {e}"
-                        )
-                        continue
+                    self._prepare_fact_for_invalidation(pipe, fact, reasons)
 
                 # Execute batch operation
                 try:

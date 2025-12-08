@@ -735,8 +735,10 @@ class MCPManualService:
             # Use filesystem MCP to check which directories exist
             for doc_dir in common_doc_dirs:
                 try:
-                    # Use direct filesystem access to check directory existence
-                    if os.path.exists(doc_dir) and os.path.isdir(doc_dir):
+                    # Issue #358 - avoid blocking
+                    dir_exists = await asyncio.to_thread(os.path.exists, doc_dir)
+                    is_dir = await asyncio.to_thread(os.path.isdir, doc_dir) if dir_exists else False
+                    if dir_exists and is_dir:
                         sources.append(
                             {"name": doc_dir, "type": "directory", "searchable": True}
                         )
@@ -766,6 +768,7 @@ class MCPManualService:
     ) -> List[str]:
         """Collect documentation files from a directory (Issue #298 - extracted helper)."""
         files = []
+        # Issue #358 - already uses lambda wrapper correctly for os.walk
         walk_results = await asyncio.to_thread(lambda: list(os.walk(dir_path)))
 
         for root, dirs, filenames in walk_results:

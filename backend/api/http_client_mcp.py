@@ -99,6 +99,42 @@ DEFAULT_TIMEOUT = 30  # seconds
 MAX_TIMEOUT = 120  # seconds
 
 
+def _try_parse_json(body: Optional[str]) -> Optional[JSONObject]:
+    """Attempt to parse body as JSON. (Issue #315 - extracted to reduce nesting)"""
+    if not body:
+        return None
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        logger.debug("Response body is not JSON, keeping as text")
+        return None
+
+
+async def _read_response_body_chunked(response, chunk_size: int = 8192) -> str:
+    """Read response body in chunks with size limit enforcement. (Issue #315 - extracted)"""
+    chunks = []
+    total_size = 0
+
+    async for chunk in response.content.iter_chunked(chunk_size):
+        total_size += len(chunk)
+        if total_size > MAX_RESPONSE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Response exceeded size limit during streaming:"
+                    f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
+                )
+            )
+        chunks.append(chunk)
+
+    # Decode response body
+    body_bytes = b"".join(chunks)
+    try:
+        return body_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return body_bytes.decode("latin-1")
+
+
 def is_domain_allowed(url: str) -> bool:
     """
     Validate URL domain against whitelist
@@ -534,42 +570,14 @@ async def execute_http_request(
                     )
                 )
 
-            # Read response body with size limit enforcement
-            # Handles chunked transfer encoding (no Content-Length)
+            # Read response body with size limit enforcement (Issue #315 - uses helper)
             if method.upper() == "HEAD":
                 body = None
             else:
-                # Read in chunks to prevent memory exhaustion
-                chunks = []
-                total_size = 0
-                chunk_size = 8192  # 8KB chunks
+                body = await _read_response_body_chunked(response)
 
-                async for chunk in response.content.iter_chunked(chunk_size):
-                    total_size += len(chunk)
-                    if total_size > MAX_RESPONSE_SIZE:
-                        raise HTTPException(
-                            status_code=413,
-                            detail=(
-                                f"Response exceeded size limit during streaming:"
-                                f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
-                            )
-                        )
-                    chunks.append(chunk)
-
-                # Decode response body
-                body_bytes = b"".join(chunks)
-                try:
-                    body = body_bytes.decode("utf-8")
-                except UnicodeDecodeError:
-                    body = body_bytes.decode("latin-1")
-
-            # Try to parse as JSON if applicable
-            json_response = None
-            if body:
-                try:
-                    json_response = json.loads(body)
-                except json.JSONDecodeError:
-                    logger.debug("Response body is not JSON, keeping as text")
+            # Try to parse as JSON if applicable (Issue #315 - uses helper)
+            json_response = _try_parse_json(body)
 
             return {
                 "success": True,

@@ -282,6 +282,56 @@ class FactExtractionService:
             logger.error(f"Error in fact deduplication: {e}")
             return facts  # Return original list if deduplication fails
 
+    def _prepare_fact_for_pipeline(
+        self, pipe, fact: AtomicFact, metadata: Optional[Dict[str, Any]]
+    ) -> bool:
+        """Prepare single fact for pipeline storage (Issue #315: extracted helper).
+
+        Args:
+            pipe: Redis pipeline
+            fact: Fact to prepare
+            metadata: Additional metadata
+
+        Returns:
+            True if successful, False if error
+        """
+        try:
+            fact_key = f"{self.fact_storage_prefix}{fact.fact_id}"
+            fact_data = fact.to_dict()
+
+            # Add service metadata
+            fact_data.update({
+                "storage_timestamp": datetime.now().isoformat(),
+                "service_metadata": metadata or {},
+            })
+
+            # Store fact data
+            pipe.hset(
+                fact_key,
+                mapping={
+                    "data": json.dumps(fact_data),
+                    "subject": fact.subject,
+                    "predicate": fact.predicate,
+                    "object": fact.object,
+                    "fact_type": fact.fact_type.value,
+                    "temporal_type": fact.temporal_type.value,
+                    "confidence": str(fact.confidence),
+                    "source": fact.source,
+                    "is_active": str(fact.is_active),
+                    "valid_from": fact.valid_from.isoformat(),
+                },
+            )
+
+            # Add to indices
+            pipe.sadd(self.fact_index_key, fact.fact_id)
+            pipe.sadd(f"facts_by_source:{fact.source}", fact.fact_id)
+            pipe.sadd(f"facts_by_type:{fact.fact_type.value}", fact.fact_id)
+            pipe.sadd(f"facts_by_temporal:{fact.temporal_type.value}", fact.fact_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error preparing fact for storage: {e}")
+            return False
+
     async def _store_facts(
         self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -306,66 +356,19 @@ class FactExtractionService:
             # Store facts in batches for better performance
             for i in range(0, len(facts), self.batch_size):
                 batch = facts[i : i + self.batch_size]
-
-                # Use Redis pipeline for batch operations
                 pipe = self.redis_client.pipeline()
+                batch_errors = 0
 
+                # Prepare facts using helper (Issue #315: reduced nesting)
                 for fact in batch:
-                    try:
-                        fact_key = f"{self.fact_storage_prefix}{fact.fact_id}"
-                        fact_data = fact.to_dict()
-
-                        # Add service metadata
-                        fact_data.update(
-                            {
-                                "storage_timestamp": datetime.now().isoformat(),
-                                "service_metadata": metadata or {},
-                            }
-                        )
-
-                        # Store fact data
-                        pipe.hset(
-                            fact_key,
-                            mapping={
-                                "data": json.dumps(fact_data),
-                                "subject": fact.subject,
-                                "predicate": fact.predicate,
-                                "object": fact.object,
-                                "fact_type": fact.fact_type.value,
-                                "temporal_type": fact.temporal_type.value,
-                                "confidence": str(fact.confidence),
-                                "source": fact.source,
-                                "is_active": str(fact.is_active),
-                                "valid_from": fact.valid_from.isoformat(),
-                            },
-                        )
-
-                        # Add to facts index
-                        pipe.sadd(self.fact_index_key, fact.fact_id)
-
-                        # Add to source-specific index
-                        source_index_key = f"facts_by_source:{fact.source}"
-                        pipe.sadd(source_index_key, fact.fact_id)
-
-                        # Add to type-specific indices
-                        type_index_key = f"facts_by_type:{fact.fact_type.value}"
-                        temporal_index_key = (
-                            f"facts_by_temporal:{fact.temporal_type.value}"
-                        )
-                        pipe.sadd(type_index_key, fact.fact_id)
-                        pipe.sadd(temporal_index_key, fact.fact_id)
-
-                    except Exception as e:
-                        logger.error(f"Error preparing fact for storage: {e}")
-                        error_count += 1
-                        continue
+                    if not self._prepare_fact_for_pipeline(pipe, fact, metadata):
+                        batch_errors += 1
 
                 # Execute batch operation
                 try:
                     await pipe.execute()
-                    stored_count += len(batch) - (
-                        error_count - (stored_count // self.batch_size * error_count)
-                    )
+                    stored_count += len(batch) - batch_errors
+                    error_count += batch_errors
                     logger.debug(f"Stored batch of {len(batch)} facts")
                 except Exception as e:
                     logger.error(f"Error executing batch storage: {e}")

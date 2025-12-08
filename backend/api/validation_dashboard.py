@@ -152,6 +152,21 @@ def generate_fallback_report():
     }
 
 
+def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
+    """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
+    try:
+        generator = ValidationDashboardGenerator()
+        logger.info("Dashboard generator initialized")
+        return generator
+    except ImportError as e:
+        logger.error(f"Failed to initialize dashboard generator due to import error: {e}")
+    except (OSError, IOError) as e:
+        logger.error(f"Failed to initialize dashboard generator due to file system error: {e}")
+    except Exception as e:
+        logger.error(f"Failed to initialize dashboard generator due to unexpected error: {e}")
+    return None
+
+
 def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
     """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
@@ -164,27 +179,25 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
         with _dashboard_generator_lock:
             # Double-check after acquiring lock
             if _dashboard_generator is None:
-                try:
-                    _dashboard_generator = ValidationDashboardGenerator()
-                    logger.info("Dashboard generator initialized")
-                except ImportError as e:
-                    logger.error(
-                        f"Failed to initialize dashboard generator due to import error: {e}"
-                    )
-                    return None
-                except (OSError, IOError) as e:
-                    logger.error(
-                        "Failed to initialize dashboard generator due to "
-                        f"file system error: {e}"
-                    )
-                    return None
-                except Exception as e:
-                    logger.error(
-                        f"Failed to initialize dashboard generator due to unexpected error: {e}"
-                    )
-                    return None
+                _dashboard_generator = _try_create_dashboard_generator()
 
     return _dashboard_generator
+
+
+def _try_create_validation_judges() -> Optional[Metadata]:
+    """Try to create validation judges, return None on failure. (Issue #315 - extracted)"""
+    try:
+        judges = {
+            "workflow_step_judge": WorkflowStepJudge(),
+            "agent_response_judge": AgentResponseJudge(),
+        }
+        logger.info("Validation judges initialized")
+        return judges
+    except ImportError as e:
+        logger.error(f"Failed to initialize validation judges due to import error: {e}")
+    except Exception as e:
+        logger.error(f"Failed to initialize validation judges due to unexpected error: {e}")
+    return None
 
 
 def get_validation_judges() -> Optional[Metadata]:
@@ -199,22 +212,7 @@ def get_validation_judges() -> Optional[Metadata]:
         with _validation_judges_lock:
             # Double-check after acquiring lock
             if _validation_judges is None:
-                try:
-                    _validation_judges = {
-                        "workflow_step_judge": WorkflowStepJudge(),
-                        "agent_response_judge": AgentResponseJudge(),
-                    }
-                    logger.info("Validation judges initialized")
-                except ImportError as e:
-                    logger.error(
-                        f"Failed to initialize validation judges due to import error: {e}"
-                    )
-                    return None
-                except Exception as e:
-                    logger.error(
-                        f"Failed to initialize validation judges due to unexpected error: {e}"
-                    )
-                    return None
+                _validation_judges = _try_create_validation_judges()
 
     return _validation_judges
 
@@ -417,6 +415,7 @@ async def generate_dashboard(
 
         # Generate dashboard in background if requested
         async def generate_background():
+            """Generate validation dashboard HTML file asynchronously."""
             try:
                 dashboard_path = await generator.generate_html_dashboard()
                 logger.info(

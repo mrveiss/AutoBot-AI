@@ -467,7 +467,10 @@ You should be aware of your current capabilities and limitations based on the sy
             output_path = f"data/reports/awareness/system_awareness_{timestamp}.json"
 
         # Ensure directory exists
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(
+            Path(output_path).parent.mkdir, parents=True, exist_ok=True
+        )
 
         # Get comprehensive context
         context = await self.get_system_context(include_detailed=True)

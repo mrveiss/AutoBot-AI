@@ -42,6 +42,7 @@ class CommandValidator:
     """
 
     def __init__(self):
+        """Initialize command validator with security whitelist."""
         self.logger = logging.getLogger(__name__)
         self._init_whitelist()
 

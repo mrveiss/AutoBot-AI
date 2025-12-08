@@ -187,57 +187,74 @@ class AlertManager:
         """Add a callback function for alerts"""
         self.alert_callbacks.append(callback)
 
-    def check_usage_alerts(self, tracker: UsageTracker) -> List[UsageAlert]:
-        """Check current usage and generate alerts if needed"""
-        alerts = []
-        current_time = time.time()
-
-        # Check rate limits
+    def _check_rate_alerts(
+        self, tracker: UsageTracker
+    ) -> Optional[UsageAlert]:
+        """Check rate limit alerts (Issue #315: extracted helper)."""
         rate_1min = tracker.calculate_usage_rate(1)
         rate_60min = tracker.calculate_usage_rate(60)
+        rates = {"rate_1min": rate_1min, "rate_60min": rate_60min}
 
-        if rate_1min > 50:  # More than 50 calls per minute
-            alert = self._create_alert(
+        if rate_1min > 50:
+            return self._create_alert(
                 "critical",
                 f"High API usage rate: {rate_1min:.1f} calls/minute",
-                {"rate_1min": rate_1min, "rate_60min": rate_60min},
+                rates,
                 "Reduce request frequency to avoid rate limits",
             )
-            alerts.append(alert)
-        elif rate_1min > 30:
-            alert = self._create_alert(
+        if rate_1min > 30:
+            return self._create_alert(
                 "warning",
                 f"Elevated API usage rate: {rate_1min:.1f} calls/minute",
-                {"rate_1min": rate_1min, "rate_60min": rate_60min},
+                rates,
                 "Consider batching requests or adding delays",
             )
-            alerts.append(alert)
+        return None
 
-        # Check payload sizes
+    def _check_payload_alert(self, tracker: UsageTracker) -> Optional[UsageAlert]:
+        """Check payload size alerts (Issue #315: extracted helper)."""
         payload_trend = tracker.calculate_payload_trend(30)
         if payload_trend["max"] > 25000:
-            alert = self._create_alert(
+            return self._create_alert(
                 "warning",
                 f"Large payload detected: {payload_trend['max']} bytes",
                 payload_trend,
                 "Consider breaking large requests into smaller chunks",
             )
-            alerts.append(alert)
+        return None
 
-        # Check error patterns
+    def _check_error_rate_alert(self, tracker: UsageTracker) -> Optional[UsageAlert]:
+        """Check error rate alerts (Issue #315: extracted helper)."""
         recent_calls = tracker.get_recent_calls(60)
-        if recent_calls:
-            error_rate = sum(1 for call in recent_calls if not call.success) / len(
-                recent_calls
+        if not recent_calls:
+            return None
+
+        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
+        if error_rate > 0.1:
+            return self._create_alert(
+                "critical",
+                f"High error rate: {error_rate*100:.1f}%",
+                {"error_rate": error_rate, "recent_calls": len(recent_calls)},
+                "Check for API issues or adjust request patterns",
             )
-            if error_rate > 0.1:  # More than 10% errors
-                alert = self._create_alert(
-                    "critical",
-                    f"High error rate: {error_rate*100:.1f}%",
-                    {"error_rate": error_rate, "recent_calls": len(recent_calls)},
-                    "Check for API issues or adjust request patterns",
-                )
-                alerts.append(alert)
+        return None
+
+    def check_usage_alerts(self, tracker: UsageTracker) -> List[UsageAlert]:
+        """Check current usage and generate alerts if needed"""
+        alerts = []
+
+        # Check all alert conditions using helpers (Issue #315: reduced nesting)
+        rate_alert = self._check_rate_alerts(tracker)
+        if rate_alert:
+            alerts.append(rate_alert)
+
+        payload_alert = self._check_payload_alert(tracker)
+        if payload_alert:
+            alerts.append(payload_alert)
+
+        error_alert = self._check_error_rate_alert(tracker)
+        if error_alert:
+            alerts.append(error_alert)
 
         # Process and store alerts
         filtered_alerts = []

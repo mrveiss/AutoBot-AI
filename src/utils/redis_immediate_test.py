@@ -24,6 +24,7 @@ class RedisConnectionState:
     """Track Redis connection state without timeouts"""
 
     def __init__(self):
+        """Initialize Redis connection state with default disconnected status."""
         self.is_connected = False
         self.client: Optional[redis.Redis] = None
         self.last_error: Optional[str] = None
@@ -151,6 +152,7 @@ class RedisCircuitBreaker:
     """
 
     def __init__(self, failure_threshold: int = 3):
+        """Initialize circuit breaker with failure threshold and state tracking."""
         self.failure_count = 0
         self.failure_threshold = failure_threshold
         self.is_circuit_open = False

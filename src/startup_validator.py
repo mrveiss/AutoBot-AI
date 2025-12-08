@@ -237,15 +237,36 @@ class StartupValidator:
         """Validate connectivity to external services"""
         logger.info("Validating service connectivity...")
 
-        for service_name, validator_func in self.services.items():
+        # Issue #370: Validate all services in parallel
+        async def validate_single_service(service_name: str, validator_func):
+            """Validate a single service and return result."""
             try:
                 await validator_func()
                 logger.debug(f"✅ Service connectivity: {service_name}")
+                return service_name, None
             except Exception as e:
+                return service_name, str(e)
+
+        results = await asyncio.gather(
+            *[
+                validate_single_service(name, func)
+                for name, func in self.services.items()
+            ],
+            return_exceptions=True,
+        )
+
+        for result in results:
+            if isinstance(result, Exception):
+                # Gather itself failed for some reason
+                self.result.add_warning(
+                    f"Service validation error: {result}", {"error": str(result)}
+                )
+            elif result[1] is not None:
                 # Service connectivity issues are warnings, not errors
                 # The system should still start but with reduced functionality
+                service_name, error = result
                 self.result.add_warning(
-                    f"Service connectivity failed: {service_name}", {"error": str(e)}
+                    f"Service connectivity failed: {service_name}", {"error": error}
                 )
 
     async def _validate_redis_connectivity(self):

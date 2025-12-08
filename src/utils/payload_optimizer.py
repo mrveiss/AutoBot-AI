@@ -25,6 +25,22 @@ def is_empty_value(value: Any) -> bool:
     return value is None or value == "" or value == [] or value == {}
 
 
+def _compress_value_by_type(
+    optimizer: "PayloadOptimizer", value: Any
+) -> Optional[Any]:
+    """Compress a value based on its type. (Issue #315 - extracted)"""
+    if isinstance(value, dict):
+        result = optimizer._compress_dict(value)
+        return result if result else None
+    if isinstance(value, list):
+        result = optimizer._compress_list(value)
+        return result if result else None
+    if isinstance(value, str):
+        result = optimizer._compress_text(value)
+        return result if result else None
+    return value
+
+
 @dataclass
 class OptimizationResult:
     """Result of payload optimization"""
@@ -274,63 +290,35 @@ class PayloadOptimizer:
         return compressed.strip()
 
     def _compress_dict(self, data: dict) -> dict:
-        """Compress dictionary by removing empty values and shortening keys"""
+        """Compress dictionary by removing empty values and shortening keys (Issue #315)"""
         compressed = {}
-
         for key, value in data.items():
-            # Skip empty values (Issue #328 - uses helper function)
             if is_empty_value(value):
                 continue
-
-            # Shorten common keys
             short_key = self._shorten_key(key)
-
-            # Recursively compress nested structures
-            if isinstance(value, dict):
-                compressed_value = self._compress_dict(value)
-                if compressed_value:  # Only add if not empty
-                    compressed[short_key] = compressed_value
-            elif isinstance(value, list):
-                compressed_value = self._compress_list(value)
-                if compressed_value:
-                    compressed[short_key] = compressed_value
-            elif isinstance(value, str):
-                compressed_value = self._compress_text(value)
-                if compressed_value:
-                    compressed[short_key] = compressed_value
-            else:
-                compressed[short_key] = value
-
+            compressed_value = _compress_value_by_type(self, value)
+            if compressed_value is not None:
+                compressed[short_key] = compressed_value
         return compressed
 
     def _compress_list(self, data: list) -> list:
-        """Compress list by removing duplicates and empty items"""
+        """Compress list by removing duplicates and empty items (Issue #315)"""
         compressed = []
         seen = set()
 
         for item in data:
-            # Skip empty values (Issue #328 - uses helper function)
             if is_empty_value(item):
                 continue
-
             # Handle duplicates for simple types
             if isinstance(item, (str, int, float, bool)):
                 if item not in seen:
                     seen.add(item)
                     compressed.append(item)
-            else:
-                # For complex types, compress recursively
-                if isinstance(item, dict):
-                    compressed_item = self._compress_dict(item)
-                    if compressed_item:
-                        compressed.append(compressed_item)
-                elif isinstance(item, list):
-                    compressed_item = self._compress_list(item)
-                    if compressed_item:
-                        compressed.append(compressed_item)
-                else:
-                    compressed.append(item)
-
+                continue
+            # For complex types, compress recursively using helper
+            compressed_item = _compress_value_by_type(self, item)
+            if compressed_item is not None:
+                compressed.append(compressed_item)
         return compressed
 
     def _shorten_key(self, key: str) -> str:

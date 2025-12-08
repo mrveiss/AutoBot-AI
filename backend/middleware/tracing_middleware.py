@@ -49,6 +49,13 @@ class TracingMiddleware(BaseHTTPMiddleware):
         "/static",
     }
 
+    # Status code to span status mapping (Issue #315 - extracted)
+    _STATUS_CODE_THRESHOLDS = [
+        (500, StatusCode.ERROR, "HTTP {code}"),
+        (400, StatusCode.ERROR, "Client error {code}"),
+        (0, StatusCode.OK, None),
+    ]
+
     def __init__(self, app, service_name: str = "autobot-backend"):
         """
         Initialize tracing middleware.
@@ -128,48 +135,20 @@ class TracingMiddleware(BaseHTTPMiddleware):
             attributes=attributes,
         ) as span:
             try:
-                # Call the next handler
                 response = await call_next(request)
-
-                # Add response attributes
-                if span and span.is_recording():
-                    span.set_attribute("http.status_code", response.status_code)
-
-                    # Set span status based on HTTP status
-                    if response.status_code >= 500:
-                        span.set_status(Status(StatusCode.ERROR, f"HTTP {response.status_code}"))
-                    elif response.status_code >= 400:
-                        span.set_status(Status(StatusCode.ERROR, f"Client error {response.status_code}"))
-                    else:
-                        span.set_status(Status(StatusCode.OK))
-
-                    # Add content type
-                    content_type = response.headers.get("content-type")
-                    if content_type:
-                        span.set_attribute("http.response_content_type", content_type)
-
+                # Use helper to set response attributes (Issue #315)
+                self._set_response_span_attributes(span, response)
                 return response
 
             except Exception as e:
-                # Record the exception in the span
-                if span and span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    span.record_exception(e)
-                    span.set_attribute("error.type", type(e).__name__)
-                    span.set_attribute("error.message", str(e)[:500])
+                # Use helper to record exception (Issue #315)
+                self._record_exception_on_span(span, e)
                 raise
 
             finally:
-                # Record timing
+                # Use helper to record timing (Issue #315)
                 duration_ms = (time.perf_counter() - start_time) * 1000
-                if span and span.is_recording():
-                    span.set_attribute("http.duration_ms", duration_ms)
-
-                # Log for debugging if trace is slow
-                if duration_ms > 5000:  # 5 second threshold
-                    logger.warning(
-                        f"Slow request traced: {span_name} took {duration_ms:.2f}ms"
-                    )
+                self._record_timing_on_span(span, span_name, duration_ms)
 
     def _should_skip_tracing(self, path: str) -> bool:
         """
@@ -243,6 +222,41 @@ class TracingMiddleware(BaseHTTPMiddleware):
 
         return None
 
+    def _set_response_span_attributes(self, span, response: Response) -> None:
+        """Set response attributes on span. (Issue #315 - extracted)"""
+        if not span or not span.is_recording():
+            return
+        span.set_attribute("http.status_code", response.status_code)
+        # Set span status based on HTTP status using threshold mapping
+        for threshold, status_code, msg_template in self._STATUS_CODE_THRESHOLDS:
+            if response.status_code >= threshold:
+                if msg_template:
+                    span.set_status(Status(status_code, msg_template.format(code=response.status_code)))
+                else:
+                    span.set_status(Status(status_code))
+                break
+        # Add content type
+        content_type = response.headers.get("content-type")
+        if content_type:
+            span.set_attribute("http.response_content_type", content_type)
+
+    def _record_exception_on_span(self, span, e: Exception) -> None:
+        """Record exception on span. (Issue #315 - extracted)"""
+        if not span or not span.is_recording():
+            return
+        span.set_status(Status(StatusCode.ERROR, str(e)))
+        span.record_exception(e)
+        span.set_attribute("error.type", type(e).__name__)
+        span.set_attribute("error.message", str(e)[:500])
+
+    def _record_timing_on_span(self, span, span_name: str, duration_ms: float) -> None:
+        """Record timing on span with slow request warning. (Issue #315 - extracted)"""
+        if span and span.is_recording():
+            span.set_attribute("http.duration_ms", duration_ms)
+        # Log for debugging if trace is slow
+        if duration_ms > 5000:  # 5 second threshold
+            logger.warning(f"Slow request traced: {span_name} took {duration_ms:.2f}ms")
+
 
 def create_tracing_middleware(
     service_name: str = "autobot-backend",
@@ -258,6 +272,7 @@ def create_tracing_middleware(
     """
     class ConfiguredTracingMiddleware(TracingMiddleware):
         def __init__(self, app):
+            """Initialize tracing middleware with preconfigured service name."""
             super().__init__(app, service_name=service_name)
 
     return ConfiguredTracingMiddleware

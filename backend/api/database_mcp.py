@@ -20,6 +20,7 @@ Security Model:
 - Comprehensive audit logging
 
 Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
+Issue #357 - Wrapped blocking SQLite operations with asyncio.to_thread() for non-blocking I/O
 """
 
 import asyncio
@@ -171,6 +172,174 @@ async def check_rate_limit() -> bool:
 
         query_counter["count"] += 1
         return True
+
+
+def _execute_sqlite_query_sync(
+    db_path: Path, query: str, params: list | None, limit: int
+) -> tuple[list, list]:
+    """Execute SQLite SELECT query synchronously (Issue #357: for use with asyncio.to_thread)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Apply LIMIT if not already in query
+        query_str = query.strip()
+        if "LIMIT" not in query_str.upper():
+            query_str = f"{query_str} LIMIT {limit}"
+
+        # Execute with parameters
+        if params:
+            cursor.execute(query_str, params)
+        else:
+            cursor.execute(query_str)
+
+        # Fetch results
+        rows = cursor.fetchmany(limit)
+        columns = [description[0] for description in cursor.description]
+
+        # Convert to list of dicts
+        results = [dict(zip(columns, row)) for row in rows]
+
+        return results, columns
+    finally:
+        if conn:
+            conn.close()
+
+
+def _execute_sqlite_statement_sync(
+    db_path: Path, statement: str, params: list | None
+) -> int:
+    """Execute SQLite DML statement synchronously (Issue #357: for use with asyncio.to_thread)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        if params:
+            cursor.execute(statement, params)
+        else:
+            cursor.execute(statement)
+
+        rows_affected = cursor.rowcount
+        conn.commit()
+
+        return rows_affected
+    finally:
+        if conn:
+            conn.close()
+
+
+def _list_tables_sync(db_path: Path) -> list[dict]:
+    """List tables with row counts synchronously (Issue #357: for use with asyncio.to_thread)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        tables = cursor.fetchall()
+
+        table_info = []
+        for (table_name,) in tables:
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
+            row_count = cursor.fetchone()[0]
+            table_info.append({"name": table_name, "row_count": row_count})
+
+        return table_info
+    finally:
+        if conn:
+            conn.close()
+
+
+def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
+    """Get schema info synchronously (Issue #357: for use with asyncio.to_thread)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        schemas = {}
+
+        if table:
+            cursor.execute(f"PRAGMA table_info([{table}])")
+            columns = cursor.fetchall()
+            schemas[table] = [
+                {
+                    "cid": col[0],
+                    "name": col[1],
+                    "type": col[2],
+                    "notnull": bool(col[3]),
+                    "default_value": col[4],
+                    "primary_key": bool(col[5]),
+                }
+                for col in columns
+            ]
+        else:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+            tables = cursor.fetchall()
+
+            for (table_name,) in tables:
+                cursor.execute(f"PRAGMA table_info([{table_name}])")
+                columns = cursor.fetchall()
+                schemas[table_name] = [
+                    {
+                        "cid": col[0],
+                        "name": col[1],
+                        "type": col[2],
+                        "notnull": bool(col[3]),
+                        "default_value": col[4],
+                        "primary_key": bool(col[5]),
+                    }
+                    for col in columns
+                ]
+
+        return schemas
+    finally:
+        if conn:
+            conn.close()
+
+
+def _get_db_statistics_sync(db_path: Path) -> dict:
+    """Get database statistics synchronously (Issue #357: for use with asyncio.to_thread)."""
+    conn = None
+    try:
+        stat_info = db_path.stat()
+        size_bytes = stat_info.st_size
+        last_modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc)
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+        table_count = cursor.fetchone()[0]
+
+        total_rows = 0
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = cursor.fetchall()
+        for (table_name,) in tables:
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
+            total_rows += cursor.fetchone()[0]
+
+        cursor.execute("SELECT sqlite_version()")
+        sqlite_version = cursor.fetchone()[0]
+
+        return {
+            "size_bytes": size_bytes,
+            "size_mb": round(size_bytes / (1024 * 1024), 2),
+            "table_count": table_count,
+            "total_rows": total_rows,
+            "last_modified": last_modified.isoformat(),
+            "sqlite_version": sqlite_version,
+        }
+    finally:
+        if conn:
+            conn.close()
 
 
 # Pydantic Models
@@ -423,6 +592,8 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     - Query pattern validation
     - Result size limits
     - Rate limiting
+
+    Issue #357: Uses asyncio.to_thread() for non-blocking database operations.
     """
     # Security checks
     if not await check_rate_limit():
@@ -442,7 +613,8 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
 
     # Get database path
     db_path = get_database_path(request.database)
-    if not db_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(db_path.exists):
         raise HTTPException(
             status_code=404, detail=f"Database file not found: {request.database}"
         )
@@ -450,30 +622,15 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     # Log the operation
     logger.info(f"Database query on {request.database}: {request.query[:100]}...")
 
-    conn = None
     try:
-        # Execute query with context manager for resource safety
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        # Apply LIMIT if not already in query
-        query = request.query.strip()
-        if "LIMIT" not in query.upper():
-            query = f"{query} LIMIT {request.limit}"
-
-        # Execute with parameters
-        if request.params:
-            cursor.execute(query, request.params)
-        else:
-            cursor.execute(query)
-
-        # Fetch results
-        rows = cursor.fetchmany(request.limit or 100)
-        columns = [description[0] for description in cursor.description]
-
-        # Convert to list of dicts
-        results = [dict(zip(columns, row)) for row in rows]
+        # Execute query in thread pool (Issue #357: non-blocking)
+        results, columns = await asyncio.to_thread(
+            _execute_sqlite_query_sync,
+            db_path,
+            request.query,
+            request.params,
+            request.limit or 100,
+        )
 
         return {
             "success": True,
@@ -488,9 +645,6 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     except sqlite3.Error as e:
         logger.error(f"SQLite error: {e}")
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
 
 
 @with_error_handling(
@@ -535,7 +689,8 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
 
     # Get database path
     db_path = get_database_path(request.database)
-    if not db_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(db_path.exists):
         raise HTTPException(
             status_code=404, detail=f"Database file not found: {request.database}"
         )
@@ -543,25 +698,16 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     # Log the operation with warning (data modification)
     logger.warning(
         f"Database EXECUTE on {request.database}: {request.statement[:100]}..."
-    ),
+    )
 
-    conn = None
     try:
-        # Execute statement with resource safety
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        # Execute with parameters
-        if request.params:
-            cursor.execute(request.statement, request.params)
-        else:
-            cursor.execute(request.statement)
-
-        # Get affected rows
-        rows_affected = cursor.rowcount
-
-        # Commit changes
-        conn.commit()
+        # Execute statement in thread pool (Issue #357: non-blocking)
+        rows_affected = await asyncio.to_thread(
+            _execute_sqlite_statement_sync,
+            db_path,
+            request.statement,
+            request.params,
+        )
 
         return {
             "success": True,
@@ -574,9 +720,6 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     except sqlite3.Error as e:
         logger.error(f"SQLite execute error: {e}")
         raise HTTPException(status_code=500, detail=f"Database execute error: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
 
 
 @with_error_handling(
@@ -604,30 +747,20 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
 
     # Get database path
     db_path = get_database_path(request.database)
-    if not db_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(db_path.exists):
         raise HTTPException(
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
     logger.info(f"Listing tables in {request.database}")
 
-    conn = None
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        # Get all tables
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        ),
-        tables = cursor.fetchall()
-
-        # Get row count for each table
-        table_info = []
-        for (table_name,) in tables:
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
-            row_count = cursor.fetchone()[0]
-            table_info.append({"name": table_name, "row_count": row_count})
+        # List tables in thread pool (Issue #357: non-blocking)
+        table_info = await asyncio.to_thread(
+            _list_tables_sync,
+            db_path,
+        )
 
         return {
             "success": True,
@@ -640,9 +773,6 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     except sqlite3.Error as e:
         logger.error(f"SQLite error listing tables: {e}")
         raise HTTPException(status_code=500, detail=f"Error listing tables: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
 
 
 @with_error_handling(
@@ -670,56 +800,21 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
 
     # Get database path
     db_path = get_database_path(request.database)
-    if not db_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(db_path.exists):
         raise HTTPException(
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
     logger.info(f"Describing schema for {request.database}")
 
-    conn = None
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        schemas = {}
-
-        if request.table:
-            # Single table
-            cursor.execute(f"PRAGMA table_info([{request.table}])")
-            columns = cursor.fetchall()
-            schemas[request.table] = [
-                {
-                    "cid": col[0],
-                    "name": col[1],
-                    "type": col[2],
-                    "notnull": bool(col[3]),
-                    "default_value": col[4],
-                    "primary_key": bool(col[5]),
-                }
-                for col in columns
-            ]
-        else:
-            # All tables
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            ),
-            tables = cursor.fetchall()
-
-            for (table_name,) in tables:
-                cursor.execute(f"PRAGMA table_info([{table_name}])")
-                columns = cursor.fetchall()
-                schemas[table_name] = [
-                    {
-                        "cid": col[0],
-                        "name": col[1],
-                        "type": col[2],
-                        "notnull": bool(col[3]),
-                        "default_value": col[4],
-                        "primary_key": bool(col[5]),
-                    }
-                    for col in columns
-                ]
+        # Describe schema in thread pool (Issue #357: non-blocking)
+        schemas = await asyncio.to_thread(
+            _describe_schema_sync,
+            db_path,
+            request.table,
+        )
 
         return {
             "success": True,
@@ -734,9 +829,6 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
         raise HTTPException(
             status_code=500, detail=f"Error describing schema: {str(e)}"
         )
-    finally:
-        if conn:
-            conn.close()
 
 
 @with_error_handling(
@@ -762,8 +854,9 @@ async def database_list_databases_mcp() -> Metadata:
     databases = []
     for db_name, db_config in DATABASE_WHITELIST.items():
         db_path = Path(db_config["path"])
-        exists = db_path.exists()
-        size_bytes = db_path.stat().st_size if exists else 0
+        # Issue #358 - avoid blocking
+        exists = await asyncio.to_thread(db_path.exists)
+        size_bytes = (await asyncio.to_thread(db_path.stat)).st_size if exists else 0
 
         databases.append(
             {
@@ -809,52 +902,28 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
 
     # Get database path
     db_path = get_database_path(request.database)
-    if not db_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(db_path.exists):
         raise HTTPException(
             status_code=404, detail=f"Database file not found: {request.database}"
         )
 
     logger.info(f"Getting statistics for {request.database}")
 
-    conn = None
     try:
-        # File statistics
-        stat_info = db_path.stat()
-        size_bytes = stat_info.st_size
-        last_modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc)
+        # Get statistics in thread pool (Issue #357: non-blocking)
+        stats = await asyncio.to_thread(
+            _get_db_statistics_sync,
+            db_path,
+        )
 
-        # Database statistics
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
-        # Table count
-        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-        table_count = cursor.fetchone()[0]
-
-        # Total rows across all tables
-        total_rows = 0
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = cursor.fetchall()
-        for (table_name,) in tables:
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
-            total_rows += cursor.fetchone()[0]
-
-        # SQLite version
-        cursor.execute("SELECT sqlite_version()")
-        sqlite_version = cursor.fetchone()[0]
+        # Add read_only flag to stats
+        stats["read_only"] = is_database_read_only(request.database)
 
         return {
             "success": True,
             "database": request.database,
-            "statistics": {
-                "size_bytes": size_bytes,
-                "size_mb": round(size_bytes / (1024 * 1024), 2),
-                "table_count": table_count,
-                "total_rows": total_rows,
-                "last_modified": last_modified.isoformat(),
-                "sqlite_version": sqlite_version,
-                "read_only": is_database_read_only(request.database),
-            },
+            "statistics": stats,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -863,9 +932,6 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
         raise HTTPException(
             status_code=500, detail=f"Error getting statistics: {str(e)}"
         )
-    finally:
-        if conn:
-            conn.close()
 
 
 @with_error_handling(
@@ -899,8 +965,10 @@ async def get_database_mcp_status() -> Metadata:
     db_status = {}
     for db_name, db_config in DATABASE_WHITELIST.items():
         db_path = Path(db_config["path"])
+        # Issue #358 - avoid blocking
+        db_exists = await asyncio.to_thread(db_path.exists)
         db_status[db_name] = {
-            "available": db_path.exists(),
+            "available": db_exists,
             "read_only": db_config["read_only"],
         }
 

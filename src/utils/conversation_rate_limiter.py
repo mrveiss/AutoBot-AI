@@ -34,6 +34,7 @@ class PayloadSizeTracker:
     """Tracks payload sizes and provides optimization recommendations"""
 
     def __init__(self, max_safe_size: int = 30000, warning_size: int = 20000):
+        """Initialize payload tracker with size thresholds and history buffer."""
         self.max_safe_size = max_safe_size
         self.warning_size = warning_size
         self.size_history = deque(maxlen=50)
@@ -98,7 +99,7 @@ class ConversationRateLimiter:
         max_payload_size: int = 30000,
         warning_payload_size: int = 20000,
     ):
-
+        """Initialize rate limiter with request limits and payload thresholds."""
         self.requests_per_minute = requests_per_minute
         self.requests_per_hour = requests_per_hour
         self.max_payload_size = max_payload_size

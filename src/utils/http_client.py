@@ -29,6 +29,7 @@ class HTTPClientManager:
     _lock = asyncio.Lock()
 
     def __new__(cls):
+        """Create or return singleton HTTPClientManager instance."""
         if cls._instance is None:
             cls._instance = super(HTTPClientManager, cls).__new__(cls)
         return cls._instance
@@ -393,6 +394,7 @@ def with_http_client(func):
     """Decorator to inject HTTP client into async functions."""
 
     async def wrapper(*args, **kwargs):
+        """Async wrapper that injects HTTP client into decorated function."""
         http_client = get_http_client()
         return await func(*args, http_client=http_client, **kwargs)
 

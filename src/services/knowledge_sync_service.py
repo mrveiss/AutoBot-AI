@@ -43,6 +43,7 @@ class KnowledgeSyncService:
     """
 
     def __init__(self):
+        """Initialize knowledge sync service with sync state and configuration."""
         self.incremental_sync = None
         self.rag_optimizer = None
 

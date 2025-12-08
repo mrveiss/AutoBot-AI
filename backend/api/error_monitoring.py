@@ -8,6 +8,7 @@ Error Monitoring API
 Provides endpoints for monitoring system errors and error boundary statistics.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -74,15 +75,19 @@ async def get_recent_errors(limit: int = 20):
 
         manager = get_error_boundary_manager()
 
-        # Get recent errors from Redis
-        pattern = "autobot:errors:*"
-        error_keys = manager.redis_client.keys(pattern)
+        # Issue #361 - avoid blocking - fetch errors in thread pool
+        def _fetch_recent_errors():
+            pattern = "autobot:errors:*"
+            error_keys = manager.redis_client.keys(pattern)
 
-        recent_errors = []
-        for key in error_keys[-limit:]:  # Get latest errors
-            error_data = manager.redis_client.get(key)
-            if error_data:
-                recent_errors.append(json.loads(error_data))
+            recent_errors = []
+            for key in error_keys[-limit:]:  # Get latest errors
+                error_data = manager.redis_client.get(key)
+                if error_data:
+                    recent_errors.append(json.loads(error_data))
+            return recent_errors
+
+        recent_errors = await asyncio.to_thread(_fetch_recent_errors)
 
         # Sort by timestamp (most recent first)
         recent_errors.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
@@ -164,6 +169,23 @@ async def get_error_by_component():
         )
 
 
+def _calculate_health_status(
+    critical_errors: int, high_errors: int, total_errors: int
+) -> tuple:
+    """Calculate health status and score from error counts. (Issue #315 - extracted)"""
+    # Check thresholds in priority order (Issue #315 - replaces chained if/elif)
+    thresholds = [
+        (critical_errors > 0, "critical", 0),
+        (high_errors > 5, "degraded", 30),
+        (total_errors > 20, "warning", 70),
+        (total_errors > 0, "healthy", 90),
+    ]
+    for condition, status_val, score in thresholds:
+        if condition:
+            return status_val, score
+    return "excellent", 100
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_error_system_health",
@@ -177,25 +199,13 @@ async def get_error_system_health():
         total_errors = stats.get("total_errors", 0)
         severities = stats.get("severities", {})
 
-        # Determine health status based on error counts
         critical_errors = severities.get("critical", 0)
         high_errors = severities.get("high", 0)
 
-        if critical_errors > 0:
-            health_status = "critical"
-            health_score = 0
-        elif high_errors > 5:
-            health_status = "degraded"
-            health_score = 30
-        elif total_errors > 20:
-            health_status = "warning"
-            health_score = 70
-        elif total_errors > 0:
-            health_status = "healthy"
-            health_score = 90
-        else:
-            health_status = "excellent"
-            health_score = 100
+        # Use extracted helper (Issue #315 - reduced depth)
+        health_status, health_score = _calculate_health_status(
+            critical_errors, high_errors, total_errors
+        )
 
         return {
             "status": "success",
@@ -232,19 +242,22 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
 
         manager = get_error_boundary_manager()
 
-        # Clear Redis error keys
-        pattern = "autobot:errors:*"
-        error_keys = manager.redis_client.keys(pattern)
+        # Issue #361 - avoid blocking - clear Redis errors in thread pool
+        def _clear_redis_errors():
+            pattern = "autobot:errors:*"
+            error_keys = manager.redis_client.keys(pattern)
+            if error_keys:
+                manager.redis_client.delete(*error_keys)
+            return len(error_keys) if error_keys else 0
 
-        if error_keys:
-            manager.redis_client.delete(*error_keys)
+        cleared_count = await asyncio.to_thread(_clear_redis_errors)
 
         # Clear in-memory errors
         manager.error_reports.clear()
 
         return {
             "status": "success",
-            "message": f"Cleared {len(error_keys)} error records",
+            "message": f"Cleared {cleared_count} error records",
         }
     except HTTPException:
         raise

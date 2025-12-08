@@ -6,6 +6,7 @@ Import tree visualization endpoints
 """
 
 import ast
+import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -134,7 +135,8 @@ async def get_import_tree():
     (Issue #315 - refactored to reduce nesting)
     """
     project_root = get_project_root()
-    python_files = list(project_root.rglob("*.py"))
+    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
+    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
 
     # Filter out unwanted directories
     excluded_dirs = {

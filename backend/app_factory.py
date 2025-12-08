@@ -31,6 +31,7 @@ class AppFactory:
     """Application factory for creating FastAPI instances with comprehensive configuration"""
 
     def __init__(self):
+        """Initialize app factory with logger instance."""
         self.logger = logging.getLogger(__name__)
 
     @staticmethod

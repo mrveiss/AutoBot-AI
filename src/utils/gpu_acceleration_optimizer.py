@@ -82,6 +82,7 @@ class GPUAccelerationOptimizer:
     """
 
     def __init__(self):
+        """Initialize GPU optimizer with config, history, and capabilities."""
         self.logger = logging.getLogger(__name__)
         self.config = GPUOptimizationConfig()
         self.optimization_history = []

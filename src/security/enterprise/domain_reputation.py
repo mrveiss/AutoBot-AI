@@ -33,6 +33,7 @@ class DomainReputationService:
             PATH.get_config_path("security", "domain_security.yaml")
         ),
     ):
+        """Initialize domain reputation service with config, caches, and threat feeds."""
         self.config_path = config_path
         self.config = self._load_config()
 
@@ -101,15 +102,38 @@ class DomainReputationService:
             # Schedule initial feed update
             asyncio.create_task(self._update_threat_feed(feed_name))
 
+    def _parse_text_feed(self, content: str) -> set:
+        """Parse text format threat feed (Issue #315 - extracted helper)."""
+        return set(
+            line.strip()
+            for line in content.split("\n")
+            if line.strip() and not line.startswith("#")
+        )
+
+    def _parse_feed_content(self, content: str, feed_format: str) -> Optional[set]:
+        """Parse feed content based on format (Issue #315 - extracted helper)."""
+        format_parsers = {
+            "text": self._parse_text_feed,
+            "csv": self._parse_csv_feed,
+        }
+        parser = format_parsers.get(feed_format)
+        if parser:
+            return parser(content)
+        logger.warning(f"Unknown feed format: {feed_format}")
+        return None
+
+    def _should_update_feed(self, feed_info: dict, config: dict) -> bool:
+        """Check if feed update is needed (Issue #315 - extracted helper)."""
+        update_interval = config.get("update_interval", 3600)
+        return time.time() - feed_info["last_update"] >= update_interval
+
     async def _update_threat_feed(self, feed_name: str):
-        """Update a threat intelligence feed"""
+        """Update a threat intelligence feed (Issue #315 - refactored)."""
         try:
             feed_info = self.threat_feeds[feed_name]
             config = feed_info["config"]
 
-            # Check if update is needed
-            update_interval = config.get("update_interval", 3600)
-            if time.time() - feed_info["last_update"] < update_interval:
+            if not self._should_update_feed(feed_info, config):
                 return
 
             logger.info(f"Updating threat feed: {feed_name}")
@@ -117,31 +141,17 @@ class DomainReputationService:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 10))
             async with await http_client.get(config["url"], timeout=timeout) as response:
-                if response.status == 200:
-                    content = await response.text()
+                if response.status != 200:
+                    logger.error(f"Failed to update {feed_name}: HTTP {response.status}")
+                    return
 
-                    # Parse based on format
-                    if config["format"] == "text":
-                        domains = set(
-                            line.strip()
-                            for line in content.split("\n")
-                            if line.strip() and not line.startswith("#")
-                        )
-                    elif config["format"] == "csv":
-                        # Parse CSV format (implement based on specific feed structure)
-                        domains = self._parse_csv_feed(content)
-                    else:
-                        logger.warning(f"Unknown feed format: {config['format']}")
-                        return
+                content = await response.text()
+                domains = self._parse_feed_content(content, config["format"])
 
+                if domains is not None:
                     feed_info["data"] = domains
                     feed_info["last_update"] = time.time()
-
                     logger.info(f"Updated {feed_name}: {len(domains)} entries")
-                else:
-                    logger.error(
-                        f"Failed to update {feed_name}: HTTP {response.status}"
-                    )
 
         except Exception as e:
             logger.error(f"Error updating threat feed {feed_name}: {e}")
@@ -494,6 +504,7 @@ class DomainReputationService:
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def check_single(domain):
+            """Check single domain with semaphore-controlled concurrency."""
             async with semaphore:
                 return await self.check_domain_reputation(domain, context)
 

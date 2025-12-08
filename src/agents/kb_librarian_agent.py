@@ -23,6 +23,7 @@ class KBLibrarianAgent:
     """A librarian agent that searches knowledge base for relevant information."""
 
     def __init__(self):
+        """Initialize KB librarian agent with knowledge base and auto-learning config."""
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
         self.auto_learning_enabled = config.get(
@@ -134,7 +135,8 @@ class KBLibrarianAgent:
         """Scan directory for documents to import (Issue #334 - extracted helper)."""
         import os
 
-        if not os.path.exists(docs_dir):
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(os.path.exists, docs_dir):
             return
 
         extensions = self._get_learning_extensions()
@@ -170,7 +172,8 @@ class KBLibrarianAgent:
         try:
             import os
 
-            if not os.path.exists(file_path):
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(os.path.exists, file_path):
                 return
 
             # CRITICAL FIX: Use asyncio.to_thread to prevent blocking the event loop
@@ -178,6 +181,7 @@ class KBLibrarianAgent:
                 """Read file content asynchronously."""
 
                 def _sync_read():
+                    """Synchronously read file content with UTF-8 encoding."""
                     with open(path, "r", encoding="utf-8") as f:
                         return f.read()
 

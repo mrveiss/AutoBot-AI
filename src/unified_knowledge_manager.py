@@ -463,10 +463,13 @@ class UnifiedKnowledgeManager:
         # List machine profiles from disk
         if hasattr(self._system_manager, "machine_profiles_dir"):
             profiles_dir: Path = self._system_manager.machine_profiles_dir
-            if profiles_dir.exists():
-                return [
-                    f.stem for f in profiles_dir.glob("*.json")
-                ]  # machine_id.json -> machine_id
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(profiles_dir.exists):
+                # Issue #358 - wrap glob in sync helper
+                def _list_profiles():
+                    return [f.stem for f in profiles_dir.glob("*.json")]
+
+                return await asyncio.to_thread(_list_profiles)
 
         return []
 
@@ -851,8 +854,11 @@ class UnifiedKnowledgeManager:
 
                     # Calculate content hash
                     file_full_path = Path(file_path)
-                    if file_full_path.exists():
-                        content = file_full_path.read_text(encoding="utf-8")
+                    # Issue #358 - avoid blocking
+                    if await asyncio.to_thread(file_full_path.exists):
+                        content = await asyncio.to_thread(
+                            file_full_path.read_text, encoding="utf-8"
+                        )
                         content_hash = hashlib.md5(content.encode()).hexdigest()
 
                         # Register with temporal tracking
@@ -1028,8 +1034,11 @@ class UnifiedKnowledgeManager:
                     for content_id, meta in self._temporal_manager.temporal_metadata.items()
                 }
 
-                temporal_backup_path.write_text(
-                    json.dumps(temporal_data, indent=2), encoding="utf-8"
+                # Issue #358 - avoid blocking
+                await asyncio.to_thread(
+                    temporal_backup_path.write_text,
+                    json.dumps(temporal_data, indent=2),
+                    encoding="utf-8",
                 )
                 backup_info["components"]["temporal_metadata"] = str(
                     temporal_backup_path

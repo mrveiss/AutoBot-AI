@@ -23,6 +23,7 @@ class IntentAnalyzer:
     """Analyzes user intent using AI and fallback heuristics"""
 
     def __init__(self, llm_interface: LLMInterface = None):
+        """Initialize intent analyzer with optional LLM interface."""
         self.llm_interface = llm_interface or LLMInterface()
 
     async def analyze_user_intent(self, user_request: str) -> Metadata:

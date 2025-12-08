@@ -56,7 +56,8 @@ class ConnectionTester:
             redis_status = "disconnected"
             try:
                 if redis_client:
-                    redis_client.ping()
+                    # Issue #361 - avoid blocking
+                    await asyncio.to_thread(redis_client.ping)
                     redis_status = "connected"
             except Exception as e:
                 logger.debug(f"Redis health check failed: {e}")

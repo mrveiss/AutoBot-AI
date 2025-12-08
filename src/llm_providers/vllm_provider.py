@@ -235,6 +235,7 @@ class VLLMModelManager:
     """
 
     def __init__(self):
+        """Initialize vLLM model manager with empty model registry."""
         self.models: Dict[str, VLLMProvider] = {}
         self.model_configs: Dict[str, Dict[str, Any]] = {}
 

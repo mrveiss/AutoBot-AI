@@ -28,6 +28,51 @@ import paramiko
 logger = logging.getLogger(__name__)
 
 
+async def _check_and_update_conn_health(
+    conn: "SSHConnection",
+    pool_key: str,
+    health_check_interval: int,
+    check_health_fn,
+) -> None:
+    """Check connection health and update state if unhealthy (Issue #315: extracted).
+
+    Args:
+        conn: SSH connection to check
+        pool_key: Pool key for logging
+        health_check_interval: Interval for health checks
+        check_health_fn: Async function to check connection health
+    """
+    if conn.state not in {ConnectionState.IDLE, ConnectionState.ACTIVE}:
+        return
+    if not conn.needs_health_check(health_check_interval):
+        return
+    if not await check_health_fn(conn):
+        conn.state = ConnectionState.UNHEALTHY
+        logger.warning(f"Connection to {pool_key} marked unhealthy")
+
+
+def _should_remove_connection(
+    conn: "SSHConnection", idle_timeout: int
+) -> tuple:
+    """Check if connection should be removed and get reason (Issue #315: extracted).
+
+    Args:
+        conn: SSH connection to check
+        idle_timeout: Idle timeout threshold in seconds
+
+    Returns:
+        Tuple of (should_remove: bool, reason: str or None)
+    """
+    if conn.state == ConnectionState.UNHEALTHY:
+        return True, "unhealthy"
+
+    if conn.state == ConnectionState.IDLE and conn.is_idle_timeout(idle_timeout):
+        idle_seconds = (datetime.now() - conn.last_used).total_seconds()
+        return True, f"idle_timeout ({idle_seconds:.0f}s)"
+
+    return False, None
+
+
 class ConnectionState(Enum):
     """SSH connection states"""
 
@@ -303,8 +348,10 @@ class SSHConnectionPool:
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
                 # Load private key
-                key_path_expanded = os.path.expanduser(key_path)
-                if not os.path.exists(key_path_expanded):
+                # Issue #358 - avoid blocking
+                key_path_expanded = await asyncio.to_thread(os.path.expanduser, key_path)
+                key_exists = await asyncio.to_thread(os.path.exists, key_path_expanded)
+                if not key_exists:
                     raise FileNotFoundError(f"SSH key not found: {key_path_expanded}")
 
                 private_key = paramiko.RSAKey.from_private_key_file(
@@ -403,41 +450,31 @@ class SSHConnectionPool:
         logger.info("Health check loop stopped")
 
     async def _perform_health_checks(self):
-        """Perform health checks on all connections"""
+        """Perform health checks on all connections (Issue #315: uses helper)."""
         async with self._lock:
             for pool_key, pool in self.pools.items():
                 for conn in pool:
-                    if conn.state in {ConnectionState.IDLE, ConnectionState.ACTIVE}:
-                        if conn.needs_health_check(self.health_check_interval):
-                            if not await self._check_connection_health(conn):
-                                conn.state = ConnectionState.UNHEALTHY
-                                logger.warning(
-                                    f"Connection to {pool_key} marked unhealthy"
-                                )
+                    await _check_and_update_conn_health(
+                        conn,
+                        pool_key,
+                        self.health_check_interval,
+                        self._check_connection_health,
+                    )
 
     async def _cleanup_idle_connections(self):
-        """Clean up idle and unhealthy connections"""
+        """Clean up idle and unhealthy connections (Issue #315: uses helper)."""
         async with self._lock:
             for pool_key, pool in self.pools.items():
                 connections_to_remove = []
 
                 for conn in pool:
-                    # Remove unhealthy connections
-                    if conn.state == ConnectionState.UNHEALTHY:
+                    should_remove, reason = _should_remove_connection(
+                        conn, self.idle_timeout
+                    )
+                    if should_remove:
                         self._close_connection(conn)
                         connections_to_remove.append(conn)
-                        logger.info(f"Removed unhealthy connection to {pool_key}")
-
-                    # Remove idle timeout connections
-                    elif conn.state == ConnectionState.IDLE and conn.is_idle_timeout(
-                        self.idle_timeout
-                    ):
-                        self._close_connection(conn)
-                        connections_to_remove.append(conn)
-                        logger.info(
-                            f"Removed idle timeout connection to {pool_key} "
-                            f"(idle for {(datetime.now() - conn.last_used).total_seconds()}s)"
-                        )
+                        logger.info(f"Removed {reason} connection to {pool_key}")
 
                 # Remove from pool
                 for conn in connections_to_remove:

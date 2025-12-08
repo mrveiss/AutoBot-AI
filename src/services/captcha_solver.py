@@ -229,6 +229,54 @@ class CaptchaSolver:
 
         return CaptchaType.TEXT
 
+    def _get_tesseract_config(self, char_set: Optional[str]) -> str:
+        """Get Tesseract config based on character set (Issue #315: extracted helper)."""
+        config = "--psm 7 --oem 3"  # Single line of text
+        if char_set == self.NUMERIC_ONLY:
+            config += " -c tessedit_char_whitelist=0123456789"
+        elif char_set == self.ALPHA_ONLY:
+            config += " -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        elif char_set == self.ALPHANUMERIC:
+            config += " -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return config
+
+    def _process_ocr_result(
+        self, image, config: str, char_set: Optional[str], expected_length: Optional[int]
+    ) -> tuple:
+        """Process single OCR attempt (Issue #315: extracted helper).
+
+        Returns:
+            Tuple of (text, confidence) or (None, 0) on failure
+        """
+        import pytesseract
+
+        try:
+            data = pytesseract.image_to_data(
+                image, config=config, output_type=pytesseract.Output.DICT
+            )
+
+            texts = []
+            confidences = []
+            for i, conf in enumerate(data["conf"]):
+                if int(conf) > 0:
+                    texts.append(data["text"][i])
+                    confidences.append(int(conf))
+
+            if not texts:
+                return None, 0.0
+
+            text = "".join(texts).strip().upper()
+            avg_confidence = sum(confidences) / len(confidences) / 100
+            text = self._clean_ocr_result(text, char_set)
+
+            if expected_length and len(text) != expected_length:
+                return None, 0.0
+
+            return text, avg_confidence
+        except Exception as e:
+            logger.debug(f"OCR attempt failed: {e}")
+            return None, 0.0
+
     async def _solve_text_captcha(
         self,
         image: Image.Image,
@@ -254,57 +302,21 @@ class CaptchaSolver:
                 requires_human=True,
             )
 
-        import pytesseract
-
         # Preprocess image for better OCR
         processed_images = await self._preprocess_for_ocr(image)
+        config = self._get_tesseract_config(char_set)
 
         best_result = None
         best_confidence = 0.0
 
+        # Process each image variant (Issue #315: reduced nesting)
         for processed_image in processed_images:
-            try:
-                # Configure Tesseract for CAPTCHA text
-                config = "--psm 7 --oem 3"  # Single line of text
-
-                if char_set == self.NUMERIC_ONLY:
-                    config += " -c tessedit_char_whitelist=0123456789"
-                elif char_set == self.ALPHA_ONLY:
-                    config += " -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                elif char_set == self.ALPHANUMERIC:
-                    config += " -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-                # Get OCR result with confidence
-                data = pytesseract.image_to_data(
-                    processed_image, config=config, output_type=pytesseract.Output.DICT
-                )
-
-                # Extract text and confidence
-                texts = []
-                confidences = []
-                for i, conf in enumerate(data["conf"]):
-                    if int(conf) > 0:
-                        texts.append(data["text"][i])
-                        confidences.append(int(conf))
-
-                if texts:
-                    text = "".join(texts).strip().upper()
-                    avg_confidence = sum(confidences) / len(confidences) / 100
-
-                    # Clean up the result
-                    text = self._clean_ocr_result(text, char_set)
-
-                    # Validate length if specified
-                    if expected_length and len(text) != expected_length:
-                        continue
-
-                    if avg_confidence > best_confidence:
-                        best_confidence = avg_confidence
-                        best_result = text
-
-            except Exception as e:
-                logger.debug(f"OCR attempt failed: {e}")
-                continue
+            text, confidence = self._process_ocr_result(
+                processed_image, config, char_set, expected_length
+            )
+            if text and confidence > best_confidence:
+                best_confidence = confidence
+                best_result = text
 
         if best_result and best_confidence >= self.MIN_CONFIDENCE_THRESHOLD:
             confidence_level = (

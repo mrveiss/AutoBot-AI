@@ -413,7 +413,7 @@ class EnhancedMultiAgentOrchestrator:
 
             # Wait for any task to complete
             if running_tasks:
-                done, pending = await asyncio.wait(
+                done, _ = await asyncio.wait(  # Issue #382: pending unused
                     [future for _, future in running_tasks],
                     return_when=asyncio.FIRST_COMPLETED,
                 )
@@ -491,69 +491,83 @@ class EnhancedMultiAgentOrchestrator:
 
         return results
 
+    def _adapt_strategy(
+        self, progress_ratio: float, failure_ratio: float, current: ExecutionStrategy
+    ) -> ExecutionStrategy:
+        """Adapt execution strategy based on progress metrics (Issue #315 - extracted helper)."""
+        if failure_ratio > 0.3:
+            self.logger.info("Adapting to SEQUENTIAL due to high failure rate")
+            return ExecutionStrategy.SEQUENTIAL
+
+        if progress_ratio > 0.7 and failure_ratio < 0.1:
+            self.logger.info("Adapting to PARALLEL due to good progress")
+            return ExecutionStrategy.PARALLEL
+
+        return current
+
+    async def _execute_parallel_batch(
+        self, pending_tasks: list, results: Dict[str, Any]
+    ) -> tuple[int, int]:
+        """Execute tasks in parallel batch (Issue #315 - extracted helper)."""
+        batch_size = min(self.max_parallel_tasks, len(pending_tasks))
+        batch_tasks = pending_tasks[:batch_size]
+
+        batch_results = await asyncio.gather(
+            *[
+                self._execute_single_task(task, results)
+                for task in batch_tasks
+                if self._dependencies_met(task, results)
+            ]
+        )
+
+        completed, failed = 0, 0
+        for task, result in zip(batch_tasks, batch_results):
+            results[task.task_id] = result
+            pending_tasks.remove(task)
+            if result.get("status") == "completed":
+                completed += 1
+            else:
+                failed += 1
+
+        return completed, failed
+
+    async def _execute_sequential_step(
+        self, pending_tasks: list, results: Dict[str, Any]
+    ) -> tuple[int, int]:
+        """Execute one sequential task step (Issue #315 - extracted helper)."""
+        for task in pending_tasks[:]:
+            if not self._dependencies_met(task, results):
+                continue
+
+            result = await self._execute_single_task(task, results)
+            results[task.task_id] = result
+            pending_tasks.remove(task)
+
+            if result.get("status") == "completed":
+                return 1, 0
+            return 0, 1
+
+        return 0, 0
+
     async def _execute_adaptive(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute with adaptive strategy that changes based on progress"""
+        """Execute with adaptive strategy (Issue #315 - refactored depth 5 to 2)."""
         results = {}
-
-        # Start with initial strategy
         current_strategy = plan.strategy
-
-        # Monitor progress and adapt
-        completed_tasks = 0
-        failed_tasks = 0
-
+        completed_tasks, failed_tasks = 0, 0
         pending_tasks = list(plan.tasks)
 
         while pending_tasks:
-            # Analyze current state
             progress_ratio = completed_tasks / len(plan.tasks)
             failure_ratio = failed_tasks / max(completed_tasks, 1)
+            current_strategy = self._adapt_strategy(progress_ratio, failure_ratio, current_strategy)
 
-            # Adapt strategy based on progress
-            if failure_ratio > 0.3:
-                # Too many failures, switch to sequential for debugging
-                current_strategy = ExecutionStrategy.SEQUENTIAL
-                self.logger.info("Adapting to SEQUENTIAL due to high failure rate")
-            elif progress_ratio > 0.7 and failure_ratio < 0.1:
-                # Good progress, low failures, maximize parallelism
-                current_strategy = ExecutionStrategy.PARALLEL
-                self.logger.info("Adapting to PARALLEL due to good progress")
-
-            # Execute next batch with current strategy
             if current_strategy == ExecutionStrategy.PARALLEL:
-                # Execute multiple tasks
-                batch_size = min(self.max_parallel_tasks, len(pending_tasks))
-                batch_tasks = pending_tasks[:batch_size]
-
-                batch_results = await asyncio.gather(
-                    *[
-                        self._execute_single_task(task, results)
-                        for task in batch_tasks
-                        if self._dependencies_met(task, results)
-                    ]
-                )
-
-                for task, result in zip(batch_tasks, batch_results):
-                    results[task.task_id] = result
-                    pending_tasks.remove(task)
-
-                    if result.get("status") == "completed":
-                        completed_tasks += 1
-                    else:
-                        failed_tasks += 1
+                c, f = await self._execute_parallel_batch(pending_tasks, results)
             else:
-                # Sequential execution
-                for task in pending_tasks[:]:
-                    if self._dependencies_met(task, results):
-                        result = await self._execute_single_task(task, results)
-                        results[task.task_id] = result
-                        pending_tasks.remove(task)
+                c, f = await self._execute_sequential_step(pending_tasks, results)
 
-                        if result.get("status") == "completed":
-                            completed_tasks += 1
-                        else:
-                            failed_tasks += 1
-                        break
+            completed_tasks += c
+            failed_tasks += f
 
         return results
 
@@ -862,37 +876,39 @@ class EnhancedMultiAgentOrchestrator:
         task.metadata["enable_sharing"] = True
         return task
 
+    async def _process_collaboration_message(
+        self, data: Dict[str, Any], shared_context: Dict[str, Any], collab_channel: str
+    ) -> None:
+        """Process a single collaboration message (Issue #315 - extracted helper)."""
+        if data.get("type") != "share_insight":
+            return
+
+        agent = data.get("agent")
+        insight = data.get("insight")
+        shared_context[f"{agent}_insight"] = insight
+
+        # Broadcast to other agents
+        await self._broadcast_to_agents(
+            collab_channel,
+            {"type": "context_update", "shared_context": shared_context},
+        )
+
     async def _coordinate_collaboration(self, plan: WorkflowPlan, collab_channel: str):
-        """Coordinate inter-agent collaboration"""
+        """Coordinate inter-agent collaboration (Issue #315 - refactored depth 5 to 3)."""
         try:
-            # Monitor collaboration channel
             pubsub = self.redis_async.pubsub()
             await pubsub.subscribe(collab_channel)
-
             shared_context = {}
 
             async for message in pubsub.listen():
-                if message["type"] == "message":
-                    try:
-                        data = json.loads(message["data"])
+                if message["type"] != "message":
+                    continue
 
-                        # Update shared context
-                        if data.get("type") == "share_insight":
-                            agent = data.get("agent")
-                            insight = data.get("insight")
-                            shared_context[f"{agent}_insight"] = insight
-
-                            # Broadcast to other agents
-                            await self._broadcast_to_agents(
-                                collab_channel,
-                                {
-                                    "type": "context_update",
-                                    "shared_context": shared_context,
-                                },
-                            )
-
-                    except Exception as e:
-                        self.logger.error(f"Collaboration coordination error: {e}")
+                try:
+                    data = json.loads(message["data"])
+                    await self._process_collaboration_message(data, shared_context, collab_channel)
+                except Exception as e:
+                    self.logger.error(f"Collaboration coordination error: {e}")
 
         except asyncio.CancelledError:
             await pubsub.unsubscribe(collab_channel)
@@ -1044,6 +1060,7 @@ class EnhancedMultiAgentOrchestrator:
         # For now, return a mock that processes requests
         class MockAgent:
             async def process_request(self, request):
+                """Process agent request and return simulated result."""
                 await asyncio.sleep(0.5)  # Simulate work
                 return {"result": f"Processed by {agent_type}"}
 

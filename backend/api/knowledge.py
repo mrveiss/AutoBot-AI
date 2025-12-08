@@ -37,6 +37,64 @@ CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute wi
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
 
+
+def _get_fact_source(fact: dict) -> str:
+    """Extract source identifier from fact for categorization (Issue #315: extracted).
+
+    Args:
+        fact: Fact dictionary with metadata
+
+    Returns:
+        Source string for category lookup
+    """
+    source = fact.get("metadata", {}).get("source", "") or fact.get("source", "")
+    if not source:
+        # Try filename or title as fallback
+        source = fact.get("metadata", {}).get("filename", "") or fact.get("title", "")
+    return source
+
+
+async def _compute_category_counts(
+    all_facts: list, get_category_for_source, category_counts: dict
+) -> None:
+    """Compute category counts from facts (Issue #315: extracted).
+
+    Args:
+        all_facts: List of fact dictionaries
+        get_category_for_source: Function to map source to category
+        category_counts: Dict to update with counts (mutated in place)
+    """
+    for fact in all_facts:
+        source = _get_fact_source(fact)
+        main_category = get_category_for_source(source)
+        if main_category in category_counts:
+            category_counts[main_category] += 1
+
+
+def _parse_man_page_fact(fact_json: bytes) -> tuple:
+    """Parse a man page fact and extract counts (Issue #315: extracted).
+
+    Args:
+        fact_json: JSON bytes of fact data
+
+    Returns:
+        Tuple of (is_man_page, is_system_command, created_at) or (False, False, None) on error
+    """
+    try:
+        fact = json.loads(fact_json)
+        metadata = fact.get("metadata", {})
+        fact_type = metadata.get("type")
+
+        is_man_page = fact_type == "manual_page"
+        is_system_command = fact_type == "system_command"
+        created_at = metadata.get("created_at")
+
+        return is_man_page, is_system_command, created_at
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        logger.warning(f"Error parsing fact metadata: {e}")
+        return False, False, None
+
+
 router = APIRouter()
 
 # Import vectorization router (extracted from this file - Issue #185)
@@ -206,31 +264,14 @@ async def get_main_categories(req: Request):
                     category_counts[cat_id] = int(cached_values[i])
                 logger.debug(f"Using cached category counts: {category_counts}")
             else:
-                # Cache miss - compute counts the slow way
+                # Cache miss - compute counts the slow way using helper (Issue #315)
                 logger.info("Cache miss - computing category counts from all facts")
-
-                # Get all facts from knowledge base
                 all_facts = await kb_to_use.get_all_facts()
-
                 logger.info(f"Categorizing {len(all_facts)} facts into main categories")
 
-                # Categorize each fact based on its source/metadata
-                for fact in all_facts:
-                    # Get source from fact metadata
-                    source = fact.get("metadata", {}).get("source", "") or fact.get(
-                        "source", ""
-                    )
-                    if not source:
-                        # Try to get filename or title as fallback
-                        source = fact.get("metadata", {}).get(
-                            "filename", ""
-                        ) or fact.get("title", "")
-
-                    # Map to main category
-                    main_category = get_category_for_source(source)
-                    if main_category in category_counts:
-                        category_counts[main_category] += 1
-
+                await _compute_category_counts(
+                    all_facts, get_category_for_source, category_counts
+                )
                 logger.info(f"Category counts: {category_counts}")
 
                 # Cache the counts for 1 hour (expensive to compute with 5k+ facts)
@@ -690,23 +731,15 @@ async def get_man_pages_summary(req: Request):
         system_command_count = 0
         last_indexed = None
 
+        # Process facts using helper (Issue #315)
         for fact_json in all_facts_data.values():
-            try:
-                fact = json.loads(fact_json)
-                metadata = fact.get("metadata", {})
-
-                if metadata.get("type") == "manual_page":
-                    man_page_count += 1
-                elif metadata.get("type") == "system_command":
-                    system_command_count += 1
-
-                # Track most recent timestamp
-                created_at = metadata.get("created_at")
-                if created_at and (last_indexed is None or created_at > last_indexed):
-                    last_indexed = created_at
-            except (KeyError, TypeError, ValueError) as e:
-                logger.warning(f"Error parsing fact metadata: {e}")
-                continue
+            is_man_page, is_system_command, created_at = _parse_man_page_fact(fact_json)
+            if is_man_page:
+                man_page_count += 1
+            elif is_system_command:
+                system_command_count += 1
+            if created_at and (last_indexed is None or created_at > last_indexed):
+                last_indexed = created_at
 
         return {
             "status": "success",

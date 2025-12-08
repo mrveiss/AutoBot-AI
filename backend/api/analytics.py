@@ -111,12 +111,19 @@ async def get_dashboard_overview():
         realtime_metrics = {"error": str(e)}
 
     # Code analysis status
+    # Issue #358 - avoid blocking
+    code_analysis_exists = await asyncio.to_thread(
+        analytics_controller.code_analysis_path.exists
+    )
+    code_index_exists = await asyncio.to_thread(
+        analytics_controller.code_index_path.exists
+    )
     code_analysis_status = {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
         "tools_available": {
-            "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-            "code_index_mcp": analytics_controller.code_index_path.exists(),
+            "code_analysis_suite": code_analysis_exists,
+            "code_index_mcp": code_index_exists,
         },
     }
 
@@ -158,55 +165,60 @@ async def get_detailed_system_health():
         "resource_alerts": [],
     }
 
-    # Check Redis connectivity for all databases
-    for db in RedisDatabase:
+    # Issue #370: Check Redis connectivity for all databases in parallel
+    async def check_redis_db(db):
+        """Check connectivity for a single Redis database."""
         try:
             redis_conn = await analytics_controller.get_redis_connection(db)
             if redis_conn:
                 await redis_conn.ping()
-                detailed_health["analytics_health"]["redis_connectivity"][
-                    db.name
-                ] = "connected"
-            else:
-                detailed_health["analytics_health"]["redis_connectivity"][
-                    db.name
-                ] = "failed"
+                return db.name, "connected"
+            return db.name, "failed"
         except Exception as e:
-            detailed_health["analytics_health"]["redis_connectivity"][
-                db.name
-            ] = f"error: {str(e)}"
+            return db.name, f"error: {str(e)}"
 
-    # Check service connectivity
+    redis_results = await asyncio.gather(
+        *[check_redis_db(db) for db in RedisDatabase],
+        return_exceptions=True
+    )
+    for result in redis_results:
+        if isinstance(result, Exception):
+            continue
+        db_name, status = result
+        detailed_health["analytics_health"]["redis_connectivity"][db_name] = status
+
+    # Issue #370: Check service connectivity in parallel
     services = {
         "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
         "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
-        "redis": get_service_address("redis", NetworkConstants.REDIS_PORT),
     }
 
+    async def check_service(client, service_name, service_url):
+        """Check connectivity for a single service."""
+        try:
+            start_time = time.time()
+            response = await client.get(f"{service_url}/health")
+            response_time = time.time() - start_time
+            return service_name, {
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time": response_time,
+                "status_code": response.status_code,
+            }
+        except Exception as e:
+            return service_name, {"status": "unreachable", "error": str(e)}
+
     async with httpx.AsyncClient(timeout=5.0) as client:
-        for service_name, service_url in services.items():
-            try:
-                if service_name == "redis":
-                    # Redis check is already done above
-                    detailed_health["service_connectivity"][
-                        service_name
-                    ] = "checked_via_redis"
-                else:
-                    start_time = time.time()
-                    response = await client.get(f"{service_url}/health")
-                    response_time = time.time() - start_time
-                    detailed_health["service_connectivity"][service_name] = {
-                        "status": (
-                            "healthy" if response.status_code == 200 else "unhealthy"
-                        ),
-                        "response_time": response_time,
-                        "status_code": response.status_code,
-                    }
-            except Exception as e:
-                detailed_health["service_connectivity"][service_name] = {
-                    "status": "unreachable",
-                    "error": str(e),
-                }
+        service_results = await asyncio.gather(
+            *[check_service(client, name, url) for name, url in services.items()],
+            return_exceptions=True
+        )
+        for result in service_results:
+            if isinstance(result, Exception):
+                continue
+            service_name, status = result
+            detailed_health["service_connectivity"][service_name] = status
+        # Redis connectivity already checked above
+        detailed_health["service_connectivity"]["redis"] = "checked_via_redis"
 
     # Resource alerts
     system_resources = hardware_monitor.get_system_resources()
@@ -625,6 +637,24 @@ async def _handle_websocket_message_or_timeout(websocket: WebSocket) -> bool:
         return await _send_periodic_update_or_break(websocket)
 
 
+async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
+    """Execute one iteration of the realtime analytics loop. (Issue #315 - extracted)
+
+    Returns:
+        Tuple of (should_continue, had_disconnect)
+    """
+    try:
+        should_continue = await _handle_websocket_message_or_timeout(websocket)
+        return should_continue, False
+    except WebSocketDisconnect:
+        logger.info("Analytics WebSocket client disconnected")
+        return False, True
+    except Exception as e:
+        logger.error(f"Error in analytics WebSocket: {e}")
+        send_ok = await _send_error_safely(websocket, e)
+        return send_ok, False
+
+
 @router.websocket("/ws/realtime")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -648,22 +678,11 @@ async def websocket_realtime_analytics(websocket: WebSocket):
             }
         )
 
-        # Start streaming loop (Issue #315 - refactored to reduce nesting)
+        # Start streaming loop (Issue #315 - refactored with helper to reduce nesting)
         while True:
-            try:
-                should_continue = await _handle_websocket_message_or_timeout(websocket)
-                if not should_continue:
-                    break
-
-            except WebSocketDisconnect:
-                logger.info("Analytics WebSocket client disconnected")
+            should_continue, _ = await _realtime_loop_iteration(websocket)
+            if not should_continue:
                 break
-            except Exception as e:
-                logger.error(f"Error in analytics WebSocket: {e}")
-                try:
-                    await websocket.send_json(_build_error_message(e))
-                except Exception:
-                    break
 
     except Exception as e:
         logger.error(f"Analytics WebSocket error: {e}")
@@ -753,11 +772,20 @@ async def get_analytics_status():
         "integration_status": {
             "redis_connectivity": {},
             "code_analysis_tools": {
-                "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                "code_index_mcp": analytics_controller.code_index_path.exists(),
+                # Issue #358 - avoid blocking (pre-computed below)
+                "code_analysis_suite": False,
+                "code_index_mcp": False,
             },
         },
     }
+
+    # Issue #358 - avoid blocking
+    status["integration_status"]["code_analysis_tools"]["code_analysis_suite"] = (
+        await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
+    )
+    status["integration_status"]["code_analysis_tools"]["code_index_mcp"] = (
+        await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    )
 
     # Check Redis connectivity
     for db in ANALYTICS_REDIS_DATABASES:  # O(1) lookups for membership checks (Issue #326)
@@ -861,6 +889,15 @@ def _build_error_message(error: Exception) -> dict:
         "message": str(error),
         "timestamp": datetime.now().isoformat(),
     }
+
+
+async def _send_error_safely(websocket: WebSocket, error: Exception) -> bool:
+    """Send error message to WebSocket, return False if send failed (Issue #315)."""
+    try:
+        await websocket.send_json(_build_error_message(error))
+        return True
+    except Exception:
+        return False
 
 
 def _build_snapshot_response(snapshot_data: dict) -> dict:
@@ -1008,6 +1045,44 @@ async def _handle_client_message_with_timeout(websocket: WebSocket) -> None:
         pass  # Continue with periodic updates
 
 
+async def _live_analytics_loop_iteration(
+    websocket: WebSocket,
+    last_performance_update: float,
+    last_api_update: float,
+    last_health_update: float,
+) -> tuple[bool, float, float, float]:
+    """Execute one iteration of the live analytics loop. (Issue #315 - extracted)
+
+    Returns:
+        Tuple of (should_continue, last_perf_update, last_api_update, last_health_update)
+    """
+    try:
+        current_time = time.time()
+
+        # Send periodic updates
+        last_performance_update = await _send_performance_update_if_due(
+            websocket, current_time, last_performance_update
+        )
+        last_api_update = await _send_api_activity_update_if_due(
+            websocket, current_time, last_api_update
+        )
+        last_health_update = await _send_health_update_if_due(
+            websocket, current_time, last_health_update
+        )
+
+        # Handle client messages
+        await _handle_client_message_with_timeout(websocket)
+
+        return True, last_performance_update, last_api_update, last_health_update
+
+    except WebSocketDisconnect:
+        return False, last_performance_update, last_api_update, last_health_update
+    except Exception as e:
+        logger.error(f"Error in live analytics WebSocket: {e}")
+        send_ok = await _send_error_safely(websocket, e)
+        return send_ok, last_performance_update, last_api_update, last_health_update
+
+
 @router.websocket("/ws/analytics/live")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1032,36 +1107,21 @@ async def websocket_live_analytics(websocket: WebSocket):
         )
 
         # Start streaming loop with different update frequencies (Issue #315 - refactored)
-        last_performance_update = 0
-        last_api_update = 0
-        last_health_update = 0
+        last_performance_update = 0.0
+        last_api_update = 0.0
+        last_health_update = 0.0
 
         while True:
-            try:
-                current_time = time.time()
-
-                # Send periodic updates
-                last_performance_update = await _send_performance_update_if_due(
-                    websocket, current_time, last_performance_update
-                )
-                last_api_update = await _send_api_activity_update_if_due(
-                    websocket, current_time, last_api_update
-                )
-                last_health_update = await _send_health_update_if_due(
-                    websocket, current_time, last_health_update
-                )
-
-                # Handle client messages
-                await _handle_client_message_with_timeout(websocket)
-
-            except WebSocketDisconnect:
+            (
+                should_continue,
+                last_performance_update,
+                last_api_update,
+                last_health_update,
+            ) = await _live_analytics_loop_iteration(
+                websocket, last_performance_update, last_api_update, last_health_update
+            )
+            if not should_continue:
                 break
-            except Exception as e:
-                logger.error(f"Error in live analytics WebSocket: {e}")
-                try:
-                    await websocket.send_json(_build_error_message(e))
-                except Exception:
-                    break
 
     except Exception as e:
         logger.error(f"Live analytics WebSocket error: {e}")

@@ -242,6 +242,34 @@ class FeatureFlags:
             logger.error(f"Failed to set feature flag {feature_name}: {e}")
             return False
 
+    def _parse_history_entries(self, history_raw: list) -> list:
+        """Parse raw history entries from Redis. (Issue #315 - extracted)"""
+        history = []
+        for entry in history_raw:
+            if isinstance(entry, bytes):
+                entry = entry.decode()
+            try:
+                history.append(json.loads(entry))
+            except Exception as e:
+                logger.debug(f"Skipping malformed history entry: {e}")
+        return history
+
+    def _build_endpoint_overrides(
+        self, endpoint_keys: list, mode_values: list
+    ) -> dict:
+        """Build endpoint overrides dict from keys and values. (Issue #315 - extracted)"""
+        endpoint_overrides = {}
+        for key, mode_val in zip(endpoint_keys, mode_values):
+            if not mode_val:
+                continue
+            if isinstance(key, bytes):
+                key = key.decode()
+            endpoint = key.replace("feature_flag:access_control:endpoint:", "")
+            if isinstance(mode_val, bytes):
+                mode_val = mode_val.decode()
+            endpoint_overrides[endpoint] = mode_val
+        return endpoint_overrides
+
     async def get_rollout_statistics(self) -> Metadata:
         """
         Get rollout statistics and metrics
@@ -255,18 +283,11 @@ class FeatureFlags:
             # Get current mode
             mode = await self.get_enforcement_mode()
 
-            # Get change history
+            # Get and parse change history (Issue #315 - uses helper)
             history_raw = await redis._redis.lrange(
                 "feature_flag:access_control:history", 0, 9
             )
-            history = []
-            for entry in history_raw:
-                if isinstance(entry, bytes):
-                    entry = entry.decode()
-                try:
-                    history.append(json.loads(entry))
-                except Exception as e:
-                    logger.debug(f"Skipping malformed history entry: {e}")
+            history = self._parse_history_entries(history_raw)
 
             # Get endpoint overrides
             endpoint_keys = []
@@ -286,15 +307,10 @@ class FeatureFlags:
                 for key in endpoint_keys:
                     pipe.get(key)
                 mode_values = await pipe.execute()
-
-                for key, mode_val in zip(endpoint_keys, mode_values):
-                    if mode_val:
-                        if isinstance(key, bytes):
-                            key = key.decode()
-                        endpoint = key.replace("feature_flag:access_control:endpoint:", "")
-                        if isinstance(mode_val, bytes):
-                            mode_val = mode_val.decode()
-                        endpoint_overrides[endpoint] = mode_val
+                # Use helper to build overrides (Issue #315)
+                endpoint_overrides = self._build_endpoint_overrides(
+                    endpoint_keys, mode_values
+                )
 
             return {
                 "current_mode": mode.value,

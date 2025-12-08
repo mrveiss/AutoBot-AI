@@ -230,6 +230,7 @@ class AsyncSQLiteConnectionPool:
 
         # Use sync pool in executor
         def _get_conn():
+            """Get connection from sync pool within executor context."""
             with self._sync_pool.get_connection() as conn:
                 return conn
 

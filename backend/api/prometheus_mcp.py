@@ -5,8 +5,11 @@
 Prometheus MCP Bridge
 Exposes Prometheus metrics as MCP tools for AutoBot's LLM agents
 Provides agents access to system monitoring data and metrics queries
+
+Issue #379: Optimized sequential awaits with asyncio.gather for concurrent queries.
 """
 
+import asyncio
 import logging
 from typing import List
 
@@ -246,54 +249,67 @@ def _build_vm_metrics(load_data: Metadata, cpu_data: Metadata, memory_data: Meta
 
 async def _handle_get_system_metrics(_request: Metadata) -> Metadata:
     """Handle get_system_metrics tool."""
-    load_data = await prometheus_query("node_load1")
-    cpu_data = await prometheus_query(
-        "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
-    )
-    memory_data = await prometheus_query(
-        "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
+    # Issue #379: Concurrent Prometheus queries
+    load_data, cpu_data, memory_data = await asyncio.gather(
+        prometheus_query("node_load1"),
+        prometheus_query(
+            "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
+        ),
+        prometheus_query(
+            "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
+        ),
     )
 
     if not load_data or not load_data.get("result"):
         return {"status": "error", "error": "No system metrics available. Node exporters may not be running."}
 
     vms = _build_vm_metrics(load_data, cpu_data, memory_data)
-    output = "System Metrics (All Machines)\n" + "=" * 50 + "\n\n"
 
+    # Issue #383: Use list.join() instead of string concatenation in loop
+    lines = ["System Metrics (All Machines)", "=" * 50, ""]
     for instance, metrics in sorted(vms.items()):
-        output += f"VM: {instance}\n"
-        output += f"  Load (1m): {metrics.get('load', 'N/A')}\n"
         cpu_val = metrics.get('cpu', 'N/A')
         mem_val = metrics.get('memory', 'N/A')
-        output += f"  CPU: {cpu_val:.1f}%\n" if isinstance(cpu_val, float) else f"  CPU: {cpu_val}\n"
-        output += f"  Memory: {mem_val:.1f}%\n\n" if isinstance(mem_val, float) else f"  Memory: {mem_val}\n\n"
+        cpu_str = f"{cpu_val:.1f}%" if isinstance(cpu_val, float) else str(cpu_val)
+        mem_str = f"{mem_val:.1f}%" if isinstance(mem_val, float) else str(mem_val)
+        lines.extend([
+            f"VM: {instance}",
+            f"  Load (1m): {metrics.get('load', 'N/A')}",
+            f"  CPU: {cpu_str}",
+            f"  Memory: {mem_str}",
+            "",
+        ])
 
-    return {"status": "success", "result": output}
+    return {"status": "success", "result": "\n".join(lines)}
 
 
 async def _handle_get_service_health(_request: Metadata) -> Metadata:
     """Handle get_service_health tool."""
-    backend_up = await prometheus_query('up{job="autobot-backend"}')
-    node_up = await prometheus_query('up{job="node"}')
+    # Issue #379: Concurrent Prometheus queries
+    backend_up, node_up = await asyncio.gather(
+        prometheus_query('up{job="autobot-backend"}'),
+        prometheus_query('up{job="node"}'),
+    )
 
-    output = "Service Health Status\n" + "=" * 50 + "\n\n"
+    # Issue #383: Use list.join() instead of string concatenation in loop
+    lines = ["Service Health Status", "=" * 50, ""]
 
     if backend_up and backend_up.get("result"):
         for result in backend_up["result"]:
             service = result["metric"].get("service", "unknown")
             status = "UP" if result["value"][1] == "1" else "DOWN"
-            output += f"AutoBot Backend ({service}): {status}\n"
+            lines.append(f"AutoBot Backend ({service}): {status}")
     else:
-        output += "AutoBot Backend: No data\n"
+        lines.append("AutoBot Backend: No data")
 
     if node_up and node_up.get("result"):
-        output += "\nNode Exporters:\n"
+        lines.extend(["", "Node Exporters:"])
         for result in node_up["result"]:
             instance = result["metric"]["instance"]
             status = "UP" if result["value"][1] == "1" else "DOWN"
-            output += f"  {instance}: {status}\n"
+            lines.append(f"  {instance}: {status}")
 
-    return {"status": "success", "result": output}
+    return {"status": "success", "result": "\n".join(lines)}
 
 
 async def _handle_get_vm_metrics(request: Metadata) -> Metadata:
@@ -302,12 +318,15 @@ async def _handle_get_vm_metrics(request: Metadata) -> Metadata:
     if not vm_ip:
         return {"status": "error", "error": "vm_ip parameter is required"}
 
-    load = await prometheus_query(f'node_load1{{instance=~"{vm_ip}:.*"}}')
-    cpu = await prometheus_query(
-        f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",instance=~"{vm_ip}:.*"}}[5m])) * 100)'
-    )
-    memory = await prometheus_query(
-        f'(1 - (node_memory_MemAvailable_bytes{{instance=~"{vm_ip}:.*"}} / node_memory_MemTotal_bytes{{instance=~"{vm_ip}:.*"}})) * 100'
+    # Issue #379: Concurrent Prometheus queries
+    load, cpu, memory = await asyncio.gather(
+        prometheus_query(f'node_load1{{instance=~"{vm_ip}:.*"}}'),
+        prometheus_query(
+            f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",instance=~"{vm_ip}:.*"}}[5m])) * 100)'
+        ),
+        prometheus_query(
+            f'(1 - (node_memory_MemAvailable_bytes{{instance=~"{vm_ip}:.*"}} / node_memory_MemTotal_bytes{{instance=~"{vm_ip}:.*"}})) * 100'
+        ),
     )
 
     output = f"VM Metrics: {vm_ip}\n" + "=" * 50 + "\n\n"
@@ -341,31 +360,30 @@ async def _fetch_metrics_list() -> tuple:
 
 
 def _format_metrics_output(metrics: list, filter_pattern: str) -> str:
-    """Format metrics list output (Issue #315 - extracted)."""
+    """Format metrics list output (Issue #315 - extracted, Issue #383 - optimized)."""
     if filter_pattern:
         metrics = [m for m in metrics if filter_pattern in m]
 
     autobot_metrics = [m for m in metrics if m.startswith("autobot_")]
     node_metrics = [m for m in metrics if m.startswith("node_")]
 
-    output = "Available Prometheus Metrics\n" + "=" * 50 + "\n\n"
+    # Issue #383: Use list.join() instead of string concatenation in loop
+    lines = ["Available Prometheus Metrics", "=" * 50, ""]
 
     if autobot_metrics:
-        output += f"AutoBot Metrics ({len(autobot_metrics)}):\n"
-        for metric in sorted(autobot_metrics)[:20]:
-            output += f"  - {metric}\n"
+        lines.append(f"AutoBot Metrics ({len(autobot_metrics)}):")
+        lines.extend(f"  - {metric}" for metric in sorted(autobot_metrics)[:20])
         if len(autobot_metrics) > 20:
-            output += f"  ... and {len(autobot_metrics) - 20} more\n"
-        output += "\n"
+            lines.append(f"  ... and {len(autobot_metrics) - 20} more")
+        lines.append("")
 
     if node_metrics:
-        output += f"Node/System Metrics ({len(node_metrics)}):\n"
-        for metric in sorted(node_metrics)[:20]:
-            output += f"  - {metric}\n"
+        lines.append(f"Node/System Metrics ({len(node_metrics)}):")
+        lines.extend(f"  - {metric}" for metric in sorted(node_metrics)[:20])
         if len(node_metrics) > 20:
-            output += f"  ... and {len(node_metrics) - 20} more\n"
+            lines.append(f"  ... and {len(node_metrics) - 20} more")
 
-    return output
+    return "\n".join(lines)
 
 
 async def _handle_list_available_metrics(request: Metadata) -> Metadata:

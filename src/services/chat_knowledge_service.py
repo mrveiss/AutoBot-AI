@@ -105,7 +105,7 @@ class QueryKnowledgeIntentDetector:
     ]
 
     def __init__(self):
-        """Initialize the detector with compiled regex patterns."""
+        """Initialize the detector with compiled query intent classification patterns."""
         self._knowledge_re = [
             re.compile(p, re.IGNORECASE) for p in self.KNOWLEDGE_PATTERNS
         ]
@@ -259,7 +259,7 @@ class ConversationContextEnhancer:
     ]
 
     def __init__(self):
-        """Initialize the context enhancer with compiled patterns."""
+        """Initialize the context enhancer with compiled conversation analysis patterns."""
         self._reference_re = re.compile(
             r"\b(" + "|".join(self.REFERENCE_PRONOUNS) + r")\b",
             re.IGNORECASE
@@ -737,7 +737,8 @@ class ChatKnowledgeService:
 
         try:
             # Perform advanced search using RAGService
-            results, metrics = await self.rag_service.advanced_search(
+            # Issue #382: metrics unused, using _ to indicate intentionally discarded
+            results, _ = await self.rag_service.advanced_search(
                 query=query,
                 max_results=top_k,
                 enable_reranking=True,

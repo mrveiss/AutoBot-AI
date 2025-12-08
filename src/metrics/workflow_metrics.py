@@ -85,6 +85,7 @@ class WorkflowMetricsCollector:
     """Collects and aggregates workflow performance metrics"""
 
     def __init__(self, max_history: int = 10000):
+        """Initialize workflow metrics collector with history buffer and aggregation."""
         self.max_history = max_history
         self.metrics_history: deque = deque(maxlen=max_history)
         self.active_workflows: Dict[str, Dict[str, Any]] = {}

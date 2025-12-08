@@ -205,6 +205,7 @@ class RedisASTVisitor(ast.NodeVisitor):
     }
 
     def __init__(self, source_lines: List[str]):
+        """Initialize visitor with source lines and operation tracking state."""
         self.operations: List[RedisOperation] = []
         self.source_lines = source_lines
         self.current_loop_depth = 0

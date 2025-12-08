@@ -29,6 +29,7 @@ class WebResearchAssistant:
     """
 
     def __init__(self, config: Dict[str, Any] = None):
+        """Initialize web research assistant with config and search cache."""
         self.config = config or {}
         self.search_cache = {}  # Cache for recent searches
         self._cache_lock = asyncio.Lock()  # Lock for search_cache access

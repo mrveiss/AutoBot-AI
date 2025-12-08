@@ -11,6 +11,7 @@ SENSITIVE_ENV_KEYWORDS = {"key", "token", "secret", "password"}
 
 
 def get_os_info():
+    """Collect OS and environment info with sensitive data redaction."""
     info = {
         "system": platform.system(),
         "node": platform.node(),

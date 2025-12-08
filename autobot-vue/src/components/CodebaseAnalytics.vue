@@ -117,6 +117,20 @@
       </div>
     </div>
 
+    <!-- Code Smells Analysis Progress -->
+    <div v-if="analyzingCodeSmells" class="progress-container code-smells-progress">
+      <div class="progress-header">
+        <div class="progress-title">
+          <i class="fas fa-spinner fa-spin"></i>
+          {{ codeSmellsProgressTitle }}
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill indeterminate"></div>
+      </div>
+      <div class="progress-status">{{ progressStatus }}</div>
+    </div>
+
     <!-- Enhanced Analytics Dashboard Cards -->
     <div class="enhanced-analytics-grid">
       <!-- System Overview -->
@@ -654,30 +668,86 @@
         </EmptyState>
       </div>
 
-      <!-- Problems Report -->
-      <div class="problems-section">
-        <h3><i class="fas fa-exclamation-triangle"></i> Code Problems</h3>
-        <div v-if="problemsReport && problemsReport.length > 0" class="problems-list">
-          <div
-            v-for="(problem, index) in (showAllProblems ? problemsReport : problemsReport.slice(0, 10))"
-            :key="index"
-            class="problem-item"
-            :class="getPriorityClass(problem.severity)"
-          >
-            <div class="problem-header">
-              <span class="problem-type">{{ formatProblemType(problem.type) }}</span>
-              <span class="problem-severity" :style="{ color: getSeverityColor(problem.severity) }">
-                {{ problem.severity }}
-              </span>
+      <!-- Problems Report - Grouped by Type and Severity -->
+      <div class="problems-section analytics-section">
+        <h3>
+          <i class="fas fa-exclamation-triangle"></i> Code Problems
+          <span v-if="problemsReport && problemsReport.length > 0" class="total-count">
+            ({{ problemsReport.length.toLocaleString() }} total)
+          </span>
+        </h3>
+        <div v-if="problemsReport && problemsReport.length > 0" class="section-content">
+          <!-- Severity Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ problemsReport.length.toLocaleString() }}</div>
+              <div class="summary-label">Total</div>
             </div>
-            <div class="problem-description">{{ problem.description }}</div>
-            <div class="problem-file">{{ problem.file_path }}:{{ problem.line_number }}</div>
-            <div class="problem-suggestion">💡 {{ problem.suggestion }}</div>
+            <div
+              v-for="(problems, severity) in problemsBySeverity"
+              :key="severity"
+              class="summary-card"
+              :class="severity"
+            >
+              <div class="summary-value">{{ problems.length.toLocaleString() }}</div>
+              <div class="summary-label">{{ severity.charAt(0).toUpperCase() + severity.slice(1) }}</div>
+            </div>
           </div>
-          <div v-if="problemsReport.length > 10" class="show-more">
-            <button @click="showAllProblems = !showAllProblems" class="btn-link">
-              {{ showAllProblems ? 'Show less' : `Show all ${problemsReport.length} problems` }}
-            </button>
+
+          <!-- Grouped by Type (Accordion) -->
+          <div class="accordion-groups">
+            <div
+              v-for="(typeData, type) in problemsByType"
+              :key="type"
+              class="accordion-group"
+            >
+              <div
+                class="accordion-header"
+                @click="toggleProblemType(type)"
+              >
+                <div class="header-info">
+                  <i :class="expandedProblemTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">{{ formatProblemType(type) }}</span>
+                  <span class="header-count">({{ typeData.problems.length.toLocaleString() }})</span>
+                </div>
+                <div class="header-badges">
+                  <span v-if="typeData.severityCounts.critical" class="severity-badge critical">
+                    {{ typeData.severityCounts.critical }} critical
+                  </span>
+                  <span v-if="typeData.severityCounts.high" class="severity-badge high">
+                    {{ typeData.severityCounts.high }} high
+                  </span>
+                  <span v-if="typeData.severityCounts.medium" class="severity-badge medium">
+                    {{ typeData.severityCounts.medium }} medium
+                  </span>
+                  <span v-if="typeData.severityCounts.low" class="severity-badge low">
+                    {{ typeData.severityCounts.low }} low
+                  </span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedProblemTypes[type]" class="accordion-items">
+                  <div
+                    v-for="(problem, index) in typeData.problems.slice(0, 20)"
+                    :key="index"
+                    class="list-item"
+                    :class="getItemSeverityClass(problem.severity)"
+                  >
+                    <div class="item-header">
+                      <span class="item-severity" :class="problem.severity?.toLowerCase()">
+                        {{ problem.severity || 'unknown' }}
+                      </span>
+                    </div>
+                    <div class="item-description">{{ problem.description }}</div>
+                    <div class="item-location">📁 {{ problem.file_path }}{{ problem.line_number ? ':' + problem.line_number : '' }}</div>
+                    <div v-if="problem.suggestion" class="item-suggestion">💡 {{ problem.suggestion }}</div>
+                  </div>
+                  <div v-if="typeData.problems.length > 20" class="show-more">
+                    <span class="muted">Showing 20 of {{ typeData.problems.length.toLocaleString() }} {{ formatProblemType(type) }} issues</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
         <EmptyState
@@ -689,76 +759,187 @@
       </div>
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report -->
-      <div class="code-smells-section">
+      <div class="code-smells-section analytics-section">
         <h3>
           <i class="fas fa-bug"></i> Code Smells & Anti-Patterns
           <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
             {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
           </span>
+          <span v-if="codeSmellsFromProblems.length > 0" class="total-count">
+            ({{ codeSmellsFromProblems.length.toLocaleString() }} found)
+          </span>
         </h3>
-        <div v-if="codeSmellsReport && codeSmellsReport.anti_patterns && codeSmellsReport.anti_patterns.length > 0" class="code-smells-list">
-          <!-- Summary Cards -->
-          <div class="smells-summary">
-            <div class="summary-card">
-              <div class="summary-value">{{ codeSmellsReport.total_files || 0 }}</div>
-              <div class="summary-label">Files Analyzed</div>
+        <div v-if="codeSmellsFromProblems.length > 0" class="section-content">
+          <!-- Summary Cards by Severity -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ codeSmellsFromProblems.length.toLocaleString() }}</div>
+              <div class="summary-label">Total</div>
             </div>
-            <div class="summary-card warning">
-              <div class="summary-value">{{ codeSmellsReport.anti_patterns.length }}</div>
-              <div class="summary-label">Issues Found</div>
-            </div>
-            <div v-if="codeSmellsReport.severity_distribution" class="summary-card critical">
-              <div class="summary-value">{{ codeSmellsReport.severity_distribution.critical || 0 }}</div>
+            <div class="summary-card critical">
+              <div class="summary-value">{{ codeSmellsSeveritySummary.critical }}</div>
               <div class="summary-label">Critical</div>
             </div>
-            <div v-if="codeSmellsReport.severity_distribution" class="summary-card high">
-              <div class="summary-value">{{ codeSmellsReport.severity_distribution.high || 0 }}</div>
+            <div class="summary-card high">
+              <div class="summary-value">{{ codeSmellsSeveritySummary.high }}</div>
               <div class="summary-label">High</div>
             </div>
-          </div>
-          <!-- Anti-Pattern List -->
-          <div
-            v-for="(pattern, index) in codeSmellsReport.anti_patterns.slice(0, 20)"
-            :key="index"
-            class="smell-item"
-            :class="getSmellSeverityClass(pattern.severity)"
-          >
-            <div class="smell-header">
-              <span class="smell-type">{{ formatSmellType(pattern.pattern_type) }}</span>
-              <span class="smell-severity" :class="pattern.severity">{{ pattern.severity }}</span>
+            <div class="summary-card medium">
+              <div class="summary-value">{{ codeSmellsSeveritySummary.medium }}</div>
+              <div class="summary-label">Medium</div>
             </div>
-            <div class="smell-description">{{ pattern.description }}</div>
-            <div class="smell-location">📁 {{ pattern.file_path }}:{{ pattern.line_number }}</div>
-            <div v-if="pattern.suggestion" class="smell-suggestion">💡 {{ pattern.suggestion }}</div>
+            <div class="summary-card low">
+              <div class="summary-value">{{ codeSmellsSeveritySummary.low }}</div>
+              <div class="summary-label">Low</div>
+            </div>
           </div>
-          <div v-if="codeSmellsReport.anti_patterns.length > 20" class="show-more">
-            <span class="muted">Showing 20 of {{ codeSmellsReport.anti_patterns.length }} issues</span>
+
+          <!-- Code Smells by Type (Accordion) -->
+          <div class="accordion-groups">
+            <div
+              v-for="(group, smellType) in codeSmellsByType"
+              :key="smellType"
+              class="accordion-group"
+            >
+              <div
+                class="accordion-header"
+                @click="toggleCodeSmellType(smellType)"
+              >
+                <div class="header-info">
+                  <i :class="expandedCodeSmellTypes[smellType] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">{{ formatCodeSmellType(smellType) }}</span>
+                  <span class="header-count">({{ group.smells.length.toLocaleString() }})</span>
+                </div>
+                <div class="header-badges">
+                  <span v-if="group.severityCounts.critical > 0" class="severity-badge critical">
+                    {{ group.severityCounts.critical }} critical
+                  </span>
+                  <span v-if="group.severityCounts.high > 0" class="severity-badge high">
+                    {{ group.severityCounts.high }} high
+                  </span>
+                  <span v-if="group.severityCounts.medium > 0" class="severity-badge medium">
+                    {{ group.severityCounts.medium }} medium
+                  </span>
+                  <span v-if="group.severityCounts.low > 0" class="severity-badge low">
+                    {{ group.severityCounts.low }} low
+                  </span>
+                </div>
+              </div>
+
+              <!-- Expanded smell items -->
+              <transition name="accordion">
+                <div v-if="expandedCodeSmellTypes[smellType]" class="accordion-items">
+                  <div
+                    v-for="(smell, idx) in group.smells.slice(0, 20)"
+                    :key="idx"
+                    class="list-item"
+                    :class="getItemSeverityClass(smell.severity)"
+                  >
+                    <div class="item-header">
+                      <span class="item-severity" :class="smell.severity?.toLowerCase()">
+                        {{ smell.severity || 'unknown' }}
+                      </span>
+                    </div>
+                    <div class="item-description">{{ smell.description }}</div>
+                    <div class="item-location">
+                      📁 {{ smell.file_path }}{{ smell.line_number ? ':' + smell.line_number : '' }}
+                    </div>
+                    <div v-if="smell.suggestion" class="item-suggestion">💡 {{ smell.suggestion }}</div>
+                  </div>
+                  <div v-if="group.smells.length > 20" class="show-more">
+                    <span class="muted">Showing 20 of {{ group.smells.length.toLocaleString() }} {{ formatCodeSmellType(smellType) }} issues</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
         <EmptyState
           v-else
           icon="fas fa-sparkles"
-          message="No code smells detected. Click 'Code Smells' button to run analysis."
+          message="No code smells detected in indexed data. Run codebase indexing first."
           variant="info"
         />
       </div>
 
-      <!-- Duplicate Code Analysis -->
-      <div class="duplicates-section">
-        <h3><i class="fas fa-copy"></i> Duplicate Code Detection</h3>
-        <div v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="duplicates-list">
-          <div
-            v-for="(duplicate, index) in duplicateAnalysis.slice(0, 5)"
-            :key="index"
-            class="duplicate-item"
-          >
-            <div class="duplicate-header">
-              <span class="duplicate-similarity">{{ duplicate.similarity }}% similar</span>
-              <span class="duplicate-lines">{{ duplicate.lines }} lines</span>
+      <!-- Duplicate Code Analysis - Grouped by Similarity -->
+      <div class="duplicates-section analytics-section">
+        <h3>
+          <i class="fas fa-copy"></i> Duplicate Code Detection
+          <span v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="total-count">
+            ({{ duplicateAnalysis.length.toLocaleString() }} pairs)
+          </span>
+        </h3>
+        <div v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="section-content">
+          <!-- Similarity Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ duplicateAnalysis.length.toLocaleString() }}</div>
+              <div class="summary-label">Total Pairs</div>
             </div>
-            <div class="duplicate-files">
-              <div class="duplicate-file">📄 {{ duplicate.file1 }}</div>
-              <div class="duplicate-file">📄 {{ duplicate.file2 }}</div>
+            <div class="summary-card high">
+              <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
+              <div class="summary-label">High (90%+)</div>
+            </div>
+            <div class="summary-card medium">
+              <div class="summary-value">{{ duplicatesBySimilarity.medium?.length || 0 }}</div>
+              <div class="summary-label">Medium (70-89%)</div>
+            </div>
+            <div class="summary-card low">
+              <div class="summary-value">{{ duplicatesBySimilarity.low?.length || 0 }}</div>
+              <div class="summary-label">Low (&lt;70%)</div>
+            </div>
+            <div class="summary-card info">
+              <div class="summary-value">{{ totalDuplicateLines.toLocaleString() }}</div>
+              <div class="summary-label">Total Lines</div>
+            </div>
+          </div>
+
+          <!-- Duplicates by Similarity Group -->
+          <div class="accordion-groups">
+            <div
+              v-for="(group, similarity) in duplicatesBySimilarity"
+              :key="similarity"
+              v-show="group && group.length > 0"
+              class="accordion-group"
+            >
+              <div
+                class="accordion-header"
+                @click="toggleDuplicateGroup(similarity)"
+              >
+                <div class="header-info">
+                  <i :class="expandedDuplicateGroups[similarity] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">{{ formatSimilarityGroup(similarity) }}</span>
+                  <span class="header-count">({{ group.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="similarity-badge" :class="similarity">
+                    {{ similarity === 'high' ? '90%+' : similarity === 'medium' ? '70-89%' : '<70%' }}
+                  </span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedDuplicateGroups[similarity]" class="accordion-items">
+                  <div
+                    v-for="(duplicate, index) in group.slice(0, 20)"
+                    :key="index"
+                    class="list-item"
+                    :class="`item-${similarity}`"
+                  >
+                    <div class="item-header">
+                      <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% similar</span>
+                      <span class="item-lines">{{ duplicate.lines }} lines</span>
+                    </div>
+                    <div class="item-files">
+                      <div class="item-file">📄 {{ duplicate.file1 }}</div>
+                      <div class="item-file">📄 {{ duplicate.file2 }}</div>
+                    </div>
+                  </div>
+                  <div v-if="group.length > 20" class="show-more">
+                    <span class="muted">Showing 20 of {{ group.length.toLocaleString() }} pairs</span>
+                  </div>
+                </div>
+              </transition>
             </div>
           </div>
         </div>
@@ -770,24 +951,80 @@
         />
       </div>
 
-      <!-- Function Declarations -->
-      <div class="declarations-section">
-        <h3><i class="fas fa-function"></i> Function Declarations</h3>
-        <div v-if="declarationAnalysis && declarationAnalysis.length > 0" class="declarations-list">
-          <div
-            v-for="(declaration, index) in declarationAnalysis.slice(0, 8)"
-            :key="index"
-            class="declaration-item"
-          >
-            <div class="declaration-name">{{ declaration.name }}</div>
-            <div class="declaration-type">{{ declaration.type }}</div>
-            <div class="declaration-file">{{ declaration.file_path }}:{{ declaration.line_number }}</div>
+      <!-- Function Declarations - Grouped by Type -->
+      <div class="declarations-section analytics-section">
+        <h3>
+          <i class="fas fa-code"></i> Code Declarations
+          <span v-if="declarationAnalysis && declarationAnalysis.length > 0" class="total-count">
+            ({{ declarationAnalysis.length.toLocaleString() }} total)
+          </span>
+        </h3>
+        <div v-if="declarationAnalysis && declarationAnalysis.length > 0" class="section-content">
+          <!-- Type Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ declarationAnalysis.length.toLocaleString() }}</div>
+              <div class="summary-label">Total</div>
+            </div>
+            <div
+              v-for="(typeData, type) in declarationsByType"
+              :key="type"
+              class="summary-card"
+              :class="getDeclarationTypeClass(type)"
+            >
+              <div class="summary-value">{{ typeData.declarations.length.toLocaleString() }}</div>
+              <div class="summary-label">{{ formatDeclarationType(type) }}</div>
+            </div>
+          </div>
+
+          <!-- Grouped by Type (Accordion) -->
+          <div class="accordion-groups">
+            <div
+              v-for="(typeData, type) in declarationsByType"
+              :key="type"
+              class="accordion-group"
+            >
+              <div
+                class="accordion-header"
+                @click="toggleDeclarationType(type)"
+              >
+                <div class="header-info">
+                  <i :class="expandedDeclarationTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">{{ formatDeclarationType(type) }}</span>
+                  <span class="header-count">({{ typeData.declarations.length.toLocaleString() }})</span>
+                </div>
+                <div class="header-badges">
+                  <span v-if="typeData.exportedCount > 0" class="export-badge">
+                    {{ typeData.exportedCount }} exported
+                  </span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedDeclarationTypes[type]" class="accordion-items">
+                  <div
+                    v-for="(declaration, index) in typeData.declarations.slice(0, 30)"
+                    :key="index"
+                    class="list-item"
+                    :class="{ 'item-exported': declaration.is_exported }"
+                  >
+                    <div class="item-header">
+                      <span class="item-name">{{ declaration.name }}</span>
+                      <span v-if="declaration.is_exported" class="export-badge small">exported</span>
+                    </div>
+                    <div class="item-location">📁 {{ declaration.file_path }}:{{ declaration.line_number }}</div>
+                  </div>
+                  <div v-if="typeData.declarations.length > 30" class="show-more">
+                    <span class="muted">Showing 30 of {{ typeData.declarations.length.toLocaleString() }} {{ formatDeclarationType(type).toLowerCase() }}s</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
         <EmptyState
           v-else
-          icon="fas fa-function"
-          message="No function declarations found or analysis not run yet."
+          icon="fas fa-code"
+          message="No code declarations found or analysis not run yet."
         />
       </div>
     </div>
@@ -888,6 +1125,14 @@ const refactoringSuggestions = ref([])
 const codeSmellsReport = ref(null)
 const codeHealthScore = ref(null)
 const analyzingCodeSmells = ref(false)
+const codeSmellsAnalysisType = ref('') // 'smells' or 'health'
+
+// Computed property for code smells progress title
+const codeSmellsProgressTitle = computed(() => {
+  return codeSmellsAnalysisType.value === 'health'
+    ? 'Calculating Health Score...'
+    : 'Analyzing Code Smells...'
+})
 
 // Enhanced analytics data
 const systemOverview = ref(null)
@@ -1795,6 +2040,7 @@ const testAllEndpoints = async () => {
 // Code Intelligence: Run anti-pattern/code smell analysis
 const runCodeSmellAnalysis = async () => {
   const startTime = Date.now()
+  codeSmellsAnalysisType.value = 'smells'
   analyzingCodeSmells.value = true
   progressStatus.value = 'Scanning for code smells and anti-patterns...'
 
@@ -1838,6 +2084,7 @@ const runCodeSmellAnalysis = async () => {
 // Code Intelligence: Get codebase health score
 const getCodeHealthScore = async () => {
   const startTime = Date.now()
+  codeSmellsAnalysisType.value = 'health'
   analyzingCodeSmells.value = true
   progressStatus.value = 'Calculating codebase health score...'
 
@@ -2086,6 +2333,207 @@ const formatProblemType = (type) => {
   return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
 }
 
+// Group problems by severity for summary view
+const problemsBySeverity = computed(() => {
+  if (!problemsReport.value || problemsReport.value.length === 0) return {}
+  const grouped = {}
+  const severityOrder = ['critical', 'high', 'medium', 'low']
+
+  for (const problem of problemsReport.value) {
+    const severity = problem.severity?.toLowerCase() || 'low'
+    if (!grouped[severity]) {
+      grouped[severity] = []
+    }
+    grouped[severity].push(problem)
+  }
+
+  // Return in severity order
+  const ordered = {}
+  for (const sev of severityOrder) {
+    if (grouped[sev]) {
+      ordered[sev] = grouped[sev]
+    }
+  }
+  return ordered
+})
+
+// Group problems by type, then by severity within each type
+const problemsByType = computed(() => {
+  if (!problemsReport.value || problemsReport.value.length === 0) return {}
+  const grouped = {}
+
+  for (const problem of problemsReport.value) {
+    const type = problem.type || 'unknown'
+    if (!grouped[type]) {
+      grouped[type] = {
+        problems: [],
+        severityCounts: { critical: 0, high: 0, medium: 0, low: 0 }
+      }
+    }
+    grouped[type].problems.push(problem)
+    const sev = problem.severity?.toLowerCase() || 'low'
+    if (grouped[type].severityCounts[sev] !== undefined) {
+      grouped[type].severityCounts[sev]++
+    }
+  }
+
+  // Sort by total count (highest first)
+  return Object.fromEntries(
+    Object.entries(grouped).sort((a, b) => b[1].problems.length - a[1].problems.length)
+  )
+})
+
+// Track which problem groups are expanded
+const expandedProblemTypes = ref({})
+
+const toggleProblemType = (type) => {
+  expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
+}
+
+// Group declarations by type for summary view
+const declarationsByType = computed(() => {
+  if (!declarationAnalysis.value || declarationAnalysis.value.length === 0) return {}
+  const grouped = {}
+
+  for (const decl of declarationAnalysis.value) {
+    const type = decl.type || 'unknown'
+    if (!grouped[type]) {
+      grouped[type] = {
+        declarations: [],
+        exportedCount: 0
+      }
+    }
+    grouped[type].declarations.push(decl)
+    if (decl.is_exported) {
+      grouped[type].exportedCount++
+    }
+  }
+
+  // Sort by count (highest first)
+  return Object.fromEntries(
+    Object.entries(grouped).sort((a, b) => b[1].declarations.length - a[1].declarations.length)
+  )
+})
+
+// Track which declaration groups are expanded
+const expandedDeclarationTypes = ref({})
+
+const toggleDeclarationType = (type) => {
+  expandedDeclarationTypes.value[type] = !expandedDeclarationTypes.value[type]
+}
+
+const formatDeclarationType = (type) => {
+  return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+}
+
+// Group duplicates by similarity level
+const duplicatesBySimilarity = computed(() => {
+  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) return {}
+  const grouped = {
+    high: [],    // 90%+
+    medium: [],  // 70-89%
+    low: []      // <70%
+  }
+
+  for (const dup of duplicateAnalysis.value) {
+    const sim = dup.similarity || 0
+    if (sim >= 90) {
+      grouped.high.push(dup)
+    } else if (sim >= 70) {
+      grouped.medium.push(dup)
+    } else {
+      grouped.low.push(dup)
+    }
+  }
+
+  // Sort each group by similarity (highest first)
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+  }
+
+  return grouped
+})
+
+// Calculate total duplicate lines
+const totalDuplicateLines = computed(() => {
+  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) return 0
+  return duplicateAnalysis.value.reduce((sum, dup) => sum + (dup.lines || 0), 0)
+})
+
+// Track which duplicate groups are expanded
+const expandedDuplicateGroups = ref({})
+
+const toggleDuplicateGroup = (similarity) => {
+  expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]
+}
+
+const formatSimilarityGroup = (similarity) => {
+  const labels = {
+    high: 'High Similarity',
+    medium: 'Medium Similarity',
+    low: 'Low Similarity'
+  }
+  return labels[similarity] || similarity
+}
+
+// Filter code smells from indexed problems
+const codeSmellsFromProblems = computed(() => {
+  if (!problemsReport.value || problemsReport.value.length === 0) return []
+  return problemsReport.value.filter(p =>
+    p.type?.startsWith('code_smell_') || p.type?.includes('anti_pattern')
+  )
+})
+
+// Group code smells by type
+const codeSmellsByType = computed(() => {
+  if (codeSmellsFromProblems.value.length === 0) return {}
+  const grouped = {}
+
+  for (const smell of codeSmellsFromProblems.value) {
+    const type = smell.type || 'unknown'
+    if (!grouped[type]) {
+      grouped[type] = {
+        smells: [],
+        severityCounts: { critical: 0, high: 0, medium: 0, low: 0 }
+      }
+    }
+    grouped[type].smells.push(smell)
+    const sev = smell.severity?.toLowerCase() || 'low'
+    if (grouped[type].severityCounts[sev] !== undefined) {
+      grouped[type].severityCounts[sev]++
+    }
+  }
+
+  // Sort by count (highest first)
+  return Object.fromEntries(
+    Object.entries(grouped).sort((a, b) => b[1].smells.length - a[1].smells.length)
+  )
+})
+
+// Code smells severity summary
+const codeSmellsSeveritySummary = computed(() => {
+  const summary = { critical: 0, high: 0, medium: 0, low: 0 }
+  for (const smell of codeSmellsFromProblems.value) {
+    const sev = smell.severity?.toLowerCase() || 'low'
+    if (summary[sev] !== undefined) {
+      summary[sev]++
+    }
+  }
+  return summary
+})
+
+// Track which code smell groups are expanded
+const expandedCodeSmellTypes = ref({})
+
+const toggleCodeSmellType = (type) => {
+  expandedCodeSmellTypes.value[type] = !expandedCodeSmellTypes.value[type]
+}
+
+const formatCodeSmellType = (type) => {
+  // Remove 'code_smell_' prefix and format
+  return type?.replace('code_smell_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+}
+
 const getHealthClass = (health) => {
   switch (health?.toLowerCase()) {
     case 'healthy': return 'health-good'
@@ -2132,6 +2580,31 @@ const getSmellSeverityClass = (severity) => {
 
 const formatSmellType = (type) => {
   return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+}
+
+// Unified item severity class for consistent styling
+const getItemSeverityClass = (severity) => {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 'item-critical'
+    case 'high': return 'item-high'
+    case 'medium': return 'item-medium'
+    case 'low': return 'item-low'
+    case 'info': return 'item-info'
+    default: return 'item-unknown'
+  }
+}
+
+// Declaration type class for summary cards
+const getDeclarationTypeClass = (type) => {
+  switch (type?.toLowerCase()) {
+    case 'function': return 'type-function'
+    case 'class': return 'type-class'
+    case 'method': return 'type-method'
+    case 'variable': return 'type-variable'
+    case 'constant': return 'type-constant'
+    case 'import': return 'type-import'
+    default: return 'type-other'
+  }
 }
 
 // All variables and functions are automatically available in <script setup>
@@ -2302,6 +2775,28 @@ const formatSmellType = (type) => {
   background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
   transition: width 0.3s ease;
   border-radius: 4px;
+}
+
+.progress-fill.indeterminate {
+  width: 30%;
+  animation: indeterminate 1.5s infinite ease-in-out;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.code-smells-progress {
+  border-left: 4px solid #E91E63;
+}
+
+.code-smells-progress .progress-fill {
+  background: linear-gradient(90deg, #E91E63 0%, #9C27B0 100%);
 }
 
 .progress-status {
@@ -2768,6 +3263,186 @@ const formatSmellType = (type) => {
   font-size: 0.8em;
 }
 
+/* Grouped Duplicates Section */
+.duplicates-section h3 .total-count {
+  font-size: 0.8em;
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+.duplicates-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.duplicate-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.duplicate-summary-card {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 2px solid #374151;
+  transition: all 0.2s ease;
+}
+
+.duplicate-summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.duplicate-summary-card.high-similarity {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.duplicate-summary-card.medium-similarity {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.duplicate-summary-card.low-similarity {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.duplicate-summary-card.total-lines {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.summary-card-count {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.duplicate-summary-card.high-similarity .summary-card-count { color: #ef4444; }
+.duplicate-summary-card.medium-similarity .summary-card-count { color: #f59e0b; }
+.duplicate-summary-card.low-similarity .summary-card-count { color: #10b981; }
+.duplicate-summary-card.total-lines .summary-card-count { color: #818cf8; }
+
+.summary-card-label {
+  font-size: 0.75em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.duplicates-by-similarity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.duplicate-similarity-group {
+  background: #1f2937;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  overflow: hidden;
+}
+
+.duplicate-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.duplicate-group-header:hover {
+  background: #374151;
+}
+
+.group-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-info i {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
+.group-name {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.group-count {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+
+.group-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.badge-high {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.badge-medium {
+  background: #713f12;
+  color: #fde047;
+}
+
+.badge-low {
+  background: #14532d;
+  color: #86efac;
+}
+
+.duplicate-group-items {
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #111827;
+  border-top: 1px solid #374151;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.duplicate-group-items .duplicate-item {
+  margin: 0;
+  padding: 12px;
+  background: #1a1f2e;
+  border-radius: 6px;
+}
+
+.duplicate-item.similarity-high {
+  border-left: 4px solid #ef4444;
+}
+
+.duplicate-item.similarity-medium {
+  border-left: 4px solid #f59e0b;
+}
+
+.duplicate-item.similarity-low {
+  border-left: 4px solid #10b981;
+}
+
+.more-duplicates-note {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 8px;
+  font-size: 0.9em;
+}
+
 .declaration-name {
   font-weight: 600;
   color: #22c55e;
@@ -2790,6 +3465,358 @@ const formatSmellType = (type) => {
   text-align: center;
   padding: 16px;
   border-top: 1px solid #374151;
+}
+
+/* Grouped Problems Section */
+.problems-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.severity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.severity-card {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 2px solid #374151;
+  transition: all 0.2s ease;
+}
+
+.severity-card:hover {
+  transform: translateY(-2px);
+}
+
+.severity-card.severity-critical {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.severity-card.severity-high {
+  border-color: #ea580c;
+  background: rgba(234, 88, 12, 0.1);
+}
+
+.severity-card.severity-medium {
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.severity-card.severity-low {
+  border-color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+}
+
+.severity-count {
+  font-size: 2em;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.severity-card.severity-critical .severity-count { color: #ef4444; }
+.severity-card.severity-high .severity-count { color: #f97316; }
+.severity-card.severity-medium .severity-count { color: #f59e0b; }
+.severity-card.severity-low .severity-count { color: #10b981; }
+
+.severity-label {
+  font-size: 0.8em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.problems-by-type {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.problem-type-group {
+  background: #1f2937;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  overflow: hidden;
+}
+
+.problem-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.problem-type-header:hover {
+  background: #374151;
+}
+
+.type-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-info i {
+  color: #6b7280;
+  font-size: 0.9em;
+  transition: transform 0.2s ease;
+}
+
+.type-name {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.type-count {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+
+.type-severity-badges {
+  display: flex;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.badge-critical {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.badge-high {
+  background: #7c2d12;
+  color: #fdba74;
+}
+
+.badge-medium {
+  background: #713f12;
+  color: #fde047;
+}
+
+.badge-low {
+  background: #14532d;
+  color: #86efac;
+}
+
+.problem-type-items {
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #111827;
+  border-top: 1px solid #374151;
+}
+
+.problem-type-items .problem-item {
+  margin: 0;
+  padding: 12px;
+  background: #1a1f2e;
+}
+
+.more-problems-note {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 8px;
+  font-size: 0.9em;
+}
+
+/* Grouped Declarations Section */
+.declarations-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.declarations-section h3 .total-count {
+  font-size: 0.8em;
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+.declarations-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.declaration-type-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.declaration-type-card {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 2px solid #374151;
+  transition: all 0.2s ease;
+}
+
+.declaration-type-card:hover {
+  transform: translateY(-2px);
+  border-color: #4b5563;
+}
+
+.declaration-type-card.type-function {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.declaration-type-card.type-class {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.declaration-type-card.type-method {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.declaration-type-card.type-variable {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.declaration-type-card.type-constant {
+  border-color: #ec4899;
+  background: rgba(236, 72, 153, 0.1);
+}
+
+.type-card-count {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.declaration-type-card.type-function .type-card-count { color: #60a5fa; }
+.declaration-type-card.type-class .type-card-count { color: #a78bfa; }
+.declaration-type-card.type-method .type-card-count { color: #34d399; }
+.declaration-type-card.type-variable .type-card-count { color: #fbbf24; }
+.declaration-type-card.type-constant .type-card-count { color: #f472b6; }
+
+.type-card-label {
+  font-size: 0.8em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.type-card-exported {
+  font-size: 0.7em;
+  color: #22c55e;
+  margin-top: 4px;
+}
+
+.declarations-by-type {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.declaration-type-group {
+  background: #1f2937;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  overflow: hidden;
+}
+
+.declaration-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.declaration-type-header:hover {
+  background: #374151;
+}
+
+.badge-exported {
+  background: #14532d;
+  color: #86efac;
+}
+
+.declaration-type-items {
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #111827;
+  border-top: 1px solid #374151;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.declaration-type-items .declaration-item {
+  margin: 0;
+  padding: 10px 12px;
+  background: #1a1f2e;
+  border-radius: 6px;
+  border-left: 3px solid #374151;
+}
+
+.declaration-type-items .declaration-item.is-exported {
+  border-left-color: #22c55e;
+}
+
+.declaration-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.declaration-item .declaration-name {
+  font-weight: 600;
+  color: #60a5fa;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.exported-badge {
+  font-size: 0.65em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #14532d;
+  color: #86efac;
+  text-transform: uppercase;
+}
+
+.declaration-item .declaration-file {
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
+}
+
+.more-declarations-note {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 8px;
+  font-size: 0.9em;
 }
 
 /* Code Smells Section */
@@ -2933,9 +3960,441 @@ const formatSmellType = (type) => {
   margin-top: 8px;
 }
 
+/* Code Smells Grouped View */
+.code-smells-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summary-card.total { border-color: #6366f1; }
+.summary-card.total .summary-value { color: #818cf8; }
+.summary-card.medium { border-color: #eab308; }
+.summary-card.medium .summary-value { color: #eab308; }
+.summary-card.low { border-color: #22c55e; }
+.summary-card.low .summary-value { color: #22c55e; }
+
+.code-smells-by-type {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.smell-type-group {
+  background: #111827;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  overflow: hidden;
+}
+
+.smell-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: #1f2937;
+  transition: background 0.2s ease;
+}
+
+.smell-type-header:hover {
+  background: #2a3544;
+}
+
+.type-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-info i {
+  color: #9ca3af;
+  font-size: 0.75em;
+  transition: transform 0.2s ease;
+}
+
+.type-name {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.type-count {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+
+.type-severity-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.severity-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.severity-badge.critical { background: #7f1d1d; color: #fca5a5; }
+.severity-badge.high { background: #7c2d12; color: #fdba74; }
+.severity-badge.medium { background: #713f12; color: #fde047; }
+.severity-badge.low { background: #14532d; color: #86efac; }
+
+.smell-type-items {
+  padding: 12px;
+  background: #0d1117;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.smell-type-items .smell-item {
+  margin: 0;
+}
+
+.show-more {
+  text-align: center;
+  padding: 12px;
+  background: #1a232f;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
 .muted {
   color: #6b7280;
   font-style: italic;
+}
+
+/* ============================================
+   UNIFIED ANALYTICS SECTION STYLES
+   Consistent formatting across all sections
+   ============================================ */
+
+/* Base Analytics Section */
+.analytics-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: #1f2937;
+  border-radius: 12px;
+  border: 1px solid #374151;
+}
+
+.analytics-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px 0;
+  color: #e5e7eb;
+  font-size: 1.1em;
+  flex-wrap: wrap;
+}
+
+.analytics-section .total-count {
+  font-size: 0.85em;
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+/* Section Content Container */
+.section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Unified Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid #374151;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.summary-value {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.summary-label {
+  font-size: 0.75em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* Summary Card Variants */
+.summary-card.total { border-color: #6366f1; }
+.summary-card.total .summary-value { color: #818cf8; }
+.summary-card.critical { border-color: #ef4444; }
+.summary-card.critical .summary-value { color: #ef4444; }
+.summary-card.high { border-color: #f97316; }
+.summary-card.high .summary-value { color: #f97316; }
+.summary-card.medium { border-color: #eab308; }
+.summary-card.medium .summary-value { color: #eab308; }
+.summary-card.low { border-color: #22c55e; }
+.summary-card.low .summary-value { color: #22c55e; }
+.summary-card.info { border-color: #3b82f6; }
+.summary-card.info .summary-value { color: #3b82f6; }
+
+/* Declaration Type Variants */
+.summary-card.type-function { border-color: #8b5cf6; }
+.summary-card.type-function .summary-value { color: #a78bfa; }
+.summary-card.type-class { border-color: #06b6d4; }
+.summary-card.type-class .summary-value { color: #22d3ee; }
+.summary-card.type-method { border-color: #ec4899; }
+.summary-card.type-method .summary-value { color: #f472b6; }
+.summary-card.type-variable { border-color: #84cc16; }
+.summary-card.type-variable .summary-value { color: #a3e635; }
+.summary-card.type-constant { border-color: #f59e0b; }
+.summary-card.type-constant .summary-value { color: #fbbf24; }
+.summary-card.type-import { border-color: #64748b; }
+.summary-card.type-import .summary-value { color: #94a3b8; }
+.summary-card.type-other { border-color: #6b7280; }
+.summary-card.type-other .summary-value { color: #9ca3af; }
+
+/* Unified Accordion Groups */
+.accordion-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accordion-group {
+  background: #111827;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: #1f2937;
+  transition: background 0.2s ease;
+}
+
+.accordion-header:hover {
+  background: #2a3544;
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-info i {
+  color: #9ca3af;
+  font-size: 0.75em;
+  transition: transform 0.2s ease;
+}
+
+.header-name {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.header-count {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+
+.header-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Unified Severity Badges */
+.severity-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.severity-badge.critical { background: #7f1d1d; color: #fca5a5; }
+.severity-badge.high { background: #7c2d12; color: #fdba74; }
+.severity-badge.medium { background: #713f12; color: #fde047; }
+.severity-badge.low { background: #14532d; color: #86efac; }
+
+/* Similarity Badges (for duplicates) */
+.similarity-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.similarity-badge.high { background: #7f1d1d; color: #fca5a5; }
+.similarity-badge.medium { background: #713f12; color: #fde047; }
+.similarity-badge.low { background: #14532d; color: #86efac; }
+
+/* Export Badges (for declarations) */
+.export-badge {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  background: #1e3a8a;
+  color: #93c5fd;
+}
+
+.export-badge.small {
+  font-size: 0.65em;
+  padding: 1px 6px;
+}
+
+/* Accordion Items Container */
+.accordion-items {
+  padding: 12px;
+  background: #0d1117;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Accordion Transition */
+.accordion-enter-active,
+.accordion-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.accordion-enter-from,
+.accordion-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.accordion-enter-to,
+.accordion-leave-from {
+  opacity: 1;
+  max-height: 2000px;
+}
+
+/* Unified List Items */
+.list-item {
+  background: #111827;
+  border-radius: 8px;
+  padding: 14px 16px;
+  border-left: 4px solid #6b7280;
+  transition: all 0.2s ease;
+}
+
+.list-item:hover {
+  transform: translateX(4px);
+  background: #1a232f;
+}
+
+/* List Item Severity Variants */
+.list-item.item-critical { border-left-color: #ef4444; }
+.list-item.item-high { border-left-color: #f97316; }
+.list-item.item-medium { border-left-color: #eab308; }
+.list-item.item-low { border-left-color: #22c55e; }
+.list-item.item-info { border-left-color: #3b82f6; }
+.list-item.item-exported { border-left-color: #3b82f6; }
+
+/* Similarity Variants for Duplicates */
+.list-item.item-high { border-left-color: #ef4444; }
+.list-item.item-medium { border-left-color: #eab308; }
+.list-item.item-low { border-left-color: #22c55e; }
+
+/* Item Header */
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #e5e7eb;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.item-severity {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.item-severity.critical { background: #7f1d1d; color: #fca5a5; }
+.item-severity.high { background: #7c2d12; color: #fdba74; }
+.item-severity.medium { background: #713f12; color: #fde047; }
+.item-severity.low { background: #14532d; color: #86efac; }
+.item-severity.info { background: #1e3a8a; color: #93c5fd; }
+
+/* Item Content */
+.item-description {
+  color: #d1d5db;
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+
+.item-location {
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
+  margin-bottom: 4px;
+}
+
+.item-suggestion {
+  color: #22c55e;
+  font-size: 0.85em;
+  padding: 8px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+/* Duplicate-specific Styles */
+.item-similarity {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.item-similarity.high { background: #7f1d1d; color: #fca5a5; }
+.item-similarity.medium { background: #713f12; color: #fde047; }
+.item-similarity.low { background: #14532d; color: #86efac; }
+
+.item-lines {
+  color: #9ca3af;
+  font-size: 0.8em;
+}
+
+.item-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-file {
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
 }
 
 /* Responsive Design */

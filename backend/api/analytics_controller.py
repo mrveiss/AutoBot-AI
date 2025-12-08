@@ -73,6 +73,7 @@ class AnalyticsController:
     """Core analytics controller with comprehensive monitoring capabilities"""
 
     def __init__(self):
+        """Initialize analytics controller with Redis, metrics, and tracking."""
         self.redis_manager = RedisDatabaseManager()
         self.metrics_collector = get_metrics_collector()
         self.code_analysis_path = PATH.PROJECT_ROOT / "tools" / "code-analysis-suite"
@@ -200,7 +201,8 @@ class AnalyticsController:
 
         try:
             # Check if code analysis tools are available
-            if not self.code_analysis_path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(self.code_analysis_path.exists):
                 analysis_results["status"] = "error"
                 analysis_results["error"] = "Code analysis suite not found"
                 return analysis_results
@@ -210,8 +212,10 @@ class AnalyticsController:
                 await self._run_code_analysis_suite(request, analysis_results)
 
             # Run code indexing if available
+            # Issue #358 - avoid blocking
+            code_index_exists = await asyncio.to_thread(self.code_index_path.exists)
             if (
-                self.code_index_path.exists()
+                code_index_exists
                 and request.analysis_type in CODE_INDEXING_ANALYSIS_TYPES
             ):
                 await self._run_code_indexing(request, analysis_results)

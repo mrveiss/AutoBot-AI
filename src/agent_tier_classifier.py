@@ -15,6 +15,7 @@ Tier 4 (Orchestrator): 50-70% cache hit rate
 
 import logging
 from enum import Enum
+from functools import lru_cache
 from typing import Dict
 
 logger = logging.getLogger(__name__)
@@ -68,9 +69,12 @@ TIER_PROMPT_MAP: Dict[AgentTier, str] = {
 }
 
 
+@lru_cache(maxsize=64)
 def get_agent_tier(agent_type: str) -> AgentTier:
     """
     Get the tier classification for an agent type.
+
+    Issue #380: Added @lru_cache to avoid repeated dictionary lookups.
 
     Args:
         agent_type: The type of agent (e.g., 'frontend-engineer')

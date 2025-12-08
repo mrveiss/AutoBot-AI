@@ -187,30 +187,31 @@ class CircuitBreaker:
             # If performance evaluation fails, don't open circuit based on performance
             return False
 
-    def _can_execute(self) -> bool:
-        """Check if a call can be executed based on current circuit state"""
-        current_time = time.time()
+    def _try_transition_to_half_open(self, current_time: float) -> bool:
+        """Attempt transition from OPEN to HALF_OPEN state (Issue #315 - extracted helper)."""
+        if current_time - self.last_failure_time < self.config.recovery_timeout:
+            return False
 
+        with self._lock:
+            if self.state != CircuitState.OPEN:  # Double-check with lock
+                return False
+
+            logger.info(f"Circuit breaker {self.name}: Transitioning to HALF_OPEN")
+            self.state = CircuitState.HALF_OPEN
+            self.state_change_time = current_time
+            self.stats["state_changes"] += 1
+            return True
+
+    def _can_execute(self) -> bool:
+        """Check if a call can be executed based on current circuit state (Issue #315 - refactored)."""
         if self.state == CircuitState.CLOSED:
             return True
 
-        elif self.state == CircuitState.OPEN:
-            # Check if enough time has passed to try half-open
-            if current_time - self.last_failure_time >= self.config.recovery_timeout:
-                with self._lock:
-                    if self.state == CircuitState.OPEN:  # Double-check with lock
-                        logger.info(
-                            f"Circuit breaker {self.name}: Transitioning to HALF_OPEN"
-                        )
-                        self.state = CircuitState.HALF_OPEN
-                        self.state_change_time = current_time
-                        self.stats["state_changes"] += 1
-                        return True
-            return False
+        if self.state == CircuitState.HALF_OPEN:
+            return True  # Allow limited calls to test service recovery
 
-        elif self.state == CircuitState.HALF_OPEN:
-            # Allow limited calls to test service recovery
-            return True
+        if self.state == CircuitState.OPEN:
+            return self._try_transition_to_half_open(time.time())
 
         return False
 

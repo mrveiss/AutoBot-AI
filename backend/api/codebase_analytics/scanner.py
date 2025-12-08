@@ -43,9 +43,11 @@ def _should_count_file(file_path: Path) -> bool:
 
 async def _count_scannable_files(root_path_obj: Path) -> int:
     """Count files to be scanned for progress tracking (Issue #315: extracted)."""
+    # Issue #358 - avoid blocking (must use lambda to defer rglob execution)
+    all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
     total_files = 0
     file_count = 0
-    for file_path in root_path_obj.rglob("*"):
+    for file_path in all_files:
         if _should_count_file(file_path):
             total_files += 1
             file_count += 1
@@ -298,9 +300,13 @@ async def scan_codebase(
             )
 
         # Walk through all files (Issue #315: restructured to reduce nesting)
+        # Issue #358 - avoid blocking (must use lambda to defer rglob execution)
+        all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
         files_processed = 0
-        for file_path in root_path_obj.rglob("*"):
-            if not file_path.is_file():
+        for file_path in all_files:
+            # Issue #358 - avoid blocking
+            is_file = await asyncio.to_thread(file_path.is_file)
+            if not is_file:
                 continue
             if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
                 continue

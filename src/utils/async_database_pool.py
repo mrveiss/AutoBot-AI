@@ -55,38 +55,39 @@ class AsyncSQLiteConnectionPool:
         self._stats = PoolStats()
         self._initialized = False
 
+    async def _apply_connection_pragmas(self, conn: aiosqlite.Connection) -> None:
+        """Apply performance-tuning PRAGMA settings to connection. (Issue #315 - extracted)"""
+        await conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
+        await conn.execute("PRAGMA synchronous=NORMAL")  # Faster writes
+        await conn.execute("PRAGMA cache_size=10000")  # Larger cache
+        await conn.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
+        await conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
+        await conn.execute("PRAGMA foreign_keys=ON")  # Enable foreign keys
+
+    async def _close_connection_safely(self, conn: aiosqlite.Connection) -> None:
+        """Close connection with error suppression. (Issue #315 - extracted)"""
+        try:
+            await conn.close()
+        except Exception:
+            pass  # Best-effort cleanup
+
     async def _create_connection(self) -> aiosqlite.Connection:
         """Create a new async SQLite connection with optimized settings."""
         conn = None
         try:
-            conn = await aiosqlite.connect(
-                self.db_path,
-                timeout=self.timeout,
-            )
-
-            # Enable optimizations
-            await conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
-            await conn.execute("PRAGMA synchronous=NORMAL")  # Faster writes
-            await conn.execute("PRAGMA cache_size=10000")  # Larger cache
-            await conn.execute("PRAGMA temp_store=MEMORY")  # Use memory for temp tables
-            await conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
-            await conn.execute("PRAGMA foreign_keys=ON")  # Enable foreign keys
+            conn = await aiosqlite.connect(self.db_path, timeout=self.timeout)
+            await self._apply_connection_pragmas(conn)
 
             async with self._lock:
                 self._created_connections += 1
                 self._stats.connections_created += 1
 
-            logger.debug(
-                f"Created new async SQLite connection #{self._created_connections}"
-            )
+            logger.debug(f"Created new async SQLite connection #{self._created_connections}")
             return conn
         except aiosqlite.Error as e:
             logger.error(f"Failed to create async SQLite connection: {e}")
             if conn:
-                try:
-                    await conn.close()
-                except Exception:
-                    pass  # Best-effort cleanup
+                await self._close_connection_safely(conn)
             raise RuntimeError(f"Failed to create database connection: {e}")
 
     async def _initialize_pool(self):

@@ -157,41 +157,54 @@ class OSAwareToolSelector:
             },
         }
 
+    def _get_tools_for_os(
+        self, intent_tools: Dict, os_info
+    ) -> Optional[List[str]]:
+        """Get tools for the current OS/distro (Issue #315 - extracted helper)."""
+        if os_info.os_type not in intent_tools:
+            return None
+
+        tools = intent_tools[os_info.os_type]
+        if not isinstance(tools, dict) or not os_info.distro:
+            return tools if isinstance(tools, list) else None
+
+        # Handle Linux distro-specific tools
+        if os_info.distro in tools:
+            return tools[os_info.distro]
+
+        # Fallback to Ubuntu or first available distro
+        fallback_distro = LinuxDistro.UBUNTU
+        return tools.get(
+            fallback_distro,
+            list(tools.values())[0] if tools.values() else [],
+        )
+
+    def _get_mapped_tools(self, goal: ProcessedGoal, os_info) -> Optional[List[str]]:
+        """Get mapped tools for goal (Issue #315 - extracted helper)."""
+        if goal.category not in self.tool_mappings:
+            return None
+        category_tools = self.tool_mappings[goal.category]
+
+        if goal.intent not in category_tools:
+            return None
+        intent_tools = category_tools[goal.intent]
+
+        return self._get_tools_for_os(intent_tools, os_info)
+
     async def select_tool(self, goal: ProcessedGoal) -> ToolSelection:
-        """Select the best tool for the given goal."""
+        """Select the best tool for the given goal (Issue #315 - refactored)."""
         os_info = await self.os_detector.detect_system()
 
-        # Get tool mapping for this goal
-        if goal.category in self.tool_mappings:
-            category_tools = self.tool_mappings[goal.category]
-            if goal.intent in category_tools:
-                intent_tools = category_tools[goal.intent]
-
-                # Handle nested OS/distro mapping
-                if os_info.os_type in intent_tools:
-                    tools = intent_tools[os_info.os_type]
-
-                    # Handle Linux distro-specific tools
-                    if isinstance(tools, dict) and os_info.distro:
-                        if os_info.distro in tools:
-                            tools = tools[os_info.distro]
-                        else:
-                            # Fallback to common Linux tools
-                            fallback_distro = LinuxDistro.UBUNTU
-                            tools = tools.get(
-                                fallback_distro,
-                                list(tools.values())[0] if tools.values() else [],
-                            )
-
-                    if isinstance(tools, list) and tools:
-                        # Select best available tool
-                        return await self._select_best_available_tool(tools, goal)
+        # Try mapped tools first
+        tools = self._get_mapped_tools(goal, os_info)
+        if tools:
+            return await self._select_best_available_tool(tools, goal)
 
         # Fallback to suggested tools from goal processing
         if goal.suggested_tools:
             return await self._select_best_available_tool(goal.suggested_tools, goal)
 
-        # No specific tools found - let LLM decide
+        # No specific tools found
         return ToolSelection(
             primary_command="",
             fallback_commands=[],

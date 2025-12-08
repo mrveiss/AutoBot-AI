@@ -554,25 +554,44 @@ class ArchitectureAnalyzer:
             mermaid_diagram=mermaid_diagram,
         )
 
+    def _should_skip_python_file(self, py_file: Path) -> bool:
+        """Check if a Python file should be skipped from analysis. (Issue #315 - extracted)"""
+        if "__pycache__" in str(py_file):
+            return True
+        if "test_" in py_file.name or "_test.py" in py_file.name:
+            return True
+        return False
+
+    def _collect_files_from_directory(self, dir_path: Path) -> List[str]:
+        """Collect Python files from a directory. (Issue #315 - extracted)"""
+        files = []
+        for py_file in dir_path.rglob("*.py"):
+            if not self._should_skip_python_file(py_file):
+                files.append(str(py_file))
+        return files
+
     async def _collect_python_files(self, paths: List[str]) -> List[str]:
         """Collect all Python files from specified paths."""
         python_files = []
 
         for path_str in paths:
             path = self.base_path / path_str
-            if not path.exists():
+            # Issue #358 - avoid blocking
+            if not await asyncio.to_thread(path.exists):
                 continue
 
-            if path.is_file() and path.suffix == ".py":
+            # Issue #358 - avoid blocking
+            is_file = await asyncio.to_thread(path.is_file)
+            is_dir = await asyncio.to_thread(path.is_dir) if not is_file else False
+
+            if is_file and path.suffix == ".py":
                 python_files.append(str(path))
-            elif path.is_dir():
-                for py_file in path.rglob("*.py"):
-                    # Skip test files, __pycache__, etc.
-                    if "__pycache__" in str(py_file):
-                        continue
-                    if "test_" in py_file.name or "_test.py" in py_file.name:
-                        continue
-                    python_files.append(str(py_file))
+            elif is_dir:
+                # _collect_files_from_directory is sync, run in thread
+                files = await asyncio.to_thread(
+                    self._collect_files_from_directory, path
+                )
+                python_files.extend(files)
 
         return python_files
 
@@ -590,6 +609,14 @@ class ArchitectureAnalyzer:
                 imports.append(node.module)
                 for alias in node.names:
                     imports.append(f"{node.module}.{alias.name}")
+
+    def _extract_attributes_from_assign(self, item: ast.Assign) -> List[str]:
+        """Extract attribute names from an assignment node. (Issue #315 - extracted)"""
+        attrs = []
+        for target in item.targets:
+            if isinstance(target, ast.Name):
+                attrs.append(target.id)
+        return attrs
 
     def _extract_class_info(self, node: ast.ClassDef) -> Dict[str, Any]:
         """
@@ -610,9 +637,7 @@ class ArchitectureAnalyzer:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 class_info["methods"].append(item.name)
             elif isinstance(item, ast.Assign):
-                for target in item.targets:
-                    if isinstance(target, ast.Name):
-                        class_info["attributes"].append(target.id)
+                class_info["attributes"].extend(self._extract_attributes_from_assign(item))
 
         return class_info
 

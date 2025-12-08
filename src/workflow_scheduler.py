@@ -284,6 +284,7 @@ class WorkflowScheduler:
     """Main workflow scheduler with persistent storage (thread-safe)"""
 
     def __init__(self, storage_path: str = "data/scheduled_workflows.json"):
+        """Initialize workflow scheduler with persistent storage and queue management."""
         self.storage_path = storage_path
         self.scheduled_workflows: Dict[str, ScheduledWorkflow] = {}
         self.completed_workflows: Dict[str, ScheduledWorkflow] = {}
@@ -661,32 +662,29 @@ class WorkflowScheduler:
             except Exception as e:
                 logger.error(f"Failed to save workflows: {e}")
 
+    def _load_workflow_dict(
+        self, data: Dict[str, Any], key: str, target: Dict[str, ScheduledWorkflow]
+    ) -> None:
+        """Load workflows from data dict into target (Issue #315 - extracted helper)."""
+        for wf_id, wf_data in data.get(key, {}).items():
+            try:
+                workflow = ScheduledWorkflow.from_dict(wf_data)
+                target[wf_id] = workflow
+            except Exception as e:
+                logger.warning(f"Failed to load {key} workflow {wf_id}: {e}")
+
     def _load_workflows(self) -> None:
-        """Load workflows from persistent storage (thread-safe)"""
+        """Load workflows from persistent storage (Issue #315 - refactored depth 5 to 3)."""
         with self._file_lock:
             try:
                 with open(self.storage_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
 
-                # Load scheduled workflows
-                for wf_id, wf_data in data.get("scheduled", {}).items():
-                    try:
-                        workflow = ScheduledWorkflow.from_dict(wf_data)
-                        self.scheduled_workflows[wf_id] = workflow
-                    except Exception as e:
-                        logger.warning(f"Failed to load scheduled workflow {wf_id}: {e}")
-
-                # Load completed workflows
-                for wf_id, wf_data in data.get("completed", {}).items():
-                    try:
-                        workflow = ScheduledWorkflow.from_dict(wf_data)
-                        self.completed_workflows[wf_id] = workflow
-                    except Exception as e:
-                        logger.warning(f"Failed to load completed workflow {wf_id}: {e}")
+                self._load_workflow_dict(data, "scheduled", self.scheduled_workflows)
+                self._load_workflow_dict(data, "completed", self.completed_workflows)
 
             except FileNotFoundError:
-                # No existing data, start fresh
-                pass
+                pass  # No existing data, start fresh
             except Exception as e:
                 logger.error(f"Failed to load workflows: {e}")
 

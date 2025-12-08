@@ -31,6 +31,7 @@ class MultiModalProcessor:
     """
 
     def __init__(self):
+        """Initialize multimodal processor as wrapper around unified processor."""
         self._unified = unified_processor
         logger.info("Using unified multi-modal processor for backward compatibility")
 

@@ -265,21 +265,26 @@ class SpeechRecognitionEngine:
                 logger.error(f"Speech recognition failed: {e}")
                 raise
 
-    async def _analyze_audio_quality(self, audio_input: AudioInput) -> SpeechQuality:
-        """Analyze audio quality for speech recognition"""
-        try:
-            # Simple audio quality heuristics
-            if audio_input.sample_rate < 8000:
-                return SpeechQuality.POOR
-            elif audio_input.sample_rate < 16000:
-                return SpeechQuality.FAIR
-            elif audio_input.duration < 0.5:
-                return SpeechQuality.POOR
-            elif audio_input.duration > 30:
-                return SpeechQuality.FAIR  # Very long audio might have quality issues
-            else:
-                return SpeechQuality.GOOD
+    def _evaluate_audio_quality(self, audio_input: AudioInput) -> SpeechQuality:
+        """Evaluate audio quality based on sample rate and duration (Issue #315 - extracted helper)."""
+        # Check sample rate quality
+        if audio_input.sample_rate < 8000:
+            return SpeechQuality.POOR
+        if audio_input.sample_rate < 16000:
+            return SpeechQuality.FAIR
 
+        # Check duration quality
+        if audio_input.duration < 0.5:
+            return SpeechQuality.POOR
+        if audio_input.duration > 30:
+            return SpeechQuality.FAIR  # Very long audio might have quality issues
+
+        return SpeechQuality.GOOD
+
+    async def _analyze_audio_quality(self, audio_input: AudioInput) -> SpeechQuality:
+        """Analyze audio quality for speech recognition (Issue #315 - refactored depth 5 to 2)."""
+        try:
+            return self._evaluate_audio_quality(audio_input)
         except Exception as e:
             logger.debug(f"Audio quality analysis failed: {e}")
             return SpeechQuality.UNKNOWN
@@ -959,6 +964,7 @@ class VoiceProcessingSystem:
     """Main voice processing system coordinator"""
 
     def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        """Initialize voice processing system with speech recognition and TTS engines."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.speech_recognition = SpeechRecognitionEngine()
         self.nlp_processor = NaturalLanguageProcessor()

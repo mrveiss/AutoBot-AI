@@ -20,6 +20,30 @@ from src.constants.path_constants import PATH
 logger = logging.getLogger(__name__)
 
 
+def _read_pty_data(fd: int) -> tuple:
+    """Read data from PTY and return (event_type, content) (Issue #315: extracted).
+
+    Returns:
+        Tuple of (event_type: str, content: str, should_break: bool)
+        event_type: 'output', 'eof', or 'error'
+        content: The data read or error message
+        should_break: True if loop should exit
+    """
+    try:
+        data = os.read(fd, 4096)
+        if data:
+            output = data.decode("utf-8", errors="replace")
+            return ("output", output, False)
+        else:
+            # EOF
+            return ("eof", "", True)
+    except OSError as e:
+        if e.errno == 5:  # Input/output error - PTY closed
+            return ("error", "PTY closed", True)
+        logger.error(f"PTY read error: {e}")
+        return ("error", str(e), False)
+
+
 class SimplePTY:
     """Simple PTY implementation using synchronous I/O
 
@@ -36,6 +60,7 @@ class SimplePTY:
         use_login_shell: bool = False,
         custom_ps1: Optional[str] = None,
     ):
+        """Initialize SimplePTY with session ID and optional shell configuration."""
         self.session_id = session_id
         self.use_login_shell = use_login_shell
         self.custom_ps1 = custom_ps1
@@ -167,7 +192,7 @@ class SimplePTY:
             return False
 
     def _read_loop(self):
-        """Background thread to read from PTY"""
+        """Background thread to read from PTY (Issue #315: uses helper)."""
         while self.running and self.master_fd is not None:
             try:
                 # Cache master_fd to prevent race condition
@@ -179,19 +204,11 @@ class SimplePTY:
                 ready, _, _ = select.select([fd], [], [], 0.01)
 
                 if ready:
-                    try:
-                        data = os.read(fd, 4096)
-                        if data:
-                            output = data.decode("utf-8", errors="replace")
-                            self.output_queue.put(("output", output))
-                        else:
-                            # EOF
-                            self.output_queue.put(("eof", ""))
-                            break
-                    except OSError as e:
-                        if e.errno == 5:  # Input/output error - PTY closed
-                            break
-                        logger.error(f"PTY read error: {e}")
+                    event_type, content, should_break = _read_pty_data(fd)
+                    if event_type in ("output", "eof"):
+                        self.output_queue.put((event_type, content))
+                    if should_break:
+                        break
 
             except Exception as e:
                 logger.error(f"Error in PTY read loop: {e}")
@@ -366,6 +383,7 @@ class SimplePTYManager:
     """Simple PTY manager with thread-safe session management"""
 
     def __init__(self):
+        """Initialize PTY manager with empty sessions dict and thread lock."""
         self.sessions = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
 

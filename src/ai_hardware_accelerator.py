@@ -145,6 +145,7 @@ class AIHardwareAccelerator:
     """
 
     def __init__(self):
+        """Initialize AI hardware accelerator with NPU/GPU/CPU routing config."""
         self.redis_client = None
         self.device_metrics = {}
         self.task_history = []
@@ -311,45 +312,38 @@ class AIHardwareAccelerator:
             except Exception as e:
                 logger.error(f"❌ Hardware monitoring error: {e}")
 
+    def _classify_by_threshold(self, value: int, light_threshold: int, mod_threshold: int) -> TaskComplexity:
+        """Classify by value thresholds (Issue #315 - extracted helper)."""
+        if value < light_threshold:
+            return TaskComplexity.LIGHTWEIGHT
+        if value < mod_threshold:
+            return TaskComplexity.MODERATE
+        return TaskComplexity.HEAVY
+
     def _classify_task_complexity(self, task: ProcessingTask) -> TaskComplexity:
-        """Classify task complexity for optimal device routing."""
+        """Classify task complexity for optimal device routing (Issue #315 - refactored depth 5 to 2)."""
         task_type = task.task_type
         input_data = task.input_data
 
-        # Task complexity classification
         if task_type == "embedding_generation":
             text_length = len(input_data.get("text", ""))
-            if text_length < 500:
-                return TaskComplexity.LIGHTWEIGHT
-            elif text_length < 2000:
-                return TaskComplexity.MODERATE
-            else:
-                return TaskComplexity.HEAVY
+            return self._classify_by_threshold(text_length, 500, 2000)
 
-        elif task_type == "semantic_search":
+        if task_type == "semantic_search":
             num_documents = input_data.get("num_documents", 0)
-            if num_documents < 100:
-                return TaskComplexity.LIGHTWEIGHT
-            elif num_documents < 1000:
-                return TaskComplexity.MODERATE
-            else:
-                return TaskComplexity.HEAVY
+            return self._classify_by_threshold(num_documents, 100, 1000)
 
-        elif task_type == "chat_inference":
+        if task_type == "chat_inference":
             model_size = input_data.get(
                 "model_size_mb", model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB
             )
-            # Uses centralized thresholds from model_constants.py
-            if model_size < model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB:
-                return TaskComplexity.LIGHTWEIGHT
-            elif model_size < model_config.MODEL_SIZE_MODERATE_THRESHOLD_MB:
-                return TaskComplexity.MODERATE
-            else:
-                return TaskComplexity.HEAVY
+            return self._classify_by_threshold(
+                model_size,
+                model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB,
+                model_config.MODEL_SIZE_MODERATE_THRESHOLD_MB,
+            )
 
-        else:
-            # Conservative default
-            return TaskComplexity.MODERATE
+        return TaskComplexity.MODERATE  # Conservative default
 
     def _select_optimal_device(self, task: ProcessingTask) -> HardwareDevice:
         """Select optimal device for task processing."""

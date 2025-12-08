@@ -26,6 +26,7 @@ class LLMStreamProcessor:
     """
 
     def __init__(self, response: aiohttp.ClientResponse):
+        """Initialize stream processor with response object and timing state."""
         self.response = response
         self.start_time = time.time()
         self.content_buffer = []
@@ -82,6 +83,7 @@ class LLMStreamingInterface:
     """
 
     def __init__(self):
+        """Initialize streaming interface with singleton HTTP client."""
         self._http_client = get_http_client()  # Use singleton HTTP client
 
     async def stream_ollama_request(self, url: str, data: dict) -> Tuple[str, bool]:

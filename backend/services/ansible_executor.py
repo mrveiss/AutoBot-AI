@@ -192,7 +192,8 @@ class AnsibleExecutor:
         base_path = Path(__file__).parent.parent.parent / "ansible"
         playbook_path = base_path / "playbooks" / playbook_name
 
-        if not playbook_path.exists():
+        # Issue #358 - avoid blocking
+        if not await asyncio.to_thread(playbook_path.exists):
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
 
         return str(playbook_path)

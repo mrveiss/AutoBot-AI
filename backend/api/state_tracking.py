@@ -6,6 +6,7 @@ State Tracking API for AutoBot
 Provides endpoints for comprehensive project state tracking and reporting
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -117,6 +118,7 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
 
         # Run snapshot in background
         async def capture_snapshot():
+            """Capture and log state snapshot asynchronously."""
             snapshot = await tracker.capture_state_snapshot()
             logger.info(f"State snapshot captured at {snapshot.timestamp}")
 
@@ -382,7 +384,8 @@ async def export_state_data(request: ExportRequest):
         # Ensure data directory and reports subdirectory exist
         ensure_data_directory()
         reports_dir = get_data_path("reports/state_tracking")
-        reports_dir.mkdir(parents=True, exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(reports_dir.mkdir, parents=True, exist_ok=True)
 
         output_path = str(reports_dir / filename)
 

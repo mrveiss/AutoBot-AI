@@ -341,6 +341,7 @@ class GPUSemanticChunker:
 
                 # GPU embedding computation
                 def gpu_encode_batch(sentences_batch):
+                    """Encode sentence batch using GPU with torch.no_grad()."""
                     with torch.no_grad():
                         embeddings = self._embedding_model.encode(
                             sentences_batch,
@@ -380,18 +381,28 @@ class GPUSemanticChunker:
         """Basic sentence splitting algorithm."""
         import re
 
+        # Issue #383 - Use regex split instead of character-by-character string building
         sentence_endings = r"[.!?]+(?:\s|$)"
+
+        # Split text by sentence endings, keeping the delimiters
+        raw_splits = re.split(f"({sentence_endings})", text)
+
+        # Recombine splits: each sentence is content + delimiter
         sentences = []
-        current_sentence = ""
+        current_parts = []
+        for part in raw_splits:
+            current_parts.append(part)
+            if re.match(sentence_endings, part):
+                sentence = "".join(current_parts).strip()
+                if sentence:
+                    sentences.append(sentence)
+                current_parts = []
 
-        for char in text:
-            current_sentence += char
-            if re.search(sentence_endings, current_sentence):
-                sentences.append(current_sentence.strip())
-                current_sentence = ""
-
-        if current_sentence.strip():
-            sentences.append(current_sentence.strip())
+        # Add any remaining text
+        if current_parts:
+            remaining = "".join(current_parts).strip()
+            if remaining:
+                sentences.append(remaining)
 
         return [s for s in sentences if len(s.split()) >= 3]
 

@@ -952,10 +952,31 @@ class AutoBotMemoryGraph:
 
         return entities[:limit]
 
+    def _entity_matches_query(
+        self, entity: Dict[str, Any], query_lower: str, entity_type: Optional[str]
+    ) -> bool:
+        """Check if entity matches search criteria (Issue #315 - extracted helper)."""
+        # Apply type filter
+        if entity_type and entity.get("type") != entity_type:
+            return False
+
+        # Skip text matching for wildcards
+        if not query_lower or query_lower == "*":
+            return True
+
+        # Check name match
+        if query_lower in entity.get("name", "").lower():
+            return True
+
+        # Check observations match
+        return any(
+            query_lower in obs.lower() for obs in entity.get("observations", [])
+        )
+
     async def _fallback_search(
         self, query: str, entity_type: Optional[str], limit: int
     ) -> List[Dict[str, Any]]:
-        """Fallback search when RediSearch is unavailable"""
+        """Fallback search when RediSearch is unavailable (Issue #315 - refactored depth 5 to 3)."""
         try:
             entities = []
             query_lower = query.lower() if query else ""
@@ -963,23 +984,11 @@ class AutoBotMemoryGraph:
             # Scan all entity keys
             async for key in self.redis_client.scan_iter(match="memory:entity:*"):
                 entity = await self.redis_client.json().get(key)
-                if entity:
-                    # Apply filters
-                    if entity_type and entity.get("type") != entity_type:
-                        continue
+                if not entity:
+                    continue
 
-                    # Simple text matching (skip for wildcards)
-                    if query and query != "*":
-                        name_match = query_lower in entity.get("name", "").lower()
-                        obs_match = any(
-                            query_lower in obs.lower()
-                            for obs in entity.get("observations", [])
-                        )
-                        if not (name_match or obs_match):
-                            continue
-
+                if self._entity_matches_query(entity, query_lower, entity_type):
                     entities.append(entity)
-
                     if len(entities) >= limit:
                         break
 

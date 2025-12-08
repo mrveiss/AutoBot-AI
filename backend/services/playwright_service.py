@@ -35,6 +35,7 @@ class PlaywrightService:
         container_port: int = NetworkConstants.BROWSER_SERVICE_PORT,
         timeout: int = 30,
     ):
+        """Initialize Playwright service with container connection settings."""
         self.base_url = f"http://{container_host}:{container_port}"
         self.timeout = timeout
         self.http_client = get_http_client()

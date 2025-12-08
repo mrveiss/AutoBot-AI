@@ -23,6 +23,7 @@ class StepGenerator:
     """Generates intelligent workflow steps"""
 
     def __init__(self, enhanced_orchestrator: EnhancedOrchestrator = None):
+        """Initialize step generator with optional enhanced orchestrator."""
         self.enhanced_orchestrator = enhanced_orchestrator or EnhancedOrchestrator()
 
     async def generate_smart_steps(

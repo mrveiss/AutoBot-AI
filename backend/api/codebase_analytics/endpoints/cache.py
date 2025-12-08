@@ -5,6 +5,7 @@
 Cache management endpoints
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter
@@ -32,13 +33,16 @@ async def clear_codebase_cache():
 
     if redis_client:
         # Get all codebase keys
-        keys_to_delete = []
-        for key in redis_client.scan_iter(match="codebase:*"):
-            keys_to_delete.append(key)
+        # Issue #361 - avoid blocking
+        def _collect_and_delete():
+            keys_to_delete = []
+            for key in redis_client.scan_iter(match="codebase:*"):
+                keys_to_delete.append(key)
+            if keys_to_delete:
+                redis_client.delete(*keys_to_delete)
+            return keys_to_delete
 
-        if keys_to_delete:
-            redis_client.delete(*keys_to_delete)
-
+        keys_to_delete = await asyncio.to_thread(_collect_and_delete)
         storage_type = "redis"
     else:
         # Clear in-memory storage

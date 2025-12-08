@@ -6,6 +6,7 @@ Dependency analysis endpoints
 """
 
 import ast
+import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List
@@ -45,6 +46,39 @@ def _extract_imports_from_ast(tree: ast.AST, stdlib_modules: set) -> tuple:
     return list(set(file_imports)), external_deps
 
 
+def _process_chromadb_metadata(
+    metadata: dict, modules: Dict[str, Dict], seen_files: set
+) -> None:
+    """Process a single metadata entry from ChromaDB (Issue #315: extracted).
+
+    Updates modules dict and seen_files set in place.
+    """
+    file_path = metadata.get("file_path", "")
+    if not file_path:
+        return
+
+    # Add new module if not seen
+    if file_path not in seen_files:
+        seen_files.add(file_path)
+        modules[file_path] = {
+            "path": file_path,
+            "name": Path(file_path).stem,
+            "package": str(Path(file_path).parent),
+            "functions": 0,
+            "classes": 0,
+            "imports": [],
+        }
+
+    # Update counts based on type
+    if file_path not in modules:
+        return
+    metadata_type = metadata.get("type")
+    if metadata_type == "function":
+        modules[file_path]["functions"] += 1
+    elif metadata_type == "class":
+        modules[file_path]["classes"] += 1
+
+
 async def _read_file_content(py_file: Path) -> str | None:
     """Read file content safely with aiofiles (Issue #315)."""
     try:
@@ -55,23 +89,31 @@ async def _read_file_content(py_file: Path) -> str | None:
         return None
 
 
-def _detect_circular_deps(import_relationships: List[Dict]) -> List[List[str]]:
-    """Detect simple circular dependencies (A→B, B→A) (Issue #315)."""
+def _build_import_map(import_relationships: List[Dict]) -> Dict[str, set]:
+    """Build import map from relationships. (Issue #315 - extracted)"""
     import_map: Dict[str, set] = {}
     for rel in import_relationships:
         source = rel["source"]
         if source not in import_map:
             import_map[source] = set()
         import_map[source].add(rel["target"])
+    return import_map
 
+
+def _detect_circular_deps(import_relationships: List[Dict]) -> List[List[str]]:
+    """Detect simple circular dependencies (A→B, B→A) (Issue #315)."""
+    import_map = _build_import_map(import_relationships)
+
+    # Find mutual imports (A imports B and B imports A)
     circular_deps = []
+    seen = set()
     for source, targets in import_map.items():
         for target in targets:
-            for other_source, other_targets in import_map.items():
-                if target in other_source and source in other_targets:
-                    cycle = sorted([source, other_source])
-                    if cycle not in circular_deps:
-                        circular_deps.append(cycle)
+            if target in import_map and source in import_map[target]:
+                cycle = tuple(sorted([source, target]))
+                if cycle not in seen:
+                    seen.add(cycle)
+                    circular_deps.append(list(cycle))
     return circular_deps
 
 
@@ -108,26 +150,10 @@ async def get_dependencies():
                 where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
             )
 
-            # Build module map from stored data
+            # Build module map from stored data (Issue #315: uses helper)
             seen_files = set()
             for metadata in results.get("metadatas", []):
-                file_path = metadata.get("file_path", "")
-                if file_path and file_path not in seen_files:
-                    seen_files.add(file_path)
-                    modules[file_path] = {
-                        "path": file_path,
-                        "name": Path(file_path).stem,
-                        "package": str(Path(file_path).parent),
-                        "functions": 0,
-                        "classes": 0,
-                        "imports": [],
-                    }
-
-                if file_path in modules:
-                    if metadata.get("type") == "function":
-                        modules[file_path]["functions"] += 1
-                    elif metadata.get("type") == "class":
-                        modules[file_path]["classes"] += 1
+                _process_chromadb_metadata(metadata, modules, seen_files)
 
             logger.info(f"Found {len(modules)} modules in ChromaDB")
 
@@ -138,7 +164,8 @@ async def get_dependencies():
     # Fallback: scan the actual filesystem for more detailed import analysis
     # This gives us actual import statements
     project_root = get_project_root()
-    python_files = list(project_root.rglob("*.py"))
+    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
+    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
 
     # Filter out unwanted directories
     excluded_dirs = {

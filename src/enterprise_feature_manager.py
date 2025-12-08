@@ -60,6 +60,7 @@ class EnterpriseFeatureManager:
     """Manages enterprise-grade features and capabilities"""
 
     def __init__(self, config_path: Optional[Path] = None):
+        """Initialize enterprise feature manager with VM topology and resource pools."""
         import os
 
         base_dir = os.getenv(
@@ -442,24 +443,27 @@ class EnterpriseFeatureManager:
                 "feature": feature_name,
             }
 
+    def _get_feature_enablers(self) -> Dict[str, Any]:
+        """Get feature name to enabler method mapping (Issue #315 - dispatch table)."""
+        return {
+            "web_research_orchestration": self._enable_web_research_orchestration,
+            "cross_vm_load_balancing": self._enable_cross_vm_load_balancing,
+            "intelligent_task_routing": self._enable_intelligent_task_routing,
+            "comprehensive_health_monitoring": self._enable_comprehensive_health_monitoring,
+            "graceful_degradation": self._enable_graceful_degradation,
+        }
+
     async def _enable_feature_implementation(
         self, feature_name: str, feature: EnterpriseFeature
     ) -> Dict[str, Any]:
-        """Implement specific feature enablement logic"""
+        """Implement specific feature enablement logic (Issue #315 - refactored depth 5 to 2)."""
+        enablers = self._get_feature_enablers()
 
-        if feature_name == "web_research_orchestration":
-            return await self._enable_web_research_orchestration(feature)
-        elif feature_name == "cross_vm_load_balancing":
-            return await self._enable_cross_vm_load_balancing(feature)
-        elif feature_name == "intelligent_task_routing":
-            return await self._enable_intelligent_task_routing(feature)
-        elif feature_name == "comprehensive_health_monitoring":
-            return await self._enable_comprehensive_health_monitoring(feature)
-        elif feature_name == "graceful_degradation":
-            return await self._enable_graceful_degradation(feature)
-        else:
-            # Generic feature enablement
-            return {"success": True, "capabilities": [f"{feature_name}_enabled"]}
+        if feature_name in enablers:
+            return await enablers[feature_name](feature)
+
+        # Generic feature enablement
+        return {"success": True, "capabilities": [f"{feature_name}_enabled"]}
 
     async def _enable_web_research_orchestration(
         self, feature: EnterpriseFeature

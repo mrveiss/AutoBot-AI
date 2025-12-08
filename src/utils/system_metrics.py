@@ -45,6 +45,7 @@ class SystemMetricsCollector:
     """
 
     def __init__(self):
+        """Initialize system metrics collector with Prometheus integration."""
         self.logger = logging.getLogger(__name__)
         self._collection_interval = config.get(
             "monitoring.metrics.collection_interval", 5
@@ -169,9 +170,8 @@ class SystemMetricsCollector:
             if not redis_client or not hasattr(redis_client, "ping"):
                 return 0.0
 
-            ping_result = redis_client.ping()
-            if asyncio.iscoroutine(ping_result):
-                await ping_result
+            # Issue #361 - always await for async client
+            await redis_client.ping()
             return 1.0
 
         except Exception as ping_error:

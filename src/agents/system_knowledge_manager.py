@@ -28,6 +28,7 @@ class SystemKnowledgeManager:
     """Manages system knowledge templates and runtime knowledge base integration"""
 
     def __init__(self, knowledge_base: KnowledgeBase):
+        """Initialize manager with knowledge base and directory paths."""
         self.knowledge_base = knowledge_base
         self.librarian = EnhancedKBLibrarian(knowledge_base)
 
@@ -120,8 +121,9 @@ class SystemKnowledgeManager:
         if not dir_exists:
             return file_states
 
+        # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(
-            list, self.system_knowledge_dir.rglob("*.yaml")
+            lambda: list(self.system_knowledge_dir.rglob("*.yaml"))
         )
         for file_path in yaml_files:
             try:
@@ -156,7 +158,8 @@ class SystemKnowledgeManager:
                 return None
 
             cache_key = "autobot:system_knowledge:file_states"
-            cached_data = redis_client.get(cache_key)
+            # Issue #361 - avoid blocking
+            cached_data = await asyncio.to_thread(redis_client.get, cache_key)
 
             if cached_data:
                 data = json.loads(cached_data)
@@ -190,7 +193,9 @@ class SystemKnowledgeManager:
             cache_key = "autobot:system_knowledge:file_states"
             ttl_seconds = 30 * 24 * 60 * 60  # 30 days
 
-            redis_client.setex(
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(
+                redis_client.setex,
                 cache_key,
                 ttl_seconds,
                 json.dumps(
@@ -282,9 +287,12 @@ class SystemKnowledgeManager:
         tools_dir = self.system_knowledge_dir / "tools"
         workflows_dir = self.system_knowledge_dir / "workflows"
         procedures_dir = self.system_knowledge_dir / "procedures"
-        await asyncio.to_thread(tools_dir.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(workflows_dir.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(procedures_dir.mkdir, parents=True, exist_ok=True)
+        # Issue #379: Create directories in parallel
+        await asyncio.gather(
+            asyncio.to_thread(tools_dir.mkdir, parents=True, exist_ok=True),
+            asyncio.to_thread(workflows_dir.mkdir, parents=True, exist_ok=True),
+            asyncio.to_thread(procedures_dir.mkdir, parents=True, exist_ok=True),
+        )
 
         # Create default steganography tools knowledge
         steganography_tools = {
@@ -519,7 +527,8 @@ class SystemKnowledgeManager:
         if not dir_exists:
             return
 
-        yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info(f"Importing tools from {yaml_file}")
 
@@ -615,7 +624,8 @@ class SystemKnowledgeManager:
         if not dir_exists:
             return
 
-        yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info(f"Importing workflow from {yaml_file}")
 
@@ -682,7 +692,8 @@ class SystemKnowledgeManager:
         if not dir_exists:
             return
 
-        yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+        # Issue #358 - wrap glob in lambda to avoid blocking
+        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             logger.info(f"Importing procedure from {yaml_file}")
 
@@ -759,7 +770,8 @@ class SystemKnowledgeManager:
         tools_dir = self.runtime_knowledge_dir / "tools"
         tools_dir_exists = await asyncio.to_thread(tools_dir.exists)
         if tools_dir_exists:
-            yaml_files = await asyncio.to_thread(list, tools_dir.glob("*.yaml"))
+            # Issue #358 - wrap glob in lambda to avoid blocking
+            yaml_files = await asyncio.to_thread(lambda: list(tools_dir.glob("*.yaml")))
             for yaml_file in yaml_files:
                 try:
                     async with aiofiles.open(
@@ -778,7 +790,8 @@ class SystemKnowledgeManager:
         workflows_dir = self.runtime_knowledge_dir / "workflows"
         workflows_dir_exists = await asyncio.to_thread(workflows_dir.exists)
         if workflows_dir_exists:
-            yaml_files = await asyncio.to_thread(list, workflows_dir.glob("*.yaml"))
+            # Issue #358 - wrap glob in lambda to avoid blocking
+            yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
             for yaml_file in yaml_files:
                 try:
                     async with aiofiles.open(
@@ -796,7 +809,8 @@ class SystemKnowledgeManager:
         procedures_dir = self.runtime_knowledge_dir / "procedures"
         procedures_dir_exists = await asyncio.to_thread(procedures_dir.exists)
         if procedures_dir_exists:
-            yaml_files = await asyncio.to_thread(list, procedures_dir.glob("*.yaml"))
+            # Issue #358 - wrap glob in lambda to avoid blocking
+            yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
             for yaml_file in yaml_files:
                 try:
                     async with aiofiles.open(

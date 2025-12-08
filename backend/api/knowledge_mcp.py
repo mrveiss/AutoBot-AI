@@ -509,6 +509,67 @@ async def mcp_langchain_qa_chain(request: Metadata):
         return {"success": False, "error": str(e), "answer": ""}
 
 
+async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
+    """Handle vector info operation. (Issue #315 - extracted)"""
+    vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
+    info = await asyncio.to_thread(vector_db.info)
+    return {
+        "success": True,
+        "operation": "info",
+        "data": {
+            "used_memory": info.get("used_memory_human", "unknown"),
+            "total_keys": info.get("db8", {}).get("keys", 0),
+            "vector_index": kb.redis_index_name if kb else "unknown",
+        },
+    }
+
+
+async def _vector_op_flush(kb, redis_mgr, params: dict) -> dict:
+    """Handle vector flush operation. (Issue #315 - extracted)"""
+    if not params.get("confirm", False):
+        return {
+            "success": False,
+            "operation": "flush",
+            "error": "Confirmation required (set params.confirm = true)",
+        }
+    vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
+    await asyncio.to_thread(vector_db.flushdb)
+    return {"success": True, "operation": "flush", "message": "Vector database flushed"}
+
+
+async def _vector_op_reindex(kb, redis_mgr, params: dict) -> dict:
+    """Handle vector reindex operation. (Issue #315 - extracted)"""
+    if kb and hasattr(kb, "index"):
+        return {
+            "success": True,
+            "operation": "reindex",
+            "message": "Reindexing triggered (operation may take time)",
+        }
+    return {
+        "success": False,
+        "operation": "reindex",
+        "error": "Knowledge base index not available",
+    }
+
+
+async def _vector_op_backup(kb, redis_mgr, params: dict) -> dict:
+    """Handle vector backup operation. (Issue #315 - extracted)"""
+    return {
+        "success": True,
+        "operation": "backup",
+        "message": "Backup operation not yet implemented",
+    }
+
+
+# Issue #315: Dispatch table for vector operations
+_VECTOR_OPERATIONS = {
+    "info": _vector_op_info,
+    "flush": _vector_op_flush,
+    "reindex": _vector_op_reindex,
+    "backup": _vector_op_backup,
+}
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="mcp_redis_vector_operations",
@@ -524,66 +585,11 @@ async def mcp_redis_vector_operations(request: Metadata):
         kb = get_knowledge_base()
         redis_mgr = get_redis_manager()
 
-        if operation == "info":
-            # Get Redis vector store info
-            vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
-            info = await asyncio.to_thread(vector_db.info)
-
-            return {
-                "success": True,
-                "operation": "info",
-                "data": {
-                    "used_memory": info.get("used_memory_human", "unknown"),
-                    "total_keys": info.get("db8", {}).get("keys", 0),
-                    "vector_index": kb.redis_index_name if kb else "unknown",
-                },
-            }
-
-        elif operation == "flush":
-            # Clear vector database (dangerous!)
-            if params.get("confirm", False):
-                vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
-                await asyncio.to_thread(vector_db.flushdb)
-                return {
-                    "success": True,
-                    "operation": "flush",
-                    "message": "Vector database flushed",
-                }
-            else:
-                return {
-                    "success": False,
-                    "operation": "flush",
-                    "error": "Confirmation required (set params.confirm = true)",
-                }
-
-        elif operation == "reindex":
-            # Trigger reindexing
-            if kb and hasattr(kb, "index"):
-                # This would typically trigger a full reindex
-                return {
-                    "success": True,
-                    "operation": "reindex",
-                    "message": "Reindexing triggered (operation may take time)",
-                }
-            else:
-                return {
-                    "success": False,
-                    "operation": "reindex",
-                    "error": "Knowledge base index not available",
-                }
-
-        elif operation == "backup":
-            # Create backup of vector data
-            vector_db = redis_mgr.get_connection(RedisDatabase.VECTORS)
-            # This would typically create a backup
-            return {
-                "success": True,
-                "operation": "backup",
-                "message": "Backup operation not yet implemented",
-            }
-
-        else:
-            return {"success": False, "error": f"Unknown operation: {operation}"}
+        # Use dispatch table (Issue #315 - reduced depth)
+        handler = _VECTOR_OPERATIONS.get(operation)
+        if handler:
+            return await handler(kb, redis_mgr, params)
+        return {"success": False, "error": f"Unknown operation: {operation}"}
 
     except Exception as e:
         logger.error(f"Error in Redis vector operations: {e}")

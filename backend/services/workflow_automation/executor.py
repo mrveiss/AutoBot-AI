@@ -29,6 +29,7 @@ class WorkflowExecutor:
     """Handles workflow step execution and processing"""
 
     def __init__(self, messenger: "WorkflowMessenger"):
+        """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()

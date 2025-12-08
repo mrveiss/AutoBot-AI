@@ -5,8 +5,11 @@
 """
 Project State Management System
 Tracks development phases, capabilities, and completion criteria for AutoBot
+
+Issue #357: Added async wrappers for database operations to prevent blocking in async contexts.
 """
 
+import asyncio
 import json
 import os
 import sqlite3
@@ -99,6 +102,7 @@ class ProjectStateManager:
     """Manages project state, phase tracking, and validation"""
 
     def __init__(self, db_path: str = None):
+        """Initialize project state manager with database and phase definitions."""
         if db_path is None:
             db_path = os.getenv(
                 "AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db"
@@ -380,38 +384,40 @@ class ProjectStateManager:
             ),
         }
 
+    def _load_current_phase(self, cursor) -> None:
+        """Load current phase from database (Issue #315 - extracted helper)."""
+        cursor.execute("SELECT value FROM project_state WHERE key = 'current_phase'")
+        row = cursor.fetchone()
+        if not row:
+            return
+        try:
+            self.current_phase = DevelopmentPhase(row[0])
+        except ValueError:
+            logger.warning(f"Invalid phase in database: {row[0]}")
+
+    def _load_phase_status(self, cursor) -> None:
+        """Load phase completion status (Issue #315 - extracted helper)."""
+        cursor.execute(
+            "SELECT phase_id, completion_percentage, is_active, is_completed FROM project_phases"
+        )
+        for row in cursor.fetchall():
+            phase_id, completion, is_active, is_completed = row
+            try:
+                phase = DevelopmentPhase(phase_id)
+                if phase in self.phases:
+                    self.phases[phase].completion_percentage = completion or 0.0
+                    self.phases[phase].is_active = bool(is_active)
+                    self.phases[phase].is_completed = bool(is_completed)
+            except ValueError:
+                continue
+
     def _load_state(self):
-        """Load project state from database"""
+        """Load project state from database (Issue #315 - refactored depth 5 to 3)."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-
-                # Load current phase
-                cursor.execute(
-                    "SELECT value FROM project_state WHERE key = 'current_phase'"
-                ),
-                row = cursor.fetchone()
-                if row:
-                    try:
-                        self.current_phase = DevelopmentPhase(row[0])
-                    except ValueError:
-                        logger.warning(f"Invalid phase in database: {row[0]}")
-
-                # Load phase completion status
-                cursor.execute(
-                    "SELECT phase_id, completion_percentage, is_active, is_completed FROM project_phases"
-                )
-                for row in cursor.fetchall():
-                    phase_id, completion, is_active, is_completed = row
-                    try:
-                        phase = DevelopmentPhase(phase_id)
-                        if phase in self.phases:
-                            self.phases[phase].completion_percentage = completion or 0.0
-                            self.phases[phase].is_active = bool(is_active)
-                            self.phases[phase].is_completed = bool(is_completed)
-                    except ValueError:
-                        continue
-
+                self._load_current_phase(cursor)
+                self._load_phase_status(cursor)
         except sqlite3.Error as e:
             logger.error(f"Error loading project state: {e}")
 
@@ -478,6 +484,41 @@ class ProjectStateManager:
 
         except sqlite3.Error as e:
             logger.error(f"Error saving project state: {e}")
+
+    async def save_state_async(self):
+        """Save current project state to database asynchronously.
+
+        Issue #357: Async wrapper for non-blocking database operations.
+        """
+        await asyncio.to_thread(self.save_state)
+
+    async def validate_all_phases_async(self) -> Dict[DevelopmentPhase, List[ValidationResult]]:
+        """Validate all defined phases asynchronously.
+
+        Issue #357: Async wrapper for non-blocking validation operations.
+        """
+        return await asyncio.to_thread(self.validate_all_phases)
+
+    async def validate_phase_async(self, phase: DevelopmentPhase) -> List[ValidationResult]:
+        """Validate all capabilities in a phase asynchronously.
+
+        Issue #357: Async wrapper for non-blocking validation operations.
+        """
+        return await asyncio.to_thread(self.validate_phase, phase)
+
+    async def get_project_status_async(self, use_cache: bool = True) -> Dict[str, Any]:
+        """Get comprehensive project status asynchronously.
+
+        Issue #357: Async wrapper for non-blocking status retrieval.
+        """
+        return await asyncio.to_thread(self.get_project_status, use_cache)
+
+    async def auto_progress_phases_async(self) -> Dict[str, Any]:
+        """Automatically progress through phases asynchronously.
+
+        Issue #357: Async wrapper for non-blocking phase progression.
+        """
+        return await asyncio.to_thread(self.auto_progress_phases)
 
     def _validate_file_exists(self, capability: PhaseCapability) -> ValidationResult:
         """Validate file existence (Issue #315)."""

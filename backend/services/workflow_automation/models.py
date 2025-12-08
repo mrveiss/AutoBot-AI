@@ -76,6 +76,7 @@ class ActiveWorkflow:
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
 
     def __post_init__(self):
+        """Set default values for created_at and user_interventions."""
         if self.created_at is None:
             self.created_at = datetime.now()
         if self.user_interventions is None:

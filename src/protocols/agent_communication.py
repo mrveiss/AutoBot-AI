@@ -177,6 +177,7 @@ class CommunicationChannel(ABC):
     """Abstract base class for communication channels"""
 
     def __init__(self, channel_id: str):
+        """Initialize communication channel with ID and inactive state."""
         self.channel_id = channel_id
         self.is_active = False
 
@@ -444,6 +445,7 @@ class AgentCommunicationProtocol:
         # Send message with error boundary
         @error_boundary(component="agent_communication", function="send_message")
         async def _send():
+            """Send message through channel with error boundary."""
             return await channel.send(message)
 
         return await _send()

@@ -37,6 +37,7 @@ class AsyncFileOperations:
     """
 
     def __init__(self):
+        """Initialize async file operations with cache and TTL settings."""
         self.file_cache: Dict[str, Dict] = {}
         self.cache_ttl = 300  # 5 minutes
 
@@ -202,11 +203,13 @@ class AsyncFileOperations:
 
             if pattern:
                 # Use glob pattern
-                files = await asyncio.to_thread(list, dir_path.glob(pattern))
+                # Issue #358 - use lambda for proper glob() execution in thread
+                files = await asyncio.to_thread(lambda: list(dir_path.glob(pattern)))
                 return [str(f) for f in files]
             else:
                 # List all files
-                files = await asyncio.to_thread(list, dir_path.iterdir())
+                # Issue #358 - use lambda for proper iterdir() execution in thread
+                files = await asyncio.to_thread(lambda: list(dir_path.iterdir()))
                 return [str(f) for f in files]
 
         except Exception as e:
@@ -355,6 +358,7 @@ def make_async_file_operation(func):
 
     @functools.wraps(func)
     async def async_wrapper(*args, **kwargs):
+        """Execute wrapped sync function in thread pool for async compatibility."""
         return await asyncio.to_thread(func, *args, **kwargs)
 
     return async_wrapper

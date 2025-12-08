@@ -462,10 +462,16 @@ async def analyze_path(
     target_path = Path(path)
     files_to_analyze: list[Path] = []
 
-    if target_path.is_file():
+    # Issue #358 - avoid blocking
+    is_file = await asyncio.to_thread(target_path.is_file)
+    is_dir = await asyncio.to_thread(target_path.is_dir) if not is_file else False
+
+    if is_file:
         files_to_analyze = [target_path]
-    elif target_path.is_dir():
-        files_to_analyze = list(target_path.rglob("*.py"))[:100]  # Limit files
+    elif is_dir:
+        # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
+        all_py_files = await asyncio.to_thread(lambda: list(target_path.rglob("*.py")))
+        files_to_analyze = all_py_files[:100]  # Limit files
     else:
         # Demo mode
         files_to_analyze = []
@@ -474,7 +480,8 @@ async def analyze_path(
 
     for filepath in files_to_analyze:
         try:
-            content = filepath.read_text(encoding="utf-8")
+            # Issue #358 - avoid blocking
+            content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
 
             # Regex analysis
             regex_issues = analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS)

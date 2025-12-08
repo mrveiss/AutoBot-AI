@@ -19,6 +19,7 @@ class WorkflowTemplateManager:
     """Manages workflow templates for common automation tasks"""
 
     def __init__(self):
+        """Initialize template manager with default workflow templates."""
         self.templates: Dict[str, Callable[[str], List[WorkflowStep]]] = {
             "system_update": self._create_system_update_workflow,
             "dev_environment": self._create_dev_environment_workflow,

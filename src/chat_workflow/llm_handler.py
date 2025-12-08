@@ -121,13 +121,15 @@ class LLMHandlerMixin:
 NEVER teach commands - ALWAYS execute them."""
 
         # Add minimal conversation history (last 2 messages only)
+        # Issue #383: Use list + join instead of += in loop
         conversation_context = ""
         if session.conversation_history:
-            conversation_context = "\n**Recent Context:**\n"
-            for msg in session.conversation_history[-2:]:
-                conversation_context += (
-                    f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-                )
+            context_parts = ["\n**Recent Context:**\n"]
+            context_parts.extend(
+                f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
+                for msg in session.conversation_history[-2:]
+            )
+            conversation_context = "".join(context_parts)
 
         # Issue #249 Phase 3: Conversation-aware knowledge retrieval
         # Uses conversation history to enhance queries with context

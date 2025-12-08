@@ -292,40 +292,48 @@ class StatsCollector:
         stats = MachineStats()
 
         try:
-            # CPU load averages from /proc/loadavg
-            returncode, stdout, _ = await self._run_command(["cat", "/proc/loadavg"])
-            if returncode == 0:
-                self._parse_load_avg(stdout, stats)
+            # Issue #379: Run all independent stat collection commands in parallel
+            results = await asyncio.gather(
+                self._run_command(["cat", "/proc/loadavg"]),
+                self._run_command(["cat", "/proc/stat"]),
+                self._run_command(["cat", "/proc/meminfo"]),
+                self._run_command(["df", "-h", "/"]),
+                self._run_command(["uptime", "-p"]),
+                self._run_command(["ps", "-e", "--no-headers"]),
+                return_exceptions=True,
+            )
 
-            # Current CPU usage from /proc/stat
-            returncode, stdout, _ = await self._run_command(["cat", "/proc/stat"])
-            if returncode == 0:
-                self._parse_cpu_usage(stdout, stats)
+            # Unpack results
+            loadavg_result, stat_result, meminfo_result, df_result, uptime_result, ps_result = results
 
-            # Memory information from /proc/meminfo
-            returncode, stdout, _ = await self._run_command(["cat", "/proc/meminfo"])
-            if returncode == 0:
-                self._parse_meminfo(stdout, stats)
+            # Parse CPU load averages
+            if not isinstance(loadavg_result, Exception) and loadavg_result[0] == 0:
+                self._parse_load_avg(loadavg_result[1], stats)
 
-            # Disk usage for root filesystem
-            returncode, stdout, _ = await self._run_command(["df", "-h", "/"])
-            if returncode == 0:
-                self._parse_disk_usage(stdout, stats)
+            # Parse CPU usage
+            if not isinstance(stat_result, Exception) and stat_result[0] == 0:
+                self._parse_cpu_usage(stat_result[1], stats)
 
-            # System uptime
-            returncode, stdout, _ = await self._run_command(["uptime", "-p"])
-            if returncode == 0:
-                stats.uptime = stdout.strip().replace("up ", "")
+            # Parse memory info
+            if not isinstance(meminfo_result, Exception) and meminfo_result[0] == 0:
+                self._parse_meminfo(meminfo_result[1], stats)
+
+            # Parse disk usage
+            if not isinstance(df_result, Exception) and df_result[0] == 0:
+                self._parse_disk_usage(df_result[1], stats)
+
+            # Parse uptime
+            if not isinstance(uptime_result, Exception) and uptime_result[0] == 0:
+                stats.uptime = uptime_result[1].strip().replace("up ", "")
             else:
-                # Fallback to /proc/uptime
+                # Fallback to /proc/uptime if uptime -p failed
                 returncode, stdout, _ = await self._run_command(["cat", "/proc/uptime"])
                 if returncode == 0:
                     self._parse_proc_uptime(stdout, stats)
 
-            # Process count
-            returncode, stdout, _ = await self._run_command(["ps", "-e", "--no-headers"])
-            if returncode == 0:
-                process_lines = stdout.strip().split("\n")
+            # Parse process count
+            if not isinstance(ps_result, Exception) and ps_result[0] == 0:
+                process_lines = ps_result[1].strip().split("\n")
                 stats.processes = len([line for line in process_lines if line.strip()])
 
         except asyncio.TimeoutError:
@@ -620,7 +628,8 @@ class InfrastructureMonitor:
         redis_host = config.get_host("redis")
         if self.redis_client:
             try:
-                self.redis_client.ping()
+                # Issue #361 - avoid blocking
+                await asyncio.to_thread(self.redis_client.ping)
                 services.database.append(
                     ServiceInfo.online(f"Redis ({redis_host})", "3ms")
                 )

@@ -30,6 +30,29 @@ from src.utils.redis_client import get_redis_client
 
 logger = get_llm_logger("entity_resolver")
 
+# Entity classification patterns (Issue #315 - module-level constant)
+_ENTITY_PATTERNS = {
+    EntityType.TECHNOLOGY: [
+        "api", "sdk", "framework", "library", "database", "server", "client",
+        "python", "javascript", "java", "redis", "chromadb", "openai", "model",
+        "algorithm", "neural", "transformer", "gpt", "llm",
+    ],
+    EntityType.PRODUCT: [
+        "autobot", "system", "platform", "application", "service", "tool",
+        "bot", "agent", "interface", "dashboard", "ui", "gui",
+    ],
+    EntityType.VERSION: ["v", "version", ".", "beta", "alpha", "rc"],
+    EntityType.CONFIGURATION: ["config", "setting", "parameter", "option", "flag"],
+}
+
+
+def _check_version_pattern(name_lower: str, entity_name: str) -> bool:
+    """Check if entity name matches version pattern. (Issue #315 - extracted)"""
+    return (
+        any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.VERSION])
+        and any(c.isdigit() for c in entity_name)
+    )
+
 
 class EntityResolver:
     """
@@ -305,69 +328,25 @@ class EntityResolver:
             return 0.0
 
     def _classify_entity_type(self, entity_name: str) -> EntityType:
-        """Classify entity type based on name patterns."""
+        """Classify entity type based on name patterns. (Issue #315 - uses module patterns)"""
         name_lower = entity_name.lower()
 
-        # Technology patterns
-        tech_patterns = [
-            "api",
-            "sdk",
-            "framework",
-            "library",
-            "database",
-            "server",
-            "client",
-            "python",
-            "javascript",
-            "java",
-            "redis",
-            "chromadb",
-            "openai",
-            "model",
-            "algorithm",
-            "neural",
-            "transformer",
-            "gpt",
-            "llm",
-        ]
-
-        # Product patterns
-        product_patterns = [
-            "autobot",
-            "system",
-            "platform",
-            "application",
-            "service",
-            "tool",
-            "bot",
-            "agent",
-            "interface",
-            "dashboard",
-            "ui",
-            "gui",
-        ]
-
-        # Version patterns
-        version_patterns = ["v", "version", ".", "beta", "alpha", "rc"]
-
-        # Configuration patterns
-        config_patterns = ["config", "setting", "parameter", "option", "flag"]
-
-        # Check patterns
-        if any(pattern in name_lower for pattern in tech_patterns):
+        # Check technology patterns
+        if any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.TECHNOLOGY]):
             return EntityType.TECHNOLOGY
-        elif any(pattern in name_lower for pattern in product_patterns):
+        # Check product patterns
+        if any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.PRODUCT]):
             return EntityType.PRODUCT
-        elif any(pattern in name_lower for pattern in version_patterns) and any(
-            c.isdigit() for c in entity_name
-        ):
+        # Check version patterns (requires digits)
+        if _check_version_pattern(name_lower, entity_name):
             return EntityType.VERSION
-        elif any(pattern in name_lower for pattern in config_patterns):
+        # Check configuration patterns
+        if any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.CONFIGURATION]):
             return EntityType.CONFIGURATION
-        elif entity_name.isupper() and len(entity_name) <= 10:  # Acronyms
+        # Acronyms
+        if entity_name.isupper() and len(entity_name) <= 10:
             return EntityType.ORGANIZATION
-        else:
-            return EntityType.CONCEPT
+        return EntityType.CONCEPT
 
     async def _load_entity_mappings(self) -> Dict[str, EntityMapping]:
         """Load existing entity mappings from Redis."""

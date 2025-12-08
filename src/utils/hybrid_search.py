@@ -25,6 +25,7 @@ class HybridSearchEngine:
     """
 
     def __init__(self, knowledge_base=None):
+        """Initialize hybrid search with knowledge base and weighted scoring config."""
         self.logger = logging.getLogger(__name__)
         self.knowledge_base = knowledge_base
 
@@ -199,10 +200,31 @@ class HybridSearchEngine:
 
         return combined_score
 
+    def _is_near_duplicate(
+        self, content: str, unique_results: List[Dict[str, Any]], threshold: float
+    ) -> bool:
+        """Check if content is a near-duplicate of any existing result. (Issue #315)"""
+        content_words = set(content.lower().split())
+        if not content_words:
+            return False
+        for unique_result in unique_results:
+            existing_content = unique_result.get("content", "").strip()
+            if not existing_content:
+                continue
+            existing_words = set(existing_content.lower().split())
+            if not existing_words:
+                continue
+            intersection = len(content_words & existing_words)
+            union = len(content_words | existing_words)
+            jaccard_similarity = intersection / union if union > 0 else 0.0
+            if jaccard_similarity > threshold:
+                return True
+        return False
+
     def deduplicate_results(
         self, results: List[Dict[str, Any]], similarity_threshold: float = 0.9
     ) -> List[Dict[str, Any]]:
-        """Remove duplicate or very similar results."""
+        """Remove duplicate or very similar results. (Issue #315 - uses helper)"""
         if not results:
             return results
 
@@ -211,8 +233,6 @@ class HybridSearchEngine:
 
         for result in results:
             content = result.get("content", "").strip()
-
-            # Skip empty content
             if not content:
                 continue
 
@@ -221,28 +241,12 @@ class HybridSearchEngine:
             if content_hash in seen_contents:
                 continue
 
-            # Check for near-duplicates (simple approach)
-            is_duplicate = False
-            for unique_result in unique_results:
-                existing_content = unique_result.get("content", "").strip()
+            # Check for near-duplicates using helper
+            if self._is_near_duplicate(content, unique_results, similarity_threshold):
+                continue
 
-                # Simple similarity check based on content length and common words
-                if len(content) > 0 and len(existing_content) > 0:
-                    content_words = set(content.lower().split())
-                    existing_words = set(existing_content.lower().split())
-
-                    if content_words and existing_words:
-                        intersection = len(content_words & existing_words)
-                        union = len(content_words | existing_words)
-                        jaccard_similarity = intersection / union if union > 0 else 0.0
-
-                        if jaccard_similarity > similarity_threshold:
-                            is_duplicate = True
-                            break
-
-            if not is_duplicate:
-                seen_contents.add(content_hash)
-                unique_results.append(result)
+            seen_contents.add(content_hash)
+            unique_results.append(result)
 
         return unique_results
 

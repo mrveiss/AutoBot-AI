@@ -489,6 +489,7 @@ if __name__ == "__main__":
     """Test the goal processor functionality."""
 
     async def test_processor():
+        """Test goal processor with various natural language inputs."""
         processor = GoalProcessor()
 
         test_goals = [

@@ -50,6 +50,7 @@ class MultiModalPerformanceMonitor:
     """Performance monitoring and optimization for multi-modal AI processing"""
 
     def __init__(self):
+        """Initialize monitor with GPU tracking and adaptive batch sizes."""
         # Lock for thread-safe access to shared state
         import threading
 

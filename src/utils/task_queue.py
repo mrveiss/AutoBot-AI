@@ -584,7 +584,8 @@ class TaskQueue:
 
         # Store result
         result_data = json.dumps(result.to_dict())
-        self.redis.hset(self.results_key, task.id, result_data)
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(self.redis.hset, self.results_key, task.id, result_data)
 
         # Log performance metrics
         if result.execution_time:
@@ -602,27 +603,36 @@ class TaskQueue:
         """Get task execution result."""
         if not self.redis:
             return None
-        result_data = self.redis.hget(self.results_key, task_id)
+        # Issue #361 - avoid blocking
+        result_data = await asyncio.to_thread(self.redis.hget, self.results_key, task_id)
         if result_data:
             return TaskResult.from_dict(json.loads(result_data))
         return None
 
+    def _check_task_in_queue(self, task_id: str, queue_key: str) -> bool:
+        """Check if task exists in specified queue (Issue #315 - extracted helper)."""
+        try:
+            return self.redis.zscore(queue_key, task_id) is not None
+        except RedisError:
+            return False
+
     async def get_task_status(self, task_id: str) -> Optional[TaskStatus]:
-        """Get current task status."""
+        """Get current task status (Issue #315 - uses dispatch table pattern)."""
         if not self.redis:
             return None
 
-        # Check all queues
-        if self.redis.zscore(self.pending_key, task_id) is not None:
-            return TaskStatus.PENDING
-        elif self.redis.zscore(self.scheduled_key, task_id) is not None:
-            return TaskStatus.PENDING
-        elif self.redis.zscore(self.running_key, task_id) is not None:
-            return TaskStatus.RUNNING
-        elif self.redis.zscore(self.completed_key, task_id) is not None:
-            return TaskStatus.COMPLETED
-        elif self.redis.zscore(self.failed_key, task_id) is not None:
-            return TaskStatus.FAILED
+        # Dispatch table: (queue_key, status_if_found)
+        queue_status_map = [
+            (self.pending_key, TaskStatus.PENDING),
+            (self.scheduled_key, TaskStatus.PENDING),
+            (self.running_key, TaskStatus.RUNNING),
+            (self.completed_key, TaskStatus.COMPLETED),
+            (self.failed_key, TaskStatus.FAILED),
+        ]
+
+        for queue_key, status in queue_status_map:
+            if self._check_task_in_queue(task_id, queue_key):
+                return status
 
         return None
 
@@ -644,7 +654,8 @@ class TaskQueue:
             )
 
             result_data = json.dumps(result.to_dict())
-            self.redis.hset(self.results_key, task_id, result_data)
+            # Issue #361 - avoid blocking
+            await asyncio.to_thread(self.redis.hset, self.results_key, task_id, result_data)
 
             self.logger.info(f"Cancelled task {task_id}")
             return True
@@ -701,25 +712,28 @@ class TaskQueue:
 
         cutoff_time = time.time() - (older_than_hours * 3600)
 
-        # Get old tasks
-        old_completed = self.redis.zrangebyscore(self.completed_key, 0, cutoff_time)
-        old_failed = self.redis.zrangebyscore(self.failed_key, 0, cutoff_time)
+        # Issue #361 - avoid blocking - run all Redis ops in helper
+        def _cleanup_old_tasks():
+            # Get old tasks
+            old_completed = self.redis.zrangebyscore(self.completed_key, 0, cutoff_time)
+            old_failed = self.redis.zrangebyscore(self.failed_key, 0, cutoff_time)
 
-        all_old_tasks = list(old_completed) + list(old_failed)
+            all_old_tasks = list(old_completed) + list(old_failed)
 
-        if all_old_tasks:
-            # Remove from queues
-            if old_completed:
-                self.redis.zremrangebyscore(self.completed_key, 0, cutoff_time)
-            if old_failed:
-                self.redis.zremrangebyscore(self.failed_key, 0, cutoff_time)
-
-            # Remove task data and results
             if all_old_tasks:
+                # Remove from queues
+                if old_completed:
+                    self.redis.zremrangebyscore(self.completed_key, 0, cutoff_time)
+                if old_failed:
+                    self.redis.zremrangebyscore(self.failed_key, 0, cutoff_time)
+
+                # Remove task data and results
                 self.redis.hdel(f"{self.queue_name}:tasks", *all_old_tasks)
                 self.redis.hdel(self.results_key, *all_old_tasks)
 
-        cleaned_count = len(all_old_tasks)
+            return len(all_old_tasks)
+
+        cleaned_count = await asyncio.to_thread(_cleanup_old_tasks)
         if cleaned_count > 0:
             self.logger.info(f"Cleaned up {cleaned_count} old tasks")
 
@@ -772,6 +786,7 @@ def task(name: Optional[str] = None, **task_kwargs):
 
         # Add enqueue method to function
         async def enqueue_task(*args, **kwargs):
+            """Enqueue task with merged default and call-time config."""
             # Merge default task config with call-time config
             enqueue_kwargs = task_kwargs.copy()
             enqueue_kwargs.update(kwargs)

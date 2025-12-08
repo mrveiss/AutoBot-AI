@@ -32,6 +32,7 @@ class MarkdownReferenceSystem:
         docs_root: str = "docs",
         knowledge_root: str = "data/system_knowledge",
     ):
+        """Initialize markdown reference system with document tracking tables."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
         self.docs_root = Path(docs_root)
         self.knowledge_root = Path(knowledge_root)

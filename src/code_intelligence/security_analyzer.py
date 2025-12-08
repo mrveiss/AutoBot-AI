@@ -285,6 +285,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
     """AST visitor for security pattern analysis."""
 
     def __init__(self, file_path: str, source_lines: List[str]):
+        """Initialize AST visitor with file context and tracking state."""
         self.file_path = file_path
         self.source_lines = source_lines
         self.findings: List[SecurityFinding] = []
@@ -694,6 +695,7 @@ class SecurityAnalyzer:
         project_root: Optional[str] = None,
         exclude_patterns: Optional[List[str]] = None,
     ):
+        """Initialize security analyzer with project root and exclusion patterns."""
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
             "venv",

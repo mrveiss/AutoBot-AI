@@ -86,6 +86,7 @@ class WakeWordDetector:
     """
 
     def __init__(self, config: Optional[WakeWordConfig] = None):
+        """Initialize wake word detector with configuration and adaptive thresholds."""
         self.config = config or WakeWordConfig()
         self.state = WakeWordState.IDLE
         self.stats = DetectionStats()
@@ -340,6 +341,7 @@ class WakeWordDetector:
         self._cooldown_end_time = time.time() + self.config.cooldown_seconds
 
         def exit_cooldown():
+            """Exit cooldown and resume listening state."""
             if self.state == WakeWordState.COOLDOWN:
                 self.state = WakeWordState.LISTENING
                 self._cooldown_end_time = None

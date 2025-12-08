@@ -652,6 +652,7 @@ async def _auto_start_monitoring():
 
 # Schedule auto-start (will run when event loop is available)
 def _schedule_auto_start():
+    """Schedule auto-start of service discovery when event loop is available."""
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_auto_start_monitoring())

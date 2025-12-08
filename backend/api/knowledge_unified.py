@@ -17,6 +17,7 @@ Endpoints:
 - POST /unified/context - Get context for LLM prompts
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Set
 
@@ -86,6 +87,103 @@ def _build_relation_context(
     rel_type = rel.get("relation_type", "relates_to")
     context_parts.append(f"- [{rel_type}] {content}\n")
     return total_length + len(content)
+
+
+def _process_fact_results(
+    fact_results: Dict[str, Any],
+    max_length: int,
+    context_parts: List[str],
+    citations: List[Dict],
+    total_length: int,
+) -> int:
+    """Process fact search results into context. (Issue #315 - extracted)"""
+    results = fact_results.get("results")
+    if not results:
+        return total_length
+
+    context_parts.append("## Knowledge Base Facts\n")
+    for i, fact in enumerate(results[:3], 1):
+        content = fact.get("content", "")[:500]
+        if total_length + len(content) > max_length:
+            break
+        context_parts.append(f"{i}. {content}\n")
+        total_length += len(content)
+        citations.append({
+            "source": "knowledge_base",
+            "id": fact.get("id") or fact.get("fact_id"),
+            "category": fact.get("category"),
+        })
+    context_parts.append("\n")
+    return total_length
+
+
+async def _process_relations_for_citations(
+    kb, citations: List[Dict], max_length: int, context_parts: List[str], total_length: int
+) -> int:
+    """Process relations for citations. (Issue #315 - extracted)"""
+    for citation in citations[:2]:
+        if total_length >= max_length:
+            break
+        fact_id = citation.get("id")
+        if not fact_id:
+            continue
+
+        relations = await kb.get_fact_relations(
+            fact_id, direction="outgoing", include_fact_details=True
+        )
+        if not (relations.get("success") and relations.get("outgoing")):
+            continue
+
+        context_parts.append("## Related Information\n")
+        for rel in relations["outgoing"][:2]:
+            total_length = _build_relation_context(
+                rel, total_length, max_length, context_parts
+            )
+        context_parts.append("\n")
+    return total_length
+
+
+def _process_single_doc_result(
+    doc: Dict[str, Any],
+    total_length: int,
+    max_length: int,
+    context_parts: List[str],
+    citations: List[Dict],
+) -> int:
+    """Process a single documentation result (Issue #315: extracted).
+
+    Returns updated total_length.
+    """
+    content = doc.get("content", "")[:400]
+    if total_length + len(content) > max_length:
+        return total_length
+    source = doc.get("metadata", {}).get("source", "docs")
+    context_parts.append(f"[{source}]\n{content}\n\n")
+    citations.append({
+        "source": "documentation",
+        "file": doc.get("metadata", {}).get("source"),
+    })
+    return total_length + len(content)
+
+
+def _process_documentation_context(
+    query: str, max_length: int, context_parts: List[str], citations: List[Dict], total_length: int
+) -> int:
+    """Process documentation search into context. (Issue #315 - extracted)"""
+    doc_searcher = get_documentation_searcher()
+    if not doc_searcher or not doc_searcher.is_documentation_query(query):
+        return total_length
+
+    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=0.6)
+    if not doc_results:
+        return total_length
+
+    context_parts.append("## AutoBot Documentation\n")
+    for doc in doc_results[:2]:
+        total_length = _process_single_doc_result(
+            doc, total_length, max_length, context_parts, citations
+        )
+    return total_length
 
 
 router = APIRouter(prefix="/unified", tags=["knowledge-unified"])
@@ -290,9 +388,14 @@ async def unified_stats(req: Request):
     }
 
     # Knowledge base stats
+    # Issue #379: Parallelize independent KB stats calls with asyncio.gather()
     if kb is not None:
         try:
-            kb_stats = await kb.get_stats()
+            kb_stats, rel_stats = await asyncio.gather(
+                kb.get_stats(),
+                kb.get_relation_stats(),
+            )
+
             stats["knowledge_base"] = {
                 "available": True,
                 "total_facts": kb_stats.get("total_facts", 0),
@@ -300,8 +403,6 @@ async def unified_stats(req: Request):
                 "categories": kb_stats.get("categories", []),
             }
 
-            # Relation stats
-            rel_stats = await kb.get_relation_stats()
             if rel_stats.get("success"):
                 stats["relations"] = {
                     "total_relations": rel_stats.get("total_relations", 0),
@@ -347,77 +448,35 @@ async def get_llm_context(req: Request, body: ContextRequest):
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-    context_parts = []
-    citations = []
+    context_parts: List[str] = []
+    citations: List[Dict] = []
     total_length = 0
 
-    # Search facts
+    # Search facts (Issue #315: use extracted helper)
     if kb is not None:
         try:
             fact_results = await kb.search(body.query, top_k=5)
-            if fact_results.get("results"):
-                context_parts.append("## Knowledge Base Facts\n")
-                for i, fact in enumerate(fact_results["results"][:3], 1):
-                    content = fact.get("content", "")[:500]
-                    if total_length + len(content) > body.max_context_length:
-                        break
-                    context_parts.append(f"{i}. {content}\n")
-                    total_length += len(content)
-                    citations.append({
-                        "source": "knowledge_base",
-                        "id": fact.get("id") or fact.get("fact_id"),
-                        "category": fact.get("category"),
-                    })
-                context_parts.append("\n")
+            total_length = _process_fact_results(
+                fact_results, body.max_context_length, context_parts, citations, total_length
+            )
         except Exception as e:
             logger.warning(f"Fact context failed: {e}")
 
-    # Get related facts (Issue #336: Use extracted helper)
+    # Get related facts (Issue #315: use extracted helper)
     if body.include_relations and kb is not None and citations:
         try:
-            for citation in citations[:2]:
-                if total_length >= body.max_context_length:
-                    break
-                fact_id = citation.get("id")
-                if not fact_id:
-                    continue
-
-                relations = await kb.get_fact_relations(
-                    fact_id, direction="outgoing", include_fact_details=True
-                )
-                if relations.get("success") and relations.get("outgoing"):
-                    context_parts.append("## Related Information\n")
-                    for rel in relations["outgoing"][:2]:
-                        total_length = _build_relation_context(
-                            rel, total_length, body.max_context_length, context_parts
-                        )
-                    context_parts.append("\n")
+            total_length = await _process_relations_for_citations(
+                kb, citations, body.max_context_length, context_parts, total_length
+            )
         except Exception as e:
             logger.warning(f"Relation context failed: {e}")
 
-    # Get documentation
+    # Get documentation (Issue #315: uses helper for reduced nesting)
     if body.include_documentation:
         try:
-            doc_searcher = get_documentation_searcher()
-            if doc_searcher and doc_searcher.is_documentation_query(body.query):
-                doc_results = doc_searcher.search(
-                    query=body.query,
-                    n_results=2,
-                    score_threshold=0.6,
-                )
-                if doc_results:
-                    context_parts.append("## AutoBot Documentation\n")
-                    for doc in doc_results[:2]:
-                        content = doc.get("content", "")[:400]
-                        if total_length + len(content) > body.max_context_length:
-                            break
-                        source = doc.get("metadata", {}).get("source", "docs")
-                        context_parts.append(f"[{source}]\n{content}\n\n")
-                        total_length += len(content)
-                        citations.append({
-                            "source": "documentation",
-                            "file": doc.get("metadata", {}).get("source"),
-                        })
+            total_length = _process_documentation_context(
+                body.query, body.max_context_length, context_parts, citations, total_length
+            )
         except Exception as e:
             logger.warning(f"Doc context failed: {e}")
 

@@ -22,6 +22,7 @@ class WorkflowLearningEngine:
     """Machine learning component for workflow optimization"""
 
     def __init__(self):
+        """Initialize learning engine with empty pattern tracking data."""
         self.learning_data = {
             "user_patterns": {},
             "success_rates": {},

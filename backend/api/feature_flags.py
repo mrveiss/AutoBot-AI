@@ -15,6 +15,7 @@ Endpoints:
 - GET /api/admin/access-control/user/{username} - User-specific stats
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, List
@@ -324,8 +325,11 @@ async def get_access_control_metrics(
         - Current enforcement mode
     """
     try:
-        stats = await metrics.get_statistics(days=days, include_details=include_details)
-        current_mode = await flags.get_enforcement_mode()
+        # Issue #379: Parallelize independent async calls
+        stats, current_mode = await asyncio.gather(
+            metrics.get_statistics(days=days, include_details=include_details),
+            flags.get_enforcement_mode(),
+        )
 
         return {"success": True, "data": {**stats, "current_mode": current_mode.value}}
 

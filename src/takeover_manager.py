@@ -81,6 +81,7 @@ class TakeoverManager:
     """
 
     def __init__(self, memory_manager: Optional[EnhancedMemoryManager] = None):
+        """Initialize takeover manager with memory and session tracking."""
         self.memory_manager = memory_manager or EnhancedMemoryManager()
 
         # Active state tracking

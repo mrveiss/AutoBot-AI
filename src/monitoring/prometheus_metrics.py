@@ -21,6 +21,7 @@ class PrometheusMetricsManager:
     """Centralized Prometheus metrics manager"""
 
     def __init__(self, registry: Optional[CollectorRegistry] = None):
+        """Initialize Prometheus metrics manager with optional registry."""
         self.registry = registry or CollectorRegistry()
 
         # Initialize all metrics

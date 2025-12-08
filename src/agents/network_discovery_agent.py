@@ -21,6 +21,7 @@ class NetworkDiscoveryAgent:
     """Agent for network discovery and asset mapping"""
 
     def __init__(self):
+        """Initialize network discovery agent with supported task types."""
         self.name = "network_discovery"
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = [

@@ -841,19 +841,41 @@ class DocGenerator:
         self._analyzed_files.add(validated_path)
         return module_doc
 
+    # Issue #315 - Standard README file names to check
+    _README_NAMES = ["README.md", "README.rst", "README.txt", "README"]
+
+    def _load_readme_content(self, package_path: str) -> Optional[str]:
+        """Load README content if available (Issue #315 - extracted helper)."""
+        for readme_name in self._README_NAMES:
+            readme_path = os.path.join(package_path, readme_name)
+            if os.path.exists(readme_path):
+                try:
+                    with open(readme_path, "r", encoding="utf-8") as f:
+                        return f.read()
+                except OSError:
+                    pass
+        return None
+
+    def _process_package_item(
+        self, item: str, package_path: str, package_doc: "PackageDoc", depth: int
+    ) -> None:
+        """Process a single item in package directory (Issue #315 - extracted helper)."""
+        item_path = os.path.join(package_path, item)
+
+        if os.path.isfile(item_path) and item.endswith(".py") and item != "__init__.py":
+            module_doc = self.analyze_module(item_path)
+            if module_doc:
+                package_doc.modules.append(module_doc)
+        elif os.path.isdir(item_path):
+            if os.path.exists(os.path.join(item_path, "__init__.py")):
+                subpackage = self.analyze_package(item_path, depth + 1)
+                if subpackage:
+                    package_doc.subpackages.append(subpackage)
+
     def analyze_package(
         self, package_path: str, depth: int = 0
     ) -> Optional[PackageDoc]:
-        """
-        Analyze a Python package and all its modules.
-
-        Args:
-            package_path: Path to the package directory
-            depth: Current recursion depth
-
-        Returns:
-            PackageDoc containing package documentation
-        """
+        """Analyze a Python package and all its modules (Issue #315 - refactored)."""
         if depth > self.max_depth:
             logger.warning(f"Max depth reached for package: {package_path}")
             return None
@@ -870,45 +892,21 @@ class DocGenerator:
             return None
 
         package_name = os.path.basename(package_path)
-        package_doc = PackageDoc(
-            name=package_name,
-            path=package_path,
-        )
+        package_doc = PackageDoc(name=package_name, path=package_path)
 
         # Read __init__.py docstring
         init_module = self.analyze_module(init_file)
         if init_module:
             package_doc.init_docstring = init_module.docstring
 
-        # Check for README
-        for readme_name in ["README.md", "README.rst", "README.txt", "README"]:
-            readme_path = os.path.join(package_path, readme_name)
-            if os.path.exists(readme_path):
-                try:
-                    with open(readme_path, "r", encoding="utf-8") as f:
-                        package_doc.readme_content = f.read()
-                except OSError:
-                    pass
-                break
+        # Load README content
+        package_doc.readme_content = self._load_readme_content(package_path)
 
-        # Process all Python files
+        # Process all items in package
         for item in os.listdir(package_path):
-            item_path = os.path.join(package_path, item)
+            self._process_package_item(item, package_path, package_doc, depth)
 
-            if os.path.isfile(item_path) and item.endswith(".py"):
-                if item != "__init__.py":
-                    module_doc = self.analyze_module(item_path)
-                    if module_doc:
-                        package_doc.modules.append(module_doc)
-
-            elif os.path.isdir(item_path):
-                # Check if it's a subpackage
-                if os.path.exists(os.path.join(item_path, "__init__.py")):
-                    subpackage = self.analyze_package(item_path, depth + 1)
-                    if subpackage:
-                        package_doc.subpackages.append(subpackage)
-
-        # Extract version and author from __init__.py or setup.py
+        # Extract version and author
         package_doc.version = self._extract_version(package_path)
         package_doc.author = self._extract_author(package_path)
 
@@ -1220,30 +1218,40 @@ class DocGenerator:
                 )
             )
 
+    def _is_code_start(self, stripped: str) -> bool:
+        """Check if line starts a code example (Issue #315 - extracted helper)."""
+        return stripped.startswith(">>>") or stripped.startswith("...")
+
+    def _extract_code_content(self, stripped: str) -> str:
+        """Extract code content from doctest line (Issue #315 - extracted helper)."""
+        return stripped[4:] if len(stripped) > 4 else ""
+
+    def _finalize_code_block(
+        self, func_doc: FunctionDoc, code_lines: List[str]
+    ) -> List[str]:
+        """Add code block to examples and reset (Issue #315 - extracted helper)."""
+        if code_lines:
+            func_doc.examples.append(ExampleDoc(code="\n".join(code_lines)))
+        return []
+
     def _parse_examples_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
-        """Parse Examples section of docstring."""
+        """Parse Examples section of docstring (Issue #315 - refactored)."""
         code_lines: List[str] = []
         in_code_block = False
 
         for line in lines:
             stripped = line.strip()
-            if stripped.startswith(">>>") or stripped.startswith("..."):
+            if self._is_code_start(stripped):
                 in_code_block = True
-                code_lines.append(stripped[4:] if len(stripped) > 4 else "")
-            elif in_code_block and (stripped.startswith("    ") or not stripped):
-                if stripped:
+                code_lines.append(self._extract_code_content(stripped))
+            elif in_code_block:
+                if stripped.startswith("    "):
                     code_lines.append(stripped)
-                else:
-                    # End of code block
-                    if code_lines:
-                        func_doc.examples.append(
-                            ExampleDoc(code="\n".join(code_lines))
-                        )
-                        code_lines = []
+                elif not stripped:
+                    code_lines = self._finalize_code_block(func_doc, code_lines)
                     in_code_block = False
 
-        if code_lines:
-            func_doc.examples.append(ExampleDoc(code="\n".join(code_lines)))
+        self._finalize_code_block(func_doc, code_lines)
 
     def _update_param_description(
         self, func_doc: FunctionDoc, param_name: str, description: str

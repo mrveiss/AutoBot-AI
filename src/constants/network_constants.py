@@ -22,6 +22,7 @@ Usage:
 
 import os
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Optional
 
 
@@ -161,6 +162,7 @@ class NetworkConfig:
     """
 
     def __init__(self):
+        """Initialize network config with deployment mode from environment."""
         self._deployment_mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
         self._is_development = os.getenv("AUTOBOT_ENV", "production") == "development"
 
@@ -190,6 +192,20 @@ class NetworkConfig:
         """Get Ollama URL based on deployment context"""
         return ServiceURLs.OLLAMA_LOCAL  # Always local for now
 
+    @cached_property
+    def _service_map(self) -> dict:
+        """Issue #380: Cache service map to avoid repeated dict creation."""
+        return {
+            "backend": self.backend_url,
+            "frontend": self.frontend_url,
+            "redis": self.redis_url,
+            "ollama": self.ollama_url,
+            "browser": ServiceURLs.BROWSER_SERVICE,
+            "ai_stack": ServiceURLs.AI_STACK_SERVICE,
+            "npu_worker": ServiceURLs.NPU_WORKER_SERVICE,
+            "vnc": ServiceURLs.VNC_DESKTOP,
+        }
+
     def get_service_url(self, service_name: str) -> Optional[str]:
         """
         Get service URL by name.
@@ -200,17 +216,19 @@ class NetworkConfig:
         Returns:
             Service URL or None if not found
         """
-        service_map = {
-            "backend": self.backend_url,
-            "frontend": self.frontend_url,
-            "redis": self.redis_url,
-            "ollama": self.ollama_url,
-            "browser": ServiceURLs.BROWSER_SERVICE,
-            "ai_stack": ServiceURLs.AI_STACK_SERVICE,
-            "npu_worker": ServiceURLs.NPU_WORKER_SERVICE,
-            "vnc": ServiceURLs.VNC_DESKTOP,
+        return self._service_map.get(service_name)
+
+    @cached_property
+    def _vm_map(self) -> dict:
+        """Issue #380: Cache VM map to avoid repeated dict creation."""
+        return {
+            "main": NetworkConstants.MAIN_MACHINE_IP,
+            "frontend": NetworkConstants.FRONTEND_VM_IP,
+            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+            "redis": NetworkConstants.REDIS_VM_IP,
+            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+            "browser": NetworkConstants.BROWSER_VM_IP,
         }
-        return service_map.get(service_name)
 
     def get_vm_ip(self, vm_name: str) -> Optional[str]:
         """
@@ -222,15 +240,7 @@ class NetworkConfig:
         Returns:
             IP address or None if not found
         """
-        vm_map = {
-            "main": NetworkConstants.MAIN_MACHINE_IP,
-            "frontend": NetworkConstants.FRONTEND_VM_IP,
-            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
-            "redis": NetworkConstants.REDIS_VM_IP,
-            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
-            "browser": NetworkConstants.BROWSER_VM_IP,
-        }
-        return vm_map.get(vm_name)
+        return self._vm_map.get(vm_name)
 
 
 # Global network configuration instance

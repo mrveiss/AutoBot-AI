@@ -59,7 +59,9 @@ class DocumentParser:
         Returns:
             Tuple of (extracted_text, metadata_dict)
         """
-        if not file_path.exists():
+        # Issue #358 - avoid blocking
+        exists = await asyncio.to_thread(file_path.exists)
+        if not exists:
             raise FileNotFoundError(f"Document not found: {file_path}")
 
         extension = file_path.suffix.lower()

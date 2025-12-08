@@ -6,6 +6,7 @@ Cache Management API
 Provides endpoints for cache monitoring, warming, and management
 """
 
+import asyncio
 import logging
 from typing import Dict, List, Optional
 
@@ -35,6 +36,20 @@ class CacheWarmingRequest(BaseModel):
     force_refresh: bool = False
 
 
+def _process_data_type_stats_results(
+    data_types: List[str], stats_results: list
+) -> Dict[str, Dict]:
+    """Process parallel stats results into a dictionary. (Issue #315 - extracted)"""
+    data_type_stats = {}
+    for dt, dt_stats in zip(data_types, stats_results):
+        if isinstance(dt_stats, Exception):
+            logger.error(f"Error getting stats for {dt}: {dt_stats}")
+            data_type_stats[dt] = {"error": str(dt_stats)}
+        else:
+            data_type_stats[dt] = dt_stats
+    return data_type_stats
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_stats",
@@ -47,29 +62,27 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
         if data_type:
             stats = await advanced_cache.get_stats(data_type)
             return CacheStatsResponse(**stats)
-        else:
-            global_stats = await advanced_cache.get_stats()
 
-            # Get individual data type stats (parallelized to avoid N+1)
-            data_type_stats = {}
-            if "configured_data_types" in global_stats:
-                import asyncio
-                data_types = global_stats["configured_data_types"]
-                # Fetch all stats in parallel
-                stats_results = await asyncio.gather(
-                    *[advanced_cache.get_stats(dt) for dt in data_types],
-                    return_exceptions=True
-                )
-                # Build result dict, handling any exceptions
-                for dt, dt_stats in zip(data_types, stats_results):
-                    if isinstance(dt_stats, Exception):
-                        logger.error(f"Error getting stats for {dt}: {dt_stats}")
-                        data_type_stats[dt] = {"error": str(dt_stats)}
-                    else:
-                        data_type_stats[dt] = dt_stats
+        # Get global stats
+        global_stats = await advanced_cache.get_stats()
 
-            global_stats["data_type_stats"] = data_type_stats
+        # Get individual data type stats (parallelized to avoid N+1)
+        if "configured_data_types" not in global_stats:
+            global_stats["data_type_stats"] = {}
             return CacheStatsResponse(**global_stats)
+
+        import asyncio
+        data_types = global_stats["configured_data_types"]
+        # Fetch all stats in parallel
+        stats_results = await asyncio.gather(
+            *[advanced_cache.get_stats(dt) for dt in data_types],
+            return_exceptions=True
+        )
+        # Build result dict using helper (Issue #315 - reduces nesting)
+        global_stats["data_type_stats"] = _process_data_type_stats_results(
+            data_types, stats_results
+        )
+        return CacheStatsResponse(**global_stats)
 
     except Exception as e:
         logger.error(f"Error getting cache stats: {e}")
@@ -253,11 +266,17 @@ async def _warm_system_status_cache() -> bool:
     from backend.utils.connection_utils import ConnectionTester
 
     try:
-        fast_status = await ConnectionTester.get_fast_health_status()
-        await advanced_cache.set("health_checks", "health:fast", fast_status)
+        # Issue #379: Fetch fast and detailed status in parallel
+        fast_status, detailed_status = await asyncio.gather(
+            ConnectionTester.get_fast_health_status(),
+            ConnectionTester.get_comprehensive_health_status(),
+        )
 
-        detailed_status = await ConnectionTester.get_comprehensive_health_status()
-        await advanced_cache.set("health_checks", "health:detailed", detailed_status)
+        # Cache both results in parallel
+        await asyncio.gather(
+            advanced_cache.set("health_checks", "health:fast", fast_status),
+            advanced_cache.set("health_checks", "health:detailed", detailed_status),
+        )
 
         logger.info("Warmed cache for system health status")
         return True

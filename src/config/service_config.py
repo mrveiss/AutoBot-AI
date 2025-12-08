@@ -8,11 +8,35 @@ Service, host, port, and URL configuration management.
 
 import logging
 import os
+from functools import cached_property
 from typing import Any, Dict
 
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level cached maps to avoid repeated dictionary creation
+_HOST_SERVICE_MAP = {
+    "backend": NetworkConstants.MAIN_MACHINE_IP,
+    "redis": NetworkConstants.REDIS_VM_IP,
+    "frontend": NetworkConstants.FRONTEND_VM_IP,
+    "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+    "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+    "browser": NetworkConstants.BROWSER_VM_IP,
+    "ollama": NetworkConstants.AI_STACK_HOST,
+    "browser_service": NetworkConstants.BROWSER_VM_IP,
+}
+
+_PORT_SERVICE_MAP = {
+    "backend": NetworkConstants.BACKEND_PORT,
+    "redis": NetworkConstants.REDIS_PORT,
+    "frontend": NetworkConstants.FRONTEND_PORT,
+    "npu_worker": NetworkConstants.NPU_WORKER_PORT,
+    "ai_stack": NetworkConstants.AI_STACK_PORT,
+    "browser": NetworkConstants.BROWSER_SERVICE_PORT,
+    "ollama": NetworkConstants.OLLAMA_PORT,
+    "browser_service": NetworkConstants.BROWSER_SERVICE_PORT,
+}
 
 
 class ServiceConfigMixin:
@@ -36,18 +60,8 @@ class ServiceConfigMixin:
         if host:
             return host
 
-        # Fallback to NetworkConstants
-        service_map = {
-            "backend": NetworkConstants.MAIN_MACHINE_IP,
-            "redis": NetworkConstants.REDIS_VM_IP,
-            "frontend": NetworkConstants.FRONTEND_VM_IP,
-            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
-            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
-            "browser": NetworkConstants.BROWSER_VM_IP,
-            "ollama": NetworkConstants.AI_STACK_HOST,
-            "browser_service": NetworkConstants.BROWSER_VM_IP,
-        }
-        return service_map.get(service, "localhost")
+        # Fallback to module-level cached map (Issue #380)
+        return _HOST_SERVICE_MAP.get(service, "localhost")
 
     def get_port(self, service: str) -> int:
         """
@@ -67,18 +81,8 @@ class ServiceConfigMixin:
         if port:
             return int(port)
 
-        # Fallback to NetworkConstants
-        service_map = {
-            "backend": NetworkConstants.BACKEND_PORT,
-            "redis": NetworkConstants.REDIS_PORT,
-            "frontend": NetworkConstants.FRONTEND_PORT,
-            "npu_worker": NetworkConstants.NPU_WORKER_PORT,
-            "ai_stack": NetworkConstants.AI_STACK_PORT,
-            "browser": NetworkConstants.BROWSER_SERVICE_PORT,
-            "ollama": NetworkConstants.OLLAMA_PORT,
-            "browser_service": NetworkConstants.BROWSER_SERVICE_PORT,
-        }
-        return service_map.get(service, 8000)
+        # Fallback to module-level cached map (Issue #380)
+        return _PORT_SERVICE_MAP.get(service, 8000)
 
     def get_service_url(self, service: str, endpoint: str = None) -> str:
         """

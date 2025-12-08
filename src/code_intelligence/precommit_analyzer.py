@@ -357,6 +357,7 @@ class PrecommitAnalyzer:
         parallel: bool = True,
         max_workers: int = 4,
     ):
+        """Initialize analyzer with project root and check configuration."""
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.checks = checks if checks is not None else BUILTIN_CHECKS.copy()
         self.fast_mode = fast_mode

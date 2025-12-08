@@ -53,6 +53,7 @@ class DisplayDetector:
     """Detects current display resolution across different platforms"""
 
     def __init__(self):
+        """Initialize display detector with cache and fallback resolution."""
         self.cached_resolution: Optional[Tuple[int, int]] = None
         self.fallback_resolution = (1920, 1080)
 

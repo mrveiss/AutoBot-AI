@@ -138,8 +138,11 @@ class UnifiedMemoryManager:
 
     async def _init_database(self):
         """Initialize database schema"""
-        await self._task_storage.initialize()
-        await self._general_storage.initialize()
+        # Issue #379: Initialize both storage backends in parallel
+        await asyncio.gather(
+            self._task_storage.initialize(),
+            self._general_storage.initialize(),
+        )
 
     # ========================================================================
     # TASK-SPECIFIC API (from enhanced_memory_manager.py)

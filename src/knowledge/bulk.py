@@ -6,6 +6,8 @@ Knowledge Base Bulk Operations Module
 
 Contains the BulkOperationsMixin class for bulk import, export,
 delete, update, cleanup, and deduplication operations.
+
+Issue #358: Fixed file I/O to use proper context managers with asyncio.to_thread.
 """
 
 import asyncio
@@ -21,6 +23,18 @@ if TYPE_CHECKING:
     import redis
 
 logger = logging.getLogger(__name__)
+
+
+def _write_file_sync(filepath: str, content: str) -> None:
+    """Write content to file synchronously with proper resource management (Issue #358)."""
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+def _read_file_sync(filepath: str) -> str:
+    """Read content from file synchronously with proper resource management (Issue #358)."""
+    with open(filepath, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 class BulkOperationsMixin:
@@ -96,11 +110,9 @@ class BulkOperationsMixin:
             else:
                 return {"status": "error", "message": f"Unknown format: {format}"}
 
-            # Save to file if specified
+            # Save to file if specified (Issue #358: proper context manager)
             if output_file:
-                await asyncio.to_thread(
-                    lambda: open(output_file, "w", encoding="utf-8").write(output)
-                )
+                await asyncio.to_thread(_write_file_sync, output_file, output)
                 return {
                     "status": "success",
                     "facts_exported": len(facts),
@@ -174,10 +186,8 @@ class BulkOperationsMixin:
             Dict with import status
         """
         try:
-            # Read file
-            content = await asyncio.to_thread(
-                lambda: open(source_file, "r", encoding="utf-8").read()
-            )
+            # Read file (Issue #358: proper context manager)
+            content = await asyncio.to_thread(_read_file_sync, source_file)
 
             # Parse based on format
             if format == "json":
@@ -371,6 +381,7 @@ class BulkOperationsMixin:
             semaphore = asyncio.Semaphore(50)
 
             async def bounded_update(fact_id: str) -> Dict[str, Any]:
+                """Update single fact category with semaphore-controlled concurrency."""
                 async with semaphore:
                     try:
                         return await self.update_fact(

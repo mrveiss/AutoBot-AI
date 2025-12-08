@@ -507,7 +507,8 @@ class GPUVectorIndex:
 
         try:
             save_dir = Path(save_path)
-            save_dir.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(save_dir.mkdir, parents=True, exist_ok=True)
 
             # For GPU index, transfer to CPU first
             if self.backend == SearchBackend.FAISS_GPU:
@@ -523,11 +524,17 @@ class GPUVectorIndex:
             # Save ID mappings
             import json
 
-            with open(save_dir / "id_map.json", "w", encoding="utf-8") as f:
-                # Convert int keys to strings for JSON
-                json.dump(
-                    {str(k): v for k, v in self.id_map.items()}, f, ensure_ascii=False
-                )
+            # Issue #358 - avoid blocking
+            id_map_path = save_dir / "id_map.json"
+            id_map_data = json.dumps(
+                {str(k): v for k, v in self.id_map.items()}, ensure_ascii=False
+            )
+
+            def _write_id_map():
+                with open(id_map_path, "w", encoding="utf-8") as f:
+                    f.write(id_map_data)
+
+            await asyncio.to_thread(_write_id_map)
 
             self.last_save_time = datetime.now()
             logger.info(f"✅ Index saved to {save_path}")
@@ -547,7 +554,9 @@ class GPUVectorIndex:
         try:
             load_dir = Path(load_path)
 
-            if not (load_dir / "index.faiss").exists():
+            # Issue #358 - avoid blocking
+            index_file_exists = await asyncio.to_thread((load_dir / "index.faiss").exists)
+            if not index_file_exists:
                 logger.warning(f"No index file found at {load_path}")
                 return False
 
@@ -570,11 +579,17 @@ class GPUVectorIndex:
             # Load ID mappings
             import json
 
-            with open(load_dir / "id_map.json", "r", encoding="utf-8") as f:
-                raw_map = json.load(f)
-                self.id_map = {int(k): v for k, v in raw_map.items()}
-                self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
-                self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
+            # Issue #358 - avoid blocking
+            id_map_path = load_dir / "id_map.json"
+
+            def _read_id_map():
+                with open(id_map_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+            raw_map = await asyncio.to_thread(_read_id_map)
+            self.id_map = {int(k): v for k, v in raw_map.items()}
+            self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
+            self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
 
             self.is_trained = True
             logger.info(

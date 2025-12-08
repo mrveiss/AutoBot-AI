@@ -291,10 +291,11 @@ def audit_operation(
     """
 
     def decorator(func: Callable):
-        """Wrap function with audit logging for async/sync execution."""
+        """Create wrapper function with audit logging and result tracking."""
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
+            """Async wrapper that executes function with audit logging and timing."""
             start_time = time.time()
 
             # Extract request if available
@@ -363,6 +364,7 @@ def audit_operation(
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
+            """Sync wrapper that executes function with audit logging and timing."""
             # For synchronous functions, create async logging task
             start_time = time.time()
 

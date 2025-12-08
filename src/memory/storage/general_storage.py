@@ -27,6 +27,7 @@ class GeneralStorage:
     """
 
     def __init__(self, db_path: Union[str, Path]):
+        """Initialize general storage with SQLite database path."""
         self.db_path = Path(db_path) if isinstance(db_path, str) else db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 

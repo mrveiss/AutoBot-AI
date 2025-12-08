@@ -33,6 +33,7 @@ class GemmaClassificationAgent(StandardizedAgent):
     """Ultra-fast classification agent using Google's Gemma models."""
 
     def __init__(self, ollama_host: str = None):
+        """Initialize Gemma classification agent with Ollama connection and Redis."""
         super().__init__("gemma_classification")
         # Get Ollama URL from configuration instead of hardcoding
         self.ollama_host = ollama_host or global_config_manager.get_ollama_url()
@@ -151,19 +152,20 @@ Respond with valid JSON:
 
     async def _read_streaming_response(self, response) -> str:
         """Read streaming response from Ollama (Issue #334 - extracted helper)."""
-        full_response = ""
+        # Issue #383 - Use list and join instead of string concatenation
+        response_parts = []
         async for line in response.content:
             if not line:
                 continue
             try:
                 chunk_data = json.loads(line.decode("utf-8"))
                 if "response" in chunk_data:
-                    full_response += chunk_data["response"]
+                    response_parts.append(chunk_data["response"])
                 if chunk_data.get("done", False):
                     break
             except json.JSONDecodeError:
                 continue
-        return full_response.strip()
+        return "".join(response_parts).strip()
 
     async def _try_model_classify(
         self, model: str, prompt: str, available_models: List[str]
@@ -452,6 +454,7 @@ if __name__ == "__main__":
         print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
 
     async def main():
+        """Run Gemma classification agent in selected mode."""
         agent = GemmaClassificationAgent()
 
         if args.benchmark:

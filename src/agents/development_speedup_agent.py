@@ -179,7 +179,10 @@ class DevelopmentSpeedupAgent:
         cache_key = (
             f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode()).hexdigest()}"
         )
-        self.redis_client.setex(cache_key, self.cache_ttl, json.dumps(report))
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            self.redis_client.setex, cache_key, self.cache_ttl, json.dumps(report)
+        )
 
         return report
 
@@ -837,6 +840,7 @@ class DevelopmentSpeedupAgent:
 
     # Conversion methods for serialization
     def _duplicate_to_dict(self, duplicate: DuplicateCode) -> Dict[str, Any]:
+        """Convert DuplicateCode dataclass to serializable dictionary."""
         return {
             "content_preview": (
                 duplicate.content[:200] + "..."
@@ -850,6 +854,7 @@ class DevelopmentSpeedupAgent:
         }
 
     def _pattern_to_dict(self, pattern: CodePattern) -> Dict[str, Any]:
+        """Convert CodePattern dataclass to serializable dictionary."""
         return {
             "pattern_type": pattern.pattern_type,
             "description": pattern.description,
@@ -862,6 +867,7 @@ class DevelopmentSpeedupAgent:
     def _opportunity_to_dict(
         self, opportunity: RefactoringOpportunity
     ) -> Dict[str, Any]:
+        """Convert RefactoringOpportunity dataclass to serializable dictionary."""
         return {
             "opportunity_type": opportunity.opportunity_type,
             "file_path": opportunity.file_path,
@@ -872,6 +878,7 @@ class DevelopmentSpeedupAgent:
         }
 
     def _quality_issue_to_dict(self, issue: CodeQualityIssue) -> Dict[str, Any]:
+        """Convert CodeQualityIssue dataclass to serializable dictionary."""
         return {
             "issue_type": issue.issue_type,
             "severity": issue.severity,

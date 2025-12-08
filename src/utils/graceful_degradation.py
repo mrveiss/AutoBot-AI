@@ -161,7 +161,8 @@ class CachedResponseStrategy(FallbackStrategy):
         cache_file = self.cache_dir / f"{cache_key}.json"
 
         # Try exact match first
-        if cache_file.exists():
+        # Issue #358 - avoid blocking
+        if await asyncio.to_thread(cache_file.exists):
             try:
                 async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
                     content = await f.read()
@@ -188,7 +189,9 @@ class CachedResponseStrategy(FallbackStrategy):
         best_similarity = 0
 
         try:
-            for cache_file in self.cache_dir.glob("*.json"):
+            # Issue #358 - use lambda for proper glob() execution in thread
+            cache_files = await asyncio.to_thread(lambda: list(self.cache_dir.glob("*.json")))
+            for cache_file in cache_files:
                 try:
                     async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
                         content = await f.read()
@@ -513,39 +516,43 @@ class GracefulDegradationManager:
 
         await self._update_service_health()
 
+    def _determine_health_status(
+        self, consecutive_failures: int, error_rate: float
+    ) -> tuple[ServiceHealth, DegradationLevel]:
+        """Determine health and degradation level (Issue #315 - extracted helper)."""
+        # Ordered thresholds from healthiest to most degraded
+        thresholds = [
+            (0, 5, ServiceHealth.HEALTHY, DegradationLevel.NORMAL),
+            (3, 15, ServiceHealth.DEGRADED, DegradationLevel.REDUCED),
+            (5, 30, ServiceHealth.UNSTABLE, DegradationLevel.MINIMAL),
+            (10, 100, ServiceHealth.FAILING, DegradationLevel.EMERGENCY),
+        ]
+
+        for max_failures, max_error, health, level in thresholds:
+            if consecutive_failures < max_failures and error_rate < max_error:
+                return health, level
+            if consecutive_failures == 0 and error_rate < max_error:
+                return health, level
+
+        return ServiceHealth.DOWN, DegradationLevel.OFFLINE
+
     async def _update_service_health(self):
-        """Update service health status and degradation level (thread-safe)"""
+        """Update service health status and degradation level (Issue #315 - refactored)."""
         async with self._lock:
             consecutive_failures = self.service_status.consecutive_failures
-
-            # Calculate error rate (failures in last 5 minutes)
             current_time = time.time()
             recent_failures = [f for f in self.failure_history if current_time - f <= 300]
             total_requests = self.metrics["total_requests"]
             error_rate = len(recent_failures) / max(1, total_requests) * 100
 
-            # Update health status
-            if consecutive_failures == 0 and error_rate < 5:
-                self.service_status.health = ServiceHealth.HEALTHY
-                self.service_status.degradation_level = DegradationLevel.NORMAL
-            elif consecutive_failures < 3 and error_rate < 15:
-                self.service_status.health = ServiceHealth.DEGRADED
-                self.service_status.degradation_level = DegradationLevel.REDUCED
-            elif consecutive_failures < 5 and error_rate < 30:
-                self.service_status.health = ServiceHealth.UNSTABLE
-                self.service_status.degradation_level = DegradationLevel.MINIMAL
-            elif consecutive_failures < 10:
-                self.service_status.health = ServiceHealth.FAILING
-                self.service_status.degradation_level = DegradationLevel.EMERGENCY
-            else:
-                self.service_status.health = ServiceHealth.DOWN
-                self.service_status.degradation_level = DegradationLevel.OFFLINE
-
+            health, level = self._determine_health_status(consecutive_failures, error_rate)
+            self.service_status.health = health
+            self.service_status.degradation_level = level
             self.service_status.error_rate = error_rate
-            health = self.service_status.health.value
-            level = self.service_status.degradation_level.name
+            health_val = health.value
+            level_name = level.name
 
-        logger.info(f"Service health updated: {health} (degradation: {level})")
+        logger.info(f"Service health updated: {health_val} (degradation: {level_name})")
 
     async def _update_response_time_metric(self, response_time: float):
         """Update average response time metric (thread-safe)"""

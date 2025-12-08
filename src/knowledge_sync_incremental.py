@@ -235,7 +235,8 @@ class IncrementalKnowledgeSync:
     async def _load_sync_state(self):
         """Load existing file metadata and sync state."""
         try:
-            if self.file_metadata_path.exists():
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(self.file_metadata_path.exists):
                 async with aiofiles.open(
                     self.file_metadata_path, "r", encoding="utf-8"
                 ) as f:
@@ -261,7 +262,10 @@ class IncrementalKnowledgeSync:
         """Save current file metadata and sync state."""
         try:
             # Ensure data directory exists
-            self.file_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(
+                self.file_metadata_path.parent.mkdir, parents=True, exist_ok=True
+            )
 
             # Convert FileMetadata objects to dict
             data = {}
@@ -290,12 +294,17 @@ class IncrementalKnowledgeSync:
 
         for pattern in self.doc_patterns:
             pattern_path = self.project_root / pattern
-            files = glob.glob(str(pattern_path), recursive=True)
+            # Issue #358 - avoid blocking
+            files = await asyncio.to_thread(
+                glob.glob, str(pattern_path), recursive=True
+            )
 
             for file_path in files:
                 path_obj = Path(file_path)
+                # Issue #358 - avoid blocking
+                is_file = await asyncio.to_thread(path_obj.is_file)
                 if (
-                    path_obj.is_file()
+                    is_file
                     and "node_modules" not in str(path_obj)
                     and ".git" not in str(path_obj)
                 ):
@@ -319,7 +328,8 @@ class IncrementalKnowledgeSync:
             return
 
         current_hash = self._compute_content_hash(content)
-        file_stat = file_path.stat()
+        # Issue #358 - avoid blocking
+        file_stat = await asyncio.to_thread(file_path.stat)
         str_path = str(file_path)
         relative_path = file_path.relative_to(self.project_root)
 
@@ -373,7 +383,8 @@ class IncrementalKnowledgeSync:
                 logger.warning(f"Empty file: {relative_path}")
                 return None
 
-            file_stat = file_path.stat()
+            # Issue #358 - avoid blocking
+            file_stat = await asyncio.to_thread(file_path.stat)
             content_hash = self._compute_content_hash(content)
 
             # GPU-accelerated semantic chunking
@@ -630,7 +641,10 @@ class IncrementalKnowledgeSync:
             }
 
             summary_path = self.project_root / "data" / "last_sync_summary.json"
-            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            # Issue #358 - avoid blocking
+            await asyncio.to_thread(
+                summary_path.parent.mkdir, parents=True, exist_ok=True
+            )
 
             async with aiofiles.open(summary_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(summary, indent=2))
