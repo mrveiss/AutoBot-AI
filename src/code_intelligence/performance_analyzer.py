@@ -240,7 +240,140 @@ BLOCKING_IO_OPERATIONS = {
 # Legacy compatibility
 BLOCKING_IO_FALSE_POSITIVES = set(SAFE_PATTERNS.keys())
 
-# Database operation patterns
+# Issue #371: Refined database operation patterns with context-aware matching
+# Split into HIGH confidence (definitely DB) and contextual patterns
+# Pattern format: (pattern, requires_prefix, prefix_patterns)
+#   - requires_prefix: if True, must have a known DB-related prefix
+#   - prefix_patterns: prefixes that indicate database context
+
+# HIGH CONFIDENCE: Definitely database operations regardless of context
+DB_OPERATIONS_HIGH_CONFIDENCE = {
+    "cursor.execute",
+    "cursor.executemany",
+    "cursor.fetchone",
+    "cursor.fetchall",
+    "cursor.fetchmany",
+    "conn.execute",
+    "connection.execute",
+    "session.execute",
+    "session.query",
+    "db.execute",
+    "db.query",
+    "collection.find",
+    "collection.find_one",
+    "collection.insert",
+    "collection.insert_one",
+    "collection.insert_many",
+    "collection.update",
+    "collection.update_one",
+    "collection.update_many",
+    "collection.delete",
+    "collection.delete_one",
+    "collection.delete_many",
+    # Redis operations (high confidence when prefixed)
+    "redis_client.get",
+    "redis_client.set",
+    "redis_client.hget",
+    "redis_client.hset",
+    "redis_client.hgetall",
+    "redis_client.mget",
+    "redis_client.mset",
+    "redis_client.delete",
+    "pipe.get",
+    "pipe.set",
+    "pipe.hget",
+    "pipe.hset",
+    "pipe.hgetall",
+    "pipe.execute",
+    "pipeline.get",
+    "pipeline.set",
+    "pipeline.hget",
+    "pipeline.hset",
+    "pipeline.execute",
+    # SQLAlchemy patterns
+    "session.add",
+    "session.commit",
+    "session.refresh",
+    # Async DB patterns
+    "await cursor.execute",
+    "await conn.execute",
+    "await session.execute",
+}
+
+# CONTEXTUAL: These operations need prefix validation
+# They're only DB operations when called on database objects
+DB_OPERATIONS_CONTEXTUAL = {
+    "execute": {"cursor", "conn", "connection", "session", "db", "database"},
+    "executemany": {"cursor"},
+    "fetchone": {"cursor", "result"},
+    "fetchall": {"cursor", "result"},
+    "fetchmany": {"cursor", "result"},
+    "query": {"session", "db", "database", "engine"},
+    "find": {"collection", "model", "db"},
+    "find_one": {"collection", "model", "db"},
+    "insert": {"collection", "db"},
+    "insert_one": {"collection"},
+    "insert_many": {"collection"},
+    "update": {"collection", "model", "db"},
+    "update_one": {"collection"},
+    "update_many": {"collection"},
+    "delete": {"collection", "model", "db"},
+    "delete_one": {"collection"},
+    "delete_many": {"collection"},
+}
+
+# FALSE POSITIVE patterns - NEVER flag these as N+1
+# These look like DB ops but are actually safe in-memory operations
+DB_OPERATIONS_FALSE_POSITIVES = {
+    # Dict/object access
+    "dict.get",
+    "result.get",  # Getting values from dict results
+    "data.get",
+    "item.get",
+    "msg.get",
+    "message.get",
+    "config.get",
+    "settings.get",
+    "metadata.get",
+    "results.get",
+    "response.get",
+    "params.get",
+    "kwargs.get",
+    "args.get",
+    "options.get",
+    "by_severity.get",
+    "severity_emoji.get",
+    "fact.get",
+    # Python builtins
+    "getattr",
+    "setattr",
+    "set",  # Python set() constructor
+    # Regex operations
+    "re.findall",
+    "re.finditer",
+    "re.find",
+    "pattern.findall",
+    "pattern.finditer",
+    "pattern.find",
+    # Inspect module
+    "inspect.getsource",
+    "inspect.getmembers",
+    "inspect.getfile",
+    # String operations
+    "str.find",
+    "text.find",
+    # List/set operations
+    "list.append",
+    "findings.append",
+    "results.append",
+    # OS operations (not I/O in loop context)
+    "os.path.getsize",
+    "os.path.exists",
+    "os.path.isfile",
+    "os.path.isdir",
+}
+
+# Legacy compatibility - keep for backward compatibility
 DB_OPERATIONS = {
     "execute",
     "executemany",
@@ -441,31 +574,82 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 )
             )
 
-        # Check for database operations in loop
+        # Issue #371: Check for database operations in loop using refined patterns
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
                 call_name = self._get_call_name(child)
-                if call_name and any(
-                    db_op in call_name.lower() for db_op in DB_OPERATIONS
-                ):
-                    code = self._get_source_segment(child.lineno, child.lineno)
-                    self.findings.append(
-                        PerformanceIssue(
-                            issue_type=PerformanceIssueType.N_PLUS_ONE_QUERY,
-                            severity=PerformanceSeverity.HIGH,
-                            file_path=self.file_path,
-                            line_start=child.lineno,
-                            line_end=child.lineno,
-                            description=f"Database operation '{call_name}' inside loop (N+1 pattern)",
-                            recommendation="Batch queries or use bulk operations",
-                            estimated_complexity="O(n) database calls",
-                            estimated_impact="Major database bottleneck",
-                            current_code=code,
-                            optimized_code="Use batch fetch: db.query(...).filter(id.in_(ids))",
-                            confidence=0.85,
+                if call_name:
+                    is_db_op, confidence = self._is_database_operation(call_name)
+                    if is_db_op:
+                        code = self._get_source_segment(child.lineno, child.lineno)
+                        self.findings.append(
+                            PerformanceIssue(
+                                issue_type=PerformanceIssueType.N_PLUS_ONE_QUERY,
+                                severity=PerformanceSeverity.HIGH if confidence >= 0.8 else PerformanceSeverity.MEDIUM,
+                                file_path=self.file_path,
+                                line_start=child.lineno,
+                                line_end=child.lineno,
+                                description=f"Database operation '{call_name}' inside loop (N+1 pattern)",
+                                recommendation="Batch queries or use bulk operations",
+                                estimated_complexity="O(n) database calls",
+                                estimated_impact="Major database bottleneck",
+                                current_code=code,
+                                optimized_code="Use batch fetch: db.query(...).filter(id.in_(ids))",
+                                confidence=confidence,
+                                potential_false_positive=confidence < 0.7,
+                            )
                         )
-                    )
-                    break  # Only report once per loop
+                        break  # Only report once per loop
+
+    def _is_database_operation(self, call_name: str) -> tuple:
+        """Issue #371: Determine if a call is a database operation with confidence score.
+
+        Returns:
+            tuple: (is_db_operation: bool, confidence: float)
+        """
+        call_name_lower = call_name.lower()
+
+        # Step 1: Check explicit false positives first - NEVER flag these
+        for fp_pattern in DB_OPERATIONS_FALSE_POSITIVES:
+            if call_name_lower == fp_pattern.lower() or call_name_lower.endswith("." + fp_pattern.lower()):
+                return False, 0.0
+
+        # Step 2: Check high confidence patterns (exact match)
+        for hc_pattern in DB_OPERATIONS_HIGH_CONFIDENCE:
+            if call_name_lower == hc_pattern.lower():
+                return True, 0.95
+            # Also check if it ends with the pattern (e.g., self.cursor.execute)
+            if call_name_lower.endswith("." + hc_pattern.lower().split(".")[-1]):
+                # Verify prefix matches expected DB object
+                parts = call_name.split(".")
+                if len(parts) >= 2:
+                    obj_name = parts[-2].lower()
+                    method_name = parts[-1].lower()
+                    # Check if object name suggests DB context
+                    db_objects = {"cursor", "conn", "connection", "session", "db",
+                                  "redis_client", "pipe", "pipeline", "collection"}
+                    if obj_name in db_objects:
+                        return True, 0.90
+
+        # Step 3: Check contextual patterns
+        parts = call_name.split(".")
+        if len(parts) >= 2:
+            obj_name = parts[-2].lower()
+            method_name = parts[-1].lower()
+
+            # Check contextual DB operations
+            if method_name in DB_OPERATIONS_CONTEXTUAL:
+                valid_prefixes = DB_OPERATIONS_CONTEXTUAL[method_name]
+                if obj_name in valid_prefixes:
+                    return True, 0.85
+
+        # Step 4: Legacy fallback with low confidence (for backward compatibility)
+        # Only flag if it's a clear DB method name AND has suggestive prefix
+        for db_op in {"execute", "executemany", "fetchone", "fetchall", "fetchmany"}:
+            if call_name_lower.endswith("." + db_op):
+                return True, 0.70
+
+        return False, 0.0
 
     def _check_call_in_loop(self, node: ast.Call) -> None:
         """Check if expensive calls are made inside loops."""
