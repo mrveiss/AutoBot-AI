@@ -43,6 +43,19 @@ except ImportError as e:
 # =============================================================================
 
 
+# Issue #315: Lock import patterns
+_ASYNCIO_LOCK_NAMES = frozenset(("Lock", "Semaphore", "Event", "Condition"))
+_THREADING_LOCK_NAMES = frozenset(("Lock", "RLock", "Semaphore", "Event", "Condition"))
+
+
+def _check_import_from_lock(node: ast.ImportFrom) -> Tuple[bool, bool]:
+    """Check ImportFrom node for lock imports. (Issue #315 - extracted)"""
+    names = {alias.name for alias in node.names}
+    has_async = node.module == "asyncio" and bool(names & _ASYNCIO_LOCK_NAMES)
+    has_threading = node.module == "threading" and bool(names & _THREADING_LOCK_NAMES)
+    return has_async, has_threading
+
+
 def _check_lock_imports(node: ast.AST) -> Tuple[bool, bool]:
     """
     Check if an AST node imports async or threading locks.
@@ -53,25 +66,15 @@ def _check_lock_imports(node: ast.AST) -> Tuple[bool, bool]:
     Returns:
         Tuple of (has_async_lock, has_threading_lock)
     """
-    has_async = False
-    has_threading = False
-
     if isinstance(node, ast.ImportFrom):
-        if node.module == "asyncio":
-            for alias in node.names:
-                if alias.name in ("Lock", "Semaphore", "Event", "Condition"):
-                    has_async = True
-        elif node.module == "threading":
-            for alias in node.names:
-                if alias.name in ("Lock", "RLock", "Semaphore", "Event", "Condition"):
-                    has_threading = True
-    elif isinstance(node, ast.Import):
-        for alias in node.names:
-            if alias.name in ("asyncio", "threading"):
-                has_async = True
-                has_threading = True
+        return _check_import_from_lock(node)
 
-    return has_async, has_threading
+    if isinstance(node, ast.Import):
+        names = {alias.name for alias in node.names}
+        has_both = bool(names & {"asyncio", "threading"})
+        return has_both, has_both
+
+    return False, False
 
 
 def _is_mutable_constructor(value: ast.AST) -> bool:
@@ -102,6 +105,36 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     return func_name in mutable_constructors
 
 
+def _process_assign_node(
+    node: ast.Assign, global_vars: Dict[str, int], global_mutables: Set[str]
+) -> None:
+    """Process Assign node for global state extraction. (Issue #315 - extracted)"""
+    for target in node.targets:
+        if isinstance(target, ast.Name):
+            global_vars[target.id] = node.lineno
+            if _is_mutable_constructor(node.value):
+                global_mutables.add(target.id)
+
+
+def _process_ann_assign_node(
+    node: ast.AnnAssign, global_vars: Dict[str, int], global_mutables: Set[str]
+) -> None:
+    """Process AnnAssign node for global state extraction. (Issue #315 - extracted)"""
+    if not node.target or not isinstance(node.target, ast.Name):
+        return
+    var_name = node.target.id
+    global_vars[var_name] = node.lineno
+
+    # Check annotation for Dict, List, Set types
+    if node.annotation:
+        ann_str = ast.unparse(node.annotation) if hasattr(ast, "unparse") else ""
+        if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
+            global_mutables.add(var_name)
+
+    if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
+        global_mutables.add(var_name)
+
+
 def _extract_global_state(tree: ast.AST) -> Tuple[Dict[str, int], Set[str]]:
     """
     Extract global variables and identify which are mutable from module-level assignments.
@@ -115,30 +148,12 @@ def _extract_global_state(tree: ast.AST) -> Tuple[Dict[str, int], Set[str]]:
     global_vars: Dict[str, int] = {}
     global_mutables: Set[str] = set()
 
+    # Use extracted helpers (Issue #315 - reduced depth)
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                var_name = target.id
-                global_vars[var_name] = node.lineno
-                if _is_mutable_constructor(node.value):
-                    global_mutables.add(var_name)
-
+            _process_assign_node(node, global_vars, global_mutables)
         elif isinstance(node, ast.AnnAssign) and node.target:
-            if not isinstance(node.target, ast.Name):
-                continue
-            var_name = node.target.id
-            global_vars[var_name] = node.lineno
-
-            # Check annotation for Dict, List, Set types
-            if node.annotation:
-                ann_str = ast.unparse(node.annotation) if hasattr(ast, "unparse") else ""
-                if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
-                    global_mutables.add(var_name)
-
-            if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
-                global_mutables.add(var_name)
+            _process_ann_assign_node(node, global_vars, global_mutables)
 
     return global_vars, global_mutables
 
@@ -282,9 +297,17 @@ def _check_lazy_init_pattern(
     return None
 
 
-def _check_file_write_without_lock(stmt: ast.With) -> Optional[Dict]:
+def _check_file_write_without_lock(
+    stmt: ast.With, file_path: str = "", func_name: str = ""
+) -> Optional[Dict]:
     """
     Check for file writes without explicit locking.
+
+    Issue #378: Refined to reduce false positives for common safe patterns:
+    - Log files (typically single-writer or append-only)
+    - Config/temp files with unique names
+    - Files in non-concurrent contexts (scripts, tests, init)
+    - Append mode (safer than write mode)
 
     Example: with open(path, 'w') as f: ... (without file lock)
     """
@@ -301,9 +324,61 @@ def _check_file_write_without_lock(stmt: ast.With) -> Optional[Dict]:
         mode_arg = call.args[1]
         if not isinstance(mode_arg, ast.Constant):
             continue
-        if "w" not in str(mode_arg.value):
+        mode_str = str(mode_arg.value)
+        if "w" not in mode_str:
             continue
 
+        # Issue #378: Check for safe patterns that don't need locking
+
+        # Get the file path argument if it's a constant or has a name
+        file_arg = call.args[0] if call.args else None
+        target_file = ""
+        if isinstance(file_arg, ast.Constant):
+            target_file = str(file_arg.value).lower()
+        elif isinstance(file_arg, ast.Name):
+            target_file = file_arg.id.lower()
+
+        # Safe pattern 1: Log files (typically single-writer or properly managed)
+        log_indicators = {"log", "logs", ".log", "logging", "debug", "trace"}
+        if any(ind in target_file for ind in log_indicators):
+            return None
+
+        # Safe pattern 2: Temp files (typically unique names)
+        temp_indicators = {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
+        if any(ind in target_file for ind in temp_indicators):
+            return None
+
+        # Safe pattern 3: Common non-concurrent file types
+        safe_file_types = {
+            ".pid", ".lock", ".json", ".yaml", ".yml", ".toml", ".ini",
+            ".md", ".txt", ".csv", ".html", ".xml"
+        }
+        if any(target_file.endswith(ext) for ext in safe_file_types):
+            return None
+
+        # Safe pattern 4: Append mode is generally safer
+        if "a" in mode_str:
+            return None
+
+        # Safe pattern 5: Context indicators in file path
+        safe_contexts = {
+            "scripts/", "test", "setup", "init", "install", "deploy",
+            "archive", "backup", "migration", "fixture", "mock"
+        }
+        file_path_lower = file_path.lower()
+        if any(ctx in file_path_lower for ctx in safe_contexts):
+            return None
+
+        # Safe pattern 6: Function name indicates non-concurrent context
+        safe_func_names = {
+            "init", "setup", "configure", "install", "migrate", "backup",
+            "export", "save_config", "write_config", "dump", "serialize"
+        }
+        func_name_lower = func_name.lower()
+        if any(safe in func_name_lower for safe in safe_func_names):
+            return None
+
+        # This is a potentially risky file write - flag it
         return _create_race_condition_problem(
             lineno=stmt.lineno,
             description=(
@@ -426,12 +501,18 @@ def _detect_augmented_assignment_issues(
     return problems
 
 
-def _detect_file_handle_issues(func_node: ast.AST) -> List[Dict]:
-    """Detect shared file handles without locks."""
+def _detect_file_handle_issues(
+    func_node: ast.AST, file_path: str = ""
+) -> List[Dict]:
+    """Detect shared file handles without locks.
+
+    Issue #378: Now passes file_path and func_name for context-aware detection.
+    """
     problems = []
+    func_name = getattr(func_node, "name", "")
     for stmt in ast.walk(func_node):
         if isinstance(stmt, ast.With):
-            problem = _check_file_write_without_lock(stmt)
+            problem = _check_file_write_without_lock(stmt, file_path, func_name)
             if problem:
                 problems.append(problem)
     return problems
@@ -907,8 +988,8 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
         # Check for read-modify-write patterns (Pass 6)
         problems.extend(_detect_augmented_assignment_issues(node, global_vars))
 
-        # Check for shared file handles (Pass 7)
-        problems.extend(_detect_file_handle_issues(node))
+        # Check for shared file handles (Pass 7) - Issue #378: pass file_path for context
+        problems.extend(_detect_file_handle_issues(node, file_path))
 
     return problems
 
