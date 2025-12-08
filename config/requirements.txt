@@ -121,3 +121,10 @@ paramiko>=3.4.0                   # SSH client library for infrastructure provis
 # Installation: Automatically installed via setup.sh
 # Note: GPU-required - system will fall back to Ollama if GPU unavailable
 vllm>=0.6.0
+
+# ===== GPU-ACCELERATED VECTOR SEARCH (Issue #387) =====
+# FAISS - GPU-Accelerated Vector Similarity Search
+# Provides 10-100x speedup for vector similarity search operations
+# Use faiss-gpu for CUDA support, faiss-cpu for CPU-only fallback
+# Note: faiss-gpu requires CUDA toolkit installation
+faiss-gpu>=1.7.4
