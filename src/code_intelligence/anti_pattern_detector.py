@@ -233,6 +233,55 @@ class AntiPatternDetector:
 
         return report
 
+    def _check_large_file(
+        self, file_path: str, line_count: int
+    ) -> Optional[AntiPatternResult]:
+        """Check if file exceeds line count threshold."""
+        if line_count <= self.LARGE_FILE_THRESHOLD:
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.LARGE_FILE,
+            severity=self._get_large_file_severity(line_count),
+            file_path=file_path,
+            line_number=1,
+            entity_name=os.path.basename(file_path),
+            description=f"File has {line_count} lines, "
+            f"exceeds threshold of {self.LARGE_FILE_THRESHOLD}",
+            suggestion="Consider splitting into smaller, focused modules",
+            metrics={"line_count": line_count},
+        )
+
+    def _run_file_level_detections(
+        self, tree: ast.AST, file_path: str
+    ) -> List[AntiPatternResult]:
+        """Run all file-level anti-pattern detections."""
+        patterns: List[AntiPatternResult] = []
+        patterns.extend(self._detect_naming_issues(tree, file_path))
+        patterns.extend(self._detect_magic_numbers(tree, file_path))
+        patterns.extend(self._detect_missing_docstrings(tree, file_path))
+        patterns.extend(self._detect_data_clumps(file_path, tree))
+        patterns.extend(self._detect_dead_code(tree, file_path))
+        return patterns
+
+    def _analyze_ast_nodes(
+        self, tree: ast.AST, file_path: str, lines: List[str]
+    ) -> Tuple[List[AntiPatternResult], int, int]:
+        """Analyze all classes and functions in AST, return patterns and counts."""
+        patterns: List[AntiPatternResult] = []
+        class_count = 0
+        function_count = 0
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                class_count += 1
+                patterns.extend(self._analyze_class(node, file_path, lines))
+                patterns.extend(self._detect_lazy_class(node, file_path))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                function_count += 1
+                patterns.extend(self._analyze_function(node, file_path, lines))
+
+        return patterns, class_count, function_count
+
     def analyze_file(self, file_path: str) -> Dict[str, Any]:
         """
         Analyze a single Python file for anti-patterns.
@@ -243,8 +292,6 @@ class AntiPatternDetector:
         Returns:
             Dictionary with patterns found and file statistics
         """
-        patterns: List[AntiPatternResult] = []
-
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 source = f.read()
@@ -253,47 +300,19 @@ class AntiPatternDetector:
             lines = source.split("\n")
             line_count = len(lines)
 
+            patterns: List[AntiPatternResult] = []
+
             # Check for large file
-            if line_count > self.LARGE_FILE_THRESHOLD:
-                patterns.append(
-                    AntiPatternResult(
-                        pattern_type=AntiPatternType.LARGE_FILE,
-                        severity=self._get_large_file_severity(line_count),
-                        file_path=file_path,
-                        line_number=1,
-                        entity_name=os.path.basename(file_path),
-                        description=f"File has {line_count} lines, "
-                        f"exceeds threshold of {self.LARGE_FILE_THRESHOLD}",
-                        suggestion="Consider splitting into smaller, focused modules",
-                        metrics={"line_count": line_count},
-                    )
-                )
+            large_file_result = self._check_large_file(file_path, line_count)
+            if large_file_result:
+                patterns.append(large_file_result)
 
-            # File-level detections
-            patterns.extend(self._detect_naming_issues(tree, file_path))
-            patterns.extend(self._detect_magic_numbers(tree, file_path))
-            patterns.extend(self._detect_missing_docstrings(tree, file_path))
-            patterns.extend(self._detect_data_clumps(file_path, tree))
-            patterns.extend(self._detect_dead_code(tree, file_path))
-
-            # Analyze classes and functions
-            class_count = 0
-            function_count = 0
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    class_count += 1
-                    class_patterns = self._analyze_class(node, file_path, lines)
-                    patterns.extend(class_patterns)
-                    # Lazy class detection
-                    patterns.extend(self._detect_lazy_class(node, file_path))
-
-                elif isinstance(node, ast.FunctionDef) or isinstance(
-                    node, ast.AsyncFunctionDef
-                ):
-                    function_count += 1
-                    func_patterns = self._analyze_function(node, file_path, lines)
-                    patterns.extend(func_patterns)
+            # File-level and node-level detections
+            patterns.extend(self._run_file_level_detections(tree, file_path))
+            node_patterns, class_count, function_count = self._analyze_ast_nodes(
+                tree, file_path, lines
+            )
+            patterns.extend(node_patterns)
 
             return {
                 "patterns": patterns,
@@ -309,76 +328,158 @@ class AntiPatternDetector:
             logger.error(f"Error analyzing {file_path}: {e}")
             return {"patterns": [], "class_count": 0, "function_count": 0}
 
+    def _get_class_methods(self, node: ast.ClassDef) -> List[ast.AST]:
+        """Extract method definitions from a class."""
+        return [
+            n for n in node.body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+
+    def _calculate_class_size(self, node: ast.ClassDef) -> int:
+        """Calculate the line count of a class."""
+        class_start = node.lineno
+        class_end = max(
+            (getattr(n, "end_lineno", class_start) for n in ast.walk(node)),
+            default=class_start,
+        )
+        return class_end - class_start + 1
+
+    def _check_god_class(
+        self, node: ast.ClassDef, file_path: str, method_count: int, class_lines: int
+    ) -> Optional[AntiPatternResult]:
+        """Check for god class anti-pattern by method count or line count."""
+        if method_count > self.GOD_CLASS_METHOD_THRESHOLD:
+            return AntiPatternResult(
+                pattern_type=AntiPatternType.GOD_CLASS,
+                severity=self._get_god_class_severity(method_count),
+                file_path=file_path,
+                line_number=node.lineno,
+                entity_name=node.name,
+                description=f"Class '{node.name}' has {method_count} methods, "
+                f"exceeds threshold of {self.GOD_CLASS_METHOD_THRESHOLD}",
+                suggestion="Consider breaking into smaller, focused classes "
+                "using composition or inheritance",
+                metrics={
+                    "method_count": method_count,
+                    "line_count": class_lines,
+                    "threshold": self.GOD_CLASS_METHOD_THRESHOLD,
+                },
+            )
+        elif class_lines > self.GOD_CLASS_LINE_THRESHOLD:
+            return AntiPatternResult(
+                pattern_type=AntiPatternType.GOD_CLASS,
+                severity=AntiPatternSeverity.MEDIUM,
+                file_path=file_path,
+                line_number=node.lineno,
+                entity_name=node.name,
+                description=f"Class '{node.name}' has {class_lines} lines, "
+                f"exceeds threshold of {self.GOD_CLASS_LINE_THRESHOLD}",
+                suggestion="Consider extracting methods or splitting responsibilities",
+                metrics={"method_count": method_count, "line_count": class_lines},
+            )
+        return None
+
     def _analyze_class(
         self, node: ast.ClassDef, file_path: str, lines: List[str]
     ) -> List[AntiPatternResult]:
         """Analyze a class for anti-patterns."""
         patterns: List[AntiPatternResult] = []
 
-        # Count methods
-        methods = [
-            n
-            for n in node.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
+        methods = self._get_class_methods(node)
         method_count = len(methods)
-
-        # Calculate class size
-        class_start = node.lineno
-        class_end = max(
-            (getattr(n, "end_lineno", class_start) for n in ast.walk(node)),
-            default=class_start,
-        )
-        class_lines = class_end - class_start + 1
+        class_lines = self._calculate_class_size(node)
 
         # God class detection
-        if method_count > self.GOD_CLASS_METHOD_THRESHOLD:
-            severity = self._get_god_class_severity(method_count)
-            patterns.append(
-                AntiPatternResult(
-                    pattern_type=AntiPatternType.GOD_CLASS,
-                    severity=severity,
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    entity_name=node.name,
-                    description=f"Class '{node.name}' has {method_count} methods, "
-                    f"exceeds threshold of {self.GOD_CLASS_METHOD_THRESHOLD}",
-                    suggestion="Consider breaking into smaller, focused classes "
-                    "using composition or inheritance",
-                    metrics={
-                        "method_count": method_count,
-                        "line_count": class_lines,
-                        "threshold": self.GOD_CLASS_METHOD_THRESHOLD,
-                    },
-                )
-            )
-
-        # Also check by line count
-        elif class_lines > self.GOD_CLASS_LINE_THRESHOLD:
-            patterns.append(
-                AntiPatternResult(
-                    pattern_type=AntiPatternType.GOD_CLASS,
-                    severity=AntiPatternSeverity.MEDIUM,
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    entity_name=node.name,
-                    description=f"Class '{node.name}' has {class_lines} lines, "
-                    f"exceeds threshold of {self.GOD_CLASS_LINE_THRESHOLD}",
-                    suggestion="Consider extracting methods or splitting "
-                    "responsibilities",
-                    metrics={
-                        "method_count": method_count,
-                        "line_count": class_lines,
-                    },
-                )
-            )
+        god_class_result = self._check_god_class(
+            node, file_path, method_count, class_lines
+        )
+        if god_class_result:
+            patterns.append(god_class_result)
 
         # Analyze each method for anti-patterns
         for method in methods:
-            method_patterns = self._analyze_function(method, file_path, lines)
-            patterns.extend(method_patterns)
+            patterns.extend(self._analyze_function(method, file_path, lines))
 
         return patterns
+
+    def _count_function_params(self, node: ast.FunctionDef) -> int:
+        """Count total parameters in a function including *args and **kwargs."""
+        param_count = len(node.args.args) + len(node.args.kwonlyargs)
+        if node.args.vararg:
+            param_count += 1
+        if node.args.kwarg:
+            param_count += 1
+        return param_count
+
+    def _check_long_parameter_list(
+        self, node: ast.FunctionDef, file_path: str, param_count: int
+    ) -> Optional[AntiPatternResult]:
+        """Check for long parameter list anti-pattern."""
+        if param_count <= self.LONG_PARAMETER_THRESHOLD:
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.LONG_PARAMETER_LIST,
+            severity=self._get_param_severity(param_count),
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=f"Function '{node.name}' has {param_count} parameters, "
+            f"exceeds threshold of {self.LONG_PARAMETER_THRESHOLD}",
+            suggestion="Consider using a configuration object or "
+            "dataclass to group related parameters",
+            metrics={
+                "param_count": param_count,
+                "threshold": self.LONG_PARAMETER_THRESHOLD,
+            },
+        )
+
+    def _check_long_method(
+        self, node: ast.FunctionDef, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check for long method anti-pattern."""
+        func_start = node.lineno
+        func_end = getattr(node, "end_lineno", func_start)
+        func_lines = func_end - func_start + 1
+
+        if func_lines <= self.LONG_METHOD_THRESHOLD:
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.LONG_METHOD,
+            severity=self._get_long_method_severity(func_lines),
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=f"Function '{node.name}' has {func_lines} lines, "
+            f"exceeds threshold of {self.LONG_METHOD_THRESHOLD}",
+            suggestion="Consider extracting smaller, focused functions",
+            metrics={
+                "line_count": func_lines,
+                "threshold": self.LONG_METHOD_THRESHOLD,
+            },
+        )
+
+    def _check_deep_nesting(
+        self, node: ast.FunctionDef, file_path: str
+    ) -> Optional[AntiPatternResult]:
+        """Check for deep nesting anti-pattern."""
+        max_depth = self._calculate_nesting_depth(node)
+        if max_depth <= self.DEEP_NESTING_THRESHOLD:
+            return None
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.DEEP_NESTING,
+            severity=self._get_nesting_severity(max_depth),
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=f"Function '{node.name}' has nesting depth of "
+            f"{max_depth}, exceeds threshold of {self.DEEP_NESTING_THRESHOLD}",
+            suggestion="Consider early returns, guard clauses, or "
+            "extracting nested logic to separate functions",
+            metrics={
+                "nesting_depth": max_depth,
+                "threshold": self.DEEP_NESTING_THRESHOLD,
+            },
+        )
 
     def _analyze_function(
         self, node: ast.FunctionDef, file_path: str, lines: List[str]
@@ -387,74 +488,20 @@ class AntiPatternDetector:
         patterns: List[AntiPatternResult] = []
 
         # Long parameter list detection
-        param_count = len(node.args.args) + len(node.args.kwonlyargs)
-        if node.args.vararg:
-            param_count += 1
-        if node.args.kwarg:
-            param_count += 1
-
-        if param_count > self.LONG_PARAMETER_THRESHOLD:
-            patterns.append(
-                AntiPatternResult(
-                    pattern_type=AntiPatternType.LONG_PARAMETER_LIST,
-                    severity=self._get_param_severity(param_count),
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    entity_name=node.name,
-                    description=f"Function '{node.name}' has {param_count} parameters, "
-                    f"exceeds threshold of {self.LONG_PARAMETER_THRESHOLD}",
-                    suggestion="Consider using a configuration object or "
-                    "dataclass to group related parameters",
-                    metrics={
-                        "param_count": param_count,
-                        "threshold": self.LONG_PARAMETER_THRESHOLD,
-                    },
-                )
-            )
+        param_count = self._count_function_params(node)
+        long_param_result = self._check_long_parameter_list(node, file_path, param_count)
+        if long_param_result:
+            patterns.append(long_param_result)
 
         # Function length detection
-        func_start = node.lineno
-        func_end = getattr(node, "end_lineno", func_start)
-        func_lines = func_end - func_start + 1
-
-        if func_lines > self.LONG_METHOD_THRESHOLD:
-            patterns.append(
-                AntiPatternResult(
-                    pattern_type=AntiPatternType.LONG_METHOD,
-                    severity=self._get_long_method_severity(func_lines),
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    entity_name=node.name,
-                    description=f"Function '{node.name}' has {func_lines} lines, "
-                    f"exceeds threshold of {self.LONG_METHOD_THRESHOLD}",
-                    suggestion="Consider extracting smaller, focused functions",
-                    metrics={
-                        "line_count": func_lines,
-                        "threshold": self.LONG_METHOD_THRESHOLD,
-                    },
-                )
-            )
+        long_method_result = self._check_long_method(node, file_path)
+        if long_method_result:
+            patterns.append(long_method_result)
 
         # Deep nesting detection
-        max_depth = self._calculate_nesting_depth(node)
-        if max_depth > self.DEEP_NESTING_THRESHOLD:
-            patterns.append(
-                AntiPatternResult(
-                    pattern_type=AntiPatternType.DEEP_NESTING,
-                    severity=self._get_nesting_severity(max_depth),
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    entity_name=node.name,
-                    description=f"Function '{node.name}' has nesting depth of "
-                    f"{max_depth}, exceeds threshold of {self.DEEP_NESTING_THRESHOLD}",
-                    suggestion="Consider early returns, guard clauses, or "
-                    "extracting nested logic to separate functions",
-                    metrics={
-                        "nesting_depth": max_depth,
-                        "threshold": self.DEEP_NESTING_THRESHOLD,
-                    },
-                )
-            )
+        deep_nesting_result = self._check_deep_nesting(node, file_path)
+        if deep_nesting_result:
+            patterns.append(deep_nesting_result)
 
         # Message chain detection (a.b().c().d() patterns)
         patterns.extend(self._detect_message_chains(node, file_path))
@@ -1013,7 +1060,8 @@ class AntiPatternDetector:
 
     # Objects to exclude from Feature Envy detection (Issue #312)
     # These are legitimate patterns, not code smells
-    FEATURE_ENVY_EXCLUDED_OBJECTS = {
+    # Issue #380: Use frozenset for O(1) lookups and immutability
+    FEATURE_ENVY_EXCLUDED_OBJECTS = frozenset({
         # Standard library modules
         "os", "sys", "time", "datetime", "re", "json", "ast", "typing",
         "pathlib", "subprocess", "socket", "hashlib", "base64", "uuid",
@@ -1030,7 +1078,10 @@ class AntiPatternDetector:
         "node", "tree", "element", "item", "obj", "result", "results",
         # Third-party utilities
         "psutil", "pydantic", "PIL", "Image",
-    }
+    })
+
+    # Issue #380: Pre-computed lowercase version for case-insensitive lookups
+    _FEATURE_ENVY_EXCLUDED_LOWER = frozenset(x.lower() for x in FEATURE_ENVY_EXCLUDED_OBJECTS)
 
     # Minimum threshold for Feature Envy detection (Issue #312)
     # Increased from 3 to 5 to reduce false positives
@@ -1063,9 +1114,8 @@ class AntiPatternDetector:
                     else:
                         obj_name = child.value.id
                         # Skip excluded objects (stdlib, frameworks, params)
-                        if obj_name.lower() not in {
-                            x.lower() for x in self.FEATURE_ENVY_EXCLUDED_OBJECTS
-                        }:
+                        # Issue #380: Use pre-computed lowercase set
+                        if obj_name.lower() not in self._FEATURE_ENVY_EXCLUDED_LOWER:
                             external_accesses[obj_name] = (
                                 external_accesses.get(obj_name, 0) + 1
                             )

@@ -124,261 +124,231 @@ class ProjectStateManager:
             f"ProjectStateManager initialized. Current phase: {self.current_phase.value}"
         )
 
+    def _create_project_phases_table(self, cursor: sqlite3.Cursor) -> None:
+        """Create project_phases table."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_phases (
+                phase_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                completion_percentage REAL DEFAULT 0.0,
+                is_active BOOLEAN DEFAULT FALSE,
+                is_completed BOOLEAN DEFAULT FALSE,
+                last_validated TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+
+    def _create_phase_capabilities_table(self, cursor: sqlite3.Cursor) -> None:
+        """Create phase_capabilities table."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS phase_capabilities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phase_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                validation_method TEXT,
+                validation_target TEXT,
+                required BOOLEAN DEFAULT TRUE,
+                implemented BOOLEAN DEFAULT FALSE,
+                last_validated TIMESTAMP,
+                validation_details TEXT,
+                FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
+            )
+        """
+        )
+
+    def _create_validation_results_table(self, cursor: sqlite3.Cursor) -> None:
+        """Create validation_results table."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS validation_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phase_id TEXT NOT NULL,
+                check_name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                score REAL NOT NULL,
+                details TEXT,
+                metadata TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
+            )
+        """
+        )
+
+    def _create_project_state_table(self, cursor: sqlite3.Cursor) -> None:
+        """Create project_state table."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+
     def _init_database(self):
         """Initialize SQLite database for state tracking"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-
-            # Create tables
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS project_phases (
-                    phase_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    completion_percentage REAL DEFAULT 0.0,
-                    is_active BOOLEAN DEFAULT FALSE,
-                    is_completed BOOLEAN DEFAULT FALSE,
-                    last_validated TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS phase_capabilities (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    phase_id TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    validation_method TEXT,
-                    validation_target TEXT,
-                    required BOOLEAN DEFAULT TRUE,
-                    implemented BOOLEAN DEFAULT FALSE,
-                    last_validated TIMESTAMP,
-                    validation_details TEXT,
-                    FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS validation_results (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    phase_id TEXT NOT NULL,
-                    check_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    score REAL NOT NULL,
-                    details TEXT,
-                    metadata TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS project_state (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
+            self._create_project_phases_table(cursor)
+            self._create_phase_capabilities_table(cursor)
+            self._create_validation_results_table(cursor)
+            self._create_project_state_table(cursor)
             conn.commit()
+
+    def _get_phase1_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 1 Core Foundation capabilities."""
+        return [
+            PhaseCapability(
+                "basic_llm_interface", "LLM Interface for chat functionality",
+                "file_exists", "src/llm_interface.py",
+            ),
+            PhaseCapability(
+                "knowledge_base", "Vector database for knowledge storage",
+                "file_exists", "src/knowledge_base.py",
+            ),
+            PhaseCapability(
+                "chat_api", "REST API for chat functionality",
+                "api_endpoint", get_service_url("backend", "/api/chats"),
+            ),
+            PhaseCapability(
+                "web_interface", "Vue.js frontend application",
+                "file_exists", "autobot-vue/src/App.vue",
+            ),
+        ]
+
+    def _get_phase2_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 2 Multi-Agent Orchestration capabilities."""
+        return [
+            PhaseCapability(
+                "orchestrator", "Main orchestration engine",
+                "file_exists", "src/orchestrator.py",
+            ),
+            PhaseCapability(
+                "worker_node", "Distributed task execution",
+                "file_exists", "src/worker_node.py",
+            ),
+            PhaseCapability(
+                "redis_integration", "Redis for task queuing",
+                "api_endpoint", get_service_url("backend", "/api/redis/config"),
+            ),
+        ]
+
+    def _get_phase3_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 3 Security Layer capabilities."""
+        return [
+            PhaseCapability(
+                "security_layer", "Command security and validation",
+                "file_exists", "src/enhanced_security_layer.py",
+            ),
+            PhaseCapability(
+                "secure_executor", "Secure command execution",
+                "file_exists", "src/secure_command_executor.py",
+            ),
+            PhaseCapability(
+                "audit_logging", "Security audit trail",
+                "file_exists", "data/audit.log",
+            ),
+        ]
+
+    def _get_phase4_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 4 System Integration capabilities."""
+        ws_url = get_service_url("backend", "/ws").replace("http://", "ws://").replace("https://", "wss://")
+        return [
+            PhaseCapability(
+                "terminal_integration", "Full terminal functionality",
+                "api_endpoint", get_service_url("backend", "/api/terminal/sessions"),
+            ),
+            PhaseCapability(
+                "file_management", "File upload/download system",
+                "api_endpoint", get_service_url("backend", "/api/files/stats"),
+            ),
+            PhaseCapability(
+                "websocket_support", "Real-time communication",
+                "websocket_endpoint", ws_url,
+            ),
+        ]
+
+    def _get_phase5_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 5 Enhanced Orchestrator capabilities."""
+        return [
+            PhaseCapability(
+                "workflow_orchestration", "Multi-agent workflow system",
+                "api_endpoint", get_service_url("backend", "/api/workflow/workflows"),
+            ),
+            PhaseCapability(
+                "session_takeover", "Human-in-the-loop control",
+                "file_exists", "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
+            ),
+            PhaseCapability(
+                "chat_knowledge", "Context-aware chat system",
+                "api_endpoint", get_service_url("backend", "/api/chat_knowledge/health"),
+            ),
+        ]
+
+    def _get_phase6_capabilities(self) -> List[PhaseCapability]:
+        """Get Phase 6 Self-Awareness capabilities."""
+        return [
+            PhaseCapability(
+                "state_tracking", "Project state management system",
+                "file_exists", "src/project_state_manager.py",
+            ),
+            PhaseCapability(
+                "phase_validation", "Automated validation system",
+                "function_test", "validate_all_phases",
+            ),
+            PhaseCapability(
+                "visual_indicators", "Phase status in Web UI",
+                "file_exists", "autobot-vue/src/components/PhaseStatusIndicator.vue",
+            ),
+            PhaseCapability(
+                "automated_progression", "Phase progression logic",
+                "function_test", "check_phase_completion",
+            ),
+        ]
 
     def _define_phases(self):
         """Define all development phases and their capabilities"""
-
-        # Phase 1: Core Foundation
-        phase1_capabilities = [
-            PhaseCapability(
-                "basic_llm_interface",
-                "LLM Interface for chat functionality",
-                "file_exists",
-                "src/llm_interface.py",
-            ),
-            PhaseCapability(
-                "knowledge_base",
-                "Vector database for knowledge storage",
-                "file_exists",
-                "src/knowledge_base.py",
-            ),
-            PhaseCapability(
-                "chat_api",
-                "REST API for chat functionality",
-                "api_endpoint",
-                get_service_url("backend", "/api/chats"),
-            ),
-            PhaseCapability(
-                "web_interface",
-                "Vue.js frontend application",
-                "file_exists",
-                "autobot-vue/src/App.vue",
-            ),
-        ]
-
-        # Phase 2: Multi-Agent Orchestration
-        phase2_capabilities = [
-            PhaseCapability(
-                "orchestrator",
-                "Main orchestration engine",
-                "file_exists",
-                "src/orchestrator.py",
-            ),
-            PhaseCapability(
-                "worker_node",
-                "Distributed task execution",
-                "file_exists",
-                "src/worker_node.py",
-            ),
-            PhaseCapability(
-                "redis_integration",
-                "Redis for task queuing",
-                "api_endpoint",
-                get_service_url("backend", "/api/redis/config"),
-            ),
-        ]
-
-        # Phase 3: Security Layer
-        phase3_capabilities = [
-            PhaseCapability(
-                "security_layer",
-                "Command security and validation",
-                "file_exists",
-                "src/enhanced_security_layer.py",
-            ),
-            PhaseCapability(
-                "secure_executor",
-                "Secure command execution",
-                "file_exists",
-                "src/secure_command_executor.py",
-            ),
-            PhaseCapability(
-                "audit_logging", "Security audit trail", "file_exists", "data/audit.log"
-            ),
-        ]
-
-        # Phase 4: System Integration
-        phase4_capabilities = [
-            PhaseCapability(
-                "terminal_integration",
-                "Full terminal functionality",
-                "api_endpoint",
-                get_service_url("backend", "/api/terminal/sessions"),
-            ),
-            PhaseCapability(
-                "file_management",
-                "File upload/download system",
-                "api_endpoint",
-                get_service_url("backend", "/api/files/stats"),
-            ),
-            PhaseCapability(
-                "websocket_support",
-                "Real-time communication",
-                "websocket_endpoint",
-                get_service_url("backend", "/ws")
-                .replace("http://", "ws://")
-                .replace("https://", "wss://"),
-            ),
-        ]
-
-        # Phase 5: Enhanced Orchestrator
-        phase5_capabilities = [
-            PhaseCapability(
-                "workflow_orchestration",
-                "Multi-agent workflow system",
-                "api_endpoint",
-                get_service_url("backend", "/api/workflow/workflows"),
-            ),
-            PhaseCapability(
-                "session_takeover",
-                "Human-in-the-loop control",
-                "file_exists",
-                "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
-            ),
-            PhaseCapability(
-                "chat_knowledge",
-                "Context-aware chat system",
-                "api_endpoint",
-                get_service_url("backend", "/api/chat_knowledge/health"),
-            ),
-        ]
-
-        # Phase 6: Self-Awareness (Current)
-        phase6_capabilities = [
-            PhaseCapability(
-                "state_tracking",
-                "Project state management system",
-                "file_exists",
-                "src/project_state_manager.py",
-            ),
-            PhaseCapability(
-                "phase_validation",
-                "Automated validation system",
-                "function_test",
-                "validate_all_phases",
-            ),
-            PhaseCapability(
-                "visual_indicators",
-                "Phase status in Web UI",
-                "file_exists",
-                "autobot-vue/src/components/PhaseStatusIndicator.vue",
-            ),
-            PhaseCapability(
-                "automated_progression",
-                "Phase progression logic",
-                "function_test",
-                "check_phase_completion",
-            ),
-        ]
-
-        # Define all phases
         self.phases = {
             DevelopmentPhase.PHASE_1_CORE: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_1_CORE,
-                "Core Foundation",
+                DevelopmentPhase.PHASE_1_CORE, "Core Foundation",
                 "Basic LLM interface, knowledge base, and web frontend",
-                phase1_capabilities,
+                self._get_phase1_capabilities(),
             ),
             DevelopmentPhase.PHASE_2_ORCHESTRATION: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_2_ORCHESTRATION,
-                "Multi-Agent Orchestration",
+                DevelopmentPhase.PHASE_2_ORCHESTRATION, "Multi-Agent Orchestration",
                 "Task orchestration and distributed worker nodes",
-                phase2_capabilities,
+                self._get_phase2_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_1_CORE],
             ),
             DevelopmentPhase.PHASE_3_SECURITY: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_3_SECURITY,
-                "Security Layer",
+                DevelopmentPhase.PHASE_3_SECURITY, "Security Layer",
                 "Command security, validation, and audit logging",
-                phase3_capabilities,
+                self._get_phase3_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_2_ORCHESTRATION],
             ),
             DevelopmentPhase.PHASE_4_INTEGRATION: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_4_INTEGRATION,
-                "System Integration",
+                DevelopmentPhase.PHASE_4_INTEGRATION, "System Integration",
                 "Terminal, file management, and WebSocket integration",
-                phase4_capabilities,
+                self._get_phase4_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_3_SECURITY],
             ),
             DevelopmentPhase.PHASE_5_ORCHESTRATOR: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_5_ORCHESTRATOR,
-                "Enhanced Orchestrator",
+                DevelopmentPhase.PHASE_5_ORCHESTRATOR, "Enhanced Orchestrator",
                 "Advanced workflow orchestration and session takeover",
-                phase5_capabilities,
+                self._get_phase5_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_4_INTEGRATION],
             ),
             DevelopmentPhase.PHASE_6_SELF_AWARENESS: DevelopmentPhaseInfo(
-                DevelopmentPhase.PHASE_6_SELF_AWARENESS,
-                "Self-Awareness & State Management",
+                DevelopmentPhase.PHASE_6_SELF_AWARENESS, "Self-Awareness & State Management",
                 "Project state tracking and automated phase validation",
-                phase6_capabilities,
+                self._get_phase6_capabilities(),
                 prerequisites=[DevelopmentPhase.PHASE_5_ORCHESTRATOR],
                 is_active=True,
             ),
@@ -421,67 +391,52 @@ class ProjectStateManager:
         except sqlite3.Error as e:
             logger.error(f"Error loading project state: {e}")
 
+    def _save_current_phase(self, cursor: sqlite3.Cursor) -> None:
+        """Save current phase to database."""
+        cursor.execute(
+            "INSERT OR REPLACE INTO project_state (key, value, updated_at) VALUES (?, ?, ?)",
+            ("current_phase", self.current_phase.value, datetime.now()),
+        )
+
+    def _save_phase_info(self, cursor: sqlite3.Cursor, phase: DevelopmentPhase, info: DevelopmentPhaseInfo) -> None:
+        """Save a single phase's information to database."""
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO project_phases
+            (phase_id, name, description, completion_percentage, is_active, is_completed, last_validated, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (phase.value, info.name, info.description, info.completion_percentage,
+             info.is_active, info.is_completed, info.last_validated, datetime.now()),
+        )
+
+    def _save_phase_capabilities(self, cursor: sqlite3.Cursor, phase: DevelopmentPhase, info: DevelopmentPhaseInfo) -> None:
+        """Save a phase's capabilities to database."""
+        cursor.execute("DELETE FROM phase_capabilities WHERE phase_id = ?", (phase.value,))
+        for capability in info.capabilities:
+            cursor.execute(
+                """
+                INSERT INTO phase_capabilities
+                (phase_id, name, description, validation_method, validation_target,
+                 required, implemented, last_validated, validation_details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (phase.value, capability.name, capability.description, capability.validation_method,
+                 capability.validation_target, capability.required, capability.implemented,
+                 capability.last_validated, capability.validation_details),
+            )
+
     def save_state(self):
         """Save current project state to database"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-
-                # Save current phase
-                cursor.execute(
-                    "INSERT OR REPLACE INTO project_state (key, value, updated_at) VALUES (?, ?, ?)",
-                    ("current_phase", self.current_phase.value, datetime.now()),
-                )
-
-                # Save phase information
+                self._save_current_phase(cursor)
                 for phase, info in self.phases.items():
-                    cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO project_phases
-                        (phase_id, name, description, completion_percentage, is_active, is_completed, last_validated, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            phase.value,
-                            info.name,
-                            info.description,
-                            info.completion_percentage,
-                            info.is_active,
-                            info.is_completed,
-                            info.last_validated,
-                            datetime.now(),
-                        ),
-                    )
-
-                    # Save capabilities
-                    cursor.execute(
-                        "DELETE FROM phase_capabilities WHERE phase_id = ?",
-                        (phase.value,),
-                    )
-                    for capability in info.capabilities:
-                        cursor.execute(
-                            """
-                            INSERT INTO phase_capabilities
-                            (phase_id, name, description, validation_method, validation_target,
-                             required, implemented, last_validated, validation_details)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                            (
-                                phase.value,
-                                capability.name,
-                                capability.description,
-                                capability.validation_method,
-                                capability.validation_target,
-                                capability.required,
-                                capability.implemented,
-                                capability.last_validated,
-                                capability.validation_details,
-                            ),
-                        )
-
+                    self._save_phase_info(cursor, phase, info)
+                    self._save_phase_capabilities(cursor, phase, info)
                 conn.commit()
                 logger.info("Project state saved successfully")
-
         except sqlite3.Error as e:
             logger.error(f"Error saving project state: {e}")
 
@@ -770,59 +725,52 @@ class ProjectStateManager:
             "next_suggested": suggested_next.value if suggested_next else None,
         }
 
+    def _check_status_cache(self) -> Optional[Dict[str, Any]]:
+        """Check if cached status data is available and valid."""
+        current_time = time.time()
+        if (_project_status_cache["data"] and
+                current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+            return _project_status_cache["data"]
+        return None
+
+    def _get_last_validation_time(self) -> Optional[datetime]:
+        """Get the most recent validation timestamp across all phases."""
+        validated_times = [info.last_validated for info in self.phases.values() if info.last_validated]
+        return max(validated_times, default=None) if validated_times else None
+
+    def _build_phase_details(self) -> Dict[str, Dict[str, Any]]:
+        """Build detailed phase information dictionary."""
+        return {
+            phase.value: {
+                "name": info.name,
+                "completion": info.completion_percentage,
+                "is_active": info.is_active,
+                "is_completed": info.is_completed,
+                "capabilities": len(info.capabilities),
+                "implemented_capabilities": sum(1 for c in info.capabilities if c.implemented),
+            }
+            for phase, info in self.phases.items()
+        }
+
     def get_project_status(self, use_cache: bool = True) -> Dict[str, Any]:
         """Get comprehensive project status with optional caching"""
-
-        # Check cache first if enabled
         if use_cache:
-            current_time = time.time()
-            if (
-                _project_status_cache["data"]
-                and current_time - _project_status_cache["timestamp"]
-                < _project_status_cache["ttl"]
-            ):
-                return _project_status_cache["data"]
+            cached = self._check_status_cache()
+            if cached:
+                return cached
 
         total_phases = len(self.phases)
-        completed_phases = sum(1 for info in self.phases.values() if info.is_completed)
-        active_phases = sum(1 for info in self.phases.values() if info.is_active)
-
-        overall_completion = (
-            sum(info.completion_percentage for info in self.phases.values())
-            / total_phases
-        )
-
         status_data = {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
-            "completed_phases": completed_phases,
-            "active_phases": active_phases,
-            "overall_completion": overall_completion,
+            "completed_phases": sum(1 for info in self.phases.values() if info.is_completed),
+            "active_phases": sum(1 for info in self.phases.values() if info.is_active),
+            "overall_completion": sum(info.completion_percentage for info in self.phases.values()) / total_phases,
             "next_suggested_phase": self.suggest_next_phase(),
-            "last_validation": max(
-                (
-                    info.last_validated
-                    for info in self.phases.values()
-                    if info.last_validated
-                ),
-                default=None,
-            ),
-            "phases": {
-                phase.value: {
-                    "name": info.name,
-                    "completion": info.completion_percentage,
-                    "is_active": info.is_active,
-                    "is_completed": info.is_completed,
-                    "capabilities": len(info.capabilities),
-                    "implemented_capabilities": sum(
-                        1 for c in info.capabilities if c.implemented
-                    ),
-                }
-                for phase, info in self.phases.items()
-            },
+            "last_validation": self._get_last_validation_time(),
+            "phases": self._build_phase_details(),
         }
 
-        # Cache the result if caching is enabled
         if use_cache:
             _project_status_cache["data"] = status_data
             _project_status_cache["timestamp"] = time.time()

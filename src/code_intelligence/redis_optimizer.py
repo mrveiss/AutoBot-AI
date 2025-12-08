@@ -363,6 +363,23 @@ class RedisOptimizer:
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.results: List[OptimizationResult] = []
 
+    def _run_all_detectors(
+        self,
+        file_path: str,
+        operations: List[RedisOperation],
+        source: str,
+        source_lines: List[str],
+    ) -> List[OptimizationResult]:
+        """Run all optimization detectors on the parsed file."""
+        results: List[OptimizationResult] = []
+        results.extend(self._detect_pipeline_opportunities(file_path, operations, source_lines))
+        results.extend(self._detect_lua_script_candidates(file_path, operations, source_lines))
+        results.extend(self._detect_loop_operations(file_path, operations, source_lines))
+        results.extend(self._detect_data_structure_improvements(file_path, operations, source_lines))
+        results.extend(self._detect_connection_patterns(file_path, source, source_lines))
+        results.extend(self._detect_cache_patterns(file_path, operations, source_lines))
+        return results
+
     def analyze_file(self, file_path: str) -> List[OptimizationResult]:
         """
         Analyze a single Python file for Redis optimizations.
@@ -373,52 +390,48 @@ class RedisOptimizer:
         Returns:
             List of optimization results found in the file
         """
-        results = []
-
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 source = f.read()
                 source_lines = source.split("\n")
 
-            # Parse AST
             tree = ast.parse(source)
-
-            # Extract Redis operations
             visitor = RedisASTVisitor(source_lines)
             visitor.visit(tree)
 
-            operations = visitor.operations
-            if not operations:
-                return results
+            if not visitor.operations:
+                return []
 
-            # Detect various optimization opportunities
-            results.extend(
-                self._detect_pipeline_opportunities(file_path, operations, source_lines)
-            )
-            results.extend(
-                self._detect_lua_script_candidates(file_path, operations, source_lines)
-            )
-            results.extend(
-                self._detect_loop_operations(file_path, operations, source_lines)
-            )
-            results.extend(
-                self._detect_data_structure_improvements(
-                    file_path, operations, source_lines
-                )
-            )
-            results.extend(
-                self._detect_connection_patterns(file_path, source, source_lines)
-            )
-            results.extend(
-                self._detect_cache_patterns(file_path, operations, source_lines)
-            )
+            return self._run_all_detectors(file_path, visitor.operations, source, source_lines)
 
         except SyntaxError as e:
             logger.warning(f"Syntax error parsing {file_path}: {e}")
         except Exception as e:
             logger.error(f"Error analyzing {file_path}: {e}")
 
-        return results
+        return []
+
+    def _get_default_exclude_patterns(self) -> List[str]:
+        """Return default patterns to exclude from analysis."""
+        return [
+            "**/test_*.py",
+            "**/*_test.py",
+            "**/tests/**",
+            "**/archive/**",
+            "**/archives/**",
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/__pycache__/**",
+            "**/venv/**",
+            "**/.venv/**",
+        ]
+
+    def _is_path_excluded(self, rel_path: str, exclude_patterns: List[str]) -> bool:
+        """Check if a relative path matches any exclusion pattern."""
+        for pattern in exclude_patterns:
+            if Path(rel_path).match(pattern.replace("**/", "")):
+                return True
+        return False
 
     def analyze_directory(
         self,
@@ -437,53 +450,19 @@ class RedisOptimizer:
         """
         self.results = []
         target_dir = Path(directory) if directory else self.project_root
-
-        exclude_patterns = exclude_patterns or [
-            "**/test_*.py",
-            "**/*_test.py",
-            "**/tests/**",
-            "**/archive/**",
-            "**/archives/**",
-            "**/.git/**",
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/venv/**",
-            "**/.venv/**",
-        ]
-
-        # Find all Python files
+        exclude_patterns = exclude_patterns or self._get_default_exclude_patterns()
         python_files = list(target_dir.rglob("*.py"))
 
         for file_path in python_files:
-            # Check exclusions
             rel_path = str(file_path.relative_to(target_dir))
-            excluded = False
-            for pattern in exclude_patterns:
-                if Path(rel_path).match(pattern.replace("**/", "")):
-                    excluded = True
-                    break
+            if not self._is_path_excluded(rel_path, exclude_patterns):
+                self.results.extend(self.analyze_file(str(file_path)))
 
-            if excluded:
-                continue
-
-            file_results = self.analyze_file(str(file_path))
-            self.results.extend(file_results)
-
-        logger.info(
-            f"Analyzed {len(python_files)} files, found {len(self.results)} optimizations"
-        )
+        logger.info(f"Analyzed {len(python_files)} files, found {len(self.results)} optimizations")
         return self.results
 
-    def _detect_pipeline_opportunities(
-        self,
-        file_path: str,
-        operations: List[RedisOperation],
-        source_lines: List[str],
-    ) -> List[OptimizationResult]:
-        """Detect sequential Redis operations that can be pipelined."""
-        results = []
-
-        # Group consecutive operations (within 5 lines of each other)
+    def _group_consecutive_operations(self, operations: List[RedisOperation]) -> List[List[RedisOperation]]:
+        """Group consecutive Redis operations within 5 lines of each other."""
         groups: List[List[RedisOperation]] = []
         current_group: List[RedisOperation] = []
 
@@ -499,62 +478,51 @@ class RedisOptimizer:
 
         if len(current_group) >= 2:
             groups.append(current_group)
+        return groups
 
-        # Analyze groups for pipeline opportunities
+    def _create_sequential_ops_result(
+        self, file_path: str, ops: List[RedisOperation], source_lines: List[str],
+        op_type: str, opt_type: OptimizationType
+    ) -> OptimizationResult:
+        """Create optimization result for sequential operations."""
+        op_label = "GET" if op_type == "get" else "SET"
+        return OptimizationResult(
+            optimization_type=opt_type,
+            severity=OptimizationSeverity.MEDIUM,
+            file_path=file_path,
+            line_start=ops[0].line_number,
+            line_end=ops[-1].line_number,
+            description=f"Found {len(ops)} sequential {op_label} operations that can be pipelined",
+            suggestion=f"Use Redis pipeline or M{op_label} for batching these {'reads' if op_type == 'get' else 'writes'}",
+            estimated_improvement=f"~{len(ops) - 1} fewer network round-trips",
+            current_code=self._get_code_range(source_lines, ops[0].line_number, ops[-1].line_number),
+            optimized_code=self._generate_pipeline_code(ops, op_type),
+            operations_affected=ops,
+            metrics={"operation_count": len(ops), "potential_latency_reduction_ms": (len(ops) - 1) * 2},
+        )
+
+    def _detect_pipeline_opportunities(
+        self, file_path: str, operations: List[RedisOperation], source_lines: List[str],
+    ) -> List[OptimizationResult]:
+        """Detect sequential Redis operations that can be pipelined."""
+        results = []
+        groups = self._group_consecutive_operations(operations)
+
         for group in groups:
-            # Skip if already in a loop (different optimization)
             if any(op.in_loop for op in group):
                 continue
 
-            # Check for sequential gets
             gets = [op for op in group if op.operation in ("get", "hget", "mget")]
             if len(gets) >= 2:
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.SEQUENTIAL_GETS,
-                        severity=OptimizationSeverity.MEDIUM,
-                        file_path=file_path,
-                        line_start=gets[0].line_number,
-                        line_end=gets[-1].line_number,
-                        description=f"Found {len(gets)} sequential GET operations that can be pipelined",
-                        suggestion="Use Redis pipeline or MGET for batching these reads",
-                        estimated_improvement=f"~{len(gets) - 1} fewer network round-trips",
-                        current_code=self._get_code_range(
-                            source_lines, gets[0].line_number, gets[-1].line_number
-                        ),
-                        optimized_code=self._generate_pipeline_code(gets, "get"),
-                        operations_affected=gets,
-                        metrics={
-                            "operation_count": len(gets),
-                            "potential_latency_reduction_ms": (len(gets) - 1) * 2,
-                        },
-                    )
-                )
+                results.append(self._create_sequential_ops_result(
+                    file_path, gets, source_lines, "get", OptimizationType.SEQUENTIAL_GETS
+                ))
 
-            # Check for sequential sets
             sets = [op for op in group if op.operation in ("set", "hset")]
             if len(sets) >= 2:
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.SEQUENTIAL_SETS,
-                        severity=OptimizationSeverity.MEDIUM,
-                        file_path=file_path,
-                        line_start=sets[0].line_number,
-                        line_end=sets[-1].line_number,
-                        description=f"Found {len(sets)} sequential SET operations that can be pipelined",
-                        suggestion="Use Redis pipeline or MSET for batching these writes",
-                        estimated_improvement=f"~{len(sets) - 1} fewer network round-trips",
-                        current_code=self._get_code_range(
-                            source_lines, sets[0].line_number, sets[-1].line_number
-                        ),
-                        optimized_code=self._generate_pipeline_code(sets, "set"),
-                        operations_affected=sets,
-                        metrics={
-                            "operation_count": len(sets),
-                            "potential_latency_reduction_ms": (len(sets) - 1) * 2,
-                        },
-                    )
-                )
+                results.append(self._create_sequential_ops_result(
+                    file_path, sets, source_lines, "set", OptimizationType.SEQUENTIAL_SETS
+                ))
 
         return results
 
@@ -674,20 +642,14 @@ class RedisOptimizer:
 
         return results
 
-    def _detect_data_structure_improvements(
-        self,
-        file_path: str,
-        operations: List[RedisOperation],
-        source_lines: List[str],
+    def _detect_string_to_hash_opportunities(
+        self, file_path: str, operations: List[RedisOperation]
     ) -> List[OptimizationResult]:
-        """Detect suboptimal data structure usage."""
+        """Detect string keys that could be consolidated into hashes."""
         results = []
-
-        # Detect multiple string keys with same prefix (should be hash)
         key_prefixes: Dict[str, List[RedisOperation]] = {}
         for op in operations:
             if op.key_pattern and op.operation in ("get", "set"):
-                # Extract prefix (before first : or {)
                 prefix = op.key_pattern.split(":")[0].split("{")[0]
                 if prefix not in key_prefixes:
                     key_prefixes[prefix] = []
@@ -695,29 +657,26 @@ class RedisOptimizer:
 
         for prefix, ops in key_prefixes.items():
             if len(ops) >= 3:
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.STRING_TO_HASH,
-                        severity=OptimizationSeverity.LOW,
-                        file_path=file_path,
-                        line_start=ops[0].line_number,
-                        line_end=ops[-1].line_number,
-                        description=f"Multiple string keys with prefix '{prefix}:' could be a Hash",
-                        suggestion=(
-                            f"Consider using HSET/HGET with key '{prefix}' instead of "
-                            f"multiple string keys. Reduces memory overhead and enables HGETALL."
-                        ),
-                        estimated_improvement="~30-50% memory reduction for related keys",
-                        operations_affected=ops,
-                        metrics={"related_keys": len(ops), "prefix": prefix},
-                    )
-                )
+                results.append(OptimizationResult(
+                    optimization_type=OptimizationType.STRING_TO_HASH,
+                    severity=OptimizationSeverity.LOW,
+                    file_path=file_path,
+                    line_start=ops[0].line_number,
+                    line_end=ops[-1].line_number,
+                    description=f"Multiple string keys with prefix '{prefix}:' could be a Hash",
+                    suggestion=f"Consider using HSET/HGET with key '{prefix}' instead. Reduces memory overhead.",
+                    estimated_improvement="~30-50% memory reduction for related keys",
+                    operations_affected=ops,
+                    metrics={"related_keys": len(ops), "prefix": prefix},
+                ))
+        return results
 
-        # Detect KEYS usage (should use SCAN)
-        keys_ops = [op for op in operations if op.operation == "keys"]
-        for op in keys_ops:
-            results.append(
-                OptimizationResult(
+    def _detect_inefficient_keys_usage(self, file_path: str, operations: List[RedisOperation]) -> List[OptimizationResult]:
+        """Detect KEYS command usage that should use SCAN instead."""
+        results = []
+        for op in operations:
+            if op.operation == "keys":
+                results.append(OptimizationResult(
                     optimization_type=OptimizationType.INEFFICIENT_SCAN,
                     severity=OptimizationSeverity.HIGH,
                     file_path=file_path,
@@ -730,98 +689,96 @@ class RedisOptimizer:
                     optimized_code="async for key in redis.scan_iter(match='pattern*'):",
                     operations_affected=[op],
                     metrics={"blocking_command": True},
-                )
-            )
-
-        # Detect SET without expiry
-        set_ops = [op for op in operations if op.operation == "set"]
-        for op in set_ops:
-            # Check if ex/px/ttl is mentioned in context
-            if "ex=" not in op.context.lower() and "expire" not in op.context.lower():
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.MISSING_EXPIRY,
-                        severity=OptimizationSeverity.INFO,
-                        file_path=file_path,
-                        line_start=op.line_number,
-                        line_end=op.line_number,
-                        description="SET operation without explicit TTL/expiry",
-                        suggestion="Consider adding ex=<seconds> to prevent unbounded memory growth",
-                        estimated_improvement="Prevents memory leaks from orphaned keys",
-                        current_code=op.context,
-                        operations_affected=[op],
-                        metrics={"has_expiry": False},
-                    )
-                )
-
+                ))
         return results
 
-    def _detect_connection_patterns(
-        self,
-        file_path: str,
-        source: str,
-        source_lines: List[str],
-    ) -> List[OptimizationResult]:
-        """Detect connection management anti-patterns."""
+    def _detect_missing_expiry(self, file_path: str, operations: List[RedisOperation]) -> List[OptimizationResult]:
+        """Detect SET operations without TTL/expiry."""
         results = []
+        for op in operations:
+            if op.operation != "set":
+                continue
+            if "ex=" not in op.context.lower() and "expire" not in op.context.lower():
+                results.append(OptimizationResult(
+                    optimization_type=OptimizationType.MISSING_EXPIRY,
+                    severity=OptimizationSeverity.INFO,
+                    file_path=file_path,
+                    line_start=op.line_number,
+                    line_end=op.line_number,
+                    description="SET operation without explicit TTL/expiry",
+                    suggestion="Consider adding ex=<seconds> to prevent unbounded memory growth",
+                    estimated_improvement="Prevents memory leaks from orphaned keys",
+                    current_code=op.context,
+                    operations_affected=[op],
+                    metrics={"has_expiry": False},
+                ))
+        return results
 
-        # Detect direct redis.Redis() instantiation (should use get_redis_client)
+    def _detect_data_structure_improvements(
+        self, file_path: str, operations: List[RedisOperation], source_lines: List[str],
+    ) -> List[OptimizationResult]:
+        """Detect suboptimal data structure usage."""
+        results = []
+        results.extend(self._detect_string_to_hash_opportunities(file_path, operations))
+        results.extend(self._detect_inefficient_keys_usage(file_path, operations))
+        results.extend(self._detect_missing_expiry(file_path, operations))
+        return results
+
+    def _detect_direct_redis_instantiation(
+        self, file_path: str, source: str, source_lines: List[str]
+    ) -> List[OptimizationResult]:
+        """Detect direct redis.Redis() instantiation that violates canonical pattern."""
+        if "redis_client.py" in file_path:
+            return []
+
+        results = []
         pattern = r"redis\.Redis\s*\("
         for match in re.finditer(pattern, source):
             line_number = source[: match.start()].count("\n") + 1
+            results.append(OptimizationResult(
+                optimization_type=OptimizationType.CONNECTION_PER_REQUEST,
+                severity=OptimizationSeverity.HIGH,
+                file_path=file_path,
+                line_start=line_number,
+                line_end=line_number,
+                description="Direct redis.Redis() instantiation - violates canonical pattern",
+                suggestion="Use get_redis_client() from src.utils.redis_client. Provides pooling and monitoring.",
+                estimated_improvement="Connection reuse, automatic retry, health monitoring",
+                current_code=self._get_code_range(source_lines, line_number, line_number + 2),
+                optimized_code="from src.utils.redis_client import get_redis_client\nredis = get_redis_client(database='main')",
+                metrics={"violates_canonical_pattern": True},
+            ))
+        return results
 
-            # Check if this is the canonical redis_client.py file
-            if "redis_client.py" not in file_path:
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.CONNECTION_PER_REQUEST,
-                        severity=OptimizationSeverity.HIGH,
-                        file_path=file_path,
-                        line_start=line_number,
-                        line_end=line_number,
-                        description="Direct redis.Redis() instantiation - violates canonical pattern",
-                        suggestion=(
-                            "Use get_redis_client() from src.utils.redis_client. "
-                            "This provides connection pooling, circuit breaker, and monitoring."
-                        ),
-                        estimated_improvement="Connection reuse, automatic retry, health monitoring",
-                        current_code=self._get_code_range(
-                            source_lines, line_number, line_number + 2
-                        ),
-                        optimized_code=(
-                            "from src.utils.redis_client import get_redis_client\n"
-                            "redis = get_redis_client(database='main')"
-                        ),
-                        metrics={"violates_canonical_pattern": True},
-                    )
-                )
-
-        # Detect blocking Redis in async context
+    def _detect_blocking_in_async(self, file_path: str, source: str) -> List[OptimizationResult]:
+        """Detect blocking Redis calls in async functions."""
+        results = []
         async_pattern = r"async\s+def\s+\w+.*?(?=async\s+def|\Z)"
         for async_match in re.finditer(async_pattern, source, re.DOTALL):
             block = async_match.group()
             block_start = source[: async_match.start()].count("\n") + 1
-
-            # Check for sync redis calls without await
             sync_calls = re.findall(r"(?<!await\s)redis\.(get|set|hget|hset)\(", block)
             if sync_calls:
-                results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.BLOCKING_IN_ASYNC,
-                        severity=OptimizationSeverity.HIGH,
-                        file_path=file_path,
-                        line_start=block_start,
-                        line_end=block_start + block.count("\n"),
-                        description="Potentially blocking Redis call in async function",
-                        suggestion=(
-                            "Use async Redis client with await: "
-                            "redis = await get_redis_client(async_client=True)"
-                        ),
-                        estimated_improvement="Non-blocking async I/O, better concurrency",
-                        metrics={"blocking_calls": len(sync_calls)},
-                    )
-                )
+                results.append(OptimizationResult(
+                    optimization_type=OptimizationType.BLOCKING_IN_ASYNC,
+                    severity=OptimizationSeverity.HIGH,
+                    file_path=file_path,
+                    line_start=block_start,
+                    line_end=block_start + block.count("\n"),
+                    description="Potentially blocking Redis call in async function",
+                    suggestion="Use async Redis client: redis = await get_redis_client(async_client=True)",
+                    estimated_improvement="Non-blocking async I/O, better concurrency",
+                    metrics={"blocking_calls": len(sync_calls)},
+                ))
+        return results
 
+    def _detect_connection_patterns(
+        self, file_path: str, source: str, source_lines: List[str],
+    ) -> List[OptimizationResult]:
+        """Detect connection management anti-patterns."""
+        results = []
+        results.extend(self._detect_direct_redis_instantiation(file_path, source, source_lines))
+        results.extend(self._detect_blocking_in_async(file_path, source))
         return results
 
     def _is_stampede_risk(self, context: str) -> bool:
