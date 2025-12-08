@@ -242,6 +242,31 @@ from .doc_generator import (
     get_diagram_types,
     get_completeness_levels,
 )
+# Multi-language analysis framework (Issue #386)
+from .base_analyzer import (
+    AnalysisIssue as MultiLangIssue,
+    AnalysisResult as MultiLangResult,
+    BaseLanguageAnalyzer,
+    IssueCategory,
+    IssueSeverity,
+    Language,
+    MultiLanguageAnalyzer,
+    detect_language,
+    extract_string_literals,
+    find_pattern_in_code,
+    is_in_comment,
+)
+from .typescript_analyzer import TypeScriptAnalyzer, typescript_analyzer
+from .vue_analyzer import VueAnalyzer, vue_analyzer
+from .shell_analyzer import ShellAnalyzer, shell_analyzer
+from .multi_language_scanner import (
+    CodebaseScanner,
+    codebase_scanner,
+    create_multi_language_scanner,
+    scan_codebase,
+    scan_directory as scan_dir_multi,
+    scan_file as scan_file_multi,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -449,4 +474,28 @@ __all__ = [
     "get_element_types",
     "get_diagram_types",
     "get_completeness_levels",
+    # Multi-language analysis framework (Issue #386)
+    "MultiLangIssue",
+    "MultiLangResult",
+    "BaseLanguageAnalyzer",
+    "IssueCategory",
+    "IssueSeverity",
+    "Language",
+    "MultiLanguageAnalyzer",
+    "detect_language",
+    "extract_string_literals",
+    "find_pattern_in_code",
+    "is_in_comment",
+    "TypeScriptAnalyzer",
+    "typescript_analyzer",
+    "VueAnalyzer",
+    "vue_analyzer",
+    "ShellAnalyzer",
+    "shell_analyzer",
+    "CodebaseScanner",
+    "codebase_scanner",
+    "create_multi_language_scanner",
+    "scan_codebase",
+    "scan_dir_multi",
+    "scan_file_multi",
 ]

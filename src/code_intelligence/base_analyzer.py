@@ -59,25 +59,27 @@ class IssueCategory(Enum):
 class AnalysisIssue:
     """Unified issue format for all language analyzers."""
 
-    # Core identification
+    # Core identification (required)
     issue_id: str
     category: IssueCategory
     severity: IssueSeverity
     language: Language
 
-    # Location
+    # Location (required)
     file_path: str
     line_start: int
     line_end: int
-    column_start: int = 0
-    column_end: int = 0
 
-    # Description
+    # Description (required)
     title: str
     description: str
     recommendation: str
 
-    # Code context
+    # Location (optional)
+    column_start: int = 0
+    column_end: int = 0
+
+    # Code context (optional)
     current_code: str = ""
     suggested_fix: str = ""
 
@@ -86,7 +88,7 @@ class AnalysisIssue:
     potential_false_positive: bool = False
     false_positive_reason: str = ""
 
-    # Additional metadata
+    # Additional metadata (optional)
     rule_id: str = ""
     documentation_url: str = ""
     tags: List[str] = field(default_factory=list)
