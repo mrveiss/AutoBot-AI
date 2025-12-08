@@ -148,6 +148,35 @@ BLOCKING_IO_OPERATIONS = {
     "cursor": "Use async database cursor",
 }
 
+# Issue #363-366: False positive exclusion patterns for blocking I/O detection
+# These patterns should NOT be flagged as blocking operations
+BLOCKING_IO_FALSE_POSITIVES = {
+    # Issue #363: dict.get() is O(1) dictionary access, not I/O
+    ".get(",  # dict.get(), os.environ.get(), etc.
+    "dict.get",
+    # Issue #365: getattr() is a builtin for attribute access
+    "getattr(",
+    "getattr",
+    # Issue #366: logging.getLogger() is logger initialization, not I/O
+    "getlogger",
+    "logging.getlogger",
+    # Issue #364: FastAPI/Starlette router decorators
+    "router.get",
+    "router.post",
+    "router.put",
+    "router.delete",
+    "router.patch",
+    "app.get",
+    "app.post",
+    # Config/settings access patterns (not I/O)
+    "config.get",
+    "settings.get",
+    "environ.get",
+    "os.environ.get",
+    # Standard library non-blocking gets
+    "queue.get",  # Thread-safe but not network I/O in this context
+}
+
 # Database operation patterns
 DB_OPERATIONS = {
     "execute",
@@ -187,6 +216,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
     """AST visitor for performance pattern analysis."""
 
     def __init__(self, file_path: str, source_lines: List[str]):
+        """Initialize AST visitor with file context and loop tracking state."""
         self.file_path = file_path
         self.source_lines = source_lines
         self.findings: List[PerformanceIssue] = []
@@ -412,11 +442,18 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         if not call_name:
             return
 
+        call_name_lower = call_name.lower()
+
+        # Issue #363-366: Skip known false positives
+        for false_positive in BLOCKING_IO_FALSE_POSITIVES:
+            if false_positive in call_name_lower:
+                return  # Not a blocking operation
+
         # Check for known blocking operations
         for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
-            if blocking_op in call_name.lower():
+            if blocking_op in call_name_lower:
                 # Skip if it's the async version
-                if "async" in call_name.lower() or "aio" in call_name.lower():
+                if "async" in call_name_lower or "aio" in call_name_lower:
                     continue
 
                 code = self._get_source_segment(node.lineno, node.lineno)
@@ -595,6 +632,7 @@ class PerformanceAnalyzer:
         project_root: Optional[str] = None,
         exclude_patterns: Optional[List[str]] = None,
     ):
+        """Initialize performance analyzer with project root and exclusion patterns."""
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
             "venv",
