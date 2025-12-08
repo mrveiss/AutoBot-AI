@@ -88,66 +88,89 @@ class LongTermMemoryManager:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Enable WAL mode for better concurrency
+        self._configure_db_pragmas(cursor)
+        self._create_memory_tables(cursor)
+        self._create_memory_indexes(cursor)
+
+        conn.commit()
+        conn.close()
+
+        self._initialized = True
+        logging.info("Long-term memory database initialized successfully")
+
+    def _configure_db_pragmas(self, cursor: sqlite3.Cursor):
+        """Configure SQLite pragmas for better performance"""
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA cache_size=10000")
         cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.execute("PRAGMA foreign_keys=ON")
 
-        # Main memory table for all types of long-term storage
+    def _create_memory_tables(self, cursor: sqlite3.Cursor):
+        """Create all memory-related tables"""
+        self._create_memory_entries_table(cursor)
+        self._create_task_logs_table(cursor)
+        self._create_agent_states_table(cursor)
+        self._create_config_history_table(cursor)
+        self._create_conversations_table(cursor)
+        self._create_markdown_refs_table(cursor)
+
+    def _create_memory_entries_table(self, cursor: sqlite3.Cursor):
+        """Create main memory entries table"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT NOT NULL,
                 content TEXT NOT NULL,
-                metadata TEXT, -- JSON string of metadata
+                metadata TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                reference_path TEXT, -- Path to referenced markdown files
-                embedding BLOB, -- Pickled embedding vector
-                content_hash TEXT, -- Hash for duplicate detection
+                reference_path TEXT,
+                embedding BLOB,
+                content_hash TEXT,
                 UNIQUE(category, content_hash)
             )
             """
         )
 
-        # Task execution logs
+    def _create_task_logs_table(self, cursor: sqlite3.Cursor):
+        """Create task execution logs table"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS task_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 task_id TEXT NOT NULL,
                 task_type TEXT NOT NULL,
-                status TEXT NOT NULL, -- 'TODO', 'IN_PROGRESS', 'DONE',
-                                      -- 'BLOCKED', 'FAILED'
+                status TEXT NOT NULL,
                 description TEXT NOT NULL,
                 result TEXT,
                 execution_time_ms INTEGER,
                 error_message TEXT,
                 started_at DATETIME,
                 completed_at DATETIME,
-                metadata TEXT -- JSON string for additional data
+                metadata TEXT
             )
             """
         )
 
-        # Agent state snapshots
+    def _create_agent_states_table(self, cursor: sqlite3.Cursor):
+        """Create agent state snapshots table"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS agent_states (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 state_name TEXT NOT NULL,
-                state_data TEXT NOT NULL, -- JSON string of state data
+                state_data TEXT NOT NULL,
                 phase INTEGER,
-                active_tasks TEXT, -- JSON array of active task IDs
-                system_status TEXT, -- 'idle', 'busy', 'error', 'maintenance'
+                active_tasks TEXT,
+                system_status TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # Configuration change history
+    def _create_config_history_table(self, cursor: sqlite3.Cursor):
+        """Create configuration change history table"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS config_history (
@@ -155,20 +178,21 @@ class LongTermMemoryManager:
                 config_section TEXT NOT NULL,
                 old_value TEXT,
                 new_value TEXT,
-                changed_by TEXT, -- 'user', 'agent', 'system'
+                changed_by TEXT,
                 change_reason TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # Conversation memory for LLM interactions
+    def _create_conversations_table(self, cursor: sqlite3.Cursor):
+        """Create conversation memory table for LLM interactions"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL,
-                role TEXT NOT NULL, -- 'user', 'assistant', 'system'
+                role TEXT NOT NULL,
                 message TEXT NOT NULL,
                 model_used TEXT,
                 tokens_used INTEGER,
@@ -178,7 +202,8 @@ class LongTermMemoryManager:
             """
         )
 
-        # Markdown file references
+    def _create_markdown_refs_table(self, cursor: sqlite3.Cursor):
+        """Create markdown file references table"""
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS markdown_refs (
@@ -194,14 +219,13 @@ class LongTermMemoryManager:
             """
         )
 
-        # Create indexes for performance
+    def _create_memory_indexes(self, cursor: sqlite3.Cursor):
+        """Create indexes for memory tables"""
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_memory_category "
-            "ON memory_entries(category)"
+            "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp "
-            "ON memory_entries(timestamp)"
+            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)"
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_task_status ON task_logs(status)"
@@ -210,15 +234,8 @@ class LongTermMemoryManager:
             "CREATE INDEX IF NOT EXISTS idx_task_type ON task_logs(task_type)"
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_conversation_session "
-            "ON conversations(session_id)"
+            "CREATE INDEX IF NOT EXISTS idx_conversation_session ON conversations(session_id)"
         )
-
-        conn.commit()
-        conn.close()
-
-        self._initialized = True
-        logging.info("Long-term memory database initialized successfully")
 
     def store_memory(
         self,
