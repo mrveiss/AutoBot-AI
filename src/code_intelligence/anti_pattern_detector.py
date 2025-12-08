@@ -504,6 +504,7 @@ class AntiPatternDetector:
         cycles_found: Set[Tuple[str, ...]] = set()
 
         def find_cycle(module: str, path: List[str]) -> Optional[List[str]]:
+            """Recursively find circular dependency cycle in import graph."""
             visited.add(module)
             rec_stack.add(module)
 
@@ -680,14 +681,43 @@ class AntiPatternDetector:
         elif self._is_camel_case(name):
             camel_case.append(name)
 
+    # Issue #314: Comprehensive list of acceptable single-letter variables
+    # These are well-established conventions that don't reduce readability
+    ACCEPTABLE_SINGLE_LETTER_VARS = frozenset({
+        # Loop counters (universal convention)
+        "i", "j", "k", "n",
+        # Coordinates (universal in graphics/math)
+        "x", "y", "z",
+        # Mathematical formulas (common in algorithms)
+        "a", "b", "c", "d",
+        # Common Python conventions
+        "e",  # Exception: except Exception as e
+        "f",  # File handle: with open(...) as f
+        "m",  # Match object: m = re.match(...)
+        "p",  # Path: p = Path(...)
+        "r",  # Response/result: r = requests.get(...)
+        "s",  # String: s = str(...)
+        "t",  # Time/tuple: t = time.time()
+        "v",  # Value (in dict iteration): for k, v in d.items()
+        "w",  # Width/writer
+        "h",  # Height/handle
+        "q",  # Queue: q = Queue()
+        "l",  # Less common but used for lists (though discouraged due to 1/l confusion)
+        "_",  # Throwaway variable (convention)
+    })
+
     def _check_single_letter_var(
         self, child, single_letter_vars: List[Tuple[str, int]]
     ) -> None:
-        """Check for single letter variable (Issue #335 - extracted helper)."""
+        """Check for single letter variable (Issue #335 - extracted helper).
+
+        Issue #314: Expanded exceptions to include well-established conventions.
+        Only flags truly problematic single-letter variables.
+        """
         if not isinstance(child.ctx, ast.Store):
             return
         name = child.id
-        if len(name) == 1 and name not in "ijknxyz_":
+        if len(name) == 1 and name not in self.ACCEPTABLE_SINGLE_LETTER_VARS:
             single_letter_vars.append((name, getattr(child, "lineno", 0)))
 
     def _detect_naming_issues(
