@@ -56,6 +56,7 @@ class NPUWorker:
     """Windows NPU Worker for AutoBot integration."""
 
     def __init__(self, redis_host: str = "localhost", redis_port: int = 6379):
+        """Initialize NPU worker with Redis connection and FastAPI routes setup."""
         self.worker_id = f"npu_worker_{uuid.uuid4().hex[:8]}"
         self.redis_host = redis_host
         self.redis_port = redis_port
@@ -74,14 +75,16 @@ class NPUWorker:
         self.setup_routes()
 
     def setup_routes(self):
-        """Setup FastAPI routes."""
+        """Setup FastAPI routes for health, stats, inference, and model management."""
 
         @self.app.on_event("startup")
         async def startup():
+            """Initialize NPU worker on application startup."""
             await self.initialize()
 
         @self.app.on_event("shutdown")
         async def shutdown():
+            """Cleanup NPU worker resources on application shutdown."""
             await self.cleanup()
 
         @self.app.get("/health")
@@ -490,7 +493,7 @@ class NPUWorker:
 
 
 def main():
-    """Main function to run NPU worker."""
+    """Main function to run NPU worker with CLI argument parsing."""
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot NPU Worker")

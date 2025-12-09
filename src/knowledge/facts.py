@@ -158,11 +158,125 @@ class FactsMixin:
 
         return None
 
+    async def _check_for_duplicates(
+        self, content: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check for duplicate facts by unique_key or content hash.
+
+        Issue #281: Extracted helper for duplicate detection.
+
+        Args:
+            content: Fact content text
+            metadata: Fact metadata dict
+
+        Returns:
+            Duplicate result dict if found, None otherwise
+        """
+        # Check for duplicates using unique_key if provided
+        if "unique_key" in metadata:
+            existing = await self._find_fact_by_unique_key(metadata["unique_key"])
+            if existing:
+                logger.info(
+                    f"Duplicate detected via unique_key: {metadata['unique_key']}"
+                )
+                return {
+                    "status": "duplicate",
+                    "fact_id": existing["fact_id"],
+                    "message": "Fact already exists with this unique key",
+                }
+
+        # Check for content duplicates
+        existing_id = await self._find_existing_fact(content, metadata)
+        if existing_id:
+            logger.info(f"Duplicate content detected: {existing_id}")
+            return {
+                "status": "duplicate",
+                "fact_id": existing_id,
+                "message": "Fact with identical content already exists",
+            }
+
+        return None
+
+    async def _store_fact_in_redis(
+        self, fact_id: str, content: str, metadata: Dict[str, Any]
+    ) -> None:
+        """
+        Store fact data in Redis with hash mappings.
+
+        Issue #281: Extracted helper for Redis storage operations.
+
+        Args:
+            fact_id: Fact identifier
+            content: Fact content text
+            metadata: Fact metadata dict
+        """
+        # Store in Redis
+        fact_key = f"fact:{fact_id}"
+        await asyncio.to_thread(
+            self.redis_client.hset,
+            fact_key,
+            mapping={
+                "content": content,
+                "metadata": json.dumps(metadata),
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+        # Store content hash for deduplication
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        await asyncio.to_thread(
+            self.redis_client.set, f"content_hash:{content_hash}", fact_id
+        )
+
+        # Store unique_key mapping if provided
+        if "unique_key" in metadata:
+            unique_key_name = f"unique_key:man_page:{metadata['unique_key']}"
+            await asyncio.to_thread(
+                self.redis_client.set, unique_key_name, fact_id
+            )
+
+    async def _vectorize_fact_in_chromadb(
+        self, fact_id: str, content: str, metadata: Dict[str, Any]
+    ) -> None:
+        """
+        Vectorize and store fact in ChromaDB vector store.
+
+        Issue #281: Extracted helper for ChromaDB vectorization.
+
+        Args:
+            fact_id: Fact identifier
+            content: Fact content text
+            metadata: Fact metadata dict
+        """
+        if not self.vector_store:
+            return
+
+        # Import sanitization utility
+        from src.knowledge.utils import (
+            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
+        )
+
+        # Sanitize metadata for ChromaDB
+        sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
+
+        # Create Document for LlamaIndex
+        doc = Document(
+            text=content, doc_id=fact_id, metadata=sanitized_metadata
+        )
+
+        # Add to vector store
+        await asyncio.to_thread(self.vector_store.add, [doc])
+
+        logger.info(f"Vectorized fact {fact_id} in ChromaDB")
+
     async def store_fact(
         self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None
     ) -> Dict[str, Any]:
         """
         Store a new fact in Redis and vectorize it in ChromaDB.
+
+        Issue #281: Refactored from 113 lines to use extracted helper methods.
 
         Args:
             content: Fact content text
@@ -178,9 +292,6 @@ class FactsMixin:
             return {"status": "error", "message": "Empty content provided"}
 
         try:
-            # Import sanitization utility
-            from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
-
             # Generate fact ID if not provided
             if not fact_id:
                 fact_id = str(uuid.uuid4())
@@ -194,68 +305,16 @@ class FactsMixin:
             metadata["timestamp"] = datetime.now().isoformat()
             metadata["embedding_model"] = self.embedding_model_name
 
-            # Check for duplicates using unique_key if provided
-            if "unique_key" in metadata:
-                existing = await self._find_fact_by_unique_key(metadata["unique_key"])
-                if existing:
-                    logger.info(
-                        f"Duplicate detected via unique_key: {metadata['unique_key']}"
-                    )
-                    return {
-                        "status": "duplicate",
-                        "fact_id": existing["fact_id"],
-                        "message": "Fact already exists with this unique key",
-                    }
+            # Issue #281: uses helper for duplicate checking
+            duplicate_result = await self._check_for_duplicates(content, metadata)
+            if duplicate_result:
+                return duplicate_result
 
-            # Check for content duplicates
-            existing_id = await self._find_existing_fact(content, metadata)
-            if existing_id:
-                logger.info(f"Duplicate content detected: {existing_id}")
-                return {
-                    "status": "duplicate",
-                    "fact_id": existing_id,
-                    "message": "Fact with identical content already exists",
-                }
+            # Issue #281: uses helper for Redis storage
+            await self._store_fact_in_redis(fact_id, content, metadata)
 
-            # Store in Redis
-            fact_key = f"fact:{fact_id}"
-            await asyncio.to_thread(
-                self.redis_client.hset,
-                fact_key,
-                mapping={
-                    "content": content,
-                    "metadata": json.dumps(metadata),
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
-            # Store content hash for deduplication
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-            await asyncio.to_thread(
-                self.redis_client.set, f"content_hash:{content_hash}", fact_id
-            )
-
-            # Store unique_key mapping if provided
-            if "unique_key" in metadata:
-                unique_key_name = f"unique_key:man_page:{metadata['unique_key']}"
-                await asyncio.to_thread(
-                    self.redis_client.set, unique_key_name, fact_id
-                )
-
-            # Vectorize and store in ChromaDB
-            if self.vector_store:
-                # Sanitize metadata for ChromaDB
-                sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
-
-                # Create Document for LlamaIndex
-                doc = Document(
-                    text=content, doc_id=fact_id, metadata=sanitized_metadata
-                )
-
-                # Add to vector store
-                await asyncio.to_thread(self.vector_store.add, [doc])
-
-                logger.info(f"Vectorized fact {fact_id} in ChromaDB")
+            # Issue #281: uses helper for ChromaDB vectorization
+            await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
 
             # Issue #379: Increment stats counters in parallel (Issue #71)
             await asyncio.gather(

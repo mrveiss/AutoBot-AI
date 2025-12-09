@@ -16,6 +16,8 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from src.constants.threshold_constants import TimingConstants
+
 # Embedding analytics integration (Issue #285)
 try:
     from backend.api.analytics_embedding_patterns import (
@@ -269,7 +271,8 @@ class BackgroundVectorizer:
 
             except Exception as e:
                 logger.error(f"Periodic check error: {e}")
-                await asyncio.sleep(60)  # Wait 1 minute on error
+                # Error recovery delay before retry
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 
 
 # Global instance (thread-safe)

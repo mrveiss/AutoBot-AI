@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 import psutil
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 # Constants for unit conversions and hardware detection
@@ -354,7 +356,7 @@ class WorkerNode:
                 "No external task listening."
             )
             while True:
-                await asyncio.sleep(10)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY * 2)
 
     async def _process_and_respond(self, task_payload: Dict[str, Any]):
         """

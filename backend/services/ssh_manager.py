@@ -27,6 +27,7 @@ import paramiko
 
 from backend.services.ssh_connection_pool import SSHConnectionPool
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.secure_command_executor import CommandRisk, SecureCommandExecutor
 
 logger = logging.getLogger(__name__)
@@ -136,9 +137,9 @@ class SSHManager:
         # Initialize connection pool
         self.connection_pool = SSHConnectionPool(
             max_connections_per_host=5,
-            connect_timeout=30,
-            idle_timeout=300,
-            health_check_interval=60,
+            connect_timeout=TimingConstants.SHORT_TIMEOUT,
+            idle_timeout=TimingConstants.VERY_LONG_TIMEOUT,
+            health_check_interval=TimingConstants.STANDARD_TIMEOUT,
         )
 
         # Initialize secure command executor for validation
@@ -268,6 +269,180 @@ class SSHManager:
         """List all configured hosts"""
         return list(self.hosts.values())
 
+    def _validate_host_config(self, host: str) -> HostConfig:
+        """
+        Validate host exists and is enabled.
+
+        Issue #281: Extracted helper for host validation.
+
+        Args:
+            host: Host name to validate
+
+        Returns:
+            HostConfig if valid
+
+        Raises:
+            ValueError: If host not found or disabled
+        """
+        host_config = self.get_host_config(host)
+        if not host_config:
+            raise ValueError(f"Unknown host: {host}")
+
+        if not host_config.enabled:
+            raise ValueError(f"Host {host} is disabled")
+
+        return host_config
+
+    def _validate_command_security(
+        self, host: str, command: str, validate: bool
+    ) -> Metadata:
+        """
+        Validate command security and block dangerous commands.
+
+        Issue #281: Extracted helper for command security validation.
+
+        Args:
+            host: Host name (for audit logging)
+            command: Command to validate
+            validate: Whether to perform validation
+
+        Returns:
+            Security info dictionary
+
+        Raises:
+            PermissionError: If command is blocked
+        """
+        if not validate:
+            return {}
+
+        risk_level, reasons = self.command_executor.assess_command_risk(command)
+        security_info: Metadata = {
+            "validated": True,
+            "risk_level": risk_level.value,
+            "reasons": reasons,
+        }
+
+        # Block forbidden and high-risk commands
+        if risk_level in {CommandRisk.FORBIDDEN, CommandRisk.HIGH}:
+            security_info["blocked"] = True
+            security_info["reason"] = f"Command blocked: {'; '.join(reasons)}"
+
+            self._audit_log(
+                "command_blocked",
+                {
+                    "host": host,
+                    "command": command,
+                    "risk_level": risk_level.value,
+                    "reason": security_info["reason"],
+                },
+            )
+
+            raise PermissionError(security_info["reason"])
+
+        return security_info
+
+    async def _execute_and_release(
+        self,
+        host_config: HostConfig,
+        command: str,
+        timeout: int,
+        use_pty: bool,
+    ) -> Tuple[str, str, int]:
+        """
+        Execute command and release connection back to pool.
+
+        Issue #281: Extracted helper for SSH execution.
+
+        Args:
+            host_config: Host configuration
+            command: Command to execute
+            timeout: Timeout in seconds
+            use_pty: Use PTY for interactive commands
+
+        Returns:
+            Tuple of (stdout, stderr, exit_code)
+        """
+        # Get SSH connection from pool
+        client = await self.connection_pool.get_connection(
+            host=host_config.ip,
+            port=host_config.port,
+            username=host_config.username,
+            key_path=self.ssh_key_path,
+        )
+
+        # Execute command
+        if use_pty:
+            stdout, stderr, exit_code = await self._execute_with_pty(
+                client, command, timeout
+            )
+        else:
+            stdout, stderr, exit_code = await self._execute_simple(
+                client, command, timeout
+            )
+
+        # Release connection back to pool
+        await self.connection_pool.release_connection(
+            client,
+            host=host_config.ip,
+            port=host_config.port,
+            username=host_config.username,
+        )
+
+        return stdout, stderr, exit_code
+
+    def _build_command_result(
+        self,
+        host: str,
+        command: str,
+        stdout: str,
+        stderr: str,
+        exit_code: int,
+        execution_time: float,
+        security_info: Metadata,
+    ) -> RemoteCommandResult:
+        """
+        Build RemoteCommandResult and audit log success.
+
+        Issue #281: Extracted helper for result building.
+
+        Args:
+            host: Host name
+            command: Executed command
+            stdout: Command stdout
+            stderr: Command stderr
+            exit_code: Exit code
+            execution_time: Execution time in seconds
+            security_info: Security info dictionary
+
+        Returns:
+            RemoteCommandResult
+        """
+        result = RemoteCommandResult(
+            host=host,
+            command=command,
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+            success=(exit_code == 0),
+            execution_time=execution_time,
+            timestamp=datetime.now(),
+            security_info=security_info,
+        )
+
+        # Audit log result
+        self._audit_log(
+            "command_completed",
+            {
+                "host": host,
+                "command": command,
+                "exit_code": exit_code,
+                "execution_time": execution_time,
+                "success": result.success,
+            },
+        )
+
+        return result
+
     async def execute_command(
         self,
         host: str,
@@ -277,7 +452,9 @@ class SSHManager:
         use_pty: bool = False,
     ) -> RemoteCommandResult:
         """
-        Execute command on remote host
+        Execute command on remote host.
+
+        Issue #281: Refactored from 141 lines to use extracted helper methods.
 
         Args:
             host: Host name (e.g., 'main', 'frontend')
@@ -296,40 +473,11 @@ class SSHManager:
         """
         start_time = datetime.now()
 
-        # Get host configuration
-        host_config = self.get_host_config(host)
-        if not host_config:
-            raise ValueError(f"Unknown host: {host}")
+        # Validate host (Issue #281: uses helper)
+        host_config = self._validate_host_config(host)
 
-        if not host_config.enabled:
-            raise ValueError(f"Host {host} is disabled")
-
-        # Validate command security if requested
-        security_info = {}
-        if validate:
-            risk_level, reasons = self.command_executor.assess_command_risk(command)
-            security_info = {
-                "validated": True,
-                "risk_level": risk_level.value,
-                "reasons": reasons,
-            }
-
-            # Block forbidden and high-risk commands
-            if risk_level in {CommandRisk.FORBIDDEN, CommandRisk.HIGH}:
-                security_info["blocked"] = True
-                security_info["reason"] = f"Command blocked: {'; '.join(reasons)}"
-
-                self._audit_log(
-                    "command_blocked",
-                    {
-                        "host": host,
-                        "command": command,
-                        "risk_level": risk_level.value,
-                        "reason": security_info["reason"],
-                    },
-                )
-
-                raise PermissionError(security_info["reason"])
+        # Validate command security (Issue #281: uses helper)
+        security_info = self._validate_command_security(host, command, validate)
 
         # Audit log command execution attempt
         self._audit_log(
@@ -344,61 +492,18 @@ class SSHManager:
         )
 
         try:
-            # Get SSH connection from pool
-            client = await self.connection_pool.get_connection(
-                host=host_config.ip,
-                port=host_config.port,
-                username=host_config.username,
-                key_path=self.ssh_key_path,
-            )
-
-            # Execute command
-            if use_pty:
-                stdout, stderr, exit_code = await self._execute_with_pty(
-                    client, command, timeout
-                )
-            else:
-                stdout, stderr, exit_code = await self._execute_simple(
-                    client, command, timeout
-                )
-
-            # Release connection back to pool
-            await self.connection_pool.release_connection(
-                client,
-                host=host_config.ip,
-                port=host_config.port,
-                username=host_config.username,
+            # Execute command (Issue #281: uses helper)
+            stdout, stderr, exit_code = await self._execute_and_release(
+                host_config, command, timeout, use_pty
             )
 
             # Calculate execution time
             execution_time = (datetime.now() - start_time).total_seconds()
 
-            # Create result
-            result = RemoteCommandResult(
-                host=host,
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                exit_code=exit_code,
-                success=(exit_code == 0),
-                execution_time=execution_time,
-                timestamp=datetime.now(),
-                security_info=security_info,
+            # Build result (Issue #281: uses helper)
+            return self._build_command_result(
+                host, command, stdout, stderr, exit_code, execution_time, security_info
             )
-
-            # Audit log result
-            self._audit_log(
-                "command_completed",
-                {
-                    "host": host,
-                    "command": command,
-                    "exit_code": exit_code,
-                    "execution_time": execution_time,
-                    "success": result.success,
-                },
-            )
-
-            return result
 
         except Exception as e:
             logger.error(f"Command execution failed on {host}: {e}")
@@ -474,7 +579,8 @@ class SSHManager:
                 if channel.exit_status_ready():
                     break
 
-                await asyncio.sleep(0.1)
+                # Brief delay while polling for channel response
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             # Get exit status
             exit_code = channel.recv_exit_status()

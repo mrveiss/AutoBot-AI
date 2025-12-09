@@ -234,6 +234,30 @@ class UsageRecordRequest(BaseModel):
     success: bool = Field(default=True)
     session_id: Optional[str] = Field(None)
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_record_dict(
+        self,
+        prompt_hash: str,
+        prompt_preview: str,
+        category_value: str,
+        cost: float,
+    ) -> Dict[str, Any]:
+        """Convert to record dictionary for storage (Issue #372 - reduces feature envy)."""
+        return {
+            "prompt_hash": prompt_hash,
+            "prompt_preview": prompt_preview,
+            "category": category_value,
+            "model": self.model,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cost": cost,
+            "timestamp": datetime.now().isoformat(),
+            "response_time": self.response_time,
+            "success": self.success,
+            "session_id": self.session_id,
+        }
+
 
 class DateRangeParams(BaseModel):
     """Date range parameters"""
@@ -388,7 +412,7 @@ class LLMPatternAnalyzer:
         }
 
     async def record_usage(self, request: UsageRecordRequest) -> Dict[str, Any]:
-        """Record an LLM usage event"""
+        """Record an LLM usage event (Issue #372 - uses model methods)."""
         prompt_hash = self._hash_prompt(request.prompt)
         category = self._categorize_prompt(request.prompt)
         cost = self._calculate_cost(
@@ -397,19 +421,13 @@ class LLMPatternAnalyzer:
             request.output_tokens
         )
 
-        record = {
-            "prompt_hash": prompt_hash,
-            "prompt_preview": self._get_prompt_preview(request.prompt),
-            "category": category.value,
-            "model": request.model,
-            "input_tokens": request.input_tokens,
-            "output_tokens": request.output_tokens,
-            "cost": cost,
-            "timestamp": datetime.now().isoformat(),
-            "response_time": request.response_time,
-            "success": request.success,
-            "session_id": request.session_id
-        }
+        # Issue #372: Use model method to reduce feature envy
+        record = request.to_record_dict(
+            prompt_hash=prompt_hash,
+            prompt_preview=self._get_prompt_preview(request.prompt),
+            category_value=category.value,
+            cost=cost,
+        )
 
         try:
             redis = await self._get_redis()

@@ -77,6 +77,70 @@ class SequentialThinkingRequest(BaseModel):
         "default", description="Thinking session identifier"
     )
 
+    def to_thought_record(self) -> Metadata:
+        """Convert to thought record for storage (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing thought record fields.
+        """
+        return {
+            "thought_number": self.thought_number,
+            "thought": self.thought,
+            "total_thoughts": self.total_thoughts,
+            "next_thought_needed": self.next_thought_needed,
+            "is_revision": self.is_revision,
+            "revises_thought": self.revises_thought,
+            "branch_from_thought": self.branch_from_thought,
+            "branch_id": self.branch_id,
+            "needs_more_thoughts": self.needs_more_thoughts,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def get_progress_percentage(self) -> float:
+        """Calculate progress percentage (Issue #372 - reduces feature envy)."""
+        return (self.thought_number / self.total_thoughts) * 100
+
+    def get_session_key(self) -> str:
+        """Get session key with fallback (Issue #372 - reduces feature envy)."""
+        return self.session_id or "default"
+
+    def is_valid_thought_number(self) -> bool:
+        """Check if thought number is valid (Issue #372 - reduces feature envy)."""
+        return (
+            self.thought_number <= self.total_thoughts or self.needs_more_thoughts
+        )
+
+    def has_revision(self) -> bool:
+        """Check if this is a revision (Issue #372 - reduces feature envy)."""
+        return bool(self.is_revision)
+
+    def get_revision_info(self) -> Optional[Metadata]:
+        """Get revision info dict if this is a revision (Issue #372 - reduces feature envy)."""
+        if not self.is_revision:
+            return None
+        return {
+            "is_revision": True,
+            "revises_thought": self.revises_thought,
+        }
+
+    def has_branch(self) -> bool:
+        """Check if this is a branch (Issue #372 - reduces feature envy)."""
+        return bool(self.branch_from_thought)
+
+    def get_branch_info(self) -> Optional[Metadata]:
+        """Get branch info dict if this is a branch (Issue #372 - reduces feature envy)."""
+        if not self.branch_from_thought:
+            return None
+        return {
+            "branched": True,
+            "branch_from_thought": self.branch_from_thought,
+            "branch_id": self.branch_id,
+        }
+
+    def get_progress_message(self) -> str:
+        """Get progress message string (Issue #372 - reduces feature envy)."""
+        return f"Recorded thought {self.thought_number}/{self.total_thoughts}"
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -178,23 +242,20 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
 @router.post("/mcp/sequential_thinking")
 async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadata:
     """
-    Execute sequential thinking tool
+    Execute sequential thinking tool (Issue #372 - uses model methods).
 
     Stores and tracks thinking progression through a problem-solving process.
     Supports revision, branching, and dynamic adjustment of thought count.
     """
-    session_id = request.session_id or "default"
+    session_id = request.get_session_key()
 
     async with _thinking_sessions_lock:
         # Initialize session if doesn't exist
         if session_id not in thinking_sessions:
             thinking_sessions[session_id] = []
 
-    # Validate thought progression
-    if (
-        request.thought_number > request.total_thoughts
-        and not request.needs_more_thoughts
-    ):
+    # Validate thought progression using model method
+    if not request.is_valid_thought_number():
         raise HTTPException(
             status_code=400,
             detail=(
@@ -203,19 +264,8 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
             )
         )
 
-    # Create thought record
-    thought_record = {
-        "thought_number": request.thought_number,
-        "thought": request.thought,
-        "total_thoughts": request.total_thoughts,
-        "next_thought_needed": request.next_thought_needed,
-        "is_revision": request.is_revision,
-        "revises_thought": request.revises_thought,
-        "branch_from_thought": request.branch_from_thought,
-        "branch_id": request.branch_id,
-        "needs_more_thoughts": request.needs_more_thoughts,
-        "timestamp": datetime.now().isoformat(),
-    }
+    # Create thought record using model method (Issue #372)
+    thought_record = request.to_thought_record()
 
     # Handle revision
     if request.is_revision and request.revises_thought:
@@ -236,13 +286,13 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
         thinking_sessions[session_id].append(thought_record)
         session_thought_count = len(thinking_sessions[session_id])
 
-    # Calculate progress
-    progress_percentage = (request.thought_number / request.total_thoughts) * 100
+    # Calculate progress using model method (Issue #372)
+    progress_percentage = request.get_progress_percentage()
 
     # Determine if thinking is complete
     thinking_complete = not request.next_thought_needed
 
-    # Build response
+    # Build response (Issue #372: Use model method for progress message)
     response = {
         "success": True,
         "session_id": session_id,
@@ -251,25 +301,17 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
         "progress_percentage": round(progress_percentage, 1),
         "thinking_complete": thinking_complete,
         "session_thought_count": session_thought_count,
-        "message": (
-            f"Recorded thought {request.thought_number}/{request.total_thoughts}"
-        ),
+        "message": request.get_progress_message(),
     }
 
-    # Add revision info
-    if request.is_revision:
-        response["revision_info"] = {
-            "is_revision": True,
-            "revises_thought": request.revises_thought,
-        }
+    # Issue #372: Use model methods for revision and branch info
+    revision_info = request.get_revision_info()
+    if revision_info:
+        response["revision_info"] = revision_info
 
-    # Add branch info
-    if request.branch_from_thought:
-        response["branch_info"] = {
-            "branched": True,
-            "branch_from_thought": request.branch_from_thought,
-            "branch_id": request.branch_id,
-        }
+    branch_info = request.get_branch_info()
+    if branch_info:
+        response["branch_info"] = branch_info
 
     # If thinking is complete, provide summary (thread-safe)
     if thinking_complete:

@@ -112,6 +112,123 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail=f"Error listing hosts: {str(e)}")
 
 
+def _validate_host_creation_params(
+    role: str, ip_address: str, auth_method: str, password: Optional[str], key_file: Optional[UploadFile]
+) -> None:
+    """
+    Validate host creation parameters.
+
+    Issue #281: Extracted helper for parameter validation.
+
+    Args:
+        role: Role name to validate
+        ip_address: IP address to check for duplicates
+        auth_method: Authentication method (password or key)
+        password: Password if auth_method is password
+        key_file: Key file if auth_method is key
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    # Validate role exists
+    role_obj = db.get_role_by_name(role)
+    if not role_obj:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Role '{role}' not found. Use /api/iac/roles to list available roles.",
+        )
+
+    # Check if host with IP already exists
+    existing_host = db.get_host_by_ip(ip_address)
+    if existing_host:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Host with IP address {ip_address} already exists (ID: {existing_host.id})",
+        )
+
+    # Validate auth method
+    if auth_method == "password" and not password:
+        raise HTTPException(
+            status_code=400, detail="Password required when auth_method='password'"
+        )
+
+    if auth_method == "key" and not key_file:
+        raise HTTPException(
+            status_code=400, detail="SSH key file required when auth_method='key'"
+        )
+
+
+async def _save_ssh_key_file(
+    hostname: str, ip_address: str, key_file: UploadFile
+) -> tuple:
+    """
+    Save uploaded SSH key file to secure location.
+
+    Issue #281: Extracted helper for SSH key file handling.
+
+    Args:
+        hostname: Host's hostname for filename
+        ip_address: Host's IP address for filename
+        key_file: Uploaded key file
+
+    Returns:
+        Tuple of (key_path, key_content)
+
+    Raises:
+        HTTPException: If file save fails
+    """
+    key_dir = "/home/autobot/.ssh/infrastructure_keys"
+    # Issue #358 - avoid blocking
+    await asyncio.to_thread(os.makedirs, key_dir, exist_ok=True)
+
+    key_filename = f"{hostname}_{ip_address.replace('.', '_')}.pem"
+    key_path = os.path.join(key_dir, key_filename)
+
+    try:
+        content = await key_file.read()
+        async with aiofiles.open(key_path, "wb") as f:
+            await f.write(content)
+
+        # Set secure permissions (Issue #358 - avoid blocking)
+        await asyncio.to_thread(os.chmod, key_path, 0o600)
+
+        return key_path, content.decode("utf-8")
+
+    except OSError as e:
+        logger.error(f"Failed to save SSH key file {key_path}: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to save SSH key file: {str(e)}"
+        )
+
+
+def _store_host_credentials(
+    host_id: int,
+    auth_method: str,
+    password: Optional[str],
+    key_content: Optional[str],
+) -> None:
+    """
+    Store SSH credentials for host.
+
+    Issue #281: Extracted helper for credential storage.
+
+    Args:
+        host_id: ID of the created host
+        auth_method: Authentication method used
+        password: Password if auth_method is password
+        key_content: Key content if auth_method is key
+    """
+    if auth_method == "key" and key_content:
+        db.store_ssh_credential(
+            host_id=host_id, credential_type="ssh_key", value=key_content
+        )
+
+    if auth_method == "password" and password:
+        db.store_ssh_credential(
+            host_id=host_id, credential_type="password", value=password
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_host",
@@ -135,7 +252,9 @@ async def create_host(
     ),
 ):
     """
-    Create new infrastructure host
+    Create new infrastructure host.
+
+    Issue #281: Refactored from 120 lines to use extracted helper methods.
 
     Authentication Methods:
     - password: Provide password in 'password' field. Use /hosts/{id}/provision-key to generate SSH key.
@@ -151,32 +270,11 @@ async def create_host(
     - 500: Internal server error
     """
     try:
-        # Validate role exists
+        # Validate parameters (Issue #281: uses helper)
+        _validate_host_creation_params(role, ip_address, auth_method, password, key_file)
+
+        # Get role for host data
         role_obj = db.get_role_by_name(role)
-        if not role_obj:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Role '{role}' not found. Use /api/iac/roles to list available roles.",
-            )
-
-        # Check if host with IP already exists
-        existing_host = db.get_host_by_ip(ip_address)
-        if existing_host:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Host with IP address {ip_address} already exists (ID: {existing_host.id})",
-            )
-
-        # Validate auth method
-        if auth_method == "password" and not password:
-            raise HTTPException(
-                status_code=400, detail="Password required when auth_method='password'"
-            )
-
-        if auth_method == "key" and not key_file:
-            raise HTTPException(
-                status_code=400, detail="SSH key file required when auth_method='key'"
-            )
 
         # Create host data
         host_data = {
@@ -188,46 +286,17 @@ async def create_host(
             "status": "new",
         }
 
-        # Handle SSH key file upload
+        # Handle SSH key file upload (Issue #281: uses helper)
+        key_content = None
         if auth_method == "key" and key_file:
-            # Save uploaded key to secure location
-            key_dir = "/home/autobot/.ssh/infrastructure_keys"
-            # Issue #358 - avoid blocking
-            await asyncio.to_thread(os.makedirs, key_dir, exist_ok=True)
-
-            key_filename = f"{hostname}_{ip_address.replace('.', '_')}.pem"
-            key_path = os.path.join(key_dir, key_filename)
-
-            # Save key file asynchronously
-            try:
-                content = await key_file.read()
-                async with aiofiles.open(key_path, "wb") as f:
-                    await f.write(content)
-
-                # Set secure permissions
-                # Issue #358 - avoid blocking
-                await asyncio.to_thread(os.chmod, key_path, 0o600)
-
-                host_data["ssh_key_path"] = key_path
-                key_content = content.decode("utf-8")
-            except OSError as e:
-                logger.error(f"Failed to save SSH key file {key_path}: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to save SSH key file: {str(e)}")
+            key_path, key_content = await _save_ssh_key_file(hostname, ip_address, key_file)
+            host_data["ssh_key_path"] = key_path
 
         # Create host FIRST (CRITICAL: Must exist before credential storage)
         host = db.create_host(host_data)
 
-        # Store SSH key credential if uploaded (AFTER host creation)
-        if auth_method == "key" and key_file:
-            db.store_ssh_credential(
-                host_id=host.id, credential_type="ssh_key", value=key_content
-            )
-
-        # Store password credential if provided
-        if auth_method == "password" and password:
-            db.store_ssh_credential(
-                host_id=host.id, credential_type="password", value=password
-            )
+        # Store credentials (Issue #281: uses helper)
+        _store_host_credentials(host.id, auth_method, password, key_content)
 
         logger.info(f"Created host: {hostname} ({ip_address}) with role {role}")
 

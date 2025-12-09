@@ -132,7 +132,7 @@ class TaskStorage:
             raise RuntimeError(f"Task storage initialization failed: {e}")
 
     async def log_task(self, record: TaskExecutionRecord) -> str:
-        """Log task execution record"""
+        """Log task execution record (Issue #372 - uses model method)."""
         try:
             async with self._get_connection() as conn:
                 await conn.execute(
@@ -145,30 +145,7 @@ class TaskStorage:
                         subtask_ids_json, metadata_json
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                    (
-                        record.task_id,
-                        record.task_name,
-                        record.description,
-                        record.status.value,
-                        record.priority.value,
-                        record.created_at,
-                        record.started_at,
-                        record.completed_at,
-                        record.duration_seconds,
-                        record.agent_type,
-                        json.dumps(record.inputs) if record.inputs else None,
-                        json.dumps(record.outputs) if record.outputs else None,
-                        record.error_message,
-                        record.retry_count,
-                        (
-                            json.dumps(record.markdown_references)
-                            if record.markdown_references
-                            else None
-                        ),
-                        record.parent_task_id,
-                        json.dumps(record.subtask_ids) if record.subtask_ids else None,
-                        json.dumps(record.metadata) if record.metadata else None,
-                    ),
+                    record.to_db_tuple(),  # Issue #372: Use model method
                 )
                 await conn.commit()
 

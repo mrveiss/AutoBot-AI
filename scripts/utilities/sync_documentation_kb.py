@@ -48,6 +48,7 @@ class DocumentationSyncManager:
     """
 
     def __init__(self, docs_dir: Path):
+        """Initialize documentation sync manager with directory path."""
         self.docs_dir = docs_dir
         self.kb = None
         self.state_file = PROJECT_ROOT / "data" / "kb_sync_state.json"

@@ -10,6 +10,8 @@ import asyncio
 import logging
 from typing import Any, Callable, Dict
 
+from src.constants.threshold_constants import FileWatcherConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -113,13 +115,13 @@ class FileWatcherMixin:
                     last_modified = await self._check_file_change(
                         config_type, file_path, last_modified
                     )
-                    await asyncio.sleep(1.0)  # Check every second
+                    await asyncio.sleep(FileWatcherConfig.CHECK_INTERVAL_S)
 
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
                     logger.error(f"File watcher error for {config_type}: {e}")
-                    await asyncio.sleep(5.0)  # Wait before retrying
+                    await asyncio.sleep(FileWatcherConfig.ERROR_RETRY_INTERVAL_S)
 
         self._file_watchers[config_type] = asyncio.create_task(watch_file())
         logger.info(f"Started file watcher for {config_type} config")

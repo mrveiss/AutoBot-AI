@@ -118,25 +118,8 @@ async def list_workflow_templates(
                     status_code=400, detail=f"Invalid complexity: {complexity}"
                 )
 
-        # Convert to response format
-        for template in template_list:
-            templates.append(
-                {
-                    "id": template.id,
-                    "name": template.name,
-                    "description": template.description,
-                    "category": template.category.value,
-                    "complexity": template.complexity.value,
-                    "estimated_duration_minutes": template.estimated_duration_minutes,
-                    "agents_involved": template.agents_involved,
-                    "tags": template.tags,
-                    "step_count": len(template.steps),
-                    "approval_steps": sum(
-                        1 for step in template.steps if step.requires_approval
-                    ),
-                    "variables": template.variables,
-                }
-            )
+        # Convert to response format using model method (Issue #372 - reduces feature envy)
+        templates = [template.to_summary_dict() for template in template_list]
 
         return {"success": True, "templates": templates, "total": len(templates)}
 
@@ -156,42 +139,16 @@ async def list_workflow_templates(
     data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
 )
 async def get_template_details(template_id: str):
-    """Get detailed information about a specific template"""
+    """Get detailed information about a specific template (Issue #372 - uses model methods)"""
     try:
         template = workflow_template_manager.get_template(template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
 
-        # Convert steps to response format
-        steps = []
-        for step in template.steps:
-            steps.append(
-                {
-                    "id": step.id,
-                    "agent_type": step.agent_type,
-                    "action": step.action,
-                    "description": step.description,
-                    "requires_approval": step.requires_approval,
-                    "dependencies": step.dependencies,
-                    "inputs": step.inputs,
-                    "expected_duration_ms": step.expected_duration_ms,
-                }
-            )
-
+        # Issue #372: Use model method to reduce feature envy
         return {
             "success": True,
-            "template": {
-                "id": template.id,
-                "name": template.name,
-                "description": template.description,
-                "category": template.category.value,
-                "complexity": template.complexity.value,
-                "estimated_duration_minutes": template.estimated_duration_minutes,
-                "agents_involved": template.agents_involved,
-                "tags": template.tags,
-                "variables": template.variables,
-                "steps": steps,
-            },
+            "template": template.to_detail_dict(),
         }
 
     except Exception as e:
@@ -209,27 +166,12 @@ async def search_templates(
         ..., description="Search query for template name, description, or tags"
     )
 ):
-    """Search workflow templates by query string"""
+    """Search workflow templates by query string (Issue #372 - uses model methods)"""
     try:
         templates = workflow_template_manager.search_templates(q)
 
-        search_results = []
-        for template in templates:
-            search_results.append(
-                {
-                    "id": template.id,
-                    "name": template.name,
-                    "description": template.description,
-                    "category": template.category.value,
-                    "complexity": template.complexity.value,
-                    "estimated_duration_minutes": template.estimated_duration_minutes,
-                    "tags": template.tags,
-                    "step_count": len(template.steps),
-                    "approval_steps": sum(
-                        1 for step in template.steps if step.requires_approval
-                    ),
-                }
-            )
+        # Issue #372: Use model method to reduce feature envy
+        search_results = [template.to_summary_dict() for template in templates]
 
         return {
             "success": True,

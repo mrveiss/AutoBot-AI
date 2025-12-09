@@ -45,6 +45,98 @@ class IndexMixin:
     hnsw_search_ef: int
     hnsw_m: int
 
+    def _get_hnsw_metadata(self) -> Dict[str, Any]:
+        """Get optimized HNSW parameters for 545K+ vectors."""
+        return {
+            "hnsw:space": self.hnsw_space,
+            "hnsw:construction_ef": self.hnsw_construction_ef,
+            "hnsw:search_ef": self.hnsw_search_ef,
+            "hnsw:M": self.hnsw_m,
+        }
+
+    async def _prepare_target_collection(
+        self, chroma_client: Any, target_name: str, hnsw_metadata: Dict[str, Any]
+    ) -> Any:
+        """Delete existing and create new collection with HNSW params."""
+        logger.info(
+            f"Creating new collection '{target_name}' with HNSW params: "
+            f"construction_ef={self.hnsw_construction_ef}, "
+            f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+        )
+
+        # Issue #369: Wrap blocking delete_collection with asyncio.to_thread
+        try:
+            await asyncio.to_thread(chroma_client.delete_collection, name=target_name)
+            logger.info(f"Deleted existing collection: {target_name}")
+        except Exception as e:
+            logger.debug(
+                f"Collection {target_name} does not exist or could not be deleted: {e}"
+            )
+
+        # Issue #369: Wrap blocking create_collection with asyncio.to_thread
+        return await asyncio.to_thread(
+            chroma_client.create_collection, name=target_name, metadata=hnsw_metadata
+        )
+
+    async def _migrate_vectors_batch(
+        self, old_collection: Any, new_collection: Any, old_count: int
+    ) -> int:
+        """Migrate vectors in batches from old to new collection."""
+        batch_size = 1000
+        migrated = 0
+        offset = 0
+
+        while offset < old_count:
+            # Issue #369: Wrap blocking get() with asyncio.to_thread
+            results = await asyncio.to_thread(
+                old_collection.get,
+                limit=batch_size,
+                offset=offset,
+                include=["documents", "embeddings", "metadatas"],
+            )
+
+            if not results["ids"]:
+                break
+
+            # Issue #369: Wrap blocking add() with asyncio.to_thread
+            await asyncio.to_thread(
+                new_collection.add,
+                ids=results["ids"],
+                embeddings=results["embeddings"],
+                documents=results["documents"],
+                metadatas=results["metadatas"],
+            )
+
+            migrated += len(results["ids"])
+            offset += batch_size
+
+            if migrated % 10000 == 0:
+                logger.info(f"Migration progress: {migrated}/{old_count} vectors")
+
+        return migrated
+
+    def _build_success_result(
+        self,
+        target_name: str,
+        old_count: int,
+        migrated: int,
+        hnsw_metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build success result dictionary."""
+        logger.info(f"Migration complete: {migrated} vectors migrated to '{target_name}'")
+        return {
+            "status": "success",
+            "old_collection": self.chromadb_collection,
+            "new_collection": target_name,
+            "old_count": old_count,
+            "migrated_count": migrated,
+            "hnsw_params": hnsw_metadata,
+            "message": (
+                f"Successfully migrated {migrated} vectors. "
+                f"To switch, update AUTOBOT_CHROMADB_COLLECTION={target_name}"
+            ),
+        }
+
     async def rebuild_chromadb_index(
         self, new_collection_name: Optional[str] = None
     ) -> dict:
@@ -54,6 +146,7 @@ class IndexMixin:
         Issue #72: This method creates a new collection with optimized parameters
         and migrates all vectors from the existing collection.
         Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
+        Issue #281: Refactored from 136 lines to use extracted helper methods.
 
         Args:
             new_collection_name: Optional new collection name. If None, uses
@@ -72,7 +165,7 @@ class IndexMixin:
 
             logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
 
-            # Get the ChromaDB client
+            # Get the ChromaDB client and old collection
             chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
@@ -85,95 +178,19 @@ class IndexMixin:
             old_count = await asyncio.to_thread(old_collection.count)
 
             if old_count == 0:
-                return {
-                    "status": "skipped",
-                    "message": "No vectors to migrate",
-                    "old_count": 0,
-                }
+                return {"status": "skipped", "message": "No vectors to migrate", "old_count": 0}
 
-            # Create new collection name
+            # Prepare target collection with HNSW params
             target_name = new_collection_name or f"{self.chromadb_collection}_optimized"
-
-            # Optimized HNSW parameters for 545K+ vectors
-            hnsw_metadata = {
-                "hnsw:space": self.hnsw_space,
-                "hnsw:construction_ef": self.hnsw_construction_ef,
-                "hnsw:search_ef": self.hnsw_search_ef,
-                "hnsw:M": self.hnsw_m,
-            }
-
-            logger.info(
-                f"Creating new collection '{target_name}' with HNSW params: "
-                f"construction_ef={self.hnsw_construction_ef}, "
-                f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
-            )
-
-            # Issue #369: Wrap blocking delete_collection with asyncio.to_thread
-            try:
-                await asyncio.to_thread(
-                    chroma_client.delete_collection, name=target_name
-                )
-                logger.info(f"Deleted existing collection: {target_name}")
-            except Exception as e:
-                logger.debug(
-                    f"Collection {target_name} does not exist or could not be deleted: {e}"
-                )
-
-            # Issue #369: Wrap blocking create_collection with asyncio.to_thread
-            new_collection = await asyncio.to_thread(
-                chroma_client.create_collection,
-                name=target_name,
-                metadata=hnsw_metadata,
+            hnsw_metadata = self._get_hnsw_metadata()
+            new_collection = await self._prepare_target_collection(
+                chroma_client, target_name, hnsw_metadata
             )
 
             # Migrate vectors in batches
-            batch_size = 1000
-            migrated = 0
-            offset = 0
+            migrated = await self._migrate_vectors_batch(old_collection, new_collection, old_count)
 
-            while offset < old_count:
-                # Issue #369: Wrap blocking get() with asyncio.to_thread
-                results = await asyncio.to_thread(
-                    old_collection.get,
-                    limit=batch_size,
-                    offset=offset,
-                    include=["documents", "embeddings", "metadatas"],
-                )
-
-                if not results["ids"]:
-                    break
-
-                # Issue #369: Wrap blocking add() with asyncio.to_thread
-                await asyncio.to_thread(
-                    new_collection.add,
-                    ids=results["ids"],
-                    embeddings=results["embeddings"],
-                    documents=results["documents"],
-                    metadatas=results["metadatas"],
-                )
-
-                migrated += len(results["ids"])
-                offset += batch_size
-
-                if migrated % 10000 == 0:
-                    logger.info(f"Migration progress: {migrated}/{old_count} vectors")
-
-            logger.info(
-                f"Migration complete: {migrated} vectors migrated to '{target_name}'"
-            )
-
-            return {
-                "status": "success",
-                "old_collection": self.chromadb_collection,
-                "new_collection": target_name,
-                "old_count": old_count,
-                "migrated_count": migrated,
-                "hnsw_params": hnsw_metadata,
-                "message": (
-                    f"Successfully migrated {migrated} vectors. "
-                    f"To switch, update AUTOBOT_CHROMADB_COLLECTION={target_name}"
-                ),
-            }
+            return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
 
         except Exception as e:
             logger.error(f"ChromaDB index rebuild failed: {e}")

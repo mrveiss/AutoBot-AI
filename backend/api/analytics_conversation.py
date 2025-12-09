@@ -335,31 +335,22 @@ class ConversationAnalyzer:
         bottlenecks.sort(key=lambda b: b.impact_score, reverse=True)
         return bottlenecks[:10]
 
-    async def analyze_conversations(
+    def _process_conversation_data(
         self,
         conversations: List[Dict[str, Any]],
-    ) -> ConversationAnalysisResult:
-        """Perform full conversation analysis"""
-        if not conversations:
-            return ConversationAnalysisResult(
-                metrics=ConversationMetrics(
-                    total_conversations=0,
-                    total_messages=0,
-                    avg_messages_per_conversation=0,
-                    avg_conversation_duration_seconds=0,
-                    user_satisfaction_estimate=0,
-                    resolution_rate=0,
-                    escalation_rate=0,
-                ),
-                intent_patterns=[],
-                common_flows=[],
-                bottlenecks=[],
-                hourly_distribution={},
-                analysis_period="N/A",
-                conversations_analyzed=0,
-            )
+    ) -> Tuple[List[Dict], Counter, Dict[str, List[float]], Counter, Counter, int, int, int, int]:
+        """
+        Process all conversations and extract aggregated data.
 
-        # Extract data from all conversations
+        Issue #281: Extracted helper for conversation processing.
+
+        Args:
+            conversations: List of conversation dictionaries
+
+        Returns:
+            Tuple of (processed_convs, intent_counts, intent_success, flow_counts,
+                     hourly_dist, total_messages, total_duration, total_success, total_frustration)
+        """
         processed_convs = []
         intent_counts: Counter = Counter()
         intent_success: Dict[str, List[float]] = defaultdict(list)
@@ -405,22 +396,30 @@ class ConversationAnalyzer:
                 except (ValueError, TypeError, KeyError) as e:
                     logger.debug("Failed to parse conversation timestamp: %s", e)
 
-        # Calculate metrics
-        n_convs = len(conversations)
-        satisfaction = (total_success / max(1, total_success + total_frustration)) * 100
-        resolution_rate = sum(1 for c in processed_convs if c["success_indicators"] > 0) / max(1, n_convs) * 100
-
-        metrics = ConversationMetrics(
-            total_conversations=n_convs,
-            total_messages=total_messages,
-            avg_messages_per_conversation=round(total_messages / max(1, n_convs), 1),
-            avg_conversation_duration_seconds=round(total_duration / max(1, n_convs), 1),
-            user_satisfaction_estimate=round(satisfaction, 1),
-            resolution_rate=round(resolution_rate, 1),
-            escalation_rate=round(total_frustration / max(1, n_convs) * 100, 1),
+        return (
+            processed_convs, intent_counts, intent_success, flow_counts,
+            hourly_dist, total_messages, total_duration, total_success, total_frustration
         )
 
-        # Build intent patterns
+    def _build_intent_patterns(
+        self,
+        intent_counts: Counter,
+        intent_success: Dict[str, List[float]],
+        total_messages: int,
+    ) -> List["IntentPattern"]:
+        """
+        Build intent pattern list from aggregated data.
+
+        Issue #281: Extracted helper for intent pattern building.
+
+        Args:
+            intent_counts: Counter of intent occurrences
+            intent_success: Dict mapping intent to success rates
+            total_messages: Total message count
+
+        Returns:
+            List of IntentPattern objects
+        """
         intent_patterns = []
         for intent_id, count in intent_counts.most_common(15):
             success_rates = intent_success.get(intent_id, [0.5])
@@ -444,8 +443,20 @@ class ConversationAnalyzer:
                     sample_queries=[],
                 )
             )
+        return intent_patterns
 
-        # Build common flows
+    def _build_common_flows(self, flow_counts: Counter) -> List["ConversationFlow"]:
+        """
+        Build common flows list from flow counts.
+
+        Issue #281: Extracted helper for flow building.
+
+        Args:
+            flow_counts: Counter of flow path occurrences
+
+        Returns:
+            List of ConversationFlow objects
+        """
         common_flows = []
         for flow_path, freq in flow_counts.most_common(10):
             common_flows.append(
@@ -458,6 +469,62 @@ class ConversationAnalyzer:
                     drop_off_point=None,
                 )
             )
+        return common_flows
+
+    async def analyze_conversations(
+        self,
+        conversations: List[Dict[str, Any]],
+    ) -> ConversationAnalysisResult:
+        """
+        Perform full conversation analysis.
+
+        Issue #281: Refactored from 136 lines to use extracted helper methods.
+        """
+        if not conversations:
+            return ConversationAnalysisResult(
+                metrics=ConversationMetrics(
+                    total_conversations=0,
+                    total_messages=0,
+                    avg_messages_per_conversation=0,
+                    avg_conversation_duration_seconds=0,
+                    user_satisfaction_estimate=0,
+                    resolution_rate=0,
+                    escalation_rate=0,
+                ),
+                intent_patterns=[],
+                common_flows=[],
+                bottlenecks=[],
+                hourly_distribution={},
+                analysis_period="N/A",
+                conversations_analyzed=0,
+            )
+
+        # Process all conversations (Issue #281: uses helper)
+        (
+            processed_convs, intent_counts, intent_success, flow_counts,
+            hourly_dist, total_messages, total_duration, total_success, total_frustration
+        ) = self._process_conversation_data(conversations)
+
+        # Calculate metrics
+        n_convs = len(conversations)
+        satisfaction = (total_success / max(1, total_success + total_frustration)) * 100
+        resolution_rate = sum(1 for c in processed_convs if c["success_indicators"] > 0) / max(1, n_convs) * 100
+
+        metrics = ConversationMetrics(
+            total_conversations=n_convs,
+            total_messages=total_messages,
+            avg_messages_per_conversation=round(total_messages / max(1, n_convs), 1),
+            avg_conversation_duration_seconds=round(total_duration / max(1, n_convs), 1),
+            user_satisfaction_estimate=round(satisfaction, 1),
+            resolution_rate=round(resolution_rate, 1),
+            escalation_rate=round(total_frustration / max(1, n_convs) * 100, 1),
+        )
+
+        # Build intent patterns (Issue #281: uses helper)
+        intent_patterns = self._build_intent_patterns(intent_counts, intent_success, total_messages)
+
+        # Build common flows (Issue #281: uses helper)
+        common_flows = self._build_common_flows(flow_counts)
 
         # Identify bottlenecks
         bottlenecks = self.identify_bottlenecks(processed_convs)

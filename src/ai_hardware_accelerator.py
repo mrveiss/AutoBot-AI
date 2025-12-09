@@ -24,6 +24,11 @@ from PIL import Image
 
 # Import centralized components
 from src.constants.model_constants import model_config
+from src.constants.threshold_constants import (
+    HardwareAcceleratorConfig,
+    ResourceThresholds,
+    TimingConstants,
+)
 from src.unified_config_manager import cfg
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
@@ -162,12 +167,12 @@ class AIHardwareAccelerator:
         )
         self.routing_strategy = cfg.get("ai_acceleration.routing_strategy", "optimal")
 
-        # Performance thresholds for device selection
+        # Performance thresholds for device selection (Issue #376 - use named constants)
         self.thresholds = {
-            "npu_max_model_size_mb": 2000,  # NPU handles < 2GB models
-            "npu_max_response_time_s": 2.0,  # NPU for < 2s tasks
-            "gpu_utilization_threshold": 80.0,  # GPU busy threshold
-            "cpu_fallback_timeout_s": 1.0,  # CPU fallback timeout
+            "npu_max_model_size_mb": HardwareAcceleratorConfig.NPU_MAX_MODEL_SIZE_MB,
+            "npu_max_response_time_s": HardwareAcceleratorConfig.NPU_MAX_RESPONSE_TIME_S,
+            "gpu_utilization_threshold": ResourceThresholds.GPU_BUSY_THRESHOLD,
+            "cpu_fallback_timeout_s": TimingConstants.STANDARD_DELAY,
         }
 
         # Device availability tracking
@@ -183,11 +188,11 @@ class AIHardwareAccelerator:
         self.wav2vec_model = None
         self.wav2vec_processor = None
 
-        # Projection matrices for unified embedding space (512 dimensions)
+        # Projection matrices for unified embedding space (Issue #376 - use named constant)
         self.text_projection = None
         self.image_projection = None
         self.audio_projection = None
-        self.unified_dim = 512  # Common embedding dimension
+        self.unified_dim = HardwareAcceleratorConfig.UNIFIED_EMBEDDING_DIM
 
     async def initialize(self):
         """Initialize the AI hardware accelerator."""
@@ -290,16 +295,24 @@ class AIHardwareAccelerator:
 
     async def _update_npu_metrics(self, health_data: Dict[str, Any]):
         """Update NPU metrics from health data."""
-        # Estimate NPU utilization from loaded models and task count
+        # Estimate NPU utilization from loaded models and task count (Issue #376)
         loaded_models = len(health_data.get("loaded_models", []))
-        utilization = min(loaded_models * 25.0, 100.0)  # Rough estimation
+        utilization = min(
+            loaded_models * HardwareAcceleratorConfig.NPU_UTILIZATION_PER_MODEL,
+            100.0
+        )  # Rough estimation
 
+        power_delta = HardwareAcceleratorConfig.NPU_MAX_POWER_W - HardwareAcceleratorConfig.NPU_BASE_POWER_W
         self.device_metrics[HardwareDevice.NPU] = HardwareMetrics(
             device=HardwareDevice.NPU,
             utilization_percent=utilization,
-            temperature_c=45.0 + (utilization * 0.3),  # Estimated
-            power_usage_w=2.0 + (utilization / 100.0 * 8.0),  # 2-10W range
-            available_memory_mb=1024.0,  # NPU memory estimation
+            temperature_c=HardwareAcceleratorConfig.NPU_BASE_TEMPERATURE_C + (
+                utilization * HardwareAcceleratorConfig.NPU_TEMP_UTILIZATION_FACTOR
+            ),  # Estimated
+            power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W + (
+                utilization / 100.0 * power_delta
+            ),  # 2-10W range
+            available_memory_mb=HardwareAcceleratorConfig.NPU_MEMORY_MB,
             last_updated=datetime.now(),
         )
 
@@ -307,7 +320,7 @@ class AIHardwareAccelerator:
         """Monitor hardware status periodically."""
         while True:
             try:
-                await asyncio.sleep(30)  # Check every 30 seconds
+                await asyncio.sleep(HardwareAcceleratorConfig.HARDWARE_CHECK_INTERVAL_S)
                 await self._check_hardware_availability()
             except Exception as e:
                 logger.error(f"❌ Hardware monitoring error: {e}")
@@ -327,11 +340,19 @@ class AIHardwareAccelerator:
 
         if task_type == "embedding_generation":
             text_length = len(input_data.get("text", ""))
-            return self._classify_by_threshold(text_length, 500, 2000)
+            return self._classify_by_threshold(
+                text_length,
+                HardwareAcceleratorConfig.TEXT_LIGHTWEIGHT_LENGTH,
+                HardwareAcceleratorConfig.TEXT_MODERATE_LENGTH,
+            )
 
         if task_type == "semantic_search":
             num_documents = input_data.get("num_documents", 0)
-            return self._classify_by_threshold(num_documents, 100, 1000)
+            return self._classify_by_threshold(
+                num_documents,
+                HardwareAcceleratorConfig.DOC_LIGHTWEIGHT_COUNT,
+                HardwareAcceleratorConfig.DOC_MODERATE_COUNT,
+            )
 
         if task_type == "chat_inference":
             model_size = input_data.get(
@@ -358,31 +379,31 @@ class AIHardwareAccelerator:
 
         # Intelligent routing based on complexity and availability
         if complexity == TaskComplexity.LIGHTWEIGHT:
-            # Lightweight tasks: NPU preferred for power efficiency
+            # Lightweight tasks: NPU preferred for power efficiency (Issue #376)
             if self.device_status[HardwareDevice.NPU]["available"]:
                 npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if not npu_metrics or npu_metrics.utilization_percent < 80.0:
+                if not npu_metrics or npu_metrics.utilization_percent < ResourceThresholds.NPU_BUSY_THRESHOLD:
                     return HardwareDevice.NPU
 
             # Fallback to GPU if available
             if self.device_status[HardwareDevice.GPU]["available"]:
                 gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if not gpu_metrics or gpu_metrics.utilization_percent < 70.0:
+                if not gpu_metrics or gpu_metrics.utilization_percent < ResourceThresholds.GPU_MODERATE_THRESHOLD:
                     return HardwareDevice.GPU
 
             return HardwareDevice.CPU
 
         elif complexity == TaskComplexity.MODERATE:
-            # Moderate tasks: GPU preferred for performance
+            # Moderate tasks: GPU preferred for performance (Issue #376)
             if self.device_status[HardwareDevice.GPU]["available"]:
                 gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if not gpu_metrics or gpu_metrics.utilization_percent < 80.0:
+                if not gpu_metrics or gpu_metrics.utilization_percent < ResourceThresholds.GPU_BUSY_THRESHOLD:
                     return HardwareDevice.GPU
 
             # NPU can handle some moderate tasks
             if self.device_status[HardwareDevice.NPU]["available"]:
                 npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if not npu_metrics or npu_metrics.utilization_percent < 60.0:
+                if not npu_metrics or npu_metrics.utilization_percent < ResourceThresholds.NPU_AVAILABLE_THRESHOLD:
                     return HardwareDevice.NPU
 
             return HardwareDevice.CPU
@@ -557,17 +578,17 @@ class AIHardwareAccelerator:
             ).to(device)
             self.wav2vec_model.eval()
 
-            # Initialize projection matrices for unified space
+            # Initialize projection matrices for unified space (Issue #376 - use named constants)
             # CLIP: 512 dims, Wav2Vec2: 768 dims, Text: varies
-            self.text_projection = torch.nn.Linear(384, self.unified_dim).to(
-                device
-            )  # MiniLM outputs 384
-            self.image_projection = torch.nn.Linear(512, self.unified_dim).to(
-                device
-            )  # CLIP outputs 512
-            self.audio_projection = torch.nn.Linear(768, self.unified_dim).to(
-                device
-            )  # Wav2Vec2 outputs 768
+            self.text_projection = torch.nn.Linear(
+                HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
+            ).to(device)  # MiniLM outputs 384
+            self.image_projection = torch.nn.Linear(
+                HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim
+            ).to(device)  # CLIP outputs 512
+            self.audio_projection = torch.nn.Linear(
+                HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim
+            ).to(device)  # Wav2Vec2 outputs 768
 
             logger.info("✅ Multi-modal models initialized successfully")
         except Exception as e:
@@ -584,7 +605,7 @@ class AIHardwareAccelerator:
 
         sentences = [content] if isinstance(content, str) else content
         embeddings = await chunker._compute_sentence_embeddings_async(sentences)
-        raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(384)
+        raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
 
         if self.text_projection:
             with torch.no_grad():

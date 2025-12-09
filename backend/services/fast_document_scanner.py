@@ -83,6 +83,40 @@ class FastDocumentScanner:
         except PermissionError:
             pass
 
+    def _create_document_change(
+        self,
+        command: str,
+        change_type: str,
+        file_path: Optional[str] = None,
+        size: Optional[int] = None,
+        mtime: Optional[float] = None,
+    ) -> DocumentChange:
+        """
+        Create a DocumentChange record for a command.
+
+        Issue #281: Extracted helper to reduce repetition in _detect_changes.
+
+        Args:
+            command: The command name
+            change_type: Type of change ('added', 'updated', 'removed')
+            file_path: Path to the file (optional for 'removed')
+            size: File size in bytes (optional)
+            mtime: File modification time (optional)
+
+        Returns:
+            DocumentChange record
+        """
+        return DocumentChange(
+            document_id=f"man-{command}",
+            command=command,
+            title=f"man {command}",
+            change_type=change_type,
+            timestamp=time.time(),
+            file_path=file_path,
+            size=size,
+            mtime=mtime,
+        )
+
     def _get_man_page_paths(self) -> Dict[str, List[str]]:
         """
         Get all man page file paths on system (FAST - no subprocess).
@@ -180,6 +214,8 @@ class FastDocumentScanner:
         """
         Detect document changes using file metadata (ULTRA FAST).
 
+        Issue #281: Refactored from 111 lines to use _create_document_change helper.
+
         Args:
             current_files: Dict of command -> file paths
             machine_id: Host identifier
@@ -197,10 +233,7 @@ class FastDocumentScanner:
         current_commands = set(current_files.keys())
 
         # Limit processing if requested
-        if limit:
-            commands_to_check = list(current_commands)[:limit]
-        else:
-            commands_to_check = current_commands
+        commands_to_check = list(current_commands)[:limit] if limit else current_commands
 
         checked_count = 0
 
@@ -224,37 +257,17 @@ class FastDocumentScanner:
             # Get cached metadata
             cached_meta = self._get_cached_metadata(file_path)
 
-            doc_id = f"man-{command}"
-
+            # Detect change type and create record (Issue #281: uses helper)
             if cached_meta is None:
-                # New document
                 changes["added"].append(
-                    DocumentChange(
-                        document_id=doc_id,
-                        command=command,
-                        title=f"man {command}",
-                        change_type="added",
-                        timestamp=time.time(),
-                        file_path=file_path,
-                        size=current_meta.size,
-                        mtime=current_meta.mtime,
+                    self._create_document_change(
+                        command, "added", file_path, current_meta.size, current_meta.mtime
                     )
                 )
-            elif (
-                current_meta.mtime != cached_meta.mtime
-                or current_meta.size != cached_meta.size
-            ):
-                # Updated document (mtime or size changed)
+            elif current_meta.mtime != cached_meta.mtime or current_meta.size != cached_meta.size:
                 changes["updated"].append(
-                    DocumentChange(
-                        document_id=doc_id,
-                        command=command,
-                        title=f"man {command}",
-                        change_type="updated",
-                        timestamp=time.time(),
-                        file_path=file_path,
-                        size=current_meta.size,
-                        mtime=current_meta.mtime,
+                    self._create_document_change(
+                        command, "updated", file_path, current_meta.size, current_meta.mtime
                     )
                 )
 
@@ -262,18 +275,10 @@ class FastDocumentScanner:
             self._cache_metadata(current_meta)
             checked_count += 1
 
-        # Check for removed documents
+        # Check for removed documents (Issue #281: uses helper)
         removed_commands = cached_commands - current_commands
         for command in removed_commands:
-            changes["removed"].append(
-                DocumentChange(
-                    document_id=f"man-{command}",
-                    command=command,
-                    title=f"man {command}",
-                    change_type="removed",
-                    timestamp=time.time(),
-                )
-            )
+            changes["removed"].append(self._create_document_change(command, "removed"))
 
         # Update cached command list
         if commands_to_check:

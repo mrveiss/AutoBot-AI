@@ -93,6 +93,41 @@ class ProcessThoughtRequest(BaseModel):
         "default", description="Thinking session identifier"
     )
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_thought_record(self) -> Metadata:
+        """Convert request to thought record for storage (Issue #372 - reduces feature envy)."""
+        return {
+            "thought_number": self.thought_number,
+            "thought": self.thought,
+            "total_thoughts": self.total_thoughts,
+            "next_thought_needed": self.next_thought_needed,
+            "stage": self.stage.value,
+            "tags": self.tags or [],
+            "axioms_used": self.axioms_used or [],
+            "assumptions_challenged": self.assumptions_challenged or [],
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def get_progress_percentage(self) -> float:
+        """Calculate progress percentage (Issue #372 - reduces feature envy)."""
+        return (self.thought_number / self.total_thoughts) * 100
+
+    def get_session_key(self) -> str:
+        """Get session key with fallback (Issue #372 - reduces feature envy)."""
+        return self.session_id or "default"
+
+    def is_thinking_complete(self) -> bool:
+        """Check if thinking process is complete (Issue #372 - reduces feature envy)."""
+        return not self.next_thought_needed
+
+    def get_progress_message(self) -> str:
+        """Get formatted progress message (Issue #372 - reduces feature envy)."""
+        return (
+            f"Processed thought {self.thought_number}/{self.total_thoughts} "
+            f"in {self.stage.value} stage"
+        )
+
 
 class GenerateSummaryRequest(BaseModel):
     """Request model for generating thinking summary"""
@@ -237,42 +272,32 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     Tracks thoughts through five stages: Problem Definition, Research, Analysis,
     Synthesis, and Conclusion. Stores metadata for comprehensive analysis.
     """
-    session_id = request.session_id or "default"
+    # Issue #372: Use model methods instead of direct attribute access
+    session_id = request.get_session_key()
 
     async with _structured_sessions_lock:
         # Initialize session if doesn't exist
         if session_id not in structured_sessions:
             structured_sessions[session_id] = []
 
-    # Create thought record
-    thought_record = {
-        "thought_number": request.thought_number,
-        "thought": request.thought,
-        "total_thoughts": request.total_thoughts,
-        "next_thought_needed": request.next_thought_needed,
-        "stage": request.stage.value,
-        "tags": request.tags or [],
-        "axioms_used": request.axioms_used or [],
-        "assumptions_challenged": request.assumptions_challenged or [],
-        "timestamp": datetime.now().isoformat(),
-    }
+    # Issue #372: Use model method for thought record creation
+    thought_record = request.to_thought_record()
 
     # Store thought (thread-safe)
     async with _structured_sessions_lock:
         structured_sessions[session_id].append(thought_record)
         # Create a copy of session thoughts for processing outside the lock
         session_thoughts = list(structured_sessions[session_id])
+
     stage_counts = {}
     for stage in ThinkingStage:
         stage_counts[stage.value] = sum(
             1 for t in session_thoughts if t["stage"] == stage.value
         )
 
-    # Calculate progress
-    progress_percentage = (request.thought_number / request.total_thoughts) * 100
-
-    # Determine if thinking is complete
-    thinking_complete = not request.next_thought_needed
+    # Issue #372: Use model methods for computed values
+    progress_percentage = request.get_progress_percentage()
+    thinking_complete = request.is_thinking_complete()
 
     # Build response
     response = {
@@ -285,9 +310,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
         "thinking_complete": thinking_complete,
         "stage_distribution": stage_counts,
         "session_thought_count": len(session_thoughts),
-        "message": (
-            f"Processed thought {request.thought_number}/{request.total_thoughts} in {request.stage.value} stage"
-        ),
+        "message": request.get_progress_message(),
     }
 
     # Identify related thoughts (same tags)

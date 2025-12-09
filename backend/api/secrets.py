@@ -148,6 +148,41 @@ class SecretCreateRequest(BaseModel):
         """Validate secret name contains only safe characters"""
         return validate_secret_name(v)
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_secret_model(self, secret_id: Optional[str] = None) -> "SecretModel":
+        """Convert request to SecretModel (Issue #372 - reduces feature envy).
+
+        Args:
+            secret_id: Optional ID for the secret, generates UUID if not provided
+
+        Returns:
+            SecretModel instance with request data
+        """
+        return SecretModel(
+            id=secret_id or str(uuid.uuid4()),
+            name=self.name,
+            type=self.type,
+            scope=self.scope,
+            chat_id=self.chat_id if self.scope == SecretScope.CHAT else None,
+            description=self.description,
+            tags=self.tags,
+            expires_at=self.expires_at,
+            metadata=self.metadata,
+        )
+
+    def is_chat_scoped(self) -> bool:
+        """Check if secret is chat-scoped (Issue #372 - reduces feature envy)."""
+        return self.scope == SecretScope.CHAT
+
+    def requires_chat_id(self) -> bool:
+        """Check if chat_id is required but missing (Issue #372)."""
+        return self.is_chat_scoped() and not self.chat_id
+
+    def get_log_summary(self) -> str:
+        """Get formatted log summary (Issue #372 - reduces feature envy)."""
+        return f"{self.scope.value} secret '{self.name}'"
+
 
 class SecretUpdateRequest(BaseModel):
     """Request model for updating secrets"""
@@ -311,26 +346,15 @@ class SecretsManager:
             self._cache_mtime = None
 
     def create_secret(self, request: SecretCreateRequest) -> SecretModel:
-        """Create a new secret"""
+        """Create a new secret (Issue #372 - uses model methods)."""
         secrets = self._load_secrets()
 
-        # Validate scope and chat_id consistency
-        if request.scope == SecretScope.CHAT and not request.chat_id:
+        # Validate scope and chat_id consistency using model methods (Issue #372)
+        if request.requires_chat_id():
             raise ValueError("Chat-scoped secrets must have a chat_id")
-        if request.scope == SecretScope.GENERAL and request.chat_id:
-            request.chat_id = None  # Clear chat_id for general secrets
 
-        # Create secret model
-        secret = SecretModel(
-            name=request.name,
-            type=request.type,
-            scope=request.scope,
-            chat_id=request.chat_id,
-            description=request.description,
-            tags=request.tags,
-            expires_at=request.expires_at,
-            metadata=request.metadata,
-        )
+        # Create secret model using model method (Issue #372)
+        secret = request.to_secret_model()
 
         # Encrypt and store the secret value
         encrypted_value = self._encrypt_value(request.value)
@@ -340,9 +364,7 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info(
-            f"Created {request.scope} secret '{request.name}' (ID: {secret.id})"
-        )
+        logger.info(f"Created {request.get_log_summary()} (ID: {secret.id})")
         return secret
 
     def get_secret(

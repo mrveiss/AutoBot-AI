@@ -253,15 +253,17 @@ class HoverRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to hover")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_browser_mcp_tools",
-    error_code_prefix="BROWSER_MCP",
-)
-@router.get("/mcp/tools")
-async def get_browser_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for browser automation operations"""
-    tools = [
+def _get_browser_navigation_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for browser navigation operations.
+
+    Issue #281: Extracted from get_browser_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of navigation-related browser MCP tools
+    """
+    return [
         MCPTool(
             name="navigate",
             description="Navigate browser to specified URL with configurable wait conditions",
@@ -284,6 +286,45 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
                 "required": ["url"],
             },
         ),
+        MCPTool(
+            name="wait_for_selector",
+            description="Wait for element to appear or reach specified state",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector to wait for",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in milliseconds",
+                        "default": 30000,
+                    },
+                    "state": {
+                        "type": "string",
+                        "enum": ["attached", "detached", "visible", "hidden"],
+                        "description": "Element state to wait for",
+                        "default": "visible",
+                    },
+                },
+                "required": ["selector"],
+            },
+        ),
+    ]
+
+
+def _get_browser_interaction_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for browser interaction operations (click, fill, select, hover).
+
+    Issue #281: Extracted from get_browser_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of interaction-related browser MCP tools
+    """
+    return [
         MCPTool(
             name="click",
             description="Click on an element identified by CSS selector",
@@ -324,6 +365,49 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             },
         ),
         MCPTool(
+            name="select",
+            description="Select option from dropdown/select element",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for select element",
+                    },
+                    "value": {"type": "string", "description": "Value to select"},
+                },
+                "required": ["selector", "value"],
+            },
+        ),
+        MCPTool(
+            name="hover",
+            description="Hover mouse over element",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for element",
+                    }
+                },
+                "required": ["selector"],
+            },
+        ),
+    ]
+
+
+def _get_browser_extraction_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for browser extraction operations (screenshot, get_text, evaluate).
+
+    Issue #281: Extracted from get_browser_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of extraction-related browser MCP tools
+    """
+    return [
+        MCPTool(
             name="screenshot",
             description="Capture screenshot of page or specific element",
             input_schema={
@@ -358,31 +442,6 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             },
         ),
         MCPTool(
-            name="wait_for_selector",
-            description="Wait for element to appear or reach specified state",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector to wait for",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in milliseconds",
-                        "default": 30000,
-                    },
-                    "state": {
-                        "type": "string",
-                        "enum": ["attached", "detached", "visible", "hidden"],
-                        "description": "Element state to wait for",
-                        "default": "visible",
-                    },
-                },
-                "required": ["selector"],
-            },
-        ),
-        MCPTool(
             name="get_text",
             description="Extract text content from element",
             input_schema={
@@ -411,36 +470,22 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
                 "required": ["selector", "attribute"],
             },
         ),
-        MCPTool(
-            name="select",
-            description="Select option from dropdown/select element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for select element",
-                    },
-                    "value": {"type": "string", "description": "Value to select"},
-                },
-                "required": ["selector", "value"],
-            },
-        ),
-        MCPTool(
-            name="hover",
-            description="Hover mouse over element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for element",
-                    }
-                },
-                "required": ["selector"],
-            },
-        ),
     ]
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_mcp_tools",
+    error_code_prefix="BROWSER_MCP",
+)
+@router.get("/mcp/tools")
+async def get_browser_mcp_tools() -> List[MCPTool]:
+    """Get available MCP tools for browser automation operations"""
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_browser_navigation_tools())
+    tools.extend(_get_browser_interaction_tools())
+    tools.extend(_get_browser_extraction_tools())
     return tools
 
 

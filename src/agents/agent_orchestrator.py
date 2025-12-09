@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from src.constants.threshold_constants import LLMDefaults, TimingConstants
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config as global_config_manager
 
@@ -326,7 +327,7 @@ class AgentOrchestrator:
                 break
             except Exception as e:
                 logger.error(f"Error in distributed health monitor: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     def _initialize_agent_capabilities(self) -> Dict[AgentType, AgentCapability]:
         """Initialize the capabilities map for all agents."""
@@ -635,7 +636,7 @@ class AgentOrchestrator:
                 messages=messages,
                 llm_type="orchestrator",
                 temperature=0.3,  # Lower temperature for consistent routing
-                max_tokens=512,
+                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.8,
             )
 

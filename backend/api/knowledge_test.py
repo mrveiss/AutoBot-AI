@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -35,7 +36,7 @@ async def get_fresh_kb_stats():
         kb = KnowledgeBase()
 
         # Wait for initialization
-        await asyncio.sleep(2)
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
         # Get stats
         stats = await kb.get_stats()
@@ -66,7 +67,7 @@ async def test_rebuild_search_index():
         kb = KnowledgeBase()
 
         # Wait for initialization
-        await asyncio.sleep(2)
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
         # Attempt to rebuild search index
         result = await kb.rebuild_search_index()

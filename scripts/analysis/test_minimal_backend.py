@@ -28,16 +28,19 @@ app.add_middleware(
 
 @app.get("/api/hello")
 async def hello():
+    """Return a basic greeting message from the minimal backend."""
     return {"message": "Hello from minimal backend!"}
 
 
 @app.get("/api/system/health")
 async def health():
+    """Return health status of the minimal backend service."""
     return {"status": "healthy", "backend": "minimal"}
 
 
 @app.post("/api/workflow/execute")
 async def execute_workflow(request: dict):
+    """Execute a basic workflow with greeting and echo response handling."""
     user_message = request.get("user_message", "")
 
     # Simple greeting response

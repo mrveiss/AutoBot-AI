@@ -44,6 +44,308 @@ class RouterConfig:
     rate_limit: Optional[Dict] = None
 
 
+def _get_core_system_routers() -> Dict[str, RouterConfig]:
+    """
+    Get core system router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of core system router configurations
+    """
+    return {
+        "system": RouterConfig(
+            name="system",
+            module_path="backend.api.system",
+            prefix="/api/system",
+            tags=["system", "health"],
+            description="System health, metrics, and information",
+        ),
+        "chat_consolidated": RouterConfig(
+            name="chat_consolidated",
+            module_path="backend.api.chat_consolidated",
+            prefix="/api",
+            tags=["chat", "consolidated", "all"],
+            description=(
+                "CONSOLIDATED chat router with ALL functionality from 5 routers -"
+                "ZERO functionality loss"
+            ),
+            version="v1.0",
+        ),
+        "settings": RouterConfig(
+            name="settings",
+            module_path="backend.api.settings",
+            prefix="/api/settings",
+            tags=["settings", "config"],
+            description="Application settings and configuration",
+        ),
+        "cache": RouterConfig(
+            name="cache",
+            module_path="backend.api.cache",
+            prefix="/api/cache",
+            tags=["cache", "management"],
+            description="Cache management and clearing operations",
+        ),
+        "rum": RouterConfig(
+            name="rum",
+            module_path="backend.api.rum",
+            prefix="/api/rum",
+            tags=["rum", "monitoring", "developer"],
+            description="Real User Monitoring (RUM) for frontend event tracking",
+        ),
+        "developer": RouterConfig(
+            name="developer",
+            module_path="backend.api.developer",
+            prefix="/api/developer",
+            tags=["developer", "debug", "config"],
+            description="Developer mode configuration and debugging utilities",
+        ),
+        "websockets": RouterConfig(
+            name="websockets",
+            module_path="backend.api.websockets",
+            prefix="",  # WebSocket routes don't use prefix
+            tags=["websockets", "realtime"],
+            description="WebSocket endpoints for real-time communication",
+        ),
+    }
+
+
+def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
+    """
+    Get knowledge management and AI-related router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of knowledge and AI router configurations
+    """
+    return {
+        "knowledge": RouterConfig(
+            name="knowledge",
+            module_path="backend.api.knowledge",
+            prefix="/api/knowledge_base",
+            tags=["knowledge", "search"],
+            status=RouterStatus.ENABLED,
+            description="Knowledge base operations and search",
+        ),
+        "agent_config": RouterConfig(
+            name="agent_config",
+            module_path="backend.api.agent_config",
+            prefix="/api/agent-config",
+            tags=["agent", "config"],
+            description="Agent configuration and management",
+        ),
+        "prompts": RouterConfig(
+            name="prompts",
+            module_path="backend.api.prompts",
+            prefix="/api/prompts",
+            tags=["prompts", "ai"],
+            description="Prompt templates and management",
+        ),
+        "llm": RouterConfig(
+            name="llm",
+            module_path="backend.api.llm",
+            prefix="/api/llm",
+            tags=["llm", "ai"],
+            status=RouterStatus.LAZY_LOAD,
+            description="LLM integration and management",
+        ),
+        "intelligent_agent": RouterConfig(
+            name="intelligent_agent",
+            module_path="backend.api.intelligent_agent",
+            prefix="/api/intelligent-agent",
+            tags=["ai", "agent", "intelligence"],
+            status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
+            description="Intelligent agent system for goal processing",
+        ),
+        "knowledge_mcp": RouterConfig(
+            name="knowledge_mcp",
+            module_path="backend.api.knowledge_mcp",
+            prefix="/api/knowledge",
+            tags=["knowledge", "mcp", "llm"],
+            status=RouterStatus.ENABLED,
+            description="MCP bridge for LLM access to knowledge base via LlamaIndex",
+        ),
+    }
+
+
+def _get_file_and_security_routers() -> Dict[str, RouterConfig]:
+    """
+    Get file management and security router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of file and security router configurations
+    """
+    return {
+        "files": RouterConfig(
+            name="files",
+            module_path="backend.api.files",
+            prefix="/api/files",
+            tags=["files", "upload"],
+            description="File operations and management",
+        ),
+        "templates": RouterConfig(
+            name="templates",
+            module_path="backend.api.templates",
+            prefix="/api/templates",
+            tags=["templates"],
+            description="Template management and rendering",
+        ),
+        "secrets": RouterConfig(
+            name="secrets",
+            module_path="backend.api.secrets",
+            prefix="/api/secrets",
+            tags=["secrets", "security"],
+            requires_auth=True,
+            description="Secrets and credential management",
+        ),
+    }
+
+
+def _get_development_automation_routers() -> Dict[str, RouterConfig]:
+    """
+    Get development and automation router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of development and automation router configurations
+    """
+    return {
+        "playwright": RouterConfig(
+            name="playwright",
+            module_path="backend.api.playwright",
+            prefix="/api/playwright",
+            tags=["automation", "browser"],
+            description="Browser automation via Playwright",
+        ),
+        "terminal": RouterConfig(
+            name="terminal",
+            module_path="backend.api.terminal",
+            prefix="/api/terminal",
+            tags=["terminal", "execution"],
+            status=RouterStatus.ENABLED,  # Enable for fast backend
+            description="Terminal execution and management",
+        ),
+        "logs": RouterConfig(
+            name="logs",
+            module_path="backend.api.logs",
+            prefix="/api/logs",
+            tags=["logs", "monitoring"],
+            status=RouterStatus.ENABLED,
+            description="Log viewing and analysis",
+        ),
+        "workflow": RouterConfig(
+            name="workflow",
+            module_path="backend.api.workflow",
+            prefix="/api/workflow",
+            tags=["workflow", "automation"],
+            status=RouterStatus.DISABLED,  # Not in fast backend
+            description="Workflow automation and orchestration",
+        ),
+        "batch": RouterConfig(
+            name="batch",
+            module_path="backend.api.batch",
+            prefix="/api/batch",
+            tags=["batch", "optimization"],
+            description="Batch API endpoints for optimized initial loading",
+        ),
+        "research_browser": RouterConfig(
+            name="research_browser",
+            module_path="backend.api.research_browser",
+            prefix="/api/research",
+            tags=["research", "browser", "automation"],
+            status=RouterStatus.ENABLED,
+            description="Browser automation for research tasks with user interaction support",
+        ),
+        "hot_reload": RouterConfig(
+            name="hot_reload",
+            module_path="backend.api.hot_reload",
+            prefix="/api/hot-reload",
+            tags=["development", "hot-reload"],
+            status=RouterStatus.ENABLED,
+            description="Hot reload functionality for chat workflow modules during development",
+        ),
+    }
+
+
+def _get_monitoring_routers() -> Dict[str, RouterConfig]:
+    """
+    Get monitoring and analytics router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of monitoring router configurations
+    """
+    return {
+        "service_monitor": RouterConfig(
+            name="service_monitor",
+            module_path="backend.api.service_monitor",
+            prefix="/api/monitoring",
+            tags=["monitoring", "services"],
+            description="Real-time service monitoring and health checks",
+        ),
+        "infrastructure_monitor": RouterConfig(
+            name="infrastructure_monitor",
+            module_path="backend.api.infrastructure_monitor",
+            prefix="/api/infrastructure",
+            tags=["monitoring", "infrastructure", "multi-machine"],
+            status=RouterStatus.ENABLED,
+            description="Multi-machine infrastructure monitoring with service hierarchies",
+        ),
+        "monitoring_alerts": RouterConfig(
+            name="monitoring_alerts",
+            module_path="backend.api.monitoring_alerts",
+            prefix="/api/alerts",
+            tags=["alerts", "notifications", "monitoring"],
+            status=RouterStatus.ENABLED,
+            description="Advanced monitoring alerts and notifications system",
+        ),
+        "monitoring": RouterConfig(
+            name="monitoring",
+            module_path="backend.api.monitoring",
+            prefix="/api/monitoring/phase9",
+            tags=["monitoring", "phase9", "gpu", "npu", "performance"],
+            status=RouterStatus.ENABLED,
+            description=(
+                "Phase 9 comprehensive performance monitoring for GPU/NPU utilization and"
+                "multi-modal AI"
+            ),
+        ),
+        "system_validation": RouterConfig(
+            name="system_validation",
+            module_path="backend.api.system_validation",
+            prefix="/api/system_validation",
+            tags=["validation", "system", "testing"],
+            description="Comprehensive system validation and integration testing",
+        ),
+        "validation_dashboard": RouterConfig(
+            name="validation_dashboard",
+            module_path="backend.api.validation_dashboard",
+            prefix="/api/validation-dashboard",
+            tags=["validation", "testing"],
+            status=RouterStatus.ENABLED,  # Enable for fast backend
+            description="Validation and testing dashboard",
+        ),
+        "startup": RouterConfig(
+            name="startup",
+            module_path="backend.api.startup",
+            prefix="/api/startup",
+            tags=["startup", "status", "websockets"],
+            status=RouterStatus.DISABLED,
+            description="Friendly startup messages and status updates for frontend",
+        ),
+    }
+
+
 class APIRegistry:
     """Central registry for all API endpoints and routers"""
 
@@ -53,258 +355,14 @@ class APIRegistry:
 
     def _initialize_routers(self) -> Dict[str, RouterConfig]:
         """Initialize all router configurations"""
-        return {
-            # Core System Routers
-            "system": RouterConfig(
-                name="system",
-                module_path="backend.api.system",
-                prefix="/api/system",
-                tags=["system", "health"],
-                description="System health, metrics, and information",
-            ),
-            "chat_consolidated": RouterConfig(
-                name="chat_consolidated",
-                module_path="backend.api.chat_consolidated",
-                prefix="/api",
-                tags=["chat", "consolidated", "all"],
-                description=(
-                    "CONSOLIDATED chat router with ALL functionality from 5 routers -"
-                    "ZERO functionality loss"
-                ),
-                version="v1.0",
-            ),
-            "settings": RouterConfig(
-                name="settings",
-                module_path="backend.api.settings",
-                prefix="/api/settings",
-                tags=["settings", "config"],
-                description="Application settings and configuration",
-            ),
-            "cache": RouterConfig(
-                name="cache",
-                module_path="backend.api.cache",
-                prefix="/api/cache",
-                tags=["cache", "management"],
-                description="Cache management and clearing operations",
-            ),
-            "rum": RouterConfig(
-                name="rum",
-                module_path="backend.api.rum",
-                prefix="/api/rum",
-                tags=["rum", "monitoring", "developer"],
-                description="Real User Monitoring (RUM) for frontend event tracking",
-            ),
-            "developer": RouterConfig(
-                name="developer",
-                module_path="backend.api.developer",
-                prefix="/api/developer",
-                tags=["developer", "debug", "config"],
-                description="Developer mode configuration and debugging utilities",
-            ),
-            # Chat and Communication - NOW CONSOLIDATED
-            # OLD: Separate chat.py, async_chat.py, chat_unified.py, chat_improved.py,
-            # chat_knowledge.py
-            # NEW: All functionality consolidated into single router with ZERO loss
-            "websockets": RouterConfig(
-                name="websockets",
-                module_path="backend.api.websockets",
-                prefix="",  # WebSocket routes don't use prefix
-                tags=["websockets", "realtime"],
-                description="WebSocket endpoints for real-time communication",
-            ),
-            # Knowledge Management
-            "knowledge": RouterConfig(
-                name="knowledge",
-                module_path="backend.api.knowledge",
-                prefix="/api/knowledge_base",
-                tags=["knowledge", "search"],
-                status=RouterStatus.ENABLED,
-                description="Knowledge base operations and search",
-            ),
-            # chat_knowledge functionality now included in consolidated chat router
-            # Agent and AI
-            "agent_config": RouterConfig(
-                name="agent_config",
-                module_path="backend.api.agent_config",
-                prefix="/api/agent-config",
-                tags=["agent", "config"],
-                description="Agent configuration and management",
-            ),
-            "prompts": RouterConfig(
-                name="prompts",
-                module_path="backend.api.prompts",
-                prefix="/api/prompts",
-                tags=["prompts", "ai"],
-                description="Prompt templates and management",
-            ),
-            "llm": RouterConfig(
-                name="llm",
-                module_path="backend.api.llm",
-                prefix="/api/llm",
-                tags=["llm", "ai"],
-                status=RouterStatus.LAZY_LOAD,
-                description="LLM integration and management",
-            ),
-            # File and Content Management
-            "files": RouterConfig(
-                name="files",
-                module_path="backend.api.files",
-                prefix="/api/files",
-                tags=["files", "upload"],
-                description="File operations and management",
-            ),
-            "templates": RouterConfig(
-                name="templates",
-                module_path="backend.api.templates",
-                prefix="/api/templates",
-                tags=["templates"],
-                description="Template management and rendering",
-            ),
-            # Security
-            "secrets": RouterConfig(
-                name="secrets",
-                module_path="backend.api.secrets",
-                prefix="/api/secrets",
-                tags=["secrets", "security"],
-                requires_auth=True,
-                description="Secrets and credential management",
-            ),
-            # Development and Automation
-            "playwright": RouterConfig(
-                name="playwright",
-                module_path="backend.api.playwright",
-                prefix="/api/playwright",
-                tags=["automation", "browser"],
-                description="Browser automation via Playwright",
-            ),
-            "terminal": RouterConfig(
-                name="terminal",
-                module_path="backend.api.terminal",
-                prefix="/api/terminal",
-                tags=["terminal", "execution"],
-                status=RouterStatus.ENABLED,  # Enable for fast backend
-                description="Terminal execution and management",
-            ),
-            "logs": RouterConfig(
-                name="logs",
-                module_path="backend.api.logs",
-                prefix="/api/logs",
-                tags=["logs", "monitoring"],
-                status=RouterStatus.ENABLED,
-                description="Log viewing and analysis",
-            ),
-            "workflow": RouterConfig(
-                name="workflow",
-                module_path="backend.api.workflow",
-                prefix="/api/workflow",
-                tags=["workflow", "automation"],
-                status=RouterStatus.DISABLED,  # Not in fast backend
-                description="Workflow automation and orchestration",
-            ),
-            # Performance Optimization
-            "batch": RouterConfig(
-                name="batch",
-                module_path="backend.api.batch",
-                prefix="/api/batch",
-                tags=["batch", "optimization"],
-                description="Batch API endpoints for optimized initial loading",
-            ),
-            # Monitoring and Analytics
-            "service_monitor": RouterConfig(
-                name="service_monitor",
-                module_path="backend.api.service_monitor",
-                prefix="/api/monitoring",
-                tags=["monitoring", "services"],
-                description="Real-time service monitoring and health checks",
-            ),
-            "infrastructure_monitor": RouterConfig(
-                name="infrastructure_monitor",
-                module_path="backend.api.infrastructure_monitor",
-                prefix="/api/infrastructure",
-                tags=["monitoring", "infrastructure", "multi-machine"],
-                status=RouterStatus.ENABLED,
-                description="Multi-machine infrastructure monitoring with service hierarchies",
-            ),
-            "monitoring_alerts": RouterConfig(
-                name="monitoring_alerts",
-                module_path="backend.api.monitoring_alerts",
-                prefix="/api/alerts",
-                tags=["alerts", "notifications", "monitoring"],
-                status=RouterStatus.ENABLED,
-                description="Advanced monitoring alerts and notifications system",
-            ),
-            "monitoring": RouterConfig(
-                name="monitoring",
-                module_path="backend.api.monitoring",
-                prefix="/api/monitoring/phase9",
-                tags=["monitoring", "phase9", "gpu", "npu", "performance"],
-                status=RouterStatus.ENABLED,
-                description=(
-                    "Phase 9 comprehensive performance monitoring for GPU/NPU utilization and"
-                    "multi-modal AI"
-                )
-            ),
-            "system_validation": RouterConfig(
-                name="system_validation",
-                module_path="backend.api.system_validation",
-                prefix="/api/system_validation",
-                tags=["validation", "system", "testing"],
-                description="Comprehensive system validation and integration testing",
-            ),
-            "validation_dashboard": RouterConfig(
-                name="validation_dashboard",
-                module_path="backend.api.validation_dashboard",
-                prefix="/api/validation-dashboard",
-                tags=["validation", "testing"],
-                status=RouterStatus.ENABLED,  # Enable for fast backend
-                description="Validation and testing dashboard",
-            ),
-            # Intelligence and AI Agent
-            "intelligent_agent": RouterConfig(
-                name="intelligent_agent",
-                module_path="backend.api.intelligent_agent",
-                prefix="/api/intelligent-agent",
-                tags=["ai", "agent", "intelligence"],
-                status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
-                description="Intelligent agent system for goal processing",
-            ),
-            # MCP Bridge for Knowledge Base
-            "knowledge_mcp": RouterConfig(
-                name="knowledge_mcp",
-                module_path="backend.api.knowledge_mcp",
-                prefix="/api/knowledge",
-                tags=["knowledge", "mcp", "llm"],
-                status=RouterStatus.ENABLED,
-                description="MCP bridge for LLM access to knowledge base via LlamaIndex",
-            ),
-            # Research and Browser Automation
-            "research_browser": RouterConfig(
-                name="research_browser",
-                module_path="backend.api.research_browser",
-                prefix="/api/research",
-                tags=["research", "browser", "automation"],
-                status=RouterStatus.ENABLED,
-                description="Browser automation for research tasks with user interaction support",
-            ),
-            # Startup Status and Messages - DISABLED per user request to remove splash screen
-            "startup": RouterConfig(
-                name="startup",
-                module_path="backend.api.startup",
-                prefix="/api/startup",
-                tags=["startup", "status", "websockets"],
-                status=RouterStatus.DISABLED,
-                description="Friendly startup messages and status updates for frontend",
-            ),
-            # Hot Reload for Development
-            "hot_reload": RouterConfig(
-                name="hot_reload",
-                module_path="backend.api.hot_reload",
-                prefix="/api/hot-reload",
-                tags=["development", "hot-reload"],
-                status=RouterStatus.ENABLED,
-                description="Hot reload functionality for chat workflow modules during development",
-            ),
-        }
+        # Issue #281: Use extracted helpers for router definitions by category
+        routers = {}
+        routers.update(_get_core_system_routers())
+        routers.update(_get_knowledge_and_ai_routers())
+        routers.update(_get_file_and_security_routers())
+        routers.update(_get_development_automation_routers())
+        routers.update(_get_monitoring_routers())
+        return routers
 
     def get_enabled_routers(self) -> Dict[str, RouterConfig]:
         """Get all enabled routers"""
@@ -461,7 +519,7 @@ async def get_routers_by_tag(tag: str):
     routers_with_tag = registry.get_routers_by_tag(tag)
     return {
         "tag": tag,
-        "routers": [name for name in routers_with_tag.keys()],
+        "routers": list(routers_with_tag),
         "count": len(routers_with_tag),
     }
 

@@ -26,6 +26,7 @@ class SettingsLoadingFixer:
     """Diagnose and fix settings loading issues"""
 
     def __init__(self):
+        """Initialize settings fixer with service URLs and issue tracking."""
         self.backend_url = ServiceURLs.BACKEND_LOCAL
         self.frontend_url = ServiceURLs.FRONTEND_LOCAL
         self.settings_file = Path("config/settings.json")

@@ -18,6 +18,7 @@ from queue import Queue
 from typing import Any, Dict
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
+from src.constants.threshold_constants import TimingConstants
 from src.utils.database_helpers import join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 class SQLiteConnectionPool:
     """Thread-safe SQLite connection pool with proper resource management."""
 
-    def __init__(self, db_path: str, pool_size: int = 10, timeout: float = 30.0):
+    def __init__(self, db_path: str, pool_size: int = 10, timeout: float = TimingConstants.SHORT_TIMEOUT):
         """
         Initialize SQLite connection pool.
 

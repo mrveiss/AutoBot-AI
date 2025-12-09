@@ -41,6 +41,7 @@ from typing import List, Literal, Optional
 
 import aiofiles
 
+from backend.models.task_context import AuditQueryContext
 from backend.type_defs.common import Metadata
 
 import redis.asyncio as async_redis
@@ -132,6 +133,29 @@ class AuditEntry:
         """Serialize to JSON for Redis storage"""
         data = asdict(self)
         return json.dumps(data, default=str)
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary with all fields formatted for JSON API response.
+        """
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp,
+            "date": self.date,
+            "operation": self.operation,
+            "result": self.result,
+            "user_id": self.user_id,
+            "session_id": self.session_id,
+            "ip_address": self.ip_address,
+            "resource": self.resource,
+            "vm_source": self.vm_source,
+            "vm_name": self.vm_name,
+            "user_role": self.user_role,
+            "details": self.details,
+            "performance_ms": self.performance_ms,
+        }
 
     @classmethod
     def from_json(cls, json_str: str) -> "AuditEntry":
@@ -463,19 +487,26 @@ class AuditLogger:
         result: Optional[AuditResult] = None,
     ) -> List[AuditEntry]:
         """Execute appropriate query based on filters (Issue #315 - reduces nesting)."""
+        # Issue #322: Create AuditQueryContext to eliminate data clump
+        query_ctx = AuditQueryContext(
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            offset=offset,
+        )
         if session_id:
-            return await self._query_session(audit_db, session_id, start_time, end_time, limit, offset)
+            return await self._query_session(audit_db, session_id, query_ctx)
         if user_id and operation:
-            return await self._query_user_operation(audit_db, user_id, operation, start_time, end_time, limit, offset)
+            return await self._query_user_operation(audit_db, user_id, operation, query_ctx)
         if user_id:
-            return await self._query_user(audit_db, user_id, start_time, end_time, limit, offset)
+            return await self._query_user(audit_db, user_id, query_ctx)
         if operation:
-            return await self._query_operation(audit_db, operation, start_time, end_time, limit, offset)
+            return await self._query_operation(audit_db, operation, query_ctx)
         if vm_name:
-            return await self._query_vm(audit_db, vm_name, start_time, end_time, limit, offset)
+            return await self._query_vm(audit_db, vm_name, query_ctx)
         if result:
-            return await self._query_result(audit_db, result, start_time, end_time, limit, offset)
-        return await self._query_time_range(audit_db, start_time, end_time, limit, offset)
+            return await self._query_result(audit_db, result, query_ctx)
+        return await self._query_time_range(audit_db, query_ctx)
 
     async def query(
         self,
@@ -531,17 +562,14 @@ class AuditLogger:
     async def _query_time_range(
         self,
         audit_db: async_redis.Redis,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query primary audit log by time range"""
+        """Query primary audit log by time range (Issue #322: uses AuditQueryContext)."""
         entries = []
 
         # Query each day in the range
-        current_date = start_time.date()
-        end_date = end_time.date()
+        current_date = query_ctx.start_time.date()
+        end_date = query_ctx.end_time.date()
 
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
@@ -549,10 +577,10 @@ class AuditLogger:
 
             # Query sorted set by timestamp range
             start_score = (
-                start_time.timestamp() if current_date == start_time.date() else 0
+                query_ctx.start_time.timestamp() if current_date == query_ctx.start_time.date() else 0
             )
             end_score = (
-                end_time.timestamp() if current_date == end_date else float("inf")
+                query_ctx.end_time.timestamp() if current_date == end_date else float("inf")
             )
 
             results = await audit_db.zrange(
@@ -566,29 +594,26 @@ class AuditLogger:
 
         # Sort by timestamp descending, apply pagination
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset : offset + limit]
+        return entries[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _query_session(
         self,
         audit_db: async_redis.Redis,
         session_id: str,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query audit logs for specific session"""
+        """Query audit logs for specific session (Issue #322: uses AuditQueryContext)."""
         key = f"audit:session:{session_id}"
 
         # Get entry IDs from session index
         entry_ids = await audit_db.zrange(
-            key, start_time.timestamp(), end_time.timestamp(), withscores=False
+            key, query_ctx.start_time.timestamp(), query_ctx.end_time.timestamp(), withscores=False
         )
 
         # Batch fetch full entries from primary log - eliminates N+1
-        paginated_ids = entry_ids[offset : offset + limit]
+        paginated_ids = entry_ids[query_ctx.offset : query_ctx.offset + query_ctx.limit]
         entry_map = await self._fetch_entries_by_ids_batch(
-            audit_db, paginated_ids, start_time, end_time
+            audit_db, paginated_ids, query_ctx.start_time, query_ctx.end_time
         )
         # Preserve order from original IDs
         entries = [entry_map[eid] for eid in paginated_ids if eid in entry_map]
@@ -599,17 +624,14 @@ class AuditLogger:
         self,
         audit_db: async_redis.Redis,
         user_id: str,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query audit logs for specific user"""
+        """Query audit logs for specific user (Issue #322: uses AuditQueryContext)."""
         # Collect all entry IDs first
         all_entry_ids = []
 
-        current_date = start_time.date()
-        end_date = end_time.date()
+        current_date = query_ctx.start_time.date()
+        end_date = query_ctx.end_time.date()
 
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
@@ -622,28 +644,25 @@ class AuditLogger:
 
         # Batch fetch all entries - eliminates N+1
         entry_map = await self._fetch_entries_by_ids_batch(
-            audit_db, all_entry_ids, start_time, end_time
+            audit_db, all_entry_ids, query_ctx.start_time, query_ctx.end_time
         )
         entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset : offset + limit]
+        return entries[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _query_operation(
         self,
         audit_db: async_redis.Redis,
         operation: str,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query audit logs for specific operation type"""
+        """Query audit logs for specific operation type (Issue #322: uses AuditQueryContext)."""
         # Collect all entry IDs first
         all_entry_ids = []
 
-        current_date = start_time.date()
-        end_date = end_time.date()
+        current_date = query_ctx.start_time.date()
+        end_date = query_ctx.end_time.date()
 
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
@@ -656,28 +675,25 @@ class AuditLogger:
 
         # Batch fetch all entries - eliminates N+1
         entry_map = await self._fetch_entries_by_ids_batch(
-            audit_db, all_entry_ids, start_time, end_time
+            audit_db, all_entry_ids, query_ctx.start_time, query_ctx.end_time
         )
         entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset : offset + limit]
+        return entries[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _query_vm(
         self,
         audit_db: async_redis.Redis,
         vm_name: str,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query audit logs for specific VM"""
+        """Query audit logs for specific VM (Issue #322: uses AuditQueryContext)."""
         # Collect all entry IDs first
         all_entry_ids = []
 
-        current_date = start_time.date()
-        end_date = end_time.date()
+        current_date = query_ctx.start_time.date()
+        end_date = query_ctx.end_time.date()
 
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
@@ -690,28 +706,25 @@ class AuditLogger:
 
         # Batch fetch all entries - eliminates N+1
         entry_map = await self._fetch_entries_by_ids_batch(
-            audit_db, all_entry_ids, start_time, end_time
+            audit_db, all_entry_ids, query_ctx.start_time, query_ctx.end_time
         )
         entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset : offset + limit]
+        return entries[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _query_result(
         self,
         audit_db: async_redis.Redis,
         result: AuditResult,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query audit logs by result (for security monitoring)"""
+        """Query audit logs by result (Issue #322: uses AuditQueryContext)."""
         # Collect all entry IDs first
         all_entry_ids = []
 
-        current_date = start_time.date()
-        end_date = end_time.date()
+        current_date = query_ctx.start_time.date()
+        end_date = query_ctx.end_time.date()
 
         while current_date <= end_date:
             date_str = current_date.strftime("%Y-%m-%d")
@@ -724,32 +737,34 @@ class AuditLogger:
 
         # Batch fetch all entries - eliminates N+1
         entry_map = await self._fetch_entries_by_ids_batch(
-            audit_db, all_entry_ids, start_time, end_time
+            audit_db, all_entry_ids, query_ctx.start_time, query_ctx.end_time
         )
         entries = [entry_map[eid] for eid in all_entry_ids if eid in entry_map]
 
         entries.sort(key=lambda e: e.timestamp, reverse=True)
-        return entries[offset : offset + limit]
+        return entries[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _query_user_operation(
         self,
         audit_db: async_redis.Redis,
         user_id: str,
         operation: str,
-        start_time: datetime,
-        end_time: datetime,
-        limit: int,
-        offset: int,
+        query_ctx: AuditQueryContext,
     ) -> List[AuditEntry]:
-        """Query intersection of user and operation indexes"""
+        """Query intersection of user and operation indexes (Issue #322: uses AuditQueryContext)."""
         # Get entries from both indexes and intersect
-        user_entries = await self._query_user(
-            audit_db, user_id, start_time, end_time, limit * 2, 0
+        # Create expanded context for initial query (need more results to filter)
+        expanded_ctx = AuditQueryContext(
+            start_time=query_ctx.start_time,
+            end_time=query_ctx.end_time,
+            limit=query_ctx.limit * 2,
+            offset=0,
         )
+        user_entries = await self._query_user(audit_db, user_id, expanded_ctx)
 
         # Filter by operation
         filtered = [e for e in user_entries if e.operation == operation]
-        return filtered[offset : offset + limit]
+        return filtered[query_ctx.offset : query_ctx.offset + query_ctx.limit]
 
     async def _fetch_entry_by_id(
         self,

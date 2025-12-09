@@ -23,6 +23,10 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
 from src.autobot_types import TaskComplexity
+from src.constants.threshold_constants import (
+    RetryConfig,
+    WorkflowConfig,
+)
 
 
 class WorkflowPriority(Enum):
@@ -63,12 +67,12 @@ class ScheduledWorkflow:
     user_id: Optional[str] = None
     variables: Dict[str, Any] = None
     auto_approve: bool = False
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES  # Issue #376
     retry_count: int = 0
     tags: List[str] = None
     dependencies: List[str] = None  # Other workflow IDs this depends on
-    estimated_duration_minutes: int = 30
-    timeout_minutes: int = 120
+    estimated_duration_minutes: int = WorkflowConfig.DEFAULT_ESTIMATED_DURATION_MIN
+    timeout_minutes: int = WorkflowConfig.DEFAULT_TIMEOUT_MIN
     metadata: Dict[str, Any] = None
 
     def __post_init__(self):
@@ -91,6 +95,66 @@ class ScheduledWorkflow:
         data["priority"] = self.priority.value
         data["status"] = self.status.value
         return data
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_summary_response(self) -> Dict[str, Any]:
+        """Convert to summary dict for schedule response (Issue #372)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "user_message": self.user_message,
+            "scheduled_time": self.scheduled_time.isoformat(),
+            "priority": self.priority.name,
+            "status": self.status.name,
+            "complexity": self.complexity.value,
+            "template_id": self.template_id,
+            "estimated_duration_minutes": self.estimated_duration_minutes,
+        }
+
+    def to_list_response(self) -> Dict[str, Any]:
+        """Convert to list item dict for listing workflows (Issue #372)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "user_message": self.user_message,
+            "scheduled_time": self.scheduled_time.isoformat(),
+            "priority": self.priority.name,
+            "status": self.status.name,
+            "complexity": self.complexity.value,
+            "created_at": self.created_at.isoformat(),
+            "template_id": self.template_id,
+            "user_id": self.user_id,
+            "tags": self.tags,
+            "dependencies": self.dependencies,
+            "estimated_duration_minutes": self.estimated_duration_minutes,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+        }
+
+    def to_detail_response(self) -> Dict[str, Any]:
+        """Convert to detailed dict for single workflow response (Issue #372)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "user_message": self.user_message,
+            "scheduled_time": self.scheduled_time.isoformat(),
+            "priority": self.priority.name,
+            "status": self.status.name,
+            "complexity": self.complexity.value,
+            "created_at": self.created_at.isoformat(),
+            "template_id": self.template_id,
+            "variables": self.variables,
+            "user_id": self.user_id,
+            "auto_approve": self.auto_approve,
+            "tags": self.tags,
+            "dependencies": self.dependencies,
+            "estimated_duration_minutes": self.estimated_duration_minutes,
+            "timeout_minutes": self.timeout_minutes,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "metadata": self.metadata,
+        }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ScheduledWorkflow":
@@ -136,9 +200,9 @@ class WorkflowScheduleRequest:
     tags: Optional[List[str]] = None
     dependencies: Optional[List[str]] = None
     user_id: Optional[str] = None
-    estimated_duration_minutes: int = 30
-    timeout_minutes: int = 120
-    max_retries: int = 3
+    estimated_duration_minutes: int = WorkflowConfig.DEFAULT_ESTIMATED_DURATION_MIN
+    timeout_minutes: int = WorkflowConfig.DEFAULT_TIMEOUT_MIN
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
 
 
 class WorkflowQueue:
@@ -148,7 +212,7 @@ class WorkflowQueue:
         """Initialize workflow queue with empty queues and default settings."""
         self._queue: List[QueuedWorkflow] = []
         self._running: Dict[str, ScheduledWorkflow] = {}
-        self._max_concurrent = 3
+        self._max_concurrent = WorkflowConfig.DEFAULT_MAX_CONCURRENT  # Issue #376
         self._paused = False
 
     def add(self, workflow: ScheduledWorkflow) -> None:
@@ -174,9 +238,9 @@ class WorkflowQueue:
 
         # Check dependencies
         if not self._dependencies_satisfied(workflow):
-            # Re-queue with lower priority if dependencies not met
+            # Re-queue with lower priority if dependencies not met (Issue #376)
             workflow.status = WorkflowStatus.QUEUED
-            queued_workflow.priority_score *= 0.9  # Reduce priority slightly
+            queued_workflow.priority_score *= WorkflowConfig.DEPENDENCY_PENALTY
             heapq.heappush(self._queue, queued_workflow)
             return None
 
@@ -239,30 +303,36 @@ class WorkflowQueue:
         return list(self._running.values())
 
     def _calculate_priority_score(self, workflow: ScheduledWorkflow) -> float:
-        """Calculate priority score for workflow"""
-        base_score = workflow.priority.value * 100
+        """Calculate priority score for workflow (Issue #376 - use named constants)"""
+        base_score = workflow.priority.value * WorkflowConfig.PRIORITY_BASE_MULTIPLIER
 
         # Add urgency based on scheduled time
         now = datetime.now()
         if workflow.scheduled_time <= now:
             # Overdue workflows get bonus
             overdue_minutes = (now - workflow.scheduled_time).total_seconds() / 60
-            urgency_bonus = min(overdue_minutes * 0.1, 50)  # Max 50 point bonus
+            urgency_bonus = min(
+                overdue_minutes * WorkflowConfig.OVERDUE_BONUS_RATE,
+                WorkflowConfig.MAX_OVERDUE_BONUS,
+            )
             base_score += urgency_bonus
 
-        # Complexity adjustment
+        # Complexity adjustment (Issue #376 - use named constants)
         complexity_multiplier = {
-            TaskComplexity.SIMPLE: 0.8,
-            TaskComplexity.RESEARCH: 1.0,
-            TaskComplexity.INSTALL: 1.1,
-            TaskComplexity.COMPLEX: 1.2,
-            TaskComplexity.SECURITY_SCAN: 1.3,
+            TaskComplexity.SIMPLE: WorkflowConfig.COMPLEXITY_SIMPLE,
+            TaskComplexity.RESEARCH: WorkflowConfig.COMPLEXITY_RESEARCH,
+            TaskComplexity.INSTALL: WorkflowConfig.COMPLEXITY_INSTALL,
+            TaskComplexity.COMPLEX: WorkflowConfig.COMPLEXITY_COMPLEX,
+            TaskComplexity.SECURITY_SCAN: WorkflowConfig.COMPLEXITY_SECURITY_SCAN,
         }
 
         complexity_factor = complexity_multiplier.get(workflow.complexity, 1.0)
 
         # Add estimated duration factor (shorter workflows get slight priority)
-        duration_factor = max(0.5, 1.0 - (workflow.estimated_duration_minutes / 120))
+        duration_factor = max(
+            WorkflowConfig.MIN_DURATION_FACTOR,
+            1.0 - (workflow.estimated_duration_minutes / WorkflowConfig.DEFAULT_TIMEOUT_MIN),
+        )
 
         return base_score * complexity_factor * duration_factor
 
@@ -447,11 +517,11 @@ class WorkflowScheduler:
         workflow = self.scheduled_workflows[workflow_id]
 
         # Only reschedule if not already running
-        if workflow.status in [
+        if workflow.status in (
             WorkflowStatus.RUNNING,
             WorkflowStatus.COMPLETED,
             WorkflowStatus.FAILED,
-        ]:
+        ):
             return False
 
         # Parse new time
@@ -522,17 +592,17 @@ class WorkflowScheduler:
         }
 
     async def _scheduler_loop(self) -> None:
-        """Main scheduler loop"""
+        """Main scheduler loop (Issue #376 - use named constants)"""
         while self._running:
             try:
                 await self._process_scheduled_workflows()
                 await self._execute_queued_workflows()
-                await asyncio.sleep(10)  # Check every 10 seconds
+                await asyncio.sleep(WorkflowConfig.SCHEDULER_CHECK_INTERVAL_S)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Scheduler loop error: {e}")
-                await asyncio.sleep(30)  # Back off on error
+                await asyncio.sleep(WorkflowConfig.SCHEDULER_ERROR_BACKOFF_S)
 
     async def _process_scheduled_workflows(self) -> None:
         """Move due scheduled workflows to queue"""

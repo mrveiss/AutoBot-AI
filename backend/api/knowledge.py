@@ -972,6 +972,129 @@ async def query_knowledge(request: dict, req: Request):
 # NOTE: _enhance_search_with_rag helper moved to knowledge_search.py (Issue #209)
 
 
+# =============================================================================
+# Helper Functions for get_facts_by_category (Issue #281)
+# =============================================================================
+
+
+async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
+    """Check cache for facts_by_category result (Issue #281: extracted)."""
+    import json
+    cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
+    cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
+
+    if cached_result:
+        logger.debug(
+            f"Cache HIT for facts_by_category (category={category}, limit={limit})"
+        )
+        return (
+            json.loads(
+                cached_result.decode("utf-8")
+                if isinstance(cached_result, bytes)
+                else cached_result
+            ),
+            cache_key,
+        )
+
+    logger.info(
+        f"Cache MISS for facts_by_category - using category index lookup "
+        f"(category={category}, limit={limit})"
+    )
+    return None, cache_key
+
+
+async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int) -> dict:
+    """Fetch fact IDs from category indexes (Issue #281: extracted)."""
+    category_fact_ids = {}
+    for cat in categories_to_fetch:
+        index_key = f"category:index:{cat}"
+        fact_ids = await asyncio.to_thread(
+            kb.redis_client.srandmember, index_key, limit
+        )
+        if fact_ids:
+            decoded_ids = [
+                fid.decode("utf-8") if isinstance(fid, bytes) else fid
+                for fid in fact_ids
+            ]
+            category_fact_ids[cat] = decoded_ids
+            logger.debug(
+                f"Category index {cat}: fetched {len(decoded_ids)} fact IDs"
+            )
+    return category_fact_ids
+
+
+async def _batch_fetch_facts(kb, category_fact_ids: dict) -> tuple:
+    """Batch fetch fact data using pipeline (Issue #281: extracted)."""
+    all_fact_keys = []
+    for cat, fact_ids in category_fact_ids.items():
+        for fid in fact_ids:
+            all_fact_keys.append((cat, f"fact:{fid}"))
+
+    if not all_fact_keys:
+        return [], []
+
+    pipeline = kb.redis_client.pipeline()
+    for _, fact_key in all_fact_keys:
+        pipeline.hgetall(fact_key)
+    fact_results = await asyncio.to_thread(pipeline.execute)
+
+    return all_fact_keys, fact_results
+
+
+def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dict]:
+    """Process a single fact from Redis data (Issue #281: extracted)."""
+    import json
+
+    if not fact_data:
+        return None
+
+    try:
+        # Extract metadata
+        metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
+        metadata_str = (
+            metadata_raw.decode("utf-8")
+            if isinstance(metadata_raw, bytes)
+            else str(metadata_raw)
+        )
+        metadata = json.loads(metadata_str) if metadata_str else {}
+
+        # Extract content
+        content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
+        content = (
+            content_raw.decode("utf-8")
+            if isinstance(content_raw, bytes)
+            else str(content_raw) if content_raw else ""
+        )
+
+        fact_title = metadata.get("title", metadata.get("command", "Untitled"))
+        fact_type = metadata.get("type", "unknown")
+
+        return {
+            "key": fact_key,
+            "title": fact_title,
+            "content": content[:500] + "..." if len(content) > 500 else content,
+            "full_content": content,
+            "category": cat,
+            "type": fact_type,
+            "metadata": metadata,
+        }
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.debug(f"Skipping invalid fact entry: {e}")
+        return None
+
+
+async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
+    """Cache the facts_by_category result (Issue #281: extracted)."""
+    import json
+    try:
+        await asyncio.to_thread(
+            kb.redis_client.setex, cache_key, 60, json.dumps(result)
+        )
+        logger.debug(f"Cached facts_by_category result")
+    except Exception as cache_error:
+        logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_category",
@@ -984,11 +1107,11 @@ async def get_facts_by_category(
     """
     Get facts grouped by category for browsing with caching.
 
+    Issue #281: Refactored from 178 lines to use extracted helper methods.
     Performance: Uses Redis SET indexes (category:index:{category}) for O(1) lookups.
     Issue #258: Optimized from 5000ms+ to <200ms target.
     """
     kb = await get_or_create_knowledge_base(req.app)
-    import json
 
     # REUSABLE PATTERN: Validate KB exists before use
     if kb is None:
@@ -1004,135 +1127,44 @@ async def get_facts_by_category(
             },
         )
 
-    # Check cache first (60 second TTL) - async operation
-    cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
-    cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
-
+    # Check cache first (Issue #281: uses helper)
+    cached_result, cache_key = await _check_facts_cache(kb, category, limit)
     if cached_result:
-        logger.debug(
-            f"Cache HIT for facts_by_category (category={category}, limit={limit})"
-        )
-        return json.loads(
-            cached_result.decode("utf-8")
-            if isinstance(cached_result, bytes)
-            else cached_result
-        )
+        return cached_result
 
-    logger.info(
-        f"Cache MISS for facts_by_category - using category index lookup "
-        f"(category={category}, limit={limit})"
-    )
+    from backend.knowledge_categories import KnowledgeCategory
 
-    from backend.knowledge_categories import (
-        KnowledgeCategory,
-    )
-
-    categories_dict = {}
+    # Determine which categories to fetch
+    if category:
+        categories_to_fetch = [category]
+    else:
+        categories_to_fetch = [cat.value for cat in KnowledgeCategory]
 
     try:
-        # OPTIMIZED (Issue #258): Use category indexes for O(1) lookup
-        # Instead of scanning all 5000+ facts, we fetch only the fact IDs we need
-
-        # Determine which categories to fetch
-        if category:
-            # Single category requested - direct index lookup
-            categories_to_fetch = [category]
-        else:
-            # All categories - fetch from all 3 main category indexes
-            categories_to_fetch = [cat.value for cat in KnowledgeCategory]
-
-        # Step 1: Get fact IDs from category indexes (O(1) per category)
-        # Use SRANDMEMBER to get only 'limit' random IDs - avoids fetching all 5000+ IDs
-        category_fact_ids = {}
-        for cat in categories_to_fetch:
-            index_key = f"category:index:{cat}"
-            # SRANDMEMBER with count returns up to 'limit' random members efficiently
-            fact_ids = await asyncio.to_thread(
-                kb.redis_client.srandmember, index_key, limit
-            )
-            if fact_ids:
-                # Decode bytes to strings
-                decoded_ids = [
-                    fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                    for fid in fact_ids
-                ]
-                category_fact_ids[cat] = decoded_ids
-                logger.debug(
-                    f"Category index {cat}: fetched {len(decoded_ids)} fact IDs"
-                )
+        # Step 1: Get fact IDs from category indexes (Issue #281: uses helper)
+        category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
 
         if not category_fact_ids:
-            # No indexed facts found - fallback to legacy SCAN method
             logger.warning(
                 "No category indexes found - falling back to SCAN method. "
                 "Run category index migration to improve performance."
             )
             return await _get_facts_by_category_legacy(kb, category, limit)
 
-        # Step 2: Batch fetch fact data using pipeline (single roundtrip)
-        all_fact_keys = []
-        for cat, fact_ids in category_fact_ids.items():
-            for fid in fact_ids:
-                all_fact_keys.append((cat, f"fact:{fid}"))
+        # Step 2: Batch fetch fact data (Issue #281: uses helper)
+        all_fact_keys, fact_results = await _batch_fetch_facts(kb, category_fact_ids)
 
         if not all_fact_keys:
             return {"categories": {}, "total_facts": 0}
 
-        # Pipeline fetch all facts at once
-        pipeline = kb.redis_client.pipeline()
-        for _, fact_key in all_fact_keys:
-            pipeline.hgetall(fact_key)
-        fact_results = await asyncio.to_thread(pipeline.execute)
-
-        # Step 3: Process facts (pure Python, no I/O)
+        # Step 3: Process facts (Issue #281: uses helper)
+        categories_dict = {}
         for (cat, fact_key), fact_data in zip(all_fact_keys, fact_results):
-            try:
-                if not fact_data:
-                    continue
-
-                # Extract metadata (handle both bytes and string keys)
-                metadata_raw = fact_data.get(b"metadata") or fact_data.get(
-                    "metadata", b"{}"
-                )
-                metadata_str = (
-                    metadata_raw.decode("utf-8")
-                    if isinstance(metadata_raw, bytes)
-                    else str(metadata_raw)
-                )
-                metadata = json.loads(metadata_str) if metadata_str else {}
-
-                # Extract content
-                content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
-                content = (
-                    content_raw.decode("utf-8")
-                    if isinstance(content_raw, bytes)
-                    else str(content_raw) if content_raw else ""
-                )
-
-                fact_title = metadata.get("title", metadata.get("command", "Untitled"))
-                fact_type = metadata.get("type", "unknown")
-
+            processed = _process_fact_data(fact_data, cat, fact_key)
+            if processed:
                 if cat not in categories_dict:
                     categories_dict[cat] = []
-
-                # Add to category list
-                categories_dict[cat].append(
-                    {
-                        "key": fact_key,
-                        "title": fact_title,
-                        "content": (
-                            content[:500] + "..." if len(content) > 500 else content
-                        ),
-                        "full_content": content,
-                        "category": cat,
-                        "type": fact_type,
-                        "metadata": metadata,
-                    }
-                )
-
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.debug(f"Skipping invalid fact entry: {e}")
-                continue
+                categories_dict[cat].append(processed)
 
     except Exception as e:
         logger.error(f"Error in indexed fact retrieval: {e}")
@@ -1144,16 +1176,8 @@ async def get_facts_by_category(
         "category_filter": category,
     }
 
-    # Cache the result for 60 seconds - async operation
-    try:
-        await asyncio.to_thread(
-            kb.redis_client.setex, cache_key, 60, json.dumps(result)
-        )
-        logger.debug(
-            f"Cached facts_by_category result (category={category}, limit={limit})"
-        )
-    except Exception as cache_error:
-        logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+    # Cache the result (Issue #281: uses helper)
+    await _cache_facts_result(kb, cache_key, result)
 
     return result
 

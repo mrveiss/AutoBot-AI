@@ -27,6 +27,7 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class TracedHttpClient:
 
     def __init__(
         self,
-        timeout: float = 30.0,
+        timeout: float = TimingConstants.SHORT_TIMEOUT,
         follow_redirects: bool = True,
     ):
         """
@@ -192,7 +193,7 @@ class TracedHttpClient:
 
 @asynccontextmanager
 async def traced_http_client(
-    timeout: float = 30.0,
+    timeout: float = TimingConstants.SHORT_TIMEOUT,
     follow_redirects: bool = True,
 ):
     """

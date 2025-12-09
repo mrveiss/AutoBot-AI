@@ -205,16 +205,17 @@ class GetFileInfoRequest(BaseModel):
     path: str = Field(..., description="File or directory path")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_filesystem_mcp_tools",
-    error_code_prefix="FILESYSTEM_MCP",
-)
-@router.get("/mcp/tools")
-async def get_filesystem_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for filesystem operations"""
-    tools = [
-        # Read Operations
+def _get_read_operation_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for file read operations.
+
+    Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for read operations
+    """
+    return [
         MCPTool(
             name="read_text_file",
             description=(
@@ -275,7 +276,20 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "required": ["paths"],
             },
         ),
-        # Write Operations
+    ]
+
+
+def _get_write_operation_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for file write operations.
+
+    Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for write operations
+    """
+    return [
         MCPTool(
             name="write_file",
             description=(
@@ -331,7 +345,20 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "required": ["path", "edits"],
             },
         ),
-        # Directory Management
+    ]
+
+
+def _get_directory_management_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for directory management operations.
+
+    Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for directory operations
+    """
+    return [
         MCPTool(
             name="create_directory",
             description=(
@@ -407,7 +434,20 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "required": ["source", "destination"],
             },
         ),
-        # Discovery/Analysis
+    ]
+
+
+def _get_discovery_analysis_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for file/directory discovery and analysis.
+
+    Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for discovery/analysis operations
+    """
+    return [
         MCPTool(
             name="search_files",
             description=(
@@ -465,6 +505,22 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={"type": "object", "properties": {}},
         ),
     ]
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_filesystem_mcp_tools",
+    error_code_prefix="FILESYSTEM_MCP",
+)
+@router.get("/mcp/tools")
+async def get_filesystem_mcp_tools() -> List[MCPTool]:
+    """Get available MCP tools for filesystem operations"""
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_read_operation_tools())
+    tools.extend(_get_write_operation_tools())
+    tools.extend(_get_directory_management_tools())
+    tools.extend(_get_discovery_analysis_tools())
     return tools
 
 

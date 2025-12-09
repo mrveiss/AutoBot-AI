@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +305,7 @@ async def background_llm_sync():
 
         # Keep the service running
         while sync_service.running:
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     except asyncio.CancelledError:
         logger.info("Background LLM sync cancelled")

@@ -29,6 +29,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
+from src.constants.threshold_constants import TimingConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ class KnowledgeBaseInitializer:
 
     @classmethod
     async def wait_for_initialization(
-        cls, timeout: float = 30.0
+        cls, timeout: float = TimingConstants.SHORT_TIMEOUT
     ) -> Optional["KnowledgeBase"]:
         """Wait for initialization to complete with timeout"""
         try:
@@ -134,7 +135,7 @@ class KnowledgeBaseInitializer:
 
 # Convenience functions for easy access
 async def get_knowledge_base(
-    force_reinit: bool = False, timeout: float = 30.0
+    force_reinit: bool = False, timeout: float = TimingConstants.SHORT_TIMEOUT
 ) -> Optional["KnowledgeBase"]:
     """Get knowledge base instance with async initialization"""
     try:
@@ -164,7 +165,7 @@ def get_knowledge_base_sync() -> Optional["KnowledgeBase"]:
 
 
 @asynccontextmanager
-async def knowledge_base_context(timeout: float = 30.0):
+async def knowledge_base_context(timeout: float = TimingConstants.SHORT_TIMEOUT):
     """Async context manager for knowledge base operations"""
     kb = None
     try:

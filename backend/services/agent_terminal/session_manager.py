@@ -40,6 +40,82 @@ class SessionManager:
         self.sessions: Dict[str, AgentTerminalSession] = {}
         self._sessions_lock = asyncio.Lock()  # Protect concurrent session access
 
+    def _create_or_reuse_pty_session(
+        self, pty_session_id: str, session_id: str
+    ) -> Optional[str]:
+        """
+        Create a new PTY session or reuse an existing alive one.
+
+        Issue #281: Extracted helper for PTY session creation/recovery.
+
+        Args:
+            pty_session_id: Desired PTY session ID
+            session_id: Agent session ID for logging
+
+        Returns:
+            PTY session ID if successful, None otherwise
+        """
+        from backend.services.simple_pty import simple_pty_manager
+        from src.constants.path_constants import PATH
+
+        existing_pty = simple_pty_manager.get_session(pty_session_id)
+
+        if not existing_pty or not existing_pty.is_alive():
+            if existing_pty and not existing_pty.is_alive():
+                logger.warning(
+                    f"PTY session {pty_session_id} exists but is dead "
+                    f"(killed during restart). Recreating..."
+                )
+                simple_pty_manager.close_session(pty_session_id)
+
+            pty = simple_pty_manager.create_session(
+                pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
+            )
+            if pty:
+                logger.info(
+                    f"Created PTY session {pty_session_id} for agent terminal {session_id}"
+                )
+                return pty_session_id
+            else:
+                logger.warning(
+                    f"Failed to create PTY session for agent terminal {session_id}"
+                )
+                return None
+        else:
+            logger.info(
+                f"Reusing existing ALIVE PTY session {pty_session_id} "
+                f"for agent terminal {session_id}"
+            )
+            return pty_session_id
+
+    def _register_pty_with_terminal_manager(
+        self, pty_session_id: str, conversation_id: str
+    ) -> None:
+        """
+        Register PTY session with terminal session_manager for WebSocket logging.
+
+        Issue #281: Extracted helper for PTY registration.
+
+        Args:
+            pty_session_id: PTY session ID to register
+            conversation_id: Conversation ID for logging linkage
+        """
+        try:
+            from backend.api.terminal import session_manager
+
+            session_manager.session_configs[pty_session_id] = {
+                "security_level": "standard",
+                "conversation_id": conversation_id,
+            }
+            logger.info(
+                f"Registered PTY session {pty_session_id} with "
+                f"conversation_id {conversation_id} for logging"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to register PTY session with session_manager: {e}"
+            )
+
     async def create_session(
         self,
         agent_id: str,
@@ -50,6 +126,8 @@ class SessionManager:
     ) -> AgentTerminalSession:
         """
         Create a new agent terminal session with PTY integration.
+
+        Issue #281: Refactored from 113 lines to use extracted helper methods.
 
         Args:
             agent_id: Unique identifier for the agent
@@ -63,62 +141,17 @@ class SessionManager:
         """
         session_id = str(uuid.uuid4())
 
-        # Create PTY session for terminal display
+        # Create PTY session for terminal display (Issue #281: uses helper)
         pty_session_id = None
         try:
-            from backend.services.simple_pty import simple_pty_manager
-            from src.constants.path_constants import PATH
+            desired_pty_id = conversation_id or session_id
+            pty_session_id = self._create_or_reuse_pty_session(
+                desired_pty_id, session_id
+            )
 
-            # Use conversation_id as PTY session ID if available, otherwise use agent session_id
-            pty_session_id = conversation_id or session_id
-
-            # Check if PTY session already exists AND is alive
-            existing_pty = simple_pty_manager.get_session(pty_session_id)
-            if not existing_pty or not existing_pty.is_alive():
-                if existing_pty and not existing_pty.is_alive():
-                    logger.warning(
-                        f"PTY session {pty_session_id} exists but is dead "
-                        f"(killed during restart). Recreating..."
-                    )
-                    # Clean up dead PTY first
-                    simple_pty_manager.close_session(pty_session_id)
-
-                # Create new PTY session
-                pty = simple_pty_manager.create_session(
-                    pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
-                )
-                if pty:
-                    logger.info(
-                        f"Created PTY session {pty_session_id} for agent terminal {session_id}"
-                    )
-                else:
-                    logger.warning(
-                        f"Failed to create PTY session for agent terminal {session_id}"
-                    )
-                    pty_session_id = None
-            else:
-                logger.info(
-                    f"Reusing existing ALIVE PTY session {pty_session_id} "
-                    f"for agent terminal {session_id}"
-                )
-
-            # CRITICAL: Register PTY session with terminal session_manager for WebSocket logging
+            # Register PTY for WebSocket logging (Issue #281: uses helper)
             if pty_session_id and conversation_id:
-                try:
-                    from backend.api.terminal import session_manager
-
-                    session_manager.session_configs[pty_session_id] = {
-                        "security_level": "standard",
-                        "conversation_id": conversation_id,  # Enable TerminalLogger
-                    }
-                    logger.info(
-                        f"Registered PTY session {pty_session_id} with "
-                        f"conversation_id {conversation_id} for logging"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to register PTY session with session_manager: {e}"
-                    )
+                self._register_pty_with_terminal_manager(pty_session_id, conversation_id)
 
         except Exception as e:
             logger.error(f"Error creating PTY session: {e}")
@@ -134,7 +167,7 @@ class SessionManager:
             pty_session_id=pty_session_id,
         )
 
-        # CRITICAL: Protect session dictionary access with lock
+        # Protect session dictionary access with lock
         async with self._sessions_lock:
             self.sessions[session_id] = session
 
@@ -144,7 +177,7 @@ class SessionManager:
             f"PTY session: {pty_session_id}"
         )
 
-        # CRITICAL: Restore pending approvals from chat history (survives restarts)
+        # Restore pending approvals from chat history (survives restarts)
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
@@ -277,23 +310,8 @@ class SessionManager:
         """Persist session to Redis"""
         try:
             key = f"agent_terminal:session:{session.session_id}"
-            session_data = {
-                "session_id": session.session_id,
-                "agent_id": session.agent_id,
-                "agent_role": session.agent_role.value,
-                "conversation_id": session.conversation_id,
-                "host": session.host,
-                "state": session.state.value,
-                "created_at": session.created_at,
-                "last_activity": session.last_activity,
-                "metadata": session.metadata,
-                "pty_session_id": (
-                    session.pty_session_id
-                ),  # CRITICAL: Store PTY session ID
-                "pending_approval": (
-                    session.pending_approval
-                ),  # CRITICAL: Persist pending approvals for page reload
-            }
+            # Issue #372: Use model method to reduce feature envy
+            session_data = session.to_persist_dict()
 
             json_data = json.dumps(session_data)
             await self.redis_client.setex(key, 3600, json_data)  # 1 hour TTL

@@ -157,27 +157,15 @@ async def get_advanced_analytics(request: Request):
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/templates")
 async def get_workflow_templates(request: Request):
-    """Get all available intelligent workflow templates"""
+    """Get all available intelligent workflow templates (Issue #372 - uses model methods)"""
     try:
         orchestrator = await get_orchestrator_instance(request)
 
-        templates = []
-        for template_id, template in orchestrator.workflow_templates.items():
-            templates.append(
-                {
-                    "template_id": template.template_id,
-                    "name": template.name,
-                    "description": template.description,
-                    "intent": template.intent.value,
-                    "complexity": template.complexity.value,
-                    "steps_count": len(template.steps),
-                    "prerequisites": template.prerequisites,
-                    "success_rate": template.success_rate,
-                    "usage_count": template.usage_count,
-                    "tags": template.tags,
-                    "last_updated": template.last_updated.isoformat(),
-                }
-            )
+        # Issue #372: Use model method to reduce feature envy
+        templates = [
+            template.to_summary_dict()
+            for template in orchestrator.workflow_templates.values()
+        ]
 
         return {"success": True, "templates": templates, "total_count": len(templates)}
 

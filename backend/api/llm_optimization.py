@@ -89,22 +89,8 @@ async def get_available_models():
         optimizer = get_model_optimizer()
         models = await optimizer.refresh_available_models()
 
-        models_data = []
-        for model in models:
-            model_data = {
-                "name": model.name,
-                "size_gb": model.size_gb,
-                "parameter_size": model.parameter_size,
-                "quantization": model.quantization,
-                "family": model.family,
-                "performance_level": model.performance_level.value,
-                "avg_tokens_per_second": model.avg_tokens_per_second,
-                "avg_response_time": model.avg_response_time,
-                "success_rate": model.success_rate,
-                "use_count": model.use_count,
-                "last_used": model.last_used,
-            }
-            models_data.append(model_data)
+        # Issue #372: Use model method to reduce feature envy
+        models_data = [model.to_info_dict() for model in models]
 
         # Sort by performance level and success rate
         models_data.sort(key=lambda x: (x["performance_level"], -x["success_rate"]))
@@ -149,19 +135,11 @@ async def select_optimal_model(request: OptimizationRequest):
         # Select optimal model
         selected_model = await optimizer.select_optimal_model(task_request)
 
-        # Get model details
+        # Get model details - Issue #372: Use model method to reduce feature envy
         model_details = None
         if selected_model and selected_model in optimizer._models_cache:
             model = optimizer._models_cache[selected_model]
-            model_details = {
-                "name": model.name,
-                "size_gb": model.size_gb,
-                "parameter_size": model.parameter_size,
-                "performance_level": model.performance_level.value,
-                "avg_response_time": model.avg_response_time,
-                "avg_tokens_per_second": model.avg_tokens_per_second,
-                "success_rate": model.success_rate,
-            }
+            model_details = model.to_select_dict()
 
         # Get system resources
         resources = optimizer.get_system_resources()
@@ -248,42 +226,8 @@ async def get_model_performance_history(model_name: str):
 
         model = optimizer._models_cache[model_name]
 
-        performance_history = {
-            "model_name": model.name,
-            "current_metrics": {
-                "avg_response_time": model.avg_response_time,
-                "avg_tokens_per_second": model.avg_tokens_per_second,
-                "success_rate": model.success_rate,
-                "use_count": model.use_count,
-                "last_used": model.last_used,
-            },
-            "model_info": {
-                "size_gb": model.size_gb,
-                "parameter_size": model.parameter_size,
-                "quantization": model.quantization,
-                "family": model.family,
-                "performance_level": model.performance_level.value,
-            },
-            "efficiency_metrics": {
-                "tokens_per_gb": model.avg_tokens_per_second / max(model.size_gb, 0.1),
-                "response_efficiency": (
-                    1.0 / max(model.avg_response_time, 0.1)
-                    if model.avg_response_time > 0
-                    else 0
-                ),
-                "overall_score": (
-                    (
-                        model.success_rate * 40
-                        + min(model.avg_tokens_per_second / 10, 30)
-                        + min(10 / max(model.avg_response_time, 0.1), 30)
-                    )
-                    if model.avg_response_time > 0
-                    else model.success_rate * 40
-                ),
-            },
-        }
-
-        return performance_history
+        # Issue #372: Use model method to reduce feature envy
+        return model.to_performance_history_dict()
 
     except HTTPException:
         raise
@@ -342,30 +286,9 @@ async def compare_models():
             "specialized": [],
         }
 
+        # Issue #372: Use model method to reduce feature envy
         for model in models:
-            model_data = {
-                "name": model.name,
-                "size_gb": model.size_gb,
-                "parameter_size": model.parameter_size,
-                "avg_response_time": model.avg_response_time,
-                "avg_tokens_per_second": model.avg_tokens_per_second,
-                "success_rate": model.success_rate,
-                "use_count": model.use_count,
-                "efficiency_score": (
-                    (model.avg_tokens_per_second / max(model.size_gb, 0.1))
-                    if model.size_gb > 0
-                    else 0
-                ),
-                "performance_score": (
-                    (
-                        model.success_rate * 50
-                        + min(model.avg_tokens_per_second / 5, 25)
-                        + min(25 / max(model.avg_response_time, 0.1), 25)
-                    )
-                    if model.avg_response_time > 0
-                    else model.success_rate * 50
-                ),
-            }
+            model_data = model.to_comparison_dict()
 
             level_key = model.performance_level.value
             if level_key in comparison_data:

@@ -145,6 +145,28 @@ class AccessControlMetrics:
             logger.error(f"Failed to record violation: {e}")
             return False
 
+    def _aggregate_redis_counts(
+        self,
+        source_counts: dict,
+        target_dict: dict,
+    ) -> None:
+        """
+        Aggregate Redis hash counts, handling byte decoding.
+
+        Issue #281: Extracted helper to reduce repetition in get_statistics.
+        Handles the common pattern of decoding bytes and summing counts.
+
+        Args:
+            source_counts: Raw Redis hash data (may have bytes keys/values)
+            target_dict: Target dictionary to aggregate counts into
+        """
+        for key, count in source_counts.items():
+            if isinstance(key, bytes):
+                key = key.decode("utf-8")
+            if isinstance(count, bytes):
+                count = count.decode("utf-8")
+            target_dict[key] = target_dict.get(key, 0) + int(count)
+
     async def get_statistics(
         self, days: int = 7, include_details: bool = False
     ) -> Metadata:
@@ -200,25 +222,9 @@ class AccessControlMetrics:
                     stats["by_day"][date] = daily_total
                     stats["total_violations"] += daily_total
 
-                # Process endpoint breakdown
-                for endpoint, count in endpoint_counts.items():
-                    if isinstance(endpoint, bytes):
-                        endpoint = endpoint.decode("utf-8")
-                    if isinstance(count, bytes):
-                        count = count.decode("utf-8")
-
-                    stats["by_endpoint"][endpoint] = stats["by_endpoint"].get(
-                        endpoint, 0
-                    ) + int(count)
-
-                # Process user breakdown
-                for user, count in user_counts.items():
-                    if isinstance(user, bytes):
-                        user = user.decode("utf-8")
-                    if isinstance(count, bytes):
-                        count = count.decode("utf-8")
-
-                    stats["by_user"][user] = stats["by_user"].get(user, 0) + int(count)
+                # Process endpoint and user breakdowns using extracted helper
+                self._aggregate_redis_counts(endpoint_counts, stats["by_endpoint"])
+                self._aggregate_redis_counts(user_counts, stats["by_user"])
 
             # Get recent violations if requested
             if include_details:
@@ -226,7 +232,7 @@ class AccessControlMetrics:
 
             # Calculate trends
             if len(stats["by_day"]) > 1:
-                dates = sorted(stats["by_day"].keys())
+                dates = sorted(stats["by_day"])
                 if len(dates) >= 2:
                     yesterday = stats["by_day"].get(dates[-2], 0)
                     today = stats["by_day"].get(dates[-1], 0)
@@ -240,6 +246,34 @@ class AccessControlMetrics:
         except Exception as e:
             logger.error(f"Failed to get statistics: {e}")
             return {"error": str(e), "total_violations": 0}
+
+    def _parse_json_violation_data(
+        self,
+        violation_data_results: list,
+    ) -> List[Metadata]:
+        """
+        Parse JSON violation records from Redis data.
+
+        Issue #281: Extracted helper to reduce complexity in _get_recent_violations.
+        Handles bytes decoding and JSON parse error handling.
+
+        Args:
+            violation_data_results: Raw Redis data (may be bytes or strings)
+
+        Returns:
+            List of parsed violation dictionaries
+        """
+        violations = []
+        for violation_data in violation_data_results:
+            if not violation_data:
+                continue
+            if isinstance(violation_data, bytes):
+                violation_data = violation_data.decode("utf-8")
+            try:
+                violations.append(json.loads(violation_data))
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.debug(f"Failed to parse violation data: {e}")
+        return violations
 
     async def _get_recent_violations(self, limit: int = 20) -> List[Metadata]:
         """
@@ -287,18 +321,8 @@ class AccessControlMetrics:
                     await pipe.get(f"access_violation:{vid}")
                 violation_data_results = await pipe.execute()
 
-            # Parse results
-            violations = []
-            for violation_data in violation_data_results:
-                if violation_data:
-                    if isinstance(violation_data, bytes):
-                        violation_data = violation_data.decode("utf-8")
-
-                    try:
-                        violations.append(json.loads(violation_data))
-                    except (json.JSONDecodeError, ValueError) as e:
-                        logger.debug(f"Failed to parse violation data: {e}")
-
+            # Parse results using extracted helper (Issue #281)
+            violations = self._parse_json_violation_data(violation_data_results)
             return violations[:limit]
 
         except Exception as e:

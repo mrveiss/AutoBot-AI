@@ -123,10 +123,108 @@ async def _check_vectorization_batch_internal(
 # ===== ENDPOINTS =====
 
 
+def _validate_vectorization_request(fact_ids: List[str]) -> dict:
+    """
+    Validate vectorization status request parameters.
+
+    Issue #281: Extracted helper for input validation.
+
+    Args:
+        fact_ids: List of fact IDs to check
+
+    Returns:
+        Empty dict if valid, or early return response if no facts provided
+
+    Raises:
+        ValueError: If too many fact IDs provided
+    """
+    if not fact_ids:
+        return {
+            "statuses": {},
+            "summary": {
+                "total_checked": 0,
+                "vectorized": 0,
+                "not_vectorized": 0,
+                "vectorization_percentage": 0.0,
+            },
+            "cached": False,
+            "check_time_ms": 0.0,
+            "message": "No fact IDs provided",
+        }
+
+    if len(fact_ids) > 1000:
+        raise ValueError(
+            f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request."
+        )
+
+    return {}
+
+
+async def _get_cached_vectorization_status(
+    kb_instance, cache_key: str, fact_count: int
+) -> dict:
+    """
+    Try to get cached vectorization status result.
+
+    Issue #281: Extracted helper for cache retrieval.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        cache_key: Redis cache key
+        fact_count: Number of facts being checked (for logging)
+
+    Returns:
+        Cached result dict if found, None otherwise
+    """
+    try:
+        cached_json = await asyncio.to_thread(kb_instance.redis_client.get, cache_key)
+        if cached_json:
+            json_str = (
+                cached_json.decode("utf-8")
+                if isinstance(cached_json, bytes)
+                else cached_json
+            )
+            cached_result = json.loads(json_str)
+            cached_result["cached"] = True
+            logger.debug(f"Cache hit for vectorization status ({fact_count} facts)")
+            return cached_result
+    except Exception as cache_err:
+        logger.debug(f"Cache read failed (continuing without cache): {cache_err}")
+
+    return None
+
+
+async def _cache_vectorization_result(
+    kb_instance, cache_key: str, result: dict, fact_count: int
+) -> None:
+    """
+    Cache vectorization status result.
+
+    Issue #281: Extracted helper for cache storage.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        cache_key: Redis cache key
+        result: Result to cache
+        fact_count: Number of facts (for logging)
+    """
+    try:
+        # Issue #361 - avoid blocking
+        await asyncio.to_thread(
+            kb_instance.redis_client.setex,
+            cache_key, 60, json.dumps(result)  # 60 second TTL
+        )
+        logger.debug(f"Cached vectorization status for {fact_count} facts")
+    except Exception as cache_err:
+        logger.warning(f"Failed to cache vectorization status: {cache_err}")
+
+
 @router.post("/vectorization_status")
 async def check_vectorization_status_batch(request: dict, req: Request):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
+
+    Issue #281: Refactored from 119 lines to use extracted helper methods.
 
     This endpoint uses Redis pipeline for optimal performance, checking 100-1000 facts
     with a single Redis roundtrip. Results are cached with TTL to reduce Redis load.
@@ -141,16 +239,8 @@ async def check_vectorization_status_batch(request: dict, req: Request):
 
     Returns:
         {
-            "statuses": {
-                "fact-id-1": {"vectorized": true, "dimensions": 768},
-                "fact-id-2": {"vectorized": false}
-            },
-            "summary": {
-                "total_checked": 1000,
-                "vectorized": 750,
-                "not_vectorized": 250,
-                "vectorization_percentage": 75.0
-            },
+            "statuses": {...},
+            "summary": {...},
             "cached": false,
             "check_time_ms": 45.2
         }
@@ -173,51 +263,21 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     include_dimensions = request.get("include_dimensions", False)
     use_cache = request.get("use_cache", True)
 
-    # Validate input
-    if not fact_ids:
-        return {
-            "statuses": {},
-            "summary": {
-                "total_checked": 0,
-                "vectorized": 0,
-                "not_vectorized": 0,
-                "vectorization_percentage": 0.0,
-            },
-            "cached": False,
-            "check_time_ms": 0.0,
-            "message": "No fact IDs provided",
-        }
-
-    if len(fact_ids) > 1000:
-        raise ValueError(
-            f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request."
-        )
+    # Validate input (Issue #281: uses helper)
+    early_return = _validate_vectorization_request(fact_ids)
+    if early_return:
+        return early_return
 
     # Generate cache key
     cache_key = f"cache:vectorization_status:{_generate_cache_key(fact_ids)}"
-    cached_result = None
 
-    # Try cache if enabled
+    # Try cache if enabled (Issue #281: uses helper)
     if use_cache:
-        try:
-            cached_json = await asyncio.to_thread(
-                kb_to_use.redis_client.get, cache_key
-            )
-            if cached_json:
-                # Ensure proper UTF-8 decoding for cached JSON
-                json_str = (
-                    cached_json.decode("utf-8")
-                    if isinstance(cached_json, bytes)
-                    else cached_json
-                )
-                cached_result = json.loads(json_str)
-                cached_result["cached"] = True
-                logger.debug(
-                    f"Cache hit for vectorization status ({len(fact_ids)} facts)"
-                )
-                return cached_result
-        except Exception as cache_err:
-            logger.debug(f"Cache read failed (continuing without cache): {cache_err}")
+        cached_result = await _get_cached_vectorization_status(
+            kb_to_use, cache_key, len(fact_ids)
+        )
+        if cached_result:
+            return cached_result
 
     # Cache miss - perform batch check
     logger.info(
@@ -227,20 +287,11 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     result = await _check_vectorization_batch_internal(
         kb_to_use, fact_ids, include_dimensions
     )
-
     result["cached"] = False
 
-    # Cache the result (TTL: 60 seconds)
+    # Cache the result (Issue #281: uses helper)
     if use_cache:
-        try:
-            # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                kb_to_use.redis_client.setex,
-                cache_key, 60, json.dumps(result)  # 60 second TTL
-            )
-            logger.debug(f"Cached vectorization status for {len(fact_ids)} facts")
-        except Exception as cache_err:
-            logger.warning(f"Failed to cache vectorization status: {cache_err}")
+        await _cache_vectorization_result(kb_to_use, cache_key, result, len(fact_ids))
 
     return result
 
@@ -446,11 +497,117 @@ async def vectorize_existing_facts(
 # ===== INDIVIDUAL DOCUMENT VECTORIZATION =====
 
 
+async def _update_job_status(kb_instance, job_id: str, job_data: Metadata) -> None:
+    """
+    Update job status in Redis with 1-hour TTL.
+
+    Issue #281: Extracted helper for job status updates.
+
+    Args:
+        kb_instance: KnowledgeBase instance with redis_client
+        job_id: Job tracking ID
+        job_data: Job data dictionary to store
+    """
+    # Issue #361 - avoid blocking
+    await asyncio.to_thread(
+        kb_instance.redis_client.setex,
+        f"vectorization_job:{job_id}",
+        3600,  # 1 hour TTL
+        json.dumps(job_data),
+    )
+
+
+async def _get_fact_content(kb_instance, fact_id: str) -> tuple:
+    """
+    Retrieve fact content and metadata from Redis.
+
+    Issue #281: Extracted helper for fact retrieval.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        fact_id: ID of fact to retrieve
+
+    Returns:
+        Tuple of (content, metadata)
+
+    Raises:
+        ValueError: If fact not found
+    """
+    fact_key = f"fact:{fact_id}"
+    # Issue #361 - avoid blocking
+    fact_hash = await asyncio.to_thread(kb_instance.redis_client.hgetall, fact_key)
+
+    if not fact_hash:
+        raise ValueError(f"Fact {fact_id} not found in knowledge base")
+
+    # Extract content
+    content = (
+        fact_hash.get("content", "")
+        if isinstance(fact_hash.get("content"), str)
+        else fact_hash.get("content", b"").decode("utf-8")
+    )
+
+    # Extract metadata
+    metadata_str = fact_hash.get("metadata", "{}")
+    metadata = (
+        json.loads(metadata_str)
+        if isinstance(metadata_str, str)
+        else json.loads(metadata_str.decode("utf-8"))
+    )
+
+    return content, metadata
+
+
+async def _check_already_vectorized(kb_instance, fact_id: str) -> bool:
+    """
+    Check if fact is already vectorized.
+
+    Issue #281: Extracted helper for vectorization check.
+
+    Args:
+        kb_instance: KnowledgeBase instance
+        fact_id: ID of fact to check
+
+    Returns:
+        True if already vectorized, False otherwise
+    """
+    vector_key = f"llama_index/vector_{fact_id}"
+    # Issue #361 - avoid blocking
+    return await asyncio.to_thread(kb_instance.redis_client.exists, vector_key)
+
+
+def _create_initial_job_data(job_id: str, fact_id: str) -> Metadata:
+    """
+    Create initial job data structure.
+
+    Issue #281: Extracted helper for job initialization.
+
+    Args:
+        job_id: Job tracking ID
+        fact_id: Fact ID being processed
+
+    Returns:
+        Initial job data dictionary
+    """
+    return {
+        "job_id": job_id,
+        "fact_id": fact_id,
+        "status": "processing",
+        "progress": 10,
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "error": None,
+        "result": None,
+    }
+
+
 async def _vectorize_fact_background(
     kb_instance, fact_id: str, job_id: str, force: bool = False
 ):
     """
     Background task to vectorize a single fact and track progress in Redis.
+
+    Issue #281: Refactored from 149 lines to use extracted helper methods.
 
     Args:
         kb_instance: KnowledgeBase instance
@@ -458,86 +615,42 @@ async def _vectorize_fact_background(
         job_id: Job tracking ID
         force: Force re-vectorization even if already vectorized
     """
+    job_data = _create_initial_job_data(job_id, fact_id)
+
     try:
-        # Update job status to processing
-        job_data = {
-            "job_id": job_id,
-            "fact_id": fact_id,
-            "status": "processing",
-            "progress": 10,
-            "started_at": datetime.now().isoformat(),
-            "completed_at": None,
-            "error": None,
-            "result": None,
-        }
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            kb_instance.redis_client.setex,
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
-        )
+        # Initialize job status
+        await _update_job_status(kb_instance, job_id, job_data)
         logger.info(f"Started vectorization job {job_id} for fact {fact_id}")
 
-        # Get fact data from Redis - facts are stored as individual hashes with key "fact:{uuid}"
-        fact_key = f"fact:{fact_id}"
-        # Issue #361 - avoid blocking
-        fact_hash = await asyncio.to_thread(kb_instance.redis_client.hgetall, fact_key)
+        # Get fact content (Issue #281: uses helper)
+        content, metadata = await _get_fact_content(kb_instance, fact_id)
 
-        if not fact_hash:
-            raise ValueError(f"Fact {fact_id} not found in knowledge base")
-
-        # Extract content and metadata from hash
-        content = (
-            fact_hash.get("content", "")
-            if isinstance(fact_hash.get("content"), str)
-            else fact_hash.get("content", b"").decode("utf-8")
-        )
-        metadata_str = fact_hash.get("metadata", "{}")
-        metadata = (
-            json.loads(metadata_str)
-            if isinstance(metadata_str, str)
-            else json.loads(metadata_str.decode("utf-8"))
-        )
-
-        # Update progress
+        # Update progress to 30%
         job_data["progress"] = 30
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            kb_instance.redis_client.setex,
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
-        )
+        await _update_job_status(kb_instance, job_id, job_data)
 
-        # Check if already vectorized (unless force=True)
-        if not force:
-            vector_key = f"llama_index/vector_{fact_id}"
-            # Issue #361 - avoid blocking
-            vector_exists = await asyncio.to_thread(kb_instance.redis_client.exists, vector_key)
-            if vector_exists:
-                logger.info(
-                    f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
-                )
-                job_data["status"] = "completed"
-                job_data["progress"] = 100
-                job_data["completed_at"] = datetime.now().isoformat()
-                job_data["result"] = {
+        # Check if already vectorized (Issue #281: uses helper)
+        if not force and await _check_already_vectorized(kb_instance, fact_id):
+            logger.info(
+                f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
+            )
+            job_data.update({
+                "status": "completed",
+                "progress": 100,
+                "completed_at": datetime.now().isoformat(),
+                "result": {
                     "status": "skipped",
                     "message": "Fact already vectorized",
                     "fact_id": fact_id,
                     "vector_indexed": True,
-                }
-                # Issue #361 - avoid blocking
-                await asyncio.to_thread(
-                    kb_instance.redis_client.setex,
-                    f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
-                )
-                return
+                },
+            })
+            await _update_job_status(kb_instance, job_id, job_data)
+            return
 
-        # Update progress
+        # Update progress to 50%
         job_data["progress"] = 50
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            kb_instance.redis_client.setex,
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
-        )
+        await _update_job_status(kb_instance, job_id, job_data)
 
         # Debug: Log KB state before vectorization
         logger.debug(
@@ -567,11 +680,7 @@ async def _vectorize_fact_background(
             )
 
         job_data["completed_at"] = datetime.now().isoformat()
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            kb_instance.redis_client.setex,
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
-        )
+        await _update_job_status(kb_instance, job_id, job_data)
 
     except Exception as e:
         error_msg = str(e)
@@ -580,21 +689,14 @@ async def _vectorize_fact_background(
         )
 
         # Update job with error
-        job_data = {
-            "job_id": job_id,
-            "fact_id": fact_id,
+        job_data.update({
             "status": "failed",
             "progress": 0,
-            "started_at": job_data.get("started_at", datetime.now().isoformat()),
             "completed_at": datetime.now().isoformat(),
             "error": error_msg,
             "result": None,
-        }
-        # Issue #361 - avoid blocking
-        await asyncio.to_thread(
-            kb_instance.redis_client.setex,
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
-        )
+        })
+        await _update_job_status(kb_instance, job_id, job_data)
 
 
 @with_error_handling(

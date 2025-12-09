@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class HTTPClientManager:
             self._pool_min = 20  # Minimum pool size
             self._pool_max = 200  # Maximum pool size
             self._current_pool_size = 100  # Start at default
-            self._pool_adjustment_interval = 60  # Adjust every 60s
+            self._pool_adjustment_interval = TimingConstants.STANDARD_TIMEOUT  # Adjust every 60s
             self._last_adjustment_time = 0
             self._active_requests = 0  # Track concurrent requests
             self._pending_pool_recreation = False  # Issue #352: Track deferred recreation

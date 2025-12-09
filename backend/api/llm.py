@@ -333,6 +333,114 @@ async def update_embedding_model(embedding_data: dict):
         )
 
 
+def _build_local_provider_status(
+    local_config: dict, ollama_url: str
+) -> dict:
+    """
+    Build status dictionary for local LLM providers.
+
+    Issue #281: Extracted helper for local provider status building.
+
+    Args:
+        local_config: Local provider configuration
+        ollama_url: Default Ollama URL from config
+
+    Returns:
+        Dictionary with ollama and lmstudio provider status
+    """
+    providers = local_config.get("providers", {})
+
+    return {
+        "ollama": {
+            "configured": bool(providers.get("ollama", {}).get("selected_model")),
+            "status": "connected",  # Assume connected for now
+            "model": providers.get("ollama", {}).get("selected_model", ""),
+            "endpoint": providers.get("ollama", {}).get("host", ollama_url),
+        },
+        "lmstudio": {
+            "configured": bool(providers.get("lmstudio", {}).get("selected_model")),
+            "status": "disconnected",  # Typically not running
+            "model": providers.get("lmstudio", {}).get("selected_model", ""),
+            "endpoint": providers.get("lmstudio", {}).get(
+                "endpoint", f"{ollama_url}/v1"
+            ),
+        },
+    }
+
+
+def _build_cloud_provider_status(cloud_config: dict) -> dict:
+    """
+    Build status dictionary for cloud LLM providers.
+
+    Issue #281: Extracted helper for cloud provider status building.
+
+    Args:
+        cloud_config: Cloud provider configuration
+
+    Returns:
+        Dictionary with openai and anthropic provider status
+    """
+    providers = cloud_config.get("providers", {})
+
+    openai_config = providers.get("openai", {})
+    anthropic_config = providers.get("anthropic", {})
+
+    return {
+        "openai": {
+            "configured": bool(openai_config.get("api_key")),
+            "status": "connected" if openai_config.get("api_key") else "disconnected",
+            "model": openai_config.get("selected_model", ""),
+            "endpoint": openai_config.get("endpoint", "https://api.openai.com/v1"),
+        },
+        "anthropic": {
+            "configured": bool(anthropic_config.get("api_key")),
+            "status": "connected" if anthropic_config.get("api_key") else "disconnected",
+            "model": anthropic_config.get("selected_model", ""),
+            "endpoint": anthropic_config.get("endpoint", "https://api.anthropic.com/v1"),
+        },
+    }
+
+
+def _build_active_provider_info(
+    provider_type: str, local_config: dict, cloud_config: dict
+) -> dict:
+    """
+    Build active provider information dictionary.
+
+    Issue #281: Extracted helper for active provider info building.
+
+    Args:
+        provider_type: Current provider type (local or cloud)
+        local_config: Local provider configuration
+        cloud_config: Cloud provider configuration
+
+    Returns:
+        Dictionary with active provider type, name, and model
+    """
+    if provider_type == "local":
+        return {
+            "type": provider_type,
+            "name": local_config.get("provider", "ollama"),
+            "model": (
+                local_config.get("providers", {})
+                .get("ollama", {})
+                .get("selected_model", "")
+            ),
+        }
+
+    # Cloud provider
+    cloud_provider = cloud_config.get("provider", "openai")
+    return {
+        "type": provider_type,
+        "name": cloud_provider,
+        "model": (
+            cloud_config.get("providers", {})
+            .get(cloud_provider, {})
+            .get("selected_model", "")
+        ),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_comprehensive_llm_status",
@@ -341,133 +449,31 @@ async def update_embedding_model(embedding_data: dict):
 @router.get("/status/comprehensive")
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 async def get_comprehensive_llm_status():
-    """Get comprehensive LLM status for GUI settings panel"""
+    """
+    Get comprehensive LLM status for GUI settings panel.
+
+    Issue #281: Refactored from 142 lines to use extracted helper methods.
+    """
     try:
         # Use unified configuration system for all values
-
         llm_config = config.get("llm", {})
         provider_type = llm_config.get("provider_type", "local")
 
         # Get provider-specific configurations
         local_config = llm_config.get("local", {})
         cloud_config = llm_config.get("cloud", {})
+        ollama_url = config.get_service_url("ollama")
 
-        # Build comprehensive status using main AutoBot OS environment configuration
+        # Build comprehensive status using extracted helpers (Issue #281)
         status = {
             "provider_type": provider_type,
             "providers": {
-                "local": {
-                    "ollama": {
-                        "configured": bool(
-                            local_config.get("providers", {})
-                            .get("ollama", {})
-                            .get("selected_model")
-                        ),
-                        "status": "connected",  # Assume connected for now
-                        "model": (
-                            local_config.get("providers", {})
-                            .get("ollama", {})
-                            .get("selected_model", "")
-                        ),
-                        "endpoint": (
-                            local_config.get("providers", {})
-                            .get("ollama", {})
-                            .get(
-                                "host",
-                                config.get_service_url("ollama"),
-                            )
-                        ),
-                    },
-                    "lmstudio": {
-                        "configured": bool(
-                            local_config.get("providers", {})
-                            .get("lmstudio", {})
-                            .get("selected_model")
-                        ),
-                        "status": "disconnected",  # Typically not running
-                        "model": (
-                            local_config.get("providers", {})
-                            .get("lmstudio", {})
-                            .get("selected_model", "")
-                        ),
-                        "endpoint": (
-                            local_config.get("providers", {})
-                            .get("lmstudio", {})
-                            .get(
-                                "endpoint",
-                                f"{config.get_service_url('ollama')}/v1",
-                            )
-                        ),
-                    },
-                },
-                "cloud": {
-                    "openai": {
-                        "configured": bool(
-                            cloud_config.get("providers", {})
-                            .get("openai", {})
-                            .get("api_key")
-                        ),
-                        "status": (
-                            "disconnected"
-                            if not cloud_config.get("providers", {})
-                            .get("openai", {})
-                            .get("api_key")
-                            else "connected"
-                        ),
-                        "model": (
-                            cloud_config.get("providers", {})
-                            .get("openai", {})
-                            .get("selected_model", "")
-                        ),
-                        "endpoint": (
-                            cloud_config.get("providers", {})
-                            .get("openai", {})
-                            .get("endpoint", "https://api.openai.com/v1")
-                        ),
-                    },
-                    "anthropic": {
-                        "configured": bool(
-                            cloud_config.get("providers", {})
-                            .get("anthropic", {})
-                            .get("api_key")
-                        ),
-                        "status": (
-                            "disconnected"
-                            if not cloud_config.get("providers", {})
-                            .get("anthropic", {})
-                            .get("api_key")
-                            else "connected"
-                        ),
-                        "model": (
-                            cloud_config.get("providers", {})
-                            .get("anthropic", {})
-                            .get("selected_model", "")
-                        ),
-                        "endpoint": (
-                            cloud_config.get("providers", {})
-                            .get("anthropic", {})
-                            .get("endpoint", "https://api.anthropic.com/v1")
-                        ),
-                    },
-                },
+                "local": _build_local_provider_status(local_config, ollama_url),
+                "cloud": _build_cloud_provider_status(cloud_config),
             },
-            "active_provider": {
-                "type": provider_type,
-                "name": (
-                    local_config.get("provider", "ollama")
-                    if provider_type == "local"
-                    else cloud_config.get("provider", "openai")
-                ),
-                "model": (
-                    local_config.get("providers", {})
-                    .get("ollama", {})
-                    .get("selected_model", "")
-                    if provider_type == "local"
-                    else cloud_config.get("providers", {})
-                    .get(cloud_config.get("provider", "openai"), {})
-                    .get("selected_model", "")
-                ),
-            },
+            "active_provider": _build_active_provider_info(
+                provider_type, local_config, cloud_config
+            ),
             "settings": {
                 "streaming": llm_config.get("streaming", False),
                 "timeout": llm_config.get("timeout", 60),

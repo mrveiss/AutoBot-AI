@@ -66,7 +66,7 @@ async def export_cost_csv(
     writer.writerow(["date", "cost_usd"])
 
     # Data rows
-    for date in sorted(daily_costs.keys()):
+    for date in sorted(daily_costs):
         writer.writerow([date, daily_costs[date]])
 
     csv_content = output.getvalue()
@@ -114,21 +114,9 @@ async def export_agent_csv():
         "last_activity",
     ])
 
-    # Data rows
+    # Data rows using model method (Issue #372 - reduces feature envy)
     for m in metrics_list:
-        writer.writerow([
-            m.agent_id,
-            m.agent_type,
-            m.total_tasks,
-            m.completed_tasks,
-            m.failed_tasks,
-            m.timeout_tasks,
-            m.success_rate,
-            m.error_rate,
-            m.avg_duration_ms,
-            m.total_tokens_used,
-            m.last_activity or "",
-        ])
+        writer.writerow(m.to_csv_row())
 
     csv_content = output.getvalue()
 
@@ -315,38 +303,30 @@ async def export_prometheus():
         lines.append(f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}')
         lines.append(f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}')
 
-    # Agent metrics
+    # Agent metrics using model methods (Issue #372 - reduces feature envy)
     lines.append("")
     lines.append("# HELP autobot_agent_tasks_total Total tasks by agent")
     lines.append("# TYPE autobot_agent_tasks_total counter")
     for m in agent_metrics:
-        lines.append(
-            f'autobot_agent_tasks_total{{agent_id="{m.agent_id}",agent_type="{m.agent_type}"}} {m.total_tasks}'
-        )
+        lines.append(m.to_prometheus_tasks_line())
 
     lines.append("")
     lines.append("# HELP autobot_agent_success_rate Agent success rate percentage")
     lines.append("# TYPE autobot_agent_success_rate gauge")
     for m in agent_metrics:
-        lines.append(
-            f'autobot_agent_success_rate{{agent_id="{m.agent_id}",agent_type="{m.agent_type}"}} {m.success_rate}'
-        )
+        lines.append(m.to_prometheus_success_rate_line())
 
     lines.append("")
     lines.append("# HELP autobot_agent_error_rate Agent error rate percentage")
     lines.append("# TYPE autobot_agent_error_rate gauge")
     for m in agent_metrics:
-        lines.append(
-            f'autobot_agent_error_rate{{agent_id="{m.agent_id}",agent_type="{m.agent_type}"}} {m.error_rate}'
-        )
+        lines.append(m.to_prometheus_error_rate_line())
 
     lines.append("")
     lines.append("# HELP autobot_agent_avg_duration_ms Average task duration in ms")
     lines.append("# TYPE autobot_agent_avg_duration_ms gauge")
     for m in agent_metrics:
-        lines.append(
-            f'autobot_agent_avg_duration_ms{{agent_id="{m.agent_id}",agent_type="{m.agent_type}"}} {m.avg_duration_ms}'
-        )
+        lines.append(m.to_prometheus_duration_line())
 
     prometheus_output = "\n".join(lines) + "\n"
 

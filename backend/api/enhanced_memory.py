@@ -170,32 +170,8 @@ async def get_task_history(
             agent_type=agent_type, status=status_enum, limit=limit, days_back=days_back
         )
 
-        # Convert to JSON-serializable format
-        history_data = []
-        for task in history:
-            task_dict = {
-                "task_id": task.task_id,
-                "task_name": task.task_name,
-                "description": task.description,
-                "status": task.status.value,
-                "priority": task.priority.value,
-                "created_at": task.created_at.isoformat(),
-                "started_at": task.started_at.isoformat() if task.started_at else None,
-                "completed_at": (
-                    task.completed_at.isoformat() if task.completed_at else None
-                ),
-                "duration_seconds": task.duration_seconds,
-                "agent_type": task.agent_type,
-                "inputs": task.inputs,
-                "outputs": task.outputs,
-                "error_message": task.error_message,
-                "retry_count": task.retry_count,
-                "parent_task_id": task.parent_task_id,
-                "subtask_ids": task.subtask_ids,
-                "markdown_references": task.markdown_references,
-                "metadata": task.metadata,
-            }
-            history_data.append(task_dict)
+        # Issue #372: Use model method to reduce feature envy
+        history_data = [task.to_response_dict() for task in history]
 
         return {
             "total_records": len(history_data),

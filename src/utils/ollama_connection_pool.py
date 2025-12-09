@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -27,9 +28,9 @@ class ConnectionPoolConfig:
 
     max_connections: int = 3  # Maximum concurrent connections to Ollama
     max_queue_size: int = 50  # Maximum queued requests
-    connection_timeout: float = 30.0  # Timeout for individual connections
-    queue_timeout: float = 60.0  # Timeout for waiting in queue
-    health_check_interval: float = 300.0  # Health check every 5 minutes
+    connection_timeout: float = TimingConstants.SHORT_TIMEOUT  # Timeout for individual connections
+    queue_timeout: float = TimingConstants.STANDARD_TIMEOUT  # Timeout for waiting in queue
+    health_check_interval: float = TimingConstants.VERY_LONG_TIMEOUT  # Health check every 5 minutes
 
 
 class OllamaConnectionPool:
@@ -65,6 +66,26 @@ class OllamaConnectionPool:
         logger.info(
             f"Ollama connection pool initialized: max_connections={self.config.max_connections}"
         )
+
+    def _update_running_average(
+        self, stat_key: str, new_value: float, count: int
+    ) -> None:
+        """
+        Update a running average statistic in connection_stats.
+
+        Issue #281: Extracted helper to reduce repetition in acquire_connection.
+
+        Args:
+            stat_key: Key in connection_stats for the average (e.g., 'avg_wait_time')
+            new_value: New value to incorporate into average
+            count: Total count of samples (including new value)
+        """
+        if count > 1:
+            self.connection_stats[stat_key] = (
+                self.connection_stats[stat_key] * (count - 1) + new_value
+            ) / count
+        else:
+            self.connection_stats[stat_key] = new_value
 
     @asynccontextmanager
     async def acquire_connection(self):
@@ -105,14 +126,8 @@ class OllamaConnectionPool:
                 self.total_requests += 1
                 self.connection_stats["active"] += 1
 
-                # Update average wait time
-                if self.total_requests > 1:
-                    self.connection_stats["avg_wait_time"] = (
-                        self.connection_stats["avg_wait_time"] * (self.total_requests - 1)
-                        + wait_time
-                    ) / self.total_requests
-                else:
-                    self.connection_stats["avg_wait_time"] = wait_time
+                # Update average wait time (Issue #281: uses helper)
+                self._update_running_average("avg_wait_time", wait_time, self.total_requests)
 
             logger.debug(
                 f"[{request_id}] Acquired connection (waited {wait_time:.2f}s)"
@@ -132,15 +147,12 @@ class OllamaConnectionPool:
                 async with self._stats_lock:
                     self.connection_stats["completed"] += 1
 
-                    # Update average execution time
-                    if self.connection_stats["completed"] > 1:
-                        self.connection_stats["avg_execution_time"] = (
-                            self.connection_stats["avg_execution_time"]
-                            * (self.connection_stats["completed"] - 1)
-                            + execution_time
-                        ) / self.connection_stats["completed"]
-                    else:
-                        self.connection_stats["avg_execution_time"] = execution_time
+                    # Update average execution time (Issue #281: uses helper)
+                    self._update_running_average(
+                        "avg_execution_time",
+                        execution_time,
+                        self.connection_stats["completed"],
+                    )
 
                 logger.debug(
                     f"[{request_id}] Connection completed successfully ({execution_time:.2f}s)"
@@ -331,7 +343,7 @@ async def cleanup_ollama_pool():
         if active == 0:
             break
         logger.info(f"Waiting for {active} active connections to complete")
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     with _ollama_pool_lock:
         logger.info("Ollama connection pool cleaned up")

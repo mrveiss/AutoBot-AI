@@ -21,6 +21,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("temporal_knowledge_manager")
@@ -459,7 +460,7 @@ class TemporalKnowledgeManager:
                     break
                 except Exception as e:
                     logger.error(f"Temporal background processing error: {e}")
-                    await asyncio.sleep(60)  # Wait before retry
+                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
 
         finally:
             self.is_running = False

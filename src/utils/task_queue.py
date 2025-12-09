@@ -27,6 +27,8 @@ except ImportError:
     RedisError = Exception  # Fallback if redis not available
     get_redis_client = None
 
+from src.constants.threshold_constants import RetryConfig, TimingConstants
+
 # Temporary implementations until proper modules are created
 # try:
 #     from src.utils.error_handler import error_handler, ErrorCategory
@@ -108,7 +110,7 @@ class Task:
     args: tuple = ()
     kwargs: Optional[Dict[str, Any]] = None
     priority: TaskPriority = TaskPriority.NORMAL
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
     retry_delay: float = 1.0  # seconds
     timeout: Optional[float] = None
     created_at: Optional[datetime] = None
@@ -236,7 +238,7 @@ class TaskQueue:
         priority: TaskPriority = TaskPriority.NORMAL,
         delay: Optional[float] = None,
         timeout: Optional[float] = None,
-        max_retries: int = 3,
+        max_retries: int = RetryConfig.DEFAULT_RETRIES,
         expires_in: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None,
         **kwargs,
@@ -375,7 +377,7 @@ class TaskQueue:
                 # Get next task
                 task_id = await self._get_next_task()
                 if not task_id:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(TimingConstants.STANDARD_DELAY)
                     continue
 
                 # Process task
@@ -385,7 +387,7 @@ class TaskQueue:
                 break
             except Exception as e:
                 self.logger.error(f"Worker {worker_name} error: {e}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         self.logger.info(f"Worker {worker_name} stopped")
 
@@ -396,7 +398,7 @@ class TaskQueue:
         while self.is_running:
             try:
                 if not self.redis:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
                     continue
 
                 current_time = time.time()
@@ -420,13 +422,13 @@ class TaskQueue:
 
                         self.logger.debug(f"Moved scheduled task to pending: {task_id}")
 
-                await asyncio.sleep(5)  # Check every 5 seconds
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Check every 5 seconds
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 self.logger.error(f"Scheduler error: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
         self.logger.info("Scheduler stopped")
 

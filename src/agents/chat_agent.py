@@ -11,6 +11,7 @@ Focuses on quick, natural interactions without complex reasoning.
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config as global_config_manager
 
@@ -99,9 +100,9 @@ class ChatAgent(StandardizedAgent):
             response = await self.llm_interface.chat_completion(
                 messages=messages,
                 llm_type="chat",  # This will use the chat-specific model
-                temperature=0.7,  # Slightly creative for natural conversation
-                max_tokens=512,  # Limit tokens for quick responses
-                top_p=0.9,
+                temperature=LLMDefaults.DEFAULT_TEMPERATURE,
+                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
+                top_p=LLMDefaults.DEFAULT_TOP_P,
             )
 
             # Extract response content

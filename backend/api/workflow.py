@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from backend.models.task_context import WorkflowStepContext
 from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
@@ -30,50 +31,45 @@ prometheus_metrics = get_metrics_manager()
 
 
 # Issue #336: Agent step handlers extracted from elif chain
-async def _handle_librarian_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
+# Issue #322: Refactored to use WorkflowStepContext to eliminate data clump pattern
+async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
     """Handle librarian agent step (Issue #336 - extracted handler)."""
     from src.agents.kb_librarian_agent import KBLibrarianAgent
 
     kb_agent = KBLibrarianAgent()
-    search_query = action.replace("Search Knowledge Base", "").strip()
+    search_query = ctx.action.replace("Search Knowledge Base", "").strip()
     if not search_query:
         search_query = "network security scanning tools"
 
     result = await kb_agent.process_query(search_query)
     response = result.get("response", "Search completed")
-    step["result"] = f"Knowledge base search completed: {response}"
+    ctx.step["result"] = f"Knowledge base search completed: {response}"
 
 
-async def _handle_research_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle research agent step (Issue #336 - extracted handler)."""
+async def _handle_research_step(ctx: WorkflowStepContext) -> None:
+    """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
     from src.agents.research_agent import ResearchAgent, ResearchRequest
 
     research_agent = ResearchAgent()
-    action_lower = action.lower()
+    action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
         request = ResearchRequest(query="network security scanning tools", focus="tools")
         result = await research_agent.research_specific_tools(request)
-        step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
+        ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
         result = await research_agent.get_tool_installation_guide("nmap")
         guide = result.get("installation_guide", "Guide obtained")
-        step["result"] = f"Installation guide retrieved: {guide}"
+        ctx.step["result"] = f"Installation guide retrieved: {guide}"
     else:
-        request = ResearchRequest(query=action, focus="general")
+        request = ResearchRequest(query=ctx.action, focus="general")
         result = await research_agent.perform_research(request)
-        step["result"] = f"Research completed: {result.summary}"
+        ctx.step["result"] = f"Research completed: {result.summary}"
 
 
-async def _handle_orchestrator_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle orchestrator agent step (Issue #336 - extracted handler)."""
-    action_lower = action.lower()
+async def _handle_orchestrator_step(ctx: WorkflowStepContext) -> None:
+    """Handle orchestrator agent step (Issue #336 - extracted handler, Issue #322 - context)."""
+    action_lower = ctx.action.lower()
 
     if "present tool options" in action_lower:
         options = (
@@ -81,47 +77,43 @@ async def _handle_orchestrator_step(
             "masscan (fast port scanner), zmap (internet scanner). "
             "Please select which tool to install."
         )
-        step["result"] = options
+        ctx.step["result"] = options
     elif "create install plan" in action_lower:
         plan = (
             "Installation plan: 1) Update package manager, "
             "2) Install selected tool, 3) Configure tool, "
             "4) Run verification test"
         )
-        step["result"] = plan
+        ctx.step["result"] = plan
     else:
-        result = await orchestrator.execute_goal(action)
+        result = await ctx.orchestrator.execute_goal(ctx.action)
         response = result.get("response", "Task coordinated")
-        step["result"] = f"Orchestration completed: {response}"
+        ctx.step["result"] = f"Orchestration completed: {response}"
 
 
-async def _handle_knowledge_manager_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle knowledge manager agent step (Issue #336 - extracted handler)."""
+async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
+    """Handle knowledge manager agent step (Issue #336 - extracted handler, Issue #322 - context)."""
     from src.knowledge_base import KnowledgeBase
 
     kb = KnowledgeBase()
-    content = f"Workflow step result: {step.get('result', action)}"
+    content = f"Workflow step result: {ctx.step.get('result', ctx.action)}"
     metadata = {
-        "workflow_id": workflow_id,
-        "step_id": step["step_id"],
+        "workflow_id": ctx.workflow_id,
+        "step_id": ctx.step["step_id"],
         "agent_type": "knowledge_manager",
         "timestamp": datetime.now().isoformat(),
     }
 
     await kb.add_document(content, metadata)
-    step["result"] = "Information stored in knowledge base for future reference"
+    ctx.step["result"] = "Information stored in knowledge base for future reference"
 
 
-async def _handle_security_scanner_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle security scanner agent step (Issue #336 - extracted handler)."""
+async def _handle_security_scanner_step(ctx: WorkflowStepContext) -> None:
+    """Handle security scanner agent step (Issue #336 - extracted handler, Issue #322 - context)."""
     from src.agents.security_scanner_agent import security_scanner_agent
 
-    scan_context = step.get("inputs", {})
-    action_lower = action.lower()
+    scan_context = ctx.step.get("inputs", {})
+    action_lower = ctx.action.lower()
 
     if "port scan" in action_lower:
         scan_context["scan_type"] = "port_scan"
@@ -132,11 +124,11 @@ async def _handle_security_scanner_step(
     elif "service" in action_lower:
         scan_context["scan_type"] = "service_detection"
 
-    result = await security_scanner_agent.execute(action, scan_context)
+    result = await security_scanner_agent.execute(ctx.action, scan_context)
     status = result.get("status")
     message = result.get("message", "Scan results available")
-    step["result"] = f"Security scan completed: {status} - {message}"
-    step["scan_results"] = result
+    ctx.step["result"] = f"Security scan completed: {status} - {message}"
+    ctx.step["scan_results"] = result
 
 
 # Issue #315: Task type patterns for network discovery
@@ -157,57 +149,52 @@ def _detect_network_task_type(action_lower: str) -> str | None:
     return None
 
 
-async def _handle_network_discovery_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle network discovery agent step (Issue #336 - extracted handler)."""
+async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
+    """Handle network discovery agent step (Issue #336 - extracted handler, Issue #322 - context)."""
     from src.agents.network_discovery_agent import network_discovery_agent
 
-    discovery_context = step.get("inputs", {})
+    discovery_context = ctx.step.get("inputs", {})
 
     # Use dispatch pattern (Issue #315 - reduced depth)
-    task_type = _detect_network_task_type(action.lower())
+    task_type = _detect_network_task_type(ctx.action.lower())
     if task_type:
         discovery_context["task_type"] = task_type
 
-    result = await network_discovery_agent.execute(action, discovery_context)
+    result = await network_discovery_agent.execute(ctx.action, discovery_context)
     status = result.get("status")
     hosts_found = result.get("hosts_found", 0)
-    step["result"] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
-    step["discovery_results"] = result
+    ctx.step["result"] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
+    ctx.step["discovery_results"] = result
 
 
-async def _handle_system_commands_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any
-) -> None:
-    """Handle system commands agent step (Issue #336 - extracted handler)."""
+async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
+    """Handle system commands agent step (Issue #336 - extracted handler, Issue #322 - context)."""
     from src.agents.enhanced_system_commands_agent import EnhancedSystemCommandsAgent
 
     cmd_agent = EnhancedSystemCommandsAgent()
-    action_lower = action.lower()
+    action_lower = ctx.action.lower()
 
     if "install tool" in action_lower:
         tool_info = {"name": "nmap", "package_name": "nmap"}
-        result = await cmd_agent.install_tool(tool_info, workflow_id)
-        step["result"] = f"Installation result: {result.get('response', 'Tool installed')}"
+        result = await cmd_agent.install_tool(tool_info, ctx.workflow_id)
+        ctx.step["result"] = f"Installation result: {result.get('response', 'Tool installed')}"
     elif "verify installation" in action_lower:
-        result = await cmd_agent.execute_command_with_output("nmap --version", workflow_id)
-        step["result"] = f"Verification result: {result.get('output', 'Tool verified')}"
+        result = await cmd_agent.execute_command_with_output("nmap --version", ctx.workflow_id)
+        ctx.step["result"] = f"Verification result: {result.get('output', 'Tool verified')}"
     else:
-        result = await cmd_agent.execute_command_with_output(action, workflow_id)
-        step["result"] = f"Command executed: {result.get('output', 'Command completed')}"
+        result = await cmd_agent.execute_command_with_output(ctx.action, ctx.workflow_id)
+        ctx.step["result"] = f"Command executed: {result.get('output', 'Command completed')}"
 
 
-async def _handle_fallback_step(
-    step: Metadata, action: str, workflow_id: str, orchestrator: Any, agent_type: str
-) -> None:
-    """Handle unknown agent type with fallback (Issue #336 - extracted handler)."""
-    result = await orchestrator.execute_goal(f"{agent_type}: {action}")
-    step["result"] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+async def _handle_fallback_step(ctx: WorkflowStepContext, agent_type: str) -> None:
+    """Handle unknown agent type with fallback (Issue #336 - extracted handler, Issue #322 - context)."""
+    result = await ctx.orchestrator.execute_goal(f"{agent_type}: {ctx.action}")
+    ctx.step["result"] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
 
 
 # Issue #336: Dispatch table for agent step handlers
-AgentStepHandler = Callable[[Metadata, str, str, Any], Awaitable[None]]
+# Issue #322: Updated to use WorkflowStepContext
+AgentStepHandler = Callable[[WorkflowStepContext], Awaitable[None]]
 
 AGENT_STEP_HANDLERS: Dict[str, AgentStepHandler] = {
     "librarian": _handle_librarian_step,
@@ -218,6 +205,110 @@ AGENT_STEP_HANDLERS: Dict[str, AgentStepHandler] = {
     "network_discovery": _handle_network_discovery_step,
     "system_commands": _handle_system_commands_step,
 }
+
+
+# =============================================================================
+# Issue #281: Helper functions for execute_workflow
+# =============================================================================
+
+
+def _validate_orchestrators(request: Request) -> tuple:
+    """Validate that orchestrators are available (Issue #281: extracted)."""
+    lightweight_orchestrator = getattr(
+        request.app.state, "lightweight_orchestrator", None
+    )
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+
+    if lightweight_orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Lightweight orchestrator not available - "
+            "application not fully initialized",
+        )
+
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Main orchestrator not available - "
+            "application not fully initialized",
+        )
+
+    return lightweight_orchestrator, orchestrator
+
+
+async def _try_lightweight_routing(
+    lightweight_orchestrator, user_message: str
+) -> Optional[Dict]:
+    """Try lightweight orchestrator routing (Issue #281: extracted).
+
+    Returns response dict if lightweight can handle it, None if complex routing needed.
+    """
+    result = await lightweight_orchestrator.route_request(user_message)
+
+    if result.get("bypass_orchestration"):
+        return {
+            "success": True,
+            "type": "lightweight_response",
+            "result": result.get(
+                "simple_response", "Response generated successfully"
+            ),
+            "routing_method": result.get(
+                "routing_reason", "lightweight_pattern_match"
+            ),
+        }
+    else:
+        # Complex requests need full orchestrator (currently blocked)
+        return {
+            "success": False,
+            "type": "complex_workflow_blocked",
+            "result": (
+                "Complex workflow orchestration is temporarily "
+                "disabled due to blocking operations. This request "
+                "requires multi-agent coordination which is not yet "
+                "available in the current implementation."
+            ),
+            "complexity": result.get("complexity", "unknown"),
+            "suggested_agents": result.get("suggested_agents", []),
+        }
+
+
+def _prepare_workflow_data(
+    workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool
+) -> Dict:
+    """Prepare workflow data structure (Issue #281: extracted)."""
+    return {
+        "workflow_id": workflow_id,
+        "user_message": user_message,
+        "classification": workflow_response.get("message_classification"),
+        "steps": [],
+        "current_step": 0,
+        "status": "planned",
+        "created_at": datetime.now().isoformat(),
+        "workflow_start_time": time.time(),
+        "estimated_duration": workflow_response.get("estimated_duration"),
+        "agents_involved": workflow_response.get("agents_involved", []),
+        "auto_approve": auto_approve,
+    }
+
+
+def _convert_preview_to_steps(workflow_preview: list) -> list:
+    """Convert workflow preview to executable steps (Issue #281: extracted)."""
+    steps = []
+    for i, step_desc in enumerate(workflow_preview):
+        step = {
+            "step_id": f"step_{i+1}",
+            "description": step_desc,
+            "status": "pending",
+            "requires_approval": "requires your approval" in step_desc,
+            "agent_type": step_desc.split(":")[0].lower(),
+            "action": (
+                step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
+            ),
+            "started_at": None,
+            "completed_at": None,
+        }
+        steps.append(step)
+    return steps
 
 
 # Workflow models
@@ -425,63 +516,18 @@ async def execute_workflow(
     background_tasks: BackgroundTasks,
     request: Request,
 ):
-    """Execute a workflow with coordination of multiple agents."""
-    # Get both orchestrators from app state
-    lightweight_orchestrator = getattr(
-        request.app.state, "lightweight_orchestrator", None
-    )
-    orchestrator = getattr(request.app.state, "orchestrator", None)
+    """
+    Execute a workflow with coordination of multiple agents.
+    Issue #281: Refactored from 158 lines to use extracted helper methods.
+    """
+    # Validate orchestrators (Issue #281: uses helper)
+    lightweight_orchestrator, orchestrator = _validate_orchestrators(request)
 
-    if lightweight_orchestrator is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Lightweight orchestrator not available - "
-            "application not fully initialized",
-        )
-
-    if orchestrator is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Main orchestrator not available - "
-            "application not fully initialized",
-        )
-
-    # TEMPORARY FIX: Use lightweight orchestrator to avoid blocking
-    # The full orchestrator's execute_goal method has blocking operations
+    # Try lightweight routing first (Issue #281: uses helper)
     try:
-        # Use lightweight orchestrator for fast, non-blocking response
-        result = await lightweight_orchestrator.route_request(
-            workflow_request.user_message
+        return await _try_lightweight_routing(
+            lightweight_orchestrator, workflow_request.user_message
         )
-
-        # Check if we got a simple response or should use full orchestration
-        if result.get("bypass_orchestration"):
-            return {
-                "success": True,
-                "type": "lightweight_response",
-                "result": result.get(
-                    "simple_response", "Response generated successfully"
-                ),
-                "routing_method": result.get(
-                    "routing_reason", "lightweight_pattern_match"
-                ),
-            }
-        else:
-            # For complex requests, we need the full orchestrator but it's blocking
-            # For now, return a message explaining this limitation
-            return {
-                "success": False,
-                "type": "complex_workflow_blocked",
-                "result": (
-                    "Complex workflow orchestration is temporarily "
-                    "disabled due to blocking operations. This request "
-                    "requires multi-agent coordination which is not yet "
-                    "available in the current implementation."
-                ),
-                "complexity": result.get("complexity", "unknown"),
-                "suggested_agents": result.get("suggested_agents", []),
-            }
-
     except Exception as e:
         import logging
 
@@ -491,93 +537,71 @@ async def execute_workflow(
             status_code=500, detail=f"Workflow execution failed: {str(e)}"
         )
 
-    # The following code is unreachable and disabled to prevent hanging
+    # =========================================================================
+    # NOTE: The following code is unreachable (currently disabled to prevent
+    # blocking). When full orchestration is enabled, uncomment this section
+    # and use the extracted helpers for cleaner code.
+    # =========================================================================
     # Create workflow response
-    workflow_response = await orchestrator.create_workflow_response(
-        workflow_request.user_message
-    )
-    workflow_id = (
-        workflow_request.workflow_id
-        or workflow_response.get("workflow_id")
-        or str(uuid.uuid4())
-    )
-
-    # Store workflow in active workflows
-    workflow_start_time = time.time()
-    workflow_data = {
-        "workflow_id": workflow_id,
-        "user_message": workflow_request.user_message,
-        "classification": workflow_response.get("message_classification"),
-        "steps": [],
-        "current_step": 0,
-        "status": "planned",
-        "created_at": datetime.now().isoformat(),
-        "workflow_start_time": workflow_start_time,  # For Prometheus duration tracking
-        "estimated_duration": workflow_response.get("estimated_duration"),
-        "agents_involved": workflow_response.get("agents_involved", []),
-        "auto_approve": workflow_request.auto_approve,
-    }
-
-    # Start workflow metrics tracking
-    metrics_data = {
-        "user_message": workflow_request.user_message,
-        "complexity": workflow_response.get("message_classification", "unknown"),
-        "total_steps": len(workflow_response.get("workflow_preview", [])),
-        "agents_involved": workflow_response.get("agents_involved", []),
-    }
-    workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
-
-    # Track workflow start in Prometheus (record later on completion with duration)
-    prometheus_metrics.update_active_workflows(
-        workflow_type=workflow_response.get("message_classification", "unknown"),
-        count=len(
-            [
-                w
-                for w in active_workflows.values()
-                if w.get("classification")
-                == workflow_response.get("message_classification")
-            ]
-        ),
-    )
-
-    # Record initial system metrics
-    initial_resources = system_monitor.get_current_metrics()
-    workflow_metrics.record_resource_usage(workflow_id, initial_resources)
-
-    # Convert workflow preview to executable steps
-    steps = []
-    for i, step_desc in enumerate(workflow_response.get("workflow_preview", [])):
-        step = {
-            "step_id": f"step_{i+1}",
-            "description": step_desc,
-            "status": "pending",
-            "requires_approval": "requires your approval" in step_desc,
-            "agent_type": step_desc.split(":")[0].lower(),
-            "action": (
-                step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
-            ),
-            "started_at": None,
-            "completed_at": None,
-        }
-        steps.append(step)
-
-    workflow_data["steps"] = steps
-
-    # Store workflow (thread-safe)
-    async with _workflows_lock:
-        active_workflows[workflow_id] = workflow_data
-
-    # Start workflow execution in background
-    background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
-
-    return {
-        "success": True,
-        "type": "workflow_orchestration",
-        "workflow_id": workflow_id,
-        "workflow_response": workflow_response,
-        "execution_started": True,
-        "status_endpoint": f"/api/workflow/{workflow_id}/status",
-    }
+    # workflow_response = await orchestrator.create_workflow_response(
+    #     workflow_request.user_message
+    # )
+    # workflow_id = (
+    #     workflow_request.workflow_id
+    #     or workflow_response.get("workflow_id")
+    #     or str(uuid.uuid4())
+    # )
+    #
+    # # Prepare workflow data (Issue #281: uses helper)
+    # workflow_data = _prepare_workflow_data(
+    #     workflow_id,
+    #     workflow_request.user_message,
+    #     workflow_response,
+    #     workflow_request.auto_approve,
+    # )
+    #
+    # # Start workflow metrics tracking
+    # metrics_data = {
+    #     "user_message": workflow_request.user_message,
+    #     "complexity": workflow_response.get("message_classification", "unknown"),
+    #     "total_steps": len(workflow_response.get("workflow_preview", [])),
+    #     "agents_involved": workflow_response.get("agents_involved", []),
+    # }
+    # workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
+    #
+    # # Track workflow start in Prometheus
+    # prometheus_metrics.update_active_workflows(
+    #     workflow_type=workflow_response.get("message_classification", "unknown"),
+    #     count=len([
+    #         w for w in active_workflows.values()
+    #         if w.get("classification") == workflow_response.get("message_classification")
+    #     ]),
+    # )
+    #
+    # # Record initial system metrics
+    # initial_resources = system_monitor.get_current_metrics()
+    # workflow_metrics.record_resource_usage(workflow_id, initial_resources)
+    #
+    # # Convert workflow preview to steps (Issue #281: uses helper)
+    # workflow_data["steps"] = _convert_preview_to_steps(
+    #     workflow_response.get("workflow_preview", [])
+    # )
+    #
+    # # Store workflow (thread-safe)
+    # async with _workflows_lock:
+    #     active_workflows[workflow_id] = workflow_data
+    #
+    # # Start workflow execution in background
+    # background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
+    #
+    # return {
+    #     "success": True,
+    #     "type": "workflow_orchestration",
+    #     "workflow_id": workflow_id,
+    #     "workflow_response": workflow_response,
+    #     "execution_started": True,
+    #     "status_endpoint": f"/api/workflow/{workflow_id}/status",
+    # }
 
 
 async def _handle_approval_result(
@@ -642,8 +666,134 @@ async def _wait_for_step_approval(
         return None
 
 
+async def _publish_step_started(workflow_id: str, step: Metadata, step_index: int, total_steps: int) -> None:
+    """
+    Publish workflow step started event.
+
+    Issue #281: Extracted helper for step start event publishing.
+
+    Args:
+        workflow_id: Workflow identifier
+        step: Step data
+        step_index: Current step index
+        total_steps: Total number of steps
+    """
+    await event_manager.publish(
+        "workflow_step_started",
+        {
+            "workflow_id": workflow_id,
+            "step_id": step["step_id"],
+            "description": step["description"],
+            "step_index": step_index,
+            "total_steps": total_steps,
+        },
+    )
+
+
+async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
+    """
+    Publish workflow step completed event.
+
+    Issue #281: Extracted helper for step completion event publishing.
+
+    Args:
+        workflow_id: Workflow identifier
+        step: Step data with result
+    """
+    await event_manager.publish(
+        "workflow_step_completed",
+        {
+            "workflow_id": workflow_id,
+            "step_id": step["step_id"],
+            "description": step["description"],
+            "result": step.get("result", "Step completed successfully"),
+        },
+    )
+
+
+def _record_workflow_metrics(workflow_type: str, workflow_start_time: float, status: str) -> None:
+    """
+    Record Prometheus metrics for workflow completion.
+
+    Issue #281: Extracted helper for metrics recording.
+
+    Args:
+        workflow_type: Type/classification of workflow
+        workflow_start_time: Start timestamp
+        status: 'success' or 'failed'
+    """
+    if workflow_start_time:
+        duration = time.time() - workflow_start_time
+        prometheus_metrics.record_workflow_execution(
+            workflow_type=workflow_type, status=status, duration=duration
+        )
+
+        # Update active workflows count (decrement)
+        prometheus_metrics.update_active_workflows(
+            workflow_type=workflow_type,
+            count=max(
+                0,
+                len(
+                    [
+                        w
+                        for w in active_workflows.values()
+                        if w.get("classification") == workflow_type
+                    ]
+                )
+                - 1,
+            ),
+        )
+
+
+async def _execute_step_with_approval(
+    workflow_id: str, workflow: Metadata, step: Metadata, step_index: int, orchestrator
+) -> bool:
+    """
+    Execute a single workflow step, handling approval if needed.
+
+    Issue #281: Extracted helper for step execution with approval.
+
+    Args:
+        workflow_id: Workflow identifier
+        workflow: Workflow data
+        step: Step to execute
+        step_index: Current step index
+        orchestrator: Orchestrator instance
+
+    Returns:
+        True if step completed, False if cancelled/timeout
+    """
+    # Check if step requires approval
+    async with _workflows_lock:
+        auto_approve = workflow.get("auto_approve", False)
+        requires_approval = step["requires_approval"] and not auto_approve
+
+    if requires_approval:
+        async with _workflows_lock:
+            step["status"] = "waiting_approval"
+            step["step_index"] = step_index
+
+        # Wait for approval using helper (Issue #315)
+        approval_result = await _wait_for_step_approval(workflow_id, workflow, step)
+        if approval_result is None or approval_result is False:
+            return False  # Timeout or cancelled
+
+    # Execute the step
+    await execute_single_step(workflow_id, step, orchestrator)
+
+    async with _workflows_lock:
+        step["status"] = "completed"
+        step["completed_at"] = datetime.now().isoformat()
+
+    return True
+
+
 async def execute_workflow_steps(workflow_id: str, orchestrator):
-    """Execute workflow steps in sequence with proper coordination."""
+    """
+    Execute workflow steps in sequence with proper coordination.
+
+    Issue #281: Refactored from 143 lines to use extracted helper methods.
+    """
     async with _workflows_lock:
         if workflow_id not in active_workflows:
             return
@@ -659,53 +809,17 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
                 step["status"] = "in_progress"
                 step["started_at"] = datetime.now().isoformat()
 
-            # Publish step start event
-            await event_manager.publish(
-                "workflow_step_started",
-                {
-                    "workflow_id": workflow_id,
-                    "step_id": step["step_id"],
-                    "description": step["description"],
-                    "step_index": step_index,
-                    "total_steps": len(steps),
-                },
-            )
+            # Publish step start event (Issue #281: uses helper)
+            await _publish_step_started(workflow_id, step, step_index, len(steps))
 
-            # Check if step requires approval
-            async with _workflows_lock:
-                workflow = active_workflows[workflow_id]
-                auto_approve = workflow.get("auto_approve", False)
-                requires_approval = step["requires_approval"] and not auto_approve
+            # Execute step with approval handling (Issue #281: uses helper)
+            if not await _execute_step_with_approval(
+                workflow_id, workflow, step, step_index, orchestrator
+            ):
+                return  # Timeout or cancelled
 
-            if requires_approval:
-                async with _workflows_lock:
-                    step["status"] = "waiting_approval"
-                    step["step_index"] = step_index  # Store for helper
-
-                # Wait for approval using helper (Issue #315)
-                approval_result = await _wait_for_step_approval(
-                    workflow_id, workflow, step
-                )
-                if approval_result is None or approval_result is False:
-                    return  # Timeout or cancelled
-
-            # Execute the step (mock execution for demonstration)
-            await execute_single_step(workflow_id, step, orchestrator)
-
-            async with _workflows_lock:
-                step["status"] = "completed"
-                step["completed_at"] = datetime.now().isoformat()
-
-            # Publish step completion event
-            await event_manager.publish(
-                "workflow_step_completed",
-                {
-                    "workflow_id": workflow_id,
-                    "step_id": step["step_id"],
-                    "description": step["description"],
-                    "result": step.get("result", "Step completed successfully"),
-                },
-            )
+            # Publish step completion event (Issue #281: uses helper)
+            await _publish_step_completed(workflow_id, step)
 
         # Workflow completed
         async with _workflows_lock:
@@ -714,28 +828,8 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
             workflow_start_time = workflow.get("workflow_start_time")
             workflow_type = workflow.get("classification", "unknown")
 
-        # Record Prometheus workflow execution metric (success)
-        if workflow_start_time:
-            duration = time.time() - workflow_start_time
-            prometheus_metrics.record_workflow_execution(
-                workflow_type=workflow_type, status="success", duration=duration
-            )
-
-            # Update active workflows count (decrement)
-            prometheus_metrics.update_active_workflows(
-                workflow_type=workflow_type,
-                count=max(
-                    0,
-                    len(
-                        [
-                            w
-                            for w in active_workflows.values()
-                            if w.get("classification") == workflow_type
-                        ]
-                    )
-                    - 1,
-                ),
-            )
+        # Record metrics (Issue #281: uses helper)
+        _record_workflow_metrics(workflow_type, workflow_start_time, "success")
 
         await event_manager.publish(
             "workflow_completed",
@@ -754,28 +848,8 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
             workflow_start_time = workflow.get("workflow_start_time")
             workflow_type = workflow.get("classification", "unknown")
 
-        # Record Prometheus workflow execution metric (failed)
-        if workflow_start_time:
-            duration = time.time() - workflow_start_time
-            prometheus_metrics.record_workflow_execution(
-                workflow_type=workflow_type, status="failed", duration=duration
-            )
-
-            # Update active workflows count (decrement)
-            prometheus_metrics.update_active_workflows(
-                workflow_type=workflow_type,
-                count=max(
-                    0,
-                    len(
-                        [
-                            w
-                            for w in active_workflows.values()
-                            if w.get("classification") == workflow_type
-                        ]
-                    )
-                    - 1,
-                ),
-            )
+        # Record metrics (Issue #281: uses helper)
+        _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
 
         await event_manager.publish(
             "workflow_failed",
@@ -806,12 +880,19 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
 
     try:
         # Issue #336: Use dispatch table instead of elif chain
+        # Issue #322: Create WorkflowStepContext to eliminate data clump
+        ctx = WorkflowStepContext(
+            workflow_id=workflow_id,
+            step=step,
+            orchestrator=orchestrator,
+            action=action,
+        )
         handler = AGENT_STEP_HANDLERS.get(agent_type)
         if handler:
-            await handler(step, action, workflow_id, orchestrator)
+            await handler(ctx)
         else:
             # Fallback to orchestrator for unknown agent types
-            await _handle_fallback_step(step, action, workflow_id, orchestrator, agent_type)
+            await _handle_fallback_step(ctx, agent_type)
 
     except Exception as e:
         step["result"] = f"Error executing step: {str(e)}"

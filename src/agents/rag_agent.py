@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.constants.model_constants import ModelConstants
+from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config
 
@@ -139,8 +140,8 @@ class RAGAgent(StandardizedAgent):
                 messages=messages,
                 llm_type="rag",  # Uses RAG-specific model
                 temperature=0.5,  # Balanced creativity for synthesis
-                max_tokens=1024,  # Allow longer responses for synthesis
-                top_p=0.9,
+                max_tokens=LLMDefaults.SYNTHESIS_MAX_TOKENS,
+                top_p=LLMDefaults.DEFAULT_TOP_P,
             )
 
             # Extract and structure response
@@ -206,7 +207,7 @@ class RAGAgent(StandardizedAgent):
                 messages=messages,
                 llm_type="rag",
                 temperature=0.6,
-                max_tokens=512,
+                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.85,
             )
 

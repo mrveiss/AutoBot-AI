@@ -19,6 +19,7 @@ from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from src.constants.network_constants import ServiceURLs
 from src.constants.security_constants import SecurityConstants
+from src.constants.threshold_constants import TimingConstants
 from src.source_attribution import SourceType, track_source
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.display_utils import get_playwright_config
@@ -182,7 +183,7 @@ class ResearchBrowserSession:
 
             if wait_for_load:
                 # Wait a bit for dynamic content
-                await asyncio.sleep(2)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             # Check for interaction requirements
             interaction_data = await self.page.evaluate(
@@ -368,7 +369,7 @@ class ResearchBrowserSession:
                     self.status = "active"
                     return True
 
-                await asyncio.sleep(2)  # Check every 2 seconds
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every 2 seconds
 
             except Exception as e:
                 logger.error(f"Error checking interaction status: {e}")

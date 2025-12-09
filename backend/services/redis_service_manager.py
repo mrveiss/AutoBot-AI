@@ -24,6 +24,7 @@ from backend.type_defs.common import Metadata
 
 from backend.services.ssh_manager import RemoteCommandResult, SSHManager
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -240,10 +241,10 @@ class RedisServiceManager:
                 )
 
             # Execute start command
-            result = await self._execute_systemctl_command("start", timeout=30)
+            result = await self._execute_systemctl_command("start", timeout=TimingConstants.SHORT_TIMEOUT)
 
-            # Verify service started
-            await asyncio.sleep(2)  # Give service time to start
+            # Verify service started - wait for service initialization
+            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()
@@ -328,10 +329,10 @@ class RedisServiceManager:
                 )
 
             # Execute stop command
-            result = await self._execute_systemctl_command("stop", timeout=30)
+            result = await self._execute_systemctl_command("stop", timeout=TimingConstants.SHORT_TIMEOUT)
 
-            # Verify service stopped
-            await asyncio.sleep(2)  # Give service time to stop
+            # Verify service stopped - wait for shutdown
+            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()
@@ -403,10 +404,10 @@ class RedisServiceManager:
 
         try:
             # Execute restart command
-            result = await self._execute_systemctl_command("restart", timeout=30)
+            result = await self._execute_systemctl_command("restart", timeout=TimingConstants.SHORT_TIMEOUT)
 
-            # Verify service restarted
-            await asyncio.sleep(2)  # Give service time to restart
+            # Verify service restarted - wait for initialization
+            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()

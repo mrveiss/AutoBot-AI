@@ -21,6 +21,7 @@ from typing import (
     Optional,
 )
 
+from src.constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +428,7 @@ class JSONFormatterAgent:
             str: lambda v: v,
             int: self._convert_int,
             float: self._convert_float,
-            bool: lambda v: v.lower() in ("true", "1", "yes", "on"),
+            bool: lambda v: v.lower() in StringParsingConstants.TRUTHY_STRING_VALUES,
             list: self._convert_list,
         }
         converter = converters.get(expected_type)

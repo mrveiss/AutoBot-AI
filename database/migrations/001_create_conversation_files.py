@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class ConversationFilesMigration:
         """
         connection = sqlite3.connect(
             str(self.db_path),
-            timeout=30.0,
+            timeout=TimingConstants.SHORT_TIMEOUT,
             isolation_level=None  # Autocommit mode for DDL
         )
 

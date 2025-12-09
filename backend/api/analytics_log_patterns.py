@@ -261,6 +261,35 @@ class LogPatternMiner:
         patterns.sort(key=lambda p: p.occurrences, reverse=True)
         return patterns
 
+    def _create_anomaly(
+        self,
+        anomaly_id: str,
+        anomaly_type: str,
+        severity: str,
+        description: str,
+        timestamp: str,
+        affected_sources: List[str],
+        metric_before: float,
+        metric_after: float,
+        confidence: float,
+    ) -> LogAnomaly:
+        """
+        Create a LogAnomaly object with the given parameters.
+
+        Issue #281: Extracted helper to reduce repetition in detect_anomalies.
+        """
+        return LogAnomaly(
+            anomaly_id=anomaly_id,
+            anomaly_type=anomaly_type,
+            severity=severity,
+            description=description,
+            timestamp=timestamp,
+            affected_sources=affected_sources,
+            metric_before=metric_before,
+            metric_after=metric_after,
+            confidence=confidence,
+        )
+
     def detect_anomalies(
         self, log_lines: List[Tuple[str, str, str]], patterns: List[LogPattern]
     ) -> List[LogAnomaly]:
@@ -286,64 +315,100 @@ class LogPatternMiner:
             avg_errors = sum(error_counts.values()) / len(error_counts)
             for hour, count in error_counts.items():
                 if count > avg_errors * 3 and count > 5:  # 3x average and >5 errors
-                    anomalies.append(
-                        LogAnomaly(
-                            anomaly_id=f"error_spike_{hour}",
-                            anomaly_type="error_surge",
-                            severity="high" if count > avg_errors * 5 else "medium",
-                            description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
-                            timestamp=hour,
-                            affected_sources=list(
-                                set(s for lines in hourly_counts.values() for s in lines)
-                            ),
-                            metric_before=avg_errors,
-                            metric_after=float(count),
-                            confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
-                        )
-                    )
+                    anomalies.append(self._create_anomaly(
+                        anomaly_id=f"error_spike_{hour}",
+                        anomaly_type="error_surge",
+                        severity="high" if count > avg_errors * 5 else "medium",
+                        description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
+                        timestamp=hour,
+                        affected_sources=list(
+                            set(s for lines in hourly_counts.values() for s in lines)
+                        ),
+                        metric_before=avg_errors,
+                        metric_after=float(count),
+                        confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
+                    ))
 
         # Detect sudden pattern appearances (new patterns)
         for pattern in patterns:
             if pattern.occurrences >= 10 and pattern.frequency_per_hour > 50:
                 if pattern.is_error_pattern:
-                    anomalies.append(
-                        LogAnomaly(
-                            anomaly_id=f"new_error_{pattern.pattern_id}",
-                            anomaly_type="new_pattern",
-                            severity="high",
-                            description=f"High-frequency error pattern detected: {pattern.pattern_template[:100]}",
-                            timestamp=pattern.first_seen,
-                            affected_sources=pattern.sources,
-                            metric_before=0,
-                            metric_after=pattern.frequency_per_hour,
-                            confidence=0.85,
-                        )
-                    )
+                    anomalies.append(self._create_anomaly(
+                        anomaly_id=f"new_error_{pattern.pattern_id}",
+                        anomaly_type="new_pattern",
+                        severity="high",
+                        description=f"High-frequency error pattern detected: {pattern.pattern_template[:100]}",
+                        timestamp=pattern.first_seen,
+                        affected_sources=pattern.sources,
+                        metric_before=0,
+                        metric_after=pattern.frequency_per_hour,
+                        confidence=0.85,
+                    ))
 
         # Detect log gaps (periods with no logs)
         if hourly_counts:
-            hours = sorted(hourly_counts.keys())
+            hours = sorted(hourly_counts)
             for i in range(1, len(hours)):
                 prev_hour = datetime.strptime(hours[i - 1], "%Y-%m-%d %H:00")
                 curr_hour = datetime.strptime(hours[i], "%Y-%m-%d %H:00")
                 gap = (curr_hour - prev_hour).total_seconds() / 3600
 
                 if gap > 2:  # More than 2 hours gap
-                    anomalies.append(
-                        LogAnomaly(
-                            anomaly_id=f"log_gap_{hours[i-1]}",
-                            anomaly_type="gap",
-                            severity="medium" if gap < 6 else "high",
-                            description=f"Log gap detected: {gap:.1f} hours without logs",
-                            timestamp=hours[i - 1],
-                            affected_sources=list(hourly_counts[hours[i - 1]].keys()),
-                            metric_before=sum(hourly_counts[hours[i - 1]].values()),
-                            metric_after=0,
-                            confidence=0.9,
-                        )
-                    )
+                    anomalies.append(self._create_anomaly(
+                        anomaly_id=f"log_gap_{hours[i-1]}",
+                        anomaly_type="gap",
+                        severity="medium" if gap < 6 else "high",
+                        description=f"Log gap detected: {gap:.1f} hours without logs",
+                        timestamp=hours[i - 1],
+                        affected_sources=list(hourly_counts[hours[i - 1]].keys()),
+                        metric_before=sum(hourly_counts[hours[i - 1]].values()),
+                        metric_after=0,
+                        confidence=0.9,
+                    ))
 
         return anomalies
+
+    def _calculate_trend_direction(
+        self,
+        values: List[float],
+        change_threshold: float = 10.0,
+    ) -> Tuple[str, float]:
+        """
+        Calculate trend direction and change percent from time series values.
+
+        Issue #281: Extracted helper to reduce repetition in analyze_trends.
+
+        Args:
+            values: Time series values to analyze
+            change_threshold: Percent change threshold for direction (default: 10%)
+
+        Returns:
+            Tuple of (direction, change_percent) where direction is
+            'increasing', 'decreasing', or 'stable'
+        """
+        if len(values) < 2:
+            return ("stable", 0.0)
+
+        # Split into halves and calculate averages
+        mid = len(values) // 2
+        first_half_avg = sum(values[:mid]) / max(1, mid)
+        second_half_avg = sum(values[mid:]) / max(1, len(values) - mid)
+
+        # Calculate change percent
+        if first_half_avg > 0:
+            change = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+        else:
+            change = 100.0 if second_half_avg > 0 else 0.0
+
+        # Determine direction
+        if change > change_threshold:
+            direction = "increasing"
+        elif change < -change_threshold:
+            direction = "decreasing"
+        else:
+            direction = "stable"
+
+        return (direction, round(change, 1))
 
     def analyze_trends(
         self, log_lines: List[Tuple[str, str, str]]
@@ -371,69 +436,44 @@ class LogPatternMiner:
         if len(hourly_data) < 3:
             return trends
 
-        hours = sorted(hourly_data.keys())
+        hours = sorted(hourly_data)
 
-        # Analyze total log volume trend
-        totals = [hourly_data[h]["total"] for h in hours]
-        if len(totals) >= 2:
-            first_half = sum(totals[: len(totals) // 2]) / max(1, len(totals) // 2)
-            second_half = sum(totals[len(totals) // 2 :]) / max(
-                1, len(totals) - len(totals) // 2
+        # Analyze total log volume trend (Issue #281: uses helper)
+        totals = [float(hourly_data[h]["total"]) for h in hours]
+        direction, change = self._calculate_trend_direction(totals, change_threshold=10.0)
+        if totals:
+            trends.append(
+                LogTrend(
+                    trend_id="log_volume",
+                    metric_name="Total Log Volume",
+                    direction=direction,
+                    change_percent=change,
+                    time_period=f"{hours[0]} to {hours[-1]}",
+                    data_points=[
+                        {"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]
+                    ],
+                )
             )
 
-            if first_half > 0:
-                change = ((second_half - first_half) / first_half) * 100
-                direction = (
-                    "increasing" if change > 10 else "decreasing" if change < -10 else "stable"
-                )
-
-                trends.append(
-                    LogTrend(
-                        trend_id="log_volume",
-                        metric_name="Total Log Volume",
-                        direction=direction,
-                        change_percent=round(change, 1),
-                        time_period=f"{hours[0]} to {hours[-1]}",
-                        data_points=[
-                            {"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]
-                        ],
-                    )
-                )
-
-        # Analyze error rate trend
+        # Analyze error rate trend (Issue #281: uses helper)
         error_rates = [
             (
                 hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
                 if hourly_data[h]["total"] > 0
-                else 0
+                else 0.0
             )
             for h in hours
         ]
-        if len(error_rates) >= 2:
-            first_half_err = sum(error_rates[: len(error_rates) // 2]) / max(
-                1, len(error_rates) // 2
-            )
-            second_half_err = sum(error_rates[len(error_rates) // 2 :]) / max(
-                1, len(error_rates) - len(error_rates) // 2
-            )
-
-            if first_half_err > 0:
-                err_change = ((second_half_err - first_half_err) / first_half_err) * 100
-            else:
-                err_change = 100 if second_half_err > 0 else 0
-
-            err_direction = (
-                "increasing"
-                if err_change > 20
-                else "decreasing" if err_change < -20 else "stable"
-            )
-
+        err_direction, err_change = self._calculate_trend_direction(
+            error_rates, change_threshold=20.0
+        )
+        if error_rates:
             trends.append(
                 LogTrend(
                     trend_id="error_rate",
                     metric_name="Error Rate",
                     direction=err_direction,
-                    change_percent=round(err_change, 1),
+                    change_percent=err_change,
                     time_period=f"{hours[0]} to {hours[-1]}",
                     data_points=[
                         {

@@ -142,7 +142,7 @@ class ProviderHealthManager:
         # Create tasks for all providers
         tasks = {
             provider: cls.check_provider_health(provider, timeout, use_cache)
-            for provider in providers.keys()
+            for provider in providers
         }
 
         # Execute all checks in parallel
@@ -150,7 +150,7 @@ class ProviderHealthManager:
 
         # Map results back to provider names
         health_status = {}
-        for provider, result in zip(tasks.keys(), results):
+        for provider, result in zip(tasks, results):
             if isinstance(result, Exception):
                 logger.error(
                     f"Provider {provider} health check raised exception: {str(result)}"

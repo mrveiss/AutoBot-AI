@@ -12,12 +12,13 @@ Extracted to eliminate code duplication (Issue #292).
 
 from typing import Any, Dict, List
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.command_utils import execute_shell_command
 
 
 async def run_agent_command(
     cmd: List[str],
-    timeout: int = 60,
+    timeout: int = TimingConstants.STANDARD_TIMEOUT,
 ) -> Dict[str, Any]:
     """
     Run a shell command with timeout and return standardized result.

@@ -515,19 +515,17 @@ class GitShowRequest(BaseModel):
 # MCP Tool Definitions
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_git_mcp_tools",
-    error_code_prefix="GIT_MCP",
-)
-@router.get("/mcp/tools")
-async def get_git_mcp_tools() -> List[MCPTool]:
+def _get_git_status_tools() -> List[MCPTool]:
     """
-    Return all available Git Operations MCP tools
+    Get MCP tools for git status and branch information.
 
-    This endpoint follows the MCP specification for tool discovery.
+    Issue #281: Extracted from get_git_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of status-related git MCP tools
     """
-    tools = [
+    return [
         MCPTool(
             name="git_status",
             description=(
@@ -553,6 +551,40 @@ async def get_git_mcp_tools() -> List[MCPTool]:
                 "required": [],
             },
         ),
+        MCPTool(
+            name="git_branch",
+            description="List all branches in the repository. Shows current branch with asterisk.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "repo_path": {
+                        "type": "string",
+                        "description": "Repository path",
+                        "default": "/home/kali/Desktop/AutoBot",
+                    },
+                    "all_branches": {
+                        "type": "boolean",
+                        "description": "Include remote branches",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        ),
+    ]
+
+
+def _get_git_history_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for git history operations (log, show).
+
+    Issue #281: Extracted from get_git_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of history-related git MCP tools
+    """
+    return [
         MCPTool(
             name="git_log",
             description=(
@@ -588,6 +620,40 @@ async def get_git_mcp_tools() -> List[MCPTool]:
             },
         ),
         MCPTool(
+            name="git_show",
+            description="Show details of a specific commit including changes. Defaults to HEAD.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "repo_path": {
+                        "type": "string",
+                        "description": "Repository path",
+                        "default": "/home/kali/Desktop/AutoBot",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Commit SHA or ref to show",
+                        "default": "HEAD",
+                    },
+                },
+                "required": [],
+            },
+        ),
+    ]
+
+
+def _get_git_change_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for git change analysis operations (diff, blame).
+
+    Issue #281: Extracted from get_git_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of change-analysis git MCP tools
+    """
+    return [
+        MCPTool(
             name="git_diff",
             description=(
                 "Show changes between working directory and index,"
@@ -615,26 +681,6 @@ async def get_git_mcp_tools() -> List[MCPTool]:
                         "description": (
                             "Compare with specific commit (e.g., HEAD~1, abc123)"
                         ),
-                    },
-                },
-                "required": [],
-            },
-        ),
-        MCPTool(
-            name="git_branch",
-            description="List all branches in the repository. Shows current branch with asterisk.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "repo_path": {
-                        "type": "string",
-                        "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
-                    },
-                    "all_branches": {
-                        "type": "boolean",
-                        "description": "Include remote branches",
-                        "default": False,
                     },
                 },
                 "required": [],
@@ -672,28 +718,26 @@ async def get_git_mcp_tools() -> List[MCPTool]:
                 "required": ["file_path"],
             },
         ),
-        MCPTool(
-            name="git_show",
-            description="Show details of a specific commit including changes. Defaults to HEAD.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "repo_path": {
-                        "type": "string",
-                        "description": "Repository path",
-                        "default": "/home/kali/Desktop/AutoBot",
-                    },
-                    "ref": {
-                        "type": "string",
-                        "description": "Commit SHA or ref to show",
-                        "default": "HEAD",
-                    },
-                },
-                "required": [],
-            },
-        ),
     ]
 
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_mcp_tools",
+    error_code_prefix="GIT_MCP",
+)
+@router.get("/mcp/tools")
+async def get_git_mcp_tools() -> List[MCPTool]:
+    """
+    Return all available Git Operations MCP tools
+
+    This endpoint follows the MCP specification for tool discovery.
+    """
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_git_status_tools())
+    tools.extend(_get_git_history_tools())
+    tools.extend(_get_git_change_tools())
     return tools
 
 

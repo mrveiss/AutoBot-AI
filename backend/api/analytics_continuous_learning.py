@@ -235,6 +235,54 @@ class LearningPipeline:
             return await handler(event)
         return None
 
+    def _create_insight(
+        self,
+        id_prefix: str,
+        pattern_id: Optional[str],
+        insight_type: InsightType,
+        title: str,
+        description: str,
+        confidence: float,
+        data: Dict[str, Any],
+        recommendations: List[str],
+        expires_days: int = 7,
+    ) -> Insight:
+        """
+        Create an Insight object with standardized ID generation and timestamps.
+
+        Issue #281: Extracted helper to reduce repetition in generate_insights.
+
+        Args:
+            id_prefix: Prefix for insight ID (e.g., 'trend', 'fp', 'improvement')
+            pattern_id: Pattern ID to include in hash (optional)
+            insight_type: Type of insight
+            title: Insight title
+            description: Insight description
+            confidence: Confidence score (0.0 to 1.0)
+            data: Additional data dict
+            recommendations: List of recommendation strings
+            expires_days: Days until insight expires (default: 7)
+
+        Returns:
+            Insight object with generated ID and timestamps
+        """
+        now = datetime.now()
+        # Build hash input: prefix + optional pattern_id + timestamp
+        hash_input = f"{id_prefix}_{pattern_id or ''}_{now.isoformat()}"
+        insight_id = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+
+        return Insight(
+            insight_id=insight_id,
+            insight_type=insight_type,
+            title=title,
+            description=description,
+            confidence=confidence,
+            data=data,
+            recommendations=recommendations,
+            generated_at=now,
+            expires_at=now + timedelta(days=expires_days),
+        )
+
     async def process_event(self, event: LearningEvent) -> Dict[str, Any]:
         """Process a learning event."""
         self.events.append(event)
@@ -415,7 +463,11 @@ class LearningPipeline:
         }
 
     async def generate_insights(self) -> List[Insight]:
-        """Generate insights from learning data."""
+        """
+        Generate insights from learning data.
+
+        Issue #281: Refactored to use _create_insight helper for Insight creation.
+        """
         new_insights = []
         now = datetime.now()
 
@@ -430,10 +482,10 @@ class LearningPipeline:
         if recent_patterns:
             most_active = max(recent_patterns, key=lambda p: p.detections)
             if most_active.detections > 10:
-                insight = Insight(
-                    insight_id=hashlib.sha256(
-                        f"trend_{most_active.pattern_id}_{now.isoformat()}".encode()
-                    ).hexdigest()[:16],
+                # Issue #281: Uses _create_insight helper
+                insight = self._create_insight(
+                    id_prefix="trend",
+                    pattern_id=most_active.pattern_id,
                     insight_type=InsightType.PATTERN_EVOLUTION,
                     title=f"Active Pattern: {most_active.pattern_id}",
                     description=f"Pattern '{most_active.pattern_id}' has been detected "
@@ -447,8 +499,6 @@ class LearningPipeline:
                         "Review pattern detection rules",
                         "Consider if this pattern is over-triggering",
                     ],
-                    generated_at=now,
-                    expires_at=now + timedelta(days=7),
                 )
                 new_insights.append(insight)
 
@@ -466,10 +516,10 @@ class LearningPipeline:
             )
 
             if fp_rate > 0.3:
-                insight = Insight(
-                    insight_id=hashlib.sha256(
-                        f"fp_{pattern.pattern_id}_{now.isoformat()}".encode()
-                    ).hexdigest()[:16],
+                # Issue #281: Uses _create_insight helper
+                insight = self._create_insight(
+                    id_prefix="fp",
+                    pattern_id=pattern.pattern_id,
                     insight_type=InsightType.FALSE_POSITIVE_TREND,
                     title=f"High False Positives: {pattern.pattern_id}",
                     description=f"Pattern '{pattern.pattern_id}' has a {fp_rate:.1%} "
@@ -485,8 +535,6 @@ class LearningPipeline:
                         "Consider adding more specific indicators",
                         "Analyze false positive examples for commonalities",
                     ],
-                    generated_at=now,
-                    expires_at=now + timedelta(days=7),
                 )
                 new_insights.append(insight)
 
@@ -497,10 +545,10 @@ class LearningPipeline:
             improvement = current_acc - first_acc
 
             if improvement > 0.05:
-                insight = Insight(
-                    insight_id=hashlib.sha256(
-                        f"improvement_{now.isoformat()}".encode()
-                    ).hexdigest()[:16],
+                # Issue #281: Uses _create_insight helper
+                insight = self._create_insight(
+                    id_prefix="improvement",
+                    pattern_id=None,
                     insight_type=InsightType.PERFORMANCE_IMPROVEMENT,
                     title="Accuracy Improvement Detected",
                     description=f"Overall pattern detection accuracy improved by "
@@ -515,8 +563,7 @@ class LearningPipeline:
                         "Continue collecting feedback",
                         "Consider expanding to more patterns",
                     ],
-                    generated_at=now,
-                    expires_at=now + timedelta(days=30),
+                    expires_days=30,
                 )
                 new_insights.append(insight)
 

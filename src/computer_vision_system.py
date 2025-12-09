@@ -479,8 +479,11 @@ class ScreenAnalyzer:
     async def analyze_current_screen(
         self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> ScreenState:
-        """Analyze the current screen state comprehensively"""
+        """
+        Analyze the current screen state comprehensively.
 
+        Issue #281: Refactored from 141 lines to use extracted helper methods.
+        """
         async with task_tracker.track_task(
             "Screen Analysis",
             "Comprehensive analysis of current screen state",
@@ -489,127 +492,44 @@ class ScreenAnalyzer:
             inputs={"session_id": session_id},
         ) as task_context:
             try:
-                # Capture screenshot
+                # Stage 1: Capture screenshot
                 screenshot = await self._capture_screenshot(session_id)
                 if screenshot is None:
                     raise RuntimeError("Failed to capture screenshot")
 
-                # Process with enhanced multi-modal processor
-                modal_inputs = []
-
-                # Always process screenshot with unified processor
-                image_input = MultiModalInput(
-                    input_id=f"screen_vision_{int(time.time())}",
-                    modality_type=ModalityType.IMAGE,
-                    intent=ProcessingIntent.SCREEN_ANALYSIS,
-                    data=screenshot,
-                    metadata={"session_id": session_id},
+                # Stage 2: Process multimodal inputs
+                processing_results, primary_result = await self._process_multimodal_inputs(
+                    screenshot, session_id, context_audio
                 )
-                modal_inputs.append(image_input)
 
-                # Add audio context if provided (e.g., voice commands about screen)
-                if context_audio and self.enable_multimodal_analysis:
-                    audio_input = MultiModalInput(
-                        input_id=f"screen_audio_{int(time.time())}",
-                        modality_type=ModalityType.AUDIO,
-                        intent=ProcessingIntent.VOICE_COMMAND,
-                        data=context_audio,
-                        metadata={
-                            "session_id": session_id,
-                            "context": "screen_analysis",
-                        },
-                    )
-                    modal_inputs.append(audio_input)
-
-                # Process all modalities
-                processing_results = []
-                for modal_input in modal_inputs:
-                    result = await self.multimodal_processor.process(modal_input)
-                    processing_results.append(result)
-
-                # Combine results if multi-modal
-                primary_result = processing_results[0]  # Image processing result
-                if len(processing_results) > 1:
-                    combined_input = MultiModalInput(
-                        input_id=f"screen_combined_{int(time.time())}",
-                        modality_type=ModalityType.COMBINED,
-                        intent=ProcessingIntent.SCREEN_ANALYSIS,
-                        data="",  # Not used for combined
-                        metadata={
-                            "image_result": processing_results[0].result_data,
-                            "audio_result": processing_results[1].result_data,
-                            "session_id": session_id,
-                        },
-                    )
-                    combined_result = await self.multimodal_processor.process(
-                        combined_input
-                    )
-                    # Use combined result as primary if successful
-                    if combined_result.success:
-                        primary_result = combined_result
-
-                # Extract UI elements with advanced classification
+                # Stage 3: Detect and analyze UI elements
                 ui_elements = await self._detect_and_classify_elements(
                     screenshot, primary_result.result_data or {}
                 )
 
-                # Enhanced context analysis with multi-modal understanding
-                context_analysis = await self.context_analyzer.analyze_context(
-                    screenshot, ui_elements
+                # Stage 4: Context analysis
+                context_analysis = await self._build_context_analysis(
+                    screenshot, ui_elements, processing_results, primary_result
                 )
 
-                # Add multi-modal context if available
-                if len(processing_results) > 1 and processing_results[1].result_data:
-                    voice_intent = processing_results[1].result_data.get(
-                        "transcribed_text", ""
-                    )
-                    context_analysis["multimodal_understanding"] = (
-                        primary_result.result_data
-                    )
-                    context_analysis["cross_modal_confidence"] = (
-                        primary_result.confidence
-                    )
-                    context_analysis["voice_intent"] = voice_intent
-
-                automation_opportunities = await self._find_automation_opportunities(
-                    ui_elements, context_analysis
+                # Stage 5: Build screen state
+                screen_state = self._build_screen_state(
+                    screenshot, ui_elements, context_analysis,
+                    processing_results, primary_result
                 )
 
-                # Use ProcessingResultExtractor to extract data (Tell, Don't Ask)
-                extractor = ProcessingResultExtractor()
-
-                # Create comprehensive screen state
-                screen_state = ScreenState(
-                    timestamp=time.time(),
-                    screenshot=screenshot,
-                    ui_elements=ui_elements,
-                    text_regions=extractor.extract_text_regions(primary_result.result_data),
-                    dominant_colors=extractor.extract_dominant_colors(
-                        primary_result.result_data
-                    ),
-                    layout_structure=extractor.extract_layout_structure(
-                        primary_result.result_data
-                    ),
-                    automation_opportunities=automation_opportunities,
-                    context_analysis=context_analysis,
-                    confidence_score=max(r.confidence for r in processing_results),
-                    multimodal_analysis=extractor.to_multimodal_analysis(processing_results),
-                )
-
-                # Update screenshot cache
+                # Update cache and set outputs
                 self._update_screenshot_cache(screenshot)
-
-                task_context.set_outputs(
-                    {
-                        "elements_detected": len(ui_elements),
-                        "text_regions": len(screen_state.text_regions),
-                        "automation_opportunities": len(automation_opportunities),
-                        "confidence_score": screen_state.confidence_score,
-                    }
-                )
+                task_context.set_outputs({
+                    "elements_detected": len(ui_elements),
+                    "text_regions": len(screen_state.text_regions),
+                    "automation_opportunities": len(screen_state.automation_opportunities),
+                    "confidence_score": screen_state.confidence_score,
+                })
 
                 logger.info(
-                    f"Screen analysis completed: {len(ui_elements)} elements, confidence {screen_state.confidence_score:.2f}"
+                    f"Screen analysis completed: {len(ui_elements)} elements, "
+                    f"confidence {screen_state.confidence_score:.2f}"
                 )
                 return screen_state
 
@@ -617,6 +537,115 @@ class ScreenAnalyzer:
                 task_context.set_outputs({"error": str(e)})
                 logger.error(f"Screen analysis failed: {e}")
                 raise
+
+    async def _process_multimodal_inputs(
+        self, screenshot: np.ndarray, session_id: Optional[str],
+        context_audio: Optional[bytes]
+    ) -> Tuple[List[Any], Any]:
+        """Process screenshot and optional audio inputs. Issue #281: Extracted helper."""
+        modal_inputs = [self._create_image_input(screenshot, session_id)]
+
+        if context_audio and self.enable_multimodal_analysis:
+            modal_inputs.append(self._create_audio_input(context_audio, session_id))
+
+        # Process all modalities
+        processing_results = []
+        for modal_input in modal_inputs:
+            result = await self.multimodal_processor.process(modal_input)
+            processing_results.append(result)
+
+        # Combine results if multi-modal
+        primary_result = processing_results[0]
+        if len(processing_results) > 1:
+            primary_result = await self._combine_multimodal_results(
+                processing_results, session_id
+            ) or primary_result
+
+        return processing_results, primary_result
+
+    def _create_image_input(
+        self, screenshot: np.ndarray, session_id: Optional[str]
+    ) -> MultiModalInput:
+        """Create image input for multimodal processing. Issue #281: Extracted helper."""
+        return MultiModalInput(
+            input_id=f"screen_vision_{int(time.time())}",
+            modality_type=ModalityType.IMAGE,
+            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            data=screenshot,
+            metadata={"session_id": session_id},
+        )
+
+    def _create_audio_input(
+        self, context_audio: bytes, session_id: Optional[str]
+    ) -> MultiModalInput:
+        """Create audio input for multimodal processing. Issue #281: Extracted helper."""
+        return MultiModalInput(
+            input_id=f"screen_audio_{int(time.time())}",
+            modality_type=ModalityType.AUDIO,
+            intent=ProcessingIntent.VOICE_COMMAND,
+            data=context_audio,
+            metadata={"session_id": session_id, "context": "screen_analysis"},
+        )
+
+    async def _combine_multimodal_results(
+        self, processing_results: List[Any], session_id: Optional[str]
+    ) -> Optional[Any]:
+        """Combine multimodal results if available. Issue #281: Extracted helper."""
+        combined_input = MultiModalInput(
+            input_id=f"screen_combined_{int(time.time())}",
+            modality_type=ModalityType.COMBINED,
+            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            data="",
+            metadata={
+                "image_result": processing_results[0].result_data,
+                "audio_result": processing_results[1].result_data,
+                "session_id": session_id,
+            },
+        )
+        combined_result = await self.multimodal_processor.process(combined_input)
+        return combined_result if combined_result.success else None
+
+    async def _build_context_analysis(
+        self, screenshot: np.ndarray, ui_elements: List[UIElement],
+        processing_results: List[Any], primary_result: Any
+    ) -> Dict[str, Any]:
+        """Build context analysis with multimodal understanding. Issue #281: Extracted helper."""
+        context_analysis = await self.context_analyzer.analyze_context(
+            screenshot, ui_elements
+        )
+
+        # Add multi-modal context if available
+        if len(processing_results) > 1 and processing_results[1].result_data:
+            voice_intent = processing_results[1].result_data.get("transcribed_text", "")
+            context_analysis["multimodal_understanding"] = primary_result.result_data
+            context_analysis["cross_modal_confidence"] = primary_result.confidence
+            context_analysis["voice_intent"] = voice_intent
+
+        return context_analysis
+
+    def _build_screen_state(
+        self, screenshot: np.ndarray, ui_elements: List[UIElement],
+        context_analysis: Dict[str, Any], processing_results: List[Any],
+        primary_result: Any
+    ) -> ScreenState:
+        """Build comprehensive screen state object. Issue #281: Extracted helper."""
+        extractor = ProcessingResultExtractor()
+        automation_opportunities = UIElementCollection(ui_elements).find_automation_opportunities(
+            context_analysis
+        )
+
+        return ScreenState(
+            timestamp=time.time(),
+            screenshot=screenshot,
+            ui_elements=ui_elements,
+            text_regions=extractor.extract_text_regions(primary_result.result_data),
+            dominant_colors=extractor.extract_dominant_colors(primary_result.result_data),
+            layout_structure=extractor.extract_layout_structure(primary_result.result_data),
+            automation_opportunities=automation_opportunities,
+            context_analysis=context_analysis,
+            confidence_score=max(r.confidence for r in processing_results),
+            multimodal_analysis=extractor.to_multimodal_analysis(processing_results),
+        )
 
     async def _capture_screenshot(
         self, session_id: Optional[str] = None

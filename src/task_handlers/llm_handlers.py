@@ -3,15 +3,16 @@
 # Author: mrveiss
 """
 LLM-related Task Handlers
+
+Issue #322: Refactored to use TaskExecutionContext to eliminate data clump pattern.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict
+
+from backend.models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
-
-if TYPE_CHECKING:
-    from src.worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +20,13 @@ logger = logging.getLogger(__name__)
 class LLMChatCompletionHandler(TaskHandler):
     """Handler for llm_chat_completion tasks"""
 
-    async def execute(
-        self,
-        worker: "WorkerNode",
-        task_payload: Dict[str, Any],
-        user_role: str,
-        task_id: str,
-    ) -> Dict[str, Any]:
+    async def execute(self, ctx: TaskExecutionContext) -> Dict[str, Any]:
         """Execute LLM chat completion task and return response."""
-        model_name = task_payload["model_name"]
-        messages = task_payload["messages"]
-        llm_kwargs = task_payload.get("kwargs", {})
+        model_name = ctx.require_payload_value("model_name")
+        messages = ctx.require_payload_value("messages")
+        llm_kwargs = ctx.get_payload_value("kwargs", {})
 
-        response = await worker.llm_interface.chat_completion(
+        response = await ctx.worker.llm_interface.chat_completion(
             model_name, messages, **llm_kwargs
         )
 
@@ -41,26 +36,20 @@ class LLMChatCompletionHandler(TaskHandler):
                 "message": "LLM completion successful.",
                 "response": response,
             }
-            worker.security_layer.audit_log(
+            ctx.audit_log(
                 "llm_chat_completion",
-                user_role,
                 "success",
-                {"task_id": task_id, "model": model_name},
+                {"model": model_name},
             )
         else:
             result = {
                 "status": "error",
                 "message": "LLM completion failed.",
             }
-            worker.security_layer.audit_log(
+            ctx.audit_log(
                 "llm_chat_completion",
-                user_role,
                 "failure",
-                {
-                    "task_id": task_id,
-                    "model": model_name,
-                    "reason": "llm_failed",
-                },
+                {"model": model_name, "reason": "llm_failed"},
             )
 
         return result

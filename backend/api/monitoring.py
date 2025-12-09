@@ -373,6 +373,7 @@ async def query_metrics(query: MetricsQuery):
     ]
 
     for category in categories:
+        # Issue #372: Use model methods to reduce feature envy
         if category == "gpu" and phase9_monitor.gpu_metrics_buffer:
             filtered_metrics = [
                 m
@@ -380,14 +381,7 @@ async def query_metrics(query: MetricsQuery):
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["gpu"] = [
-                {
-                    "timestamp": m.timestamp,
-                    "utilization_percent": m.utilization_percent,
-                    "memory_utilization_percent": m.memory_utilization_percent,
-                    "temperature_celsius": m.temperature_celsius,
-                    "power_draw_watts": m.power_draw_watts,
-                }
-                for m in filtered_metrics
+                m.to_query_dict() for m in filtered_metrics
             ]
 
         elif category == "npu" and phase9_monitor.npu_metrics_buffer:
@@ -397,14 +391,7 @@ async def query_metrics(query: MetricsQuery):
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["npu"] = [
-                {
-                    "timestamp": m.timestamp,
-                    "utilization_percent": m.utilization_percent,
-                    "acceleration_ratio": m.acceleration_ratio,
-                    "inference_count": m.inference_count,
-                    "average_inference_time_ms": m.average_inference_time_ms,
-                }
-                for m in filtered_metrics
+                m.to_query_dict() for m in filtered_metrics
             ]
 
         elif category == "system" and phase9_monitor.system_metrics_buffer:
@@ -414,14 +401,7 @@ async def query_metrics(query: MetricsQuery):
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["system"] = [
-                {
-                    "timestamp": m.timestamp,
-                    "cpu_usage_percent": m.cpu_usage_percent,
-                    "memory_usage_percent": m.memory_usage_percent,
-                    "cpu_load_1m": m.cpu_load_1m,
-                    "network_latency_ms": m.network_latency_ms,
-                }
-                for m in filtered_metrics
+                m.to_query_dict() for m in filtered_metrics
             ]
 
     # Include trends if requested

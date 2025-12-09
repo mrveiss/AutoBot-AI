@@ -214,11 +214,80 @@ class PromptKnowledgeSync:
 
         return "operational_guidance"
 
+    def _should_skip_unchanged(
+        self,
+        existing_entries: List[Dict[str, Any]],
+        metadata: Dict[str, Any],
+        force_update: bool,
+    ) -> bool:
+        """
+        Check if prompt should be skipped due to no content change.
+
+        Issue #281: Extracted helper for change detection.
+
+        Args:
+            existing_entries: Existing knowledge base entries
+            metadata: New prompt metadata with content_hash
+            force_update: Whether to force update regardless
+
+        Returns:
+            True if should skip (no changes), False otherwise
+        """
+        if not existing_entries or force_update:
+            return False
+
+        existing_hash = existing_entries[0].get("metadata", {}).get("content_hash")
+        return existing_hash == metadata["content_hash"]
+
+    async def _store_or_update_prompt(
+        self,
+        prompt_key: str,
+        content: str,
+        metadata: Dict[str, Any],
+        existing_entries: List[Dict[str, Any]],
+        results: Dict[str, Any],
+    ) -> None:
+        """
+        Store new prompt or update existing one in knowledge base.
+
+        Issue #281: Extracted helper for storage operations.
+
+        Args:
+            prompt_key: Unique prompt identifier
+            content: Prompt content
+            metadata: Prompt metadata
+            existing_entries: Existing entries (if any)
+            results: Results dict to update counters
+        """
+        if existing_entries:
+            existing_fact_id = existing_entries[0]["id"]
+            success = await self.knowledge_base.update_fact(
+                fact_id=existing_fact_id, content=content, metadata=metadata
+            )
+            if success:
+                results["updated"] += 1
+                logger.debug(f"Updated prompt in knowledge base: {prompt_key}")
+            else:
+                results["errors"] += 1
+                logger.error(f"Failed to update prompt: {prompt_key}")
+        else:
+            result = await self.knowledge_base.store_fact(
+                content=content, metadata=metadata
+            )
+            if result.get("status") == "success":
+                results["imported"] += 1
+                logger.debug(f"Imported prompt to knowledge base: {prompt_key}")
+            else:
+                results["errors"] += 1
+                logger.error(f"Failed to import prompt: {prompt_key}")
+
     async def sync_prompts_to_knowledge(
         self, force_update: bool = False
     ) -> Dict[str, Any]:
         """
         Synchronize selected prompts from prompt manager to knowledge base.
+
+        Issue #281: Refactored from 111 lines to use extracted helper methods.
 
         Args:
             force_update: If True, update all prompts regardless of changes
@@ -238,16 +307,13 @@ class PromptKnowledgeSync:
             "error_details": [],
         }
 
-        # Get all available prompts
         available_prompts = self.prompt_manager.list_prompts()
         results["total_prompts"] = len(available_prompts)
 
         for prompt_key in available_prompts:
             try:
-                # Convert prompt key back to file path for pattern matching
                 file_path = prompt_key.replace(".", "/") + ".md"
 
-                # Check if we should import this prompt
                 should_import, category, collection_name = self.should_import_prompt(
                     prompt_key, file_path
                 )
@@ -256,57 +322,25 @@ class PromptKnowledgeSync:
                     results["skipped"] += 1
                     continue
 
-                # Ensure category is not None
-                if category is None:
-                    category = "uncategorized"
+                category = category or "uncategorized"
+                collection_name = collection_name or "Uncategorized"
 
-                if collection_name is None:
-                    collection_name = "Uncategorized"
-
-                # Get prompt content
                 content = self.prompt_manager.get_raw(prompt_key)
-
-                # Extract metadata
                 metadata = self.extract_prompt_metadata(
                     prompt_key, content, file_path, category, collection_name
                 )
 
-                # Check if prompt already exists in knowledge base
                 existing_entries = await self._find_existing_prompt_entry(prompt_key)
 
-                if existing_entries and not force_update:
-                    # Check if content has changed
-                    existing_hash = (
-                        existing_entries[0].get("metadata", {}).get("content_hash")
-                    )
-                    if existing_hash == metadata["content_hash"]:
-                        results["skipped"] += 1
-                        continue
+                # Issue #281: uses helper
+                if self._should_skip_unchanged(existing_entries, metadata, force_update):
+                    results["skipped"] += 1
+                    continue
 
-                # Use knowledge base fact storage for prompts
-                if existing_entries:
-                    # Update existing fact
-                    existing_fact_id = existing_entries[0]["id"]
-                    success = await self.knowledge_base.update_fact(
-                        fact_id=existing_fact_id, content=content, metadata=metadata
-                    )
-                    if success:
-                        results["updated"] += 1
-                        logger.debug(f"Updated prompt in knowledge base: {prompt_key}")
-                    else:
-                        results["errors"] += 1
-                        logger.error(f"Failed to update prompt: {prompt_key}")
-                else:
-                    # Store new fact in knowledge base
-                    result = await self.knowledge_base.store_fact(
-                        content=content, metadata=metadata
-                    )
-                    if result.get("status") == "success":
-                        results["imported"] += 1
-                        logger.debug(f"Imported prompt to knowledge base: {prompt_key}")
-                    else:
-                        results["errors"] += 1
-                        logger.error(f"Failed to import prompt: {prompt_key}")
+                # Issue #281: uses helper
+                await self._store_or_update_prompt(
+                    prompt_key, content, metadata, existing_entries, results
+                )
 
                 # Track by category
                 if category not in results["categories"]:

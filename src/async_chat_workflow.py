@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from src.constants.threshold_constants import TimingConstants
 from src.dependency_container import inject_services
 from src.llm_interface import ChatMessage, LLMResponse
 
@@ -131,154 +132,157 @@ class AsyncChatWorkflow:
         self, user_message: str, chat_id: str = "default", llm=None, config=None
     ) -> ChatWorkflowResult:
         """
-        Process chat message through complete workflow with dependency injection
+        Process chat message through complete workflow with dependency injection.
+
+        Issue #281: Refactored from 152 lines to use extracted helper methods
+        for each workflow stage.
         """
         self._start_time = time.time()
         self.workflow_messages.clear()
-
-        workflow_steps = []
+        workflow_steps: List[Dict[str, Any]] = []
 
         try:
-            # Step 1: Initialize workflow
-            await self.add_workflow_message(
-                "thought", "🤔 I'm analyzing your message...", step="initialization"
+            # Stage 1: Initialize and classify
+            await self._workflow_initialize(workflow_steps)
+            message_type = await self._workflow_classify(user_message, workflow_steps)
+
+            # Stage 2: Knowledge search
+            knowledge_status, kb_results = await self._workflow_knowledge_search()
+
+            # Stage 3: LLM response generation
+            llm_response = await self._workflow_llm_generate(
+                user_message, llm, workflow_steps
             )
 
-            workflow_steps.append(
-                {
-                    "step": "initialization",
-                    "status": "completed",
-                    "timestamp": time.time(),
-                }
+            # Stage 4: Build and return result
+            return self._build_success_result(
+                llm_response, message_type, knowledge_status,
+                kb_results, workflow_steps, chat_id
             )
-
-            # Step 2: Show planning
-            await self.add_workflow_message(
-                "planning", "📋 Planning my response approach...", step="planning"
-            )
-            await asyncio.sleep(0.2)  # Brief pause for UX
-
-            # Step 3: Message classification
-            await self.add_workflow_message(
-                "debug",
-                "🔍 WORKFLOW: Classifying message type...",
-                step="classification",
-            )
-
-            message_type = await self._classify_message(user_message)
-
-            await self.add_workflow_message(
-                "utility",
-                f"✅ Classified as: {message_type.value}",
-                step="classification",
-                result=message_type.value,
-            )
-
-            workflow_steps.append(
-                {
-                    "step": "classification",
-                    "result": message_type.value,
-                    "timestamp": time.time(),
-                }
-            )
-
-            # Step 4: Knowledge search (simplified for now)
-            await self.add_workflow_message(
-                "debug",
-                "🔍 WORKFLOW: Searching knowledge base...",
-                step="knowledge_search",
-            )
-
-            knowledge_status = KnowledgeStatus.BYPASSED  # Simplified for now
-            kb_results = []
-
-            await asyncio.sleep(0.1)  # Simulate search
-            await self.add_workflow_message(
-                "utility",
-                "📚 Knowledge base search completed",
-                step="knowledge_search",
-                results_count=len(kb_results),
-            )
-
-            # Step 5: LLM interaction
-            await self.add_workflow_message(
-                "thought", "🧠 Generating response using LLM...", step="llm_generation"
-            )
-
-            await self.add_workflow_message(
-                "debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection"
-            )
-
-            # Generate LLM response
-            llm_response = await self._generate_llm_response(user_message, llm)
-
-            await self.add_workflow_message(
-                "utility",
-                "✅ LLM response received",
-                step="llm_generation",
-                response_length=len(llm_response.content),
-                model=llm_response.model,
-                processing_time=llm_response.processing_time,
-            )
-
-            workflow_steps.append(
-                {
-                    "step": "llm_generation",
-                    "model": llm_response.model,
-                    "tokens_used": llm_response.tokens_used,
-                    "processing_time": llm_response.processing_time,
-                    "timestamp": time.time(),
-                }
-            )
-
-            # Step 6: Completion
-            await self.add_workflow_message(
-                "debug", "🏁 WORKFLOW: Response generation completed", step="completion"
-            )
-
-            processing_time = time.time() - self._start_time
-
-            # Create result
-            result = ChatWorkflowResult(
-                response=llm_response.content,
-                message_type=message_type,
-                knowledge_status=knowledge_status,
-                kb_results=kb_results,
-                sources=[],
-                processing_time=processing_time,
-                workflow_steps=workflow_steps,
-                workflow_messages=self.workflow_messages.copy(),
-                librarian_engaged=False,
-                mcp_used=False,
-                conversation_id=chat_id,
-            )
-
-            logger.info(f"Chat workflow completed in {processing_time:.2f}s")
-            return result
 
         except Exception as e:
-            # Error handling with workflow message
-            await self.add_workflow_message(
-                "debug",
-                f"❌ WORKFLOW: Error occurred: {str(e)}",
-                step="error_handling",
-                error=str(e),
-            )
+            return await self._build_error_result(e, workflow_steps, chat_id)
 
-            processing_time = time.time() - self._start_time
+    async def _workflow_initialize(
+        self, workflow_steps: List[Dict[str, Any]]
+    ) -> None:
+        """Initialize workflow with status messages. Issue #281: Extracted helper."""
+        await self.add_workflow_message(
+            "thought", "🤔 I'm analyzing your message...", step="initialization"
+        )
+        workflow_steps.append({
+            "step": "initialization",
+            "status": "completed",
+            "timestamp": time.time(),
+        })
+        await self.add_workflow_message(
+            "planning", "📋 Planning my response approach...", step="planning"
+        )
+        await asyncio.sleep(0.2)  # Brief pause for UX
 
-            return ChatWorkflowResult(
-                response=(
-                    f"I apologize, but I encountered an error while processing your message:"
-                    f"{str(e)}"
-                ),
-                message_type=MessageType.GENERAL_QUERY,
-                knowledge_status=KnowledgeStatus.BYPASSED,
-                processing_time=processing_time,
-                workflow_steps=workflow_steps,
-                workflow_messages=self.workflow_messages.copy(),
-                conversation_id=chat_id,
-            )
+    async def _workflow_classify(
+        self, user_message: str, workflow_steps: List[Dict[str, Any]]
+    ) -> MessageType:
+        """Classify message and log workflow step. Issue #281: Extracted helper."""
+        await self.add_workflow_message(
+            "debug", "🔍 WORKFLOW: Classifying message type...", step="classification"
+        )
+        message_type = await self._classify_message(user_message)
+        await self.add_workflow_message(
+            "utility", f"✅ Classified as: {message_type.value}",
+            step="classification", result=message_type.value
+        )
+        workflow_steps.append({
+            "step": "classification",
+            "result": message_type.value,
+            "timestamp": time.time(),
+        })
+        return message_type
+
+    async def _workflow_knowledge_search(
+        self,
+    ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
+        """Search knowledge base. Issue #281: Extracted helper."""
+        await self.add_workflow_message(
+            "debug", "🔍 WORKFLOW: Searching knowledge base...", step="knowledge_search"
+        )
+        knowledge_status = KnowledgeStatus.BYPASSED  # Simplified for now
+        kb_results: List[Dict[str, Any]] = []
+        await asyncio.sleep(0.1)  # Simulate search
+        await self.add_workflow_message(
+            "utility", "📚 Knowledge base search completed",
+            step="knowledge_search", results_count=len(kb_results)
+        )
+        return knowledge_status, kb_results
+
+    async def _workflow_llm_generate(
+        self, user_message: str, llm, workflow_steps: List[Dict[str, Any]]
+    ) -> LLMResponse:
+        """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
+        await self.add_workflow_message(
+            "thought", "🧠 Generating response using LLM...", step="llm_generation"
+        )
+        await self.add_workflow_message(
+            "debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection"
+        )
+        llm_response = await self._generate_llm_response(user_message, llm)
+        await self.add_workflow_message(
+            "utility", "✅ LLM response received", step="llm_generation",
+            response_length=len(llm_response.content),
+            model=llm_response.model, processing_time=llm_response.processing_time
+        )
+        workflow_steps.append({
+            "step": "llm_generation",
+            "model": llm_response.model,
+            "tokens_used": llm_response.tokens_used,
+            "processing_time": llm_response.processing_time,
+            "timestamp": time.time(),
+        })
+        return llm_response
+
+    def _build_success_result(
+        self, llm_response: LLMResponse, message_type: MessageType,
+        knowledge_status: KnowledgeStatus, kb_results: List[Dict[str, Any]],
+        workflow_steps: List[Dict[str, Any]], chat_id: str
+    ) -> ChatWorkflowResult:
+        """Build successful workflow result. Issue #281: Extracted helper."""
+        processing_time = time.time() - self._start_time
+        logger.info(f"Chat workflow completed in {processing_time:.2f}s")
+        return ChatWorkflowResult(
+            response=llm_response.content,
+            message_type=message_type,
+            knowledge_status=knowledge_status,
+            kb_results=kb_results,
+            sources=[],
+            processing_time=processing_time,
+            workflow_steps=workflow_steps,
+            workflow_messages=self.workflow_messages.copy(),
+            librarian_engaged=False,
+            mcp_used=False,
+            conversation_id=chat_id,
+        )
+
+    async def _build_error_result(
+        self, error: Exception, workflow_steps: List[Dict[str, Any]], chat_id: str
+    ) -> ChatWorkflowResult:
+        """Build error workflow result. Issue #281: Extracted helper."""
+        await self.add_workflow_message(
+            "debug", f"❌ WORKFLOW: Error occurred: {str(error)}",
+            step="error_handling", error=str(error)
+        )
+        processing_time = time.time() - self._start_time
+        return ChatWorkflowResult(
+            response=(
+                f"I apologize, but I encountered an error while processing your message:"
+                f"{str(error)}"
+            ),
+            message_type=MessageType.GENERAL_QUERY,
+            knowledge_status=KnowledgeStatus.BYPASSED,
+            processing_time=processing_time,
+            workflow_steps=workflow_steps,
+            workflow_messages=self.workflow_messages.copy(),
+            conversation_id=chat_id,
+        )
 
     async def _classify_message(self, message: str) -> MessageType:
         """Classify message type (simplified implementation)"""
@@ -311,7 +315,7 @@ class AsyncChatWorkflow:
 
         # Generate response with timeout
         response = await asyncio.wait_for(
-            llm.chat_completion(messages, stream=False), timeout=30.0
+            llm.chat_completion(messages, stream=False), timeout=TimingConstants.SHORT_TIMEOUT
         )
 
         return response

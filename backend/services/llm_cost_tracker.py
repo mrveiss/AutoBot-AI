@@ -129,6 +129,28 @@ class LLMUsageRecord:
 
 
 @dataclass
+class TrackUsageRequest:
+    """
+    Request parameters for tracking LLM usage.
+
+    Issue #375: Reduces long parameter list in track_usage().
+    Groups all tracking parameters into a single request object.
+    """
+
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    endpoint: Optional[str] = None
+    latency_ms: Optional[float] = None
+    success: bool = True
+    error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass
 class BudgetAlert:
     """Budget alert configuration"""
 
@@ -209,10 +231,12 @@ class LLMCostTracker:
 
     async def track_usage(
         self,
-        provider: str,
-        model: str,
-        input_tokens: int,
-        output_tokens: int,
+        request: Optional[TrackUsageRequest] = None,
+        *,  # Force keyword-only args for backwards compatibility
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None,
         session_id: Optional[str] = None,
         user_id: Optional[str] = None,
         endpoint: Optional[str] = None,
@@ -224,11 +248,14 @@ class LLMCostTracker:
         """
         Track an LLM API usage event.
 
+        Issue #375: Supports both request object and individual parameters.
+
         Args:
-            provider: LLM provider (anthropic, openai, etc.)
-            model: Model name
-            input_tokens: Number of input tokens
-            output_tokens: Number of output tokens
+            request: TrackUsageRequest object (preferred, reduces param count)
+            provider: LLM provider (legacy, use request instead)
+            model: Model name (legacy, use request instead)
+            input_tokens: Number of input tokens (legacy, use request instead)
+            output_tokens: Number of output tokens (legacy, use request instead)
             session_id: Optional session identifier
             user_id: Optional user identifier
             endpoint: Optional API endpoint called
@@ -240,6 +267,25 @@ class LLMCostTracker:
         Returns:
             LLMUsageRecord with calculated cost
         """
+        # Issue #375: Extract from request object if provided
+        if request is not None:
+            provider = request.provider
+            model = request.model
+            input_tokens = request.input_tokens
+            output_tokens = request.output_tokens
+            session_id = request.session_id
+            user_id = request.user_id
+            endpoint = request.endpoint
+            latency_ms = request.latency_ms
+            success = request.success
+            error_message = request.error_message
+            metadata = request.metadata
+        elif provider is None or model is None or input_tokens is None or output_tokens is None:
+            raise ValueError(
+                "Either 'request' object or 'provider', 'model', "
+                "'input_tokens', 'output_tokens' are required"
+            )
+
         cost = self.calculate_cost(model, input_tokens, output_tokens)
         timestamp = datetime.utcnow().isoformat()
 
@@ -444,7 +490,7 @@ class LLMCostTracker:
         summary = await self.get_cost_summary(start_date, end_date)
 
         daily_costs = summary.get("daily_costs", {})
-        sorted_dates = sorted(daily_costs.keys())
+        sorted_dates = sorted(daily_costs)
 
         # Calculate trends
         if len(sorted_dates) >= 2:

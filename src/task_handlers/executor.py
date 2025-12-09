@@ -6,10 +6,14 @@ Task Executor - Routes tasks to appropriate handlers
 
 This module implements the Strategy Pattern for task execution,
 dramatically reducing nesting depth and improving maintainability.
+
+Issue #322: Updated to use TaskExecutionContext for cleaner handler interface.
 """
 
 import logging
 from typing import TYPE_CHECKING, Any, Dict
+
+from backend.models.task_context import TaskExecutionContext
 
 from .communication_handlers import (
     AskUserCommandApprovalHandler,
@@ -106,6 +110,8 @@ class TaskExecutor:
         """
         Execute a task by routing to the appropriate handler.
 
+        Issue #322: Updated to use TaskExecutionContext.
+
         Args:
             task_payload: Task data including type and parameters
             user_role: User role for audit logging
@@ -126,11 +132,17 @@ class TaskExecutor:
                 "message": f"Unsupported task type: {task_type}",
             }
 
-        # Delegate to the handler
+        # Issue #322: Create context object to eliminate data clump pattern
+        ctx = TaskExecutionContext(
+            worker=self.worker,
+            task_payload=task_payload,
+            user_role=user_role,
+            task_id=task_id,
+        )
+
+        # Delegate to the handler with context
         try:
-            result = await handler.execute(
-                self.worker, task_payload, user_role, task_id
-            )
+            result = await handler.execute(ctx)
             return result
         except KeyError as e:
             # Missing required parameter
@@ -145,13 +157,11 @@ class TaskExecutor:
             error_msg = f"Handler execution error: {str(e)}"
             logger.error(f"Task {task_id} failed: {error_msg}", exc_info=True)
 
-            # Audit log the failure
-            self.worker.security_layer.audit_log(
+            # Audit log the failure using context
+            ctx.audit_log(
                 f"execute_task_{task_type}",
-                user_role,
                 "failure",
                 {
-                    "task_id": task_id,
                     "payload": task_payload,
                     "error": str(e),
                 },

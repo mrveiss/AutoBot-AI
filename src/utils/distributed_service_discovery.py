@@ -19,6 +19,7 @@ from typing import Dict, Optional
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -64,146 +65,159 @@ class DistributedServiceDiscovery:
         self._initialize_service_registry()
 
     def _initialize_service_registry(self):
-        """Initialize service registry from unified configuration"""
+        """
+        Initialize service registry from unified configuration.
 
-        # Get configuration from unified config manager
+        Issue #281: Refactored from 141 lines to use extracted helper methods.
+        """
         from src.unified_config_manager import unified_config_manager
 
-        # Get service configurations
-        services_config = unified_config_manager.get_distributed_services_config()
-        backend_config = unified_config_manager.get_backend_config()
-        redis_config = unified_config_manager.get_redis_config()
-
-        # Get system defaults for ultimate fallbacks
-        system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
-            or {}
+        # Load configurations
+        self._services_config = unified_config_manager.get_distributed_services_config()
+        self._backend_config = unified_config_manager.get_backend_config()
+        self._redis_config = unified_config_manager.get_redis_config()
+        self._system_defaults = (
+            unified_config_manager.get_config_section("service_discovery_defaults") or {}
         )
 
-        # Helper to safely get host/port from config
-        def get_config_value(service_name, key, default_key):
-            """Get configuration value with fallback to system defaults"""
-            if service_name == "backend":
-                value = backend_config.get(key)
-            elif service_name == "redis":
-                value = redis_config.get(key)
-            else:
-                service_config = services_config.get(service_name, {})
-                value = service_config.get(key)
-
-            # If not in config, try system defaults
-            if not value:
-                value = system_defaults.get(
-                    default_key, NetworkConstants.LOCALHOST_NAME if key == "host" else NetworkConstants.BACKEND_PORT
-                )
-
-            return value
-
-        # Primary service endpoints (from configuration)
-        primary_services = {
-            "redis": ServiceEndpoint(
-                get_config_value("redis", "host", "redis_host"),
-                get_config_value("redis", "port", "redis_port"),
-                "redis",
-            ),
-            "backend": ServiceEndpoint(
-                get_config_value("backend", "host", "backend_host"),
-                get_config_value("backend", "port", "backend_port"),
-                "http",
-            ),
-            "frontend": ServiceEndpoint(
-                get_config_value("frontend", "host", "frontend_host"),
-                get_config_value("frontend", "port", "frontend_port"),
-                "http",
-            ),
-            "npu_worker": ServiceEndpoint(
-                get_config_value("npu_worker", "host", "npu_worker_host"),
-                get_config_value("npu_worker", "port", "npu_worker_port"),
-                "http",
-            ),
-            "ai_stack": ServiceEndpoint(
-                get_config_value("ai_stack", "host", "ai_stack_host"),
-                get_config_value("ai_stack", "port", "ai_stack_port"),
-                "http",
-            ),
-            "browser": ServiceEndpoint(
-                get_config_value("browser_service", "host", "browser_service_host"),
-                get_config_value("browser_service", "port", "browser_service_port"),
-                "http",
-            ),
-            "ollama": ServiceEndpoint(
-                get_config_value("ollama", "host", "ollama_host"),
-                get_config_value("ollama", "port", "ollama_port"),
-                "http",
-            ),
-        }
-
-        # Backup endpoints for failover (from configuration)
-        backup_configs = system_defaults.get("backup_endpoints", {})
-        backup_endpoints = {
-            "redis": [
-                ServiceEndpoint(
-                    backup_configs.get("redis_backup_1_host", "localhost"),
-                    backup_configs.get(
-                        "redis_backup_1_port",
-                        get_config_value("redis", "port", "redis_port"),
-                    ),
-                    "redis",
-                ),
-                ServiceEndpoint(
-                    backup_configs.get(
-                        "redis_backup_2_host",
-                        get_config_value("backend", "host", "backend_host"),
-                    ),
-                    backup_configs.get(
-                        "redis_backup_2_port",
-                        get_config_value("redis", "port", "redis_port"),
-                    ),
-                    "redis",
-                ),
-            ],
-            "backend": [
-                ServiceEndpoint(
-                    backup_configs.get("backend_backup_1_host", "localhost"),
-                    backup_configs.get(
-                        "backend_backup_1_port",
-                        get_config_value("backend", "port", "backend_port"),
-                    ),
-                    "http",
-                ),
-            ],
-            "ollama": [
-                ServiceEndpoint(
-                    backup_configs.get(
-                        "ollama_backup_1_host",
-                        get_config_value("ai_stack", "host", "ai_stack_host"),
-                    ),
-                    backup_configs.get(
-                        "ollama_backup_1_port",
-                        get_config_value("ollama", "port", "ollama_port"),
-                    ),
-                    "http",
-                ),
-                ServiceEndpoint(
-                    backup_configs.get(
-                        "ollama_backup_2_host",
-                        get_config_value("npu_worker", "host", "npu_worker_host"),
-                    ),
-                    backup_configs.get(
-                        "ollama_backup_2_port",
-                        get_config_value("ollama", "port", "ollama_port"),
-                    ),
-                    "http",
-                ),
-            ],
-        }
+        # Build service registries
+        primary_services = self._build_primary_services()
+        backup_endpoints = self._build_backup_endpoints()
 
         self.services.update(primary_services)
         self.backup_endpoints.update(backup_endpoints)
 
-        logger.info(
-            f"🌐 Service registry initialized with {len(self.services)} services"
-        )
+        logger.info(f"🌐 Service registry initialized with {len(self.services)} services")
+
+    def _get_config_value(self, service_name: str, key: str, default_key: str):
+        """Get configuration value with fallback to system defaults. Issue #281: Extracted helper."""
+        if service_name == "backend":
+            value = self._backend_config.get(key)
+        elif service_name == "redis":
+            value = self._redis_config.get(key)
+        else:
+            service_config = self._services_config.get(service_name, {})
+            value = service_config.get(key)
+
+        if not value:
+            value = self._system_defaults.get(
+                default_key,
+                NetworkConstants.LOCALHOST_NAME if key == "host" else NetworkConstants.BACKEND_PORT
+            )
+        return value
+
+    def _build_primary_services(self) -> Dict[str, ServiceEndpoint]:
+        """Build primary service endpoints from configuration. Issue #281: Extracted helper."""
+        return {
+            "redis": ServiceEndpoint(
+                self._get_config_value("redis", "host", "redis_host"),
+                self._get_config_value("redis", "port", "redis_port"),
+                "redis",
+            ),
+            "backend": ServiceEndpoint(
+                self._get_config_value("backend", "host", "backend_host"),
+                self._get_config_value("backend", "port", "backend_port"),
+                "http",
+            ),
+            "frontend": ServiceEndpoint(
+                self._get_config_value("frontend", "host", "frontend_host"),
+                self._get_config_value("frontend", "port", "frontend_port"),
+                "http",
+            ),
+            "npu_worker": ServiceEndpoint(
+                self._get_config_value("npu_worker", "host", "npu_worker_host"),
+                self._get_config_value("npu_worker", "port", "npu_worker_port"),
+                "http",
+            ),
+            "ai_stack": ServiceEndpoint(
+                self._get_config_value("ai_stack", "host", "ai_stack_host"),
+                self._get_config_value("ai_stack", "port", "ai_stack_port"),
+                "http",
+            ),
+            "browser": ServiceEndpoint(
+                self._get_config_value("browser_service", "host", "browser_service_host"),
+                self._get_config_value("browser_service", "port", "browser_service_port"),
+                "http",
+            ),
+            "ollama": ServiceEndpoint(
+                self._get_config_value("ollama", "host", "ollama_host"),
+                self._get_config_value("ollama", "port", "ollama_port"),
+                "http",
+            ),
+        }
+
+    def _build_backup_endpoints(self) -> Dict[str, list]:
+        """Build backup endpoints for failover. Issue #281: Extracted helper."""
+        backup_configs = self._system_defaults.get("backup_endpoints", {})
+        return {
+            "redis": self._build_redis_backups(backup_configs),
+            "backend": self._build_backend_backups(backup_configs),
+            "ollama": self._build_ollama_backups(backup_configs),
+        }
+
+    def _build_redis_backups(self, backup_configs: Dict) -> list:
+        """Build Redis backup endpoints. Issue #281: Extracted helper."""
+        return [
+            ServiceEndpoint(
+                backup_configs.get("redis_backup_1_host", "localhost"),
+                backup_configs.get(
+                    "redis_backup_1_port",
+                    self._get_config_value("redis", "port", "redis_port"),
+                ),
+                "redis",
+            ),
+            ServiceEndpoint(
+                backup_configs.get(
+                    "redis_backup_2_host",
+                    self._get_config_value("backend", "host", "backend_host"),
+                ),
+                backup_configs.get(
+                    "redis_backup_2_port",
+                    self._get_config_value("redis", "port", "redis_port"),
+                ),
+                "redis",
+            ),
+        ]
+
+    def _build_backend_backups(self, backup_configs: Dict) -> list:
+        """Build backend backup endpoints. Issue #281: Extracted helper."""
+        return [
+            ServiceEndpoint(
+                backup_configs.get("backend_backup_1_host", "localhost"),
+                backup_configs.get(
+                    "backend_backup_1_port",
+                    self._get_config_value("backend", "port", "backend_port"),
+                ),
+                "http",
+            ),
+        ]
+
+    def _build_ollama_backups(self, backup_configs: Dict) -> list:
+        """Build Ollama backup endpoints. Issue #281: Extracted helper."""
+        return [
+            ServiceEndpoint(
+                backup_configs.get(
+                    "ollama_backup_1_host",
+                    self._get_config_value("ai_stack", "host", "ai_stack_host"),
+                ),
+                backup_configs.get(
+                    "ollama_backup_1_port",
+                    self._get_config_value("ollama", "port", "ollama_port"),
+                ),
+                "http",
+            ),
+            ServiceEndpoint(
+                backup_configs.get(
+                    "ollama_backup_2_host",
+                    self._get_config_value("npu_worker", "host", "npu_worker_host"),
+                ),
+                backup_configs.get(
+                    "ollama_backup_2_port",
+                    self._get_config_value("ollama", "port", "ollama_port"),
+                ),
+                "http",
+            ),
+        ]
 
     async def get_service_endpoint(
         self, service_name: str
@@ -379,7 +393,7 @@ class DistributedServiceDiscovery:
                 # Check all services in parallel
                 tasks = []
                 for service_name, endpoint in self.services.items():
-                    if endpoint.is_stale(60.0):  # Check stale services
+                    if endpoint.is_stale(TimingConstants.STANDARD_TIMEOUT):  # Check stale services
                         task = asyncio.create_task(self._quick_health_check(endpoint))
                         tasks.append((service_name, task))
 
@@ -388,11 +402,11 @@ class DistributedServiceDiscovery:
                         *[task for _, task in tasks], return_exceptions=True
                     )
 
-                await asyncio.sleep(30)  # Check every 30 seconds
+                await asyncio.sleep(ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S)  # Check every 30 seconds
 
             except Exception as e:
                 logger.error(f"Background health monitoring error: {e}")
-                await asyncio.sleep(60)  # Back off on errors
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Back off on errors
 
 
 # Global instance for easy access (thread-safe)

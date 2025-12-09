@@ -29,6 +29,7 @@ from src.constants import PATH
 
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
+from src.constants.threshold_constants import TimingConstants
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
 from src.utils.system_metrics import get_metrics_collector
@@ -256,7 +257,7 @@ class AnalyticsController:
                 cwd=str(self.code_analysis_path),
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.VERY_LONG_TIMEOUT)
 
             if process.returncode == 0:
                 analysis_data = json.loads(stdout.decode())
