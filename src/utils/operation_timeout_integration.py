@@ -29,6 +29,7 @@ from fastapi import (
 from pydantic import BaseModel
 
 from src.constants.network_constants import ServiceURLs
+from src.constants.threshold_constants import TimingConstants
 from src.utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
@@ -166,13 +167,38 @@ class OperationIntegrationManager:
 
     def _calculate_operation_stats(self) -> tuple[int, int, int, int]:
         """Calculate operation statistics."""
-        all_operations = list(self.operation_manager.operations.values())
+        all_operations = self.get_all_operations()
         return (
             len(all_operations),
             len([op for op in all_operations if op.status == OperationStatus.RUNNING]),
             len([op for op in all_operations if op.status == OperationStatus.COMPLETED]),
             len([op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]),
         )
+
+    # Issue #321: Helper methods to reduce message chains (Law of Demeter)
+    def get_all_operations(self) -> List[LongRunningOperation]:
+        """Get all operations as a list, reducing operation_manager.operations.values() chain."""
+        if self.operation_manager:
+            return list(self.operation_manager.operations.values())
+        return []
+
+    async def list_operation_checkpoints(self, operation_id: str) -> List:
+        """List checkpoints for operation, reducing checkpoint_manager.list_checkpoints chain."""
+        if self.operation_manager and self.operation_manager.checkpoint_manager:
+            return await self.operation_manager.checkpoint_manager.list_checkpoints(operation_id)
+        return []
+
+    async def update_operation_progress(
+        self, operation: LongRunningOperation, current_step: str,
+        processed_items: int, total_items: Optional[int] = None,
+        performance_metrics: Optional[Dict[str, Any]] = None, status_message: str = ""
+    ) -> None:
+        """Update operation progress, reducing progress_tracker.update_progress chain."""
+        if self.operation_manager:
+            await self.operation_manager.progress_tracker.update_progress(
+                operation, current_step, processed_items, total_items,
+                performance_metrics, status_message
+            )
 
     async def _handle_websocket_connection(self, websocket: WebSocket, operation_id: str):
         """Handle WebSocket connection for progress updates."""
@@ -187,7 +213,7 @@ class OperationIntegrationManager:
                 await websocket.send_json({"type": "current_progress", "data": self._convert_operation_to_response(operation).dict()})
             while True:
                 try:
-                    await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                    await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
                 except asyncio.TimeoutError:
                     await websocket.send_json({"type": "ping"})
         except WebSocketDisconnect:
@@ -200,7 +226,8 @@ class OperationIntegrationManager:
     async def _handle_resume_operation(self, operation_id: str) -> Dict[str, str]:
         """Handle resume operation from latest checkpoint."""
         try:
-            checkpoints = await self.operation_manager.checkpoint_manager.list_checkpoints(operation_id)
+            # Issue #321: Use helper method to reduce message chains
+            checkpoints = await self.list_operation_checkpoints(operation_id)
             if not checkpoints:
                 raise_not_found_error("API_0002", "No checkpoints found for operation")
             latest_checkpoint = checkpoints[-1]
@@ -215,8 +242,10 @@ class OperationIntegrationManager:
         operation = self.operation_manager.get_operation(operation_id)
         if not operation:
             raise_not_found_error("API_0002", "Operation not found")
-        await self.operation_manager.progress_tracker.update_progress(
-            operation, request.current_step, request.processed_items, request.total_items, request.performance_metrics, request.status_message)
+        # Issue #321: Use helper method to reduce message chains
+        await self.update_operation_progress(
+            operation, request.current_step, request.processed_items,
+            request.total_items, request.performance_metrics, request.status_message)
         return {"status": "updated"}
 
     async def _handle_start_indexing(self, codebase_path: str, file_patterns: Optional[List[str]] = None) -> Dict[str, str]:
@@ -444,32 +473,8 @@ class OperationIntegrationManager:
     def _convert_operation_to_response(
         self, operation: LongRunningOperation
     ) -> OperationResponse:
-        """Convert internal operation to API response format"""
-        return OperationResponse(
-            operation_id=operation.operation_id,
-            operation_type=operation.operation_type.value,
-            name=operation.name,
-            description=operation.description,
-            status=operation.status.value,
-            priority=operation.priority.name.lower(),
-            created_at=operation.created_at.isoformat(),
-            started_at=(
-                operation.started_at.isoformat() if operation.started_at else None
-            ),
-            completed_at=(
-                operation.completed_at.isoformat() if operation.completed_at else None
-            ),
-            progress_percentage=operation.progress.progress_percentage,
-            processed_items=operation.progress.processed_items,
-            total_items=operation.progress.total_items,
-            current_step=operation.progress.current_step,
-            estimated_completion=(
-                operation.progress.estimated_completion.isoformat()
-                if operation.progress.estimated_completion
-                else None
-            ),
-            error_info=operation.error_info,
-        )
+        """Convert internal operation to API response format (Issue #372 - uses model method)"""
+        return OperationResponse(**operation.to_response_dict())
 
     async def _broadcast_progress_update(self, progress_data: Dict[str, Any]):
         """Broadcast progress update to WebSocket connections (thread-safe)"""
