@@ -181,17 +181,9 @@ class StreamingCommandExecutor:
         timeout: int = 300,
         provide_commentary: bool = True,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """
-        Execute command with real-time streaming output and commentary.
+        """Execute command with real-time streaming output and commentary.
 
-        Args:
-            command: Command to execute
-            user_goal: Original user goal for context
-            timeout: Execution timeout in seconds
-            provide_commentary: Whether to provide AI commentary
-
-        Yields:
-            StreamChunk: Stream of execution results and commentary
+        Issue #281: Refactored to use extracted helpers.
         """
         process_id = str(uuid.uuid4())
         start_time = time.time()
@@ -206,13 +198,8 @@ class StreamingCommandExecutor:
             return
 
         try:
-            # Start process
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.STATUS,
-                content=f"🚀 Executing: {command}",
-                metadata={"command": command, "process_id": process_id},
-            )
+            # Start process (Issue #281 - uses helper)
+            yield self._create_status_chunk(command, process_id)
 
             # Parse command safely (Issue #315 - uses helper)
             cmd_parts, parse_error = self._parse_command_safe(command)
@@ -220,24 +207,10 @@ class StreamingCommandExecutor:
                 yield parse_error
                 return
 
-            # Start the process
-            process = await asyncio.create_subprocess_exec(
-                *cmd_parts,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE,
+            # Start and track process (Issue #281 - uses helper)
+            process = await self._start_process_and_track(
+                cmd_parts, command, user_goal, process_id, start_time
             )
-
-            # Track the process
-            process_info = ProcessInfo(
-                process_id=process_id,
-                command=command,
-                pid=process.pid,
-                start_time=start_time,
-                user_goal=user_goal,
-                process=process,
-            )
-            self.active_processes[process_id] = process_info
 
             # Stream output with timeout
             try:
@@ -250,50 +223,27 @@ class StreamingCommandExecutor:
 
                 # Wait for process completion
                 return_code = await process.wait()
-
-                # Build completion chunk (Issue #315 - uses helper)
                 execution_time = time.time() - start_time
-                yield self._build_completion_chunk(
-                    return_code, execution_time, process_id
-                )
+                yield self._build_completion_chunk(return_code, execution_time, process_id)
 
-                # Yield final commentary if enabled (Issue #315 - early return pattern)
-                if not provide_commentary or return_code != 0:
-                    return  # Skip commentary for failures or when disabled
-                async for chunk in self._provide_completion_commentary(
-                    command, user_goal, execution_time
-                ):
-                    yield chunk
+                # Yield final commentary if enabled
+                if provide_commentary and return_code == 0:
+                    async for chunk in self._provide_completion_commentary(
+                        command, user_goal, execution_time
+                    ):
+                        yield chunk
 
             except asyncio.TimeoutError:
-                # Process timed out
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.ERROR,
-                    content=f"⏰ Command timed out after {timeout}s",
-                    metadata={"timeout": True, "timeout_duration": timeout},
-                )
-                # Kill the process (Issue #315 - uses helper)
+                yield self._create_timeout_error_chunk(timeout)
                 await self._terminate_process_safely(process)
 
             except Exception as e:
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.ERROR,
-                    content=f"❌ Execution error: {str(e)}",
-                    metadata={"execution_error": True, "error": str(e)},
-                )
+                yield self._create_execution_error_chunk(e)
 
         except Exception as e:
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.ERROR,
-                content=f"❌ Failed to start command: {str(e)}",
-                metadata={"startup_error": True, "error": str(e)},
-            )
+            yield self._create_startup_error_chunk(e)
 
         finally:
-            # Clean up process tracking
             if process_id in self.active_processes:
                 del self.active_processes[process_id]
 
@@ -402,6 +352,69 @@ class StreamingCommandExecutor:
         except Exception as e:
             logger.warning(f"Error in stream task: {e}")
             return []
+
+    # -------------------------------------------------------------------------
+    # Issue #281 - Extracted helper methods for execute_with_streaming refactoring
+    # -------------------------------------------------------------------------
+
+    def _create_status_chunk(self, command: str, process_id: str) -> StreamChunk:
+        """Create status chunk for command start (Issue #281 - extracted helper)."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.STATUS,
+            content=f"🚀 Executing: {command}",
+            metadata={"command": command, "process_id": process_id},
+        )
+
+    async def _start_process_and_track(
+        self, cmd_parts: List[str], command: str, user_goal: str,
+        process_id: str, start_time: float,
+    ) -> asyncio.subprocess.Process:
+        """Start async subprocess and track it (Issue #281 - extracted helper)."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd_parts,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+        )
+
+        process_info = ProcessInfo(
+            process_id=process_id,
+            command=command,
+            pid=process.pid,
+            start_time=start_time,
+            user_goal=user_goal,
+            process=process,
+        )
+        self.active_processes[process_id] = process_info
+        return process
+
+    def _create_timeout_error_chunk(self, timeout: int) -> StreamChunk:
+        """Create timeout error chunk (Issue #281 - extracted helper)."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content=f"⏰ Command timed out after {timeout}s",
+            metadata={"timeout": True, "timeout_duration": timeout},
+        )
+
+    def _create_execution_error_chunk(self, error: Exception) -> StreamChunk:
+        """Create execution error chunk (Issue #281 - extracted helper)."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content=f"❌ Execution error: {str(error)}",
+            metadata={"execution_error": True, "error": str(error)},
+        )
+
+    def _create_startup_error_chunk(self, error: Exception) -> StreamChunk:
+        """Create startup error chunk (Issue #281 - extracted helper)."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content=f"❌ Failed to start command: {str(error)}",
+            metadata={"startup_error": True, "error": str(error)},
+        )
 
     async def _collect_chunks(self, generator) -> List[StreamChunk]:
         """Collect chunks from async generator."""
