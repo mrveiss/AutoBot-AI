@@ -144,6 +144,39 @@ class EmbeddingUsageRequest(BaseModel):
     source: Optional[str] = Field(None, description="Source of the operation")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_usage_record(self, operation_id: str, cost: float) -> Dict[str, Any]:
+        """Convert to usage record dict for storage (Issue #372)."""
+        return {
+            "operation_id": operation_id,
+            "operation_type": self.operation_type,
+            "model": self.model,
+            "provider": self.provider,
+            "token_count": self.token_count,
+            "document_count": self.document_count,
+            "batch_size": self.batch_size,
+            "processing_time": self.processing_time,
+            "success": self.success,
+            "timestamp": datetime.now().isoformat(),
+            "cost": cost,
+            "source": self.source or "unknown",
+            "metadata": self.metadata or {},
+        }
+
+    def get_tokens_per_second(self) -> float:
+        """Calculate tokens per second (Issue #372)."""
+        if self.processing_time > 0:
+            return self.token_count / self.processing_time
+        return 0
+
+    def get_log_summary(self) -> str:
+        """Get formatted log summary (Issue #372)."""
+        return (
+            f"{self.document_count} docs, {self.token_count} tokens, "
+            f"{self.processing_time:.3f}s"
+        )
+
 
 class EmbeddingStatsResponse(BaseModel):
     """Response model for embedding statistics"""
@@ -208,22 +241,8 @@ class EmbeddingPatternAnalyzer:
             # Calculate cost
             cost = self._calculate_cost(request.model, request.token_count)
 
-            # Create usage record
-            record = {
-                "operation_id": operation_id,
-                "operation_type": request.operation_type,
-                "model": request.model,
-                "provider": request.provider,
-                "token_count": request.token_count,
-                "document_count": request.document_count,
-                "batch_size": request.batch_size,
-                "processing_time": request.processing_time,
-                "success": request.success,
-                "timestamp": datetime.now().isoformat(),
-                "cost": cost,
-                "source": request.source or "unknown",
-                "metadata": request.metadata or {},
-            }
+            # Issue #372: Use model method for record creation
+            record = request.to_usage_record(operation_id, cost)
 
             # Store in Redis with 30-day retention
             record_key = f"{self._usage_key}:{operation_id}"
@@ -232,20 +251,15 @@ class EmbeddingPatternAnalyzer:
             # Update aggregated stats
             await self._update_stats(request, cost)
 
-            logger.debug(
-                f"Recorded embedding usage: {request.document_count} docs, "
-                f"{request.token_count} tokens, {request.processing_time:.3f}s"
-            )
+            # Issue #372: Use model method for log summary
+            logger.debug(f"Recorded embedding usage: {request.get_log_summary()}")
 
             return {
                 "status": "recorded",
                 "operation_id": operation_id,
                 "cost": cost,
-                "tokens_per_second": (
-                    request.token_count / request.processing_time
-                    if request.processing_time > 0
-                    else 0
-                ),
+                # Issue #372: Use model method
+                "tokens_per_second": request.get_tokens_per_second(),
             }
 
         except Exception as e:

@@ -82,6 +82,41 @@ class TaskEntry:
         if self.dependencies is None:
             self.dependencies = []
 
+    def to_db_tuple(self) -> tuple:
+        """Convert to tuple for SQLite insertion (Issue #372 - reduces feature envy).
+
+        Returns:
+            Tuple with all fields formatted for tasks table insertion.
+        """
+        return (
+            self.task_id,
+            self.description,
+            self.status.value,
+            self.priority.value,
+            self.created_at.timestamp(),
+            self.updated_at.timestamp(),
+            self.completed_at.timestamp() if self.completed_at else None,
+            self.assigned_agent,
+            self.parent_task_id,
+            json.dumps(self.tags),
+            json.dumps(self.metadata),
+            json.dumps(self.execution_log),
+            self.estimated_duration_minutes,
+            self.actual_duration_minutes,
+            json.dumps(self.dependencies),
+            self.markdown_reference,
+        )
+
+    def generate_task_id(self) -> str:
+        """Generate a unique task ID based on timestamp and description hash (Issue #372).
+
+        Returns:
+            Generated task ID string.
+        """
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        desc_hash = hashlib.md5(self.description.encode()).hexdigest()[:8]
+        return f"task_{timestamp}_{desc_hash}"
+
 
 @dataclass
 class ExecutionRecord:
@@ -117,8 +152,123 @@ class AsyncEnhancedMemoryManager:
 
         logger.info(f"Async Enhanced Memory Manager initialized: {self.db_path}")
 
+    async def _configure_pragmas(self, conn) -> None:
+        """
+        Configure SQLite pragmas for optimal performance.
+
+        Issue #281: Extracted helper for PRAGMA configuration.
+        """
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA synchronous=NORMAL")
+        await conn.execute("PRAGMA cache_size=10000")
+        await conn.execute("PRAGMA temp_store=MEMORY")
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    async def _create_tables(self, conn) -> None:
+        """
+        Create database tables for tasks, execution records, and memory entries.
+
+        Issue #281: Extracted helper for table creation.
+        """
+        # Tasks table with enhanced schema
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+                task_id TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                completed_at REAL,
+                assigned_agent TEXT,
+                parent_task_id TEXT,
+                tags TEXT, -- JSON array
+                metadata TEXT, -- JSON object
+                execution_log TEXT, -- JSON array
+                estimated_duration_minutes INTEGER,
+                actual_duration_minutes INTEGER,
+                dependencies TEXT, -- JSON array
+                markdown_reference TEXT,
+                FOREIGN KEY (parent_task_id) REFERENCES tasks(task_id)
+            )
+            """
+        )
+
+        # Execution records table
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS execution_records (
+                record_id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                success BOOLEAN NOT NULL,
+                error_message TEXT,
+                agent_context TEXT, -- JSON object
+                FOREIGN KEY (task_id) REFERENCES tasks(task_id)
+            )
+            """
+        )
+
+        # Memory entries table for general storage
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                metadata TEXT, -- JSON object
+                timestamp REAL NOT NULL,
+                embedding BLOB,
+                reference_path TEXT,
+                UNIQUE(category, content_hash)
+            )
+            """
+        )
+
+    async def _create_indexes(self, conn) -> None:
+        """
+        Create performance indexes for all tables.
+
+        Issue #281: Extracted helper for index creation.
+        """
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
+            (
+                "CREATE INDEX IF NOT EXISTS idx_execution_task "
+                "ON execution_records(task_id)"
+            ),
+            (
+                "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
+                "ON execution_records(timestamp)"
+            ),
+            (
+                "CREATE INDEX IF NOT EXISTS idx_execution_success "
+                "ON execution_records(success)"
+            ),
+            "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
+            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
+        ]
+
+        for index_query in indexes:
+            await conn.execute(index_query)
+
     async def _init_database(self):
-        """Initialize async database schema"""
+        """
+        Initialize async database schema.
+
+        Issue #281: Refactored from 113 lines to use extracted helper methods.
+        """
         if self._initialized:
             return
 
@@ -128,101 +278,10 @@ class AsyncEnhancedMemoryManager:
 
             try:
                 async with aiosqlite.connect(self.db_path) as conn:
-                    # Enable WAL mode for better concurrency
-                    await conn.execute("PRAGMA journal_mode=WAL")
-                    await conn.execute("PRAGMA synchronous=NORMAL")
-                    await conn.execute("PRAGMA cache_size=10000")
-                    await conn.execute("PRAGMA temp_store=MEMORY")
-                    await conn.execute("PRAGMA foreign_keys=ON")
-
-                    # Tasks table with enhanced schema
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS tasks (
-                            task_id TEXT PRIMARY KEY,
-                            description TEXT NOT NULL,
-                            status TEXT NOT NULL,
-                            priority INTEGER NOT NULL,
-                            created_at REAL NOT NULL,
-                            updated_at REAL NOT NULL,
-                            completed_at REAL,
-                            assigned_agent TEXT,
-                            parent_task_id TEXT,
-                            tags TEXT, -- JSON array
-                            metadata TEXT, -- JSON object
-                            execution_log TEXT, -- JSON array
-                            estimated_duration_minutes INTEGER,
-                            actual_duration_minutes INTEGER,
-                            dependencies TEXT, -- JSON array
-                            markdown_reference TEXT,
-                            FOREIGN KEY (parent_task_id) REFERENCES tasks(task_id)
-                        )
-                        """
-                    )
-
-                    # Execution records table
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS execution_records (
-                            record_id TEXT PRIMARY KEY,
-                            task_id TEXT NOT NULL,
-                            timestamp REAL NOT NULL,
-                            action TEXT NOT NULL,
-                            result TEXT NOT NULL,
-                            duration_ms INTEGER NOT NULL,
-                            success BOOLEAN NOT NULL,
-                            error_message TEXT,
-                            agent_context TEXT, -- JSON object
-                            FOREIGN KEY (task_id) REFERENCES tasks(task_id)
-                        )
-                        """
-                    )
-
-                    # Memory entries table for general storage
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS memory_entries (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            category TEXT NOT NULL,
-                            content TEXT NOT NULL,
-                            content_hash TEXT NOT NULL,
-                            metadata TEXT, -- JSON object
-                            timestamp REAL NOT NULL,
-                            embedding BLOB,
-                            reference_path TEXT,
-                            UNIQUE(category, content_hash)
-                        )
-                        """
-                    )
-
-                    # Performance indexes
-                    indexes = [
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)",
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at)",
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
-                        "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
-                        (
-                            "CREATE INDEX IF NOT EXISTS idx_execution_task "
-                            "ON execution_records(task_id)"
-                        ),
-                        (
-                            "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
-                            "ON execution_records(timestamp)"
-                        ),
-                        (
-                            "CREATE INDEX IF NOT EXISTS idx_execution_success "
-                            "ON execution_records(success)"
-                        ),
-                        "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
-                        "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
-                        "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
-                    ]
-
-                    for index_query in indexes:
-                        await conn.execute(index_query)
-
+                    # Issue #281: uses helpers
+                    await self._configure_pragmas(conn)
+                    await self._create_tables(conn)
+                    await self._create_indexes(conn)
                     await conn.commit()
 
                 self._initialized = True
@@ -232,14 +291,12 @@ class AsyncEnhancedMemoryManager:
                 raise RuntimeError(f"Database initialization failed: {e}")
 
     async def create_task(self, task: TaskEntry) -> str:
-        """Create a new task with async performance"""
+        """Create a new task with async performance (Issue #372 - uses model methods)."""
         await self._init_database()
 
-        # Generate task ID if not provided
+        # Generate task ID if not provided using model method
         if not hasattr(task, "task_id") or not task.task_id:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            desc_hash = hashlib.md5(task.description.encode()).hexdigest()[:8]
-            task.task_id = f"task_{timestamp}_{desc_hash}"
+            task.task_id = task.generate_task_id()
 
         try:
             async with aiosqlite.connect(self.db_path) as conn:
@@ -252,24 +309,7 @@ class AsyncEnhancedMemoryManager:
                      dependencies, markdown_reference)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        task.task_id,
-                        task.description,
-                        task.status.value,
-                        task.priority.value,
-                        task.created_at.timestamp(),
-                        task.updated_at.timestamp(),
-                        task.completed_at.timestamp() if task.completed_at else None,
-                        task.assigned_agent,
-                        task.parent_task_id,
-                        json.dumps(task.tags),
-                        json.dumps(task.metadata),
-                        json.dumps(task.execution_log),
-                        task.estimated_duration_minutes,
-                        task.actual_duration_minutes,
-                        json.dumps(task.dependencies),
-                        task.markdown_reference,
-                    ),
+                    task.to_db_tuple(),  # Issue #372: Use model method
                 )
                 await conn.commit()
 

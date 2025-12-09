@@ -14,6 +14,7 @@ from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from src.constants.threshold_constants import TimingConstants
 from src.desktop_streaming_manager import desktop_streaming
 from src.enhanced_memory_manager_async import TaskPriority
 from src.takeover_manager import TakeoverTrigger, takeover_manager
@@ -443,7 +444,7 @@ async def monitoring_websocket(websocket: WebSocket):
                 )
 
                 # Wait for next update cycle
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
             except WebSocketDisconnect:
                 break

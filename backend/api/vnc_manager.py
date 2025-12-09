@@ -14,6 +14,7 @@ from typing import Dict
 from fastapi import APIRouter
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ async def restart_vnc_server() -> Dict[str, str]:
         await asyncio.gather(kill_vnc(), kill_websockify(), return_exceptions=True)
 
         # Wait a moment for cleanup (async to not block event loop)
-        await asyncio.sleep(1)
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         # Start fresh
         return start_vnc_server()

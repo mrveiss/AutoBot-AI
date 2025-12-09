@@ -4,7 +4,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.type_defs.common import Metadata, STREAMING_MESSAGE_TYPES
 from fastapi import (
@@ -44,7 +44,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 
 # Create placeholder dependency functions for missing imports
-def get_current_user():
+def get_current_user() -> Dict[str, str]:
     """Placeholder for auth dependency"""
     return {"user_id": "default"}
 
@@ -65,17 +65,17 @@ async def validate_chat_ownership(chat_id: str, request: Request) -> Dict:
     return await validate_session_ownership(session_id=chat_id, request=request)
 
 
-def get_system_state(request):
+def get_system_state(request: Request) -> Dict:
     """Get system state from app state"""
     return getattr(request.app.state, "system_state", {})
 
 
-def get_memory_interface(request):
+def get_memory_interface(request: Request) -> Optional[Any]:
     """Get memory interface from app state"""
     return getattr(request.app.state, "memory_interface", None)
 
 
-def get_llm_service(request):
+def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
     from src.utils.lazy_singleton import lazy_init_singleton
     from src.llm_service import LLMService
@@ -83,12 +83,12 @@ def get_llm_service(request):
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)
 
 
-async def get_chat_workflow_manager(request):
+async def get_chat_workflow_manager(request: Request) -> Any:
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
     from src.utils.lazy_singleton import lazy_init_singleton_async
     from src.chat_workflow import ChatWorkflowManager
 
-    async def create_workflow_manager():
+    async def create_workflow_manager() -> Any:
         """
         Factory function to create and initialize ChatWorkflowManager.
 
@@ -105,13 +105,13 @@ async def get_chat_workflow_manager(request):
 
 
 # Simple utility functions to replace missing imports
-def handle_api_error(error, request_id="unknown"):
+def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str, str]:
     """Simple error handler replacement"""
     logger.error(f"[{request_id}] API error: {str(error)}")
     return {"error": str(error)}
 
 
-def log_request_context(request, endpoint, request_id):
+def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
     """Log request context for debugging"""
     logger.info(f"[{request_id}] {endpoint} - {request.method} {request.url.path}")
 
@@ -154,6 +154,125 @@ def _has_longer_streaming_response(
         for m in messages
         if m is not msg
     )
+
+
+def _is_streaming_response(msg: Dict) -> bool:
+    """Check if message is a streaming LLM response (Issue #281: module-level helper)."""
+    message_type = msg.get("messageType", msg.get("type", "default"))
+    return message_type in STREAMING_MESSAGE_TYPES
+
+
+def _get_message_signature(msg: Dict) -> tuple:
+    """
+    Create a unique signature for message deduplication (Issue #281: extracted).
+
+    For user messages, use sender + content for deduplication.
+    For streaming responses, use sender + messageType (content changes during streaming).
+    For terminal/system messages, use ID if available, else timestamp + content prefix.
+    """
+    message_type = msg.get("messageType", msg.get("type", "default"))
+    sender = msg.get("sender", "")
+    text_content = msg.get("text", "") or msg.get("content", "")
+
+    # For USER messages: deduplicate by sender + content
+    if sender == "user":
+        return ("user", text_content[:200])
+
+    # For STREAMING responses: use sender + messageType
+    if message_type in STREAMING_MESSAGE_TYPES:
+        return (sender, message_type, "streaming")
+
+    # For TERMINAL/SYSTEM messages: use ID if available
+    msg_id = msg.get("id") or msg.get("messageId")
+    if msg_id:
+        return ("id", msg_id)
+
+    return (msg.get("timestamp", ""), sender, text_content[:100])
+
+
+def _filter_preserved_messages(
+    existing: List[Dict], new: List[Dict], new_sigs: set, new_by_id: Dict
+) -> List[Dict]:
+    """Filter existing messages to preserve backend-added ones (Issue #281: extracted)."""
+    preserved = []
+    for msg in existing:
+        sig = _get_message_signature(msg)
+        msg_id = msg.get("id") or msg.get("messageId")
+
+        # If message has an ID and new set has same ID, skip (use new version)
+        if msg_id and msg_id in new_by_id:
+            continue
+
+        # If signature matches, skip (deduplicate)
+        if sig in new_sigs:
+            continue
+
+        # For streaming responses without IDs, check if there's a longer version
+        if _is_streaming_response(msg):
+            msg_sender = msg.get("sender", "")
+            msg_content_len = len(msg.get("text", "") or msg.get("content", ""))
+
+            has_longer_existing = _has_longer_streaming_response(
+                msg, msg_sender, msg_content_len, existing, _is_streaming_response
+            )
+            has_longer_new = _has_longer_streaming_response(
+                msg, msg_sender, msg_content_len, new, _is_streaming_response
+            )
+            if has_longer_existing or has_longer_new:
+                continue
+
+        preserved.append(msg)
+    return preserved
+
+
+def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
+    """
+    Process merged messages, grouping streaming responses by time window (Issue #281: extracted).
+
+    Groups streaming messages by 2-minute windows and keeps only the longest per group.
+    This preserves multiple LLM responses across different conversation turns.
+    """
+    final_merged = []
+    streaming_groups: List[List[Dict]] = []
+    current_group: List[Dict] = []
+    last_streaming_ts = None
+
+    for msg in merged:
+        if _is_streaming_response(msg):
+            msg_ts_str = msg.get("timestamp", "")
+            current_ts = _parse_message_timestamp(msg_ts_str)
+
+            if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
+                if current_group:
+                    streaming_groups.append(current_group)
+                current_group = []
+
+            if current_ts:
+                last_streaming_ts = current_ts
+
+            current_group.append(msg)
+        else:
+            # Non-streaming message - finalize current streaming group
+            if current_group:
+                streaming_groups.append(current_group)
+                current_group = []
+                last_streaming_ts = None
+            final_merged.append(msg)
+
+    # Don't forget the last group
+    if current_group:
+        streaming_groups.append(current_group)
+
+    # Keep only the longest streaming message from each group
+    for group in streaming_groups:
+        if group:
+            longest = max(
+                group,
+                key=lambda m: len(m.get("text", "") or m.get("content", ""))
+            )
+            final_merged.append(longest)
+
+    return final_merged
 
 
 # ====================================================================
@@ -223,18 +342,19 @@ STREAMING_CHUNK_SIZE = 1024
 # ====================================================================
 
 
-async def process_chat_message(
-    message: ChatMessage,
-    chat_history_manager,
-    llm_service,
-    memory_interface,
-    knowledge_base,
-    config: Metadata,
-    request_id: str,
-) -> Metadata:
-    """Process a chat message and generate response"""
-    # Validate session ID
-    if message.session_id and not validate_chat_session_id(message.session_id):
+def _validate_session_id(session_id: Optional[str]) -> None:
+    """
+    Validate session ID format if provided.
+
+    Issue #281: Extracted helper for session validation.
+
+    Args:
+        session_id: Session ID to validate
+
+    Raises:
+        ValidationError: If session ID format is invalid
+    """
+    if session_id and not validate_chat_session_id(session_id):
         (
             AutoBotError,
             InternalError,
@@ -244,10 +364,25 @@ async def process_chat_message(
         ) = get_exceptions_lazy()
         raise ValidationError("Invalid session ID format")
 
-    # Get or create session
-    session_id = message.session_id or generate_chat_session_id()
 
-    # Store user message
+async def _store_and_log_user_message(
+    message: "ChatMessage",
+    session_id: str,
+    chat_history_manager,
+) -> str:
+    """
+    Store user message and log the event.
+
+    Issue #281: Extracted helper for user message handling.
+
+    Args:
+        message: Chat message object
+        session_id: Session ID
+        chat_history_manager: Chat history manager instance
+
+    Returns:
+        Generated message ID
+    """
     user_message_id = generate_message_id()
     user_message_data = {
         "id": user_message_id,
@@ -258,11 +393,9 @@ async def process_chat_message(
         "session_id": session_id,
     }
 
-    # Add to session history
     if hasattr(chat_history_manager, "add_message"):
         await chat_history_manager.add_message(session_id, user_message_data)
 
-    # Log chat event
     log_chat_event(
         "message_received",
         session_id,
@@ -273,72 +406,137 @@ async def process_chat_message(
         },
     )
 
-    # Get chat context from history (Redis-backed, efficient retrieval)
-    chat_context = []
-    if hasattr(chat_history_manager, "get_session_messages"):
-        try:
-            # Use model-aware message retrieval for optimal context window usage
-            # Context manager calculates efficient limits based on model capabilities
-            model_name = message.metadata.get("model") if message.metadata else None
-            recent_messages = await chat_history_manager.get_session_messages(
-                session_id, model_name=model_name
-            )
-            chat_context = recent_messages or []
-            logger.info(
-                f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
-            )
-        except Exception as e:
-            logger.warning(f"Could not retrieve chat context: {e}")
+    return user_message_id
 
-    # Generate AI response
+
+async def _get_chat_context(
+    chat_history_manager, session_id: str, model_name: Optional[str]
+) -> List[Dict]:
+    """
+    Get chat context from history with model-aware retrieval.
+
+    Issue #281: Extracted helper for context retrieval.
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        session_id: Session ID
+        model_name: Optional model name for context optimization
+
+    Returns:
+        List of chat context messages
+    """
+    if not hasattr(chat_history_manager, "get_session_messages"):
+        return []
+
     try:
-        # Prepare context for LLM
-        # Use model-aware message limit for optimal context window usage
-        model_name = message.metadata.get("model") if message.metadata else None
-        context_manager = getattr(chat_history_manager, "context_manager", None)
+        recent_messages = await chat_history_manager.get_session_messages(
+            session_id, model_name=model_name
+        )
+        chat_context = recent_messages or []
+        logger.info(
+            f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
+        )
+        return chat_context
+    except Exception as e:
+        logger.warning(f"Could not retrieve chat context: {e}")
+        return []
 
-        if context_manager:
-            message_limit = context_manager.get_message_limit(model_name)
-            logger.info(
-                f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})"
-            )
-        else:
-            message_limit = 20  # Fallback default
-            logger.warning("Context manager not available, using default limit")
 
-        llm_context = []
-        for msg in chat_context[-message_limit:]:  # Model-aware message limit
-            llm_context.append(
-                {"role": msg.get("role", "user"), "content": msg.get("content", "")}
-            )
+def _build_llm_context(
+    chat_context: List[Dict],
+    message: "ChatMessage",
+    chat_history_manager,
+    model_name: Optional[str],
+) -> List[Dict]:
+    """
+    Build LLM context with model-aware message limits.
 
-        # Add current message to context
-        llm_context.append({"role": message.role, "content": message.content})
+    Issue #281: Extracted helper for LLM context building.
 
-        # Generate response using LLM service
+    Args:
+        chat_context: Chat history context
+        message: Current chat message
+        chat_history_manager: Chat history manager instance
+        model_name: Optional model name for context optimization
+
+    Returns:
+        List of messages for LLM context
+    """
+    context_manager = getattr(chat_history_manager, "context_manager", None)
+
+    if context_manager:
+        message_limit = context_manager.get_message_limit(model_name)
+        logger.info(
+            f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})"
+        )
+    else:
+        message_limit = 20
+        logger.warning("Context manager not available, using default limit")
+
+    llm_context = [
+        {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+        for msg in chat_context[-message_limit:]
+    ]
+    llm_context.append({"role": message.role, "content": message.content})
+
+    return llm_context
+
+
+async def _generate_ai_response(
+    llm_service, llm_context: List[Dict], session_id: str, request_id: str
+) -> Dict:
+    """
+    Generate AI response using LLM service with fallback handling.
+
+    Issue #281: Extracted helper for AI response generation.
+
+    Args:
+        llm_service: LLM service instance
+        llm_context: Context messages for LLM
+        session_id: Session ID
+        request_id: Request ID
+
+    Returns:
+        AI response dict with content and role
+    """
+    try:
         if hasattr(llm_service, "generate_response"):
-            ai_response = await llm_service.generate_response(
+            return await llm_service.generate_response(
                 messages=llm_context, session_id=session_id, request_id=request_id
             )
         else:
-            # Fallback response
-            ai_response = {
-                "content": (
-                    "I'm currently unable to generate a response. Please try again."
-                ),
+            return {
+                "content": "I'm currently unable to generate a response. Please try again.",
                 "role": "assistant",
             }
-
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")
-        ai_response = {
-            "content": (
-                "I encountered an error processing your message. Please try again."
-            ),
+        return {
+            "content": "I encountered an error processing your message. Please try again.",
             "role": "assistant",
         }
 
-    # Store AI response
+
+async def _store_and_log_ai_response(
+    ai_response: Dict,
+    session_id: str,
+    request_id: str,
+    chat_history_manager,
+) -> str:
+    """
+    Store AI response and log the event.
+
+    Issue #281: Extracted helper for AI response handling.
+
+    Args:
+        ai_response: AI response dict
+        session_id: Session ID
+        request_id: Request ID
+        chat_history_manager: Chat history manager instance
+
+    Returns:
+        Generated message ID
+    """
     ai_message_id = generate_message_id()
     ai_message_data = {
         "id": ai_message_id,
@@ -349,11 +547,9 @@ async def process_chat_message(
         "session_id": session_id,
     }
 
-    # Add AI response to session history
     if hasattr(chat_history_manager, "add_message"):
         await chat_history_manager.add_message(session_id, ai_message_data)
 
-    # Log response event
     log_chat_event(
         "response_generated",
         session_id,
@@ -362,6 +558,65 @@ async def process_chat_message(
             "content_length": len(ai_response.get("content", "")),
             "request_id": request_id,
         },
+    )
+
+    return ai_message_id
+
+
+async def process_chat_message(
+    message: ChatMessage,
+    chat_history_manager,
+    llm_service,
+    memory_interface,
+    knowledge_base,
+    config: Metadata,
+    request_id: str,
+) -> Metadata:
+    """
+    Process a chat message and generate response.
+
+    Issue #281: Refactored from 149 lines to use extracted helper methods.
+
+    Args:
+        message: Chat message to process
+        chat_history_manager: Chat history manager instance
+        llm_service: LLM service instance
+        memory_interface: Memory interface instance
+        knowledge_base: Knowledge base instance
+        config: Configuration metadata
+        request_id: Request ID for tracking
+
+    Returns:
+        Response metadata dict
+    """
+    # Validate session ID (Issue #281: uses helper)
+    _validate_session_id(message.session_id)
+
+    # Get or create session
+    session_id = message.session_id or generate_chat_session_id()
+
+    # Store user message (Issue #281: uses helper)
+    await _store_and_log_user_message(message, session_id, chat_history_manager)
+
+    # Get chat context (Issue #281: uses helper)
+    model_name = message.metadata.get("model") if message.metadata else None
+    chat_context = await _get_chat_context(
+        chat_history_manager, session_id, model_name
+    )
+
+    # Build LLM context (Issue #281: uses helper)
+    llm_context = _build_llm_context(
+        chat_context, message, chat_history_manager, model_name
+    )
+
+    # Generate AI response (Issue #281: uses helper)
+    ai_response = await _generate_ai_response(
+        llm_service, llm_context, session_id, request_id
+    )
+
+    # Store AI response (Issue #281: uses helper)
+    ai_message_id = await _store_and_log_ai_response(
+        ai_response, session_id, request_id, chat_history_manager
     )
 
     return {
@@ -759,6 +1014,7 @@ async def send_chat_message_by_id(
 async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     """
     Merge message lists with deduplication to prevent race conditions.
+    Issue #281: Refactored from 159 lines to use extracted helper methods.
 
     This function prevents the race condition where frontend saves overwrite
     backend-added messages (terminal_command, terminal_output). It preserves
@@ -774,137 +1030,24 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     Returns:
         Merged message list, sorted by timestamp, with duplicates removed
     """
+    # Build set of new message signatures (Issue #281: uses helper)
+    new_sigs = {_get_message_signature(msg) for msg in new}
 
-    def msg_signature(msg: Dict) -> tuple:
-        """
-        Create a unique signature for message deduplication.
-
-        CRITICAL FIX Issue #259: For user messages, use sender + content for deduplication
-        to prevent duplicate user messages from frontend auto-save.
-        For streaming responses, use sender + messageType (content changes during streaming).
-        For terminal/system messages, use timestamp + sender + content prefix.
-        """
-        message_type = msg.get("messageType", msg.get("type", "default"))
-        sender = msg.get("sender", "")
-        text_content = msg.get("text", "") or msg.get("content", "")
-
-        # For USER messages: deduplicate by sender + content (ignore ID and timestamp)
-        # This prevents duplicate user messages from backend + frontend both saving
-        if sender == "user":
-            return ("user", text_content[:200])
-
-        # For STREAMING responses: use sender + messageType (content changes during streaming)
-        if message_type in STREAMING_MESSAGE_TYPES:
-            return (
-                sender,
-                message_type,
-                "streaming",
-            )
-
-        # For TERMINAL/SYSTEM messages: use ID if available, else timestamp + content
-        msg_id = msg.get("id") or msg.get("messageId")
-        if msg_id:
-            return ("id", msg_id)
-
-        return (
-            msg.get("timestamp", ""),
-            sender,
-            text_content[:100],
-        )
-
-    def is_streaming_response(msg: Dict) -> bool:
-        """Check if message is a streaming LLM response."""
-        message_type = msg.get("messageType", msg.get("type", "default"))
-        return message_type in STREAMING_MESSAGE_TYPES
-
-    # Build set of new message signatures
-    new_sigs = {msg_signature(msg) for msg in new}
-
-    # For streaming responses, also track new messages by ID for update detection
+    # Track new messages by ID for update detection
     new_by_id = {}
     for msg in new:
         msg_id = msg.get("id") or msg.get("messageId")
         if msg_id:
             new_by_id[msg_id] = msg
 
-    # Keep existing messages not in new set (e.g., terminal messages added by backend)
-    # But skip streaming messages that have a newer version in the new set
-    preserved = []
-    for msg in existing:
-        sig = msg_signature(msg)
-        msg_id = msg.get("id") or msg.get("messageId")
-
-        # If message has an ID and new set has same ID, skip (use new version)
-        if msg_id and msg_id in new_by_id:
-            continue
-
-        # If signature matches, skip (deduplicate)
-        if sig in new_sigs:
-            continue
-
-        # For streaming responses without IDs, check if there's a longer version
-        # Issue #315: Extracted to helper function to reduce nesting
-        if is_streaming_response(msg):
-            msg_sender = msg.get("sender", "")
-            msg_content_len = len(msg.get("text", "") or msg.get("content", ""))
-
-            has_longer_existing = _has_longer_streaming_response(
-                msg, msg_sender, msg_content_len, existing, is_streaming_response
-            )
-            has_longer_new = _has_longer_streaming_response(
-                msg, msg_sender, msg_content_len, new, is_streaming_response
-            )
-            if has_longer_existing or has_longer_new:
-                continue
-
-        preserved.append(msg)
+    # Filter preserved messages (Issue #281: uses helper)
+    preserved = _filter_preserved_messages(existing, new, new_sigs, new_by_id)
 
     # Combine: preserved messages + new messages
     merged = preserved + new
 
-    # CRITICAL FIX Issue #259: Deduplicate streaming responses using TIME-WINDOW grouping
-    # Group streaming messages by time window (2 minutes) and keep only longest per group
-    # This preserves multiple LLM responses across different conversation turns
-    final_merged = []
-    streaming_groups: List[List[Dict]] = []
-    current_group: List[Dict] = []
-    last_streaming_ts = None
-
-    # First pass: separate non-streaming messages and group streaming ones (Issue #315)
-    for msg in merged:
-        if is_streaming_response(msg):
-            msg_ts_str = msg.get("timestamp", "")
-            current_ts = _parse_message_timestamp(msg_ts_str)
-
-            if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
-                if current_group:
-                    streaming_groups.append(current_group)
-                current_group = []
-
-            if current_ts:
-                last_streaming_ts = current_ts
-
-            current_group.append(msg)
-        else:
-            # Non-streaming message - finalize current streaming group
-            if current_group:
-                streaming_groups.append(current_group)
-                current_group = []
-                last_streaming_ts = None
-            final_merged.append(msg)
-
-    # Don't forget the last group
-    if current_group:
-        streaming_groups.append(current_group)
-
-    # Keep only the longest streaming message from each group
-    for group in streaming_groups:
-        if group:
-            longest = max(
-                group,
-                key=lambda m: len(m.get("text", "") or m.get("content", ""))
-            )
-            final_merged.append(longest)
+    # Process streaming groups (Issue #281: uses helper)
+    final_merged = _process_streaming_groups(merged)
 
     # Sort by timestamp to maintain chronological order
     final_merged.sort(key=lambda m: m.get("timestamp", ""))

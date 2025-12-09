@@ -245,6 +245,119 @@ async def find_duplicates(request: DeduplicationRequest, req: Request):
 # ===== HOST CHANGE SCANNING =====
 
 
+def _create_vectorization_result() -> dict:
+    """Create initial vectorization result structure (Issue #281: extracted)."""
+    return {
+        "attempted": 0,
+        "successful": 0,
+        "failed": 0,
+        "skipped": 0,
+        "details": [],
+    }
+
+
+async def _vectorize_single_document(
+    kb, scanner, doc_change: dict, machine_id: str, results: dict
+) -> None:
+    """Vectorize a single document and update results (Issue #281: extracted)."""
+    results["attempted"] += 1
+
+    command = doc_change.get("command")
+    file_path = doc_change.get("file_path")
+    doc_id = doc_change.get("document_id")
+
+    if not file_path or not command:
+        results["skipped"] += 1
+        results["details"].append({
+            "doc_id": doc_id,
+            "command": command,
+            "status": "skipped",
+            "reason": "Missing file_path or command",
+        })
+        return
+
+    try:
+        # Read man page content
+        content = scanner.read_man_page_content(file_path, command)
+
+        if not content or len(content.strip()) < 10:
+            results["failed"] += 1
+            results["details"].append({
+                "doc_id": doc_id,
+                "command": command,
+                "status": "failed",
+                "reason": "Empty or too short content",
+            })
+            return
+
+        # Add to knowledge base with metadata
+        metadata = {
+            "category": "system/manpages",
+            "title": f"man {command}",
+            "command": command,
+            "machine_id": machine_id,
+            "file_path": file_path,
+            "document_id": doc_id,
+            "change_type": doc_change.get("change_type"),
+            "content_size": len(content),
+        }
+
+        kb_result = await kb.add_document(
+            content=content, metadata=metadata, doc_id=doc_id
+        )
+
+        if kb_result.get("status") == "success":
+            results["successful"] += 1
+            results["details"].append({
+                "doc_id": doc_id,
+                "command": command,
+                "status": "success",
+                "fact_id": kb_result.get("fact_id"),
+            })
+        else:
+            results["failed"] += 1
+            results["details"].append({
+                "doc_id": doc_id,
+                "command": command,
+                "status": "failed",
+                "reason": kb_result.get("message", "Unknown error"),
+            })
+
+    except Exception as e:
+        logger.error(f"Vectorization failed for {command}: {e}")
+        results["failed"] += 1
+        results["details"].append({
+            "doc_id": doc_id,
+            "command": command,
+            "status": "error",
+            "reason": str(e),
+        })
+
+
+async def _process_vectorization(
+    kb, scanner, result: dict, machine_id: str
+) -> dict:
+    """Process vectorization for added/updated documents (Issue #281: extracted)."""
+    vectorization_results = _create_vectorization_result()
+
+    # Vectorize added and updated documents
+    documents_to_vectorize = (
+        result["changes"]["added"] + result["changes"]["updated"]
+    )
+
+    for doc_change in documents_to_vectorize:
+        await _vectorize_single_document(
+            kb, scanner, doc_change, machine_id, vectorization_results
+        )
+
+    logger.info(
+        f"Vectorization completed: "
+        f"{vectorization_results['successful']}/{vectorization_results['attempted']} successful"
+    )
+
+    return vectorization_results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_host_changes",
@@ -254,6 +367,7 @@ async def find_duplicates(request: DeduplicationRequest, req: Request):
 async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
     """
     ULTRA-FAST document change scanner using file metadata.
+    Issue #281: Refactored from 162 lines to use extracted helper methods.
 
     Performance: ~0.5 seconds for 10,000 documents (100x faster than subprocess approach)
 
@@ -306,110 +420,10 @@ async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
         force=force,
     )
 
-    # Auto-vectorization: Add changed documents to knowledge base
+    # Auto-vectorization (Issue #281: uses helper)
     if auto_vectorize:
-        vectorization_results = {
-            "attempted": 0,
-            "successful": 0,
-            "failed": 0,
-            "skipped": 0,
-            "details": [],
-        }
-
-        # Vectorize added and updated documents
-        documents_to_vectorize = (
-            result["changes"]["added"] + result["changes"]["updated"]
-        )
-
-        for doc_change in documents_to_vectorize:
-            vectorization_results["attempted"] += 1
-
-            command = doc_change.get("command")
-            file_path = doc_change.get("file_path")
-            doc_id = doc_change.get("document_id")
-
-            if not file_path or not command:
-                vectorization_results["skipped"] += 1
-                vectorization_results["details"].append(
-                    {
-                        "doc_id": doc_id,
-                        "command": command,
-                        "status": "skipped",
-                        "reason": "Missing file_path or command",
-                    }
-                )
-                continue
-
-            try:
-                # Read man page content
-                content = scanner.read_man_page_content(file_path, command)
-
-                if not content or len(content.strip()) < 10:
-                    vectorization_results["failed"] += 1
-                    vectorization_results["details"].append(
-                        {
-                            "doc_id": doc_id,
-                            "command": command,
-                            "status": "failed",
-                            "reason": "Empty or too short content",
-                        }
-                    )
-                    continue
-
-                # Add to knowledge base with metadata
-                metadata = {
-                    "category": "system/manpages",
-                    "title": f"man {command}",
-                    "command": command,
-                    "machine_id": machine_id,
-                    "file_path": file_path,
-                    "document_id": doc_id,
-                    "change_type": doc_change.get("change_type"),
-                    "content_size": len(content),
-                }
-
-                kb_result = await kb.add_document(
-                    content=content, metadata=metadata, doc_id=doc_id
-                )
-
-                if kb_result.get("status") == "success":
-                    vectorization_results["successful"] += 1
-                    vectorization_results["details"].append(
-                        {
-                            "doc_id": doc_id,
-                            "command": command,
-                            "status": "success",
-                            "fact_id": kb_result.get("fact_id"),
-                        }
-                    )
-                else:
-                    vectorization_results["failed"] += 1
-                    vectorization_results["details"].append(
-                        {
-                            "doc_id": doc_id,
-                            "command": command,
-                            "status": "failed",
-                            "reason": kb_result.get("message", "Unknown error"),
-                        }
-                    )
-
-            except Exception as e:
-                logger.error(f"Vectorization failed for {command}: {e}")
-                vectorization_results["failed"] += 1
-                vectorization_results["details"].append(
-                    {
-                        "doc_id": doc_id,
-                        "command": command,
-                        "status": "error",
-                        "reason": str(e),
-                    }
-                )
-
-        # Add vectorization results to response
-        result["vectorization"] = vectorization_results
-        logger.info(
-            f"Vectorization completed: "
-            f"{vectorization_results['successful']}/{vectorization_results['attempted']} successful"
+        result["vectorization"] = await _process_vectorization(
+            kb, scanner, result, machine_id
         )
 
     return result

@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 import yaml
 
 from src.config.defaults import get_default_config
+from src.constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
         env_value = os.getenv(env_var)
         if env_value is not None:
             # Convert string values to appropriate types
-            if env_value.lower() in ("true", "false"):
+            if env_value.lower() in StringParsingConstants.BOOL_STRING_VALUES:
                 env_value = env_value.lower() == "true"
             elif env_value.isdigit():
                 env_value = int(env_value)

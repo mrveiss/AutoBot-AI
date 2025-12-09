@@ -133,11 +133,115 @@ class SecureSandboxExecutor:
                 self.logger.error(f"Failed to pull fallback image: {e}")
                 raise
 
+    def _create_validation_failure_result(
+        self, command: Union[str, List[str]], container_id: str
+    ) -> SandboxResult:
+        """
+        Create a SandboxResult for command validation failure.
+
+        Issue #281: Extracted helper for validation failure result building.
+
+        Args:
+            command: Command that failed validation
+            container_id: Container identifier
+
+        Returns:
+            SandboxResult indicating validation failure
+        """
+        return SandboxResult(
+            success=False,
+            exit_code=-1,
+            stdout="",
+            stderr="Command validation failed",
+            execution_time=0,
+            container_id=container_id,
+            security_events=[
+                {
+                    "type": "command_blocked",
+                    "command": str(command),
+                    "reason": "Failed security validation",
+                }
+            ],
+            resource_usage={},
+            metadata={"validation_failed": True},
+        )
+
+    async def _run_container_and_collect_results(
+        self,
+        container,
+        container_id: str,
+        config: SandboxConfig,
+        start_time: float,
+    ) -> SandboxResult:
+        """
+        Run container, wait for completion, and collect results.
+
+        Issue #281: Extracted helper for container execution and result collection.
+
+        Args:
+            container: Docker container instance
+            container_id: Container identifier
+            config: Sandbox configuration
+            start_time: Execution start timestamp
+
+        Returns:
+            SandboxResult with execution details
+        """
+        # Start monitoring if enabled
+        if config.enable_monitoring:
+            asyncio.create_task(self._monitor_container(container.id, container_id))
+
+        # Start container and wait for completion
+        container.start()
+
+        # Wait with timeout
+        try:
+            exit_code = container.wait(timeout=config.timeout)["StatusCode"]
+        except Exception:
+            # Timeout reached, kill container
+            container.kill()
+            exit_code = -9
+
+        # Get logs
+        logs = container.logs(stdout=True, stderr=True, stream=False)
+        stdout_logs, stderr_logs = self._parse_logs(logs)
+
+        # Get container stats
+        stats = container.stats(stream=False)
+        resource_usage = self._parse_resource_usage(stats)
+
+        # Collect security events
+        security_events = await self._collect_security_events(container_id)
+
+        execution_time = time.time() - start_time
+
+        result = SandboxResult(
+            success=(exit_code == 0),
+            exit_code=exit_code,
+            stdout=stdout_logs,
+            stderr=stderr_logs,
+            execution_time=execution_time,
+            container_id=container_id,
+            security_events=security_events,
+            resource_usage=resource_usage,
+            metadata={
+                "security_level": config.security_level.value,
+                "execution_mode": config.execution_mode.value,
+            },
+        )
+
+        # Log execution metrics
+        await self._log_execution_metrics(container_id, result)
+
+        return result
+
     async def execute_command(
         self, command: Union[str, List[str]], config: Optional[SandboxConfig] = None
     ) -> SandboxResult:
         """
         Execute a command in the secure sandbox.
+
+        Issue #281: Refactored from 111 lines to use extracted helper methods.
 
         Args:
             command: Command to execute (string or list)
@@ -155,23 +259,8 @@ class SecureSandboxExecutor:
         try:
             # Validate command
             if not self._validate_command(command, config):
-                return SandboxResult(
-                    success=False,
-                    exit_code=-1,
-                    stdout="",
-                    stderr="Command validation failed",
-                    execution_time=0,
-                    container_id=container_id,
-                    security_events=[
-                        {
-                            "type": "command_blocked",
-                            "command": str(command),
-                            "reason": "Failed security validation",
-                        }
-                    ],
-                    resource_usage={},
-                    metadata={"validation_failed": True},
-                )
+                # Issue #281: uses helper
+                return self._create_validation_failure_result(command, container_id)
 
             # Prepare container configuration
             container_config = self._prepare_container_config(command, config)
@@ -180,53 +269,10 @@ class SecureSandboxExecutor:
             container = self.docker_client.containers.create(**container_config)
             self.active_containers[container_id] = container.id
 
-            # Start monitoring if enabled
-            if config.enable_monitoring:
-                asyncio.create_task(self._monitor_container(container.id, container_id))
-
-            # Start container and wait for completion
-            container.start()
-
-            # Wait with timeout
-            try:
-                exit_code = container.wait(timeout=config.timeout)["StatusCode"]
-            except Exception:
-                # Timeout reached, kill container
-                container.kill()
-                exit_code = -9
-
-            # Get logs
-            logs = container.logs(stdout=True, stderr=True, stream=False)
-            stdout_logs, stderr_logs = self._parse_logs(logs)
-
-            # Get container stats
-            stats = container.stats(stream=False)
-            resource_usage = self._parse_resource_usage(stats)
-
-            # Collect security events
-            security_events = await self._collect_security_events(container_id)
-
-            execution_time = time.time() - start_time
-
-            result = SandboxResult(
-                success=(exit_code == 0),
-                exit_code=exit_code,
-                stdout=stdout_logs,
-                stderr=stderr_logs,
-                execution_time=execution_time,
-                container_id=container_id,
-                security_events=security_events,
-                resource_usage=resource_usage,
-                metadata={
-                    "security_level": config.security_level.value,
-                    "execution_mode": config.execution_mode.value,
-                },
+            # Issue #281: uses helper
+            return await self._run_container_and_collect_results(
+                container, container_id, config, start_time
             )
-
-            # Log execution metrics
-            await self._log_execution_metrics(container_id, result)
-
-            return result
 
         except Exception as e:
             self.logger.error(f"Sandbox execution error: {e}")

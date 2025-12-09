@@ -30,6 +30,7 @@ class MemoryOptimizationApplier:
     """Applies memory optimizations to AutoBot codebase"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize memory optimization applier with project paths."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.logs_dir = self.project_root / "logs"
         self.backup_dir = self.project_root / "logs" / "backup"

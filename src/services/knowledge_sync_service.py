@@ -24,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.advanced_rag_optimizer import get_rag_optimizer
+from src.constants.threshold_constants import TimingConstants
 from src.knowledge_sync_incremental import IncrementalKnowledgeSync
 from src.utils.catalog_http_exceptions import raise_kb_error
 from src.utils.logging_manager import get_llm_logger
@@ -110,7 +111,7 @@ class KnowledgeSyncService:
                 except Exception as e:
                     logger.error(f"Background sync error: {e}")
                     # Continue running despite errors
-                    await asyncio.sleep(60)  # Wait 1 minute before retry
+                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait 1 minute before retry
 
         finally:
             self.is_running = False

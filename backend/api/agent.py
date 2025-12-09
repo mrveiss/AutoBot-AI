@@ -16,6 +16,7 @@ from backend.utils.chat_exceptions import (
     InternalError,
     SubprocessError,
 )
+from src.constants.threshold_constants import TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -49,6 +50,195 @@ async def _kill_timed_out_process(
         await process.wait()
     except ProcessLookupError:
         pass  # Process already terminated
+
+
+def _validate_command_request(
+    command: Optional[str], security_layer, user_role: str
+) -> Optional[JSONResponse]:
+    """
+    Validate command request: check if command provided and user has permission.
+
+    Issue #281: Extracted helper for command validation.
+
+    Args:
+        command: Command string to validate
+        security_layer: Security layer for permission checks
+        user_role: User's role
+
+    Returns:
+        JSONResponse with error if validation fails, None if valid
+    """
+    if not command:
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "no_command_provided"},
+        )
+        return JSONResponse(
+            status_code=400, content={"message": "No command provided."}
+        )
+
+    if not security_layer.check_permission(
+        user_role, "allow_shell_execute", resource=command
+    ):
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "permission_denied"},
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Permission denied to execute command."},
+        )
+
+    return None
+
+
+async def _publish_event_safe(event_manager, event_name: str, data: dict) -> None:
+    """
+    Publish event with error handling (non-critical operation).
+
+    Issue #281: Extracted helper for safe event publishing.
+
+    Args:
+        event_manager: Event manager instance
+        event_name: Name of event to publish
+        data: Event data
+    """
+    try:
+        await event_manager.publish(event_name, data)
+    except Exception as e:
+        logger.warning(f"Failed to publish {event_name} event: {e}")
+
+
+async def _run_subprocess(
+    command: str, security_layer, user_role: str
+) -> tuple:
+    """
+    Execute subprocess with timeout and error handling.
+
+    Issue #281: Extracted helper for subprocess execution.
+
+    Args:
+        command: Command to execute
+        security_layer: Security layer for audit logging
+        user_role: User's role
+
+    Returns:
+        Tuple of (stdout, stderr, returncode)
+
+    Raises:
+        SubprocessError: If subprocess creation or execution fails
+    """
+    process: Optional[asyncio.subprocess.Process] = None
+    try:
+        process = await asyncio.create_subprocess_shell(
+            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=TimingConstants.VERY_LONG_TIMEOUT,
+        )
+        return stdout, stderr, process.returncode
+    except asyncio.TimeoutError:
+        await _kill_timed_out_process(process)
+        logger.error(
+            f"Command timed out after {TimingConstants.VERY_LONG_TIMEOUT}s: {command[:100]}..."
+        )
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "timeout"},
+        )
+        raise SubprocessError(
+            message="Command execution timed out after 5 minutes",
+            command=command[:200],
+            return_code=None,
+        )
+    except OSError as e:
+        logger.error(f"Failed to create subprocess: {e}")
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "failure",
+            {"command": command, "reason": "subprocess_creation_failed", "error": str(e)},
+        )
+        raise SubprocessError(
+            message=f"Failed to execute command: {e}",
+            command=command[:200],
+        ) from e
+
+
+def _build_success_response(
+    command: str, output: str, security_layer, user_role: str
+) -> dict:
+    """
+    Build success response and audit log.
+
+    Issue #281: Extracted helper for success response building.
+
+    Args:
+        command: Executed command
+        output: Command output
+        security_layer: Security layer for audit logging
+        user_role: User's role
+
+    Returns:
+        Success response dict
+    """
+    message = f"Command executed successfully.\nOutput:\n{output}"
+    security_layer.audit_log(
+        "execute_command",
+        user_role,
+        "success",
+        {"command": command, "output": output},
+    )
+    logging.info(message)
+    return {"message": message, "output": output, "status": "success"}
+
+
+def _build_error_response(
+    command: str, output: str, error: str, returncode: int, security_layer, user_role: str
+) -> JSONResponse:
+    """
+    Build error response and audit log.
+
+    Issue #281: Extracted helper for error response building.
+
+    Args:
+        command: Executed command
+        output: Command stdout
+        error: Command stderr
+        returncode: Process return code
+        security_layer: Security layer for audit logging
+        user_role: User's role
+
+    Returns:
+        JSONResponse with error details
+    """
+    message = (
+        f"Command failed with exit code {returncode}."
+        f"\nError:\n{error}\nOutput:\n{output}"
+    )
+    security_layer.audit_log(
+        "execute_command",
+        user_role,
+        "failure",
+        {"command": command, "error": error, "returncode": returncode},
+    )
+    logging.error(message)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "message": message,
+            "error": error,
+            "output": output,
+            "status": "error",
+        },
+    )
 
 
 def _process_tool_result(result_dict: dict) -> tuple:
@@ -110,6 +300,91 @@ def _process_tool_result(result_dict: dict) -> tuple:
     return str(result_dict), str(result_dict), None
 
 
+async def _publish_event_safe(event_manager, event_name: str, data: dict) -> None:
+    """
+    Publish event with error handling (non-critical operation).
+
+    Issue #281: Extracted helper for safe event publishing.
+
+    Args:
+        event_manager: Event manager instance
+        event_name: Name of event to publish
+        data: Event data dictionary
+    """
+    try:
+        await event_manager.publish(event_name, data)
+    except Exception as e:
+        logger.warning(f"Failed to publish {event_name} event: {e}")
+
+
+def _record_goal_metrics(task_start_time: float, status: str) -> None:
+    """
+    Record Prometheus metrics for goal execution.
+
+    Issue #281: Extracted helper for metrics recording.
+
+    Args:
+        task_start_time: Start timestamp
+        status: Execution status (success, timeout, network_error, error)
+    """
+    prometheus_metrics.record_task_execution(
+        task_type="goal_execution",
+        agent_type="orchestrator",
+        status=status,
+        duration=time.time() - task_start_time,
+    )
+
+
+async def _execute_goal_with_error_handling(
+    orchestrator, goal: str, task_start_time: float
+) -> dict:
+    """
+    Execute goal with comprehensive error handling.
+
+    Issue #281: Extracted helper for goal execution with error handling.
+
+    Args:
+        orchestrator: Orchestrator instance
+        goal: Goal string to execute
+        task_start_time: Start timestamp for metrics
+
+    Returns:
+        Result dictionary from orchestrator
+
+    Raises:
+        InternalError: On timeout, network, or general execution errors
+    """
+    try:
+        orchestrator_result = await orchestrator.execute_goal(
+            goal, [{"role": "user", "content": goal}]
+        )
+    except asyncio.TimeoutError as e:
+        logger.error(f"Goal execution timed out: {goal[:100]}...")
+        _record_goal_metrics(task_start_time, "timeout")
+        raise InternalError(
+            message="Goal execution timed out. Please try again.",
+            details={"goal": goal[:100], "error_type": "timeout"},
+        ) from e
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error during goal execution: {e}")
+        _record_goal_metrics(task_start_time, "network_error")
+        raise InternalError(
+            message="Network error during goal execution. Please try again.",
+            details={"error_type": "network", "error": str(e)},
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to execute goal: {e}", exc_info=True)
+        _record_goal_metrics(task_start_time, "error")
+        raise InternalError(
+            message=f"Goal execution failed: {str(e)}",
+            details={"goal": goal[:100], "error_type": type(e).__name__},
+        ) from e
+
+    if isinstance(orchestrator_result, dict):
+        return orchestrator_result
+    return {"message": str(orchestrator_result)}
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal",
@@ -119,6 +394,8 @@ def _process_tool_result(result_dict: dict) -> tuple:
 async def receive_goal(request: Request, payload: GoalPayload):
     """
     Receives a goal from the user to be executed by the orchestrator.
+
+    Issue #281: Refactored from 130 lines to use extracted helper methods.
 
     Args:
         payload (GoalPayload): The payload containing the goal, whether to
@@ -153,74 +430,21 @@ async def receive_goal(request: Request, payload: GoalPayload):
 
     logging.info(f"Received goal via API: {goal}")
 
-    # Publish events with error handling (non-critical, log and continue)
-    try:
-        await event_manager.publish("user_message", {"message": goal})
-        await event_manager.publish("goal_received", {"goal": goal, "use_phi2": use_phi2})
-    except Exception as e:
-        logger.warning(f"Failed to publish goal events: {e}")
-        # Continue execution - event publishing is non-critical
+    # Publish events (Issue #281: uses helper)
+    await _publish_event_safe(event_manager, "user_message", {"message": goal})
+    await _publish_event_safe(event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2})
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
-    task_type = "goal_execution"
-    agent_type = "orchestrator"
 
-    try:
-        orchestrator_result = await orchestrator.execute_goal(
-            goal, [{"role": "user", "content": goal}]
-        )
-    except asyncio.TimeoutError as e:
-        logger.error(f"Goal execution timed out: {goal[:100]}...")
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="timeout",
-            duration=time.time() - task_start_time,
-        )
-        raise InternalError(
-            message="Goal execution timed out. Please try again.",
-            details={"goal": goal[:100], "error_type": "timeout"},
-        ) from e
-    except aiohttp.ClientError as e:
-        logger.error(f"Network error during goal execution: {e}")
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="network_error",
-            duration=time.time() - task_start_time,
-        )
-        raise InternalError(
-            message="Network error during goal execution. Please try again.",
-            details={"error_type": "network", "error": str(e)},
-        ) from e
-    except Exception as e:
-        logger.error(f"Failed to execute goal: {e}", exc_info=True)
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="error",
-            duration=time.time() - task_start_time,
-        )
-        raise InternalError(
-            message=f"Goal execution failed: {str(e)}",
-            details={"goal": goal[:100], "error_type": type(e).__name__},
-        ) from e
-
-    if isinstance(orchestrator_result, dict):
-        result_dict = orchestrator_result
-    else:
-        result_dict = {"message": str(orchestrator_result)}
+    # Execute goal (Issue #281: uses helper)
+    result_dict = await _execute_goal_with_error_handling(orchestrator, goal, task_start_time)
 
     # Process tool result using helper (Issue #315: reduced nesting)
     response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        # Publish event (non-critical, log and continue)
-        try:
-            await event_manager.publish("tool_output", {"output": tool_output_content})
-        except Exception as e:
-            logger.warning(f"Failed to publish tool_output event: {e}")
+        await _publish_event_safe(event_manager, "tool_output", {"output": tool_output_content})
 
     security_layer.audit_log(
         "submit_goal",
@@ -228,22 +452,13 @@ async def receive_goal(request: Request, payload: GoalPayload):
         "success",
         {"goal": goal, "result": response_message},
     )
-    # Publish event (non-critical, log and continue)
-    try:
-        await event_manager.publish(
-            "goal_completed", {"goal": goal, "result": response_message}
-        )
-    except Exception as e:
-        logger.warning(f"Failed to publish goal_completed event: {e}")
+
+    await _publish_event_safe(
+        event_manager, "goal_completed", {"goal": goal, "result": response_message}
+    )
 
     # Record Prometheus task execution metric (success)
-    duration = time.time() - task_start_time
-    prometheus_metrics.record_task_execution(
-        task_type=task_type,
-        agent_type=agent_type,
-        status="success",
-        duration=duration,
-    )
+    _record_goal_metrics(task_start_time, "success")
 
     return {"message": response_message}
 
@@ -418,6 +633,8 @@ async def execute_command(
     """
     Executes a shell command and returns its output.
 
+    Issue #281: Refactored from 151 lines to use extracted helper methods.
+
     Args:
         command_data (dict): A dictionary containing the command to execute.
         user_role (str): The role of the user executing the command.
@@ -434,132 +651,52 @@ async def execute_command(
 
     security_layer = request.app.state.security_layer
     command = command_data.get("command")
-    if not command:
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "failure",
-            {"command": command, "reason": "no_command_provided"},
-        )
-        await event_manager.publish(
-            "error", {"message": "No command provided for execution."}
-        )
-        return JSONResponse(
-            status_code=400, content={"message": "No command provided."}
-        )
 
-    if not security_layer.check_permission(
-        user_role, "allow_shell_execute", resource=command
-    ):
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "failure",
-            {"command": command, "reason": "permission_denied"},
-        )
-        return JSONResponse(
-            status_code=403,
-            content={"message": "Permission denied to execute command."},
-        )
+    # Validate command request (Issue #281: uses helper)
+    validation_error = _validate_command_request(command, security_layer, user_role)
+    if validation_error:
+        if not command:
+            await _publish_event_safe(
+                event_manager, "error", {"message": "No command provided for execution."}
+            )
+        return validation_error
 
-    # Publish event with error handling (non-critical)
-    try:
-        await event_manager.publish("command_execution_start", {"command": command})
-    except Exception as e:
-        logger.warning(f"Failed to publish command_execution_start event: {e}")
-
+    # Publish start event (Issue #281: uses helper)
+    await _publish_event_safe(
+        event_manager, "command_execution_start", {"command": command}
+    )
     logging.info(f"Executing command: {command}")
 
-    # Execute subprocess with proper error handling
-    process: Optional[asyncio.subprocess.Process] = None
-    try:
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=300.0,  # 5 minute timeout for command execution
-        )
-    except asyncio.TimeoutError:
-        await _kill_timed_out_process(process)
-        logger.error(f"Command timed out after 300s: {command[:100]}...")
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "failure",
-            {"command": command, "reason": "timeout"},
-        )
-        raise SubprocessError(
-            message="Command execution timed out after 5 minutes",
-            command=command[:200],
-            return_code=None,
-        )
-    except OSError as e:
-        logger.error(f"Failed to create subprocess: {e}")
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "failure",
-            {"command": command, "reason": "subprocess_creation_failed", "error": str(e)},
-        )
-        raise SubprocessError(
-            message=f"Failed to execute command: {e}",
-            command=command[:200],
-        ) from e
+    # Execute subprocess (Issue #281: uses helper)
+    stdout, stderr, returncode = await _run_subprocess(
+        command, security_layer, user_role
+    )
 
     output = stdout.decode(errors="replace").strip()
     error = stderr.decode(errors="replace").strip()
 
-    if process.returncode == 0:
-        message = f"Command executed successfully.\nOutput:\n{output}"
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "success",
-            {"command": command, "output": output},
+    # Build and return response based on result (Issue #281: uses helpers)
+    if returncode == 0:
+        response = _build_success_response(command, output, security_layer, user_role)
+        await _publish_event_safe(
+            event_manager,
+            "command_execution_end",
+            {"command": command, "status": "success", "output": output},
         )
-        # Publish event (non-critical, log and continue)
-        try:
-            await event_manager.publish(
-                "command_execution_end",
-                {"command": command, "status": "success", "output": output},
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish command_execution_end event: {e}")
-        logging.info(message)
-        return {"message": message, "output": output, "status": "success"}
+        return response
     else:
-        message = (
-            f"Command failed with exit code {process.returncode}."
-            f"\nError:\n{error}\nOutput:\n{output}"
+        response = _build_error_response(
+            command, output, error, returncode, security_layer, user_role
         )
-        security_layer.audit_log(
-            "execute_command",
-            user_role,
-            "failure",
-            {"command": command, "error": error, "returncode": process.returncode},
-        )
-        # Publish event (non-critical, log and continue)
-        try:
-            await event_manager.publish(
-                "command_execution_end",
-                {
-                    "command": command,
-                    "status": "error",
-                    "error": error,
-                    "output": output,
-                    "returncode": process.returncode,
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Failed to publish command_execution_end event: {e}")
-        logging.error(message)
-        return JSONResponse(
-            status_code=500,
-            content={
-                "message": message,
+        await _publish_event_safe(
+            event_manager,
+            "command_execution_end",
+            {
+                "command": command,
+                "status": "error",
                 "error": error,
                 "output": output,
-                "status": "error",
+                "returncode": returncode,
             },
         )
+        return response

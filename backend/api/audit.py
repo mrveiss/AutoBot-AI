@@ -166,26 +166,8 @@ async def query_audit_logs(
         if has_more:
             entries = entries[:limit]
 
-        # Convert entries to dicts
-        entry_dicts = [
-            {
-                "id": e.id,
-                "timestamp": e.timestamp,
-                "date": e.date,
-                "operation": e.operation,
-                "result": e.result,
-                "user_id": e.user_id,
-                "session_id": e.session_id,
-                "ip_address": e.ip_address,
-                "resource": e.resource,
-                "vm_source": e.vm_source,
-                "vm_name": e.vm_name,
-                "user_role": e.user_role,
-                "details": e.details,
-                "performance_ms": e.performance_ms,
-            }
-            for e in entries
-        ]
+        # Issue #372: Use model method to reduce feature envy
+        entry_dicts = [e.to_response_dict() for e in entries]
 
         return AuditQueryResponse(
             success=True,
@@ -272,20 +254,8 @@ async def get_session_audit_trail(
             start_time=start_time, end_time=end_time, session_id=session_id, limit=1000
         )
 
-        entry_dicts = [
-            {
-                "id": e.id,
-                "timestamp": e.timestamp,
-                "operation": e.operation,
-                "result": e.result,
-                "user_id": e.user_id,
-                "ip_address": e.ip_address,
-                "resource": e.resource,
-                "vm_source": e.vm_source,
-                "details": e.details,
-            }
-            for e in entries
-        ]
+        # Issue #372: Use model method to reduce feature envy
+        entry_dicts = [e.to_response_dict() for e in entries]
 
         return AuditQueryResponse(
             success=True,
@@ -328,20 +298,8 @@ async def get_user_audit_trail(
             start_time=start_time, end_time=end_time, user_id=user_id, limit=1000
         )
 
-        entry_dicts = [
-            {
-                "id": e.id,
-                "timestamp": e.timestamp,
-                "operation": e.operation,
-                "result": e.result,
-                "session_id": e.session_id,
-                "ip_address": e.ip_address,
-                "resource": e.resource,
-                "vm_source": e.vm_source,
-                "details": e.details,
-            }
-            for e in entries
-        ]
+        # Issue #372: Use model method to reduce feature envy
+        entry_dicts = [e.to_response_dict() for e in entries]
 
         return AuditQueryResponse(
             success=True,
@@ -389,21 +347,8 @@ async def get_failed_operations(
             start_time=start_time, end_time=end_time, result=result_filter, limit=500
         )
 
-        entry_dicts = [
-            {
-                "id": e.id,
-                "timestamp": e.timestamp,
-                "operation": e.operation,
-                "result": e.result,
-                "user_id": e.user_id,
-                "session_id": e.session_id,
-                "ip_address": e.ip_address,
-                "resource": e.resource,
-                "vm_source": e.vm_source,
-                "details": e.details,
-            }
-            for e in entries
-        ]
+        # Issue #372: Use model method to reduce feature envy
+        entry_dicts = [e.to_response_dict() for e in entries]
 
         return AuditQueryResponse(
             success=True,

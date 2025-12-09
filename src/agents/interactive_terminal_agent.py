@@ -18,6 +18,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ class InteractiveTerminalAgent:
             bytes if data available, empty bytes for EOF, None to continue waiting
         """
         if not await self._data_available():
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(TimingConstants.POLL_INTERVAL)
             return None
 
         try:
@@ -409,7 +410,8 @@ class InteractiveTerminalAgent:
         if self.process:
             try:
                 self.process.terminate()
-                await asyncio.sleep(0.1)
+                # Brief delay to allow graceful termination before force kill
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
                 if self.process.returncode is None:
                     self.process.kill()
             except Exception as e:

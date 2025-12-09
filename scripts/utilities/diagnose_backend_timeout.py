@@ -26,6 +26,7 @@ class BackendDiagnostic:
     """Diagnose backend timeout issues"""
 
     def __init__(self, base_url: str = ServiceURLs.BACKEND_LOCAL):
+        """Initialize diagnostic tool with backend URL and results container."""
         self.base_url = base_url
         self.results = {}
 

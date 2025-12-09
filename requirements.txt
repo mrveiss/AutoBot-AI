@@ -31,3 +31,4 @@ opentelemetry-propagator-b3>=1.34.0
 # Use faiss-gpu for CUDA support, faiss-cpu for CPU-only fallback
 # Note: faiss-gpu requires CUDA toolkit installation
 faiss-gpu>=1.7.4          # GPU version with CUDA support
+aiosqlite>=0.21.0

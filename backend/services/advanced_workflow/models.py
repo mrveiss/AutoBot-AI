@@ -99,3 +99,19 @@ class WorkflowTemplate:
     last_updated: datetime = field(default_factory=datetime.now)
     user_ratings: List[float] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
+
+    def to_summary_dict(self) -> dict:
+        """Convert to summary dictionary for API response (Issue #372 - reduces feature envy)."""
+        return {
+            "template_id": self.template_id,
+            "name": self.name,
+            "description": self.description,
+            "intent": self.intent.value,
+            "complexity": self.complexity.value,
+            "steps_count": len(self.steps),
+            "prerequisites": self.prerequisites,
+            "success_rate": self.success_rate,
+            "usage_count": self.usage_count,
+            "tags": self.tags,
+            "last_updated": self.last_updated.isoformat(),
+        }

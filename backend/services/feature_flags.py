@@ -35,6 +35,7 @@ from typing import Optional
 
 from backend.type_defs.common import Metadata
 
+from src.constants.threshold_constants import StringParsingConstants
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -213,7 +214,7 @@ class FeatureFlags:
             if isinstance(value, bytes):
                 value = value.decode()
 
-            return value.lower() in ("true", "1", "yes", "on")
+            return value.lower() in StringParsingConstants.TRUTHY_STRING_VALUES
 
         except Exception as e:
             logger.error(f"Failed to get feature flag {feature_name}: {e}")

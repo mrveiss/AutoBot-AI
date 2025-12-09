@@ -23,6 +23,7 @@ from typing import (
     TypeVar,
 )
 
+from src.constants.threshold_constants import TimingConstants
 from src.exceptions import AutoBotError, InternalError
 
 logger = logging.getLogger(__name__)
@@ -217,7 +218,7 @@ class CircuitBreaker:
     def __init__(
         self,
         failure_threshold: int = 5,
-        recovery_timeout: float = 60.0,
+        recovery_timeout: float = TimingConstants.STANDARD_TIMEOUT,
         expected_exception: Type[Exception] = Exception,
     ):
         """Initialize circuit breaker with failure threshold and recovery settings."""
@@ -387,7 +388,7 @@ async def call_external_api():
     return await make_api_request()
 
 # Using circuit breaker
-@CircuitBreaker(failure_threshold=5, recovery_timeout=60)
+@CircuitBreaker(failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT)
 def unstable_service_call():
     # After 5 failures, circuit opens for 60 seconds
     return external_service.call()

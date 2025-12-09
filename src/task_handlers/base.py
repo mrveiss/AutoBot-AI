@@ -5,10 +5,14 @@
 Base TaskHandler Abstract Class
 
 Defines the interface that all task handlers must implement.
+
+Issue #322: Updated to use TaskExecutionContext to eliminate data clump pattern.
 """
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict
+
+from backend.models.task_context import TaskExecutionContext
 
 if TYPE_CHECKING:
     from src.worker_node import WorkerNode
@@ -20,24 +24,23 @@ class TaskHandler(ABC):
 
     Each handler is responsible for executing a specific task type,
     including all validation, execution, and audit logging.
+
+    Issue #322: Updated to use TaskExecutionContext instead of individual parameters.
     """
 
     @abstractmethod
-    async def execute(
-        self,
-        worker: "WorkerNode",
-        task_payload: Dict[str, Any],
-        user_role: str,
-        task_id: str,
-    ) -> Dict[str, Any]:
+    async def execute(self, ctx: TaskExecutionContext) -> Dict[str, Any]:
         """
         Execute a specific task type.
 
+        Issue #322: Refactored to use TaskExecutionContext instead of 4 separate parameters.
+
         Args:
-            worker: The WorkerNode instance providing access to modules
-            task_payload: The task data including all parameters
-            user_role: The user role for audit logging
-            task_id: The unique task identifier
+            ctx: TaskExecutionContext containing:
+                - worker: The WorkerNode instance providing access to modules
+                - task_payload: The task data including all parameters
+                - user_role: The user role for audit logging
+                - task_id: The unique task identifier
 
         Returns:
             Dict with status, message, and any result data

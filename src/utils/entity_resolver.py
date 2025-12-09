@@ -463,36 +463,22 @@ class EntityResolver:
                 context={"source": "atomic_facts", "fact_count": len(facts)},
             )
 
-            # Update facts with resolved entity names
+            # Update facts with resolved entity names (Issue #372 - use model method)
             updated_facts = []
             for fact in facts:
-                # Create a copy of the fact with resolved entities
+                # Resolve entities for this fact
                 resolved_entities = [
                     resolution_result.get_canonical_name(entity)
                     for entity in fact.entities
                 ]
-
                 resolved_subject = resolution_result.get_canonical_name(fact.subject)
                 resolved_object = resolution_result.get_canonical_name(fact.object)
 
-                # Create updated fact
-                updated_fact = AtomicFact(
-                    subject=resolved_subject,
-                    predicate=fact.predicate,  # Don't resolve predicates
-                    object=resolved_object,
-                    fact_type=fact.fact_type,
-                    temporal_type=fact.temporal_type,
-                    confidence=fact.confidence,
-                    source=fact.source,
-                    extraction_method=fact.extraction_method,
-                    entities=resolved_entities,
-                    context=fact.context,
-                    reasoning=fact.reasoning,
-                    valid_from=fact.valid_from,
-                    valid_until=fact.valid_until,
-                    contradicts_facts=fact.contradicts_facts,
-                    is_active=fact.is_active,
-                    metadata=fact.metadata,
+                # Create updated fact using model method (reduces feature envy)
+                updated_fact = fact.with_resolved_entities(
+                    resolved_subject=resolved_subject,
+                    resolved_object=resolved_object,
+                    resolved_entities=resolved_entities,
                 )
 
                 updated_facts.append(updated_fact)

@@ -613,40 +613,16 @@ async def broadcast_npu_worker_event(event_data: dict):
 
 
 def _format_worker_for_frontend(w) -> dict:
-    """Format worker data for frontend consumption (Issue #315 - extracted).
+    """Format worker data for frontend consumption (Issue #372 - uses model method).
 
     Args:
-        w: Worker object
+        w: NPUWorkerDetails object
 
     Returns:
         Formatted worker dictionary
     """
-    return {
-        "id": w.config.id,
-        "name": w.config.name,
-        "platform": w.config.platform,
-        "ip_address": (
-            w.config.url.split("//")[1].split(":")[0]
-            if "://" in w.config.url
-            else ""
-        ),
-        "port": (
-            int(w.config.url.split(":")[-1]) if ":" in w.config.url else 0
-        ),
-        "status": w.status.status.value,
-        "current_load": w.status.current_load,
-        "max_capacity": w.config.max_concurrent_tasks,
-        "uptime": f"{int(w.status.uptime_seconds)}s",
-        "performance_metrics": w.metrics.dict() if w.metrics else {},
-        "priority": w.config.priority,
-        "weight": w.config.weight,
-        "last_heartbeat": (
-            w.status.last_heartbeat.isoformat() + "Z"
-            if w.status.last_heartbeat
-            else ""
-        ),
-        "created_at": "",  # Not tracked
-    }
+    # Delegate to model method to reduce feature envy (Issue #372)
+    return w.to_event_dict()
 
 
 async def _send_initial_worker_list(websocket: WebSocket) -> None:

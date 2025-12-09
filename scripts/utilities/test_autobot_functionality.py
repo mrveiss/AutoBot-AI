@@ -28,6 +28,7 @@ class AutoBotFunctionalityTest:
     """Test all AutoBot system functionality"""
 
     def __init__(self):
+        """Initialize functionality test suite with service URLs and results."""
         self.services = {
             "frontend": ServiceURLs.FRONTEND_LOCAL,
             "backend": ServiceURLs.BACKEND_LOCAL,

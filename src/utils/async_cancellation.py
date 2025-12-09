@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -211,11 +212,11 @@ class SmartCancellationHandler:
                             "Knowledge base unavailable",
                         )
 
-                await asyncio.sleep(1.0)  # Check every second
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
                 logger.error(f"Error in condition monitoring: {e}")
-                await asyncio.sleep(5.0)  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def shutdown(self):
         """Graceful shutdown - cancel all operations"""

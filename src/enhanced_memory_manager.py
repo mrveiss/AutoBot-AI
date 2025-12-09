@@ -442,6 +442,47 @@ class EnhancedMemoryManager:
 
         return None
 
+    def _build_task_record(
+        self,
+        row: tuple,
+        markdown_refs: List[str],
+        subtask_ids: List[str],
+    ) -> TaskExecutionRecord:
+        """
+        Build a TaskExecutionRecord from a database row and related data.
+
+        Issue #281: Extracted from get_task_history to reduce function length
+        and improve readability.
+
+        Args:
+            row: Database row tuple with task fields
+            markdown_refs: List of markdown file paths for this task
+            subtask_ids: List of subtask IDs for this task
+
+        Returns:
+            TaskExecutionRecord instance
+        """
+        return TaskExecutionRecord(
+            task_id=row[0],
+            task_name=row[1],
+            description=row[2],
+            status=TaskStatus(row[3]),
+            priority=TaskPriority(row[4]),
+            created_at=datetime.fromisoformat(row[5]),
+            started_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            completed_at=datetime.fromisoformat(row[7]) if row[7] else None,
+            duration_seconds=row[8],
+            agent_type=row[9],
+            inputs=json.loads(row[10]) if row[10] else None,
+            outputs=json.loads(row[11]) if row[11] else None,
+            error_message=row[12],
+            retry_count=row[13],
+            parent_task_id=row[14],
+            markdown_references=markdown_refs,
+            subtask_ids=subtask_ids,
+            metadata=json.loads(row[15]) if row[15] else None,
+        )
+
     def get_task_history(
         self,
         agent_type: Optional[str] = None,
@@ -520,32 +561,12 @@ class EnhancedMemoryManager:
                     subtasks_by_parent[parent_id] = []
                 subtasks_by_parent[parent_id].append(subtask_row[1])
 
-            # Now build task objects with pre-loaded data
+            # Issue #281: Build task objects using extracted helper
             for row in task_rows:
                 task_id = row[0]
                 markdown_refs = markdown_refs_by_task.get(task_id, [])
                 subtask_ids = subtasks_by_parent.get(task_id, [])
-
-                task = TaskExecutionRecord(
-                    task_id=row[0],
-                    task_name=row[1],
-                    description=row[2],
-                    status=TaskStatus(row[3]),
-                    priority=TaskPriority(row[4]),
-                    created_at=datetime.fromisoformat(row[5]),
-                    started_at=datetime.fromisoformat(row[6]) if row[6] else None,
-                    completed_at=datetime.fromisoformat(row[7]) if row[7] else None,
-                    duration_seconds=row[8],
-                    agent_type=row[9],
-                    inputs=json.loads(row[10]) if row[10] else None,
-                    outputs=json.loads(row[11]) if row[11] else None,
-                    error_message=row[12],
-                    retry_count=row[13],
-                    parent_task_id=row[14],
-                    markdown_references=markdown_refs,
-                    subtask_ids=subtask_ids,
-                    metadata=json.loads(row[15]) if row[15] else None,
-                )
+                task = self._build_task_record(row, markdown_refs, subtask_ids)
                 tasks.append(task)
 
         return tasks

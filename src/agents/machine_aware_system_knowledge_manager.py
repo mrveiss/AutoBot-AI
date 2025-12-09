@@ -561,6 +561,67 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # This would implement knowledge sharing between connected AutoBot instances
         # For now, just log the request
 
+    async def _process_single_man_page(
+        self,
+        command: str,
+        integrator,
+        profile,
+        integration_results: dict,
+    ) -> None:
+        """
+        Process a single man page command integration.
+
+        Issue #281: Extracted from _integrate_man_pages to reduce function length
+        and improve testability of individual command processing.
+
+        Args:
+            command: Command name to process
+            integrator: Man page integrator instance
+            profile: Current machine profile
+            integration_results: Dict to update with results
+        """
+        integration_results["processed"] += 1
+
+        try:
+            # Check if already cached (recent)
+            cached_info = await integrator.load_cached_man_page(command)
+            if cached_info and self._is_man_page_recent(cached_info):
+                integration_results["cached"] += 1
+                integration_results["commands"][command] = "cached"
+                return
+
+            # Check if man page exists
+            if not await integrator.check_man_page_exists(command):
+                integration_results["failed"] += 1
+                integration_results["commands"][command] = "no_man_page"
+                return
+
+            # Extract man page
+            man_info = await integrator.extract_man_page(command)
+            if not man_info:
+                integration_results["failed"] += 1
+                integration_results["commands"][command] = "extraction_failed"
+                return
+
+            # Set machine ID for proper organization
+            man_info.machine_id = profile.machine_id
+
+            # Cache the result
+            await integrator.cache_man_page(man_info)
+
+            # Save as machine-specific knowledge
+            await self._save_man_page_knowledge(man_info, integrator)
+
+            integration_results["successful"] += 1
+            integration_results["commands"][command] = "success"
+
+            logger.debug(f"Integrated man page for {command}")
+
+        except Exception as e:
+            integration_results["failed"] += 1
+            integration_results["commands"][command] = f"error: {str(e)}"
+            logger.error(f"Failed to integrate man page for {command}: {e}")
+
     async def _integrate_man_pages(self):
         """Integrate man pages for tools available on this machine"""
         # Get snapshot of profile under lock
@@ -612,48 +673,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 "commands": {},
             }
 
+            # Issue #281: Use extracted helper for individual command processing
             for command in commands_to_integrate:
-                integration_results["processed"] += 1
-
-                try:
-                    # Check if already cached (recent)
-                    cached_info = await integrator.load_cached_man_page(command)
-                    if cached_info and self._is_man_page_recent(cached_info):
-                        integration_results["cached"] += 1
-                        integration_results["commands"][command] = "cached"
-                        continue
-
-                    # Check if man page exists
-                    if not await integrator.check_man_page_exists(command):
-                        integration_results["failed"] += 1
-                        integration_results["commands"][command] = "no_man_page"
-                        continue
-
-                    # Extract man page
-                    man_info = await integrator.extract_man_page(command)
-                    if not man_info:
-                        integration_results["failed"] += 1
-                        integration_results["commands"][command] = "extraction_failed"
-                        continue
-
-                    # Set machine ID for proper organization
-                    man_info.machine_id = profile.machine_id
-
-                    # Cache the result
-                    await integrator.cache_man_page(man_info)
-
-                    # Save as machine-specific knowledge
-                    await self._save_man_page_knowledge(man_info, integrator)
-
-                    integration_results["successful"] += 1
-                    integration_results["commands"][command] = "success"
-
-                    logger.debug(f"Integrated man page for {command}")
-
-                except Exception as e:
-                    integration_results["failed"] += 1
-                    integration_results["commands"][command] = f"error: {str(e)}"
-                    logger.error(f"Failed to integrate man page for {command}: {e}")
+                await self._process_single_man_page(
+                    command, integrator, profile, integration_results
+                )
 
             logger.info(
                 f"Man page integration complete: {integration_results['successful']} successful, "

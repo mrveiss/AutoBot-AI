@@ -146,6 +146,7 @@ async def calculate_debt_from_analysis(
 ) -> Dict[str, Any]:
     """
     Calculate technical debt from codebase analysis data.
+    Issue #281: Refactored from 163 lines to use extracted helper methods.
 
     Args:
         analysis_data: Data from codebase analytics
@@ -156,150 +157,28 @@ async def calculate_debt_from_analysis(
     """
     debt_items: List[DebtItem] = []
 
-    # Process anti-patterns
-    anti_patterns = analysis_data.get("anti_patterns", [])
-    for pattern in anti_patterns:
-        severity = _map_severity(pattern.get("severity", "medium"))
-        debt_items.append(
-            DebtItem(
-                category=DebtCategory.ANTI_PATTERNS,
-                severity=severity,
-                file_path=pattern.get("file_path", "unknown"),
-                line_number=pattern.get("line_number"),
-                description=pattern.get("description", "Anti-pattern detected"),
-                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.ANTI_PATTERNS]
-                * SEVERITY_WEIGHTS[severity],
-                fix_complexity=_get_fix_complexity(pattern.get("type")),
-                business_impact=_get_business_impact(severity),
-                recommendation=pattern.get("recommendation", "Refactor to fix pattern"),
-                tags=[pattern.get("type", "unknown")],
-            )
-        )
+    # Process all data sources (Issue #281: uses helpers)
+    debt_items.extend(_process_anti_patterns(analysis_data.get("anti_patterns", [])))
+    debt_items.extend(_process_problems(analysis_data.get("problems", [])))
+    debt_items.extend(_process_hardcodes(analysis_data.get("hardcodes", [])))
+    debt_items.extend(_process_complexity(analysis_data.get("complexity", {})))
 
-    # Process code problems
-    problems = analysis_data.get("problems", [])
-    for problem in problems:
-        category = _map_problem_to_category(problem.get("type", ""))
-        severity = _map_severity(problem.get("severity", "medium"))
-        debt_items.append(
-            DebtItem(
-                category=category,
-                severity=severity,
-                file_path=problem.get("file_path", "unknown"),
-                line_number=problem.get("line_number"),
-                description=problem.get("description", "Code issue detected"),
-                estimated_hours=DEBT_HOURS_ESTIMATE.get(category, 1.0)
-                * SEVERITY_WEIGHTS[severity],
-                fix_complexity=problem.get("fix_complexity", "medium"),
-                business_impact=_get_business_impact(severity),
-                recommendation=problem.get("suggestion", "Fix the issue"),
-                tags=[problem.get("type", "unknown")],
-            )
-        )
+    # Calculate aggregations (Issue #281: uses helper)
+    aggregations = _calculate_debt_aggregations(debt_items, hourly_rate)
 
-    # Process hardcoded values
-    hardcodes = analysis_data.get("hardcodes", [])
-    for hardcode in hardcodes:
-        debt_items.append(
-            DebtItem(
-                category=DebtCategory.HARDCODED_VALUES,
-                severity=DebtSeverity.MEDIUM,
-                file_path=hardcode.get("file_path", "unknown"),
-                line_number=hardcode.get("line"),
-                description=f"Hardcoded {hardcode.get('type', 'value')}: {hardcode.get('value', '')}",
-                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.HARDCODED_VALUES],
-                fix_complexity="easy",
-                business_impact="low",
-                recommendation="Extract to configuration or constants",
-                tags=[hardcode.get("type", "unknown")],
-            )
-        )
-
-    # Process complexity issues
-    complexity_data = analysis_data.get("complexity", {})
-    for file_path, complexity in complexity_data.items():
-        if complexity > 10:
-            severity = (
-                DebtSeverity.CRITICAL
-                if complexity > 20
-                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
-            )
-            debt_items.append(
-                DebtItem(
-                    category=DebtCategory.CODE_COMPLEXITY,
-                    severity=severity,
-                    file_path=file_path,
-                    line_number=None,
-                    description=f"High cyclomatic complexity: {complexity}",
-                    estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.CODE_COMPLEXITY]
-                    * SEVERITY_WEIGHTS[severity],
-                    fix_complexity="hard",
-                    business_impact=_get_business_impact(severity),
-                    recommendation="Refactor into smaller, focused functions",
-                    tags=["complexity", "refactoring"],
-                )
-            )
-
-    # Calculate totals
-    total_hours = sum(item.estimated_hours for item in debt_items)
-    total_cost = total_hours * hourly_rate
-
-    # Group by category
-    by_category: Dict[str, int] = {}
-    for item in debt_items:
-        cat = item.category.value
-        by_category[cat] = by_category.get(cat, 0) + 1
-
-    # Group by severity
-    by_severity: Dict[str, int] = {}
-    for item in debt_items:
-        sev = item.severity.value
-        by_severity[sev] = by_severity.get(sev, 0) + 1
-
-    # Find top files by debt
-    file_debt: Dict[str, float] = {}
-    for item in debt_items:
-        file_debt[item.file_path] = file_debt.get(item.file_path, 0) + item.estimated_hours
-
-    top_files = sorted(
-        [{"file": f, "hours": h, "cost_usd": h * hourly_rate} for f, h in file_debt.items()],
-        key=lambda x: x["hours"],
-        reverse=True,
-    )[:10]
-
-    # Calculate ROI ranking (quick wins = low effort, high impact)
-    roi_items = []
-    for item in debt_items:
-        # ROI = impact / effort
-        impact_score = {"high": 3, "medium": 2, "low": 1}.get(item.business_impact, 1)
-        effort_score = {"easy": 1, "medium": 2, "hard": 3}.get(item.fix_complexity, 2)
-        roi = impact_score / effort_score
-
-        roi_items.append(
-            {
-                "file_path": item.file_path,
-                "category": item.category.value,
-                "description": item.description[:100],
-                "roi_score": round(roi, 2),
-                "estimated_hours": item.estimated_hours,
-                "fix_complexity": item.fix_complexity,
-                "business_impact": item.business_impact,
-            }
-        )
-
-    # Sort by ROI (highest first)
-    roi_ranking = sorted(roi_items, key=lambda x: x["roi_score"], reverse=True)[:20]
+    # Calculate ROI ranking (Issue #281: uses helper)
+    roi_ranking = _calculate_roi_ranking(debt_items)
 
     return {
         "summary": {
             "total_items": len(debt_items),
-            "total_hours": round(total_hours, 1),
-            "total_cost_usd": round(total_cost, 2),
-            "by_category": by_category,
-            "by_severity": by_severity,
+            "total_hours": round(aggregations["total_hours"], 1),
+            "total_cost_usd": round(aggregations["total_cost"], 2),
+            "by_category": aggregations["by_category"],
+            "by_severity": aggregations["by_severity"],
             "hourly_rate": hourly_rate,
         },
-        "top_files": top_files,
+        "top_files": aggregations["top_files"],
         "roi_ranking": roi_ranking,
         "items": [item.to_dict() for item in debt_items],
         "timestamp": datetime.now().isoformat(),
@@ -355,6 +234,171 @@ def _get_business_impact(severity: DebtSeverity) -> str:
         DebtSeverity.LOW: "low",
     }
     return mapping.get(severity, "medium")
+
+
+# =============================================================================
+# Issue #281: Helper functions for calculate_debt_from_analysis
+# =============================================================================
+
+
+def _process_anti_patterns(anti_patterns: List[Dict[str, Any]]) -> List[DebtItem]:
+    """Process anti-patterns into debt items (Issue #281: extracted helper)."""
+    debt_items = []
+    for pattern in anti_patterns:
+        severity = _map_severity(pattern.get("severity", "medium"))
+        debt_items.append(
+            DebtItem(
+                category=DebtCategory.ANTI_PATTERNS,
+                severity=severity,
+                file_path=pattern.get("file_path", "unknown"),
+                line_number=pattern.get("line_number"),
+                description=pattern.get("description", "Anti-pattern detected"),
+                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.ANTI_PATTERNS]
+                * SEVERITY_WEIGHTS[severity],
+                fix_complexity=_get_fix_complexity(pattern.get("type")),
+                business_impact=_get_business_impact(severity),
+                recommendation=pattern.get("recommendation", "Refactor to fix pattern"),
+                tags=[pattern.get("type", "unknown")],
+            )
+        )
+    return debt_items
+
+
+def _process_problems(problems: List[Dict[str, Any]]) -> List[DebtItem]:
+    """Process code problems into debt items (Issue #281: extracted helper)."""
+    debt_items = []
+    for problem in problems:
+        category = _map_problem_to_category(problem.get("type", ""))
+        severity = _map_severity(problem.get("severity", "medium"))
+        debt_items.append(
+            DebtItem(
+                category=category,
+                severity=severity,
+                file_path=problem.get("file_path", "unknown"),
+                line_number=problem.get("line_number"),
+                description=problem.get("description", "Code issue detected"),
+                estimated_hours=DEBT_HOURS_ESTIMATE.get(category, 1.0)
+                * SEVERITY_WEIGHTS[severity],
+                fix_complexity=problem.get("fix_complexity", "medium"),
+                business_impact=_get_business_impact(severity),
+                recommendation=problem.get("suggestion", "Fix the issue"),
+                tags=[problem.get("type", "unknown")],
+            )
+        )
+    return debt_items
+
+
+def _process_hardcodes(hardcodes: List[Dict[str, Any]]) -> List[DebtItem]:
+    """Process hardcoded values into debt items (Issue #281: extracted helper)."""
+    debt_items = []
+    for hardcode in hardcodes:
+        debt_items.append(
+            DebtItem(
+                category=DebtCategory.HARDCODED_VALUES,
+                severity=DebtSeverity.MEDIUM,
+                file_path=hardcode.get("file_path", "unknown"),
+                line_number=hardcode.get("line"),
+                description=f"Hardcoded {hardcode.get('type', 'value')}: {hardcode.get('value', '')}",
+                estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.HARDCODED_VALUES],
+                fix_complexity="easy",
+                business_impact="low",
+                recommendation="Extract to configuration or constants",
+                tags=[hardcode.get("type", "unknown")],
+            )
+        )
+    return debt_items
+
+
+def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
+    """Process complexity issues into debt items (Issue #281: extracted helper)."""
+    debt_items = []
+    for file_path, complexity in complexity_data.items():
+        if complexity > 10:
+            severity = (
+                DebtSeverity.CRITICAL
+                if complexity > 20
+                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
+            )
+            debt_items.append(
+                DebtItem(
+                    category=DebtCategory.CODE_COMPLEXITY,
+                    severity=severity,
+                    file_path=file_path,
+                    line_number=None,
+                    description=f"High cyclomatic complexity: {complexity}",
+                    estimated_hours=DEBT_HOURS_ESTIMATE[DebtCategory.CODE_COMPLEXITY]
+                    * SEVERITY_WEIGHTS[severity],
+                    fix_complexity="hard",
+                    business_impact=_get_business_impact(severity),
+                    recommendation="Refactor into smaller, focused functions",
+                    tags=["complexity", "refactoring"],
+                )
+            )
+    return debt_items
+
+
+def _calculate_debt_aggregations(
+    debt_items: List[DebtItem], hourly_rate: float
+) -> Dict[str, Any]:
+    """Calculate totals, category/severity groupings, and top files (Issue #281: extracted)."""
+    total_hours = sum(item.estimated_hours for item in debt_items)
+    total_cost = total_hours * hourly_rate
+
+    # Group by category
+    by_category: Dict[str, int] = {}
+    for item in debt_items:
+        cat = item.category.value
+        by_category[cat] = by_category.get(cat, 0) + 1
+
+    # Group by severity
+    by_severity: Dict[str, int] = {}
+    for item in debt_items:
+        sev = item.severity.value
+        by_severity[sev] = by_severity.get(sev, 0) + 1
+
+    # Find top files by debt
+    file_debt: Dict[str, float] = {}
+    for item in debt_items:
+        file_debt[item.file_path] = file_debt.get(item.file_path, 0) + item.estimated_hours
+
+    top_files = sorted(
+        [{"file": f, "hours": h, "cost_usd": h * hourly_rate} for f, h in file_debt.items()],
+        key=lambda x: x["hours"],
+        reverse=True,
+    )[:10]
+
+    return {
+        "total_hours": total_hours,
+        "total_cost": total_cost,
+        "by_category": by_category,
+        "by_severity": by_severity,
+        "top_files": top_files,
+    }
+
+
+def _calculate_roi_ranking(debt_items: List[DebtItem]) -> List[Dict[str, Any]]:
+    """Calculate ROI ranking for debt items (Issue #281: extracted helper)."""
+    roi_items = []
+    for item in debt_items:
+        # ROI = impact / effort
+        impact_score = {"high": 3, "medium": 2, "low": 1}.get(item.business_impact, 1)
+        effort_score = {"easy": 1, "medium": 2, "hard": 3}.get(item.fix_complexity, 2)
+        roi = impact_score / effort_score
+
+        roi_items.append(
+            {
+                "file_path": item.file_path,
+                "category": item.category.value,
+                "description": item.description[:100],
+                "roi_score": round(roi, 2),
+                "estimated_hours": item.estimated_hours,
+                "fix_complexity": item.fix_complexity,
+                "business_impact": item.business_impact,
+            }
+        )
+
+    # Sort by ROI (highest first)
+    return sorted(roi_items, key=lambda x: x["roi_score"], reverse=True)[:20]
 
 
 def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:

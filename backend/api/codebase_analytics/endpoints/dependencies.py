@@ -117,115 +117,80 @@ def _detect_circular_deps(import_relationships: List[Dict]) -> List[List[str]]:
     return circular_deps
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_dependencies",
-    error_code_prefix="CODEBASE",
-)
-@router.get("/analytics/dependencies")
-async def get_dependencies():
+async def _analyze_file_imports(
+    py_file: Path,
+    project_root: Path,
+    modules: Dict[str, Dict],
+    import_relationships: List[Dict],
+    external_deps: Dict[str, int],
+) -> None:
     """
-    Get file dependency analysis showing imports and module relationships.
+    Analyze imports from a single Python file and update data structures.
+
+    Issue #281: Extracted helper for file import analysis.
+
+    Args:
+        py_file: Python file to analyze
+        project_root: Root directory of the project
+        modules: Dict to update with module info
+        import_relationships: List to update with import relationships
+        external_deps: Dict to update with external dependency counts
+    """
+    rel_path = str(py_file.relative_to(project_root))
+    if rel_path not in modules:
+        modules[rel_path] = {
+            "path": rel_path,
+            "name": py_file.stem,
+            "package": str(py_file.parent.relative_to(project_root)),
+            "functions": 0,
+            "classes": 0,
+            "imports": [],
+        }
+
+    content = await _read_file_content(py_file)
+    if content is None:
+        return
+
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        logger.debug(f"Syntax error parsing {py_file}")
+        return
+
+    file_imports, file_ext_deps = _extract_imports_from_ast(tree, STDLIB_MODULES)
+    modules[rel_path]["imports"] = file_imports
+
+    # Merge external dependencies
+    for pkg, count in file_ext_deps.items():
+        external_deps[pkg] = external_deps.get(pkg, 0) + count
+
+    # Create import relationships for graph
+    for imp in file_imports:
+        import_relationships.append(
+            {"source": rel_path, "target": imp, "type": "import"}
+        )
+
+
+def _build_visualization_graph(
+    modules: Dict[str, Dict],
+    import_relationships: List[Dict],
+    external_deps: Dict[str, int],
+    circular_deps: List[List[str]],
+) -> Dict:
+    """
+    Build graph structure and response dict for visualization.
+
+    Issue #281: Extracted helper for graph building.
+
+    Args:
+        modules: Module information dict
+        import_relationships: List of import relationships
+        external_deps: External dependency counts
+        circular_deps: Detected circular dependencies
 
     Returns:
-    - modules: List of all modules/files in the codebase
-    - imports: Import relationships (which file imports what)
-    - dependency_graph: Graph structure for visualization
-    - circular_dependencies: Detected circular import issues
-    - external_dependencies: Third-party package dependencies
+        Complete response dictionary for JSONResponse
     """
-    code_collection = get_code_collection()
-
-    # Data structures
-    modules: Dict[str, Dict] = {}  # file_path -> module info
-    import_relationships: List[Dict] = []  # source -> target relationships
-    external_deps: Dict[str, int] = {}  # external package -> usage count
-    circular_deps: List[List[str]] = []
-
-    if code_collection:
-        try:
-            # Query all Python files from ChromaDB
-            # Get functions and classes to understand module structure
-            results = code_collection.get(
-                where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
-            )
-
-            # Build module map from stored data (Issue #315: uses helper)
-            seen_files = set()
-            for metadata in results.get("metadatas", []):
-                _process_chromadb_metadata(metadata, modules, seen_files)
-
-            logger.info(f"Found {len(modules)} modules in ChromaDB")
-
-        except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}")
-            code_collection = None
-
-    # Fallback: scan the actual filesystem for more detailed import analysis
-    # This gives us actual import statements
-    project_root = get_project_root()
-    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
-    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
-
-    # Filter out unwanted directories
-    excluded_dirs = {
-        ".git",
-        "__pycache__",
-        "node_modules",
-        ".venv",
-        "venv",
-        "env",
-        ".env",
-        "archive",
-        "dist",
-        "build",
-    }
-    python_files = [
-        f
-        for f in python_files
-        if not any(excluded in f.parts for excluded in excluded_dirs)
-    ]
-
-    # Analyze imports from each file (Issue #315: refactored depth 7→3)
-    for py_file in python_files[:500]:  # Limit to 500 files for performance
-        rel_path = str(py_file.relative_to(project_root))
-        if rel_path not in modules:
-            modules[rel_path] = {
-                "path": rel_path,
-                "name": py_file.stem,
-                "package": str(py_file.parent.relative_to(project_root)),
-                "functions": 0,
-                "classes": 0,
-                "imports": [],
-            }
-
-        content = await _read_file_content(py_file)
-        if content is None:
-            continue
-
-        try:
-            tree = ast.parse(content)
-        except SyntaxError:
-            logger.debug(f"Syntax error parsing {py_file}")
-            continue
-
-        file_imports, file_ext_deps = _extract_imports_from_ast(tree, STDLIB_MODULES)
-        modules[rel_path]["imports"] = file_imports
-
-        # Merge external dependencies
-        for pkg, count in file_ext_deps.items():
-            external_deps[pkg] = external_deps.get(pkg, 0) + count
-
-        # Create import relationships for graph
-        for imp in file_imports:
-            import_relationships.append(
-                {"source": rel_path, "target": imp, "type": "import"}
-            )
-
-    # Detect circular dependencies
-    circular_deps = _detect_circular_deps(import_relationships)
-
-    # Build graph structure for visualization
     nodes = []
     edges = []
 
@@ -251,21 +216,95 @@ async def get_dependencies():
         for pkg, count in sorted(external_deps.items(), key=lambda x: x[1], reverse=True)
     ]
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "dependency_data": {
-                "modules": list(modules.values()),
-                "import_relationships": import_relationships[:1000],  # Limit for UI
-                "graph": {"nodes": nodes[:500], "edges": edges[:2000]},
-                "circular_dependencies": circular_deps,
-                "external_dependencies": sorted_external[:50],
-                "summary": {
-                    "total_modules": len(modules),
-                    "total_import_relationships": len(import_relationships),
-                    "circular_dependency_count": len(circular_deps),
-                    "external_dependency_count": len(external_deps),
-                },
+    return {
+        "status": "success",
+        "dependency_data": {
+            "modules": list(modules.values()),
+            "import_relationships": import_relationships[:1000],  # Limit for UI
+            "graph": {"nodes": nodes[:500], "edges": edges[:2000]},
+            "circular_dependencies": circular_deps,
+            "external_dependencies": sorted_external[:50],
+            "summary": {
+                "total_modules": len(modules),
+                "total_import_relationships": len(import_relationships),
+                "circular_dependency_count": len(circular_deps),
+                "external_dependency_count": len(external_deps),
             },
-        }
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dependencies",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analytics/dependencies")
+async def get_dependencies():
+    """
+    Get file dependency analysis showing imports and module relationships.
+
+    Issue #281: Refactored from 146 lines to use extracted helper methods.
+
+    Returns:
+    - modules: List of all modules/files in the codebase
+    - imports: Import relationships (which file imports what)
+    - dependency_graph: Graph structure for visualization
+    - circular_dependencies: Detected circular import issues
+    - external_dependencies: Third-party package dependencies
+    """
+    code_collection = get_code_collection()
+
+    # Data structures
+    modules: Dict[str, Dict] = {}  # file_path -> module info
+    import_relationships: List[Dict] = []  # source -> target relationships
+    external_deps: Dict[str, int] = {}  # external package -> usage count
+
+    if code_collection:
+        try:
+            # Query all Python files from ChromaDB
+            results = code_collection.get(
+                where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+            )
+
+            # Build module map from stored data (Issue #315: uses helper)
+            seen_files = set()
+            for metadata in results.get("metadatas", []):
+                _process_chromadb_metadata(metadata, modules, seen_files)
+
+            logger.info(f"Found {len(modules)} modules in ChromaDB")
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}")
+            code_collection = None
+
+    # Scan filesystem for detailed import analysis
+    project_root = get_project_root()
+    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
+    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
+
+    # Filter out unwanted directories
+    excluded_dirs = {
+        ".git", "__pycache__", "node_modules", ".venv",
+        "venv", "env", ".env", "archive", "dist", "build",
+    }
+    python_files = [
+        f for f in python_files
+        if not any(excluded in f.parts for excluded in excluded_dirs)
+    ]
+
+    # Analyze imports from each file (Issue #281: uses extracted helper)
+    for py_file in python_files[:500]:  # Limit to 500 files for performance
+        await _analyze_file_imports(
+            py_file, project_root, modules, import_relationships, external_deps
+        )
+
+    # Detect circular dependencies
+    circular_deps = _detect_circular_deps(import_relationships)
+
+    # Build and return visualization response (Issue #281: uses extracted helper)
+    return JSONResponse(
+        _build_visualization_graph(
+            modules, import_relationships, external_deps, circular_deps
+        )
     )

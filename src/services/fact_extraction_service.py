@@ -305,28 +305,16 @@ class FactExtractionService:
                 "service_metadata": metadata or {},
             })
 
-            # Store fact data
+            # Store fact data using model method (Issue #372 - reduces feature envy)
             pipe.hset(
                 fact_key,
-                mapping={
-                    "data": json.dumps(fact_data),
-                    "subject": fact.subject,
-                    "predicate": fact.predicate,
-                    "object": fact.object,
-                    "fact_type": fact.fact_type.value,
-                    "temporal_type": fact.temporal_type.value,
-                    "confidence": str(fact.confidence),
-                    "source": fact.source,
-                    "is_active": str(fact.is_active),
-                    "valid_from": fact.valid_from.isoformat(),
-                },
+                mapping=fact.to_redis_mapping(json.dumps(fact_data)),
             )
 
-            # Add to indices
+            # Add to indices using model method (Issue #372 - reduces feature envy)
             pipe.sadd(self.fact_index_key, fact.fact_id)
-            pipe.sadd(f"facts_by_source:{fact.source}", fact.fact_id)
-            pipe.sadd(f"facts_by_type:{fact.fact_type.value}", fact.fact_id)
-            pipe.sadd(f"facts_by_temporal:{fact.temporal_type.value}", fact.fact_id)
+            for index_key in fact.get_index_keys():
+                pipe.sadd(index_key, fact.fact_id)
             return True
         except Exception as e:
             logger.error(f"Error preparing fact for storage: {e}")
@@ -481,6 +469,63 @@ class FactExtractionService:
         except Exception as e:
             logger.error(f"Error recording extraction history: {e}")
 
+    def _build_criteria_candidate_keys(
+        self,
+        source: Optional[str],
+        fact_type: Optional[FactType],
+        temporal_type: Optional[TemporalType],
+    ) -> List[str]:
+        """
+        Build Redis index keys for fact criteria filtering.
+
+        Issue #281: Extracted helper to reduce complexity in get_facts_by_criteria.
+
+        Args:
+            source: Filter by source
+            fact_type: Filter by fact type
+            temporal_type: Filter by temporal type
+
+        Returns:
+            List of Redis index keys to query
+        """
+        candidate_keys = []
+        if source:
+            candidate_keys.append(f"facts_by_source:{source}")
+        if fact_type:
+            candidate_keys.append(f"facts_by_type:{fact_type.value}")
+        if temporal_type:
+            candidate_keys.append(f"facts_by_temporal:{temporal_type.value}")
+        return candidate_keys
+
+    async def _get_fact_ids_from_criteria(
+        self,
+        candidate_keys: List[str],
+    ) -> set:
+        """
+        Retrieve fact IDs by intersecting criteria index keys.
+
+        Issue #281: Extracted helper to reduce complexity in get_facts_by_criteria.
+
+        Args:
+            candidate_keys: Redis index keys to intersect
+
+        Returns:
+            Set of fact IDs matching all criteria
+        """
+        if candidate_keys:
+            if len(candidate_keys) == 1:
+                return await self.redis_client.smembers(candidate_keys[0])
+            else:
+                # Create temporary intersection key
+                temp_key = f"temp_intersection:{uuid.uuid4()}"
+                await self.redis_client.sinterstore(temp_key, *candidate_keys)
+                fact_ids = await self.redis_client.smembers(temp_key)
+                await self.redis_client.delete(temp_key)
+                return fact_ids
+        else:
+            # Get all facts
+            return await self.redis_client.smembers(self.fact_index_key)
+
     async def get_facts_by_criteria(
         self,
         source: Optional[str] = None,
@@ -509,30 +554,11 @@ class FactExtractionService:
                 logger.warning("Redis client not available")
                 return []
 
-            # Determine which index to use
-            candidate_keys = []
-
-            if source:
-                candidate_keys.append(f"facts_by_source:{source}")
-            if fact_type:
-                candidate_keys.append(f"facts_by_type:{fact_type.value}")
-            if temporal_type:
-                candidate_keys.append(f"facts_by_temporal:{temporal_type.value}")
-
-            # Get fact IDs
-            if candidate_keys:
-                # Intersect all criteria
-                if len(candidate_keys) == 1:
-                    fact_ids = await self.redis_client.smembers(candidate_keys[0])
-                else:
-                    # Create temporary intersection key
-                    temp_key = f"temp_intersection:{uuid.uuid4()}"
-                    await self.redis_client.sinterstore(temp_key, *candidate_keys)
-                    fact_ids = await self.redis_client.smembers(temp_key)
-                    await self.redis_client.delete(temp_key)
-            else:
-                # Get all facts
-                fact_ids = await self.redis_client.smembers(self.fact_index_key)
+            # Build candidate keys and get fact IDs (Issue #281: uses helpers)
+            candidate_keys = self._build_criteria_candidate_keys(
+                source, fact_type, temporal_type
+            )
+            fact_ids = await self._get_fact_ids_from_criteria(candidate_keys)
 
             if not fact_ids:
                 return []

@@ -23,6 +23,7 @@ from backend.api.analytics_models import (
     RealTimeEvent,
 )
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import RedisDatabase
 
@@ -711,7 +712,8 @@ async def start_analytics_collection():
     collector = analytics_controller.metrics_collector
     if not collector._is_collecting:
         asyncio.create_task(collector.start_collection())
-        await asyncio.sleep(0.5)  # Give it time to start
+        # Brief delay for service startup
+        await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
     return {
         "status": "started",

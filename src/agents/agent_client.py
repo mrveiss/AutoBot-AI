@@ -109,7 +109,7 @@ class AgentRegistry:
         """Get list of healthy agent types"""
         healthy = []
         for agent_type, health in self.agent_health.items():
-            if health.status in [AgentStatus.HEALTHY, AgentStatus.DEGRADED]:
+            if health.status in (AgentStatus.HEALTHY, AgentStatus.DEGRADED):
                 healthy.append(agent_type)
         return healthy
 

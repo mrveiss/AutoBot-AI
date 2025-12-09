@@ -348,6 +348,43 @@ async def test_npu_connectivity():
         }
 
 
+def _evaluate_device_timing(
+    stats: Optional[Metadata],
+    device_name: str,
+    low_threshold: float,
+    high_threshold: float,
+    excellent_msg: str,
+    slow_msg: str,
+) -> List[str]:
+    """
+    Evaluate device timing stats and generate recommendations.
+
+    Issue #281: Extracted helper to reduce repetition in _generate_performance_recommendations.
+
+    Args:
+        stats: Device stats dictionary with 'average_total_time_ms' key
+        device_name: Name of device for logging (unused, kept for clarity)
+        low_threshold: Threshold below which performance is excellent
+        high_threshold: Threshold above which performance is slow
+        excellent_msg: Message for excellent performance
+        slow_msg: Message for slow performance
+
+    Returns:
+        List of recommendation strings (0 or 1 item)
+    """
+    if not stats:
+        return []
+
+    avg_time = stats.get("average_total_time_ms", 0)
+
+    if avg_time < low_threshold:
+        return [excellent_msg]
+    elif avg_time > high_threshold:
+        return [slow_msg]
+
+    return []
+
+
 def _generate_performance_recommendations(
     benchmark_results: Metadata,
 ) -> List[str]:
@@ -356,37 +393,37 @@ def _generate_performance_recommendations(
 
     summary = benchmark_results.get("summary", {})
 
-    # Analyze NPU performance
+    # Analyze NPU performance (Issue #281: success_rate check kept separate)
     npu_stats = summary.get("npu")
     if npu_stats:
-        if npu_stats["success_rate"] < 80:
+        if npu_stats.get("success_rate", 100) < 80:
             recommendations.append(
                 "NPU success rate is low - check NPU Worker stability and connectivity"
             )
-        elif npu_stats["average_total_time_ms"] < 1000:
-            recommendations.append(
-                "NPU performance is excellent - consider routing more lightweight tasks to NPU"
-            )
-        elif npu_stats["average_total_time_ms"] > 3000:
-            recommendations.append(
-                "NPU response times are high - consider model optimization or reduce batch sizes"
+        else:
+            recommendations.extend(
+                _evaluate_device_timing(
+                    npu_stats, "NPU",
+                    low_threshold=1000, high_threshold=3000,
+                    excellent_msg="NPU performance is excellent - consider routing more lightweight tasks to NPU",
+                    slow_msg="NPU response times are high - consider model optimization or reduce batch sizes",
+                )
             )
     else:
         recommendations.append(
             "NPU not available - verify NPU Worker setup and Intel NPU drivers"
         )
 
-    # Analyze GPU performance
+    # Analyze GPU performance (Issue #281: Using extracted helper)
     gpu_stats = summary.get("gpu")
-    if gpu_stats:
-        if gpu_stats["average_total_time_ms"] < 500:
-            recommendations.append(
-                "GPU performance is excellent - consider routing more complex tasks to GPU"
-            )
-        elif gpu_stats["average_total_time_ms"] > 2000:
-            recommendations.append(
-                "GPU response times are high - check GPU utilization and memory usage"
-            )
+    recommendations.extend(
+        _evaluate_device_timing(
+            gpu_stats, "GPU",
+            low_threshold=500, high_threshold=2000,
+            excellent_msg="GPU performance is excellent - consider routing more complex tasks to GPU",
+            slow_msg="GPU response times are high - check GPU utilization and memory usage",
+        )
+    )
 
     # Compare devices
     if npu_stats and gpu_stats:

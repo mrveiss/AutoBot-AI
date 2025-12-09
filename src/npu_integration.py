@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 
+from src.constants.threshold_constants import LLMDefaults, TimingConstants
 from src.utils.http_client import get_http_client
 
 from .utils.service_registry import get_service_url
@@ -23,11 +24,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class NPUInferenceRequest:
+    """Request payload for NPU inference (Issue #376 - use named constants)."""
+
     model_id: str
     input_text: str
-    max_tokens: int = 100
-    temperature: float = 0.7
-    top_p: float = 0.9
+    max_tokens: int = LLMDefaults.DEFAULT_MAX_TOKENS
+    temperature: float = LLMDefaults.DEFAULT_TEMPERATURE
+    top_p: float = LLMDefaults.DEFAULT_TOP_P
 
 
 class NPUWorkerClient:
@@ -88,9 +91,9 @@ class NPUWorkerClient:
         self,
         model_id: str,
         input_text: str,
-        max_tokens: int = 100,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
+        max_tokens: int = LLMDefaults.DEFAULT_MAX_TOKENS,
+        temperature: float = LLMDefaults.DEFAULT_TEMPERATURE,
+        top_p: float = LLMDefaults.DEFAULT_TOP_P,
     ) -> Dict[str, Any]:
         """Run inference on NPU worker"""
         try:
@@ -147,7 +150,7 @@ class NPUWorkerClient:
                 return await self.run_inference(
                     model_id=data.get("model_id", "default"),
                     input_text=prompt,
-                    max_tokens=data.get("max_tokens", 200),
+                    max_tokens=data.get("max_tokens", LLMDefaults.ANALYSIS_MAX_TOKENS),
                 )
 
             elif task_type == "knowledge_processing":
@@ -158,7 +161,7 @@ class NPUWorkerClient:
                 return await self.run_inference(
                     model_id=data.get("model_id", "default"),
                     input_text=prompt,
-                    max_tokens=data.get("max_tokens", 150),
+                    max_tokens=data.get("max_tokens", LLMDefaults.KNOWLEDGE_MAX_TOKENS),
                 )
 
             else:
@@ -177,9 +180,13 @@ class NPUWorkerClient:
 
 
 class NPUTaskQueue:
-    """Queue for managing NPU processing tasks"""
+    """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""
 
-    def __init__(self, npu_client: NPUWorkerClient, max_concurrent: int = 3):
+    def __init__(
+        self,
+        npu_client: NPUWorkerClient,
+        max_concurrent: int = LLMDefaults.DEFAULT_CONCURRENT_WORKERS,
+    ):
         """Initialize task queue with NPU client and worker pool."""
         self.npu_client = npu_client
         self.max_concurrent = max_concurrent
@@ -210,7 +217,9 @@ class NPUTaskQueue:
         while self.running:
             try:
                 # Wait for task with timeout to allow graceful shutdown
-                task_data = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+                task_data = await asyncio.wait_for(
+                    self.queue.get(), timeout=TimingConstants.STANDARD_DELAY
+                )
 
                 logger.debug(
                     f"Worker {worker_id} processing task: {task_data['task_type']}"
@@ -246,8 +255,8 @@ class NPUTaskQueue:
         await self.queue.put(task_data)
 
         try:
-            # Wait for result with timeout
-            result = await asyncio.wait_for(future, timeout=30.0)
+            # Wait for result with timeout (Issue #376 - use named constants)
+            result = await asyncio.wait_for(future, timeout=TimingConstants.SHORT_TIMEOUT)
             return result
         except asyncio.TimeoutError:
             return {"success": False, "error": "NPU task timeout", "fallback": True}

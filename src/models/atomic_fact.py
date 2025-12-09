@@ -265,6 +265,98 @@ class AtomicFact:
             metadata=data.get("metadata", {})
         )
 
+    def with_resolved_entities(
+        self,
+        resolved_subject: str,
+        resolved_object: str,
+        resolved_entities: List[str],
+    ) -> "AtomicFact":
+        """Create a copy with resolved entity names (Issue #372 - reduces feature envy).
+
+        Args:
+            resolved_subject: The resolved canonical name for subject
+            resolved_object: The resolved canonical name for object
+            resolved_entities: List of resolved entity names
+
+        Returns:
+            New AtomicFact with resolved entities, preserving all other fields
+        """
+        return AtomicFact(
+            subject=resolved_subject,
+            predicate=self.predicate,
+            object=resolved_object,
+            fact_type=self.fact_type,
+            temporal_type=self.temporal_type,
+            confidence=self.confidence,
+            source=self.source,
+            extraction_method=self.extraction_method,
+            valid_from=self.valid_from,
+            valid_until=self.valid_until,
+            last_verified=self.last_verified,
+            fact_id=self.fact_id,
+            entities=resolved_entities,
+            related_facts=self.related_facts,
+            context=self.context,
+            original_text=self.original_text,
+            chunk_id=self.chunk_id,
+            is_active=self.is_active,
+            invalidated_by=self.invalidated_by,
+            invalidation_reason=self.invalidation_reason,
+            metadata=self.metadata,
+        )
+
+    def to_redis_mapping(self, json_data: str) -> Dict[str, str]:
+        """Convert to Redis hash mapping for pipeline storage (Issue #372 - reduces feature envy).
+
+        Args:
+            json_data: Pre-serialized JSON data for the 'data' field
+
+        Returns:
+            Dict with string values suitable for Redis hset mapping
+        """
+        return {
+            "data": json_data,
+            "subject": self.subject,
+            "predicate": self.predicate,
+            "object": self.object,
+            "fact_type": self.fact_type.value,
+            "temporal_type": self.temporal_type.value,
+            "confidence": str(self.confidence),
+            "source": self.source,
+            "is_active": str(self.is_active),
+            "valid_from": self.valid_from.isoformat(),
+        }
+
+    def get_index_keys(self) -> List[str]:
+        """Get list of index keys for this fact (Issue #372 - reduces feature envy).
+
+        Returns:
+            List of index key suffixes for fact indices
+        """
+        return [
+            f"facts_by_source:{self.source}",
+            f"facts_by_type:{self.fact_type.value}",
+            f"facts_by_temporal:{self.temporal_type.value}",
+        ]
+
+    def mark_invalidated(
+        self, reason: Optional[Dict[str, Any]] = None, service: str = "unknown"
+    ) -> None:
+        """Mark this fact as invalidated with metadata (Issue #372 - reduces feature envy).
+
+        Args:
+            reason: Optional invalidation reason dict
+            service: Name of the service performing invalidation
+        """
+        self.is_active = False
+        self.valid_until = datetime.now()
+        self.metadata = self.metadata or {}
+        self.metadata.update({
+            "invalidated_at": datetime.now().isoformat(),
+            "invalidation_reason": reason or {},
+            "invalidation_service": service,
+        })
+
     def __str__(self) -> str:
         """String representation of the atomic fact."""
         status = "ACTIVE" if self.is_active else "INVALIDATED"

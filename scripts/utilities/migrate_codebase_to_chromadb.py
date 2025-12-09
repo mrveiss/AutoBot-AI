@@ -34,6 +34,7 @@ class CodebaseChromaDBMigration:
     """Migrate codebase analytics from Redis to ChromaDB"""
 
     def __init__(self):
+        """Initialize migration tool with empty client references and stats."""
         self.redis_client = None
         self.chroma_client = None
         self.code_collection = None

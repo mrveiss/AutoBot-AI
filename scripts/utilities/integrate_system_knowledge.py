@@ -97,8 +97,60 @@ async def integrate_cached_man_pages(kb_v2):
     return integrated_count
 
 
+def _extract_doc_title(content: str, doc_path: Path) -> str:
+    """Extract title from content or filename (Issue #315: extracted helper)."""
+    lines = content.split('\n')
+    title = doc_path.stem.replace('_', ' ').title()
+    for line in lines[:10]:
+        if line.startswith('# '):
+            return line.lstrip('# ').strip()
+    return title
+
+
+def _determine_doc_category(doc_path: Path) -> str:
+    """Determine category based on document path (Issue #315: extracted helper)."""
+    category_map = [
+        ("/api/", "api_reference"),
+        ("/architecture/", "architecture"),
+        ("/developer/", "developer_guide"),
+        ("/troubleshooting/", "troubleshooting"),
+    ]
+    doc_path_str = str(doc_path)
+    for path_pattern, cat in category_map:
+        if path_pattern in doc_path_str:
+            return cat
+    if doc_path.name == "CLAUDE.md":
+        return "project_rules"
+    return "documentation"
+
+
+async def _integrate_single_doc(doc_path: Path, kb_v2) -> bool:
+    """Integrate a single documentation file (Issue #315: extracted helper)."""
+    with open(doc_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    title = _extract_doc_title(content, doc_path)
+    category = _determine_doc_category(doc_path)
+
+    result = await kb_v2.store_fact(
+        content=content,
+        metadata={
+            "type": "autobot_documentation",
+            "title": title,
+            "category": category,
+            "source": "autobot_docs",
+            "file_path": str(doc_path)
+        }
+    )
+
+    if result.get('status') == 'success':
+        logger.info(f"✓ Integrated documentation: {title}")
+        return True
+    return False
+
+
 async def integrate_autobot_documentation(kb_v2):
-    """Integrate AutoBot documentation from docs/ directory"""
+    """Integrate AutoBot documentation from docs/ directory (Issue #315: refactored)."""
     logger.info("Starting AutoBot documentation integration...")
 
     docs_dir = Path("docs")
@@ -106,7 +158,6 @@ async def integrate_autobot_documentation(kb_v2):
         logger.warning(f"Documentation directory not found: {docs_dir}")
         return 0
 
-    # Priority documentation files
     priority_docs = [
         "CLAUDE.md",
         "docs/system-state.md",
@@ -125,46 +176,8 @@ async def integrate_autobot_documentation(kb_v2):
             continue
 
         try:
-            with open(doc_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # Extract title from first header or filename
-            lines = content.split('\n')
-            title = doc_path.stem.replace('_', ' ').title()
-            for line in lines[:10]:
-                if line.startswith('# '):
-                    title = line.lstrip('# ').strip()
-                    break
-
-            # Determine category based on directory
-            category = "documentation"
-            if "/api/" in str(doc_path):
-                category = "api_reference"
-            elif "/architecture/" in str(doc_path):
-                category = "architecture"
-            elif "/developer/" in str(doc_path):
-                category = "developer_guide"
-            elif "/troubleshooting/" in str(doc_path):
-                category = "troubleshooting"
-            elif doc_path.name == "CLAUDE.md":
-                category = "project_rules"
-
-            # Store in Knowledge Base V2
-            result = await kb_v2.store_fact(
-                content=content,
-                metadata={
-                    "type": "autobot_documentation",
-                    "title": title,
-                    "category": category,
-                    "source": "autobot_docs",
-                    "file_path": str(doc_path)
-                }
-            )
-
-            if result.get('status') == 'success':
+            if await _integrate_single_doc(doc_path, kb_v2):
                 integrated_count += 1
-                logger.info(f"✓ Integrated documentation: {title}")
-
         except Exception as e:
             logger.error(f"Error integrating {doc_path}: {e}")
             continue

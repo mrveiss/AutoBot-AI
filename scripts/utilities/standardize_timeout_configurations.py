@@ -87,6 +87,7 @@ class TimeoutConfigurationAnalyzer:
     """Analyzes and standardizes timeout configurations"""
 
     def __init__(self, project_root: str):
+        """Initialize timeout analyzer with project root and issue tracking."""
         self.project_root = Path(project_root)
         self.issues: List[TimeoutIssue] = []
         self.standard_config = StandardTimeoutConfig()

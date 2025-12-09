@@ -14,6 +14,7 @@ from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from src.constants.threshold_constants import RetryConfig
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.workflow_scheduler import (
     WorkflowPriority,
@@ -38,7 +39,7 @@ class ScheduleWorkflowRequest(BaseModel):
     user_id: Optional[str] = None
     estimated_duration_minutes: int = 30
     timeout_minutes: int = 120
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
 
 
 class RescheduleRequest(BaseModel):
@@ -85,23 +86,13 @@ async def schedule_workflow(request: ScheduleWorkflowRequest):
     )
     workflow_id = workflow_scheduler.schedule_workflow(request=internal_request)
 
-    # Get the created workflow for response
+    # Get the created workflow for response (Issue #372 - use model method)
     workflow = workflow_scheduler.get_workflow(workflow_id)
 
     return {
         "success": True,
         "workflow_id": workflow_id,
-        "scheduled_workflow": {
-            "id": workflow.id,
-            "name": workflow.name,
-            "user_message": workflow.user_message,
-            "scheduled_time": workflow.scheduled_time.isoformat(),
-            "priority": workflow.priority.name,
-            "status": workflow.status.name,
-            "complexity": workflow.complexity.value,
-            "template_id": workflow.template_id,
-            "estimated_duration_minutes": workflow.estimated_duration_minutes,
-        },
+        "scheduled_workflow": workflow.to_summary_response(),
     }
 
 
@@ -134,28 +125,8 @@ async def list_scheduled_workflows(
         status=status_filter, user_id=user_id, tags=tags_filter
     )
 
-    # Convert to response format
-    workflow_list = []
-    for workflow in workflows:
-        workflow_list.append(
-            {
-                "id": workflow.id,
-                "name": workflow.name,
-                "user_message": workflow.user_message,
-                "scheduled_time": workflow.scheduled_time.isoformat(),
-                "priority": workflow.priority.name,
-                "status": workflow.status.name,
-                "complexity": workflow.complexity.value,
-                "created_at": workflow.created_at.isoformat(),
-                "template_id": workflow.template_id,
-                "user_id": workflow.user_id,
-                "tags": workflow.tags,
-                "dependencies": workflow.dependencies,
-                "estimated_duration_minutes": workflow.estimated_duration_minutes,
-                "retry_count": workflow.retry_count,
-                "max_retries": workflow.max_retries,
-            }
-        )
+    # Convert to response format using model method (Issue #372)
+    workflow_list = [workflow.to_list_response() for workflow in workflows]
 
     return {
         "success": True,
@@ -171,34 +142,15 @@ async def list_scheduled_workflows(
 )
 @router.get("/workflows/{workflow_id}")
 async def get_workflow_details(workflow_id: str):
-    """Get detailed information about a specific scheduled workflow"""
+    """Get detailed information about a specific scheduled workflow (Issue #372)"""
     workflow = workflow_scheduler.get_workflow(workflow_id)
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
+    # Use model method to reduce feature envy (Issue #372)
     return {
         "success": True,
-        "workflow": {
-            "id": workflow.id,
-            "name": workflow.name,
-            "user_message": workflow.user_message,
-            "scheduled_time": workflow.scheduled_time.isoformat(),
-            "priority": workflow.priority.name,
-            "status": workflow.status.name,
-            "complexity": workflow.complexity.value,
-            "created_at": workflow.created_at.isoformat(),
-            "template_id": workflow.template_id,
-            "variables": workflow.variables,
-            "user_id": workflow.user_id,
-            "auto_approve": workflow.auto_approve,
-            "tags": workflow.tags,
-            "dependencies": workflow.dependencies,
-            "estimated_duration_minutes": workflow.estimated_duration_minutes,
-            "timeout_minutes": workflow.timeout_minutes,
-            "retry_count": workflow.retry_count,
-            "max_retries": workflow.max_retries,
-            "metadata": workflow.metadata,
-        },
+        "workflow": workflow.to_detail_response(),
     }
 
 

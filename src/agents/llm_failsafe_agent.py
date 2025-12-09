@@ -213,32 +213,29 @@ class LLMFailsafeAgent:
             ),
         }
 
-    def _create_structured_messages(
-        self, prompt: str, context: Optional[Dict[str, Any]] = None
-    ) -> list:
+    def _build_base_system_content(
+        self, context: Optional[Dict[str, Any]] = None
+    ) -> dict:
         """
-        Create structured JSON messages for better LLM understanding.
+        Build the base system content structure for LLM messages.
+
+        Issue #281: Extracted from _create_structured_messages to reduce function
+        length and improve reusability of system content generation.
 
         Args:
-            prompt: User input/request
-            context: Optional context information
+            context: Optional context information for response formatting
 
         Returns:
-            List of properly structured message objects
+            Dict with base system content structure
         """
-        messages = []
-
-        # Add system message with structured instructions
-        system_content = {
+        return {
             "role": "system",
             "instructions": (
-                (
-                    "You are AutoBot, an advanced autonomous AI platform specifically designed "
-                    "for Linux system administration and intelligent task automation. "
-                    "You are NOT a Meta AI model or related to Transformers. "
-                    "You are an enterprise-grade automation platform with 20+ specialized "
-                    "AI agents, expert Linux knowledge, and multi-modal processing capabilities."
-                )
+                "You are AutoBot, an advanced autonomous AI platform specifically designed "
+                "for Linux system administration and intelligent task automation. "
+                "You are NOT a Meta AI model or related to Transformers. "
+                "You are an enterprise-grade automation platform with 20+ specialized "
+                "AI agents, expert Linux knowledge, and multi-modal processing capabilities."
             ),
             "response_format": {
                 "type": "conversational",
@@ -263,34 +260,65 @@ class LLMFailsafeAgent:
             ],
         }
 
+    def _add_context_info_to_system_content(
+        self, system_content: dict, context: Dict[str, Any]
+    ) -> None:
+        """
+        Add context-specific information to system content.
+
+        Issue #281: Extracted from _create_structured_messages to reduce function
+        length and separate context processing logic.
+
+        Args:
+            system_content: System content dict to modify in place
+            context: Context information to add
+        """
+        system_content["context_info"] = {}
+
+        if context.get("chat_id"):
+            system_content["context_info"]["chat_session"] = context["chat_id"]
+
+        if context.get("kb_documents_found", 0) > 0:
+            system_content["context_info"]["knowledge_base"] = {
+                "documents_found": context["kb_documents_found"],
+                "has_context": True,
+                "instruction": (
+                    "Use the provided knowledge base context to inform your response. "
+                    "Cite sources when using KB information."
+                ),
+            }
+
+        if context.get("response_type"):
+            system_content["context_info"]["expected_response_type"] = context[
+                "response_type"
+            ]
+
+        if context.get("instructions"):
+            system_content["context_info"]["special_instructions"] = context[
+                "instructions"
+            ]
+
+    def _create_structured_messages(
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
+    ) -> list:
+        """
+        Create structured JSON messages for better LLM understanding.
+
+        Args:
+            prompt: User input/request
+            context: Optional context information
+
+        Returns:
+            List of properly structured message objects
+        """
+        messages = []
+
+        # Issue #281: Use extracted helpers for system content building
+        system_content = self._build_base_system_content(context)
+
         # Add context-specific instructions if available
         if context:
-            system_content["context_info"] = {}
-
-            if context.get("chat_id"):
-                system_content["context_info"]["chat_session"] = context["chat_id"]
-
-            if context.get("kb_documents_found", 0) > 0:
-                system_content["context_info"]["knowledge_base"] = {
-                    "documents_found": context["kb_documents_found"],
-                    "has_context": True,
-                    "instruction": (
-                        (
-                            "Use the provided knowledge base context to inform your response. "
-                            "Cite sources when using KB information."
-                        )
-                    ),
-                }
-
-            if context.get("response_type"):
-                system_content["context_info"]["expected_response_type"] = context[
-                    "response_type"
-                ]
-
-            if context.get("instructions"):
-                system_content["context_info"]["special_instructions"] = context[
-                    "instructions"
-                ]
+            self._add_context_info_to_system_content(system_content, context)
 
         messages.append(
             {"role": "system", "content": json.dumps(system_content, indent=2)}
@@ -353,12 +381,12 @@ class LLMFailsafeAgent:
 
     def _get_best_available_tier(self) -> LLMTier:
         """Determine the best available LLM tier based on health status"""
-        for tier in [
+        for tier in (
             LLMTier.PRIMARY,
             LLMTier.SECONDARY,
             LLMTier.BASIC,
             LLMTier.EMERGENCY,
-        ]:
+        ):
             if self.tier_health[tier]:
                 return tier
 

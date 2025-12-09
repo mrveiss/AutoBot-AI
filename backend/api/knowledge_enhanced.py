@@ -104,6 +104,160 @@ class RAGQueryRequest(BaseModel):
 
 
 # ====================================================================
+# Enhanced Search Helpers (Issue #281)
+# ====================================================================
+
+
+async def _search_local_knowledge_base(
+    req: Request,
+    query: str,
+    max_results: int,
+    confidence_threshold: float,
+) -> Dict[str, Any]:
+    """
+    Search local knowledge base with confidence filtering.
+
+    Issue #281: Extracted helper for local KB search.
+
+    Args:
+        req: FastAPI request for app state access
+        query: Search query string
+        max_results: Maximum results to return
+        confidence_threshold: Minimum confidence score
+
+    Returns:
+        Dictionary with search results and metadata
+    """
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        if kb_to_use:
+            local_results = await kb_to_use.search(query=query, top_k=max_results)
+
+            # Filter by confidence threshold
+            filtered_local = [
+                result
+                for result in local_results
+                if result.get("score", 0) >= confidence_threshold
+            ]
+
+            logger.info(
+                f"Local KB search: {len(local_results)} results, "
+                f"{len(filtered_local)} above threshold"
+            )
+
+            return {
+                "results": filtered_local,
+                "total_found": len(local_results),
+                "filtered_count": len(filtered_local),
+                "source": "local_kb",
+            }
+
+        return {"results": [], "source": "local_kb", "error": "KB not available"}
+
+    except Exception as e:
+        logger.warning(f"Local knowledge base search failed: {e}")
+        return {"results": [], "error": str(e), "source": "local_kb"}
+
+
+async def _search_rag_enhanced(
+    query: str,
+    max_results: int,
+    local_docs: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """
+    Search using AI Stack RAG capabilities.
+
+    Issue #281: Extracted helper for RAG search.
+
+    Args:
+        query: Search query string
+        max_results: Maximum results to return
+        local_docs: Optional local documents to enhance with
+
+    Returns:
+        Dictionary with RAG search results
+    """
+    try:
+        ai_client = await get_ai_stack_client()
+        rag_results = await ai_client.rag_query(
+            query=query,
+            documents=local_docs,
+            max_results=max_results,
+        )
+
+        logger.info("RAG search completed successfully")
+        return {"results": rag_results, "source": "ai_stack_rag"}
+
+    except AIStackError as e:
+        logger.warning(f"AI Stack RAG search failed: {e}")
+        return {"results": [], "error": e.message, "source": "ai_stack_rag"}
+
+
+async def _search_enhanced_librarian(
+    query: str,
+    search_type: str,
+    max_results: int,
+) -> Dict[str, Any]:
+    """
+    Search using AI Stack enhanced librarian.
+
+    Issue #281: Extracted helper for librarian search.
+
+    Args:
+        query: Search query string
+        search_type: Type of search (precise, comprehensive, broad)
+        max_results: Maximum results to return
+
+    Returns:
+        Dictionary with librarian search results
+    """
+    try:
+        ai_client = await get_ai_stack_client()
+        enhanced_results = await ai_client.search_knowledge_enhanced(
+            query=query,
+            search_type=search_type,
+            max_results=max_results,
+        )
+
+        logger.info("Enhanced librarian search completed")
+        return {"results": enhanced_results, "source": "ai_stack_librarian"}
+
+    except AIStackError as e:
+        logger.warning(f"Enhanced librarian search failed: {e}")
+        return {"results": [], "error": e.message, "source": "ai_stack_librarian"}
+
+
+def _combine_search_results(
+    results: Dict[str, Dict[str, Any]],
+) -> tuple:
+    """
+    Combine and rank results from multiple sources.
+
+    Issue #281: Extracted helper for result combination.
+
+    Args:
+        results: Dictionary of results from different sources
+
+    Returns:
+        Tuple of (combined_results, source_count)
+    """
+    combined_results = []
+    source_count = 0
+
+    for source_key, source_data in results.items():
+        if source_data.get("results") and isinstance(source_data["results"], list):
+            source_count += 1
+            for result in source_data["results"]:
+                result["source_type"] = source_data["source"]
+                combined_results.append(result)
+
+    # Sort combined results by relevance score
+    combined_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    return combined_results, source_count
+
+
+# ====================================================================
 # Enhanced Search Endpoints
 # ====================================================================
 
@@ -122,6 +276,8 @@ async def enhanced_search(
     """
     Enhanced search combining local knowledge base with AI Stack RAG capabilities.
 
+    Issue #281: Refactored from 144 lines to use extracted helper methods.
+
     This endpoint provides superior search results by combining:
     - Local knowledge base semantic search
     - AI Stack RAG-enhanced retrieval
@@ -130,111 +286,33 @@ async def enhanced_search(
     try:
         results = {}
 
-        # Local knowledge base search
+        # Local knowledge base search (Issue #281: uses helper)
         if request_data.include_local and knowledge_base:
-            try:
-                kb_to_use = await get_or_create_knowledge_base(
-                    req.app, force_refresh=False
-                )
-                if kb_to_use:
-                    local_results = await kb_to_use.search(
-                        query=request_data.query, top_k=request_data.max_results
-                    )
-
-                    # Filter by confidence threshold
-                    filtered_local = [
-                        result
-                        for result in local_results
-                        if result.get("score", 0) >= request_data.confidence_threshold
-                    ]
-
-                    results["local_knowledge_base"] = {
-                        "results": filtered_local,
-                        "total_found": len(local_results),
-                        "filtered_count": len(filtered_local),
-                        "source": "local_kb",
-                    }
-
-                    logger.info(
-                        f"Local KB search: {len(local_results)} results, {len(filtered_local)} above threshold"
-                    )
-
-            except Exception as e:
-                logger.warning(f"Local knowledge base search failed: {e}")
-                results["local_knowledge_base"] = {
-                    "results": [],
-                    "error": str(e),
-                    "source": "local_kb",
-                }
-
-        # AI Stack enhanced search
-        if request_data.include_rag:
-            try:
-                ai_client = await get_ai_stack_client()
-
-                # Use documents from local search if available
-                local_docs = None
-                if results.get("local_knowledge_base", {}).get("results"):
-                    local_docs = results["local_knowledge_base"]["results"]
-
-                rag_results = await ai_client.rag_query(
-                    query=request_data.query,
-                    documents=local_docs,
-                    max_results=request_data.max_results,
-                )
-
-                results["rag_enhanced"] = {
-                    "results": rag_results,
-                    "source": "ai_stack_rag",
-                }
-
-                logger.info("RAG search completed successfully")
-
-            except AIStackError as e:
-                logger.warning(f"AI Stack RAG search failed: {e}")
-                results["rag_enhanced"] = {
-                    "results": [],
-                    "error": e.message,
-                    "source": "ai_stack_rag",
-                }
-
-        # Enhanced search through AI Stack librarian
-        try:
-            ai_client = await get_ai_stack_client()
-            enhanced_results = await ai_client.search_knowledge_enhanced(
+            results["local_knowledge_base"] = await _search_local_knowledge_base(
+                req=req,
                 query=request_data.query,
-                search_type=request_data.search_type,
                 max_results=request_data.max_results,
+                confidence_threshold=request_data.confidence_threshold,
             )
 
-            results["enhanced_librarian"] = {
-                "results": enhanced_results,
-                "source": "ai_stack_librarian",
-            }
+        # AI Stack RAG search (Issue #281: uses helper)
+        if request_data.include_rag:
+            local_docs = results.get("local_knowledge_base", {}).get("results")
+            results["rag_enhanced"] = await _search_rag_enhanced(
+                query=request_data.query,
+                max_results=request_data.max_results,
+                local_docs=local_docs,
+            )
 
-            logger.info("Enhanced librarian search completed")
+        # Enhanced librarian search (Issue #281: uses helper)
+        results["enhanced_librarian"] = await _search_enhanced_librarian(
+            query=request_data.query,
+            search_type=request_data.search_type,
+            max_results=request_data.max_results,
+        )
 
-        except AIStackError as e:
-            logger.warning(f"Enhanced librarian search failed: {e}")
-            results["enhanced_librarian"] = {
-                "results": [],
-                "error": e.message,
-                "source": "ai_stack_librarian",
-            }
-
-        # Combine and rank results if multiple sources available
-        combined_results = []
-        source_count = 0
-
-        for source_key, source_data in results.items():
-            if source_data.get("results") and isinstance(source_data["results"], list):
-                source_count += 1
-                for result in source_data["results"]:
-                    result["source_type"] = source_data["source"]
-                    combined_results.append(result)
-
-        # Sort combined results by relevance score
-        combined_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        # Combine and rank results (Issue #281: uses helper)
+        combined_results, source_count = _combine_search_results(results)
 
         return create_success_response(
             {

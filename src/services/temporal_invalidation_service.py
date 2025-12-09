@@ -287,11 +287,112 @@ class TemporalInvalidationService:
         except Exception as e:
             logger.error(f"Error storing invalidation rules: {e}")
 
+    def _process_facts_against_rules(
+        self,
+        all_facts: List[AtomicFact],
+        enabled_rules: Dict[str, "InvalidationRule"],
+    ) -> Tuple[List[AtomicFact], Dict[str, Dict[str, Any]], Dict[str, int]]:
+        """
+        Process facts against enabled rules to find matches.
+
+        Issue #281: Extracted helper for fact-rule matching.
+
+        Args:
+            all_facts: List of facts to process
+            enabled_rules: Dictionary of enabled invalidation rules
+
+        Returns:
+            Tuple of (facts_to_invalidate, invalidation_reasons, rule_statistics)
+        """
+        facts_to_invalidate = []
+        invalidation_reasons = {}
+        rule_statistics = {rule_id: 0 for rule_id in enabled_rules.keys()}
+
+        for i, fact in enumerate(all_facts):
+            if i % 100 == 0:
+                logger.debug(f"Processed {i}/{len(all_facts)} facts")
+
+            # Check each rule against this fact
+            for rule_id, rule in enabled_rules.items():
+                matches, reason = rule.matches_fact(fact)
+                if matches:
+                    facts_to_invalidate.append(fact)
+                    invalidation_reasons[fact.fact_id] = {
+                        "rule_id": rule_id,
+                        "rule_name": rule.name,
+                        "reason": reason.value,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                    rule_statistics[rule_id] += 1
+                    break  # Only apply first matching rule
+
+        return facts_to_invalidate, invalidation_reasons, rule_statistics
+
+    def _build_sweep_result(
+        self,
+        dry_run: bool,
+        all_facts: List[AtomicFact],
+        facts_to_invalidate: List[AtomicFact],
+        invalidated_count: int,
+        processing_time: float,
+        enabled_rules: Dict[str, "InvalidationRule"],
+        rule_statistics: Dict[str, int],
+        source_filter: Optional[str],
+        invalidation_reasons: Dict[str, Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Build the sweep result dictionary.
+
+        Issue #281: Extracted helper for result building.
+
+        Args:
+            dry_run: Whether this was a dry run
+            all_facts: All processed facts
+            facts_to_invalidate: Facts identified for invalidation
+            invalidated_count: Number actually invalidated
+            processing_time: Time taken for processing
+            enabled_rules: Rules used
+            rule_statistics: Per-rule statistics
+            source_filter: Source filter applied
+            invalidation_reasons: Reasons for each fact invalidation
+
+        Returns:
+            Result dictionary
+        """
+        result = {
+            "status": "success",
+            "dry_run": dry_run,
+            "facts_processed": len(all_facts),
+            "facts_identified_for_invalidation": len(facts_to_invalidate),
+            "facts_invalidated": invalidated_count,
+            "processing_time": processing_time,
+            "rules_used": len(enabled_rules),
+            "rule_statistics": rule_statistics,
+            "source_filter": source_filter,
+        }
+
+        if dry_run:
+            result["sample_facts_to_invalidate"] = [
+                {
+                    "fact_id": fact.fact_id,
+                    "statement": f"{fact.subject} {fact.predicate} {fact.object}",
+                    "age_days": (datetime.now() - fact.valid_from).days,
+                    "confidence": fact.confidence,
+                    "source": fact.source,
+                    "reason": invalidation_reasons.get(fact.fact_id, {}),
+                }
+                for fact in facts_to_invalidate[:10]  # Show first 10
+            ]
+
+        return result
+
     async def run_invalidation_sweep(
         self, source_filter: Optional[str] = None, dry_run: bool = False
     ) -> Dict[str, Any]:
         """
         Run a comprehensive invalidation sweep.
+
+        Issue #281: Refactored from 129 lines to use extracted helper methods.
 
         Args:
             source_filter: Optional source filter
@@ -335,28 +436,10 @@ class TemporalInvalidationService:
 
             logger.info(f"Processing {len(all_facts)} active facts")
 
-            # Process facts in batches
-            facts_to_invalidate = []
-            invalidation_reasons = {}
-            rule_statistics = {rule_id: 0 for rule_id in enabled_rules.keys()}
-
-            for i, fact in enumerate(all_facts):
-                if i % 100 == 0:
-                    logger.debug(f"Processed {i}/{len(all_facts)} facts")
-
-                # Check each rule against this fact
-                for rule_id, rule in enabled_rules.items():
-                    matches, reason = rule.matches_fact(fact)
-                    if matches:
-                        facts_to_invalidate.append(fact)
-                        invalidation_reasons[fact.fact_id] = {
-                            "rule_id": rule_id,
-                            "rule_name": rule.name,
-                            "reason": reason.value,
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                        rule_statistics[rule_id] += 1
-                        break  # Only apply first matching rule
+            # Process facts against rules (Issue #281: uses helper)
+            facts_to_invalidate, invalidation_reasons, rule_statistics = (
+                self._process_facts_against_rules(all_facts, enabled_rules)
+            )
 
             processing_time = (datetime.now() - start_time).total_seconds()
 
@@ -378,30 +461,18 @@ class TemporalInvalidationService:
                 rule_statistics=rule_statistics,
             )
 
-            result = {
-                "status": "success",
-                "dry_run": dry_run,
-                "facts_processed": len(all_facts),
-                "facts_identified_for_invalidation": len(facts_to_invalidate),
-                "facts_invalidated": invalidated_count,
-                "processing_time": processing_time,
-                "rules_used": len(enabled_rules),
-                "rule_statistics": rule_statistics,
-                "source_filter": source_filter,
-            }
-
-            if dry_run:
-                result["sample_facts_to_invalidate"] = [
-                    {
-                        "fact_id": fact.fact_id,
-                        "statement": f"{fact.subject} {fact.predicate} {fact.object}",
-                        "age_days": (datetime.now() - fact.valid_from).days,
-                        "confidence": fact.confidence,
-                        "source": fact.source,
-                        "reason": invalidation_reasons.get(fact.fact_id, {}),
-                    }
-                    for fact in facts_to_invalidate[:10]  # Show first 10
-                ]
+            # Build result (Issue #281: uses helper)
+            result = self._build_sweep_result(
+                dry_run=dry_run,
+                all_facts=all_facts,
+                facts_to_invalidate=facts_to_invalidate,
+                invalidated_count=invalidated_count,
+                processing_time=processing_time,
+                enabled_rules=enabled_rules,
+                rule_statistics=rule_statistics,
+                source_filter=source_filter,
+                invalidation_reasons=invalidation_reasons,
+            )
 
             logger.info(
                 f"Invalidation sweep completed: {invalidated_count}/"
@@ -433,15 +504,11 @@ class TemporalInvalidationService:
         try:
             fact_key = f"atomic_fact:{fact.fact_id}"
 
-            # Update fact data
-            fact.is_active = False
-            fact.valid_until = datetime.now()
-            fact.metadata = fact.metadata or {}
-            fact.metadata.update({
-                "invalidated_at": datetime.now().isoformat(),
-                "invalidation_reason": reasons.get(fact.fact_id, {}),
-                "invalidation_service": "temporal_invalidation",
-            })
+            # Update fact data using model method (Issue #372 - reduces feature envy)
+            fact.mark_invalidated(
+                reason=reasons.get(fact.fact_id, {}),
+                service="temporal_invalidation"
+            )
 
             # Store updated fact
             fact_data = fact.to_dict()
@@ -449,12 +516,11 @@ class TemporalInvalidationService:
             pipe.hset(fact_key, "is_active", "False")
             pipe.hset(fact_key, "valid_until", fact.valid_until.isoformat())
 
-            # Update indices
+            # Update indices using model method (Issue #372 - reduces feature envy)
             pipe.sadd(self.invalidated_facts_key, fact.fact_id)
             pipe.srem("atomic_facts_index", fact.fact_id)
-            pipe.srem(f"facts_by_source:{fact.source}", fact.fact_id)
-            pipe.srem(f"facts_by_type:{fact.fact_type.value}", fact.fact_id)
-            pipe.srem(f"facts_by_temporal:{fact.temporal_type.value}", fact.fact_id)
+            for index_key in fact.get_index_keys():
+                pipe.srem(index_key, fact.fact_id)
             return True
         except Exception as e:
             logger.error(f"Error preparing fact {fact.fact_id} for invalidation: {e}")

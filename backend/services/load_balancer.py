@@ -31,6 +31,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
+from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
 
@@ -154,6 +155,60 @@ class Worker:
                 logger.info(
                     f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests"
                 )
+
+    def handle_healthy_check(self) -> bool:
+        """Handle successful health check result (Issue #372 - reduces feature envy).
+
+        Returns:
+            True if circuit breaker was closed (status changed significantly).
+        """
+        self.last_health_check = datetime.now()
+        self.status = WorkerStatus.ONLINE
+        self.consecutive_failures = 0
+
+        # Close circuit breaker if in HALF_OPEN state
+        if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
+            self.circuit_breaker_state = CircuitBreakerState.CLOSED
+            self.circuit_open_until = None
+            return True
+        return False
+
+    def handle_unhealthy_check(self, circuit_breaker_threshold: int, circuit_breaker_timeout: int):
+        """Handle failed health check result (Issue #372 - reduces feature envy).
+
+        Args:
+            circuit_breaker_threshold: Number of failures before opening circuit
+            circuit_breaker_timeout: Seconds before circuit can attempt recovery
+        """
+        self.last_health_check = datetime.now()
+        self.consecutive_failures += 1
+
+        if self.consecutive_failures >= circuit_breaker_threshold:
+            self.status = WorkerStatus.ERROR
+            self.circuit_breaker_state = CircuitBreakerState.OPEN
+            self.circuit_open_until = datetime.now() + timedelta(
+                seconds=circuit_breaker_timeout
+            )
+        else:
+            self.status = WorkerStatus.OFFLINE
+
+    def to_status_event_dict(self, reason: str) -> Metadata:
+        """Convert to dictionary for status change event (Issue #372 - reduces feature envy).
+
+        Args:
+            reason: Reason for the status change event.
+
+        Returns:
+            Dictionary suitable for WebSocket event publishing.
+        """
+        return {
+            "worker_id": self.worker_id,
+            "status": self.status.value,
+            "circuit_breaker_state": self.circuit_breaker_state.value,
+            "current_load": self.current_load,
+            "reason": reason,
+            "timestamp": datetime.now().isoformat(),
+        }
 
     def to_dict(self) -> Metadata:
         """Serialize worker to dictionary"""
@@ -442,7 +497,7 @@ class NPULoadBalancer:
         worker_id: str,
         task_type: str,
         task_data: Metadata,
-        max_retries: int = 2,
+        max_retries: int = RetryConfig.MIN_RETRIES,
     ) -> Metadata:
         """
         Submit task to specific worker with retry logic.
@@ -577,12 +632,12 @@ class NPULoadBalancer:
                 break
             except Exception as e:
                 logger.error(f"Error in health monitor loop: {e}", exc_info=True)
-                # Continue monitoring despite errors
-                await asyncio.sleep(5)
+                # Error recovery delay before continuing monitoring
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     async def _check_worker_health(self, worker: Worker):
         """
-        Check health of a single worker.
+        Check health of a single worker (Issue #372 - uses model methods).
 
         Args:
             worker: Worker to check
@@ -593,33 +648,19 @@ class NPULoadBalancer:
         client = NPUWorkerClient(npu_endpoint=worker.endpoint)
         try:
             health = await client.check_health()
-            worker.last_health_check = datetime.now()
-
             previous_status = worker.status
 
-            # Update worker status based on health check
+            # Update worker status based on health check using model methods
             if health.get("status") == "healthy":
-                worker.status = WorkerStatus.ONLINE
-                worker.consecutive_failures = 0
-
-                # Close circuit breaker if in HALF_OPEN state
-                if worker.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
-                    worker.circuit_breaker_state = CircuitBreakerState.CLOSED
-                    worker.circuit_open_until = None
+                circuit_closed = worker.handle_healthy_check()
+                if circuit_closed:
                     logger.info(
                         f"Circuit breaker CLOSED for worker {worker.worker_id} after successful health check"
                     )
             else:
-                # Health check failed
-                worker.consecutive_failures += 1
-                if worker.consecutive_failures >= self._circuit_breaker_threshold:
-                    worker.status = WorkerStatus.ERROR
-                    worker.circuit_breaker_state = CircuitBreakerState.OPEN
-                    worker.circuit_open_until = datetime.now() + timedelta(
-                        seconds=self._circuit_breaker_timeout
-                    )
-                else:
-                    worker.status = WorkerStatus.OFFLINE
+                worker.handle_unhealthy_check(
+                    self._circuit_breaker_threshold, self._circuit_breaker_timeout
+                )
 
             # Emit status change event if status changed
             if previous_status != worker.status:
@@ -627,17 +668,13 @@ class NPULoadBalancer:
 
         except Exception as e:
             logger.warning(f"Health check failed for worker {worker.worker_id}: {e}")
-            worker.status = WorkerStatus.OFFLINE
-            worker.consecutive_failures += 1
-            worker.last_health_check = datetime.now()
+            previous_status = worker.status
+            worker.handle_unhealthy_check(
+                self._circuit_breaker_threshold, self._circuit_breaker_timeout
+            )
 
-            # Open circuit breaker if threshold reached
-            if worker.consecutive_failures >= self._circuit_breaker_threshold:
-                worker.status = WorkerStatus.ERROR
-                worker.circuit_breaker_state = CircuitBreakerState.OPEN
-                worker.circuit_open_until = datetime.now() + timedelta(
-                    seconds=self._circuit_breaker_timeout
-                )
+            # Emit event if circuit breaker opened
+            if worker.circuit_breaker_state == CircuitBreakerState.OPEN and previous_status != worker.status:
                 await self._emit_worker_status_change(worker, "circuit_breaker_opened")
 
         finally:
@@ -645,7 +682,7 @@ class NPULoadBalancer:
 
     async def _emit_worker_status_change(self, worker: Worker, reason: str):
         """
-        Emit WebSocket event for worker status change.
+        Emit WebSocket event for worker status change (Issue #372 - uses model method).
 
         Args:
             worker: Worker that changed status
@@ -654,14 +691,7 @@ class NPULoadBalancer:
         try:
             await event_manager.publish(
                 "npu_worker_status_change",
-                {
-                    "worker_id": worker.worker_id,
-                    "status": worker.status.value,
-                    "circuit_breaker_state": worker.circuit_breaker_state.value,
-                    "current_load": worker.current_load,
-                    "reason": reason,
-                    "timestamp": datetime.now().isoformat(),
-                },
+                worker.to_status_event_dict(reason),
             )
         except Exception as e:
             logger.error(f"Failed to emit worker status change event: {e}")

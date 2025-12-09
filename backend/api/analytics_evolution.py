@@ -85,6 +85,61 @@ def _extract_pattern_types(all_keys: list) -> set:
     return pattern_types
 
 
+def _fetch_timeline_snapshots(redis_client, start_ts: float, end_ts: float) -> list:
+    """
+    Fetch timeline snapshots from Redis within a date range.
+
+    Issue #281: Extracted from get_evolution_timeline to reduce nesting.
+
+    Args:
+        redis_client: Redis client instance
+        start_ts: Start timestamp
+        end_ts: End timestamp
+
+    Returns:
+        List of parsed snapshot dictionaries
+    """
+    snapshot_keys = redis_client.zrangebyscore(
+        f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+    )
+    results = []
+    for key in snapshot_keys:
+        if isinstance(key, bytes):
+            key = key.decode("utf-8")
+        snapshot_json = redis_client.get(key)
+        if snapshot_json:
+            if isinstance(snapshot_json, bytes):
+                snapshot_json = snapshot_json.decode("utf-8")
+            results.append(json.loads(snapshot_json))
+    return results
+
+
+def _filter_timeline_by_metrics(
+    timeline_data: List[Dict[str, Any]],
+    requested_metrics: List[str],
+) -> List[Dict[str, Any]]:
+    """
+    Filter timeline data to include only requested metrics.
+
+    Issue #281: Extracted from get_evolution_timeline to simplify main function.
+
+    Args:
+        timeline_data: Raw timeline data from Redis
+        requested_metrics: List of metric names to include
+
+    Returns:
+        Filtered timeline data
+    """
+    filtered_timeline = []
+    for point in timeline_data:
+        filtered_point = {"timestamp": point.get("timestamp")}
+        for metric in requested_metrics:
+            if metric in point:
+                filtered_point[metric] = point[metric]
+        filtered_timeline.append(filtered_point)
+    return filtered_timeline
+
+
 class QualitySnapshot(BaseModel):
     """A point-in-time quality snapshot"""
 
@@ -244,36 +299,18 @@ async def get_evolution_timeline(
             end_ts = datetime.now().timestamp()
 
         # Issue #361 - run Redis ops in thread pool to avoid blocking
-        def _fetch_timeline():
-            snapshot_keys = redis_client.zrangebyscore(
-                f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-            )
-            results = []
-            for key in snapshot_keys:
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                snapshot_json = redis_client.get(key)
-                if snapshot_json:
-                    if isinstance(snapshot_json, bytes):
-                        snapshot_json = snapshot_json.decode("utf-8")
-                    results.append(json.loads(snapshot_json))
-            return results
-
-        timeline_data = await asyncio.to_thread(_fetch_timeline)
+        # Issue #281 - Using extracted helper for timeline fetching
+        timeline_data = await asyncio.to_thread(
+            _fetch_timeline_snapshots, redis_client, start_ts, end_ts
+        )
 
         # Apply granularity aggregation if needed
         if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
             timeline_data = _aggregate_by_granularity(timeline_data, granularity)
 
-        # Filter to requested metrics
+        # Issue #281 - Using extracted helper for metrics filtering
         requested_metrics = metrics.split(",")
-        filtered_timeline = []
-        for point in timeline_data:
-            filtered_point = {"timestamp": point.get("timestamp")}
-            for metric in requested_metrics:
-                if metric in point:
-                    filtered_point[metric] = point[metric]
-            filtered_timeline.append(filtered_point)
+        filtered_timeline = _filter_timeline_by_metrics(timeline_data, requested_metrics)
 
         return JSONResponse(
             {

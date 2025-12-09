@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, Request
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -43,7 +44,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
 
         # Wait for async initialization
         logger.info("Waiting for knowledge base initialization...")
-        await asyncio.sleep(3)
+        await asyncio.sleep(TimingConstants.KB_INIT_DELAY)
 
         # Get fresh stats
         logger.info("Getting fresh stats...")
@@ -171,7 +172,7 @@ async def rebuild_search_index():
 
         # Create fresh instance
         kb = KnowledgeBase()
-        await asyncio.sleep(2)
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
         # Rebuild index
         result = await kb.rebuild_search_index()

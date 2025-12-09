@@ -37,6 +37,34 @@ class UserEvent:
     duration_ms: Optional[int] = None
     metadata: dict = field(default_factory=dict)
 
+    def to_tracking_dict(self) -> dict:
+        """Convert to dictionary for Redis stream storage (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary with all fields formatted for tracking storage.
+        """
+        return {
+            "event_type": self.event_type,
+            "feature": self.feature,
+            "user_id": self.user_id or "anonymous",
+            "session_id": self.session_id or "unknown",
+            "timestamp": self.timestamp.isoformat(),
+            "duration_ms": str(self.duration_ms or 0),
+            "metadata": str(self.metadata),
+        }
+
+    def get_date_key(self) -> str:
+        """Get date key for daily aggregation (Issue #372 - reduces feature envy)."""
+        return self.timestamp.strftime("%Y-%m-%d")
+
+    def get_hour_key(self) -> str:
+        """Get hour key for heatmap aggregation (Issue #372 - reduces feature envy)."""
+        return self.timestamp.strftime("%H")
+
+    def get_journey_entry(self) -> str:
+        """Get journey entry string (Issue #372 - reduces feature envy)."""
+        return f"{self.timestamp.isoformat()}|{self.feature}|{self.event_type}"
+
 
 @dataclass
 class FeatureMetrics:
@@ -80,7 +108,7 @@ class UserBehaviorAnalytics:
 
     async def track_event(self, event: UserEvent) -> bool:
         """
-        Track a user behavior event.
+        Track a user behavior event (Issue #372 - uses model methods).
 
         Args:
             event: UserEvent to track
@@ -90,24 +118,14 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            timestamp = event.timestamp.isoformat()
-            date_key = event.timestamp.strftime("%Y-%m-%d")
-            hour_key = event.timestamp.strftime("%H")
+            # Use model methods to reduce feature envy (Issue #372)
+            date_key = event.get_date_key()
+            hour_key = event.get_hour_key()
 
-            # Store event in stream
-            event_data = {
-                "event_type": event.event_type,
-                "feature": event.feature,
-                "user_id": event.user_id or "anonymous",
-                "session_id": event.session_id or "unknown",
-                "timestamp": timestamp,
-                "duration_ms": str(event.duration_ms or 0),
-                "metadata": str(event.metadata),
-            }
-
+            # Store event in stream using model method
             await redis.xadd(
                 self.EVENTS_KEY,
-                event_data,
+                event.to_tracking_dict(),
                 maxlen=100000,  # Keep last 100k events
             )
 
@@ -135,12 +153,10 @@ class UserBehaviorAnalytics:
             await redis.hincrby(heatmap_key, f"{hour_key}:{event.feature}", 1)
             await redis.expire(heatmap_key, 30 * 24 * 3600)  # 30 days retention
 
-            # Track user journey
+            # Track user journey using model method
             if event.session_id:
                 journey_key = f"{self.USER_JOURNEY_KEY}:{event.session_id}"
-                await redis.rpush(
-                    journey_key, f"{timestamp}|{event.feature}|{event.event_type}"
-                )
+                await redis.rpush(journey_key, event.get_journey_entry())
                 await redis.expire(journey_key, 24 * 3600)  # 24 hours retention
 
             # Track time spent if duration provided

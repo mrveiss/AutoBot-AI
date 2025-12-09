@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import logging
+from typing import Any, Dict
 
 from fastapi import APIRouter
 
@@ -14,6 +15,111 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _build_project_config() -> Dict[str, Any]:
+    """
+    Build static project configuration section.
+
+    Issue #281: Extracted helper for project config.
+    """
+    return {
+        "root_path": str(PathConstants.PROJECT_ROOT),
+        "name": "AutoBot",
+        "version": "1.5.0",
+    }
+
+
+def _build_features_config(source: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build features configuration section from any config source.
+
+    Issue #281: Extracted helper for features config.
+
+    Args:
+        source: Config dict (either full_config.get("features", {}) or features section)
+    """
+    return {
+        "chat_enabled": source.get("chat_enabled", True),
+        "knowledge_base_enabled": source.get("knowledge_base_enabled", True),
+        "terminal_enabled": source.get("terminal_enabled", True),
+        "desktop_enabled": source.get("desktop_enabled", True),
+        "system_monitoring_enabled": source.get("system_monitoring_enabled", True),
+    }
+
+
+def _build_ui_config(source: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build UI configuration section from any config source.
+
+    Issue #281: Extracted helper for UI config.
+
+    Args:
+        source: Config dict (either full_config.get("ui", {}) or ui section)
+    """
+    return {
+        "theme": source.get("theme", "light"),
+        "language": source.get("language", "en"),
+        "auto_scroll": source.get("auto_scroll", True),
+        "notifications": source.get("notifications", True),
+    }
+
+
+def _build_performance_config(source: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build performance configuration section from any config source.
+
+    Issue #281: Extracted helper for performance config.
+
+    Args:
+        source: Config dict (either full_config.get("performance", {}) or performance section)
+    """
+    return {
+        "cache_enabled": source.get("cache_enabled", True),
+        "lazy_loading": source.get("lazy_loading", True),
+        "chunk_loading": source.get("chunk_loading", True),
+    }
+
+
+def _build_fallback_config() -> Dict[str, Any]:
+    """
+    Build fallback frontend config when primary config fails.
+
+    Issue #281: Extracted helper for fallback config building.
+
+    Returns:
+        Complete fallback frontend configuration dict
+    """
+    from src.unified_config_manager import unified_config_manager
+
+    backend_config = unified_config_manager.get_backend_config()
+
+    # Get defaults from config manager
+    api_config = unified_config_manager.get_config_section("api") or {}
+    websocket_config = unified_config_manager.get_config_section("websocket") or {}
+    features_config = unified_config_manager.get_config_section("features") or {}
+    ui_config = unified_config_manager.get_config_section("ui") or {}
+    performance_config = unified_config_manager.get_config_section("performance") or {}
+
+    return {
+        "project": _build_project_config(),
+        "api": {
+            "base_url": backend_config.get("host"),
+            "port": backend_config.get("port"),
+            "timeout": api_config.get("timeout", 30),
+            "retry_attempts": api_config.get("retry_attempts", 3),
+        },
+        "websocket": {
+            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws",
+            "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
+            "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
+        },
+        "features": _build_features_config(features_config),
+        "ui": _build_ui_config(ui_config),
+        "performance": _build_performance_config(performance_config),
+        # Issue #372: Use NetworkConstants method for host configs
+        "hosts": NetworkConstants.get_host_configs(),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_config",
@@ -21,120 +127,39 @@ logger = logging.getLogger(__name__)
 )
 @router.get("/frontend-config")
 async def get_frontend_config():
-    """Get frontend-specific configuration"""
+    """
+    Get frontend-specific configuration.
+
+    Issue #281: Refactored from 139 lines to use extracted helper methods.
+    """
     try:
         # Get the full config and extract frontend-relevant settings
         full_config = ConfigService.get_full_config()
 
-        # Get backend config from unified config manager for defaults
-        from src.unified_config_manager import unified_config_manager
-
-        backend_config = unified_config_manager.get_backend_config()
-
-        # Extract frontend-relevant configuration
+        # Extract frontend-relevant configuration using NetworkConstants methods
+        # and extracted helpers (Issue #281, Issue #372)
+        api_config = NetworkConstants.get_api_config()
         frontend_config = {
-            "project": {
-                "root_path": str(PathConstants.PROJECT_ROOT),
-                "name": "AutoBot",
-                "version": "1.5.0",
-            },
+            "project": _build_project_config(),
             "api": {
-                "base_url": NetworkConstants.MAIN_MACHINE_IP,
-                "port": NetworkConstants.BACKEND_PORT,
+                **api_config,
                 "timeout": full_config.get("api", {}).get("timeout", 30),
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
             },
             "websocket": {
-                "url": (
-                    f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/ws"
+                "url": NetworkConstants.get_websocket_url(),
+                "reconnect_attempts": full_config.get("websocket", {}).get(
+                    "reconnect_attempts", 5
                 ),
-                "reconnect_attempts": (
-                    full_config.get("websocket", {}).get("reconnect_attempts", 5)
-                ),
-                "reconnect_delay": (
-                    full_config.get("websocket", {}).get("reconnect_delay", 1000)
+                "reconnect_delay": full_config.get("websocket", {}).get(
+                    "reconnect_delay", 1000
                 ),
             },
-            "features": {
-                "chat_enabled": (
-                    full_config.get("features", {}).get("chat_enabled", True)
-                ),
-                "knowledge_base_enabled": (
-                    full_config.get("features", {}).get("knowledge_base_enabled", True)
-                ),
-                "terminal_enabled": (
-                    full_config.get("features", {}).get("terminal_enabled", True)
-                ),
-                "desktop_enabled": (
-                    full_config.get("features", {}).get("desktop_enabled", True)
-                ),
-                "system_monitoring_enabled": (
-                    full_config.get("features", {}).get(
-                        "system_monitoring_enabled", True
-                    )
-                ),
-            },
-            "ui": {
-                "theme": full_config.get("ui", {}).get("theme", "light"),
-                "language": full_config.get("ui", {}).get("language", "en"),
-                "auto_scroll": full_config.get("ui", {}).get("auto_scroll", True),
-                "notifications": full_config.get("ui", {}).get("notifications", True),
-            },
-            "performance": {
-                "cache_enabled": (
-                    full_config.get("performance", {}).get("cache_enabled", True)
-                ),
-                "lazy_loading": (
-                    full_config.get("performance", {}).get("lazy_loading", True)
-                ),
-                "chunk_loading": (
-                    full_config.get("performance", {}).get("chunk_loading", True)
-                ),
-            },
-            "hosts": [
-                {
-                    "id": "main",
-                    "name": "Main (WSL Backend)",
-                    "ip": NetworkConstants.MAIN_MACHINE_IP,
-                    "port": NetworkConstants.BACKEND_PORT,
-                    "description": "Main backend server on WSL",
-                },
-                {
-                    "id": "frontend",
-                    "name": "VM1 (Frontend)",
-                    "ip": NetworkConstants.FRONTEND_VM_IP,
-                    "port": NetworkConstants.FRONTEND_PORT,
-                    "description": "Frontend web interface server",
-                },
-                {
-                    "id": "npu-worker",
-                    "name": "VM2 (NPU Worker)",
-                    "ip": NetworkConstants.NPU_WORKER_VM_IP,
-                    "port": NetworkConstants.NPU_WORKER_PORT,
-                    "description": "Hardware AI acceleration worker",
-                },
-                {
-                    "id": "redis",
-                    "name": "VM3 (Redis)",
-                    "ip": NetworkConstants.REDIS_VM_IP,
-                    "port": NetworkConstants.REDIS_PORT,
-                    "description": "Redis data layer server",
-                },
-                {
-                    "id": "ai-stack",
-                    "name": "VM4 (AI Stack)",
-                    "ip": NetworkConstants.AI_STACK_VM_IP,
-                    "port": NetworkConstants.AI_STACK_PORT,
-                    "description": "AI processing stack server",
-                },
-                {
-                    "id": "browser",
-                    "name": "VM5 (Browser)",
-                    "ip": NetworkConstants.BROWSER_VM_IP,
-                    "port": NetworkConstants.BROWSER_SERVICE_PORT,
-                    "description": "Web automation browser server",
-                },
-            ],
+            "features": _build_features_config(full_config.get("features", {})),
+            "ui": _build_ui_config(full_config.get("ui", {})),
+            "performance": _build_performance_config(full_config.get("performance", {})),
+            # Issue #372: Use NetworkConstants method for host configs
+            "hosts": NetworkConstants.get_host_configs(),
         }
 
         logger.info("Frontend configuration provided successfully")
@@ -142,105 +167,6 @@ async def get_frontend_config():
 
     except Exception as e:
         logger.error(f"Error getting frontend config: {str(e)}")
-        # Return minimal default config from unified config manager instead of failing
-        from src.unified_config_manager import unified_config_manager
-
-        backend_config = unified_config_manager.get_backend_config()
-
-        # Get defaults from config manager
-        api_config = unified_config_manager.get_config_section("api") or {}
-        websocket_config = unified_config_manager.get_config_section("websocket") or {}
-        features_config = unified_config_manager.get_config_section("features") or {}
-        ui_config = unified_config_manager.get_config_section("ui") or {}
-        performance_config = (
-            unified_config_manager.get_config_section("performance") or {}
-        )
-
-        default_config = {
-            "project": {
-                "root_path": str(PathConstants.PROJECT_ROOT),
-                "name": "AutoBot",
-                "version": "1.5.0",
-            },
-            "api": {
-                "base_url": backend_config.get("host"),
-                "port": backend_config.get("port"),
-                "timeout": api_config.get("timeout", 30),
-                "retry_attempts": api_config.get("retry_attempts", 3),
-            },
-            "websocket": {
-                "url": (
-                    f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws"
-                ),
-                "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
-                "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
-            },
-            "features": {
-                "chat_enabled": features_config.get("chat_enabled", True),
-                "knowledge_base_enabled": features_config.get(
-                    "knowledge_base_enabled", True
-                ),
-                "terminal_enabled": features_config.get("terminal_enabled", True),
-                "desktop_enabled": features_config.get("desktop_enabled", True),
-                "system_monitoring_enabled": features_config.get(
-                    "system_monitoring_enabled", True
-                ),
-            },
-            "ui": {
-                "theme": ui_config.get("theme", "light"),
-                "language": ui_config.get("language", "en"),
-                "auto_scroll": ui_config.get("auto_scroll", True),
-                "notifications": ui_config.get("notifications", True),
-            },
-            "performance": {
-                "cache_enabled": performance_config.get("cache_enabled", True),
-                "lazy_loading": performance_config.get("lazy_loading", True),
-                "chunk_loading": performance_config.get("chunk_loading", True),
-            },
-            "hosts": [
-                {
-                    "id": "main",
-                    "name": "Main (WSL Backend)",
-                    "ip": NetworkConstants.MAIN_MACHINE_IP,
-                    "port": NetworkConstants.BACKEND_PORT,
-                    "description": "Main backend server on WSL",
-                },
-                {
-                    "id": "frontend",
-                    "name": "VM1 (Frontend)",
-                    "ip": NetworkConstants.FRONTEND_VM_IP,
-                    "port": NetworkConstants.FRONTEND_PORT,
-                    "description": "Frontend web interface server",
-                },
-                {
-                    "id": "npu-worker",
-                    "name": "VM2 (NPU Worker)",
-                    "ip": NetworkConstants.NPU_WORKER_VM_IP,
-                    "port": NetworkConstants.NPU_WORKER_PORT,
-                    "description": "Hardware AI acceleration worker",
-                },
-                {
-                    "id": "redis",
-                    "name": "VM3 (Redis)",
-                    "ip": NetworkConstants.REDIS_VM_IP,
-                    "port": NetworkConstants.REDIS_PORT,
-                    "description": "Redis data layer server",
-                },
-                {
-                    "id": "ai-stack",
-                    "name": "VM4 (AI Stack)",
-                    "ip": NetworkConstants.AI_STACK_VM_IP,
-                    "port": NetworkConstants.AI_STACK_PORT,
-                    "description": "AI processing stack server",
-                },
-                {
-                    "id": "browser",
-                    "name": "VM5 (Browser)",
-                    "ip": NetworkConstants.BROWSER_VM_IP,
-                    "port": NetworkConstants.BROWSER_SERVICE_PORT,
-                    "description": "Web automation browser server",
-                },
-            ],
-        }
+        # Return fallback config (Issue #281: uses extracted helper)
         logger.warning(f"Returning default frontend config due to error: {str(e)}")
-        return default_config
+        return _build_fallback_config()

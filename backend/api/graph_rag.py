@@ -234,19 +234,8 @@ async def graph_rag_search(
             for r in results
         ]
 
-        # Convert metrics to dict
-        metrics_data = {
-            "query_processing_time": metrics.query_processing_time,
-            "retrieval_time": metrics.retrieval_time,
-            "reranking_time": metrics.reranking_time,
-            "graph_traversal_time": metrics.graph_traversal_time,
-            "total_time": metrics.total_time,
-            "documents_considered": metrics.documents_considered,
-            "final_results_count": metrics.final_results_count,
-            "entities_explored": metrics.entities_explored,
-            "graph_expansion_enabled": metrics.graph_expansion_enabled,
-            "graph_results_added": metrics.graph_results_added,
-        }
+        # Convert metrics to dict (Issue #372 - use model method)
+        metrics_data = metrics.to_response_dict()
 
         logger.info(
             f"[{request_id}] Graph-RAG search complete: {len(results)} results in {metrics.total_time:.3f}s"

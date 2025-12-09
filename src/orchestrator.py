@@ -446,7 +446,7 @@ class ConsolidatedOrchestrator:
         logger.error(f"❌ Fallback model '{fallback_model}' also failed")
         raise Exception("No working LLM models available")
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize orchestrator components.
 
         Issue #315: Refactored to use helper methods for reduced nesting depth.
@@ -482,7 +482,7 @@ class ConsolidatedOrchestrator:
             logger.error(f"❌ Orchestrator initialization failed: {e}")
             raise
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown orchestrator gracefully"""
         logger.info("Shutting down Consolidated Orchestrator...")
 
