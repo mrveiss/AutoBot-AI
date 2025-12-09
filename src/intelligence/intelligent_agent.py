@@ -12,9 +12,12 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 
 from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
+
+# Issue #380: Module-level frozenset for package managers requiring sudo
+_SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
 # Import our new intelligent agent components
 from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
@@ -24,6 +27,7 @@ from src.intelligence.streaming_executor import (
     StreamingCommandExecutor,
 )
 from src.intelligence.tool_selector import OSAwareToolSelector
+from src.constants.threshold_constants import TimingConstants
 from src.knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
@@ -172,19 +176,92 @@ class IntelligentAgent:
                 "initialization_time": time.time() - start_time,
             }
 
+    async def _handle_high_confidence_goal(
+        self, processed_goal: ProcessedGoal, user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Handle goals with high confidence (>0.5)."""
+        yield StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.COMMENTARY,
+            content=f"💡 I understand you want to: {processed_goal.explanation}",
+            metadata={
+                "intent": processed_goal.intent,
+                "confidence": processed_goal.confidence,
+                "category": processed_goal.category.value,
+                "risk_level": processed_goal.risk_level.value,
+            },
+        )
+
+        for warning in processed_goal.warnings:
+            yield StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.COMMENTARY,
+                content=f"⚠️ {warning}",
+                metadata={"type": "warning"},
+            )
+
+        yield StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.STATUS,
+            content="🔧 Selecting the best tools for your system...",
+            metadata={"step": "tool_selection"},
+        )
+
+        tool_selection = await self.tool_selector.select_tool(processed_goal)
+        self.state.conversation_context.append(
+            {"type": "tool_selection", "content": tool_selection, "timestamp": time.time()}
+        )
+
+        async for chunk in self._execute_tool_selection(tool_selection, processed_goal, user_input):
+            yield chunk
+            if chunk.chunk_type in (ChunkType.ERROR, ChunkType.COMPLETE):
+                break
+
+    async def _handle_partial_confidence_goal(
+        self, processed_goal: ProcessedGoal, user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Handle goals with partial confidence (0.2-0.5)."""
+        yield StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.COMMENTARY,
+            content="🤔 I'm not entirely sure what you want. Let me suggest some possibilities...",
+            metadata={"partial_understanding": True, "confidence": processed_goal.confidence},
+        )
+
+        similar_intents = await self.goal_processor.get_similar_intents(user_input, limit=3)
+        if similar_intents:
+            yield StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.COMMENTARY,
+                content="💭 Here are some similar requests I can help with:",
+                metadata={"suggestions": True},
+            )
+            for i, intent in enumerate(similar_intents, 1):
+                yield StreamChunk(
+                    timestamp=self._get_timestamp(),
+                    chunk_type=ChunkType.COMMENTARY,
+                    content=f"{i}. {intent.explanation} (confidence: {intent.confidence:.2f})",
+                    metadata={"suggestion": True, "intent": intent.intent},
+                )
+
+        async for chunk in self._handle_complex_goal(user_input):
+            yield chunk
+
+    async def _handle_low_confidence_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
+        """Handle goals with low confidence (<0.2)."""
+        yield StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.COMMENTARY,
+            content="🧠 This is a complex request. Let me analyze it using advanced reasoning...",
+            metadata={"llm_processing": True},
+        )
+        async for chunk in self._handle_complex_goal(user_input):
+            yield chunk
+
     async def process_natural_language_goal(
         self, user_input: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[StreamChunk, None]:
-        """
-        Process natural language input and execute appropriate commands.
-
-        Args:
-            user_input: Natural language goal from user
-            context: Additional context information
-
-        Yields:
-            StreamChunk: Stream of processing and execution results
-        """
+        """Process natural language input and execute appropriate commands."""
         if not self.state.initialized:
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
@@ -195,19 +272,11 @@ class IntelligentAgent:
             return
 
         logger.info(f"Processing natural language goal: {user_input}")
-
-        # Add to conversation context
         self.state.conversation_context.append(
-            {
-                "type": "user_input",
-                "content": user_input,
-                "timestamp": time.time(),
-                "context": context or {},
-            }
+            {"type": "user_input", "content": user_input, "timestamp": time.time(), "context": context or {}}
         )
 
         try:
-            # Step 1: Process the goal into structured intent
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.STATUS,
@@ -216,126 +285,18 @@ class IntelligentAgent:
             )
 
             processed_goal = await self.goal_processor.process_goal(user_input)
-
-            # Add goal to conversation context
             self.state.conversation_context.append(
-                {
-                    "type": "processed_goal",
-                    "content": processed_goal,
-                    "timestamp": time.time(),
-                }
+                {"type": "processed_goal", "content": processed_goal, "timestamp": time.time()}
             )
 
             if processed_goal.confidence > 0.5:
-                # We have a good understanding of the goal
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.COMMENTARY,
-                    content=f"💡 I understand you want to: {processed_goal.explanation}",
-                    metadata={
-                        "intent": processed_goal.intent,
-                        "confidence": processed_goal.confidence,
-                        "category": processed_goal.category.value,
-                        "risk_level": processed_goal.risk_level.value,
-                    },
-                )
-
-                # Show warnings if any
-                if processed_goal.warnings:
-                    for warning in processed_goal.warnings:
-                        yield StreamChunk(
-                            timestamp=self._get_timestamp(),
-                            chunk_type=ChunkType.COMMENTARY,
-                            content=f"⚠️ {warning}",
-                            metadata={"type": "warning"},
-                        )
-
-                # Step 2: Select appropriate tools
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.STATUS,
-                    content="🔧 Selecting the best tools for your system...",
-                    metadata={"step": "tool_selection"},
-                )
-
-                tool_selection = await self.tool_selector.select_tool(processed_goal)
-
-                # Add tool selection to context
-                self.state.conversation_context.append(
-                    {
-                        "type": "tool_selection",
-                        "content": tool_selection,
-                        "timestamp": time.time(),
-                    }
-                )
-
-                # Step 3 & 4: Execute tool with installation if needed (Issue #315 - delegated)
-                async for chunk in self._execute_tool_selection(
-                    tool_selection, processed_goal, user_input
-                ):
+                async for chunk in self._handle_high_confidence_goal(processed_goal, user_input):
                     yield chunk
-                    if chunk.chunk_type in (ChunkType.ERROR, ChunkType.COMPLETE):
-                        if chunk.metadata.get("installation_failed"):
-                            return
-                        if chunk.chunk_type == ChunkType.COMPLETE:
-                            break
-
             elif processed_goal.confidence > 0.2:
-                # Partial understanding - offer alternatives
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.COMMENTARY,
-                    content=(
-                        "🤔 I'm not entirely sure what you want. "
-                        "Let me suggest some possibilities..."
-                    ),
-                    metadata={
-                        "partial_understanding": True,
-                        "confidence": processed_goal.confidence,
-                    },
-                )
-
-                # Get similar intents
-                similar_intents = await self.goal_processor.get_similar_intents(
-                    user_input, limit=3
-                )
-
-                if similar_intents:
-                    yield StreamChunk(
-                        timestamp=self._get_timestamp(),
-                        chunk_type=ChunkType.COMMENTARY,
-                        content="💭 Here are some similar requests I can help with:",
-                        metadata={"suggestions": True},
-                    )
-
-                    for i, intent in enumerate(similar_intents, 1):
-                        yield StreamChunk(
-                            timestamp=self._get_timestamp(),
-                            chunk_type=ChunkType.COMMENTARY,
-                            content=(
-                                f"{i}. {intent.explanation} "
-                                f"(confidence: {intent.confidence:.2f})"
-                            ),
-                            metadata={"suggestion": True, "intent": intent.intent},
-                        )
-
-                # Fall back to LLM processing
-                async for chunk in self._handle_complex_goal(user_input):
+                async for chunk in self._handle_partial_confidence_goal(processed_goal, user_input):
                     yield chunk
-
             else:
-                # Unknown goal - use LLM to figure it out
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.COMMENTARY,
-                    content=(
-                        "🧠 This is a complex request. "
-                        "Let me analyze it using advanced reasoning..."
-                    ),
-                    metadata={"llm_processing": True},
-                )
-
-                async for chunk in self._handle_complex_goal(user_input):
+                async for chunk in self._handle_low_confidence_goal(user_input):
                     yield chunk
 
         except Exception as e:
@@ -402,7 +363,7 @@ class IntelligentAgent:
         async for chunk in self.streaming_executor.execute_with_streaming(
             tool_selection.primary_command,
             user_input,
-            timeout=300,
+            timeout=TimingConstants.VERY_LONG_TIMEOUT,
         ):
             yield chunk
             if chunk.chunk_type == ChunkType.COMPLETE:
@@ -535,9 +496,7 @@ class IntelligentAgent:
         # Check if installation requires root and we don't have it
         if not self.state.os_info.is_root and "sudo" not in install_command:
             # Add sudo if needed for common package managers
-            if any(
-                pm in install_command for pm in ["apt", "yum", "dn", "pacman", "zypper"]
-            ):
+            if any(pm in install_command for pm in _SUDO_PACKAGE_MANAGERS):
                 install_command = f"sudo {install_command}"
 
         # Execute installation command
