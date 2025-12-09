@@ -90,15 +90,17 @@ class KnowledgeStatsRequest(BaseModel):
     include_details: bool = Field(False, description="Include detailed statistics")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_mcp_tools",
-    error_code_prefix="KNOWLEDGE_MCP",
-)
-@router.get("/mcp/tools")
-async def get_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for knowledge base operations"""
-    tools = [
+def _get_knowledge_search_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for knowledge base search and retrieval operations.
+
+    Issue #281: Extracted from get_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for search/retrieval operations
+    """
+    return [
         MCPTool(
             name="search_knowledge_base",
             description="Search the AutoBot knowledge base using LlamaIndex and Redis vector store",
@@ -189,6 +191,20 @@ async def get_mcp_tools() -> List[MCPTool]:
                 "required": ["question"],
             },
         ),
+    ]
+
+
+def _get_knowledge_management_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for knowledge base management and admin operations.
+
+    Issue #281: Extracted from get_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for management/admin operations
+    """
+    return [
         MCPTool(
             name="get_knowledge_stats",
             description="Get statistics about the AutoBot knowledge base and Redis vector store",
@@ -240,6 +256,20 @@ async def get_mcp_tools() -> List[MCPTool]:
             },
         ),
     ]
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_mcp_tools",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
+@router.get("/mcp/tools")
+async def get_mcp_tools() -> List[MCPTool]:
+    """Get available MCP tools for knowledge base operations"""
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_knowledge_search_tools())
+    tools.extend(_get_knowledge_management_tools())
     return tools
 
 

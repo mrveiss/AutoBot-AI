@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Tuple
 from backend.type_defs.common import Metadata
 import paramiko
 
+from backend.models.task_context import ConnectionCredentials
 from backend.services.ssh_connection_pool import SSHConnectionPool
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import TimingConstants
@@ -362,13 +363,16 @@ class SSHManager:
         Returns:
             Tuple of (stdout, stderr, exit_code)
         """
-        # Get SSH connection from pool
-        client = await self.connection_pool.get_connection(
+        # Issue #322: Use ConnectionCredentials to eliminate data clump
+        creds = ConnectionCredentials(
             host=host_config.ip,
             port=host_config.port,
             username=host_config.username,
             key_path=self.ssh_key_path,
         )
+
+        # Get SSH connection from pool using credentials context
+        client = await self.connection_pool.get_connection_from_creds(creds)
 
         # Execute command
         if use_pty:
@@ -380,13 +384,8 @@ class SSHManager:
                 client, command, timeout
             )
 
-        # Release connection back to pool
-        await self.connection_pool.release_connection(
-            client,
-            host=host_config.ip,
-            port=host_config.port,
-            username=host_config.username,
-        )
+        # Release connection back to pool using credentials context
+        await self.connection_pool.release_connection_with_creds(client, creds)
 
         return stdout, stderr, exit_code
 
