@@ -21,6 +21,11 @@ from src.unified_config import UnifiedConfig
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuples for AST node type checks
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For)
+_BOOLEAN_OP_TYPES = (ast.And, ast.Or)
+
 
 @dataclass
 class CodeFunction:
@@ -224,7 +229,7 @@ class TestingCoverageAnalyzer:
             tree = ast.parse(content, filename=file_path)
 
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                     func = self._analyze_function(node, file_path, content)
                     if func:
                         functions.append(func)
@@ -298,11 +303,12 @@ class TestingCoverageAnalyzer:
         complexity = 1  # Base complexity
 
         for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For)):
+            # Issue #380: Use module-level constants
+            if isinstance(child, _COMPLEXITY_BRANCH_TYPES):
                 complexity += 1
             elif isinstance(child, ast.ExceptHandler):
                 complexity += 1
-            elif isinstance(child, (ast.And, ast.Or)):
+            elif isinstance(child, _BOOLEAN_OP_TYPES):
                 complexity += 1
 
         return complexity
@@ -354,7 +360,7 @@ class TestingCoverageAnalyzer:
             tree = ast.parse(content, filename=file_path)
 
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                     if self._is_test_function(node.name):
                         test_func = self._analyze_test_function(node, file_path, content)
                         if test_func:

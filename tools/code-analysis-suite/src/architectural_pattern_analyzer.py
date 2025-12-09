@@ -19,6 +19,11 @@ from src.unified_config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
+
+# Issue #380: Module-level tuples for AST node type checks
+_FUNC_OR_CLASS_TYPES = (ast.FunctionDef, ast.ClassDef)
+_COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
+_BOOLEAN_OP_TYPES = (ast.And, ast.Or)
 logger = logging.getLogger(__name__)
 
 
@@ -368,7 +373,7 @@ class ArchitecturalPatternAnalyzer:
         """Extract public functions/classes as interfaces (Issue #340 - extracted)"""
         return [
             node.name for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith('_')
+            if isinstance(node, _FUNC_OR_CLASS_TYPES) and not node.name.startswith('_')  # Issue #380
         ]
 
     def _extract_class_dependencies(self, node: ast.ClassDef, content: str) -> List[str]:
@@ -492,7 +497,7 @@ class ArchitecturalPatternAnalyzer:
         # Get all defined names in the module
         defined_names = set()
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            if isinstance(node, _FUNC_OR_CLASS_TYPES):  # Issue #380
                 defined_names.add(node.name)
 
         # Count internal vs external calls
@@ -542,9 +547,10 @@ class ArchitecturalPatternAnalyzer:
         complexity = 1  # Base complexity
 
         for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+            # Issue #380: Use module-level constants
+            if isinstance(child, _COMPLEXITY_BRANCH_TYPES):
                 complexity += 1
-            elif isinstance(child, (ast.And, ast.Or)):
+            elif isinstance(child, _BOOLEAN_OP_TYPES):
                 complexity += 1
 
         return complexity
