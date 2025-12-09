@@ -50,6 +50,19 @@ class WorkflowStep:
         if self.inputs is None:
             self.inputs = {}
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert step to dictionary for caching/serialization (Issue #372 - reduces feature envy)."""
+        return {
+            "id": self.id,
+            "agent_type": self.agent_type,
+            "action": self.action,
+            "description": self.description,
+            "requires_approval": self.requires_approval,
+            "dependencies": self.dependencies,
+            "inputs": self.inputs,
+            "expected_duration_ms": self.expected_duration_ms,
+        }
+
 
 @dataclass
 class WorkflowTemplate:
@@ -70,6 +83,37 @@ class WorkflowTemplate:
         """Initialize default value for variables field."""
         if self.variables is None:
             self.variables = {}
+
+    def to_summary_dict(self) -> Dict[str, Any]:
+        """Convert template to summary dict for caching (Issue #372 - reduces feature envy)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category.value,
+            "complexity": self.complexity.value,
+            "estimated_duration_minutes": self.estimated_duration_minutes,
+            "agents_involved": self.agents_involved,
+            "tags": self.tags,
+            "step_count": len(self.steps),
+            "approval_steps": sum(1 for step in self.steps if step.requires_approval),
+            "variables": self.variables,
+        }
+
+    def to_detail_dict(self) -> Dict[str, Any]:
+        """Convert template to detailed dict for caching (Issue #372 - reduces feature envy)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "category": self.category.value,
+            "complexity": self.complexity.value,
+            "estimated_duration_minutes": self.estimated_duration_minutes,
+            "agents_involved": self.agents_involved,
+            "tags": self.tags,
+            "variables": self.variables,
+            "steps": [step.to_dict() for step in self.steps],
+        }
 
 
 class WorkflowTemplateManager:
@@ -107,114 +151,98 @@ class WorkflowTemplateManager:
         self._add_data_analysis_template()
         self._add_log_analysis_template()
 
+    def _get_network_security_scan_steps(self) -> List[WorkflowStep]:
+        """Get workflow steps for network security scan (Issue #281 - extracted helper)."""
+        return [
+            WorkflowStep(
+                id="kb_search",
+                agent_type="librarian",
+                action="Search Knowledge Base for network scanning tools and techniques",
+                description="Librarian: Search Knowledge Base",
+                expected_duration_ms=3000,
+            ),
+            WorkflowStep(
+                id="research_tools",
+                agent_type="research",
+                action="Research latest network security scanning tools and methodologies",
+                description="Research: Research Tools",
+                dependencies=["kb_search"],
+                expected_duration_ms=30000,
+            ),
+            WorkflowStep(
+                id="present_options",
+                agent_type="orchestrator",
+                action="Present scanning tool options and scan types",
+                description="Orchestrator: Present Tool Options (requires your approval)",
+                requires_approval=True,
+                dependencies=["research_tools"],
+                expected_duration_ms=2000,
+            ),
+            WorkflowStep(
+                id="network_discovery",
+                agent_type="network_discovery",
+                action="Perform network discovery and host enumeration",
+                description="Network_Discovery: Host Discovery",
+                dependencies=["present_options"],
+                inputs={"task_type": "network_scan"},
+                expected_duration_ms=20000,
+            ),
+            WorkflowStep(
+                id="security_scan",
+                agent_type="security_scanner",
+                action="Execute comprehensive security scan on discovered hosts",
+                description="Security_Scanner: Port and Service Scan",
+                dependencies=["network_discovery"],
+                inputs={"scan_type": "comprehensive"},
+                expected_duration_ms=45000,
+            ),
+            WorkflowStep(
+                id="vulnerability_check",
+                agent_type="security_scanner",
+                action="Perform vulnerability assessment on identified services",
+                description="Security_Scanner: Vulnerability Assessment",
+                dependencies=["security_scan"],
+                inputs={"scan_type": "vulnerability_scan"},
+                expected_duration_ms=30000,
+            ),
+            WorkflowStep(
+                id="generate_report",
+                agent_type="orchestrator",
+                action="Generate comprehensive security assessment report",
+                description="Orchestrator: Generate Security Report (requires your approval)",
+                requires_approval=True,
+                dependencies=["vulnerability_check"],
+                expected_duration_ms=10000,
+            ),
+            WorkflowStep(
+                id="store_results",
+                agent_type="knowledge_manager",
+                action="Store security scan results and recommendations in knowledge base",
+                description="Knowledge_Manager: Store Results",
+                dependencies=["generate_report"],
+                expected_duration_ms=5000,
+            ),
+        ]
+
     def _add_network_security_scan_template(self):
-        """Network security scanning workflow template"""
+        """Network security scanning workflow template (Issue #281 - refactored)."""
         template = WorkflowTemplate(
             id="network_security_scan",
             name="Network Security Scan",
-            description=(
-                "Comprehensive network security assessment with "
-                "tool discovery and scanning"
-            ),
+            description="Comprehensive network security assessment with tool discovery and scanning",
             category=TemplateCategory.SECURITY,
             complexity=TaskComplexity.SECURITY_SCAN,
             estimated_duration_minutes=15,
             agents_involved=[
-                "librarian",
-                "research",
-                "security_scanner",
-                "network_discovery",
-                "knowledge_manager",
+                "librarian", "research", "security_scanner",
+                "network_discovery", "knowledge_manager",
             ],
             tags=["security", "network", "scanning", "vulnerability"],
             variables={
                 "target": "Target IP address or network range",
                 "scan_type": "Type of scan (basic, comprehensive, stealth)",
             },
-            steps=[
-                WorkflowStep(
-                    id="kb_search",
-                    agent_type="librarian",
-                    action=(
-                        "Search Knowledge Base for network scanning tools and "
-                        "techniques"
-                    ),
-                    description="Librarian: Search Knowledge Base",
-                    expected_duration_ms=3000,
-                ),
-                WorkflowStep(
-                    id="research_tools",
-                    agent_type="research",
-                    action=(
-                        "Research latest network security scanning tools and "
-                        "methodologies"
-                    ),
-                    description="Research: Research Tools",
-                    dependencies=["kb_search"],
-                    expected_duration_ms=30000,
-                ),
-                WorkflowStep(
-                    id="present_options",
-                    agent_type="orchestrator",
-                    action="Present scanning tool options and scan types",
-                    description=(
-                        "Orchestrator: Present Tool Options (requires your " "approval)"
-                    ),
-                    requires_approval=True,
-                    dependencies=["research_tools"],
-                    expected_duration_ms=2000,
-                ),
-                WorkflowStep(
-                    id="network_discovery",
-                    agent_type="network_discovery",
-                    action="Perform network discovery and host enumeration",
-                    description="Network_Discovery: Host Discovery",
-                    dependencies=["present_options"],
-                    inputs={"task_type": "network_scan"},
-                    expected_duration_ms=20000,
-                ),
-                WorkflowStep(
-                    id="security_scan",
-                    agent_type="security_scanner",
-                    action="Execute comprehensive security scan on discovered hosts",
-                    description="Security_Scanner: Port and Service Scan",
-                    dependencies=["network_discovery"],
-                    inputs={"scan_type": "comprehensive"},
-                    expected_duration_ms=45000,
-                ),
-                WorkflowStep(
-                    id="vulnerability_check",
-                    agent_type="security_scanner",
-                    action="Perform vulnerability assessment on identified services",
-                    description="Security_Scanner: Vulnerability Assessment",
-                    dependencies=["security_scan"],
-                    inputs={"scan_type": "vulnerability_scan"},
-                    expected_duration_ms=30000,
-                ),
-                WorkflowStep(
-                    id="generate_report",
-                    agent_type="orchestrator",
-                    action="Generate comprehensive security assessment report",
-                    description=(
-                        "Orchestrator: Generate Security Report (requires your "
-                        "approval)"
-                    ),
-                    requires_approval=True,
-                    dependencies=["vulnerability_check"],
-                    expected_duration_ms=10000,
-                ),
-                WorkflowStep(
-                    id="store_results",
-                    agent_type="knowledge_manager",
-                    action=(
-                        "Store security scan results and recommendations in "
-                        "knowledge base"
-                    ),
-                    description="Knowledge_Manager: Store Results",
-                    dependencies=["generate_report"],
-                    expected_duration_ms=5000,
-                ),
-            ],
+            steps=self._get_network_security_scan_steps(),
         )
         self.templates[template.id] = template
 
