@@ -52,6 +52,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for JSON-serializable types
+_JSON_BASIC_TYPES = (str, int, float, bool)
+
 
 class RedisToChromaDBMigration:
     """
@@ -59,6 +62,7 @@ class RedisToChromaDBMigration:
     """
 
     def __init__(self, batch_size: int = 1000, dry_run: bool = False):
+        """Initialize migration with batch size, dry run mode, and ChromaDB config."""
         self.batch_size = batch_size
         self.dry_run = dry_run
 
@@ -193,19 +197,87 @@ class RedisToChromaDBMigration:
             logger.error(f"Failed to get Redis vector count: {e}")
             return 0
 
+    def _decode_field_value(self, field_name: str, field_value, field_dict: Dict) -> bool:
+        """Decode and store field value (Issue #315: extracted helper)."""
+        if isinstance(field_name, bytes):
+            field_name = field_name.decode()
+
+        if isinstance(field_value, bytes) and field_name not in ['vector', 'embedding']:
+            try:
+                field_value = field_value.decode('utf-8')
+            except UnicodeDecodeError:
+                logger.debug(f"Skipping non-UTF8 field: {field_name}")
+                return False
+        field_dict[field_name] = field_value
+        return True
+
+    def _extract_text_content(self, field_dict: Dict, doc_key: str) -> str:
+        """Extract text content from document fields (Issue #315: extracted helper)."""
+        node_content_str = field_dict.get('_node_content', '')
+        if not node_content_str:
+            return f"Document {doc_key}"
+
+        try:
+            node_data = json.loads(node_content_str)
+            text_content = node_data.get('text', '')
+            if text_content:
+                return text_content
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse _node_content JSON for {doc_key}")
+
+        return f"Document {doc_key}"
+
+    def _build_metadata(self, field_dict: Dict, doc_key: str) -> Dict:
+        """Build metadata dict from field dict (Issue #315: extracted helper)."""
+        metadata = {
+            "doc_id": doc_key,
+            "migrated_at": datetime.now().isoformat()
+        }
+        skip_fields = {'vector', 'embedding', 'text', '_node_content'}
+        for key, value in field_dict.items():
+            if key in skip_fields:
+                continue
+            if isinstance(value, _JSON_BASIC_TYPES):  # Issue #380
+                metadata[key] = value
+            elif key not in metadata:
+                metadata[key] = str(value)
+        return metadata
+
+    def _process_single_document(
+        self, doc_key, doc_fields: Dict
+    ) -> Optional[Tuple[str, List[float], str, Dict]]:
+        """Process single Redis document (Issue #315: extracted helper)."""
+        if isinstance(doc_key, bytes):
+            doc_key = doc_key.decode()
+
+        if not doc_fields:
+            logger.warning(f"No fields found for {doc_key}, skipping")
+            return None
+
+        # Parse fields
+        field_dict = {}
+        for field_name, field_value in doc_fields.items():
+            self._decode_field_value(field_name, field_value, field_dict)
+
+        # Extract embedding
+        embedding_bytes = field_dict.get('vector', field_dict.get('embedding'))
+        if not embedding_bytes:
+            logger.warning(f"No embedding found for {doc_key}, skipping")
+            return None
+
+        embedding = np.frombuffer(embedding_bytes, dtype=np.float32).tolist()
+        full_text = self._extract_text_content(field_dict, doc_key)
+        metadata = self._build_metadata(field_dict, doc_key)
+
+        return doc_key, embedding, full_text, metadata
+
     async def export_vectors_batch(
         self,
         cursor: int,
         batch_size: int
     ) -> Tuple[int, List[str], List[List[float]], List[str], List[Dict]]:
-        """
-        Export a batch of vectors from Redis using SCAN (no OFFSET limit)
-
-        Returns:
-            (new_cursor, ids, embeddings, documents, metadatas)
-        """
+        """Export batch of vectors from Redis (Issue #315: refactored)."""
         try:
-            # Use SCAN to iterate through doc:* keys (cursor-based, no 10K limit)
             scan_result = self.redis_kb.redis_client.execute_command(
                 "SCAN", cursor,
                 "MATCH", "doc:*",
@@ -213,96 +285,26 @@ class RedisToChromaDBMigration:
             )
 
             if not scan_result or len(scan_result) < 2:
-                return 0, [], [], []
+                return 0, [], [], [], []
 
-            # Result format: [new_cursor, [key1, key2, ...]]
             new_cursor = int(scan_result[0])
             keys = scan_result[1]
 
             if not keys:
                 return new_cursor, [], [], [], []
 
-            ids = []
-            embeddings = []
-            documents = []  # CRITICAL: Add documents list
-            metadatas = []
+            ids, embeddings, documents, metadatas = [], [], [], []
 
-            # Fetch each document's hash fields
             for doc_key in keys:
                 try:
-                    if isinstance(doc_key, bytes):
-                        doc_key = doc_key.decode()
-
-                    # Get all hash fields for this document
                     doc_fields = self.redis_kb.redis_client.hgetall(doc_key)
-
-                    if not doc_fields:
-                        logger.warning(f"No fields found for {doc_key}, skipping")
-                        continue
-
-                    # Parse fields into dict
-                    field_dict = {}
-                    for field_name, field_value in doc_fields.items():
-                        if isinstance(field_name, bytes):
-                            field_name = field_name.decode()
-
-                        # Keep binary fields (like 'vector') as bytes, decode text fields carefully
-                        if isinstance(field_value, bytes) and field_name not in ['vector', 'embedding']:
-                            try:
-                                field_value = field_value.decode('utf-8')
-                            except UnicodeDecodeError:
-                                # Skip fields that can't be decoded (likely binary data)
-                                logger.debug(f"Skipping non-UTF8 field: {field_name}")
-                                continue
-                        field_dict[field_name] = field_value
-
-                    # Extract vector embedding
-                    embedding_bytes = field_dict.get('vector', field_dict.get('embedding'))
-                    if not embedding_bytes:
-                        logger.warning(f"No embedding found for {doc_key}, skipping")
-                        continue
-
-                    # Parse embedding (stored as bytes)
-                    embedding = np.frombuffer(embedding_bytes, dtype=np.float32).tolist()
-
-                    # Extract text from _node_content JSON or use empty string
-                    text_content = ""
-                    node_content_str = field_dict.get('_node_content', '')
-                    if node_content_str:
-                        try:
-                            # Parse _node_content JSON
-                            node_data = json.loads(node_content_str)
-                            # Extract text from node data (it should be in 'text' field of the node)
-                            text_content = node_data.get('text', '')
-
-                            # If no text field, try to get from metadata
-                            if not text_content and 'metadata' in node_data:
-                                # Sometimes text is stored differently
-                                pass  # Metadata fields will be extracted below
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to parse _node_content JSON for {doc_key}")
-
-                    # CRITICAL: Store full text in documents, not just metadata
-                    full_text = text_content if text_content else f"Document {doc_key}"
-
-                    metadata = {
-                        "doc_id": doc_key,
-                        "migrated_at": datetime.now().isoformat()
-                    }
-
-                    # Add other fields as metadata (ChromaDB restrictions)
-                    for key, value in field_dict.items():
-                        if key not in ['vector', 'embedding', 'text', '_node_content']:
-                            if isinstance(value, (str, int, float, bool)):
-                                metadata[key] = value
-                            elif key not in metadata:  # Don't override already set values
-                                metadata[key] = str(value)
-
-                    ids.append(doc_key)
-                    embeddings.append(embedding)
-                    documents.append(full_text)  # CRITICAL: Add full document text
-                    metadatas.append(metadata)
-
+                    result = self._process_single_document(doc_key, doc_fields)
+                    if result:
+                        doc_id, embedding, full_text, metadata = result
+                        ids.append(doc_id)
+                        embeddings.append(embedding)
+                        documents.append(full_text)
+                        metadatas.append(metadata)
                 except Exception as e:
                     logger.error(f"Failed to parse document {doc_key}: {e}")
                     self.failed_vectors += 1
