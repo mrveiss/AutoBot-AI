@@ -270,6 +270,48 @@ class DocumentExtractor:
             )
 
     @staticmethod
+    async def _validate_directory(directory_path: Path) -> None:
+        """Validate directory exists and is a directory (Issue #281 - extracted helper)."""
+        if not await asyncio.to_thread(directory_path.exists):
+            raise FileNotFoundError(f"Directory not found: {directory_path}")
+        if not await asyncio.to_thread(directory_path.is_dir):
+            raise NotADirectoryError(f"Path is not a directory: {directory_path}")
+
+    @staticmethod
+    def _collect_files_sync(
+        directory_path: Path,
+        file_types: List[str],
+        glob_pattern: str,
+        max_files: Optional[int],
+    ) -> List[Path]:
+        """Sync helper for collecting files (Issue #281 - extracted helper)."""
+        result_files = []
+        for ft in file_types:
+            if not ft.startswith("."):
+                ft = f".{ft}"
+
+            for fp in directory_path.glob(f"{glob_pattern}{ft}"):
+                if fp.is_file():
+                    result_files.append(fp)
+                    if max_files and len(result_files) >= max_files:
+                        break
+
+            if max_files and len(result_files) >= max_files:
+                break
+        return result_files
+
+    @staticmethod
+    async def _extract_single_file(file_path: Path) -> tuple:
+        """Extract text from single file with error handling (Issue #281 - extracted helper)."""
+        try:
+            text = await DocumentExtractor.extract_from_file(file_path)
+            logger.info(f"✅ Extracted {len(text)} chars from {file_path.name}")
+            return (file_path, text)
+        except Exception as e:
+            logger.error(f"❌ Failed to extract from {file_path}: {e}")
+            return (file_path, None)
+
+    @staticmethod
     async def extract_from_directory(
         directory_path: Union[str, Path],
         file_types: Optional[List[str]] = None,
@@ -277,9 +319,9 @@ class DocumentExtractor:
         max_files: Optional[int] = None,
     ) -> Dict[Path, str]:
         """
-        Extract text from all supported documents in a directory
+        Extract text from all supported documents in a directory.
 
-        Processes multiple files in parallel for performance.
+        Issue #281: Refactored from 110 lines to use extracted helper methods.
 
         Args:
             directory_path: Path to directory to process
@@ -293,86 +335,27 @@ class DocumentExtractor:
         Raises:
             FileNotFoundError: If directory doesn't exist
             NotADirectoryError: If path is not a directory
-
-        Example:
-            # Process all supported files
-            results = await DocumentExtractor.extract_from_directory("docs/")
-
-            # Process only PDFs and DOCX
-            results = await DocumentExtractor.extract_from_directory(
-                "docs/",
-                file_types=['.pdf', '.docx']
-            )
-
-            # Limit to 100 files
-            results = await DocumentExtractor.extract_from_directory(
-                "docs/",
-                max_files=100
-            )
         """
         directory_path = Path(directory_path)
+        await DocumentExtractor._validate_directory(directory_path)
 
-        # Issue #358 - avoid blocking
-        if not await asyncio.to_thread(directory_path.exists):
-            raise FileNotFoundError(f"Directory not found: {directory_path}")
-
-        # Issue #358 - avoid blocking
-        if not await asyncio.to_thread(directory_path.is_dir):
-            raise NotADirectoryError(f"Path is not a directory: {directory_path}")
-
-        # Default to all supported file types
         if file_types is None:
             file_types = DocumentExtractor.get_supported_extensions()
 
-        # Collect all matching files
-        # Issue #358 - wrap blocking glob/is_file in sync helper
         glob_pattern = "**/*" if recursive else "*"
-
-        def _collect_files_sync() -> List[Path]:
-            """Sync helper for collecting files to avoid blocking event loop."""
-            result_files = []
-            for ft in file_types:
-                # Ensure file type starts with dot
-                if not ft.startswith("."):
-                    ft = f".{ft}"
-
-                for fp in directory_path.glob(f"{glob_pattern}{ft}"):
-                    if fp.is_file():
-                        result_files.append(fp)
-
-                        # Check max_files limit
-                        if max_files and len(result_files) >= max_files:
-                            break
-
-                if max_files and len(result_files) >= max_files:
-                    break
-            return result_files
-
-        all_files = await asyncio.to_thread(_collect_files_sync)
+        all_files = await asyncio.to_thread(
+            DocumentExtractor._collect_files_sync,
+            directory_path, file_types, glob_pattern, max_files
+        )
 
         logger.info(f"Found {len(all_files)} files to process in {directory_path}")
 
-        # Process files in parallel (async)
-        extracted_texts = {}
-
-        async def extract_single_file(file_path: Path) -> tuple[Path, Optional[str]]:
-            """Extract text from single file with error handling"""
-            try:
-                text = await DocumentExtractor.extract_from_file(file_path)
-                logger.info(f"✅ Extracted {len(text)} chars from {file_path.name}")
-                return (file_path, text)
-            except Exception as e:
-                logger.error(f"❌ Failed to extract from {file_path}: {e}")
-                return (file_path, None)
-
         # Process all files concurrently
-        tasks = [extract_single_file(fp) for fp in all_files]
+        tasks = [DocumentExtractor._extract_single_file(fp) for fp in all_files]
         results = await asyncio.gather(*tasks)
 
         # Build result dict (exclude failures)
-        for file_path, text in results:
-            if text is not None:
-                extracted_texts[file_path] = text
+        extracted_texts = {fp: text for fp, text in results if text is not None}
 
         logger.info(
             f"Successfully extracted {len(extracted_texts)}/{len(all_files)} files "
