@@ -21,6 +21,9 @@ from src.unified_config import UnifiedConfig
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for literal value AST types
+_LITERAL_VALUE_TYPES = (ast.Str, ast.Num)
+
 
 @dataclass
 class HardcodedValue:
@@ -258,7 +261,7 @@ class EnvironmentAnalyzer:
         """Try to extract a named hardcoded value (Issue #340 - extracted)"""
         if not isinstance(target, ast.Name):
             return None
-        if not isinstance(value_node, (ast.Str, ast.Num)):
+        if not isinstance(value_node, _LITERAL_VALUE_TYPES):  # Issue #380
             return None
 
         var_name = target.id
