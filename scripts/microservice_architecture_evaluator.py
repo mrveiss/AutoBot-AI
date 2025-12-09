@@ -21,11 +21,16 @@ from typing import Any, Dict, List, Set
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuples for import filtering
+_FRAMEWORK_IMPORT_PREFIXES = ('fastapi', 'pydantic', 'typing')
+_PROJECT_IMPORT_PREFIXES = ('src.', 'backend.')
+
 
 class MicroserviceArchitectureEvaluator:
     """Evaluates current monolithic architecture for microservice decomposition opportunities"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize architecture evaluator with project paths and result containers."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.reports_dir = self.project_root / "reports" / "architecture"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -204,7 +209,7 @@ class MicroserviceArchitectureEvaluator:
 
         for imp1, imp2 in imports:
             dep = imp1 or imp2
-            if dep and not dep.startswith(('fastapi', 'pydantic', 'typing')):
+            if dep and not dep.startswith(_FRAMEWORK_IMPORT_PREFIXES):  # Issue #380
                 router_info["dependencies"].append(dep)
 
     def _analyze_data_models(self) -> Dict[str, Any]:
@@ -364,7 +369,7 @@ class MicroserviceArchitectureEvaluator:
 
         for imp1, imp2 in imports:
             dep = imp1 or imp2
-            if dep and dep.startswith(('src.', 'backend.')):
+            if dep and dep.startswith(_PROJECT_IMPORT_PREFIXES):  # Issue #380
                 agent_info["dependencies"].append(dep)
 
     def _group_agent_by_type(self, agent_info: Dict[str, Any], agents: Dict[str, Any]) -> None:
@@ -737,7 +742,7 @@ class MicroserviceArchitectureEvaluator:
         # Identify high coupling modules (high fan-out or fan-in)
         high_coupling_threshold = 5
 
-        for module in import_graph.keys():
+        for module in import_graph:
             fan_out = coupling["fan_out"].get(module, 0)
             fan_in = coupling["fan_in"].get(module, 0)
 
@@ -761,6 +766,7 @@ class MicroserviceArchitectureEvaluator:
         cycles = []
 
         def dfs(module, path):
+            """Depth-first search helper for cycle detection."""
             visited.add(module)
             rec_stack.add(module)
             current_path = path + [module]
