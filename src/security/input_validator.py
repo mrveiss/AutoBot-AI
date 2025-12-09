@@ -17,6 +17,9 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for URL scheme validation
+_VALID_URL_SCHEMES = frozenset({"http", "https"})
+
 
 class InputValidationError(Exception):
     """Exception raised when input validation fails"""
@@ -150,407 +153,322 @@ class WebResearchInputValidator:
             except re.error as e:
                 logger.warning(f"Failed to compile keyword pattern {keyword}: {e}")
 
-    def validate_research_query(
-        self, query: str, max_length: int = 500
-    ) -> Dict[str, Any]:
-        """
-        Validate and analyze a research query for safety
-
-        Args:
-            query: The research query to validate
-            max_length: Maximum allowed query length
-
-        Returns:
-            Dict containing validation results:
-            - safe: bool - Whether query is safe
-            - sanitized_query: str - Cleaned version of query
-            - threats_detected: List[str] - Detected threats
-            - risk_level: str - low, medium, high
-            - warnings: List[str] - Non-blocking warnings
-        """
-        result = {
-            "safe": True,
-            "sanitized_query": query,
-            "threats_detected": [],
-            "risk_level": "low",
-            "warnings": [],
-            "metadata": {},
+    def _create_query_result(self, query: str) -> Dict[str, Any]:
+        """Create initial query validation result structure."""
+        return {
+            "safe": True, "sanitized_query": query, "threats_detected": [],
+            "risk_level": "low", "warnings": [], "metadata": {},
         }
 
+    def _check_empty_query(self, query: str) -> tuple:
+        """Check for empty query. Returns (query, error_result or None)."""
+        if not query or not query.strip():
+            return None, {"safe": False, "threats_detected": ["EMPTY_QUERY"], "risk_level": "medium"}
+        return query.strip(), None
+
+    def _check_query_length(self, query: str, max_length: int, result: Dict) -> str:
+        """Check and truncate query if too long. Updates result warnings."""
+        if len(query) > max_length:
+            result["warnings"].append(f"Query length ({len(query)}) exceeds maximum ({max_length})")
+            query = query[:max_length]
+            result["sanitized_query"] = query
+        return query
+
+    def _check_encoding(self, query: str) -> Dict[str, Any]:
+        """Check UTF-8 encoding. Returns error result if invalid, None if valid."""
         try:
-            if not query or not query.strip():
-                result.update(
-                    {
-                        "safe": False,
-                        "threats_detected": ["EMPTY_QUERY"],
-                        "risk_level": "medium",
-                    }
-                )
+            query.encode("utf-8")
+            return None
+        except UnicodeEncodeError:
+            return {"safe": False, "threats_detected": ["INVALID_ENCODING"], "risk_level": "medium"}
+
+    def _check_dangerous_patterns(self, query: str) -> tuple:
+        """Check for dangerous patterns. Returns (matches, error_result or None)."""
+        dangerous_matches = []
+        for pattern in self.dangerous_pattern_compiled:
+            matches = pattern.findall(query)
+            if matches:
+                dangerous_matches.extend(matches)
+        if dangerous_matches:
+            logger.warning(f"Dangerous patterns detected in query: {dangerous_matches}")
+            return dangerous_matches, {
+                "safe": False, "threats_detected": ["DANGEROUS_PATTERNS"], "risk_level": "high",
+                "metadata": {"dangerous_patterns": dangerous_matches[:5]},
+            }
+        return dangerous_matches, None
+
+    def _check_suspicious_keywords(self, query: str, result: Dict) -> Dict[str, Any]:
+        """Check for suspicious keywords. Returns error result if high risk, None otherwise."""
+        suspicious_matches = [kw for kw, pat in self.suspicious_keyword_patterns if pat.search(query)]
+        if suspicious_matches:
+            if len(suspicious_matches) >= 3:
+                return {
+                    "safe": False, "threats_detected": ["MULTIPLE_SUSPICIOUS_KEYWORDS"],
+                    "risk_level": "high", "metadata": {"suspicious_keywords": suspicious_matches},
+                }
+            result["warnings"].append(f"Potentially sensitive keywords: {', '.join(suspicious_matches)}")
+            result["risk_level"] = "medium"
+            result["metadata"]["suspicious_keywords"] = suspicious_matches
+        return None
+
+    def _check_urls_in_query(self, query: str) -> Dict[str, Any]:
+        """Check URLs in query. Returns error result if dangerous URL found, None otherwise."""
+        for url in self._extract_urls(query):
+            url_result = self._validate_url_in_query(url)
+            if not url_result["safe"]:
+                return {
+                    "safe": False, "threats_detected": ["DANGEROUS_URL_IN_QUERY"],
+                    "risk_level": "high", "metadata": {"dangerous_urls": [url_result]},
+                }
+        return None
+
+    def _create_url_result(self, url: str) -> Dict[str, Any]:
+        """Create initial URL validation result structure."""
+        return {
+            "safe": True, "sanitized_url": url, "threats_detected": [],
+            "warnings": [], "metadata": {},
+        }
+
+    def _check_empty_url(self, url: str) -> tuple:
+        """Check for empty URL. Returns (url, error_result or None)."""
+        if not url or not url.strip():
+            return None, {"safe": False, "threats_detected": ["EMPTY_URL"]}
+        return url.strip(), None
+
+    def _parse_url(self, url: str) -> tuple:
+        """Parse URL. Returns (parsed, error_result or None)."""
+        try:
+            parsed = urlparse(url)
+            return parsed, None
+        except Exception as e:
+            return None, {
+                "safe": False, "threats_detected": ["INVALID_URL_FORMAT"],
+                "metadata": {"error": str(e)},
+            }
+
+    def _validate_url_scheme(self, parsed) -> Dict[str, Any]:
+        """Validate URL scheme. Returns error result if invalid, None if valid."""
+        if parsed.scheme not in _VALID_URL_SCHEMES:
+            return {
+                "safe": False, "threats_detected": ["INVALID_SCHEME"],
+                "metadata": {"scheme": parsed.scheme},
+            }
+        return None
+
+    def _validate_url_hostname(self, parsed) -> Dict[str, Any]:
+        """Validate URL hostname. Returns error result if missing, None if valid."""
+        if not parsed.hostname:
+            return {"safe": False, "threats_detected": ["NO_HOSTNAME"]}
+        return None
+
+    def _check_dangerous_url_patterns(self, url: str) -> Dict[str, Any]:
+        """Check for dangerous URL patterns. Returns error result if found, None otherwise."""
+        dangerous_url_patterns = [
+            r"javascript:", r"data:", r"vbscript:", r"file://",
+            r"ftp://", r"ldap://", r"gopher://",
+        ]
+        for pattern in dangerous_url_patterns:
+            if re.search(pattern, url, re.IGNORECASE):
+                return {
+                    "safe": False, "threats_detected": ["DANGEROUS_URL_SCHEME"],
+                    "metadata": {"pattern": pattern},
+                }
+        return None
+
+    def _check_url_length(self, url: str, result: Dict) -> str:
+        """Check URL length. Updates result warnings and returns sanitized URL."""
+        if len(url) > 2000:
+            result["warnings"].append(f"Very long URL ({len(url)} characters)")
+            result["sanitized_url"] = url[:2000]
+        return url
+
+    def _check_suspicious_url_patterns(self, url: str, result: Dict) -> None:
+        """Check for suspicious URL patterns. Updates result warnings."""
+        suspicious_url_patterns = [
+            r"%[0-9a-f]{2}%[0-9a-f]{2}%[0-9a-f]{2}",  # Multiple URL encoding
+            r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}",  # IP addresses
+            r"(localhost|127\.0\.0\.1|0\.0\.0\.0)",  # Local addresses
+        ]
+        for pattern in suspicious_url_patterns:
+            if re.search(pattern, url, re.IGNORECASE):
+                result["warnings"].append(f"Suspicious URL pattern detected: {pattern}")
+
+    def validate_research_query(self, query: str, max_length: int = 500) -> Dict[str, Any]:
+        """Validate and analyze a research query for safety."""
+        result = self._create_query_result(query)
+        try:
+            query, error = self._check_empty_query(query)
+            if error:
+                result.update(error)
                 return result
 
-            query = query.strip()
-
-            # Length validation
-            if len(query) > max_length:
-                result["warnings"].append(
-                    f"Query length ({len(query)}) exceeds maximum ({max_length})"
-                ),
-                query = query[:max_length]
-                result["sanitized_query"] = query
-
-            # Character encoding validation
-            try:
-                query.encode("utf-8")
-            except UnicodeEncodeError:
-                result.update(
-                    {
-                        "safe": False,
-                        "threats_detected": ["INVALID_ENCODING"],
-                        "risk_level": "medium",
-                    }
-                )
+            query = self._check_query_length(query, max_length, result)
+            if error := self._check_encoding(query):
+                result.update(error)
+                return result
+            if (_, error := self._check_dangerous_patterns(query))[1]:
+                result.update(error)
+                return result
+            if error := self._check_suspicious_keywords(query, result):
+                result.update(error)
+                return result
+            if error := self._check_urls_in_query(query):
+                result.update(error)
                 return result
 
-            # Dangerous pattern detection
-            dangerous_matches = []
-            for pattern in self.dangerous_pattern_compiled:
-                matches = pattern.findall(query)
-                if matches:
-                    dangerous_matches.extend(matches)
-
-            if dangerous_matches:
-                result.update(
-                    {
-                        "safe": False,
-                        "threats_detected": ["DANGEROUS_PATTERNS"],
-                        "risk_level": "high",
-                        "metadata": {
-                            "dangerous_patterns": dangerous_matches[:5]
-                        },  # Limit to first 5
-                    }
-                )
-                logger.warning(
-                    f"Dangerous patterns detected in query: {dangerous_matches}"
-                )
-                return result
-
-            # Suspicious keyword detection
-            suspicious_matches = []
-            for keyword, pattern in self.suspicious_keyword_patterns:
-                if pattern.search(query):
-                    suspicious_matches.append(keyword)
-
-            if suspicious_matches:
-                if len(suspicious_matches) >= 3:
-                    # Multiple suspicious keywords = high risk
-                    result.update(
-                        {
-                            "safe": False,
-                            "threats_detected": ["MULTIPLE_SUSPICIOUS_KEYWORDS"],
-                            "risk_level": "high",
-                            "metadata": {"suspicious_keywords": suspicious_matches},
-                        }
-                    )
-                    return result
-                else:
-                    # Single suspicious keyword = warning
-                    result["warnings"].append(
-                        f"Potentially sensitive keywords: {', '.join(suspicious_matches)}"
-                    )
-                    result["risk_level"] = "medium"
-                    result["metadata"]["suspicious_keywords"] = suspicious_matches
-
-            # URL extraction and validation
-            urls_in_query = self._extract_urls(query)
-            if urls_in_query:
-                url_validation_results = []
-                for url in urls_in_query:
-                    url_result = self._validate_url_in_query(url)
-                    url_validation_results.append(url_result)
-                    if not url_result["safe"]:
-                        result.update(
-                            {
-                                "safe": False,
-                                "threats_detected": ["DANGEROUS_URL_IN_QUERY"],
-                                "risk_level": "high",
-                                "metadata": {"dangerous_urls": [url_result]},
-                            }
-                        )
-                        return result
-
-            # Content sanitization
             sanitized_query = self._sanitize_query(query)
             if sanitized_query != query:
                 result["sanitized_query"] = sanitized_query
-                result["warnings"].append(
-                    "Query was sanitized to remove potentially dangerous content"
-                )
-
-            # Final risk assessment
+                result["warnings"].append("Query was sanitized to remove potentially dangerous content")
             if result["warnings"] and result["risk_level"] == "low":
                 result["risk_level"] = "medium"
 
-            logger.debug(
-                f"Query validation completed: risk={result['risk_level']}, safe={result['safe']}"
-            )
+            logger.debug(f"Query validation completed: risk={result['risk_level']}, safe={result['safe']}")
             return result
-
         except Exception as e:
             logger.error(f"Error validating research query: {e}")
             return {
-                "safe": False,
-                "sanitized_query": "",
-                "threats_detected": ["VALIDATION_ERROR"],
-                "risk_level": "high",
-                "warnings": [f"Validation error: {str(e)}"],
-                "metadata": {},
+                "safe": False, "sanitized_query": "", "threats_detected": ["VALIDATION_ERROR"],
+                "risk_level": "high", "warnings": [f"Validation error: {str(e)}"], "metadata": {},
             }
 
     def validate_url(self, url: str) -> Dict[str, Any]:
-        """
-        Validate a URL for safety before accessing
-
-        Args:
-            url: URL to validate
-
-        Returns:
-            Dict with validation results
-        """
-        result = {
-            "safe": True,
-            "sanitized_url": url,
-            "threats_detected": [],
-            "warnings": [],
-            "metadata": {},
-        }
-
+        """Validate a URL for safety before accessing."""
+        result = self._create_url_result(url)
         try:
-            if not url or not url.strip():
-                result.update({"safe": False, "threats_detected": ["EMPTY_URL"]})
+            url, error = self._check_empty_url(url)
+            if error:
+                result.update(error)
                 return result
 
-            url = url.strip()
-
-            # Basic URL format validation
-            try:
-                parsed = urlparse(url)
-            except Exception as e:
-                result.update(
-                    {
-                        "safe": False,
-                        "threats_detected": ["INVALID_URL_FORMAT"],
-                        "metadata": {"error": str(e)},
-                    }
-                )
+            parsed, error = self._parse_url(url)
+            if error:
+                result.update(error)
                 return result
 
-            # Scheme validation
-            if parsed.scheme not in {"http", "https"}:
-                result.update(
-                    {
-                        "safe": False,
-                        "threats_detected": ["INVALID_SCHEME"],
-                        "metadata": {"scheme": parsed.scheme},
-                    }
-                )
+            if error := self._validate_url_scheme(parsed):
+                result.update(error)
+                return result
+            if error := self._validate_url_hostname(parsed):
+                result.update(error)
+                return result
+            if error := self._check_dangerous_url_patterns(url):
+                result.update(error)
                 return result
 
-            # Hostname validation
-            if not parsed.hostname:
-                result.update({"safe": False, "threats_detected": ["NO_HOSTNAME"]})
-                return result
-
-            # Check for dangerous URL patterns
-            dangerous_url_patterns = [
-                r"javascript:",
-                r"data:",
-                r"vbscript:",
-                r"file://",
-                r"ftp://",
-                r"ldap://",
-                r"gopher://",
-            ]
-
-            for pattern in dangerous_url_patterns:
-                if re.search(pattern, url, re.IGNORECASE):
-                    result.update(
-                        {
-                            "safe": False,
-                            "threats_detected": ["DANGEROUS_URL_SCHEME"],
-                            "metadata": {"pattern": pattern},
-                        }
-                    )
-                    return result
-
-            # URL length validation
-            if len(url) > 2000:  # URLs longer than 2000 chars are suspicious
-                result["warnings"].append(f"Very long URL ({len(url)} characters)")
-                # Truncate for safety
-                result["sanitized_url"] = url[:2000]
-
-            # Check for suspicious URL patterns
-            suspicious_url_patterns = [
-                r"%[0-9a-f]{2}%[0-9a-f]{2}%[0-9a-f]{2}",  # Multiple URL encoding
-                r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}",  # IP addresses
-                r"(localhost|127\.0\.0\.1|0\.0\.0\.0)",  # Local addresses
-            ]
-
-            for pattern in suspicious_url_patterns:
-                if re.search(pattern, url, re.IGNORECASE):
-                    result["warnings"].append(
-                        f"Suspicious URL pattern detected: {pattern}"
-                    )
+            self._check_url_length(url, result)
+            self._check_suspicious_url_patterns(url, result)
 
             result["metadata"]["parsed"] = {
-                "scheme": parsed.scheme,
-                "hostname": parsed.hostname,
-                "port": parsed.port,
-                "path": parsed.path[:100],  # Limit path length for logging
+                "scheme": parsed.scheme, "hostname": parsed.hostname,
+                "port": parsed.port, "path": parsed.path[:100],
             }
-
             return result
-
         except Exception as e:
             logger.error(f"Error validating URL {url}: {e}")
             return {
-                "safe": False,
-                "sanitized_url": "",
-                "threats_detected": ["URL_VALIDATION_ERROR"],
-                "warnings": [f"Validation error: {str(e)}"],
-                "metadata": {},
+                "safe": False, "sanitized_url": "", "threats_detected": ["URL_VALIDATION_ERROR"],
+                "warnings": [f"Validation error: {str(e)}"], "metadata": {},
             }
 
-    def sanitize_web_content(
-        self, content: str, content_type: str = "text/html"
-    ) -> Dict[str, Any]:
-        """
-        Sanitize web content before processing or storage
-
-        Args:
-            content: Raw web content
-            content_type: MIME type of content
-
-        Returns:
-            Dict with sanitized content and safety information
-        """
-        result = {
-            "safe": True,
-            "sanitized_content": content,
-            "threats_detected": [],
-            "warnings": [],
-            "metadata": {"original_length": len(content)},
+    def _create_content_result(self, content: str) -> Dict[str, Any]:
+        """Create initial content sanitization result structure."""
+        return {
+            "safe": True, "sanitized_content": content, "threats_detected": [],
+            "warnings": [], "metadata": {"original_length": len(content)},
         }
 
+    def _validate_content_type(self, content_type: str, result: Dict) -> None:
+        """Validate content type. Updates result warnings."""
+        if content_type not in self.SAFE_CONTENT_TYPES:
+            result["warnings"].append(f"Potentially unsafe content type: {content_type}")
+
+    def _truncate_content(self, content: str, result: Dict, max_length: int = 1_000_000) -> str:
+        """Truncate content if too long. Updates result warnings."""
+        if len(content) > max_length:
+            result["warnings"].append(f"Content truncated from {len(content)} to {max_length} chars")
+            return content[:max_length]
+        return content
+
+    def _remove_script_tags(self, content: str, result: Dict) -> str:
+        """Remove dangerous script tags. Updates result metadata."""
+        script_pattern = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+        scripts_removed = len(script_pattern.findall(content))
+        if scripts_removed > 0:
+            content = script_pattern.sub("", content)
+            result["threats_detected"].append("SCRIPT_TAGS_REMOVED")
+            result["metadata"]["scripts_removed"] = scripts_removed
+        return content
+
+    def _remove_event_handlers(self, content: str, result: Dict) -> str:
+        """Remove dangerous event handlers. Updates result metadata."""
+        event_pattern = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
+        events_removed = len(event_pattern.findall(content))
+        if events_removed > 0:
+            content = event_pattern.sub("", content)
+            result["threats_detected"].append("EVENT_HANDLERS_REMOVED")
+            result["metadata"]["events_removed"] = events_removed
+        return content
+
+    def _remove_dangerous_links(self, content: str, result: Dict) -> str:
+        """Remove dangerous links. Updates result metadata."""
+        dangerous_link_pattern = re.compile(
+            r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE
+        )
+        dangerous_links = len(dangerous_link_pattern.findall(content))
+        if dangerous_links > 0:
+            content = dangerous_link_pattern.sub('href="#"', content)
+            result["threats_detected"].append("DANGEROUS_LINKS_REMOVED")
+            result["metadata"]["dangerous_links_removed"] = dangerous_links
+        return content
+
+    def _encode_dangerous_patterns(self, content: str, content_type: str, result: Dict) -> str:
+        """Encode remaining dangerous patterns in HTML. Updates result warnings."""
+        if content_type != "text/html":
+            return content
+        dangerous_chars = ["<script", "</script", "javascript:", "vbscript:", "onload=", "onclick=", "onerror="]
+        for char_pattern in dangerous_chars:
+            if char_pattern in content.lower():
+                content = content.replace(char_pattern, html.escape(char_pattern))
+                result["warnings"].append(f"Encoded dangerous pattern: {char_pattern}")
+        return content
+
+    def _check_remaining_threats(self, content: str, result: Dict) -> None:
+        """Check for remaining suspicious patterns. Updates result warnings."""
+        remaining_threats = [p.pattern for p in self.dangerous_pattern_compiled[:10] if p.search(content)]
+        if remaining_threats:
+            result["warnings"].append(f"Suspicious patterns still present after sanitization: {len(remaining_threats)}")
+            result["metadata"]["remaining_threats"] = remaining_threats[:3]
+
+    def sanitize_web_content(self, content: str, content_type: str = "text/html") -> Dict[str, Any]:
+        """Sanitize web content before processing or storage."""
+        result = self._create_content_result(content)
         try:
             if not content:
                 return result
 
-            # Content type validation
-            if content_type not in self.SAFE_CONTENT_TYPES:
-                result["warnings"].append(
-                    f"Potentially unsafe content type: {content_type}"
-                )
+            self._validate_content_type(content_type, result)
+            content = self._truncate_content(content, result)
 
-            # Length validation
-            max_content_length = 1_000_000  # 1MB max
-            if len(content) > max_content_length:
-                result["warnings"].append(
-                    f"Content truncated from {len(content)} to {max_content_length} chars"
-                ),
-                content = content[:max_content_length]
+            # Apply sanitization chain
+            sanitized = self._remove_script_tags(content, result)
+            sanitized = self._remove_event_handlers(sanitized, result)
+            sanitized = self._remove_dangerous_links(sanitized, result)
+            sanitized = self._encode_dangerous_patterns(sanitized, content_type, result)
+            self._check_remaining_threats(sanitized, result)
 
-            sanitized_content = content
+            result["sanitized_content"] = sanitized
+            result["metadata"]["final_length"] = len(sanitized)
+            result["metadata"]["size_reduction"] = len(content) - len(sanitized)
 
-            # Remove dangerous script tags
-            script_pattern = re.compile(
-                r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL
-            )
-            scripts_removed = len(script_pattern.findall(sanitized_content))
-            if scripts_removed > 0:
-                sanitized_content = script_pattern.sub("", sanitized_content)
-                result["threats_detected"].append("SCRIPT_TAGS_REMOVED")
-                result["metadata"]["scripts_removed"] = scripts_removed
-
-            # Remove dangerous event handlers
-            event_pattern = re.compile(
-                r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE
-            )
-            events_removed = len(event_pattern.findall(sanitized_content))
-            if events_removed > 0:
-                sanitized_content = event_pattern.sub("", sanitized_content)
-                result["threats_detected"].append("EVENT_HANDLERS_REMOVED")
-                result["metadata"]["events_removed"] = events_removed
-
-            # Remove dangerous links
-            dangerous_link_pattern = re.compile(
-                r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']',
-                re.IGNORECASE,
-            )
-            dangerous_links = len(dangerous_link_pattern.findall(sanitized_content))
-            if dangerous_links > 0:
-                sanitized_content = dangerous_link_pattern.sub(
-                    'href="#"', sanitized_content
-                )
-                result["threats_detected"].append("DANGEROUS_LINKS_REMOVED")
-                result["metadata"]["dangerous_links_removed"] = dangerous_links
-
-            # HTML entity encoding for remaining content
-            if content_type == "text/html":
-                # Only encode specific dangerous characters, preserve HTML structure
-                dangerous_chars = [
-                    "<script",
-                    "</script",
-                    "javascript:",
-                    "vbscript:",
-                    "onload=",
-                    "onclick=",
-                    "onerror=",
-                ]
-                for char_pattern in dangerous_chars:
-                    if char_pattern in sanitized_content.lower():
-                        sanitized_content = sanitized_content.replace(
-                            char_pattern, html.escape(char_pattern)
-                        )
-                        result["warnings"].append(
-                            f"Encoded dangerous pattern: {char_pattern}"
-                        )
-
-            # Check for remaining suspicious patterns
-            remaining_threats = []
-            for pattern in self.dangerous_pattern_compiled[
-                :10
-            ]:  # Check first 10 patterns
-                if pattern.search(sanitized_content):
-                    remaining_threats.append(pattern.pattern)
-
-            if remaining_threats:
-                result["warnings"].append(
-                    f"Suspicious patterns still present after sanitization: {len(remaining_threats)}"
-                )
-                result["metadata"]["remaining_threats"] = remaining_threats[
-                    :3
-                ]  # Limit to first 3
-
-            result["sanitized_content"] = sanitized_content
-            result["metadata"]["final_length"] = len(sanitized_content)
-            result["metadata"]["size_reduction"] = len(content) - len(sanitized_content)
-
-            # Overall safety assessment
             if result["threats_detected"]:
-                result["safe"] = (
-                    len(result["threats_detected"]) <= 2
-                )  # Allow minor threats if cleaned
-
+                result["safe"] = len(result["threats_detected"]) <= 2
             return result
-
         except Exception as e:
             logger.error(f"Error sanitizing web content: {e}")
             return {
-                "safe": False,
-                "sanitized_content": "",
-                "threats_detected": ["SANITIZATION_ERROR"],
-                "warnings": [f"Sanitization failed: {str(e)}"],
-                "metadata": {"original_length": len(content)},
+                "safe": False, "sanitized_content": "", "threats_detected": ["SANITIZATION_ERROR"],
+                "warnings": [f"Sanitization failed: {str(e)}"], "metadata": {"original_length": len(content)},
             }
 
     def _extract_urls(self, text: str) -> List[str]:
