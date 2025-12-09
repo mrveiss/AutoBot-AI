@@ -22,6 +22,7 @@ import psutil
 import yaml
 
 from src.constants.model_constants import ModelConstants
+from src.constants.path_constants import PATH
 from src.unified_config_manager import UnifiedConfigManager
 
 # Create singleton config instance
@@ -37,6 +38,11 @@ class TaskComplexity(Enum):
     MODERATE = "moderate"  # Analysis, reasoning, explanations
     COMPLEX = "complex"  # Advanced reasoning, code generation, long-form content
     SPECIALIZED = "specialized"  # Domain-specific tasks requiring maximum capability
+
+
+# Issue #380: Module-level frozensets to avoid repeated list creation
+_CODE_TASK_TYPES = frozenset({"code", "programming", "development"})
+_CODE_COMPLEXITY_KEYWORDS = frozenset({"complex", "algorithm", "optimize", "architecture"})
 
 
 class ModelPerformanceLevel(Enum):
@@ -405,6 +411,105 @@ class ModelInfo:
             and self.use_count > 50
         )
 
+    def to_info_dict(self) -> Dict[str, Any]:
+        """Convert to info dictionary for API response (Issue #372 - reduces feature envy)."""
+        return {
+            "name": self.name,
+            "size_gb": self.size_gb,
+            "parameter_size": self.parameter_size,
+            "quantization": self.quantization,
+            "family": self.family,
+            "performance_level": self.performance_level.value,
+            "avg_tokens_per_second": self.avg_tokens_per_second,
+            "avg_response_time": self.avg_response_time,
+            "success_rate": self.success_rate,
+            "use_count": self.use_count,
+            "last_used": self.last_used,
+        }
+
+    def to_select_dict(self) -> Dict[str, Any]:
+        """Convert to selection summary for model selection API (Issue #372 - reduces feature envy)."""
+        return {
+            "name": self.name,
+            "size_gb": self.size_gb,
+            "parameter_size": self.parameter_size,
+            "performance_level": self.performance_level.value,
+            "avg_response_time": self.avg_response_time,
+            "avg_tokens_per_second": self.avg_tokens_per_second,
+            "success_rate": self.success_rate,
+        }
+
+    def to_performance_history_dict(self) -> Dict[str, Any]:
+        """Convert to performance history response (Issue #372 - reduces feature envy)."""
+        # Calculate efficiency metrics
+        tokens_per_gb = self.avg_tokens_per_second / max(self.size_gb, 0.1)
+        response_efficiency = (
+            1.0 / max(self.avg_response_time, 0.1)
+            if self.avg_response_time > 0
+            else 0
+        )
+        overall_score = (
+            (
+                self.success_rate * 40
+                + min(self.avg_tokens_per_second / 10, 30)
+                + min(10 / max(self.avg_response_time, 0.1), 30)
+            )
+            if self.avg_response_time > 0
+            else self.success_rate * 40
+        )
+
+        return {
+            "model_name": self.name,
+            "current_metrics": {
+                "avg_response_time": self.avg_response_time,
+                "avg_tokens_per_second": self.avg_tokens_per_second,
+                "success_rate": self.success_rate,
+                "use_count": self.use_count,
+                "last_used": self.last_used,
+            },
+            "model_info": {
+                "size_gb": self.size_gb,
+                "parameter_size": self.parameter_size,
+                "quantization": self.quantization,
+                "family": self.family,
+                "performance_level": self.performance_level.value,
+            },
+            "efficiency_metrics": {
+                "tokens_per_gb": tokens_per_gb,
+                "response_efficiency": response_efficiency,
+                "overall_score": overall_score,
+            },
+        }
+
+    def to_comparison_dict(self) -> Dict[str, Any]:
+        """Convert to comparison dict for model comparison API (Issue #372 - reduces feature envy)."""
+        efficiency_score = (
+            (self.avg_tokens_per_second / max(self.size_gb, 0.1))
+            if self.size_gb > 0
+            else 0
+        )
+        performance_score = (
+            (
+                self.success_rate * 50
+                + min(self.avg_tokens_per_second / 5, 25)
+                + min(25 / max(self.avg_response_time, 0.1), 25)
+            )
+            if self.avg_response_time > 0
+            else self.success_rate * 50
+        )
+
+        return {
+            "name": self.name,
+            "size_gb": self.size_gb,
+            "parameter_size": self.parameter_size,
+            "avg_response_time": self.avg_response_time,
+            "avg_tokens_per_second": self.avg_tokens_per_second,
+            "success_rate": self.success_rate,
+            "use_count": self.use_count,
+            "efficiency_score": efficiency_score,
+            "performance_score": performance_score,
+        }
+
 
 @dataclass
 class TaskRequest:
@@ -424,12 +529,9 @@ class TaskRequest:
         query_lower = self.query.lower()
         task_type = self.task_type.lower()
 
-        # Check for specialized task types
-        if task_type in ["code", "programming", "development"]:
-            if any(
-                word in query_lower
-                for word in ["complex", "algorithm", "optimize", "architecture"]
-            ):
+        # Check for specialized task types - Issue #380: Use module-level frozensets
+        if task_type in _CODE_TASK_TYPES:
+            if any(word in query_lower for word in _CODE_COMPLEXITY_KEYWORDS):
                 return TaskComplexity.SPECIALIZED
             else:
                 return TaskComplexity.COMPLEX
@@ -515,10 +617,8 @@ class ModelOptimizer:
             If config file not found or invalid, returns minimal defaults
         """
         try:
-            # Get config file path (project root / config / llm_models.yaml)
-            config_path = (
-                Path(__file__).parent.parent.parent / "config" / "llm_models.yaml"
-            )
+            # Use centralized PathConstants (Issue #380)
+            config_path = PATH.CONFIG_DIR / "llm_models.yaml"
 
             if config_path.exists():
                 with open(config_path, "r") as f:
@@ -906,122 +1006,103 @@ class ModelOptimizer:
             self.logger.error(f"Error tracking performance for {model_name}: {e}")
 
     async def get_optimization_suggestions(self) -> List[Dict[str, Any]]:
-        """Get suggestions for model optimization"""
-        suggestions = []
-
+        """Get suggestions for model optimization (Issue #281 - uses helpers)."""
         try:
             if not self._models_cache:
                 await self.refresh_available_models()
 
-            # Analyze model usage patterns
             models_with_history = [
                 m for m in self._models_cache.values() if m.use_count > 0
             ]
 
             if not models_with_history:
-                suggestions.append(
-                    {
-                        "type": "info",
-                        "message": "No model usage history available yet",
-                        "action": (
-                            "Continue using the system to build performance profiles"
-                        ),
-                    }
-                )
-                return suggestions
+                return [self._build_no_history_suggestion()]
 
-            # Calculate averages for comparison
-            avg_success_rate = sum(m.success_rate for m in models_with_history) / len(
-                models_with_history
-            )
-            avg_response_time = sum(
-                m.avg_response_time for m in models_with_history
-            ) / len(models_with_history)
+            # Collect suggestions from various checks
+            suggestions = []
+            avg_success_rate = sum(m.success_rate for m in models_with_history) / len(models_with_history)
+            avg_response_time = sum(m.avg_response_time for m in models_with_history) / len(models_with_history)
 
-            # Find underperforming models (models answer about themselves)
-            underperforming = [
-                m for m in models_with_history if m.is_underperforming(avg_success_rate)
-            ]
-
-            if underperforming:
-                suggestions.append(
-                    {
-                        "type": "warning",
-                        "message": (
-                            f"Found {len(underperforming)} underperforming models"
-                        ),
-                        "models": [m.name for m in underperforming],
-                        "action": (
-                            "Consider avoiding these models or investigating issues"
-                        ),
-                    }
-                )
-
-            # Find slow models (models answer about themselves)
-            slow_models = [m for m in models_with_history if m.is_slow(avg_response_time)]
-
-            if slow_models:
-                suggestions.append(
-                    {
-                        "type": "performance",
-                        "message": f"Found {len(slow_models)} slow models",
-                        "models": [
-                            {
-                                "name": m.name,
-                                "avg_time": f"{m.avg_response_time:.2f}s",
-                            }
-                            for m in slow_models
-                        ],
-                        "action": (
-                            "Consider using faster alternatives for time-sensitive tasks"
-                        ),
-                    }
-                )
-
-            # Suggest model upgrades (models answer about themselves)
-            lightweight_overused = [
-                m for m in models_with_history if m.is_overused_lightweight()
-            ]
-
-            if lightweight_overused:
-                suggestions.append(
-                    {
-                        "type": "optimization",
-                        "message": "Heavily used lightweight models detected",
-                        "models": [m.name for m in lightweight_overused],
-                        "action": (
-                            "Consider upgrading to more capable models for better quality"
-                        ),
-                    }
-                )
-
-            # Resource optimization (Tell Don't Ask - resources know if they allow large models)
-            resources = self._resource_analyzer.get_current_resources()
-            if resources.allows_large_models():
-                large_models = [
-                    m
-                    for m in self._models_cache.values()
-                    if m.performance_level == ModelPerformanceLevel.ADVANCED
-                ]
-                if large_models:
-                    suggestions.append(
-                        {
-                            "type": "resource",
-                            "message": (
-                                "System has available resources for larger models"
-                            ),
-                            "available_models": [m.name for m in large_models],
-                            "action": (
-                                "Consider using more capable models for better results"
-                            ),
-                        }
-                    )
+            suggestions.extend(self._check_underperforming_models(models_with_history, avg_success_rate))
+            suggestions.extend(self._check_slow_models(models_with_history, avg_response_time))
+            suggestions.extend(self._check_overused_lightweight_models(models_with_history))
+            suggestions.extend(self._check_resource_optimization())
 
             return suggestions
 
         except Exception as e:
             self.logger.error(f"Error generating optimization suggestions: {e}")
             return [{"type": "error", "message": str(e)}]
+
+    def _build_no_history_suggestion(self) -> Dict[str, Any]:
+        """Build suggestion for no usage history (Issue #281 - extracted helper)."""
+        return {
+            "type": "info",
+            "message": "No model usage history available yet",
+            "action": "Continue using the system to build performance profiles",
+        }
+
+    def _check_underperforming_models(
+        self, models: List[ModelInfo], avg_success_rate: float
+    ) -> List[Dict[str, Any]]:
+        """Check for underperforming models (Issue #281 - extracted helper)."""
+        underperforming = [m for m in models if m.is_underperforming(avg_success_rate)]
+        if not underperforming:
+            return []
+        return [{
+            "type": "warning",
+            "message": f"Found {len(underperforming)} underperforming models",
+            "models": [m.name for m in underperforming],
+            "action": "Consider avoiding these models or investigating issues",
+        }]
+
+    def _check_slow_models(
+        self, models: List[ModelInfo], avg_response_time: float
+    ) -> List[Dict[str, Any]]:
+        """Check for slow models (Issue #281 - extracted helper)."""
+        slow_models = [m for m in models if m.is_slow(avg_response_time)]
+        if not slow_models:
+            return []
+        return [{
+            "type": "performance",
+            "message": f"Found {len(slow_models)} slow models",
+            "models": [{"name": m.name, "avg_time": f"{m.avg_response_time:.2f}s"} for m in slow_models],
+            "action": "Consider using faster alternatives for time-sensitive tasks",
+        }]
+
+    def _check_overused_lightweight_models(
+        self, models: List[ModelInfo]
+    ) -> List[Dict[str, Any]]:
+        """Check for overused lightweight models (Issue #281 - extracted helper)."""
+        lightweight_overused = [m for m in models if m.is_overused_lightweight()]
+        if not lightweight_overused:
+            return []
+        return [{
+            "type": "optimization",
+            "message": "Heavily used lightweight models detected",
+            "models": [m.name for m in lightweight_overused],
+            "action": "Consider upgrading to more capable models for better quality",
+        }]
+
+    def _check_resource_optimization(self) -> List[Dict[str, Any]]:
+        """Check for resource optimization opportunities (Issue #281 - extracted helper)."""
+        resources = self._resource_analyzer.get_current_resources()
+        if not resources.allows_large_models():
+            return []
+
+        large_models = [
+            m for m in self._models_cache.values()
+            if m.performance_level == ModelPerformanceLevel.ADVANCED
+        ]
+        if not large_models:
+            return []
+
+        return [{
+            "type": "resource",
+            "message": "System has available resources for larger models",
+            "available_models": [m.name for m in large_models],
+            "action": "Consider using more capable models for better results",
+        }]
 
 
 # Global optimizer instance (thread-safe)
