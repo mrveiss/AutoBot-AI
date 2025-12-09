@@ -74,6 +74,9 @@ _COLLECTION_AST_TYPES = (ast.Dict, ast.List, ast.Set)
 # Issue #380: Module-level tuple for local IP prefixes
 _LOCAL_IP_PREFIXES = ("127.0.0.", "192.168.")
 
+# Issue #380: Module-level tuple for definition types (functions + classes)
+_DEFINITION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
 
 def _check_import_from_lock(node: ast.ImportFrom) -> Tuple[bool, bool]:
     """Check ImportFrom node for lock imports. (Issue #315 - extracted)"""
@@ -826,7 +829,7 @@ def _find_all_docstring_lines(tree: ast.AST) -> Set[int]:
             docstring_lines.update(_extract_docstring_lines(node.body[0]))
 
         # Check function/class docstrings
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+        if isinstance(node, _DEFINITION_TYPES) and node.body:  # Issue #380
             docstring_lines.update(_extract_docstring_lines(node.body[0]))
 
     return docstring_lines

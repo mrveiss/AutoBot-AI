@@ -21,6 +21,9 @@ from src.unified_config import UnifiedConfig
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for import AST types
+_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
+
 
 @dataclass
 class SecurityVulnerability:
@@ -315,7 +318,7 @@ class SecurityAnalyzer:
             return self._analyze_insecure_assignment(node, file_path, lines)
 
         # Check for dangerous imports
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+        if isinstance(node, _IMPORT_TYPES):  # Issue #380
             return self._analyze_dangerous_import(node, file_path, lines)
 
         return None

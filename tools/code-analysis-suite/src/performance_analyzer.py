@@ -21,6 +21,9 @@ from src.unified_config import UnifiedConfig
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for loop AST types
+_LOOP_TYPES = (ast.For, ast.While)
+
 
 @dataclass
 class PerformanceIssue:
@@ -344,7 +347,8 @@ class PerformanceAnalyzer:
         # Check for nested loops (potential O(n²) or worse)
         nested_loops = 0
         for child in ast.walk(node):
-            if isinstance(child, (ast.For, ast.While)) and child != node:
+            # Issue #380: Use module-level constant
+            if isinstance(child, _LOOP_TYPES) and child != node:
                 nested_loops += 1
 
         if nested_loops >= 2:
