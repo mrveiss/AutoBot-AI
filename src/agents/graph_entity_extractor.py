@@ -47,8 +47,8 @@ Usage:
         ]
     )
 
-    print(f"Created {result['entities_created']} entities, "
-          f"{result['relations_created']} relationships")
+    logger.info(f"Created {result['entities_created']} entities, "
+                f"{result['relations_created']} relationships")
 """
 
 import time
@@ -235,25 +235,7 @@ class GraphEntityExtractor:
         Returns:
             ExtractionResult with statistics and errors
 
-        Strategy:
-            1. Combine messages into text
-            2. Extract facts using self.extractor (REUSE)
-            3. Classify facts as entity types
-            4. Group related facts into entity candidates
-            5. Create entities using self.graph (REUSE)
-            6. Infer relationships from co-occurrence
-            7. Create relationships using self.graph (REUSE)
-
-        Example:
-            >>> result = await extractor.extract_and_populate(
-            ...     conversation_id="conv-123",
-            ...     messages=[
-            ...         {"role": "user", "content": "Redis is timing out"},
-            ...         {"role": "assistant", "content": "Fixed by increasing timeout"}
-            ...     ]
-            ... )
-            >>> print(f"Created {result.entities_created} entities")
-            Created 2 entities
+        Issue #281: Refactored to use extracted helpers.
         """
         start_time = time.perf_counter()
         result = ExtractionResult(conversation_id=conversation_id)
@@ -271,55 +253,23 @@ class GraphEntityExtractor:
                 logger.warning(f"No content to extract from conversation {conversation_id}")
                 return result
 
-            # Step 2: Extract facts using KnowledgeExtractionAgent (REUSE)
-            extraction_result = await self.extractor.extract_facts_from_text(
-                text=combined_text,
-                source=f"Conversation {conversation_id}",
-                max_facts=50,  # Limit to prevent overwhelming
+            # Step 2: Extract and filter facts (Issue #281 - uses helper)
+            high_confidence_facts = await self._extract_facts_from_messages(
+                combined_text, conversation_id, result
             )
 
-            result.facts_analyzed = len(extraction_result.facts)
-            logger.info(f"Extracted {result.facts_analyzed} facts from conversation")
-
-            # Filter facts by confidence
-            high_confidence_facts = [
-                fact
-                for fact in extraction_result.facts
-                if fact.confidence >= self.confidence_threshold
-            ]
-
-            logger.info(
-                f"Filtered to {len(high_confidence_facts)} high-confidence facts "
-                f"(threshold={self.confidence_threshold})"
-            )
-
-            # Step 3: Convert facts to entity candidates
+            # Step 3: Process entity candidates (Issue #281 - uses helper)
             entity_candidates = self._facts_to_entity_candidates(
                 high_confidence_facts, conversation_id, session_metadata
             )
+            created_entities = await self._process_entity_candidates(
+                high_confidence_facts, conversation_id, session_metadata, result
+            )
 
-            logger.info(f"Generated {len(entity_candidates)} entity candidates")
-
-            # Step 4: Create entities in graph (REUSE AutoBotMemoryGraph)
-            created_entities = await self._create_entities_in_graph(entity_candidates)
-            result.entities_created = len(created_entities)
-
-            logger.info(f"Created {result.entities_created} entities in graph")
-
-            # Step 5: Infer and create relationships (if enabled)
-            if self.enable_relationship_inference and len(created_entities) > 1:
-                relation_candidates = self._infer_relationships(
-                    entity_candidates, high_confidence_facts
-                )
-
-                logger.info(f"Inferred {len(relation_candidates)} relationship candidates")
-
-                created_relations = await self._create_relations_in_graph(
-                    relation_candidates
-                )
-                result.relations_created = len(created_relations)
-
-                logger.info(f"Created {result.relations_created} relationships in graph")
+            # Step 4: Process relationships (Issue #281 - uses helper)
+            await self._process_relationships(
+                entity_candidates, high_confidence_facts, created_entities, result
+            )
 
             result.processing_time = time.perf_counter() - start_time
 
@@ -380,11 +330,7 @@ class GraphEntityExtractor:
         Returns:
             List of EntityCandidate objects
 
-        Strategy:
-            - Map fact types to entity types using self.fact_to_entity_mapping
-            - Group facts by entity type and content similarity
-            - Create entity candidates with observations from facts
-            - Preserve temporal characteristics from facts
+        Issue #281: Refactored to use _build_entity_candidate_from_group helper.
         """
         entity_candidates = []
         facts_by_type: Dict[str, List[AtomicFact]] = defaultdict(list)
@@ -394,43 +340,14 @@ class GraphEntityExtractor:
             entity_type = self.fact_to_entity_mapping.get(fact.fact_type, "context")
             facts_by_type[entity_type].append(fact)
 
-        # Create entity candidates for each type
+        # Create entity candidates for each type (Issue #281 - uses helper)
         for entity_type, type_facts in facts_by_type.items():
-            # Group similar facts together
             grouped_facts = self._group_similar_facts(type_facts)
 
             for fact_group in grouped_facts:
-                # Create entity name from first fact
-                primary_fact = fact_group[0]
-                entity_name = self._generate_entity_name(
-                    primary_fact, entity_type, conversation_id
+                candidate = self._build_entity_candidate_from_group(
+                    fact_group, entity_type, conversation_id
                 )
-
-                # Collect observations from all facts in group
-                observations = [fact.original_text for fact in fact_group]
-
-                # Calculate average confidence
-                avg_confidence = sum(f.confidence for f in fact_group) / len(fact_group)
-
-                # Extract tags from entities
-                tags = set()
-                for fact in fact_group:
-                    if fact.entities:
-                        tags.update(fact.entities[:3])  # Limit to 3 tags per fact
-
-                # Use temporal type from primary fact
-                temporal_type = primary_fact.temporal_type
-
-                candidate = EntityCandidate(
-                    name=entity_name,
-                    entity_type=entity_type,
-                    observations=observations,
-                    facts=fact_group,
-                    confidence=avg_confidence,
-                    tags=tags,
-                    temporal_type=temporal_type,
-                )
-
                 entity_candidates.append(candidate)
 
         return entity_candidates
@@ -776,3 +693,135 @@ class GraphEntityExtractor:
                 continue
 
         return created_relations
+
+    # -------------------------------------------------------------------------
+    # Issue #281 - Extracted helper methods for extract_and_populate refactoring
+    # -------------------------------------------------------------------------
+
+    async def _extract_facts_from_messages(
+        self, combined_text: str, conversation_id: str, result: ExtractionResult
+    ) -> List[AtomicFact]:
+        """
+        Extract facts from combined message text (Issue #281 - extracted helper).
+
+        Args:
+            combined_text: Combined conversation text
+            conversation_id: Conversation identifier
+            result: Result object to update
+
+        Returns:
+            List of high-confidence facts
+        """
+        extraction_result = await self.extractor.extract_facts_from_text(
+            text=combined_text,
+            source=f"Conversation {conversation_id}",
+            max_facts=50,
+        )
+
+        result.facts_analyzed = len(extraction_result.facts)
+        logger.info(f"Extracted {result.facts_analyzed} facts from conversation")
+
+        # Filter facts by confidence
+        high_confidence_facts = [
+            fact
+            for fact in extraction_result.facts
+            if fact.confidence >= self.confidence_threshold
+        ]
+
+        logger.info(
+            f"Filtered to {len(high_confidence_facts)} high-confidence facts "
+            f"(threshold={self.confidence_threshold})"
+        )
+
+        return high_confidence_facts
+
+    async def _process_entity_candidates(
+        self, high_confidence_facts: List[AtomicFact], conversation_id: str,
+        session_metadata: Optional[Dict[str, Any]], result: ExtractionResult,
+    ) -> List[Dict[str, Any]]:
+        """
+        Process facts into entity candidates and create in graph (Issue #281 - extracted helper).
+
+        Args:
+            high_confidence_facts: Filtered facts
+            conversation_id: Conversation identifier
+            session_metadata: Optional metadata
+            result: Result object to update
+
+        Returns:
+            List of created entities
+        """
+        entity_candidates = self._facts_to_entity_candidates(
+            high_confidence_facts, conversation_id, session_metadata
+        )
+        logger.info(f"Generated {len(entity_candidates)} entity candidates")
+
+        created_entities = await self._create_entities_in_graph(entity_candidates)
+        result.entities_created = len(created_entities)
+        logger.info(f"Created {result.entities_created} entities in graph")
+
+        return created_entities
+
+    async def _process_relationships(
+        self, entity_candidates: List[EntityCandidate], high_confidence_facts: List[AtomicFact],
+        created_entities: List[Dict[str, Any]], result: ExtractionResult,
+    ) -> None:
+        """
+        Infer and create relationships between entities (Issue #281 - extracted helper).
+
+        Args:
+            entity_candidates: Entity candidates for relationship inference
+            high_confidence_facts: Facts for context
+            created_entities: Created entity list (for count check)
+            result: Result object to update
+        """
+        if not self.enable_relationship_inference or len(created_entities) <= 1:
+            return
+
+        relation_candidates = self._infer_relationships(
+            entity_candidates, high_confidence_facts
+        )
+        logger.info(f"Inferred {len(relation_candidates)} relationship candidates")
+
+        created_relations = await self._create_relations_in_graph(relation_candidates)
+        result.relations_created = len(created_relations)
+        logger.info(f"Created {result.relations_created} relationships in graph")
+
+    def _build_entity_candidate_from_group(
+        self, fact_group: List[AtomicFact], entity_type: str, conversation_id: str
+    ) -> EntityCandidate:
+        """
+        Build an entity candidate from a group of related facts (Issue #281 - extracted helper).
+
+        Args:
+            fact_group: Group of related facts
+            entity_type: Type of entity
+            conversation_id: Conversation identifier
+
+        Returns:
+            EntityCandidate object
+        """
+        primary_fact = fact_group[0]
+        entity_name = self._generate_entity_name(primary_fact, entity_type, conversation_id)
+
+        # Collect observations from all facts in group
+        observations = [fact.original_text for fact in fact_group]
+
+        # Calculate average confidence
+        avg_confidence = sum(f.confidence for f in fact_group) / len(fact_group)
+
+        # Extract tags from entities
+        tags: Set[str] = set()
+        for fact in fact_group:
+            if fact.entities:
+                tags.update(fact.entities[:3])
+
+        return EntityCandidate(
+            name=entity_name,
+            entity_type=entity_type,
+            observations=observations,
+            facts=fact_group,
+            confidence=avg_confidence,
+            tags=tags,
+            temporal_type=primary_fact.temporal_type,
+        )
