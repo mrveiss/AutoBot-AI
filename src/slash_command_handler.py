@@ -36,6 +36,29 @@ from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level cached category info to avoid repeated dict creation
+_CATEGORY_INFO: Dict[str, str] = {
+    "api": "🔌 API Reference - REST endpoints and integrations",
+    "architecture": "🏗️ Architecture - System design and diagrams",
+    "developer": "👨‍💻 Developer Guide - Setup and coding standards",
+    "features": "✨ Features - Platform capabilities",
+    "security": "🔒 Security - Security implementation",
+    "deployment": "🚀 Deployment - Installation and setup",
+    "agents": "🤖 Agents - Agent system documentation",
+    "guides": "📖 Guides - How-to guides",
+    "workflow": "🔄 Workflow - Workflow automation",
+    "testing": "🧪 Testing - Test framework docs",
+}
+
+# Issue #380: Module-level severity emoji mapping to avoid repeated dict creation
+_SEVERITY_EMOJIS: Dict[str, str] = {
+    "critical": "🔴",
+    "high": "🟠",
+    "medium": "🟡",
+    "low": "🔵",
+    "info": "⚪",
+}
+
 
 class CommandType(Enum):
     """Supported slash command types."""
@@ -128,20 +151,8 @@ class DocsCommand(Command):
             "",
         ]
 
-        category_info = {
-            "api": "🔌 API Reference - REST endpoints and integrations",
-            "architecture": "🏗️ Architecture - System design and diagrams",
-            "developer": "👨‍💻 Developer Guide - Setup and coding standards",
-            "features": "✨ Features - Platform capabilities",
-            "security": "🔒 Security - Security implementation",
-            "deployment": "🚀 Deployment - Installation and setup",
-            "agents": "🤖 Agents - Agent system documentation",
-            "guides": "📖 Guides - How-to guides",
-            "workflow": "🔄 Workflow - Workflow automation",
-            "testing": "🧪 Testing - Test framework docs",
-        }
-
-        for cat, desc in category_info.items():
+        # Issue #380: Use module-level cached _CATEGORY_INFO
+        for cat, desc in _CATEGORY_INFO.items():
             if (self.docs_base_path / self.doc_categories[cat]).exists():
                 lines.append(f"  • `{cat}` - {desc}")
 
@@ -687,7 +698,7 @@ class SecurityStatusSubcommand(Command):
         # Build severity display
         severity_lines = []
         for sev, count in summary.get("stats", {}).get("severity_distribution", {}).items():
-            sev_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "info": "⚪"}.get(sev.lower(), "⚪")
+            sev_emoji = _SEVERITY_EMOJIS.get(sev.lower(), "⚪")
             severity_lines.append(f"    {sev_emoji} {sev.upper()}: {count}")
 
         severity_text = "\n".join(severity_lines) if severity_lines else "    No vulnerabilities found yet"

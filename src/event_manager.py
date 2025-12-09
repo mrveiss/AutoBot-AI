@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
 
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,8 @@ class EventManager:
 
     def _load_config(self):
         """Load configuration from YAML file or return defaults."""
-        # Get absolute path to config file
-        from pathlib import Path
-
-        project_root = Path(__file__).parent.parent
-        config_path = project_root / "config" / "config.yaml"
+        # Use centralized PathConstants (Issue #380)
+        config_path = PATH.CONFIG_DIR / "config.yaml"
         if not config_path.exists():
             logger.warning(
                 f"Config file not found at {config_path}. "

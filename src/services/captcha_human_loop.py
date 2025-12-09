@@ -47,9 +47,13 @@ from typing import Any, Dict, Optional
 from playwright.async_api import Page
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuple for unsupported CAPTCHA types (require human intervention)
+_UNSUPPORTED_CAPTCHA_TYPES = ("recaptcha", "hcaptcha", "cloudflare")
 
 
 class CaptchaResolutionStatus(Enum):
@@ -135,8 +139,7 @@ class CaptchaHumanLoop:
         Returns:
             True if auto-solving is enabled and type is supported
         """
-        unsupported_types = ("recaptcha", "hcaptcha", "cloudflare")
-        return self.enable_auto_solve and captcha_type not in unsupported_types
+        return self.enable_auto_solve and captcha_type not in _UNSUPPORTED_CAPTCHA_TYPES  # Issue #380
 
     async def _try_auto_fill(
         self,
@@ -157,7 +160,7 @@ class CaptchaHumanLoop:
         try:
             await page.fill(captcha_input_selector, solution)
             await page.keyboard.press("Enter")
-            await asyncio.sleep(1)  # Wait for response
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Wait for response
             return True
         except Exception as e:
             logger.warning(f"Auto-fill failed, falling back: {e}")

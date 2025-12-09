@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ router = APIRouter(tags=["logs"])
 
 # Performance optimization: O(1) lookup for log level detection (Issue #326)
 LOG_LEVEL_KEYWORDS = {"CRITICAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG"}
+
+# Issue #380: Module-level frozenset for protected log files
+_PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
@@ -101,7 +105,8 @@ async def _tail_file_to_websocket(
             if line:
                 await websocket.send_text(line.rstrip())
             else:
-                await asyncio.sleep(0.1)
+                # Brief delay while polling for new log lines
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
 
 async def _read_log_lines_from_file(
@@ -909,9 +914,8 @@ async def clear_log(filename: str):
         if not str(resolved_path).startswith(str(resolved_log_dir)):
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Don't delete critical logs
-        protected_logs = ["system.log", "backend.log", "frontend.log"]
-        if filename in protected_logs:
+        # Don't delete critical logs (Issue #380: use module-level constant)
+        if filename in _PROTECTED_LOG_FILES:
             raise HTTPException(
                 status_code=403, detail="Cannot clear protected log files"
             )

@@ -18,8 +18,12 @@ from typing import Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level constant for supported prompt file extensions
+_SUPPORTED_PROMPT_EXTENSIONS = frozenset({".md", ".txt", ".prompt"})
 
 
 class PromptManager:
@@ -41,9 +45,8 @@ class PromptManager:
         if Path(prompts_dir).is_absolute():
             self.prompts_dir = Path(prompts_dir)
         else:
-            # Find project root (parent of src directory)
-            project_root = Path(__file__).parent.parent
-            self.prompts_dir = project_root / prompts_dir
+            # Use centralized PathConstants (Issue #380)
+            self.prompts_dir = PATH.PROJECT_ROOT / prompts_dir
         self.prompts: Dict[str, str] = {}
         self.templates: Dict[str, Template] = {}
         self.jinja_env = Environment(
@@ -90,10 +93,9 @@ class PromptManager:
             )
 
         # Fallback to file loading
-        supported_extensions = {".md", ".txt", ".prompt"}
-
+        # Issue #380: Use module-level constant for O(1) lookup
         for file_path in self.prompts_dir.rglob("*"):
-            if file_path.is_file() and file_path.suffix in supported_extensions:
+            if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
                 # Skip hidden files and special files
                 if file_path.name.startswith(".") or file_path.name.startswith("_"):
                     continue
@@ -168,7 +170,7 @@ class PromptManager:
             # Try fallback strategies
             fallback_prompt = self._try_fallbacks(prompt_key)
             if fallback_prompt is None:
-                available_keys = sorted(self.prompts.keys())
+                available_keys = sorted(self.prompts)
                 raise KeyError(
                     f"Prompt '{prompt_key}' not found. Available prompts: "
                     f"{available_keys}"
@@ -192,7 +194,7 @@ class PromptManager:
         3. Look in default/ directory
         """
         # Strategy 1: Case insensitive match
-        for key in self.prompts.keys():
+        for key in self.prompts:
             if key.lower() == prompt_key.lower():
                 logger.warning(
                     f"Using case-insensitive match '{key}' for '{prompt_key}'"
@@ -210,7 +212,7 @@ class PromptManager:
 
         # Strategy 3: Look for similar patterns
         similar_keys = [
-            key for key in self.prompts.keys() if prompt_key.split(".")[-1] in key
+            key for key in self.prompts if prompt_key.split(".")[-1] in key
         ]
         if similar_keys:
             best_match = similar_keys[0]  # Take first match
@@ -247,7 +249,7 @@ class PromptManager:
         Returns:
             List of matching prompt keys
         """
-        keys = list(self.prompts.keys())
+        keys = list(self.prompts)
 
         if filter_pattern:
             pattern = re.compile(filter_pattern, re.IGNORECASE)
@@ -296,7 +298,7 @@ class PromptManager:
             List of category names
         """
         categories = set()
-        for key in self.prompts.keys():
+        for key in self.prompts:
             if "." in key:
                 categories.add(key.split(".")[0])
             else:
@@ -368,10 +370,9 @@ class PromptManager:
         if not self.prompts_dir.exists():
             return file_states
 
-        supported_extensions = {".md", ".txt", ".prompt"}
-
+        # Issue #380: Use module-level constant for O(1) lookup
         for file_path in self.prompts_dir.rglob("*"):
-            if file_path.is_file() and file_path.suffix in supported_extensions:
+            if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
                 # Skip hidden files and special files
                 if file_path.name.startswith(".") or file_path.name.startswith("_"):
                     continue
@@ -460,11 +461,7 @@ class PromptManager:
             # Get all prompt file paths and their modification times
             files_info = []
             for file_path in self.prompts_dir.rglob("*"):
-                if file_path.is_file() and file_path.suffix in {
-                    ".md",
-                    ".txt",
-                    ".prompt",
-                }:
+                if file_path.is_file() and file_path.suffix in _SUPPORTED_PROMPT_EXTENSIONS:
                     files_info.append(f"{file_path}:{file_path.stat().st_mtime}")
 
             # Create hash of file info

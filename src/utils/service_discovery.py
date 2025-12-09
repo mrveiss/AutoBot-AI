@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 from src.utils.http_client import get_http_client
 
@@ -109,10 +110,8 @@ class ServiceDiscovery:
     def __init__(self, config_file: Optional[str] = None):
         """Initialize service discovery with config file and health checks."""
         self.services: Dict[str, ServiceEndpoint] = {}
-        # Use project-relative path for config file (this file is in src/utils/)
-        default_config = (
-            Path(__file__).parent.parent.parent / "config" / "services.json"
-        )
+        # Use centralized PathConstants (Issue #380)
+        default_config = PATH.CONFIG_DIR / "services.json"
         self.config_file = config_file or str(default_config)
         self.health_check_interval = ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
         self.circuit_breaker_threshold = ServiceDiscoveryConfig.CIRCUIT_BREAKER_THRESHOLD

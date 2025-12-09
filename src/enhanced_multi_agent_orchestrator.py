@@ -16,13 +16,17 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from src.agents.llm_failsafe_agent import get_robust_llm_response
+from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.event_manager import event_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for fallback tier checks
+_FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
 
 
 class AgentCapability(Enum):
@@ -58,9 +62,9 @@ class AgentTask:
     inputs: Dict[str, Any]
     dependencies: List[str] = field(default_factory=list)  # Task IDs this depends on
     priority: int = 5  # 1-10, higher is more important
-    timeout: float = 60.0
+    timeout: float = float(TimingConstants.STANDARD_TIMEOUT)  # Issue #376
     retry_count: int = 0
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES  # Issue #376
     capabilities_required: Set[AgentCapability] = field(default_factory=set)
     outputs: Optional[Dict[str, Any]] = None
     status: str = "pending"  # pending, running, completed, failed
@@ -68,6 +72,64 @@ class AgentTask:
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def start_execution(self) -> None:
+        """Mark task as started (Issue #372 - reduces feature envy)."""
+        self.start_time = time.time()
+        self.status = "running"
+
+    def complete_execution(self, result: Dict[str, Any]) -> None:
+        """Mark task as completed with result (Issue #372 - reduces feature envy)."""
+        self.end_time = time.time()
+        self.status = "completed"
+        self.outputs = result
+
+    def fail_execution(self, error_msg: str) -> None:
+        """Mark task as failed with error (Issue #372 - reduces feature envy)."""
+        self.status = "failed"
+        self.error = error_msg
+
+    def get_execution_time(self) -> float:
+        """Get execution time in seconds (Issue #372 - reduces feature envy)."""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return 0.0
+
+    def can_retry(self) -> bool:
+        """Check if task can be retried (Issue #372 - reduces feature envy)."""
+        return self.retry_count < self.max_retries
+
+    def increment_retry(self) -> None:
+        """Increment retry counter (Issue #372 - reduces feature envy)."""
+        self.retry_count += 1
+
+    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Get inputs enhanced with context (Issue #372 - reduces feature envy)."""
+        return {
+            **self.inputs,
+            "context": context,
+            "task_id": self.task_id,
+            "workflow_metadata": self.metadata,
+        }
+
+    def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Build completed result dict (Issue #372 - reduces feature envy)."""
+        return {
+            "status": "completed",
+            "output": result,
+            "execution_time": self.get_execution_time(),
+            "agent": self.agent_type,
+        }
+
+    def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
+        """Build failed result dict (Issue #372 - reduces feature envy)."""
+        return {
+            "status": "failed",
+            "error": error_msg,
+            "agent": self.agent_type,
+        }
 
 
 @dataclass
@@ -214,7 +276,7 @@ class EnhancedMultiAgentOrchestrator:
             response = await get_robust_llm_response(planning_prompt, context)
 
             # Parse the plan
-            if response.tier_used.value in {"basic", "emergency"}:
+            if response.tier_used.value in _FALLBACK_TIERS:
                 # Fallback to simple sequential plan
                 plan_data = self._create_fallback_plan(goal)
             else:
@@ -426,8 +488,8 @@ class EnhancedMultiAgentOrchestrator:
                         running_tasks.remove((task, future))
                         self.logger.info(f"Completed parallel task {task.task_id}")
             else:
-                # No tasks running, wait a bit
-                await asyncio.sleep(0.1)
+                # No tasks running, wait a bit (Issue #376 - use named constant)
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         return results
 
@@ -574,9 +636,8 @@ class EnhancedMultiAgentOrchestrator:
     async def _execute_single_task(
         self, task: AgentTask, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Execute a single agent task"""
-        task.start_time = time.time()
-        task.status = "running"
+        """Execute a single agent task (Issue #372 - uses model methods)"""
+        task.start_execution()
 
         try:
             # Acquire resource semaphore
@@ -587,13 +648,8 @@ class EnhancedMultiAgentOrchestrator:
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
 
-                # Prepare inputs with context
-                enhanced_inputs = {
-                    **task.inputs,
-                    "context": context,
-                    "task_id": task.task_id,
-                    "workflow_metadata": task.metadata,
-                }
+                # Prepare inputs with context using model method (Issue #372)
+                enhanced_inputs = task.get_enhanced_inputs(context)
 
                 # Execute with timeout
                 result = await asyncio.wait_for(
@@ -603,29 +659,21 @@ class EnhancedMultiAgentOrchestrator:
                     timeout=task.timeout,
                 )
 
-                task.end_time = time.time()
-                task.status = "completed"
-                task.outputs = result
+                task.complete_execution(result)
 
                 # Update performance metrics
                 self._update_agent_performance(
-                    task.agent_type, True, task.end_time - task.start_time
+                    task.agent_type, True, task.get_execution_time()
                 )
 
-                return {
-                    "status": "completed",
-                    "output": result,
-                    "execution_time": task.end_time - task.start_time,
-                    "agent": task.agent_type,
-                }
+                return task.to_completed_result(result)
 
         except asyncio.TimeoutError:
-            task.status = "failed"
-            task.error = "Timeout"
+            task.fail_execution("Timeout")
 
-            # Retry logic
-            if task.retry_count < task.max_retries:
-                task.retry_count += 1
+            # Retry logic using model methods (Issue #372)
+            if task.can_retry():
+                task.increment_retry()
                 self.logger.warning(
                     f"Task {task.task_id} timed out, retrying ({task.retry_count}/{task.max_retries})"
                 )
@@ -633,21 +681,16 @@ class EnhancedMultiAgentOrchestrator:
 
             self._update_agent_performance(task.agent_type, False, task.timeout)
 
-            return {
-                "status": "failed",
-                "error": "Task execution timed out",
-                "agent": task.agent_type,
-            }
+            return task.to_failed_result("Task execution timed out")
 
         except Exception as e:
-            task.status = "failed"
-            task.error = str(e)
+            task.fail_execution(str(e))
 
             self._update_agent_performance(
-                task.agent_type, False, time.time() - task.start_time
+                task.agent_type, False, time.time() - (task.start_time or time.time())
             )
 
-            return {"status": "failed", "error": str(e), "agent": task.agent_type}
+            return task.to_failed_result(str(e))
 
     async def get_agent_recommendations(
         self, task_type: str, capabilities_needed: Set[AgentCapability]
@@ -837,9 +880,9 @@ class EnhancedMultiAgentOrchestrator:
         return True
 
     async def _wait_for_dependencies(self, task: AgentTask, results: Dict[str, Any]):
-        """Wait for task dependencies to complete"""
+        """Wait for task dependencies to complete (Issue #376 - use named constant)"""
         while not self._dependencies_met(task, results):
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
     def _group_pipeline_stages(
         self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]
@@ -1061,7 +1104,7 @@ class EnhancedMultiAgentOrchestrator:
         class MockAgent:
             async def process_request(self, request):
                 """Process agent request and return simulated result."""
-                await asyncio.sleep(0.5)  # Simulate work
+                await asyncio.sleep(TimingConstants.SHORT_DELAY)  # Simulate work
                 return {"result": f"Processed by {agent_type}"}
 
         return MockAgent()

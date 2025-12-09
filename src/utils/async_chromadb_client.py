@@ -38,6 +38,10 @@ from chromadb.config import Settings as ChromaSettings
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuples for ChromaDB default includes
+_DEFAULT_QUERY_INCLUDE = ["documents", "metadatas", "distances"]
+_DEFAULT_GET_INCLUDE = ["documents", "metadatas", "embeddings"]
+
 
 class AsyncChromaCollection:
     """
@@ -115,7 +119,7 @@ class AsyncChromaCollection:
             Dict with query results including ids, documents, metadatas, distances
         """
         if include is None:
-            include = ["documents", "metadatas", "distances"]
+            include = _DEFAULT_QUERY_INCLUDE  # Issue #380: use module constant
 
         return await asyncio.to_thread(
             self._collection.query,
@@ -151,7 +155,7 @@ class AsyncChromaCollection:
             Dict with matching items
         """
         if include is None:
-            include = ["documents", "metadatas", "embeddings"]
+            include = _DEFAULT_GET_INCLUDE  # Issue #380: use module constant
 
         return await asyncio.to_thread(
             self._collection.get,

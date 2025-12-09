@@ -16,13 +16,17 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 import aiosqlite
 
 
 # Import the centralized ConfigManager
 from src.unified_config_manager import UnifiedConfigManager
+
+# Issue #380: Module-level frozensets for task status checks
+_ACTIVE_STATUSES: FrozenSet[str] = frozenset({"IN_PROGRESS", "DONE", "FAILED"})
+_COMPLETED_STATUSES: FrozenSet[str] = frozenset({"DONE", "FAILED"})
 
 # Create singleton config instance
 global_config_manager = UnifiedConfigManager()
@@ -80,8 +84,117 @@ class AsyncLongTermMemoryManager:
         self.logger = logging.getLogger(__name__)
         logging.info(f"Async long-term memory manager initialized at {self.db_path}")
 
+    async def _setup_db_pragmas(self, conn) -> None:
+        """Configure database pragmas for optimal performance."""
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA synchronous=NORMAL")
+        await conn.execute("PRAGMA cache_size=10000")
+        await conn.execute("PRAGMA temp_store=MEMORY")
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    async def _create_memory_entries_table(self, conn) -> None:
+        """Create main memory table for all types of long-term storage."""
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS memory_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                metadata TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                reference_path TEXT,
+                embedding BLOB,
+                content_hash TEXT,
+                UNIQUE(category, content_hash)
+            )
+        """)
+
+    async def _create_task_logs_table(self, conn) -> None:
+        """Create task execution logs table."""
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS task_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                task_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                description TEXT NOT NULL,
+                result TEXT,
+                execution_time_ms INTEGER,
+                error_message TEXT,
+                started_at DATETIME,
+                completed_at DATETIME,
+                metadata TEXT
+            )
+        """)
+
+    async def _create_agent_states_table(self, conn) -> None:
+        """Create agent state snapshots table."""
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state_name TEXT NOT NULL,
+                state_data TEXT NOT NULL,
+                phase INTEGER,
+                active_tasks TEXT,
+                system_status TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    async def _create_conversation_history_table(self, conn) -> None:
+        """Create conversation history table."""
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                message_id TEXT UNIQUE,
+                response_time_ms INTEGER,
+                token_usage INTEGER,
+                model_used TEXT
+            )
+        """)
+
+    async def _create_config_history_table(self, conn) -> None:
+        """Create configuration changes table."""
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS config_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_key TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT NOT NULL,
+                change_reason TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                rollback_available BOOLEAN DEFAULT TRUE
+            )
+        """)
+
+    async def _create_indexes(self, conn) -> None:
+        """Create performance indexes for all tables."""
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
+            "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
+            "CREATE INDEX IF NOT EXISTS idx_task_status ON task_logs(status)",
+            "CREATE INDEX IF NOT EXISTS idx_task_type ON task_logs(task_type)",
+            "CREATE INDEX IF NOT EXISTS idx_task_started ON task_logs(started_at)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_state_name ON agent_states(state_name)",
+            "CREATE INDEX IF NOT EXISTS idx_agent_timestamp ON agent_states(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_conversation_session ON conversation_history(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_conversation_timestamp ON conversation_history(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_config_key ON config_history(config_key)",
+            "CREATE INDEX IF NOT EXISTS idx_config_timestamp ON config_history(timestamp)",
+        ]
+        for index_query in indexes:
+            await conn.execute(index_query)
+
     async def _init_memory_db(self):
-        """Initialize async SQLite database with comprehensive memory tables"""
+        """
+        Initialize async SQLite database with comprehensive memory tables.
+
+        Issue #281: Refactored from 129 lines to use extracted helper methods.
+        """
         if self._initialized:
             return
 
@@ -93,115 +206,13 @@ class AsyncLongTermMemoryManager:
 
             try:
                 async with aiosqlite.connect(self.db_path) as conn:
-                    # Enable WAL mode for better concurrency
-                    await conn.execute("PRAGMA journal_mode=WAL")
-                    await conn.execute("PRAGMA synchronous=NORMAL")
-                    await conn.execute("PRAGMA cache_size=10000")
-                    await conn.execute("PRAGMA temp_store=MEMORY")
-                    await conn.execute("PRAGMA foreign_keys=ON")
-
-                    # Main memory table for all types of long-term storage
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS memory_entries (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            category TEXT NOT NULL,
-                            content TEXT NOT NULL,
-                            metadata TEXT, -- JSON string of metadata
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                            reference_path TEXT, -- Path to referenced markdown files
-                            embedding BLOB, -- Pickled embedding vector
-                            content_hash TEXT, -- Hash for duplicate detection
-                            UNIQUE(category, content_hash)
-                        )
-                        """
-                    )
-
-                    # Task execution logs
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS task_logs (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            task_id TEXT NOT NULL,
-                            task_type TEXT NOT NULL,
-                            status TEXT NOT NULL, -- 'TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'FAILED'
-                            description TEXT NOT NULL,
-                            result TEXT,
-                            execution_time_ms INTEGER,
-                            error_message TEXT,
-                            started_at DATETIME,
-                            completed_at DATETIME,
-                            metadata TEXT -- JSON string for additional data
-                        )
-                        """
-                    )
-
-                    # Agent state snapshots
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS agent_states (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            state_name TEXT NOT NULL,
-                            state_data TEXT NOT NULL, -- JSON string of state data
-                            phase INTEGER,
-                            active_tasks TEXT, -- JSON array of active task IDs
-                            system_status TEXT, -- 'idle', 'busy', 'error', 'maintenance'
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    )
-
-                    # Conversation history
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS conversation_history (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            session_id TEXT NOT NULL,
-                            role TEXT NOT NULL, -- 'user', 'assistant', 'system'
-                            content TEXT NOT NULL,
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                            message_id TEXT UNIQUE,
-                            response_time_ms INTEGER,
-                            token_usage INTEGER,
-                            model_used TEXT
-                        )
-                        """
-                    )
-
-                    # Configuration changes
-                    await conn.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS config_history (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            config_key TEXT NOT NULL,
-                            old_value TEXT,
-                            new_value TEXT NOT NULL,
-                            change_reason TEXT,
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                            rollback_available BOOLEAN DEFAULT TRUE
-                        )
-                        """
-                    )
-
-                    # Performance indexes
-                    indexes = [
-                        "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
-                        "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
-                        "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
-                        "CREATE INDEX IF NOT EXISTS idx_task_status ON task_logs(status)",
-                        "CREATE INDEX IF NOT EXISTS idx_task_type ON task_logs(task_type)",
-                        "CREATE INDEX IF NOT EXISTS idx_task_started ON task_logs(started_at)",
-                        "CREATE INDEX IF NOT EXISTS idx_agent_state_name ON agent_states(state_name)",
-                        "CREATE INDEX IF NOT EXISTS idx_agent_timestamp ON agent_states(timestamp)",
-                        "CREATE INDEX IF NOT EXISTS idx_conversation_session ON conversation_history(session_id)",
-                        "CREATE INDEX IF NOT EXISTS idx_conversation_timestamp ON conversation_history(timestamp)",
-                        "CREATE INDEX IF NOT EXISTS idx_config_key ON config_history(config_key)",
-                        "CREATE INDEX IF NOT EXISTS idx_config_timestamp ON config_history(timestamp)",
-                    ]
-
-                    for index_query in indexes:
-                        await conn.execute(index_query)
-
+                    await self._setup_db_pragmas(conn)
+                    await self._create_memory_entries_table(conn)
+                    await self._create_task_logs_table(conn)
+                    await self._create_agent_states_table(conn)
+                    await self._create_conversation_history_table(conn)
+                    await self._create_config_history_table(conn)
+                    await self._create_indexes(conn)
                     await conn.commit()
 
                 self._initialized = True
@@ -335,10 +346,10 @@ class AsyncLongTermMemoryManager:
                         error_message,
                         (
                             datetime.now()
-                            if status in {"IN_PROGRESS", "DONE", "FAILED"}
+                            if status in _ACTIVE_STATUSES
                             else None
                         ),
-                        datetime.now() if status in {"DONE", "FAILED"} else None,
+                        datetime.now() if status in _COMPLETED_STATUSES else None,
                         json.dumps(metadata or {}),
                     ),
                 )

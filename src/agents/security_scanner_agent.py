@@ -11,29 +11,44 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.utils.agent_command_helpers import run_agent_command
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuples for constant scan types and targets
+_SUPPORTED_SCAN_TYPES = (
+    "port_scan",
+    "service_detection",
+    "vulnerability_scan",
+    "ssl_scan",
+    "dns_enum",
+    "web_scan",
+)
+_ALLOWED_SCAN_TARGETS = (
+    NetworkConstants.LOCALHOST_NAME,
+    NetworkConstants.LOCALHOST_IP,
+    NetworkConstants.LOCALHOST_IPV6,
+)
+
+# Issue #380: Module-level tuple for common subdomains in DNS enumeration
+_COMMON_SUBDOMAINS = ("www", "mail", "ftp", "admin", "api", "dev", "test")
+
+# Issue #380: Module-level tuple for DNS record types in enumeration
+_DNS_RECORD_TYPES = ("A", "AAAA", "MX", "TXT", "NS", "SOA")
 
 
 class SecurityScannerAgent:
     """Agent for performing defensive security scans and vulnerability assessments"""
 
     def __init__(self):
-        """Initialize security scanner agent with supported scan types."""
+        """Initialize security scanner agent (Issue #380: use module-level constants)."""
         self.name = "security_scanner"
         self.description = (
             "Performs defensive security scans and vulnerability assessments"
         )
-        self.supported_scan_types = [
-            "port_scan",
-            "service_detection",
-            "vulnerability_scan",
-            "ssl_scan",
-            "dns_enum",
-            "web_scan",
-        ]
+        self.supported_scan_types = _SUPPORTED_SCAN_TYPES
 
     def _get_scan_handlers(self) -> Dict[str, Any]:
         """Get scan type to handler mapping (Issue #334 - extracted helper)."""
@@ -79,15 +94,10 @@ class SecurityScannerAgent:
         # 1. Localhost/loopback
         # 2. Private IP ranges (RFC1918)
         # 3. Explicitly authorized domains (would need config)
-
-        allowed_targets = [
-            NetworkConstants.LOCALHOST_NAME,
-            NetworkConstants.LOCALHOST_IP,
-            NetworkConstants.LOCALHOST_IPV6,
-        ]
+        # Issue #380: Use module-level constant for allowed targets
 
         # Check if target is in allowed list
-        if target in allowed_targets:
+        if target in _ALLOWED_SCAN_TARGETS:
             return True
 
         # Check if target is in private IP range
@@ -198,7 +208,7 @@ class SecurityScannerAgent:
             # Basic example using nmap vulnerability scripts
             cmd = ["nmap", "--script", "vuln", "-p-", target]
 
-            result = await run_agent_command(cmd, timeout=300)  # 5 minute timeout
+            result = await run_agent_command(cmd, timeout=TimingConstants.VERY_LONG_TIMEOUT)  # 5 minute timeout
 
             if result["status"] == "success":
                 vulnerabilities = self._parse_vulnerabilities(result["output"])
@@ -257,9 +267,8 @@ class SecurityScannerAgent:
             # Use multiple tools for comprehensive enumeration
             results = {"domain": target, "dns_records": {}, "subdomains": []}
 
-            # Get DNS records
-            record_types = ["A", "AAAA", "MX", "TXT", "NS", "SOA"]
-            for record_type in record_types:
+            # Get DNS records - Issue #380: use module constant
+            for record_type in _DNS_RECORD_TYPES:
                 cmd = ["dig", "+short", record_type, target]
                 result = await run_agent_command(cmd)
                 if result["status"] == "success" and result["output"].strip():
@@ -267,9 +276,8 @@ class SecurityScannerAgent:
                         result["output"].strip().split("\n")
                     )
 
-            # Basic subdomain enumeration (would use wordlist in production)
-            common_subdomains = ["www", "mail", "ftp", "admin", "api", "dev", "test"]
-            for subdomain in common_subdomains:
+            # Basic subdomain enumeration (Issue #380: use module constant)
+            for subdomain in _COMMON_SUBDOMAINS:
                 full_domain = f"{subdomain}.{target}"
                 cmd = ["dig", "+short", "A", full_domain]
                 result = await run_agent_command(cmd)
@@ -310,7 +318,7 @@ class SecurityScannerAgent:
         """Check single admin path (Issue #334 - extracted helper)."""
         try:
             async with await http_client.get(f"{target}{path}") as response:
-                if response.status in [200, 301, 302]:
+                if response.status in (200, 301, 302):
                     findings.append({
                         "type": "warning",
                         "path": path,

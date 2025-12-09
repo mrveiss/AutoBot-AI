@@ -12,10 +12,22 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Pattern
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex patterns for text compression
+_WHITESPACE_RE = re.compile(r"\s+")
+_REDUNDANT_PATTERNS: List[Pattern] = [
+    re.compile(r"\b(the|a|an)\s+", re.IGNORECASE),  # Articles
+    re.compile(r"\b(very|really|quite|rather)\s+", re.IGNORECASE),  # Intensifiers
+    re.compile(r"\s*(,|;)\s*", re.IGNORECASE),  # Punctuation spacing
+]
+
+# Issue #380: Module-level tuples for type checking
+_SEQUENCE_TYPES = (list, tuple)
+_SIMPLE_HASHABLE_TYPES = (str, int, float, bool)
 
 # Issue #328 - extracted complex conditional into named function
 
@@ -198,7 +210,7 @@ class PayloadOptimizer:
                 return len(payload.encode("utf-8"))
             elif isinstance(payload, dict):
                 return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-            elif isinstance(payload, (list, tuple)):
+            elif isinstance(payload, _SEQUENCE_TYPES):  # Issue #380
                 return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
             else:
                 return len(str(payload).encode("utf-8"))
@@ -274,18 +286,12 @@ class PayloadOptimizer:
 
     def _compress_text(self, text: str) -> str:
         """Compress text by removing redundancy and unnecessary whitespace"""
-        # Remove excessive whitespace
-        compressed = re.sub(r"\s+", " ", text)
+        # Remove excessive whitespace (Issue #380: use pre-compiled pattern)
+        compressed = _WHITESPACE_RE.sub(" ", text)
 
-        # Remove redundant phrases
-        redundant_patterns = [
-            r"\b(the|a|an)\s+",  # Articles
-            r"\b(very|really|quite|rather)\s+",  # Intensifiers
-            r"\s*(,|;)\s*",  # Punctuation spacing
-        ]
-
-        for pattern in redundant_patterns:
-            compressed = re.sub(pattern, " ", compressed, flags=re.IGNORECASE)
+        # Remove redundant phrases (Issue #380: use pre-compiled patterns)
+        for compiled_pattern in _REDUNDANT_PATTERNS:
+            compressed = compiled_pattern.sub(" ", compressed)
 
         return compressed.strip()
 
@@ -309,8 +315,8 @@ class PayloadOptimizer:
         for item in data:
             if is_empty_value(item):
                 continue
-            # Handle duplicates for simple types
-            if isinstance(item, (str, int, float, bool)):
+            # Handle duplicates for simple types (Issue #380: use module-level tuple)
+            if isinstance(item, _SIMPLE_HASHABLE_TYPES):
                 if item not in seen:
                     seen.add(item)
                     compressed.append(item)

@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Issue #380: Module-level tuple for function definition AST nodes
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
 
 # =============================================================================
 # Enums and Constants
@@ -634,7 +637,7 @@ class ArchitectureAnalyzer:
         }
 
         for item in node.body:
-            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(item, _FUNCTION_DEF_TYPES):  # Issue #380
                 class_info["methods"].append(item.name)
             elif isinstance(item, ast.Assign):
                 class_info["attributes"].extend(self._extract_attributes_from_assign(item))
@@ -714,6 +717,67 @@ class ArchitectureAnalyzer:
             return self._get_decorator_name(node.func)
         return "Unknown"
 
+    def _check_import_indicators(
+        self,
+        imports: List[str],
+        import_indicators: List[str],
+        indicators: List[str],
+        score_per_match: float = 0.1,
+        first_match_only: bool = True,
+    ) -> float:
+        """
+        Check imports against pattern indicators and accumulate score.
+
+        Issue #281: Extracted helper to reduce repetition in _match_pattern.
+
+        Args:
+            imports: List of imports from file analysis
+            import_indicators: List of indicator strings to match
+            indicators: List to append found indicators (mutated)
+            score_per_match: Score to add per matching import
+            first_match_only: If True, only count first indicator match per import
+
+        Returns:
+            Score delta from matching imports
+        """
+        score = 0.0
+        for imp in imports:
+            for indicator in import_indicators:
+                if indicator.lower() in imp.lower():
+                    score += score_per_match
+                    indicators.append(f"import:{imp}")
+                    if first_match_only:
+                        break
+        return score
+
+    def _check_code_patterns(
+        self,
+        content: str,
+        code_patterns: List[str],
+        indicators: List[str],
+        score_per_match: float = 0.1,
+    ) -> float:
+        """
+        Check content against code patterns and accumulate score.
+
+        Issue #281: Extracted helper to reduce repetition in _match_pattern.
+
+        Args:
+            content: Source code content to search
+            code_patterns: List of regex patterns to match
+            indicators: List to append found indicators (mutated)
+            score_per_match: Score to add per pattern match
+
+        Returns:
+            Score delta from matching patterns
+        """
+        score = 0.0
+        for pattern in code_patterns:
+            if re.search(pattern, content):
+                score += score_per_match
+                indicators.append(f"code_pattern:{pattern[:30]}")
+        return score
+
     def _match_pattern(
         self,
         analysis: FileAnalysis,
@@ -749,19 +813,15 @@ class ArchitectureAnalyzer:
                         score += 0.2
                         indicators.append(f"base_class:{base}")
 
-            # Check code patterns
-            for pattern in template.code_patterns:
-                if re.search(pattern, content):
-                    score += 0.1
-                    indicators.append(f"code_pattern:{pattern[:30]}")
+            # Check code patterns (Issue #281: uses helper)
+            score += self._check_code_patterns(
+                content, template.code_patterns, indicators
+            )
 
-            # Check imports
-            for imp in analysis.imports:
-                for indicator in template.import_indicators:
-                    if indicator.lower() in imp.lower():
-                        score += 0.1
-                        indicators.append(f"import:{imp}")
-                        break
+            # Check imports (Issue #281: uses helper)
+            score += self._check_import_indicators(
+                analysis.imports, template.import_indicators, indicators
+            )
 
             if score >= template.required_score:
                 # Get code snippet
@@ -787,17 +847,21 @@ class ArchitectureAnalyzer:
             score = 0.0
             indicators = []
 
+            # Module-level uses findall with multiplied score
             for pattern in template.code_patterns:
                 matches_found = re.findall(pattern, content)
                 if matches_found:
                     score += 0.3 * len(matches_found)
                     indicators.append(f"pattern:{pattern[:30]}")
 
-            for imp in analysis.imports:
-                for indicator in template.import_indicators:
-                    if indicator.lower() in imp.lower():
-                        score += 0.2
-                        indicators.append(f"import:{imp}")
+            # Check imports (Issue #281: uses helper with module-level scoring)
+            score += self._check_import_indicators(
+                analysis.imports,
+                template.import_indicators,
+                indicators,
+                score_per_match=0.2,
+                first_match_only=False,
+            )
 
             if score >= template.required_score:
                 matches.append(

@@ -17,6 +17,9 @@ from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for sender type detection
+_BOT_SENDER_TYPES = frozenset({"bot", "assistant"})
+
 # Performance optimization: O(1) lookup for topic keywords (Issue #326)
 TOPIC_PATTERNS = {
     "installation": frozenset(["install", "setup", "configure", "deployment"]),
@@ -75,7 +78,7 @@ class AnalysisMixin:
 
                 if sender == "user":
                     user_messages.append(text)
-                elif sender in ("bot", "assistant"):
+                elif sender in _BOT_SENDER_TYPES:
                     bot_messages.append(text)
 
             # Topic extraction

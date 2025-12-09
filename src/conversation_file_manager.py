@@ -21,6 +21,7 @@ import logging
 import os
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,62 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
+
+from src.constants.threshold_constants import TimingConstants
+
+# Module-level project root constant (Issue #380 - avoid repeated Path computation)
+_PROJECT_ROOT = Path(__file__).parent.parent
+
+
+@dataclass
+class FileInfo:
+    """Issue #375: Dataclass to group file-related parameters and reduce function signatures.
+
+    Groups commonly passed file attributes to reduce long parameter lists across
+    _store_new_file, _insert_file_record, _build_file_response, and related methods.
+    """
+
+    file_id: str
+    session_id: str
+    original_filename: str
+    stored_filename: str
+    file_path: Path
+    file_size: int
+    file_hash: str
+    mime_type: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    message_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    deduplicated: bool = False
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to API response dictionary."""
+        return {
+            "file_id": self.file_id,
+            "session_id": self.session_id,
+            "original_filename": self.original_filename,
+            "stored_filename": self.stored_filename,
+            "file_path": str(self.file_path),
+            "file_size": self.file_size,
+            "file_hash": self.file_hash,
+            "mime_type": self.mime_type,
+            "uploaded_at": datetime.now().isoformat(),
+            "deduplicated": self.deduplicated,
+        }
+
+    def to_db_tuple(self) -> tuple:
+        """Convert to database insert tuple (for conversation_files table)."""
+        return (
+            self.file_id,
+            self.session_id,
+            self.original_filename,
+            self.stored_filename,
+            str(self.file_path),
+            self.file_size,
+            self.file_hash,
+            self.mime_type,
+            self.uploaded_by,
+        )
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import (
     RedisError,
@@ -63,9 +120,8 @@ class ConversationFileManager:
     @staticmethod
     def _get_default_paths() -> tuple:
         """Get default storage directory and database path from environment or defaults."""
-        project_root = Path(__file__).parent.parent
-        storage = Path(os.getenv("AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")))
-        db = Path(os.getenv("AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")))
+        storage = Path(os.getenv("AUTOBOT_STORAGE_DIR", str(_PROJECT_ROOT / "data" / "conversation_files")))
+        db = Path(os.getenv("AUTOBOT_DB_PATH", str(_PROJECT_ROOT / "data" / "conversation_files.db")))
         return storage, db
 
     def _init_redis_config(self, redis_host: Optional[str], redis_port: Optional[int]) -> None:
@@ -115,8 +171,7 @@ class ConversationFileManager:
         Raises:
             RuntimeError: If database schema initialization fails
         """
-        project_root = Path(__file__).parent.parent
-        schema_path = project_root / "database/schemas/conversation_files_schema.sql"
+        schema_path = _PROJECT_ROOT / "database/schemas/conversation_files_schema.sql"
 
         if not schema_path.exists():
             logger.warning(f"Schema file not found at {schema_path}")
@@ -176,7 +231,7 @@ class ConversationFileManager:
         """
         connection = sqlite3.connect(
             str(self.db_path),
-            timeout=30.0,
+            timeout=TimingConstants.SHORT_TIMEOUT,
             check_same_thread=False,  # Allow connection use across threads
         )
 
@@ -218,7 +273,7 @@ class ConversationFileManager:
         """
         connection = await aiosqlite.connect(
             str(self.db_path),
-            timeout=30.0,
+            timeout=TimingConstants.SHORT_TIMEOUT,
         )
 
         # Enable foreign keys
@@ -365,37 +420,40 @@ class ConversationFileManager:
         )
 
     async def _handle_deduplicated_file(
-        self, connection, existing_file, session_id: str, original_filename: str,
-        file_size: int, file_hash: str, mime_type: Optional[str],
-        uploaded_by: Optional[str], message_id: Optional[str]
+        self, connection, existing_file, file_info: FileInfo
     ) -> Dict[str, Any]:
-        """Handle case where file already exists (deduplication)."""
+        """Handle case where file already exists (Issue #375: uses FileInfo dataclass)."""
         existing_file_id = existing_file["file_id"]
         existing_path = Path(existing_file["file_path"])
 
-        logger.info(f"File with hash {file_hash[:8]}... already exists, creating association only")
+        logger.info(
+            f"File with hash {file_info.file_hash[:8]}... already exists, creating association only"
+        )
 
-        await self._create_file_association(connection, session_id, existing_file_id, message_id, "reference")
+        await self._create_file_association(
+            connection, file_info.session_id, existing_file_id, file_info.message_id, "reference"
+        )
         await connection.commit()
 
         await self._log_access(
-            existing_file_id, "reference", uploaded_by,
-            {"session_id": session_id, "deduplication": True},
+            existing_file_id, "reference", file_info.uploaded_by,
+            {"session_id": file_info.session_id, "deduplication": True},
         )
-        await self._invalidate_session_cache(session_id)
+        await self._invalidate_session_cache(file_info.session_id)
 
-        return {
-            "file_id": existing_file_id,
-            "session_id": session_id,
-            "original_filename": original_filename,
-            "stored_filename": existing_file["stored_filename"],
-            "file_path": str(existing_path),
-            "file_size": file_size,
-            "file_hash": file_hash,
-            "mime_type": mime_type,
-            "uploaded_at": datetime.now().isoformat(),
-            "deduplicated": True,
-        }
+        # Create response FileInfo with existing file data
+        response_info = FileInfo(
+            file_id=existing_file_id,
+            session_id=file_info.session_id,
+            original_filename=file_info.original_filename,
+            stored_filename=existing_file["stored_filename"],
+            file_path=existing_path,
+            file_size=file_info.file_size,
+            file_hash=file_info.file_hash,
+            mime_type=file_info.mime_type,
+            deduplicated=True,
+        )
+        return response_info.to_response_dict()
 
     async def _write_file_to_disk(self, file_path: Path, file_content: bytes) -> None:
         """Write file content to disk asynchronously."""
@@ -406,12 +464,8 @@ class ConversationFileManager:
             logger.error(f"Failed to write file to disk {file_path}: {e}")
             raise RuntimeError(f"Failed to write file to disk: {e}")
 
-    async def _insert_file_record(
-        self, connection, file_id: str, session_id: str, original_filename: str,
-        stored_filename: str, file_path: Path, file_size: int, file_hash: str,
-        mime_type: Optional[str], uploaded_by: Optional[str]
-    ) -> None:
-        """Insert file record into database."""
+    async def _insert_file_record(self, connection, file_info: FileInfo) -> None:
+        """Insert file record into database (Issue #375: uses FileInfo dataclass)."""
         await connection.execute(
             """
             INSERT INTO conversation_files
@@ -419,8 +473,7 @@ class ConversationFileManager:
              file_path, file_size, file_hash, mime_type, uploaded_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (file_id, session_id, original_filename, stored_filename,
-             str(file_path), file_size, file_hash, mime_type, uploaded_by),
+            file_info.to_db_tuple(),
         )
 
     async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
@@ -434,45 +487,33 @@ class ConversationFileManager:
                 (file_id, key, str(value)),
             )
 
-    def _build_file_response(
-        self, file_id: str, session_id: str, original_filename: str, stored_filename: str,
-        file_path: Path, file_size: int, file_hash: str, mime_type: Optional[str], deduplicated: bool
-    ) -> Dict[str, Any]:
-        """Build standard file response dictionary."""
-        return {
-            "file_id": file_id, "session_id": session_id, "original_filename": original_filename,
-            "stored_filename": stored_filename, "file_path": str(file_path), "file_size": file_size,
-            "file_hash": file_hash, "mime_type": mime_type, "uploaded_at": datetime.now().isoformat(),
-            "deduplicated": deduplicated,
-        }
+    def _build_file_response(self, file_info: FileInfo) -> Dict[str, Any]:
+        """Build standard file response dictionary (Issue #375: uses FileInfo dataclass)."""
+        return file_info.to_response_dict()
 
     async def _store_new_file(
-        self, connection, file_id: str, session_id: str, original_filename: str,
-        stored_filename: str, file_path: Path, file_content: bytes, file_size: int,
-        file_hash: str, mime_type: Optional[str], uploaded_by: Optional[str],
-        message_id: Optional[str], metadata: Optional[Dict[str, Any]]
+        self, connection, file_info: FileInfo, file_content: bytes
     ) -> Dict[str, Any]:
-        """Store a new file to disk and database."""
-        await self._write_file_to_disk(file_path, file_content)
-        logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
+        """Store a new file to disk and database (Issue #375: uses FileInfo dataclass)."""
+        await self._write_file_to_disk(file_info.file_path, file_content)
+        logger.info(f"Stored file: {file_info.stored_filename} ({file_info.file_size} bytes)")
 
-        await self._insert_file_record(
-            connection, file_id, session_id, original_filename, stored_filename,
-            file_path, file_size, file_hash, mime_type, uploaded_by
+        await self._insert_file_record(connection, file_info)
+        await self._create_file_association(
+            connection, file_info.session_id, file_info.file_id, file_info.message_id, "upload"
         )
-        await self._create_file_association(connection, session_id, file_id, message_id, "upload")
 
-        if metadata:
-            await self._insert_file_metadata(connection, file_id, metadata)
+        if file_info.metadata:
+            await self._insert_file_metadata(connection, file_info.file_id, file_info.metadata)
 
         await connection.commit()
-        logger.info(f"Added file {file_id} to session {session_id}: {original_filename} ({file_size} bytes)")
-        await self._invalidate_session_cache(session_id)
-
-        return self._build_file_response(
-            file_id, session_id, original_filename, stored_filename, file_path,
-            file_size, file_hash, mime_type, False
+        logger.info(
+            f"Added file {file_info.file_id} to session {file_info.session_id}: "
+            f"{file_info.original_filename} ({file_info.file_size} bytes)"
         )
+        await self._invalidate_session_cache(file_info.session_id)
+
+        return self._build_file_response(file_info)
 
     async def add_file(
         self, session_id: str, file_content: bytes, original_filename: str,
@@ -487,19 +528,30 @@ class ConversationFileManager:
             stored_filename = self._generate_stored_filename(original_filename, file_hash)
             file_path = self.storage_dir / stored_filename
 
+            # Issue #375: Create FileInfo dataclass to reduce parameter passing
+            file_info = FileInfo(
+                file_id=file_id,
+                session_id=session_id,
+                original_filename=original_filename,
+                stored_filename=stored_filename,
+                file_path=file_path,
+                file_size=file_size,
+                file_hash=file_hash,
+                mime_type=mime_type,
+                uploaded_by=uploaded_by,
+                message_id=message_id,
+                metadata=metadata,
+                deduplicated=False,
+            )
+
             connection = await self._get_async_db_connection()
             try:
                 existing_file = await self._check_existing_file(connection, file_hash)
                 if existing_file:
                     return await self._handle_deduplicated_file(
-                        connection, existing_file, session_id, original_filename,
-                        file_size, file_hash, mime_type, uploaded_by, message_id
+                        connection, existing_file, file_info
                     )
-                return await self._store_new_file(
-                    connection, file_id, session_id, original_filename, stored_filename,
-                    file_path, file_content, file_size, file_hash, mime_type, uploaded_by,
-                    message_id, metadata
-                )
+                return await self._store_new_file(connection, file_info, file_content)
             except Exception as e:
                 await connection.rollback()
                 if await asyncio.to_thread(file_path.exists):
@@ -768,8 +820,7 @@ class ConversationFileManager:
             )
 
             # Resolve schema directory relative to project root (no hardcoded absolute paths)
-            project_root = Path(__file__).parent.parent
-            default_schema_dir = project_root / "database" / "schemas"
+            default_schema_dir = _PROJECT_ROOT / "database" / "schemas"
             schema_dir = Path(os.getenv("AUTOBOT_SCHEMA_DIR", str(default_schema_dir)))
 
             # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for
@@ -798,7 +849,7 @@ class ConversationFileManager:
 
     def _query_schema_version_sync(self) -> str:
         """Thread-safe database query for schema version (sync helper)."""
-        connection = sqlite3.connect(str(self.db_path), timeout=30.0, check_same_thread=False)
+        connection = sqlite3.connect(str(self.db_path), timeout=TimingConstants.SHORT_TIMEOUT, check_same_thread=False)
         cursor = connection.cursor()
         try:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")

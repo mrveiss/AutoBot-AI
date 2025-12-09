@@ -32,6 +32,26 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
+# Issue #380: Module-level tuple for dangerous content patterns in uploads
+_DANGEROUS_CONTENT_PATTERNS = (
+    "<script",
+    "</script>",
+    "javascript:",
+    "vbscript:",
+    "onload=",
+    "onerror=",
+    "onclick=",
+    "eval(",
+    "document.write",
+    "innerHTML",
+    "<?php",
+    "<%",
+    "<jsp:",
+    "exec(",
+    "system(",
+    "shell_exec(",
+)
+
 # Configure sandboxed directory for file operations using centralized paths
 
 # Ensure data directory exists
@@ -93,6 +113,9 @@ ALLOWED_EXTENSIONS = {
 
 # Performance optimization: O(1) lookup for invalid path characters (Issue #326)
 INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
+
+# Issue #380: Module-level frozenset for dangerous filename characters
+_DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
 
 
 class FileInfo(BaseModel):
@@ -221,9 +244,8 @@ def is_safe_file(filename: str) -> bool:
     if not filename:
         return False
 
-    # Check for dangerous characters in filename
-    dangerous_chars = {"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"}
-    if any(char in filename for char in dangerous_chars):
+    # Check for dangerous characters in filename (Issue #380: use module-level constant)
+    if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
         return False
 
     # Check filename length
@@ -399,33 +421,124 @@ def validate_file_content(content: bytes, filename: str) -> bool:
         if extension not in binary_formats:
             return False
 
-    # Check for script tags and other dangerous content
+    # Check for script tags and other dangerous content (Issue #380: use module constant)
     content_str = content.decode("utf-8", errors="ignore").lower()
-    dangerous_patterns = [
-        "<script",
-        "</script>",
-        "javascript:",
-        "vbscript:",
-        "onload=",
-        "onerror=",
-        "onclick=",
-        "eval(",
-        "document.write",
-        "innerHTML",
-        "<?php",
-        "<%",
-        "<jsp:",
-        "exec(",
-        "system(",
-        "shell_exec(",
-    ]
 
-    for pattern in dangerous_patterns:
+    for pattern in _DANGEROUS_CONTENT_PATTERNS:
         if pattern in content_str:
             logger.warning(f"Dangerous content detected in {filename}: {pattern}")
             return False
 
     return True
+
+
+def _validate_upload_file(file: UploadFile, content: bytes) -> None:
+    """
+    Validate uploaded file for security and constraints.
+
+    Issue #281: Extracted helper for file validation.
+
+    Args:
+        file: Uploaded file object
+        content: File content bytes
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    if not is_safe_file(file.filename):
+        raise HTTPException(
+            status_code=400, detail=f"File type not allowed: {file.filename}"
+        )
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+        )
+
+    if not validate_file_content(content, file.filename):
+        raise HTTPException(
+            status_code=400,
+            detail="File content contains potentially dangerous elements",
+        )
+
+    # Verify MIME type matches file extension
+    detected_mime = mimetypes.guess_type(file.filename)[0]
+    if detected_mime and file.content_type and file.content_type != detected_mime:
+        logger.warning(
+            f"MIME type mismatch for {file.filename}: "
+            f"declared={file.content_type}, detected={detected_mime}"
+        )
+
+
+async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:
+    """
+    Write uploaded file to target location.
+
+    Issue #281: Extracted helper for file writing.
+
+    Args:
+        target_file: Target file path
+        content: File content to write
+        overwrite: Whether to overwrite existing files
+
+    Raises:
+        HTTPException: If file exists without overwrite or write fails
+    """
+    # Issue #358: Check if file exists in thread to avoid blocking
+    file_exists = await asyncio.to_thread(target_file.exists)
+    if file_exists and not overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail="File already exists. Use overwrite=true to replace it.",
+        )
+
+    try:
+        async with aiofiles.open(target_file, "wb") as f:
+            await f.write(content)
+    except OSError as e:
+        logger.error(f"Failed to write uploaded file {target_file}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {e}")
+
+
+def _log_upload_audit(
+    request: Request,
+    user_data: dict,
+    file: UploadFile,
+    relative_path: str,
+    content_size: int,
+    overwrite: bool,
+) -> None:
+    """
+    Log upload audit information.
+
+    Issue #281: Extracted helper for audit logging.
+
+    Args:
+        request: FastAPI request
+        user_data: Authenticated user data
+        file: Uploaded file
+        relative_path: Relative path to file
+        content_size: Size of uploaded content
+        overwrite: Whether overwrite was used
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_upload",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "filename": file.filename,
+            "path": relative_path,
+            "size": content_size,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+            "overwrite": overwrite,
+        },
+    )
 
 
 @with_error_handling(
@@ -442,6 +555,8 @@ async def upload_file(
 ):
     """
     Upload a file to the specified directory within the sandbox.
+
+    Issue #281: Refactored from 115 lines to use extracted helper methods.
 
     Args:
         file: The file to upload
@@ -460,41 +575,11 @@ async def upload_file(
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    # Validate file
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided")
-
-    if not is_safe_file(file.filename):
-        raise HTTPException(
-            status_code=400, detail=f"File type not allowed: {file.filename}"
-        )
-
-    # Read and validate file content
+    # Read file content
     content = await file.read()
 
-    # Check file size
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
-            )
-        )
-
-    # Validate content for security threats
-    if not validate_file_content(content, file.filename):
-        raise HTTPException(
-            status_code=400,
-            detail="File content contains potentially dangerous elements",
-        )
-
-    # Verify MIME type matches file extension
-    detected_mime = mimetypes.guess_type(file.filename)[0]
-    if detected_mime and file.content_type and file.content_type != detected_mime:
-        logger.warning(
-            f"MIME type mismatch for {file.filename}: "
-            f"declared={file.content_type}, detected={detected_mime}"
-        )
+    # Validate file (Issue #281: uses helper)
+    _validate_upload_file(file, content)
 
     # Validate and resolve target directory
     target_dir = validate_and_resolve_path(path)
@@ -504,44 +589,15 @@ async def upload_file(
     # Prepare target file path
     target_file = target_dir / file.filename
 
-    # Issue #358: Check if file exists in thread to avoid blocking
-    file_exists = await asyncio.to_thread(target_file.exists)
-    if file_exists and not overwrite:
-        raise HTTPException(
-            status_code=409,
-            detail="File already exists. Use overwrite=true to replace it.",
-        )
-
-    # Write file - PERFORMANCE FIX: Convert to async file I/O
-    try:
-        async with aiofiles.open(target_file, "wb") as f:
-            await f.write(content)
-    except OSError as e:
-        logger.error(f"Failed to write uploaded file {target_file}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to write file: {e}",
-        )
+    # Write file (Issue #281: uses helper)
+    await _write_upload_file(target_file, content, overwrite)
 
     # Get file info for response
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
     file_info = get_file_info(target_file, relative_path)
 
-    # Enhanced audit logging with authenticated user
-    security_layer = get_security_layer(request)
-    security_layer.audit_log(
-        "file_upload",
-        user_data.get("username", "unknown"),
-        "success",
-        {
-            "filename": file.filename,
-            "path": relative_path,
-            "size": len(content),
-            "user_role": user_data.get("role", "unknown"),
-            "ip": request.client.host if request.client else "unknown",
-            "overwrite": overwrite,
-        },
-    )
+    # Audit logging (Issue #281: uses helper)
+    _log_upload_audit(request, user_data, file, relative_path, len(content), overwrite)
 
     return FileUploadResponse(
         success=True,

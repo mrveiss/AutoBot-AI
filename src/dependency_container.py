@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# Issue #380: Module-level tuple for critical service names
+_CRITICAL_SERVICES = ("redis", "config", "llm")
+
 
 @dataclass
 class ServiceDescriptor:
@@ -371,11 +374,10 @@ async def service_context():
         # Initialize all services
         initialization_results = await container.initialize_all_services()
 
-        # Check if critical services failed
-        critical_services = ["redis", "config", "llm"]
+        # Check if critical services failed (Issue #380: use module-level constant)
         failed_critical = [
             name
-            for name in critical_services
+            for name in _CRITICAL_SERVICES
             if name in initialization_results and not initialization_results[name]
         ]
 

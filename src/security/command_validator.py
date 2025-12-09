@@ -14,6 +14,10 @@ from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets to avoid repeated list creation
+_COMMAND_REQUEST_KEYWORDS = frozenset({"run", "execute", "command"})
+_DANGEROUS_CHARS = frozenset({"&", ";", "|", ">", "<", "`", "$"})
+
 
 class CommandValidator:
     """Validates and sanitizes system commands using a predefined safelist."""
@@ -55,9 +59,8 @@ class CommandValidator:
             if pattern in command_lower:
                 return True, f"Contains blocked pattern: {pattern}"
 
-        # Additional safety checks
-        dangerous_chars = ["&", ";", "|", ">", "<", "`", "$"]
-        for char in dangerous_chars:
+        # Additional safety checks - Issue #380: Use module-level frozenset
+        for char in _DANGEROUS_CHARS:
             if char in command:
                 return True, f"Contains dangerous character: {char}"
 
@@ -154,7 +157,8 @@ class CommandValidator:
                     return command_info
 
             # Check for explicit command requests (but don't execute them)
-            if any(word in message.lower() for word in ["run", "execute", "command"]):
+            # Issue #380: Use module-level frozenset
+            if any(word in message.lower() for word in _COMMAND_REQUEST_KEYWORDS):
                 logger.warning(f"Blocked explicit command request: {message}")
                 return {
                     "type": "blocked",

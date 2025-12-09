@@ -12,11 +12,34 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from src.constants.threshold_constants import LLMDefaults
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config as global_config_manager
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuples for knowledge retrieval patterns
+_KNOWLEDGE_PATTERNS = (
+    "what is",
+    "who is",
+    "when did",
+    "where is",
+    "how much",
+    "tell me about",
+    "find information",
+    "look up",
+    "search for",
+    "do you know",
+    "can you find",
+    "what do you know about",
+    "fact",
+    "information",
+    "details",
+    "definition",
+    "meaning",
+)
+_QUICK_LOOKUP_PATTERNS = ("quick", "fast", "briefly", "simple", "basic", "just tell me")
 
 
 class KnowledgeRetrievalAgent:
@@ -296,7 +319,7 @@ Guidelines:
                 messages=messages,
                 llm_type="knowledge_retrieval",
                 temperature=0.3,  # Low temperature for factual responses
-                max_tokens=150,  # Short responses for speed
+                max_tokens=LLMDefaults.RETRIEVAL_MAX_TOKENS,
                 top_p=0.8,
             )
 
@@ -346,7 +369,7 @@ If the information is not in the provided text, respond with "Information not fo
                 messages=messages,
                 llm_type="knowledge_retrieval",
                 temperature=0.2,
-                max_tokens=100,
+                max_tokens=LLMDefaults.DEFAULT_MAX_TOKENS,
                 top_p=0.7,
             )
 
@@ -431,33 +454,11 @@ If the information is not in the provided text, respond with "Information not fo
         Returns:
             bool: True if knowledge retrieval agent should handle it
         """
-        knowledge_patterns = [
-            "what is",
-            "who is",
-            "when did",
-            "where is",
-            "how much",
-            "tell me about",
-            "find information",
-            "look up",
-            "search for",
-            "do you know",
-            "can you find",
-            "what do you know about",
-            "fact",
-            "information",
-            "details",
-            "definition",
-            "meaning",
-        ]
-
-        # Quick lookup patterns
-        quick_patterns = ["quick", "fast", "briefly", "simple", "basic", "just tell me"]
-
+        # Issue #380: Use module-level constants for pattern matching
         message_lower = message.lower()
 
         # Strong indicators for knowledge retrieval
-        if any(pattern in message_lower for pattern in knowledge_patterns):
+        if any(pattern in message_lower for pattern in _KNOWLEDGE_PATTERNS):
             return True
 
         # Questions that seem factual
@@ -465,7 +466,7 @@ If the information is not in the provided text, respond with "Information not fo
             return True
 
         # Quick lookup requests
-        if any(pattern in message_lower for pattern in quick_patterns):
+        if any(pattern in message_lower for pattern in _QUICK_LOOKUP_PATTERNS):
             return True
 
         return False

@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level tuple for function definition prefixes (used in startswith)
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
+# Issue #380: Pre-compiled regex for import statement counting
+_IMPORT_PATTERN_RE = re.compile(r"^(?:from\s+\S+\s+)?import\s+", re.MULTILINE)
+
 
 # Issue #315 - Threshold-based score calculation to reduce nesting
 def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], default: int = 10) -> int:
@@ -807,9 +810,8 @@ class BugPredictor:
 
             content = path.read_text(encoding="utf-8", errors="ignore")
 
-            # Count import statements
-            import_pattern = r"^(?:from\s+\S+\s+)?import\s+"
-            imports = len(re.findall(import_pattern, content, re.MULTILINE))
+            # Count import statements (Issue #380: use pre-compiled pattern)
+            imports = len(_IMPORT_PATTERN_RE.findall(content))
             score = _calculate_threshold_score(imports, self._DEPENDENCY_THRESHOLDS)
 
             return {"count": imports, "score": score}

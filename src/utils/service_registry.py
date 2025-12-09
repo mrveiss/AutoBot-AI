@@ -29,6 +29,7 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -99,11 +100,17 @@ class ServiceRegistry:
     4. Cloud deployment (managed services)
     """
 
+    # Issue #380: Cache service configs to avoid repeated dict creation/config lookups
+    _cached_default_services: Optional[Dict] = None
+    _cached_host_patterns: Optional[Dict] = None
+
     # Service configurations from unified config - NO HARDCODED VALUES
     @classmethod
     def get_default_services(cls):
-        """Get service configurations from unified config"""
-        return {
+        """Get service configurations from unified config (cached)"""
+        if cls._cached_default_services is not None:
+            return cls._cached_default_services
+        cls._cached_default_services = {
             "redis": {
                 "port": config.get_port("redis"),
                 "health_endpoint": "/",
@@ -144,12 +151,15 @@ class ServiceRegistry:
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
         }
+        return cls._cached_default_services
 
     # Host resolution patterns from unified config - NO HARDCODED VALUES
     @classmethod
     def get_host_patterns(cls):
-        """Get host patterns from unified config"""
-        return {
+        """Get host patterns from unified config (cached)"""
+        if cls._cached_host_patterns is not None:
+            return cls._cached_host_patterns
+        cls._cached_host_patterns = {
             DeploymentMode.LOCAL: {
                 # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
                 "default": config.get("infrastructure.defaults.localhost"),
@@ -177,6 +187,7 @@ class ServiceRegistry:
                 "npu-worker": "npu-worker.autobot.local",
             },
         }
+        return cls._cached_host_patterns
 
     def __init__(self, config_file: Optional[str] = None):
         """Initialize service registry with optional configuration file"""
@@ -332,10 +343,10 @@ class ServiceRegistry:
 
             # CRITICAL: Respect LOCAL mode patterns for localhost services
             # Don't override Ollama/LMStudio hosts in LOCAL mode
-            if self.deployment_mode == DeploymentMode.LOCAL and service_name in [
+            if self.deployment_mode == DeploymentMode.LOCAL and service_name in (
                 "ollama",
                 "lmstudio",
-            ]:
+            ):
                 # Keep the LOCAL mode host pattern, don't override with explicit config
                 pass
             else:

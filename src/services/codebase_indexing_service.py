@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.knowledge_base_factory import get_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,16 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for file type and metadata filtering (Issue #326)
 JAVASCRIPT_LANGUAGE_TYPES = {"javascript", "typescript"}
 EXCLUDED_CHUNK_METADATA_KEYS = {"content"}
+
+# Issue #380: Module-level tuple for code definition prefixes
+_CODE_DEF_PREFIXES = ("def ", "class ", "async def ")
+
+# Issue #380: Pre-compiled regex patterns for Vue and code chunking
+_VUE_TEMPLATE_RE = re.compile(r"<template[^>]*>(.*?)</template>", re.DOTALL)
+_VUE_SCRIPT_RE = re.compile(r"<script[^>]*>(.*?)</script>", re.DOTALL)
+_VUE_STYLE_RE = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL)
+_JS_FUNCTION_RE = re.compile(r"^\s*(function|const|let|var|export|async)")
+_MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)")
 
 
 @dataclass
@@ -101,6 +112,38 @@ class CodeChunker:
         self.max_chunk_size = max_chunk_size
         self.overlap_size = overlap_size
 
+    def _create_chunk_dict(
+        self,
+        lines: List[str],
+        chunk_type: str,
+        start_line: int,
+        end_line: int,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Create a chunk dictionary from lines if content is not empty.
+
+        Issue #281: Extracted from chunk_python_file to reduce repetition.
+
+        Args:
+            lines: List of code lines to join as content
+            chunk_type: Type of chunk (general, function, class)
+            start_line: Starting line number (1-based)
+            end_line: Ending line number (1-based)
+
+        Returns:
+            Chunk dictionary or None if content is empty
+        """
+        chunk_content = "\n".join(lines)
+        if not chunk_content.strip():
+            return None
+
+        return {
+            "content": chunk_content,
+            "type": chunk_type,
+            "start_line": start_line,
+            "end_line": end_line,
+        }
+
     def chunk_python_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Chunk Python files by functions, classes, and logical blocks"""
         chunks = []
@@ -115,19 +158,17 @@ class CodeChunker:
             stripped_line = line.strip()
 
             # Detect function or class definitions
-            if stripped_line.startswith(("def ", "class ", "async def ")):
-                # Save previous chunk if it exists
+            if stripped_line.startswith(_CODE_DEF_PREFIXES):
+                # Issue #281: Use helper to save previous chunk if it exists
                 if current_chunk:
-                    chunk_content = "\n".join(current_chunk)
-                    if chunk_content.strip():
-                        chunks.append(
-                            {
-                                "content": chunk_content,
-                                "type": current_chunk_type,
-                                "start_line": i - len(current_chunk) + 1,
-                                "end_line": i,
-                            }
-                        )
+                    chunk = self._create_chunk_dict(
+                        current_chunk,
+                        current_chunk_type,
+                        i - len(current_chunk) + 1,
+                        i,
+                    )
+                    if chunk:
+                        chunks.append(chunk)
 
                 # Start new chunk
                 current_chunk = [line]
@@ -151,17 +192,15 @@ class CodeChunker:
                     else:
                         break
 
-                # Save the function/class chunk
-                chunk_content = "\n".join(current_chunk)
-                if chunk_content.strip():
-                    chunks.append(
-                        {
-                            "content": chunk_content,
-                            "type": current_chunk_type,
-                            "start_line": i - len(current_chunk),
-                            "end_line": i - 1,
-                        }
-                    )
+                # Issue #281: Use helper to save the function/class chunk
+                chunk = self._create_chunk_dict(
+                    current_chunk,
+                    current_chunk_type,
+                    i - len(current_chunk),
+                    i - 1,
+                )
+                if chunk:
+                    chunks.append(chunk)
 
                 current_chunk = []
                 current_chunk_type = "general"
@@ -171,32 +210,28 @@ class CodeChunker:
             current_chunk.append(line)
             i += 1
 
-            # Check if chunk is getting too large
+            # Issue #281: Check if chunk is getting too large, use helper
             if len("\n".join(current_chunk)) > self.max_chunk_size:
-                chunk_content = "\n".join(current_chunk)
-                if chunk_content.strip():
-                    chunks.append(
-                        {
-                            "content": chunk_content,
-                            "type": current_chunk_type,
-                            "start_line": i - len(current_chunk) + 1,
-                            "end_line": i,
-                        }
-                    ),
+                chunk = self._create_chunk_dict(
+                    current_chunk,
+                    current_chunk_type,
+                    i - len(current_chunk) + 1,
+                    i,
+                )
+                if chunk:
+                    chunks.append(chunk)
                 current_chunk = []
 
-        # Save final chunk
+        # Issue #281: Use helper to save final chunk
         if current_chunk:
-            chunk_content = "\n".join(current_chunk)
-            if chunk_content.strip():
-                chunks.append(
-                    {
-                        "content": chunk_content,
-                        "type": current_chunk_type,
-                        "start_line": len(lines) - len(current_chunk) + 1,
-                        "end_line": len(lines),
-                    }
-                )
+            chunk = self._create_chunk_dict(
+                current_chunk,
+                current_chunk_type,
+                len(lines) - len(current_chunk) + 1,
+                len(lines),
+            )
+            if chunk:
+                chunks.append(chunk)
 
         return chunks
 
@@ -204,12 +239,10 @@ class CodeChunker:
         """Chunk Vue files by template, script, and style sections"""
         chunks = []
 
-        # Split Vue file into sections
-        template_match = re.search(
-            r"<template[^>]*>(.*?)</template>", content, re.DOTALL
-        )
-        script_match = re.search(r"<script[^>]*>(.*?)</script>", content, re.DOTALL)
-        style_match = re.search(r"<style[^>]*>(.*?)</style>", content, re.DOTALL)
+        # Split Vue file into sections using pre-compiled patterns (Issue #380)
+        template_match = _VUE_TEMPLATE_RE.search(content)
+        script_match = _VUE_SCRIPT_RE.search(content)
+        style_match = _VUE_STYLE_RE.search(content)
 
         if template_match:
             template_content = template_match.group(1).strip()
@@ -274,8 +307,8 @@ class CodeChunker:
             line = lines[i]
             current_chunk.append(line)
 
-            # Check for function definitions
-            if re.match(r"^\s*(function|const|let|var|export|async)", line):
+            # Check for function definitions using pre-compiled pattern (Issue #380)
+            if _JS_FUNCTION_RE.match(line):
                 # Look for the complete function
                 brace_count = line.count("{") - line.count("}")
                 i += 1
@@ -319,7 +352,8 @@ class CodeChunker:
         current_level = 0
 
         for line in lines:
-            heading_match = re.match(r"^(#{1,6})\s+(.+)", line)
+            # Use pre-compiled pattern (Issue #380)
+            heading_match = _MD_HEADING_RE.match(line)
 
             if heading_match:
                 # Save previous chunk
@@ -765,7 +799,7 @@ class CodebaseIndexingService:
                     )
 
                     # Small delay to prevent overwhelming the system
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             self.progress.end_time = datetime.now()
 
@@ -836,7 +870,8 @@ class CodebaseIndexingService:
                     f"Category {category} batch {i//batch_size + 1}: {successful_in_batch}/{len(batch)} files indexed"
                 )
 
-                await asyncio.sleep(0.1)
+                # Small delay between batches to prevent system overload
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             self.progress.end_time = datetime.now()
             logger.info(

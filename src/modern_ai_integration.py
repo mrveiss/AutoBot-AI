@@ -22,6 +22,9 @@ from src.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for error filtering
+_ERROR_FINISH_REASONS = frozenset({"error", "timeout"})
+
 
 class AIProvider(Enum):
     """Supported AI providers"""
@@ -1035,11 +1038,12 @@ class ModernAIIntegration:
                 provider_usage[provider] = 0
             provider_usage[provider] += 1
 
+        # Issue #380: Use module-level frozenset for error filtering
         success_rate = (
             sum(
                 1
                 for r in self.request_history
-                if r.finish_reason not in {"error", "timeout"}
+                if r.finish_reason not in _ERROR_FINISH_REASONS
             )
             / total_requests
         )

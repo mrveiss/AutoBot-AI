@@ -11,7 +11,7 @@ input validation, domain security, and content filtering.
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, FrozenSet, Optional
 
 
 from ..agents.web_research_integration import ResearchType, WebResearchIntegration
@@ -19,6 +19,9 @@ from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for risk levels requiring confirmation
+_CONFIRMATION_REQUIRED_RISK_LEVELS: FrozenSet[str] = frozenset({"medium", "high"})
 
 
 class SecureWebResearch:
@@ -163,7 +166,7 @@ class SecureWebResearch:
         research_result["security"]["warnings"] = query_validation["warnings"]
         research_result["security"]["risk_level"] = query_validation["risk_level"]
 
-        if require_user_confirmation and query_validation["risk_level"] in {"medium", "high"}:
+        if require_user_confirmation and query_validation["risk_level"] in _CONFIRMATION_REQUIRED_RISK_LEVELS:
             research_result.update({
                 "status": "requires_confirmation",
                 "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",

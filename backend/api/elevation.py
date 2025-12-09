@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["elevation"])
 
+# Issue #380: Module-level frozenset for allowed elevated commands
+_ALLOWED_ELEVATED_COMMANDS = frozenset({"apt", "systemctl", "mount", "umount", "chmod", "chown"})
+
 # In-memory storage for elevation sessions (in production, use Redis)
 elevation_sessions: Dict[str, dict] = {}
 pending_requests: Dict[str, dict] = {}
@@ -270,9 +273,8 @@ async def run_elevated_command(command: str) -> dict:
         if not cmd_parts:
             raise ValueError("Empty command")
 
-        # Validate command against allowlist for security
-        allowed_commands = ["apt", "systemctl", "mount", "umount", "chmod", "chown"]
-        if cmd_parts[0] not in allowed_commands:
+        # Validate command against allowlist for security (Issue #380)
+        if cmd_parts[0] not in _ALLOWED_ELEVATED_COMMANDS:
             raise ValueError(f"Command '{cmd_parts[0]}' not in allowlist")
 
         process = await asyncio.create_subprocess_exec(

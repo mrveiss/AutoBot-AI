@@ -24,7 +24,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,12 @@ COMMUNICATION_KEYWORDS = {"todo", "task", "agent"}
 ANALYSIS_KEYWORDS = {"analyze", "diagnostic", "lint"}
 LARGE_PATH_INDICATORS = {"/large/", "/data/", "/logs/"}
 BATCH_PARAMETER_KEYS = {"recursive", "batch", "all"}
+
+# Issue #380: Module-level frozenset for file reading tools (inefficient pattern detection)
+_FILE_READING_TOOLS: FrozenSet[str] = frozenset({"Read", "Glob"})
+
+# Issue #380: Module-level tuple for JSON-serializable primitive types
+_JSON_PRIMITIVE_TYPES = (str, int, bool)
 
 
 class ToolCallType(Enum):
@@ -360,7 +366,7 @@ class ToolPatternAnalyzer:
         # Parameter pattern tracking
         if isinstance(tool_call.parameters, dict):
             for key, value in tool_call.parameters.items():
-                if isinstance(value, (str, int, bool)):
+                if isinstance(value, _JSON_PRIMITIVE_TYPES):  # Issue #380
                     self.parameter_patterns[tool_call.tool_name][f"{key}:{value}"] += 1
 
     async def _analyze_patterns(self) -> None:
@@ -670,8 +676,8 @@ class ToolPatternAnalyzer:
                 # Check for inefficient patterns
                 if (
                     len(tools) == 2
-                    and tools[0] in ["Read", "Glob"]
-                    and tools[1] in ["Read", "Glob"]
+                    and tools[0] in _FILE_READING_TOOLS
+                    and tools[1] in _FILE_READING_TOOLS
                 ):
                     inefficient.append(sequence)
 

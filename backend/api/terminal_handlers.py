@@ -47,6 +47,10 @@ from backend.services.terminal_websocket import (
 )
 from src.chat_history import ChatHistoryManager
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
+
+# Issue #380: Module-level frozenset for terminal close event types
+_TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +226,7 @@ class ConsolidatedTerminalWebSocket:
             await self.send_output(content)
             return True
 
-        if event_type in ("eo", "close"):
+        if event_type in _TERMINAL_CLOSE_EVENTS:
             # PTY closed
             logger.info(f"PTY closed for session {self.session_id}")
             await self.send_message(
@@ -251,7 +255,7 @@ class ConsolidatedTerminalWebSocket:
 
                 if not output:
                     # No output available, small delay to prevent CPU spinning
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(TimingConstants.POLL_INTERVAL)
                     continue
 
                 # Process event using extracted helper
@@ -440,77 +444,83 @@ class ConsolidatedTerminalWebSocket:
                 }
             )
 
-    async def _handle_input_message(self, message: dict):
-        """Handle terminal input with security assessment"""
-        logger.info(
-            f"[_handle_input_message] CALLED for session {self.session_id}, message: {str(message)[:100]}"
-        )
+    # =========================================================================
+    # Helper Methods for _handle_input_message (Issue #281)
+    # =========================================================================
 
-        # Support both 'text' and 'content' fields for compatibility
-        text = message.get("text") or message.get("content", "")
-        logger.info(
-            f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}"
-        )
+    async def _write_to_transcript(self, text: str) -> None:
+        """Write input to transcript file (Issue #281: extracted)."""
+        if not (self.terminal_logger and self.conversation_id):
+            return
 
-        if not text:
+        try:
+            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
+            from pathlib import Path
+
+            import aiofiles
+
+            transcript_path = Path("data/chats") / transcript_file
+            async with aiofiles.open(
+                transcript_path, "a", encoding="utf-8"
+            ) as f:
+                await f.write(text)
+        except OSError as e:
+            logger.error(f"Failed to write input to transcript (I/O error): {e}")
+        except Exception as e:
+            logger.error(f"Failed to write input to transcript: {e}")
+
+    async def _log_command_to_terminal_logger(
+        self, command: str, status: str
+    ) -> None:
+        """Log command to TerminalLogger (Issue #281: extracted)."""
+        if not (self.terminal_logger and self.conversation_id):
             logger.warning(
-                "[_handle_input_message] No text found in message, returning"
+                f"[MANUAL CMD] Skipping log - terminal_logger={self.terminal_logger is not None}, "
+                f"conversation_id={self.conversation_id}"
             )
             return
 
-        # CRITICAL FIX: Only log complete commands (when Enter is pressed)
-        # Terminal sends character-by-character, we only want to log on Enter
-        is_command_complete = "\r" in text or "\n" in text
-
-        # Build command buffer for this session
-        if not hasattr(self, "_command_buffer"):
-            self._command_buffer = ""
-
-        # CRITICAL: Log ALL input to transcript (character-by-character for complete record)
-        if self.terminal_logger and self.conversation_id:
-            try:
-                transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-                from pathlib import Path
-
-                import aiofiles
-
-                transcript_path = Path("data/chats") / transcript_file
-                async with aiofiles.open(
-                    transcript_path, "a", encoding="utf-8"
-                ) as f:
-                    await f.write(text)
-            except OSError as e:
-                logger.error(
-                    f"Failed to write input to transcript (I/O error): {e}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to write input to transcript: {e}")
-
-        if is_command_complete:
-            # Extract command before the newline
-            command = (
-                (self._command_buffer + text).split("\r")[0].split("\n")[0].strip()
-            )
-            self._command_buffer = ""  # Reset buffer
-
-            # Only log non-empty commands
-            if not command:
-                await self.send_to_terminal(text)
-                return
-
+        try:
             logger.info(
-                f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}"
+                f"[MANUAL CMD] Logging to {self.conversation_id}: {command[:50]}"
             )
-        else:
-            # Accumulate characters until Enter is pressed
-            self._command_buffer += text
-            await self.send_to_terminal(text)
+            await self.terminal_logger.log_command(
+                session_id=self.conversation_id,
+                command=command,
+                run_type="manual",
+                status=status,
+                user_id=None,
+            )
+            logger.info(f"[MANUAL CMD] Successfully logged to {self.conversation_id}")
+        except Exception as e:
+            logger.error(f"Failed to log command to TerminalLogger: {e}")
+
+    async def _save_command_to_chat(self, command: str) -> None:
+        """Save command as terminal message to chat (Issue #281: extracted)."""
+        if not (self.chat_history_manager and self.conversation_id):
             return
 
-        # Security assessment for commands
+        try:
+            logger.info(f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}")
+            await self.chat_history_manager.add_message(
+                sender="terminal",
+                text=f"$ {command}",
+                message_type="terminal_command",
+                session_id=self.conversation_id,
+            )
+            logger.info("[CHAT INTEGRATION] Command saved successfully")
+        except Exception as e:
+            logger.error(f"Failed to save command to chat: {e}")
+
+    async def _handle_complete_command(self, command: str, text: str) -> bool:
+        """Handle a complete command with security assessment (Issue #281: extracted).
+
+        Returns True if command was blocked, False otherwise.
+        """
+        # Security assessment
         risk_level = self._assess_command_risk(command)
 
-        # Log command for audit trail (internal logging)
+        # Log command for audit trail
         if self.enable_logging:
             self._log_command_activity(
                 "command_input",
@@ -522,50 +532,15 @@ class ConsolidatedTerminalWebSocket:
                 },
             )
 
-        # Log to TerminalLogger for persistent storage (MANUAL commands)
+        # Log to TerminalLogger for persistent storage
         logger.info(
             f"[MANUAL CMD DEBUG] terminal_logger={self.terminal_logger is not None}, "
             f"conversation_id={self.conversation_id}, command={command[:50]}"
         )
-        if self.terminal_logger and self.conversation_id:
-            try:
-                logger.info(
-                    f"[MANUAL CMD] Logging to {self.conversation_id}: {command[:50]}"
-                )
-                await self.terminal_logger.log_command(
-                    session_id=self.conversation_id,
-                    command=command,
-                    run_type="manual",
-                    status="executing",
-                    user_id=None,
-                )
-                logger.info(
-                    f"[MANUAL CMD] Successfully logged to {self.conversation_id}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to log command to TerminalLogger: {e}")
-        else:
-            logger.warning(
-                f"[MANUAL CMD] Skipping log - terminal_logger={self.terminal_logger is not None}, "
-                f"conversation_id={self.conversation_id}"
-            )
+        await self._log_command_to_terminal_logger(command, "executing")
 
-        # CRITICAL FIX: Save command as terminal message to chat
-        # Use sender="terminal" instead of "user" to prevent triggering AI responses
-        if self.chat_history_manager and self.conversation_id:
-            try:
-                logger.info(
-                    f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}"
-                )
-                await self.chat_history_manager.add_message(
-                    sender="terminal",
-                    text=f"$ {command}",
-                    message_type="terminal_command",
-                    session_id=self.conversation_id,
-                )
-                logger.info("[CHAT INTEGRATION] Command saved successfully")
-            except Exception as e:
-                logger.error(f"Failed to save command to chat: {e}")
+        # Save command to chat
+        await self._save_command_to_chat(command)
 
         # Add to command history
         self.command_history.append(
@@ -589,26 +564,70 @@ class ConsolidatedTerminalWebSocket:
                     "timestamp": time.time(),
                 }
             )
-            return
+            return True  # Command was blocked
 
-        # Send to terminal (send the original text with \r to execute)
+        # Send to terminal
         await self.send_to_terminal(text)
 
-        # Log command sent to terminal (completion status)
-        # NOTE: For MANUAL commands, we can't easily capture output because PTY streams are async
-        # Output capture works for AUTOBOT commands because they use SecureCommandExecutor
-        # MANUAL commands are logged as "sent" - user can see full output in terminal interface
-        if self.terminal_logger and self.conversation_id:
-            try:
-                await self.terminal_logger.log_command(
-                    session_id=self.conversation_id,
-                    command=command,
-                    run_type="manual",
-                    status="sent",  # Indicates command was sent to PTY
-                    user_id=None,
-                )
-            except Exception as e:
-                logger.error(f"Failed to log command completion: {e}")
+        # Log command completion
+        await self._log_command_to_terminal_logger(command, "sent")
+
+        return False  # Command was not blocked
+
+    async def _handle_input_message(self, message: dict):
+        """
+        Handle terminal input with security assessment.
+
+        Issue #281: Refactored from 169 lines to use extracted helper methods.
+        """
+        logger.info(
+            f"[_handle_input_message] CALLED for session {self.session_id}, message: {str(message)[:100]}"
+        )
+
+        # Support both 'text' and 'content' fields for compatibility
+        text = message.get("text") or message.get("content", "")
+        logger.info(
+            f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}"
+        )
+
+        if not text:
+            logger.warning(
+                "[_handle_input_message] No text found in message, returning"
+            )
+            return
+
+        # Check if command is complete (Enter pressed)
+        is_command_complete = "\r" in text or "\n" in text
+
+        # Build command buffer for this session
+        if not hasattr(self, "_command_buffer"):
+            self._command_buffer = ""
+
+        # Log ALL input to transcript (Issue #281: uses helper)
+        await self._write_to_transcript(text)
+
+        if is_command_complete:
+            # Extract command before the newline
+            command = (
+                (self._command_buffer + text).split("\r")[0].split("\n")[0].strip()
+            )
+            self._command_buffer = ""  # Reset buffer
+
+            # Only process non-empty commands
+            if not command:
+                await self.send_to_terminal(text)
+                return
+
+            logger.info(
+                f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}"
+            )
+
+            # Handle complete command with security (Issue #281: uses helper)
+            await self._handle_complete_command(command, text)
+        else:
+            # Accumulate characters until Enter is pressed
+            self._command_buffer += text
+            await self.send_to_terminal(text)
 
     async def _validate_stdin_size(self, content: str) -> bool:
         """
@@ -690,7 +709,8 @@ class ConsolidatedTerminalWebSocket:
 
         # Re-enable echo after password (if it was disabled)
         if is_password:
-            await asyncio.sleep(0.1)  # Wait for password to be processed
+            # Brief delay for password processing before re-enabling echo
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
             self.pty_process.set_echo(True)
             logger.info("[STDIN] Re-enabled echo after password input")
 
@@ -1109,7 +1129,7 @@ class ConsolidatedTerminalWebSocket:
 
                     if message is None:
                         # No messages in queue, yield control briefly
-                        await asyncio.sleep(0.01)
+                        await asyncio.sleep(TimingConstants.POLL_INTERVAL)
                         continue
 
                     # Check for stop signal (early return)
@@ -1127,7 +1147,8 @@ class ConsolidatedTerminalWebSocket:
 
                 except Exception as e:
                     logger.error(f"Error in async output sender loop: {e}")
-                    await asyncio.sleep(0.1)  # Prevent tight error loop
+                    # Error recovery delay to prevent tight loop
+                    await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         except Exception as e:
             logger.error(f"Async output sender error: {e}")

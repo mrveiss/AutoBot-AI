@@ -29,6 +29,12 @@ from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_extraction")
 
+# Issue #380: Module-level tuple for fact text field validation
+_FACT_TEXT_FIELDS = ("subject", "predicate", "object")
+
+# Issue #380: Module-level tuple for numeric types
+_NUMERIC_TYPES = (int, float)
+
 
 class KnowledgeExtractionAgent:
     """
@@ -261,16 +267,15 @@ Respond only with valid JSON.
 
         # Check confidence range
         confidence = fact_data.get("confidence", 0)
-        if not isinstance(confidence, (int, float)) or not (0.0 <= confidence <= 1.0):
+        if not isinstance(confidence, _NUMERIC_TYPES) or not (0.0 <= confidence <= 1.0):  # Issue #380
             logger.debug(f"Invalid confidence value: {confidence}")
             return False
 
-        # Check non-empty strings
-        text_fields = ["subject", "predicate", "object"]
+        # Check non-empty strings (Issue #380: use module-level constant)
         if any(
             not isinstance(fact_data.get(field), str)
             or not fact_data.get(field).strip()
-            for field in text_fields
+            for field in _FACT_TEXT_FIELDS
         ):
             logger.debug("Empty text fields in fact")
             return False

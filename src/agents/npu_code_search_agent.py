@@ -29,6 +29,12 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for code element types
+_CODE_ELEMENT_TYPES = ("functions", "classes", "imports", "variables")
+
+# Issue #380: Module-level frozenset for ignored directories in code search
+_IGNORED_DIRS = frozenset({"node_modules", "__pycache__", ".git", "dist", "build", "target"})
+
 
 @dataclass
 class CodeSearchResult:
@@ -63,10 +69,85 @@ class NPUCodeSearchAgent(StandardizedAgent):
     - Multi-language code understanding
     - Context-aware search results
     - Performance monitoring
+
+    Issue #281: Extracted helper methods for initialization.
     """
 
+    @staticmethod
+    def _get_supported_extensions() -> set:
+        """Get set of supported file extensions for code search."""
+        return {
+            ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".cpp", ".c", ".h",
+            ".cs", ".rb", ".go", ".rs", ".php", ".swift", ".kt", ".scala",
+            ".clj", ".elm", ".hs", ".ml", ".sh", ".bash", ".zsh", ".ps1",
+            ".yaml", ".yml", ".json", ".xml", ".html", ".css", ".scss",
+            ".less", ".sql", ".r", ".m", ".pl", ".lua", ".vim", ".md",
+        }
+
+    @staticmethod
+    def _get_action_handlers() -> Dict[str, ActionHandler]:
+        """Get action handlers for the agent."""
+        return {
+            "search_code": ActionHandler(
+                handler_method="handle_search_code",
+                required_params=["query"],
+                optional_params=["max_results", "file_patterns"],
+                description="Search for code using NPU-accelerated semantic search",
+            ),
+            "index_directory": ActionHandler(
+                handler_method="handle_index_directory",
+                required_params=["directory"],
+                optional_params=["force_reindex"],
+                description="Index a directory for code search",
+            ),
+            "get_capabilities": ActionHandler(
+                handler_method="handle_get_capabilities",
+                description="Get agent capabilities",
+            ),
+        }
+
+    @staticmethod
+    def _get_language_patterns() -> Dict[str, Dict[str, str]]:
+        """Get language-specific code patterns for parsing."""
+        return {
+            "python": {
+                "function": r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[\(:]",
+                "import": r"(?:from\s+\S+\s+)?import\s+([^#\n]+)",
+                "variable": r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=",
+            },
+            "javascript": {
+                "function": (
+                    r"(?:function\s+([a-zA-Z_][a-zA-Z0-9_]*)|"
+                    r"([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function|"
+                    r"\bconst\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:\(.*?\)\s*=>|\bfunction))"
+                ),
+                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                "import": (
+                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|'
+                    r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
+                ),
+                "variable": r"(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            },
+        }
+
+    def _init_communication(self) -> None:
+        """Initialize communication protocol for agent-to-agent messaging."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.initialize_communication(self.capabilities))
+            else:
+                loop.run_until_complete(self.initialize_communication(self.capabilities))
+        except RuntimeError:
+            logger.debug("Event loop not available, will initialize communication later")
+
     def __init__(self):
-        """Initialize the NPU code search agent"""
+        """
+        Initialize the NPU code search agent.
+
+        Issue #281: Refactored from 135 lines to use extracted helper methods.
+        """
         super().__init__("npu_code_search")
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
@@ -76,9 +157,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Worker node for NPU capabilities
         self.worker_node = WorkerNode()
-
-        # NPU Semantic Search Engine (Issue #68)
-        self.npu_search_engine = None
+        self.npu_search_engine = None  # NPU Semantic Search Engine (Issue #68)
 
         # Search configuration
         self.index_prefix = "autobot:code:index:"
@@ -92,114 +171,18 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Define capabilities
         self.capabilities = [
-            "code_search",
-            "semantic_similarity",
-            "npu_acceleration",
-            "redis_indexing",
-            "file_indexing",
-            "pattern_matching",
+            "code_search", "semantic_similarity", "npu_acceleration",
+            "redis_indexing", "file_indexing", "pattern_matching",
         ]
 
-        # Register action handlers using standardized pattern
-        self.register_actions(
-            {
-                "search_code": ActionHandler(
-                    handler_method="handle_search_code",
-                    required_params=["query"],
-                    optional_params=["max_results", "file_patterns"],
-                    description="Search for code using NPU-accelerated semantic search",
-                ),
-                "index_directory": ActionHandler(
-                    handler_method="handle_index_directory",
-                    required_params=["directory"],
-                    optional_params=["force_reindex"],
-                    description="Index a directory for code search",
-                ),
-                "get_capabilities": ActionHandler(
-                    handler_method="handle_get_capabilities",
-                    description="Get agent capabilities",
-                ),
-            }
-        )
-
-        # Supported file extensions for code search
-        self.supported_extensions = {
-            ".py",
-            ".js",
-            ".ts",
-            ".jsx",
-            ".tsx",
-            ".java",
-            ".cpp",
-            ".c",
-            ".h",
-            ".cs",
-            ".rb",
-            ".go",
-            ".rs",
-            ".php",
-            ".swift",
-            ".kt",
-            ".scala",
-            ".clj",
-            ".elm",
-            ".hs",
-            ".ml",
-            ".sh",
-            ".bash",
-            ".zsh",
-            ".ps1",
-            ".yaml",
-            ".yml",
-            ".json",
-            ".xml",
-            ".html",
-            ".css",
-            ".scss",
-            ".less",
-            ".sql",
-            ".r",
-            ".m",
-            ".pl",
-            ".lua",
-            ".vim",
-            ".md",
-        }
-
-        # Initialize communication protocol for agent-to-agent messaging
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(self.initialize_communication(self.capabilities))
-            else:
-                loop.run_until_complete(
-                    self.initialize_communication(self.capabilities)
-                )
-        except RuntimeError:
-            # Event loop not available yet, will initialize later
-            logger.debug("Event loop not available, will initialize communication later")
-
-        # Language-specific patterns
-        self.language_patterns = {
-            "python": {
-                "function": r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
-                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[\(:]",
-                "import": r"(?:from\s+\S+\s+)?import\s+([^#\n]+)",
-                "variable": r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=",
-            },
-            "javascript": {
-                "function": (
-                    r"(?:function\s+([a-zA-Z_][a-zA-Z0-9_]*)|([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function|\bconst\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:\(.*?\)\s*=>|\bfunction))"
-                ),
-                "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-                "import": (
-                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
-                ),
-                "variable": r"(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-            },
-        }
-
+        # Register action handlers and initialize data
+        self.register_actions(self._get_action_handlers())
+        self.supported_extensions = self._get_supported_extensions()
+        self.language_patterns = self._get_language_patterns()
         self.stats = SearchStats(0, 0.0, False, False, 0)
+
+        # Initialize communication protocol
+        self._init_communication()
 
     def _init_npu(self):
         """Initialize NPU acceleration if available"""
@@ -272,8 +255,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Check if directory should be ignored (Issue #334 - extracted helper)."""
         if dirname.startswith("."):
             return True
-        ignored_dirs = {"node_modules", "__pycache__", ".git", "dist", "build", "target"}
-        return dirname in ignored_dirs
+        return dirname in _IGNORED_DIRS  # Issue #380: use module constant
 
     def _is_supported_file(self, filename: str) -> bool:
         """Check if file has supported extension (Issue #334 - extracted helper)."""
@@ -464,12 +446,47 @@ class NPUCodeSearchAgent(StandardizedAgent):
         }
         return language_map.get(file_ext.lower(), "unknown")
 
+    def _extract_elements_by_pattern(
+        self,
+        lines: List[str],
+        pattern: str,
+        use_first_group: bool = False,
+    ) -> List[Dict]:
+        """
+        Extract code elements matching a regex pattern from source lines.
+
+        Issue #281: Extracted helper to reduce repetition in _extract_code_elements.
+
+        Args:
+            lines: Source code lines to search
+            pattern: Regex pattern to match
+            use_first_group: If True, use first non-None group; otherwise use group(1)
+
+        Returns:
+            List of element dicts with name, line_number, and context
+        """
+        import re
+
+        elements = []
+        for i, line in enumerate(lines):
+            matches = re.finditer(pattern, line)
+            for match in matches:
+                if use_first_group:
+                    name = next((g for g in match.groups() if g), None)
+                else:
+                    name = match.group(1)
+                if name:
+                    elements.append({
+                        "name": name.strip(),
+                        "line_number": i + 1,
+                        "context": line.strip(),
+                    })
+        return elements
+
     def _extract_code_elements(
         self, content: str, language: str
     ) -> Dict[str, List[Dict]]:
         """Extract code elements (functions, classes, etc.) from content"""
-        import re
-
         elements = {"functions": [], "classes": [], "imports": [], "variables": []}
 
         if language not in self.language_patterns:
@@ -478,52 +495,21 @@ class NPUCodeSearchAgent(StandardizedAgent):
         patterns = self.language_patterns[language]
         lines = content.splitlines()
 
-        # Extract functions
+        # Issue #281: Use extracted helper for all element types
         if "function" in patterns:
-            for i, line in enumerate(lines):
-                matches = re.finditer(patterns["function"], line)
-                for match in matches:
-                    # Get the first non-None group
-                    name = next((g for g in match.groups() if g), None)
-                    if name:
-                        elements["functions"].append(
-                            {
-                                "name": name.strip(),
-                                "line_number": i + 1,
-                                "context": line.strip(),
-                            }
-                        )
+            elements["functions"] = self._extract_elements_by_pattern(
+                lines, patterns["function"], use_first_group=True
+            )
 
-        # Extract classes
         if "class" in patterns:
-            for i, line in enumerate(lines):
-                matches = re.finditer(patterns["class"], line)
-                for match in matches:
-                    name = match.group(1)
-                    if name:
-                        elements["classes"].append(
-                            {
-                                "name": name.strip(),
-                                "line_number": i + 1,
-                                "context": line.strip(),
-                            }
-                        )
+            elements["classes"] = self._extract_elements_by_pattern(
+                lines, patterns["class"], use_first_group=False
+            )
 
-        # Extract imports
         if "import" in patterns:
-            for i, line in enumerate(lines):
-                matches = re.finditer(patterns["import"], line)
-                for match in matches:
-                    # Get the first non-None group
-                    name = next((g for g in match.groups() if g), None)
-                    if name:
-                        elements["imports"].append(
-                            {
-                                "name": name.strip(),
-                                "line_number": i + 1,
-                                "context": line.strip(),
-                            }
-                        )
+            elements["imports"] = self._extract_elements_by_pattern(
+                lines, patterns["import"], use_first_group=True
+            )
 
         return elements
 
@@ -610,8 +596,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Search for specific code elements (functions, classes, etc.)"""
         results = []
 
-        # Search across all element types
-        for element_type in ["functions", "classes", "imports", "variables"]:
+        # Search across all element types - Issue #380: Use module-level tuple
+        for element_type in _CODE_ELEMENT_TYPES:
             element_key = f"{self.index_prefix}element:{element_type}:{query}"
             # Issue #361 - avoid blocking
             element_data_list = await asyncio.to_thread(

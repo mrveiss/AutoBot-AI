@@ -15,7 +15,11 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from src.constants.security_constants import SecurityConstants
+from src.constants.threshold_constants import TimingConstants
 from src.services.captcha_human_loop import get_captcha_human_loop
+
+# Issue #380: Module-level frozenset for CAPTCHA detection keywords
+_CAPTCHA_KEYWORDS: frozenset = frozenset({"captcha", "challenge", "verification"})
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -112,7 +116,7 @@ class CaptchaSolver:
 
         # Poll for result
         for attempt in range(self.timeout // 5):
-            await asyncio.sleep(5)
+            await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
             # Use HTTP client for result polling
             result = await http_client.get_json(
@@ -554,10 +558,7 @@ class AdvancedWebResearcher:
 
         # Check page title and content for CAPTCHA indicators
         title = await page.title()
-        if any(
-            keyword in title.lower()
-            for keyword in ["captcha", "challenge", "verification"]
-        ):
+        if any(keyword in title.lower() for keyword in _CAPTCHA_KEYWORDS):
             logger.info(f"CAPTCHA detected in page title: {title}")
             return True
 

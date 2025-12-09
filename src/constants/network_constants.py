@@ -86,6 +86,69 @@ class NetworkConstants:
     DEFAULT_GID: str = "1000"
     DEFAULT_USER_GROUP: str = "1000:1000"
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    @classmethod
+    def get_host_configs(cls) -> list:
+        """Get list of host configurations for frontend (Issue #372 - reduces feature envy)."""
+        return [
+            {
+                "id": "main",
+                "name": "Main (WSL Backend)",
+                "ip": cls.MAIN_MACHINE_IP,
+                "port": cls.BACKEND_PORT,
+                "description": "Main backend server on WSL",
+            },
+            {
+                "id": "frontend",
+                "name": "VM1 (Frontend)",
+                "ip": cls.FRONTEND_VM_IP,
+                "port": cls.FRONTEND_PORT,
+                "description": "Frontend web interface server",
+            },
+            {
+                "id": "npu-worker",
+                "name": "VM2 (NPU Worker)",
+                "ip": cls.NPU_WORKER_VM_IP,
+                "port": cls.NPU_WORKER_PORT,
+                "description": "Hardware AI acceleration worker",
+            },
+            {
+                "id": "redis",
+                "name": "VM3 (Redis)",
+                "ip": cls.REDIS_VM_IP,
+                "port": cls.REDIS_PORT,
+                "description": "Redis data layer server",
+            },
+            {
+                "id": "ai-stack",
+                "name": "VM4 (AI Stack)",
+                "ip": cls.AI_STACK_VM_IP,
+                "port": cls.AI_STACK_PORT,
+                "description": "AI processing stack server",
+            },
+            {
+                "id": "browser",
+                "name": "VM5 (Browser)",
+                "ip": cls.BROWSER_VM_IP,
+                "port": cls.BROWSER_SERVICE_PORT,
+                "description": "Browser automation server",
+            },
+        ]
+
+    @classmethod
+    def get_api_config(cls) -> dict:
+        """Get API connection config for frontend (Issue #372 - reduces feature envy)."""
+        return {
+            "base_url": cls.MAIN_MACHINE_IP,
+            "port": cls.BACKEND_PORT,
+        }
+
+    @classmethod
+    def get_websocket_url(cls) -> str:
+        """Get WebSocket URL for frontend (Issue #372 - reduces feature envy)."""
+        return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/ws"
+
 
 @dataclass(frozen=True)
 class ServiceURLs:

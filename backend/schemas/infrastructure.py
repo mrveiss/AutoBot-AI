@@ -16,6 +16,16 @@ from backend.type_defs.common import Metadata
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+# Issue #380: Module-level frozenset for valid host statuses
+_VALID_HOST_STATUSES = frozenset({
+    "new",
+    "provisioning",
+    "deployed",
+    "healthy",
+    "degraded",
+    "failed",
+})
+
 
 class HostCreate(BaseModel):
     """Schema for creating a new infrastructure host"""
@@ -84,17 +94,9 @@ class HostUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
-        """Validate status value"""
-        valid_statuses = [
-            "new",
-            "provisioning",
-            "deployed",
-            "healthy",
-            "degraded",
-            "failed",
-        ]
-        if v is not None and v not in valid_statuses:
-            raise ValueError(f"Status must be one of {valid_statuses}, got {v}")
+        """Validate status value (Issue #380: use module-level constant)"""
+        if v is not None and v not in _VALID_HOST_STATUSES:
+            raise ValueError(f"Status must be one of {sorted(_VALID_HOST_STATUSES)}, got {v}")
         return v
 
 

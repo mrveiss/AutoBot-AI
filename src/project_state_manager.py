@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.utils.logging_manager import get_logger
 
 from .utils.service_registry import get_service_url
@@ -108,7 +109,8 @@ class ProjectStateManager:
                 "AUTOBOT_PROJECT_STATE_DB_PATH", "data/project_state.db"
             )
         self.db_path = db_path
-        self.project_root = Path(__file__).parent.parent
+        # Use centralized PathConstants (Issue #380)
+        self.project_root = PATH.PROJECT_ROOT
         self.phases: Dict[DevelopmentPhase, DevelopmentPhaseInfo] = {}
         self.current_phase = DevelopmentPhase.PHASE_6_SELF_AWARENESS
 
@@ -548,7 +550,7 @@ class ProjectStateManager:
         """Validate phase completion logic (Issue #315)."""
         try:
             test_results = []
-            for test_phase in self.phases.keys():
+            for test_phase in self.phases:
                 result = self.check_phase_completion(test_phase)
                 test_results.append(f"{test_phase.value}: {'Complete' if result else 'Incomplete'}")
 
@@ -630,7 +632,7 @@ class ProjectStateManager:
         logger.info("Starting validation of all phases...")
 
         all_results = {}
-        for phase in self.phases.keys():
+        for phase in self.phases:
             results = self.validate_phase(phase)
             all_results[phase] = results
 

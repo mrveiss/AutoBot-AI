@@ -23,6 +23,18 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for engagement keyword detection (O(1) iteration)
+_ENGAGEMENT_KEYWORDS = ("how", "what", "why", "create", "make", "build")
+
+# Issue #380: Module-level dict for topic keyword mapping
+_TOPIC_KEYWORDS = {
+    "installation": ("install", "setup", "configure", "deploy"),
+    "troubleshooting": ("error", "issue", "problem", "fix", "debug"),
+    "architecture": ("architecture", "design", "component", "system"),
+    "api": ("api", "endpoint", "request", "response"),
+    "configuration": ("config", "setting", "environment", "variable"),
+}
+
 
 @dataclass
 class ConversationContext:
@@ -214,8 +226,7 @@ class ConversationContextAnalyzer:
 
         # Questions or task requests = high engagement
         if "?" in current_message or any(
-            word in current_message.lower()
-            for word in ["how", "what", "why", "create", "make", "build"]
+            word in current_message.lower() for word in _ENGAGEMENT_KEYWORDS
         ):
             return "high"
 
@@ -242,16 +253,8 @@ class ConversationContextAnalyzer:
             msg.get("content", "").lower() for msg in conversation_history[-3:]
         )
 
-        # Topic keywords
-        topics = {
-            "installation": ["install", "setup", "configure", "deploy"],
-            "troubleshooting": ["error", "issue", "problem", "fix", "debug"],
-            "architecture": ["architecture", "design", "component", "system"],
-            "api": ["api", "endpoint", "request", "response"],
-            "configuration": ["config", "setting", "environment", "variable"],
-        }
-
-        for topic, keywords in topics.items():
+        # Issue #380: Use module-level topic keywords constant
+        for topic, keywords in _TOPIC_KEYWORDS.items():
             if any(keyword in recent_content for keyword in keywords):
                 return topic
 

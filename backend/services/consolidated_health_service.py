@@ -17,6 +17,10 @@ from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for health status categorization
+_HEALTHY_STATUSES = frozenset({"healthy", "connected", "available"})
+_DEGRADED_STATUSES = frozenset({"degraded", "warning"})
+
 
 class ConsolidatedHealthService:
     """Service to aggregate health status from all system components"""
@@ -34,6 +38,40 @@ class ConsolidatedHealthService:
         """Register a health checker for a component (thread-safe)"""
         with self._sync_lock:
             self.component_checkers[component_name] = health_checker
+
+    async def _check_single_component(
+        self,
+        component_name: str,
+        checker,
+    ) -> tuple:
+        """
+        Check a single component's health status.
+
+        Issue #281: Extracted from get_comprehensive_health to reduce nesting
+        and improve testability.
+
+        Args:
+            component_name: Name of the component being checked
+            checker: Health checker function/coroutine or static dict
+
+        Returns:
+            Tuple of (component_name, health_status_dict)
+        """
+        try:
+            if hasattr(checker, "__call__"):
+                if asyncio.iscoroutinefunction(checker):
+                    return component_name, await checker()
+                else:
+                    return component_name, checker()
+            else:
+                return component_name, checker
+        except Exception as e:
+            logger.error(f"Error checking health for {component_name}: {e}")
+            return component_name, {
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+            }
 
     async def get_comprehensive_health(self) -> Metadata:
         """Get comprehensive health status from all registered components (thread-safe)"""
@@ -57,27 +95,9 @@ class ConsolidatedHealthService:
             checkers_snapshot = dict(self.component_checkers)
 
         # Issue #379: Run all health checks in parallel using asyncio.gather()
-        async def check_component(component_name: str, checker):
-            """Check a single component's health."""
-            try:
-                if hasattr(checker, "__call__"):
-                    if asyncio.iscoroutinefunction(checker):
-                        return component_name, await checker()
-                    else:
-                        return component_name, checker()
-                else:
-                    return component_name, checker
-            except Exception as e:
-                logger.error(f"Error checking health for {component_name}: {e}")
-                return component_name, {
-                    "status": "unhealthy",
-                    "error": str(e),
-                    "timestamp": datetime.now().isoformat(),
-                }
-
-        # Run all health checks in parallel
+        # Issue #281: Using extracted _check_single_component method
         check_tasks = [
-            check_component(name, checker)
+            self._check_single_component(name, checker)
             for name, checker in checkers_snapshot.items()
         ]
         results = await asyncio.gather(*check_tasks, return_exceptions=True)
@@ -91,11 +111,11 @@ class ConsolidatedHealthService:
             component_name, component_health = result
             health_status["components"][component_name] = component_health
 
-            # Update summary counts
+            # Update summary counts (Issue #380: use module-level constants)
             component_status = component_health.get("status", "unknown")
-            if component_status in {"healthy", "connected", "available"}:
+            if component_status in _HEALTHY_STATUSES:
                 health_status["summary"]["healthy"] += 1
-            elif component_status in {"degraded", "warning"}:
+            elif component_status in _DEGRADED_STATUSES:
                 health_status["summary"]["degraded"] += 1
             else:
                 health_status["summary"]["unhealthy"] += 1

@@ -26,6 +26,7 @@ Created: 2025-01-14
 """
 
 import logging
+import re
 from typing import Any, Optional
 
 from src.utils.path_validation import contains_injection_patterns
@@ -37,6 +38,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex for session ID validation
+_SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 # =============================================================================
@@ -124,7 +128,6 @@ def validate_chat_session_id(session_id: str) -> bool:
         >>> validate_chat_session_id("")
         False
     """
-    import re
     import uuid
 
     if not session_id or len(session_id) > 255:
@@ -153,7 +156,7 @@ def validate_chat_session_id(session_id: str) -> bool:
 
     # Accept legacy/test session IDs (alphanumeric + underscore + hyphen)
     # This allows "test_conv" while rejecting malicious inputs
-    if re.match(r"^[a-zA-Z0-9_-]+$", session_id):
+    if _SESSION_ID_RE.match(session_id):
         return True
 
     return False

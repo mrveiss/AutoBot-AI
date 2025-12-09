@@ -22,6 +22,16 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for allowed configuration keys
+_ALLOWED_CONFIG_KEYS = frozenset({
+    "auto_progression_enabled",
+    "minimum_phase_duration",
+    "validation_threshold",
+    "rollback_threshold",
+    "max_concurrent_phases",
+    "progression_cooldown",
+})
+
 
 class PhaseProgressionRequest(BaseModel):
     phase_name: str
@@ -349,19 +359,10 @@ async def update_progression_config(config_update: dict):
     try:
         progression_manager = get_progression_manager()
 
-        # Update allowed configuration keys
-        allowed_keys = [
-            "auto_progression_enabled",
-            "minimum_phase_duration",
-            "validation_threshold",
-            "rollback_threshold",
-            "max_concurrent_phases",
-            "progression_cooldown",
-        ]
-
+        # Update allowed configuration keys (Issue #380: use module-level constant)
         updated_keys = []
         for key, value in config_update.items():
-            if key in allowed_keys:
+            if key in _ALLOWED_CONFIG_KEYS:
                 progression_manager.config[key] = value
                 updated_keys.append(key)
 

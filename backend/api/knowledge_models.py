@@ -43,6 +43,18 @@ from backend.type_defs.common import Metadata
 from pydantic import BaseModel, Field, validator
 from src.utils.path_validation import contains_path_traversal
 
+# Issue #380: Module-level frozenset for tag operations
+_VALID_TAG_OPERATIONS = frozenset({"add", "remove"})
+
+# Issue #380: Pre-compiled regex patterns for validators
+# These are called on every request validation, so pre-compilation is important
+_ALNUM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")  # Mixed case: IDs, categories, cursors
+_LOWERCASE_TAG_RE = re.compile(r"^[a-z0-9_-]+$")  # Lowercase: tags
+
+# Issue #380: Module-level tuples for search mode and sort validation
+_VALID_SEARCH_MODES = ("semantic", "keyword", "hybrid", "auto")
+_VALID_SORT_OPTIONS = ("newest", "oldest", "longest")
+
 
 # ===== BASIC VALIDATION MODELS =====
 
@@ -56,7 +68,7 @@ class FactIdValidator(BaseModel):
     def validate_fact_id(cls, v):
         """Validate fact_id format to prevent injection attacks"""
         # Allow UUID format or safe alphanumeric with underscores/hyphens
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not _ALNUM_ID_RE.match(v):
             raise ValueError(
                 "Invalid fact_id format: only alphanumeric, underscore, and hyphen allowed"
             )
@@ -76,7 +88,7 @@ class SearchRequest(BaseModel):
     @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid category format")
         return v
 
@@ -116,7 +128,7 @@ class EnhancedSearchRequest(BaseModel):
     @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid category format")
         return v
 
@@ -125,17 +137,57 @@ class EnhancedSearchRequest(BaseModel):
         """Validate each tag"""
         if v:
             v = v.lower().strip()
-            if not re.match(r"^[a-z0-9_-]+$", v):
+            if not _LOWERCASE_TAG_RE.match(v):
                 raise ValueError(f"Invalid tag format: {v}")
         return v
 
     @validator("mode")
     def validate_mode(cls, v):
         """Validate search mode"""
-        valid_modes = ("semantic", "keyword", "hybrid", "auto")
-        if v not in valid_modes:
-            raise ValueError(f"Invalid mode: {v}. Must be one of {valid_modes}")
+        if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
+            raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
         return v
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_search_params(self) -> dict:
+        """Convert to parameters dict for knowledge base search (Issue #372)."""
+        return {
+            "query": self.query,
+            "limit": self.limit,
+            "offset": self.offset,
+            "category": self.category,
+            "tags": self.tags,
+            "tags_match_any": self.tags_match_any,
+            "mode": self.mode,
+            "enable_reranking": self.enable_reranking,
+            "min_score": self.min_score,
+        }
+
+    def get_log_summary(self) -> str:
+        """Get formatted log summary string (Issue #372 - reduces feature envy)."""
+        return (
+            f"'{self.query}' (limit={self.limit}, offset={self.offset}, "
+            f"mode={self.mode}, tags={self.tags}, min_score={self.min_score})"
+        )
+
+    def get_fallback_response(self, results: list) -> dict:
+        """Build fallback response when enhanced search is unavailable (Issue #372)."""
+        return {
+            "success": True,
+            "results": results,
+            "total_count": len(results),
+            "query_processed": self.query,
+            "mode": self.mode,
+            "tags_applied": [],
+            "min_score_applied": 0.0,
+            "reranking_applied": False,
+            "message": "Using fallback search - enhanced features not available",
+        }
+
+    def get_safe_mode(self, valid_modes: set) -> str:
+        """Get mode with fallback if not in valid modes (Issue #372)."""
+        return self.mode if self.mode in valid_modes else "auto"
 
 
 class PaginationRequest(BaseModel):
@@ -149,14 +201,14 @@ class PaginationRequest(BaseModel):
     @validator("cursor")
     def validate_cursor(cls, v):
         """Validate cursor format"""
-        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid cursor format")
         return v
 
     @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if v and not _ALNUM_ID_RE.match(v):
             raise ValueError("Invalid category format")
         return v
 
@@ -228,7 +280,7 @@ class TagValidator(BaseModel):
         # Normalize to lowercase
         v = v.lower().strip()
         # Allow alphanumeric, hyphens, underscores
-        if not re.match(r"^[a-z0-9_-]+$", v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError(
                 "Invalid tag format: only lowercase alphanumeric, underscore, "
                 "and hyphen allowed"
@@ -253,7 +305,7 @@ class AddTagsRequest(BaseModel):
     def validate_tag_item(cls, v):
         """Validate each tag in the list"""
         v = v.lower().strip()
-        if not re.match(r"^[a-z0-9_-]+$", v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError(f"Invalid tag format: {v}")
         if len(v) > 50:
             raise ValueError(f"Tag too long: {v}")
@@ -274,7 +326,7 @@ class RemoveTagsRequest(BaseModel):
     def validate_tag_item(cls, v):
         """Validate each tag in the list"""
         v = v.lower().strip()
-        if not re.match(r"^[a-z0-9_-]+$", v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError(f"Invalid tag format: {v}")
         return v
 
@@ -303,7 +355,7 @@ class BulkTagRequest(BaseModel):
     def validate_fact_id_item(cls, v):
         """Validate each fact ID format (Critical fix #5)"""
         # Reuse existing FactIdValidator logic
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not _ALNUM_ID_RE.match(v):
             raise ValueError(
                 f"Invalid fact_id format: {v} - only alphanumeric, "
                 "underscore, and hyphen allowed"
@@ -316,7 +368,7 @@ class BulkTagRequest(BaseModel):
     @validator("operation")
     def validate_operation(cls, v):
         """Validate operation type"""
-        if v not in ("add", "remove"):
+        if v not in _VALID_TAG_OPERATIONS:
             raise ValueError("Operation must be 'add' or 'remove'")
         return v
 
@@ -324,7 +376,7 @@ class BulkTagRequest(BaseModel):
     def validate_tag_item(cls, v):
         """Validate each tag"""
         v = v.lower().strip()
-        if not re.match(r"^[a-z0-9_-]+$", v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError(f"Invalid tag format: {v}")
         return v
 
@@ -350,7 +402,7 @@ class SearchByTagsRequest(BaseModel):
     def validate_tag_item(cls, v):
         """Validate each tag"""
         v = v.lower().strip()
-        if not re.match(r"^[a-z0-9_-]+$", v):
+        if not _LOWERCASE_TAG_RE.match(v):
             raise ValueError(f"Invalid tag format: {v}")
         return v
 
@@ -455,9 +507,8 @@ class DeduplicationRequest(BaseModel):
     @validator("keep_strategy")
     def validate_strategy(cls, v):
         """Validate keep strategy"""
-        valid = ("newest", "oldest", "longest")
-        if v not in valid:
-            raise ValueError(f"Invalid strategy: {v}. Must be one of {valid}")
+        if v not in _VALID_SORT_OPTIONS:  # Issue #380: use module constant
+            raise ValueError(f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}")
         return v
 
 
@@ -478,7 +529,7 @@ class BulkDeleteRequest(BaseModel):
     @validator("fact_ids", each_item=True)
     def validate_fact_id(cls, v):
         """Validate fact ID format"""
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not _ALNUM_ID_RE.match(v):
             raise ValueError(f"Invalid fact_id format: {v}")
         # Prevent path traversal (Issue #328 - uses shared validation)
         if contains_path_traversal(v):
@@ -503,14 +554,14 @@ class BulkCategoryUpdateRequest(BaseModel):
     @validator("fact_ids", each_item=True)
     def validate_fact_id(cls, v):
         """Validate fact ID format"""
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not _ALNUM_ID_RE.match(v):
             raise ValueError(f"Invalid fact_id format: {v}")
         return v
 
     @validator("new_category")
     def validate_category(cls, v):
         """Validate category format"""
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not _ALNUM_ID_RE.match(v):
             raise ValueError(f"Invalid category format: {v}")
         return v
 
@@ -555,7 +606,7 @@ class UpdateFactRequest(BaseModel):
     @validator("category")
     def validate_category(cls, v):
         """Validate category format"""
-        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if v and not _ALNUM_ID_RE.match(v):
             raise ValueError(f"Invalid category format: {v}")
         return v
 

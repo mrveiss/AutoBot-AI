@@ -11,13 +11,20 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
+from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 from src.security_layer import SecurityLayer
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for unrestricted root access commands
+_UNRESTRICTED_ROOT_COMMANDS: FrozenSet[str] = frozenset({"sudo su", "sudo -i"})
+
+# Issue #380: Module-level tuple for persistent session commands
+_PERSISTENT_COMMANDS = ("ssh", "screen", "tmux", "docker exec", "kubectl exec")
 
 
 class SystemCommandAgent:
@@ -317,7 +324,7 @@ class SystemCommandAgent:
             command,
             chat_id,
             require_confirmation=False,
-            timeout=300,  # 5 minute timeout for non-interactive commands
+            timeout=TimingConstants.VERY_LONG_TIMEOUT,  # 5 minute timeout for non-interactive commands
         )
 
     def _is_dangerous_command(self, command: str) -> bool:
@@ -326,9 +333,8 @@ class SystemCommandAgent:
         return any(pattern in command_lower for pattern in self.DANGEROUS_PATTERNS)
 
     def _is_persistent_session(self, command: str) -> bool:
-        """Check if command starts a persistent session (like ssh, screen, etc)"""
-        persistent_commands = ["ssh", "screen", "tmux", "docker exec", "kubectl exec"]
-        return any(command.startswith(cmd) for cmd in persistent_commands)
+        """Check if command starts a persistent session (Issue #380: use module constant)"""
+        return any(command.startswith(cmd) for cmd in _PERSISTENT_COMMANDS)
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
@@ -351,7 +357,7 @@ class SystemCommandAgent:
 
         try:
             # Wait for confirmation with timeout
-            confirmed = await asyncio.wait_for(confirmation_future, timeout=30.0)
+            confirmed = await asyncio.wait_for(confirmation_future, timeout=TimingConstants.SHORT_TIMEOUT)
             return confirmed
         except asyncio.TimeoutError:
             return False  # Default to not executing dangerous commands
@@ -385,7 +391,7 @@ class SystemCommandAgent:
             risk_level = "high"
 
         # Check for sudo without specific command
-        if command.strip() == "sudo su" or command.strip() == "sudo -i":
+        if command.strip() in _UNRESTRICTED_ROOT_COMMANDS:
             issues.append("Unrestricted root access requested")
             risk_level = "high"
 

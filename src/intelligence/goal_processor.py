@@ -14,10 +14,15 @@ import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Pattern
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex patterns for warning generation
+_SUDO_ROOT_RE = re.compile(r"sudo|root")
+_INSTALL_DOWNLOAD_RE = re.compile(r"install|download")
+_NETWORK_SCAN_PORT_RE = re.compile(r"network|scan|port")
 
 
 class GoalCategory(Enum):
@@ -64,16 +69,26 @@ class GoalProcessor:
         self._risk_patterns = self._build_risk_patterns()
 
     def _build_intent_patterns(self) -> Dict[str, Dict]:
-        """Build intent recognition patterns."""
+        """
+        Build intent recognition patterns.
+
+        Issue #281: Refactored from 149 lines to use extracted category builders.
+        """
+        patterns: Dict[str, Dict] = {}
+        patterns.update(self._get_network_intents())
+        patterns.update(self._get_system_intents())
+        patterns.update(self._get_file_intents())
+        patterns.update(self._get_development_intents())
+        patterns.update(self._get_monitoring_intents())
+        return patterns
+
+    def _get_network_intents(self) -> Dict[str, Dict]:
+        """Network operation intent patterns. Issue #281: Extracted helper."""
         return {
-            # Network operations
             "get_ip_address": {
                 "patterns": [
-                    r"what.{0,10}my.{0,10}ip",
-                    r"show.{0,10}ip.{0,10}address",
-                    r"get.{0,10}ip",
-                    r"find.{0,10}ip",
-                    r"current.{0,10}ip",
+                    r"what.{0,10}my.{0,10}ip", r"show.{0,10}ip.{0,10}address",
+                    r"get.{0,10}ip", r"find.{0,10}ip", r"current.{0,10}ip",
                 ],
                 "category": GoalCategory.NETWORK,
                 "explanation": "Get your current IP address",
@@ -81,10 +96,8 @@ class GoalProcessor:
             },
             "network_scan": {
                 "patterns": [
-                    r"scan.{0,10}network",
-                    r"find.{0,10}devices",
-                    r"network.{0,10}devices",
-                    r"what.{0,10}devices.{0,10}network",
+                    r"scan.{0,10}network", r"find.{0,10}devices",
+                    r"network.{0,10}devices", r"what.{0,10}devices.{0,10}network",
                     r"discover.{0,10}hosts",
                 ],
                 "category": GoalCategory.NETWORK,
@@ -93,22 +106,22 @@ class GoalProcessor:
             },
             "port_scan": {
                 "patterns": [
-                    r"scan.{0,10}ports?",
-                    r"open.{0,10}ports?",
-                    r"check.{0,10}ports?",
-                    r"port.{0,10}scan",
+                    r"scan.{0,10}ports?", r"open.{0,10}ports?",
+                    r"check.{0,10}ports?", r"port.{0,10}scan",
                 ],
                 "category": GoalCategory.SECURITY,
                 "explanation": "Scan for open ports on a target",
                 "risk": RiskLevel.HIGH,
             },
-            # System operations
+        }
+
+    def _get_system_intents(self) -> Dict[str, Dict]:
+        """System operation intent patterns. Issue #281: Extracted helper."""
+        return {
             "system_info": {
                 "patterns": [
-                    r"system.{0,10}info",
-                    r"show.{0,10}system",
-                    r"system.{0,10}details",
-                    r"computer.{0,10}info",
+                    r"system.{0,10}info", r"show.{0,10}system",
+                    r"system.{0,10}details", r"computer.{0,10}info",
                     r"hardware.{0,10}info",
                 ],
                 "category": GoalCategory.SYSTEM,
@@ -117,10 +130,8 @@ class GoalProcessor:
             },
             "system_update": {
                 "patterns": [
-                    r"update.{0,10}system",
-                    r"system.{0,10}update",
-                    r"os.{0,10}update",
-                    r"upgrade.{0,10}system",
+                    r"update.{0,10}system", r"system.{0,10}update",
+                    r"os.{0,10}update", r"upgrade.{0,10}system",
                     r"install.{0,10}updates",
                 ],
                 "category": GoalCategory.SYSTEM,
@@ -129,36 +140,32 @@ class GoalProcessor:
             },
             "disk_usage": {
                 "patterns": [
-                    r"disk.{0,10}usage",
-                    r"storage.{0,10}space",
-                    r"check.{0,10}disk",
-                    r"free.{0,10}space",
-                    r"disk.{0,10}space",
+                    r"disk.{0,10}usage", r"storage.{0,10}space",
+                    r"check.{0,10}disk", r"free.{0,10}space", r"disk.{0,10}space",
                 ],
                 "category": GoalCategory.SYSTEM,
                 "explanation": "Check disk usage and available storage",
                 "risk": RiskLevel.LOW,
             },
-            # Process management
             "list_processes": {
                 "patterns": [
-                    r"list.{0,10}processes",
-                    r"show.{0,10}processes",
-                    r"running.{0,10}processes",
-                    r"ps.{0,10}list",
+                    r"list.{0,10}processes", r"show.{0,10}processes",
+                    r"running.{0,10}processes", r"ps.{0,10}list",
                     r"find.{0,10}python.{0,10}processes",
                 ],
                 "category": GoalCategory.SYSTEM,
                 "explanation": "List running processes",
                 "risk": RiskLevel.LOW,
             },
-            # File operations
+        }
+
+    def _get_file_intents(self) -> Dict[str, Dict]:
+        """File operation intent patterns. Issue #281: Extracted helper."""
+        return {
             "list_files": {
                 "patterns": [
-                    r"list.{0,10}files",
-                    r"show.{0,10}files",
-                    r"ls.{0,10}directory",
-                    r"directory.{0,10}contents",
+                    r"list.{0,10}files", r"show.{0,10}files",
+                    r"ls.{0,10}directory", r"directory.{0,10}contents",
                     r"files.{0,10}current.{0,10}directory",
                 ],
                 "category": GoalCategory.FILES,
@@ -167,16 +174,27 @@ class GoalProcessor:
             },
             "find_files": {
                 "patterns": [
-                    r"find.{0,10}files?",
-                    r"search.{0,10}files?",
-                    r"locate.{0,10}files?",
-                    r"grep.{0,10}files?",
+                    r"find.{0,10}files?", r"search.{0,10}files?",
+                    r"locate.{0,10}files?", r"grep.{0,10}files?",
                 ],
                 "category": GoalCategory.FILES,
                 "explanation": "Search for files matching criteria",
                 "risk": RiskLevel.LOW,
             },
-            # Development operations
+            "backup_files": {
+                "patterns": [
+                    r"backup.{0,20}(home|directory|files?)",
+                    r"create.{0,10}backup", r"archive.{0,10}files?",
+                ],
+                "category": GoalCategory.FILES,
+                "explanation": "Create backup of files or directories",
+                "risk": RiskLevel.MEDIUM,
+            },
+        }
+
+    def _get_development_intents(self) -> Dict[str, Dict]:
+        """Development operation intent patterns. Issue #281: Extracted helper."""
+        return {
             "install_package": {
                 "patterns": [
                     r"install.{0,20}(docker|nginx|apache|mysql|postgresql|node|python|git)",  # noqa: E501
@@ -187,29 +205,20 @@ class GoalProcessor:
                 "explanation": "Install development tools or packages",
                 "risk": RiskLevel.MEDIUM,
             },
-            # Monitoring operations
+        }
+
+    def _get_monitoring_intents(self) -> Dict[str, Dict]:
+        """Monitoring operation intent patterns. Issue #281: Extracted helper."""
+        return {
             "system_monitoring": {
                 "patterns": [
-                    r"monitor.{0,10}system",
-                    r"performance.{0,10}monitor",
-                    r"system.{0,10}performance",
-                    r"cpu.{0,10}usage",
+                    r"monitor.{0,10}system", r"performance.{0,10}monitor",
+                    r"system.{0,10}performance", r"cpu.{0,10}usage",
                     r"memory.{0,10}usage",
                 ],
                 "category": GoalCategory.MONITORING,
                 "explanation": "Monitor system performance and resources",
                 "risk": RiskLevel.LOW,
-            },
-            # Backup operations
-            "backup_files": {
-                "patterns": [
-                    r"backup.{0,20}(home|directory|files?)",
-                    r"create.{0,10}backup",
-                    r"archive.{0,10}files?",
-                ],
-                "category": GoalCategory.FILES,
-                "explanation": "Create backup of files or directories",
-                "risk": RiskLevel.MEDIUM,
             },
         }
 
@@ -342,16 +351,16 @@ class GoalProcessor:
         elif risk_level == RiskLevel.MEDIUM:
             warnings.append("This operation will make changes to your system")
 
-        # Specific pattern warnings
-        if re.search(r"sudo|root", user_input):
+        # Specific pattern warnings (Issue #380: use pre-compiled patterns)
+        if _SUDO_ROOT_RE.search(user_input):
             warnings.append("Administrative privileges will be required")
 
-        if re.search(r"install|download", user_input):
+        if _INSTALL_DOWNLOAD_RE.search(user_input):
             warnings.append(
                 "Software will be downloaded and installed " "from external sources"
             )
 
-        if re.search(r"network|scan|port", user_input):
+        if _NETWORK_SCAN_PORT_RE.search(user_input):
             warnings.append("Network operations may be detected by security systems")
 
         return warnings

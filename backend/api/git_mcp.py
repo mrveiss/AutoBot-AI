@@ -41,6 +41,12 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["git_mcp", "mcp"])
 
+# Issue #380: Pre-compiled regex patterns for validators
+# These are called on every git request validation
+_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")  # Safe file paths
+_SHELL_METACHAR_RE = re.compile(r"[;&|`$]")  # Shell injection characters
+_COMMIT_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~]+$")  # Git commit refs
+_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")  # Git refs with colon
 
 # Security Configuration
 
@@ -77,6 +83,14 @@ BLOCKED_GIT_ARGS = [
 ]
 
 # Git commands that are BLOCKED (destructive or dangerous)
+# Issue #380: Module-level tuple for dangerous git argument patterns
+_DANGEROUS_GIT_PATTERNS = (
+    r"[;&|`$]",  # Shell injection
+    r"\.\.(/|$)",  # Path traversal (matches ../ or .. at end)
+    r"%2[eE]%2[eE]",  # URL encoded ..
+    r"\\x2e\\x2e",  # Hex encoded ..
+)
+
 BLOCKED_GIT_COMMANDS = [
     "push",
     "reset",
@@ -181,13 +195,7 @@ def sanitize_git_args(args: List[str]) -> bool:
     - Prevent absolute path access outside repo
     - Prevent URL-encoded path traversal
     """
-    dangerous_patterns = [
-        r"[;&|`$]",  # Shell injection
-        r"\.\.(/|$)",  # Path traversal (matches ../ or .. at end)
-        r"%2[eE]%2[eE]",  # URL encoded ..
-        r"\\x2e\\x2e",  # Hex encoded ..
-    ]
-
+    # Issue #380: use module-level constant for dangerous patterns
     for arg in args:
         # Block empty arguments
         if not arg.strip():
@@ -201,7 +209,7 @@ def sanitize_git_args(args: List[str]) -> bool:
                 return False
 
         # Check against dangerous patterns
-        for pattern in dangerous_patterns:
+        for pattern in _DANGEROUS_GIT_PATTERNS:
             if re.search(pattern, arg):
                 logger.warning(f"Blocked dangerous git argument pattern: {arg}")
                 return False
@@ -368,7 +376,7 @@ class GitLogRequest(BaseModel):
     def validate_file_path(cls, v):
         """Ensure file path is safe"""
         if v:
-            if not re.match(r"^[a-zA-Z0-9_\-./]+$", v):
+            if not _SAFE_PATH_RE.match(v):
                 raise ValueError("Invalid file path format")
             if ".." in v:
                 raise ValueError("Path traversal not allowed")
@@ -382,7 +390,7 @@ class GitLogRequest(BaseModel):
         """Basic validation for repository path"""
         if not v or not v.strip():
             raise ValueError("Repository path cannot be empty")
-        if re.search(r"[;&|`$]", v):
+        if _SHELL_METACHAR_RE.search(v):
             raise ValueError("Invalid characters in repository path")
         return v.strip()
 
@@ -407,7 +415,7 @@ class GitDiffRequest(BaseModel):
     def validate_file_path(cls, v):
         """Ensure file path is safe"""
         if v:
-            if not re.match(r"^[a-zA-Z0-9_\-./]+$", v):
+            if not _SAFE_PATH_RE.match(v):
                 raise ValueError("Invalid file path format")
             if ".." in v:
                 raise ValueError("Path traversal not allowed")
@@ -419,7 +427,7 @@ class GitDiffRequest(BaseModel):
     @classmethod
     def validate_commit_ref(cls, v):
         """Ensure commit reference is safe"""
-        if v and not re.match(r"^[a-zA-Z0-9_\-./^~]+$", v):
+        if v and not _COMMIT_REF_RE.match(v):
             raise ValueError("Invalid commit reference format")
         return v
 
@@ -429,7 +437,7 @@ class GitDiffRequest(BaseModel):
         """Basic validation for repository path"""
         if not v or not v.strip():
             raise ValueError("Repository path cannot be empty")
-        if re.search(r"[;&|`$]", v):
+        if _SHELL_METACHAR_RE.search(v):
             raise ValueError("Invalid characters in repository path")
         return v.strip()
 
@@ -465,7 +473,7 @@ class GitBlameRequest(BaseModel):
     @classmethod
     def validate_file_path(cls, v):
         """Ensure file path is safe"""
-        if not re.match(r"^[a-zA-Z0-9_\-./]+$", v):
+        if not _SAFE_PATH_RE.match(v):
             raise ValueError("Invalid file path format")
         if ".." in v:
             raise ValueError("Path traversal not allowed")
@@ -479,7 +487,7 @@ class GitBlameRequest(BaseModel):
         """Basic validation for repository path"""
         if not v or not v.strip():
             raise ValueError("Repository path cannot be empty")
-        if re.search(r"[;&|`$]", v):
+        if _SHELL_METACHAR_RE.search(v):
             raise ValueError("Invalid characters in repository path")
         return v.strip()
 
@@ -499,7 +507,7 @@ class GitShowRequest(BaseModel):
     @classmethod
     def validate_ref(cls, v):
         """Ensure ref is safe"""
-        if not re.match(r"^[a-zA-Z0-9_\-./^~:]+$", v):
+        if not _FULL_REF_RE.match(v):
             raise ValueError("Invalid ref format")
         return v
 

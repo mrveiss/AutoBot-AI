@@ -27,11 +27,18 @@ from .threshold_constants import (  # Issue #318: Threshold and timing constants
     CacheConfig,
     CircuitBreakerDefaults,
     ComputerVisionThresholds,
+    FileWatcherConfig,
+    HardwareAcceleratorConfig,
     KnowledgeSyncConfig,
+    LLMDefaults,
+    ResourceThresholds,
     RetryConfig,
     SecurityThresholds,
+    ServiceDiscoveryConfig,
+    StringParsingConstants,  # Issue #380: Centralized string parsing
     TimingConstants,
     VoiceRecognitionConfig,
+    WorkflowConfig,
     WorkflowThresholds,
 )
 
@@ -61,4 +68,11 @@ __all__ = [
     "TimingConstants",
     "RetryConfig",
     "BatchConfig",
+    "LLMDefaults",
+    "ResourceThresholds",
+    "HardwareAcceleratorConfig",
+    "WorkflowConfig",
+    "ServiceDiscoveryConfig",
+    "FileWatcherConfig",
+    "StringParsingConstants",  # Issue #380
 ]

@@ -41,6 +41,12 @@ from .operation_timeout_integration import (
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for sequence type checks
+_SEQUENCE_TYPES = (list, tuple)
+
+# Issue #380: Module-level tuple for path-like type checks
+_PATH_TYPES = (str, Path)
+
 
 class ExistingOperationMigrator:
     """
@@ -563,9 +569,9 @@ class ExistingOperationMigrator:
 
 def _estimate_items_from_arg(arg: Any) -> int:
     """Estimate item count from first argument (Issue #315 - extracted helper)."""
-    if isinstance(arg, (list, tuple)):
+    if isinstance(arg, _SEQUENCE_TYPES):  # Issue #380
         return len(arg)
-    if isinstance(arg, (str, Path)):
+    if isinstance(arg, _PATH_TYPES):  # Issue #380
         try:
             path = Path(arg)
             if path.is_dir():

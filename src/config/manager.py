@@ -22,6 +22,7 @@ from src.config.settings import UnifiedConfigSettings
 from src.config.sync_ops import SyncOperationsMixin
 from src.config.timeout_config import TimeoutConfigMixin
 from src.config.validation import ValidationMixin
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class UnifiedConfigManager(
         settings: Optional[UnifiedConfigSettings] = None,
     ):
         """Initialize unified config manager with directory paths and settings."""
-        # Find project root dynamically
-        self.project_root = Path(__file__).parent.parent.parent
+        # Use centralized PathConstants (Issue #380)
+        self.project_root = PATH.PROJECT_ROOT
         self.config_dir = self.project_root / config_dir
         self.base_config_file = self.config_dir / "config.yaml"
         self.settings_file = self.config_dir / "settings.json"

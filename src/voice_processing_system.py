@@ -43,6 +43,40 @@ _QUERY_INTENT_PATTERNS = [
     (r"(?i)status", "status_query"),
 ]
 
+# Issue #380: Module-level frozensets to avoid repeated list creation
+_HIGH_RISK_INTENTS = frozenset({
+    "shutdown",
+    "restart",
+    "delete",
+    "uninstall",
+    "request_manual_control",
+    "emergency",
+})
+
+_CONTEXT_DEPENDENT_INTENTS = frozenset({
+    "click_element",
+    "type_text",
+    "scroll_page",
+    "navigate_to",
+})
+
+_HIGH_RISK_COMMAND_TYPES = frozenset({VoiceCommand.SYSTEM, VoiceCommand.TAKEOVER})
+
+# Issue #380: Intents requiring current screen state
+_SCREEN_STATE_INTENTS = frozenset({"click_element", "type_text"})
+
+# Issue #380: Pre-compiled regex patterns for entity extraction
+import re as _re
+_NUMBER_RE = _re.compile(r"\b\d+\b")
+_QUOTED_TEXT_RE = _re.compile(r'"([^"]*)"')
+_URL_RE = _re.compile(r"https?://[^\s]+")
+_DIRECTION_RE = _re.compile(r"(?i)\b(up|down|left|right|top|bottom|center)\b")
+_APP_PATTERNS_RE = [
+    _re.compile(r"(?i)\b(chrome|firefox|safari|edge|browser)\b"),
+    _re.compile(r"(?i)\b(notepad|word|excel|powerpoint)\b"),
+    _re.compile(r"(?i)\b(calculator|terminal|cmd|console)\b"),
+]
+
 
 def _match_intent_from_patterns(
     transcription: str, patterns: list, default: str
@@ -665,42 +699,32 @@ class NaturalLanguageProcessor:
         self, transcription: str, command_type: VoiceCommand
     ) -> Dict[str, Any]:
         """Extract entities and parameters from transcription"""
-        import re
-
         entities = {}
 
-        # Extract common entities
+        # Extract common entities using pre-compiled patterns (Issue #380)
         # Numbers
-        numbers = re.findall(r"\b\d+\b", transcription)
+        numbers = _NUMBER_RE.findall(transcription)
         if numbers:
             entities["numbers"] = [int(n) for n in numbers]
 
-        # Applications/programs
-        app_patterns = [
-            r"(?i)\b(chrome|firefox|safari|edge|browser)\b",
-            r"(?i)\b(notepad|word|excel|powerpoint)\b",
-            r"(?i)\b(calculator|terminal|cmd|console)\b",
-        ]
-
-        for pattern in app_patterns:
-            matches = re.findall(pattern, transcription)
+        # Applications/programs using pre-compiled patterns
+        for pattern in _APP_PATTERNS_RE:
+            matches = pattern.findall(transcription)
             if matches:
                 entities.setdefault("applications", []).extend(matches)
 
-        # Directions
-        directions = re.findall(
-            r"(?i)\b(up|down|left|right|top|bottom|center)\b", transcription
-        )
+        # Directions using pre-compiled pattern
+        directions = _DIRECTION_RE.findall(transcription)
         if directions:
             entities["directions"] = directions
 
-        # Text content (quoted text)
-        quoted_text = re.findall(r'"([^"]*)"', transcription)
+        # Text content (quoted text) using pre-compiled pattern
+        quoted_text = _QUOTED_TEXT_RE.findall(transcription)
         if quoted_text:
             entities["quoted_text"] = quoted_text
 
-        # URLs
-        urls = re.findall(r"https?://[^\s]+", transcription)
+        # URLs using pre-compiled pattern
+        urls = _URL_RE.findall(transcription)
         if urls:
             entities["urls"] = urls
 
@@ -738,17 +762,8 @@ class NaturalLanguageProcessor:
     ) -> bool:
         """Determine if command requires user confirmation"""
 
-        # Commands that typically require confirmation
-        high_risk_intents = [
-            "shutdown",
-            "restart",
-            "delete",
-            "uninstall",
-            "request_manual_control",
-            "emergency",
-        ]
-
-        if intent.lower() in [i.lower() for i in high_risk_intents]:
+        # Issue #380: Use module-level frozenset for O(1) lookup
+        if intent.lower() in _HIGH_RISK_INTENTS:
             return True
 
         if command_type == VoiceCommand.TAKEOVER:
@@ -768,15 +783,8 @@ class NaturalLanguageProcessor:
     ) -> bool:
         """Determine if command needs additional context"""
 
-        # Check if command references elements that need screen context
-        context_dependent_intents = [
-            "click_element",
-            "type_text",
-            "scroll_page",
-            "navigate_to",
-        ]
-
-        if intent in context_dependent_intents and not context:
+        # Issue #380: Use module-level frozenset for O(1) lookup
+        if intent in _CONTEXT_DEPENDENT_INTENTS and not context:
             return True
 
         # Check if parameters are incomplete
@@ -1126,15 +1134,13 @@ class VoiceProcessingSystem:
 
     async def _assess_risk_level(self, command_analysis: VoiceCommandAnalysis) -> str:
         """Assess risk level of command execution"""
-        high_risk_types = {VoiceCommand.SYSTEM, VoiceCommand.TAKEOVER}
-        high_risk_intents = ["shutdown", "restart", "delete", "uninstall"]
-
-        if command_analysis.command_type in high_risk_types:
+        # Issue #380: Use module-level frozenset for O(1) lookup
+        if command_analysis.command_type in _HIGH_RISK_COMMAND_TYPES:
             return "high"
 
-        if any(
-            intent in command_analysis.intent.lower() for intent in high_risk_intents
-        ):
+        # Issue #380: Use module-level frozenset for O(1) lookup
+        intent_lower = command_analysis.intent.lower()
+        if any(risk_intent in intent_lower for risk_intent in _HIGH_RISK_INTENTS):
             return "high"
 
         if command_analysis.confidence < 0.7:
@@ -1152,7 +1158,7 @@ class VoiceProcessingSystem:
             if "target_element" not in command_analysis.parameters:
                 required_context.append("target_element_identification")
 
-            if command_analysis.intent in {"click_element", "type_text"}:
+            if command_analysis.intent in _SCREEN_STATE_INTENTS:
                 required_context.append("current_screen_state")
 
         if command_analysis.command_type == VoiceCommand.NAVIGATION:

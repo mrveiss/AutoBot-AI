@@ -22,6 +22,14 @@ from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for sanitize_input()
+# These are called on every input sanitization, so pre-compilation is important
+_SANITIZE_COMMAND_RE = re.compile(r"COMMAND\s*:", re.IGNORECASE)
+_SANITIZE_EXECUTE_RE = re.compile(r"EXECUTE\s*:", re.IGNORECASE)
+_SANITIZE_SYSTEM_RE = re.compile(r"\[SYSTEM\]", re.IGNORECASE)
+_SANITIZE_INST_RE = re.compile(r"\[INST\]", re.IGNORECASE)
+_SANITIZE_IGNORE_RE = re.compile(r"ignore\s+previous\s+instructions", re.IGNORECASE)
+
 
 class InjectionRisk(Enum):
     """Risk levels for detected injection patterns"""
@@ -189,49 +197,46 @@ class PromptInjectionDetector:
                 metadata=metadata,
             )
 
-        text_lower = text.lower()
-
-        # Check for shell metacharacters
-        metachar_found = []
-        for meta in self.shell_metacharacters:
-            if meta in text:
-                metachar_found.append(meta)
-                detected_patterns.append(f"Shell metacharacter: {meta}")
-                max_risk = self._update_risk(max_risk, InjectionRisk.HIGH)
-
+        # Issue #281: Using extracted helper for pattern checking
+        # Check for shell metacharacters (literal match, case-sensitive for metachars)
+        metachar_found = self._check_pattern_list(
+            text, self.shell_metacharacters, "metacharacter",
+            use_regex=False, case_sensitive=True
+        )
+        for meta in metachar_found:
+            detected_patterns.append(f"Shell metacharacter: {meta}")
+            max_risk = self._update_risk(max_risk, InjectionRisk.HIGH)
         metadata["metacharacters"] = metachar_found
 
-        # Check for prompt injection patterns
-        injection_found = []
-        for pattern in self.injection_patterns:
-            matches = re.findall(pattern, text_lower, re.IGNORECASE | re.MULTILINE)
-            if matches:
-                injection_found.append(pattern)
-                detected_patterns.append(f"Injection pattern: {pattern}")
-                max_risk = InjectionRisk.CRITICAL
-
+        # Check for prompt injection patterns (regex match)
+        injection_found = self._check_pattern_list(
+            text, self.injection_patterns, "injection",
+            use_regex=True, case_sensitive=False
+        )
+        for pattern in injection_found:
+            detected_patterns.append(f"Injection pattern: {pattern}")
+            max_risk = InjectionRisk.CRITICAL
         metadata["injection_patterns"] = injection_found
 
-        # Check for dangerous commands
-        dangerous_found = []
-        for pattern in self.dangerous_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
-            if matches:
-                dangerous_found.append(pattern)
-                detected_patterns.append(f"Dangerous command: {pattern}")
-                max_risk = self._update_risk(max_risk, InjectionRisk.CRITICAL)
-
+        # Check for dangerous commands (regex match)
+        dangerous_found = self._check_pattern_list(
+            text, self.dangerous_patterns, "dangerous",
+            use_regex=True, case_sensitive=False
+        )
+        for pattern in dangerous_found:
+            detected_patterns.append(f"Dangerous command: {pattern}")
+            max_risk = self._update_risk(max_risk, InjectionRisk.CRITICAL)
         metadata["dangerous_patterns"] = dangerous_found
 
         # Check for context poisoning (if analyzing conversation context)
         if context == "conversation_context":
-            poison_found = []
-            for pattern in self.context_poison_patterns:
-                if re.search(pattern, text_lower, re.IGNORECASE):
-                    poison_found.append(pattern)
-                    detected_patterns.append(f"Context poisoning: {pattern}")
-                    max_risk = self._update_risk(max_risk, InjectionRisk.MODERATE)
-
+            poison_found = self._check_pattern_list(
+                text, self.context_poison_patterns, "poison",
+                use_regex=True, case_sensitive=False
+            )
+            for pattern in poison_found:
+                detected_patterns.append(f"Context poisoning: {pattern}")
+                max_risk = self._update_risk(max_risk, InjectionRisk.MODERATE)
             metadata["context_poisoning"] = poison_found
 
         # Sanitize the text
@@ -310,16 +315,14 @@ class PromptInjectionDetector:
         for meta in dangerous_metachars:
             sanitized = sanitized.replace(meta, "")
 
-        # Remove command injection attempts
-        sanitized = re.sub(r"COMMAND\s*:", "", sanitized, flags=re.IGNORECASE)
-        sanitized = re.sub(r"EXECUTE\s*:", "", sanitized, flags=re.IGNORECASE)
+        # Remove command injection attempts using pre-compiled patterns (Issue #380)
+        sanitized = _SANITIZE_COMMAND_RE.sub("", sanitized)
+        sanitized = _SANITIZE_EXECUTE_RE.sub("", sanitized)
 
-        # Remove system prompt manipulation attempts
-        sanitized = re.sub(r"\[SYSTEM\]", "", sanitized, flags=re.IGNORECASE)
-        sanitized = re.sub(r"\[INST\]", "", sanitized, flags=re.IGNORECASE)
-        sanitized = re.sub(
-            r"ignore\s+previous\s+instructions", "", sanitized, flags=re.IGNORECASE
-        )
+        # Remove system prompt manipulation attempts using pre-compiled patterns
+        sanitized = _SANITIZE_SYSTEM_RE.sub("", sanitized)
+        sanitized = _SANITIZE_INST_RE.sub("", sanitized)
+        sanitized = _SANITIZE_IGNORE_RE.sub("", sanitized)
 
         return sanitized.strip()
 
@@ -349,19 +352,58 @@ class PromptInjectionDetector:
 
         return sanitized
 
+    # Issue #380: Class-level constant for risk ordering to avoid dict recreation
+    _RISK_ORDER = {
+        InjectionRisk.SAFE: 0,
+        InjectionRisk.LOW: 1,
+        InjectionRisk.MODERATE: 2,
+        InjectionRisk.HIGH: 3,
+        InjectionRisk.CRITICAL: 4,
+    }
+
     def _update_risk(self, current: InjectionRisk, new: InjectionRisk) -> InjectionRisk:
         """Update risk level to the higher of two levels"""
-        risk_order = {
-            InjectionRisk.SAFE: 0,
-            InjectionRisk.LOW: 1,
-            InjectionRisk.MODERATE: 2,
-            InjectionRisk.HIGH: 3,
-            InjectionRisk.CRITICAL: 4,
-        }
-
-        if risk_order[new] > risk_order[current]:
+        if self._RISK_ORDER[new] > self._RISK_ORDER[current]:
             return new
         return current
+
+    def _check_pattern_list(
+        self,
+        text: str,
+        patterns: List[str],
+        pattern_type: str,
+        use_regex: bool = True,
+        case_sensitive: bool = False,
+    ) -> List[str]:
+        """
+        Check text against a list of patterns and return matches.
+
+        Issue #281: Extracted helper to reduce repetition in detect_injection.
+
+        Args:
+            text: Text to check against patterns
+            patterns: List of patterns (regex or literal strings)
+            pattern_type: Descriptive name for the pattern type (for logging)
+            use_regex: If True, use re.findall; if False, use 'in' operator
+            case_sensitive: Whether matching should be case-sensitive
+
+        Returns:
+            List of matched patterns
+        """
+        matches = []
+        search_text = text if case_sensitive else text.lower()
+
+        for pattern in patterns:
+            if use_regex:
+                flags = 0 if case_sensitive else (re.IGNORECASE | re.MULTILINE)
+                if re.findall(pattern, text, flags):
+                    matches.append(pattern)
+            else:
+                check_pattern = pattern if case_sensitive else pattern.lower()
+                if check_pattern in search_text:
+                    matches.append(pattern)
+
+        return matches
 
     def get_security_report(self) -> Dict[str, Any]:
         """

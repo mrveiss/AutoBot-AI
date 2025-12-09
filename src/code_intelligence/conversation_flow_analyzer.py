@@ -33,6 +33,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for satisfaction signal detection
+_SATISFACTION_SIGNALS = frozenset({"thanks", "great", "perfect", "excellent", "helpful"})
+
 
 # =============================================================================
 # Enums
@@ -581,6 +584,72 @@ class ConversationFlowAnalyzer:
         self._bottlenecks: List[Bottleneck] = []
         self._optimizations: List[Optimization] = []
 
+    def _parse_single_message(
+        self,
+        msg: Dict[str, Any],
+    ) -> Tuple[ConversationMessage, Optional[IntentCategory], int, int, Optional[str]]:
+        """
+        Parse a single message from raw dict into ConversationMessage.
+
+        Issue #281: Extracted from parse_conversation to reduce function length.
+
+        Args:
+            msg: Raw message dict with role, content, etc.
+
+        Returns:
+            Tuple of:
+            - ConversationMessage
+            - Intent (if user message)
+            - Error increment (0 or 1)
+            - Clarification increment (0 or 1)
+            - Satisfaction signal (or None)
+        """
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        timestamp = msg.get("timestamp")
+        latency = msg.get("latency_ms", 0.0)
+
+        if timestamp and isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp)
+            except ValueError:
+                timestamp = None
+
+        intent = None
+        response_type = None
+        error_inc = 0
+        clarification_inc = 0
+        satisfaction_signal = None
+
+        if role == "user":
+            intent, _ = IntentClassifier.classify(content)
+            if intent == IntentCategory.CLARIFICATION:
+                clarification_inc = 1
+            # Issue #380: Use module-level frozenset for O(1) lookup
+            if any(word in content.lower() for word in _SATISFACTION_SIGNALS):
+                satisfaction_signal = content[:100]
+        elif role == "assistant":
+            response_type = ResponseClassifier.classify(content)
+            if response_type == ResponseType.ERROR_MESSAGE:
+                error_inc = 1
+
+        has_tool_call = bool(msg.get("tool_calls")) or "using the" in content.lower()
+
+        parsed_msg = ConversationMessage(
+            role=role,
+            content=content,
+            timestamp=timestamp,
+            message_id=msg.get("message_id"),
+            intent=intent,
+            response_type=response_type,
+            latency_ms=latency,
+            token_count=msg.get("token_count"),
+            has_tool_call=has_tool_call,
+            metadata=msg.get("metadata", {}),
+        )
+
+        return parsed_msg, intent, error_inc, clarification_inc, satisfaction_signal
+
     def parse_conversation(
         self,
         messages: List[Dict[str, Any]],
@@ -603,56 +672,20 @@ class ConversationFlowAnalyzer:
         clarification_count = 0
         user_satisfaction_signals: List[str] = []
 
-        for i, msg in enumerate(messages):
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
-            timestamp = msg.get("timestamp")
-            latency = msg.get("latency_ms", 0.0)
-
-            if timestamp and isinstance(timestamp, str):
-                try:
-                    timestamp = datetime.fromisoformat(timestamp)
-                except ValueError:
-                    timestamp = None
-
-            # Classify intent for user messages
-            intent = None
-            response_type = None
-            if role == "user":
-                intent, _ = IntentClassifier.classify(content)
-                intent_sequence.append(intent)
-                if intent == IntentCategory.CLARIFICATION:
-                    clarification_count += 1
-                # Check for satisfaction signals
-                if any(
-                    word in content.lower()
-                    for word in ["thanks", "great", "perfect", "excellent", "helpful"]
-                ):
-                    user_satisfaction_signals.append(content[:100])
-            elif role == "assistant":
-                response_type = ResponseClassifier.classify(content)
-                if response_type == ResponseType.ERROR_MESSAGE:
-                    error_count += 1
-
-            # Check for tool calls
-            has_tool_call = bool(msg.get("tool_calls")) or "using the" in content.lower()
-
-            total_latency += latency
-
-            parsed_messages.append(
-                ConversationMessage(
-                    role=role,
-                    content=content,
-                    timestamp=timestamp,
-                    message_id=msg.get("message_id"),
-                    intent=intent,
-                    response_type=response_type,
-                    latency_ms=latency,
-                    token_count=msg.get("token_count"),
-                    has_tool_call=has_tool_call,
-                    metadata=msg.get("metadata", {}),
-                )
+        # Issue #281: Use extracted helper for message parsing
+        for msg in messages:
+            parsed_msg, intent, err_inc, clar_inc, sat_signal = (
+                self._parse_single_message(msg)
             )
+            parsed_messages.append(parsed_msg)
+            total_latency += parsed_msg.latency_ms or 0.0
+
+            if intent:
+                intent_sequence.append(intent)
+            error_count += err_inc
+            clarification_count += clar_inc
+            if sat_signal:
+                user_satisfaction_signals.append(sat_signal)
 
         # Determine final state
         final_state = self._determine_final_state(

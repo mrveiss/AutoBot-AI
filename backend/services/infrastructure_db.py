@@ -33,6 +33,11 @@ from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for infrastructure status tracking
+_DEPLOYMENT_COMPLETED_STATUSES = frozenset({"success", "failed", "rolled_back"})
+_HOST_STATUSES = ("new", "provisioning", "deployed", "healthy", "degraded", "failed")
+_DEPLOYMENT_STATUSES = ("queued", "running", "success", "failed", "rolled_back")
+
 
 class InfrastructureDB:
     """
@@ -542,7 +547,7 @@ class InfrastructureDB:
 
                 if status == "running" and not deployment.started_at:
                     deployment.started_at = datetime.utcnow()
-                elif status in ("success", "failed", "rolled_back"):
+                elif status in _DEPLOYMENT_COMPLETED_STATUSES:
                     deployment.completed_at = datetime.utcnow()
 
                 session.commit()
@@ -673,23 +678,16 @@ class InfrastructureDB:
                 ),
             }
 
-            # Count hosts by status
-            for status in [
-                "new",
-                "provisioning",
-                "deployed",
-                "healthy",
-                "degraded",
-                "failed",
-            ]:
+            # Count hosts by status (Issue #380: use module-level tuple)
+            for status in _HOST_STATUSES:
                 count = (
                     session.query(InfraHost).filter(InfraHost.status == status).count()
                 )
                 if count > 0:
                     stats["hosts_by_status"][status] = count
 
-            # Count deployments by status
-            for status in ["queued", "running", "success", "failed", "rolled_back"]:
+            # Count deployments by status (Issue #380: use module-level tuple)
+            for status in _DEPLOYMENT_STATUSES:
                 count = (
                     session.query(InfraDeployment)
                     .filter(InfraDeployment.status == status)

@@ -33,6 +33,17 @@ COMMON_CLI_TOOLS = {"grep", "awk", "sed", "find", "xargs"}
 SECURITY_KEYWORDS = {"secure", "safe", "recommend", "best practice"}
 OFFICIAL_DOC_DOMAINS = {"github.com", "docs.", "man7.org", ".org"}
 LIMITATION_KEYWORDS = {"limit", "cannot", "not support", "restriction"}
+
+# Issue #380: Module-level frozenset for text section handling
+_TEXT_SECTIONS = frozenset({"installation", "usage"})
+
+# Issue #380: Module-level tuple for tool info optional fields (used in iteration)
+_TOOL_INFO_OPTIONAL_FIELDS = (
+    "purpose", "installation", "requirements", "package_name", "usage", "syntax",
+    "output_formats", "advanced_usage", "features", "troubleshooting", "error_codes",
+    "integrations", "security_notes", "documentation_url", "verified", "limitations",
+    "performance"
+)
 PERFORMANCE_KEYWORDS = {"performance", "speed", "memory", "cpu", "slow", "fast"}
 INSTALLATION_COMMANDS = {
     "apt install",
@@ -783,7 +794,7 @@ class InstructionParser:
     ) -> None:
         """Add content line to the appropriate instruction section"""
         # Handle text sections with simple append
-        if section in ("installation", "usage"):
+        if section in _TEXT_SECTIONS:
             instructions[section] += line + "\n"
             return
 
@@ -837,9 +848,7 @@ class ToolInfoData:
         """Convert to dictionary"""
         result = {"name": self.name, "type": self.type, "category": self.category, "platform": self.platform}
         # Add non-None fields
-        for key in ["purpose", "installation", "requirements", "package_name", "usage", "syntax", 
-                    "output_formats", "advanced_usage", "features", "troubleshooting", "error_codes",
-                    "integrations", "security_notes", "documentation_url", "verified", "limitations", "performance"]:
+        for key in _TOOL_INFO_OPTIONAL_FIELDS:
             val = getattr(self, key, None)
             if val is not None:
                 result[key] = val

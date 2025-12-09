@@ -19,6 +19,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cache", tags=["cache_management"])
 
+# Issue #380: Module-level tuple for essential cache data types
+_ESSENTIAL_CACHE_DATA_TYPES = ("templates", "system_status", "project_status")
+
 
 class CacheStatsResponse(BaseModel):
     status: str
@@ -185,59 +188,13 @@ async def clear_all_cache():
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
-def _template_to_summary_dict(template) -> dict:
-    """Convert template to summary dict for caching."""
-    return {
-        "id": template.id,
-        "name": template.name,
-        "description": template.description,
-        "category": template.category.value,
-        "complexity": template.complexity.value,
-        "estimated_duration_minutes": template.estimated_duration_minutes,
-        "agents_involved": template.agents_involved,
-        "tags": template.tags,
-        "step_count": len(template.steps),
-        "approval_steps": sum(1 for step in template.steps if step.requires_approval),
-        "variables": template.variables,
-    }
-
-
-def _step_to_dict(step) -> dict:
-    """Convert template step to dict for caching."""
-    return {
-        "id": step.id,
-        "agent_type": step.agent_type,
-        "action": step.action,
-        "description": step.description,
-        "requires_approval": step.requires_approval,
-        "dependencies": step.dependencies,
-        "inputs": step.inputs,
-        "expected_duration_ms": step.expected_duration_ms,
-    }
-
-
-def _template_to_detail_dict(template_detail) -> dict:
-    """Convert template to detailed dict for caching."""
-    return {
-        "id": template_detail.id,
-        "name": template_detail.name,
-        "description": template_detail.description,
-        "category": template_detail.category.value,
-        "complexity": template_detail.complexity.value,
-        "estimated_duration_minutes": template_detail.estimated_duration_minutes,
-        "agents_involved": template_detail.agents_involved,
-        "tags": template_detail.tags,
-        "variables": template_detail.variables,
-        "steps": [_step_to_dict(step) for step in template_detail.steps],
-    }
-
-
 async def _warm_templates_cache() -> bool:
-    """Warm cache for workflow templates."""
+    """Warm cache for workflow templates (Issue #372 - uses model methods)."""
     from src.workflow_templates import workflow_template_manager
 
     templates = workflow_template_manager.list_templates()
-    template_data = [_template_to_summary_dict(t) for t in templates]
+    # Issue #372: Use model method to reduce feature envy
+    template_data = [t.to_summary_dict() for t in templates]
 
     # Cache templates list
     await advanced_cache.set(
@@ -251,10 +208,11 @@ async def _warm_templates_cache() -> bool:
         template_detail = workflow_template_manager.get_template(template.id)
         if not template_detail:
             continue
+        # Issue #372: Use model method to reduce feature envy
         await advanced_cache.set(
             "templates",
             f"detail:{template.id}",
-            {"success": True, "template": _template_to_detail_dict(template_detail)},
+            {"success": True, "template": template_detail.to_detail_dict()},
         )
 
     logger.info(f"Warmed cache for {len(templates)} templates")
@@ -353,14 +311,13 @@ async def cache_health_check():
 
 # Startup cache warming function
 async def warm_startup_cache():
-    """Warm essential cache data during application startup"""
+    """Warm essential cache data during application startup (Issue #380: use module constant)"""
     try:
         logger.info("Starting cache warming during application startup")
 
-        essential_data_types = ["templates", "system_status", "project_status"]
         warmed_count = 0
 
-        for data_type in essential_data_types:
+        for data_type in _ESSENTIAL_CACHE_DATA_TYPES:
             try:
                 success = await _warm_data_type(data_type)
                 if success:
@@ -373,7 +330,7 @@ async def warm_startup_cache():
 
         logger.info(
             f"Startup cache warming completed: "
-            f"{warmed_count}/{len(essential_data_types)} data types warmed"
+            f"{warmed_count}/{len(_ESSENTIAL_CACHE_DATA_TYPES)} data types warmed"
         )
         return warmed_count
 

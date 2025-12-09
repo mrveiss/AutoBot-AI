@@ -30,6 +30,12 @@ SENSITIVE_FILE_PATTERNS = {"passwd", "shadow", "key"}
 FILE_TRANSFER_OPS = {"upload", "download", "transfer"}
 FILE_TRANSFER_OPS_SIMPLE = {"upload", "download"}
 
+# Issue #380: Module-level frozensets to avoid repeated list creation
+_SENSITIVE_FILE_KEYWORDS = frozenset({"password", "secret", "key", "token", "credential"})
+_SYSTEM_DIRECTORIES = frozenset({"/etc/", "/usr/", "/var/"})
+_SENSITIVE_PORTS = frozenset({22, 23, 3389, 5900, 135, 139, 445})
+_REMOTE_ACCESS_PORTS = frozenset({22, 3389})  # SSH and RDP ports for auth requirements
+
 
 class SecurityRiskJudge(BaseLLMJudge):
     """Judge for evaluating security risks, command safety, and compliance"""
@@ -554,16 +560,14 @@ Please provide thorough security assessment focusing on safety, security, and co
             if file_path.startswith(critical_path):
                 risks.append(f"Access to critical system path: {critical_path}")
 
-        # Sensitive file patterns
-        if any(
-            pattern in file_path.lower()
-            for pattern in ["password", "secret", "key", "token", "credential"]
-        ):
+        # Sensitive file patterns - Issue #380: Use module-level frozenset
+        file_path_lower = file_path.lower()
+        if any(pattern in file_path_lower for pattern in _SENSITIVE_FILE_KEYWORDS):
             risks.append("File name suggests sensitive content")
 
-        # Hidden files in system directories
+        # Hidden files in system directories - Issue #380: Use module-level frozenset
         if "/." in file_path and any(
-            sys_dir in file_path for sys_dir in ["/etc/", "/usr/", "/var/"]
+            sys_dir in file_path for sys_dir in _SYSTEM_DIRECTORIES
         ):
             risks.append("Access to hidden system file")
 
@@ -605,9 +609,8 @@ Please provide thorough security assessment focusing on safety, security, and co
         if any(suspicious in host for suspicious in suspicious_hosts):
             risks.append("Local network access - potential tunnel or backdoor")
 
-        # Check for sensitive ports
-        sensitive_ports = [22, 23, 3389, 5900, 135, 139, 445]
-        if port in sensitive_ports:
+        # Check for sensitive ports - Issue #380: Use module-level frozenset
+        if port in _SENSITIVE_PORTS:
             risks.append(f"Access to sensitive port {port}")
 
         # Check for risky operations (Issue #326)
@@ -647,7 +650,7 @@ Please provide thorough security assessment focusing on safety, security, and co
                 ]
             )
 
-        if operation_data.get("port") in [22, 3389]:
+        if operation_data.get("port") in _REMOTE_ACCESS_PORTS:
             requirements.extend(
                 [
                     "Use key-based authentication",

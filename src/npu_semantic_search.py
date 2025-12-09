@@ -34,6 +34,7 @@ from src.utils.gpu_vector_search import (
 )
 
 # Import existing AutoBot components
+from src.constants.threshold_constants import TimingConstants
 from src.knowledge.embedding_cache import get_embedding_cache
 from src.knowledge_base import KnowledgeBase
 from src.unified_config_manager import cfg
@@ -50,6 +51,9 @@ except ImportError:
     CHROMADB_AVAILABLE = False
 
 logger = get_llm_logger("npu_semantic_search")
+
+# Issue #380: Module-level tuple for default target modalities in cross-modal search
+_DEFAULT_TARGET_MODALITIES = ("text", "image", "audio", "multimodal")
 
 
 @dataclass
@@ -107,21 +111,25 @@ def _convert_chroma_results(
     if not search_results["ids"] or len(search_results["ids"][0]) == 0:
         return results
 
-    for i in range(len(search_results["ids"][0])):
+    # Use zip for parallel iteration over ChromaDB result arrays (avoids index access)
+    for doc_id, distance, metadata, content in zip(
+        search_results["ids"][0],
+        search_results["distances"][0],
+        search_results["metadatas"][0],
+        search_results["documents"][0],
+    ):
         # Convert distance to similarity (ChromaDB uses L2 distance)
-        distance = search_results["distances"][0][i]
         similarity = 1.0 / (1.0 + distance)
 
         if similarity < threshold:
             continue
 
-        metadata = search_results["metadatas"][0][i]
         result = MultiModalSearchResult(
-            content=search_results["documents"][0][i],
+            content=content,
             modality=modality,
             metadata=metadata,
             score=similarity,
-            doc_id=search_results["ids"][0][i],
+            doc_id=doc_id,
             source_modality=metadata.get("source_modality"),
             fusion_confidence=metadata.get("fusion_confidence"),
         )
@@ -192,10 +200,10 @@ class NPUSemanticSearch:
         self.knowledge_base = KnowledgeBase()
 
         # Wait for knowledge base initialization
-        max_wait = 30  # seconds
+        max_wait = TimingConstants.SHORT_TIMEOUT  # seconds
         wait_time = 0
         while not self.knowledge_base.vector_store and wait_time < max_wait:
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
             wait_time += 1
 
         if self.knowledge_base.vector_store:
@@ -267,6 +275,98 @@ class NPUSemanticSearch:
         except Exception as e:
             logger.warning(f"⚠️ NPU Worker connectivity test failed: {e}")
 
+    def _create_empty_metrics(self) -> SearchMetrics:
+        """Create metrics for empty query case."""
+        return SearchMetrics(
+            total_documents_searched=0,
+            embedding_generation_time_ms=0,
+            similarity_computation_time_ms=0,
+            total_search_time_ms=0,
+            device_used="none",
+            hardware_utilization={},
+        )
+
+    def _convert_basic_results(
+        self, basic_results: List[Dict], device_label: str
+    ) -> List[SearchResult]:
+        """Convert basic search results to SearchResult objects."""
+        return [
+            SearchResult(
+                content=r["content"],
+                metadata=r["metadata"],
+                score=r["score"],
+                doc_id=r.get("doc_id", str(uuid.uuid4())),
+                device_used=device_label,
+                processing_time_ms=0,
+                embedding_model=device_label,
+            )
+            for r in basic_results
+        ]
+
+    async def _perform_vector_search(
+        self,
+        query: str,
+        query_embedding: np.ndarray,
+        similarity_top_k: int,
+        filters: Optional[Dict[str, Any]],
+        embedding_device: str,
+    ) -> List[SearchResult]:
+        """Perform vector similarity search with fallback."""
+        if self.knowledge_base.vector_store and self.knowledge_base.vector_index:
+            return await self._vector_similarity_search(
+                query_embedding, similarity_top_k, filters, embedding_device
+            )
+
+        logger.warning("Vector store not available, using basic search fallback")
+        basic_results = await self.knowledge_base.search(
+            query, similarity_top_k, filters, "text"
+        )
+        return self._convert_basic_results(basic_results, "cpu_fallback")
+
+    async def _create_search_metrics(
+        self,
+        results: List[SearchResult],
+        embedding_time: float,
+        search_time: float,
+        total_time: float,
+        embedding_device: str,
+    ) -> SearchMetrics:
+        """Create performance metrics for search results."""
+        return SearchMetrics(
+            total_documents_searched=len(results),
+            embedding_generation_time_ms=embedding_time,
+            similarity_computation_time_ms=search_time,
+            total_search_time_ms=total_time,
+            device_used=embedding_device,
+            hardware_utilization=await self._get_hardware_utilization(),
+        )
+
+    async def _handle_search_error(
+        self,
+        error: Exception,
+        query: str,
+        similarity_top_k: int,
+        filters: Optional[Dict[str, Any]],
+        start_time: float,
+    ) -> Tuple[List[SearchResult], SearchMetrics]:
+        """Handle search error with fallback."""
+        logger.error(f"❌ Enhanced search failed: {error}")
+        basic_results = await self.knowledge_base.search(
+            query, similarity_top_k, filters, "auto"
+        )
+        fallback_results = self._convert_basic_results(basic_results, "fallback")
+        total_time = (time.time() - start_time) * 1000
+
+        fallback_metrics = SearchMetrics(
+            total_documents_searched=len(fallback_results),
+            embedding_generation_time_ms=0,
+            similarity_computation_time_ms=total_time,
+            total_search_time_ms=total_time,
+            device_used="fallback",
+            hardware_utilization={},
+        )
+        return fallback_results, fallback_metrics
+
     async def enhanced_search(
         self,
         query: str,
@@ -277,6 +377,8 @@ class NPUSemanticSearch:
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """
         Perform NPU-enhanced semantic search.
+
+        Issue #281: Refactored from 136 lines to use extracted helper methods.
 
         Args:
             query: Search query string
@@ -291,14 +393,7 @@ class NPUSemanticSearch:
         start_time = time.time()
 
         if not query.strip():
-            return [], SearchMetrics(
-                total_documents_searched=0,
-                embedding_generation_time_ms=0,
-                similarity_computation_time_ms=0,
-                total_search_time_ms=0,
-                device_used="none",
-                hardware_utilization={},
-            )
+            return [], self._create_empty_metrics()
 
         logger.info(f"🔍 Enhanced search: '{query[:50]}...' (top_k={similarity_top_k})")
 
@@ -312,56 +407,23 @@ class NPUSemanticSearch:
         try:
             # Step 1: Generate query embedding with optimal hardware
             embedding_start = time.time()
-            query_embedding, embedding_device = (
-                await self._generate_optimized_embedding(
-                    query, enable_npu_acceleration, force_device
-                )
+            query_embedding, embedding_device = await self._generate_optimized_embedding(
+                query, enable_npu_acceleration, force_device
             )
             embedding_time = (time.time() - embedding_start) * 1000
 
             # Step 2: Perform vector similarity search
             search_start = time.time()
-
-            if self.knowledge_base.vector_store and self.knowledge_base.vector_index:
-                # Use existing vector store with enhanced processing
-                results = await self._vector_similarity_search(
-                    query_embedding, similarity_top_k, filters, embedding_device
-                )
-            else:
-                # Fallback to basic search
-                logger.warning(
-                    "Vector store not available, using basic search fallback"
-                ),
-                basic_results = await self.knowledge_base.search(
-                    query, similarity_top_k, filters, "text"
-                )
-                results = [
-                    SearchResult(
-                        content=r["content"],
-                        metadata=r["metadata"],
-                        score=r["score"],
-                        doc_id=r.get("doc_id", str(uuid.uuid4())),
-                        device_used="cpu_fallback",
-                        processing_time_ms=0,
-                        embedding_model="basic_search",
-                    )
-                    for r in basic_results
-                ]
-
+            results = await self._perform_vector_search(
+                query, query_embedding, similarity_top_k, filters, embedding_device
+            )
             search_time = (time.time() - search_start) * 1000
             total_time = (time.time() - start_time) * 1000
 
-            # Create performance metrics
-            metrics = SearchMetrics(
-                total_documents_searched=len(results),
-                embedding_generation_time_ms=embedding_time,
-                similarity_computation_time_ms=search_time,
-                total_search_time_ms=total_time,
-                device_used=embedding_device,
-                hardware_utilization=await self._get_hardware_utilization(),
+            # Step 3: Create metrics and cache results
+            metrics = await self._create_search_metrics(
+                results, embedding_time, search_time, total_time, embedding_device
             )
-
-            # Cache the results
             self._cache_result(cache_key, (results, metrics))
 
             logger.info(
@@ -369,40 +431,12 @@ class NPUSemanticSearch:
                 f"(embedding: {embedding_time:.2f}ms, search: {search_time:.2f}ms) "
                 f"using {embedding_device}"
             )
-
             return results, metrics
 
         except Exception as e:
-            logger.error(f"❌ Enhanced search failed: {e}")
-            # Fallback to basic knowledge base search
-            basic_results = await self.knowledge_base.search(
-                query, similarity_top_k, filters, "auto"
+            return await self._handle_search_error(
+                e, query, similarity_top_k, filters, start_time
             )
-
-            fallback_results = [
-                SearchResult(
-                    content=r["content"],
-                    metadata=r["metadata"],
-                    score=r["score"],
-                    doc_id=r.get("doc_id", str(uuid.uuid4())),
-                    device_used="fallback",
-                    processing_time_ms=0,
-                    embedding_model="fallback",
-                )
-                for r in basic_results
-            ]
-
-            total_time = (time.time() - start_time) * 1000
-            fallback_metrics = SearchMetrics(
-                total_documents_searched=len(fallback_results),
-                embedding_generation_time_ms=0,
-                similarity_computation_time_ms=total_time,
-                total_search_time_ms=total_time,
-                device_used="fallback",
-                hardware_utilization={},
-            )
-
-            return fallback_results, fallback_metrics
 
     async def _generate_optimized_embedding(
         self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
@@ -959,7 +993,7 @@ class NPUSemanticSearch:
 
             # Determine target modalities
             if target_modalities is None:
-                target_modalities = ["text", "image", "audio", "multimodal"]
+                target_modalities = _DEFAULT_TARGET_MODALITIES  # Issue #380: use module constant
 
             # Use configured threshold if not provided
             threshold = similarity_threshold or self.similarity_threshold

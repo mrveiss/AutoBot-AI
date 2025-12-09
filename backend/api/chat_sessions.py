@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
 
+# Issue #380: Module-level frozenset for valid file actions
+_VALID_FILE_ACTIONS = frozenset({"delete", "transfer_kb", "transfer_shared"})
+
 # ====================================================================
 # Helper Functions
 # ====================================================================
@@ -366,36 +369,15 @@ async def update_session(
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="delete_session",
-    error_code_prefix="CHAT",
-)
-@router.delete("/chat/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    request: Request,
-    ownership: Dict = Depends(
-        validate_session_ownership
-    ),  # SECURITY: Validate ownership
-    file_action: str = "delete",
-    file_options: Optional[str] = None,
-):
-    """
-    Delete a chat session with optional file handling
+# =============================================================================
+# Helper Functions for delete_session (Issue #281)
+# =============================================================================
 
-    Args:
-        session_id: Chat session ID to delete
-        file_action: How to handle conversation files ("delete", "transfer_kb", "transfer_shared")
-        file_options: JSON string with transfer options
-            (e.g., '{"target_path": "archive/", "tags": ["archived"]}')
 
-    Returns:
-        Success response with deletion details
-    """
-    request_id = generate_request_id()
-    log_request_context(request, "delete_session", request_id)
-
+def _validate_delete_session_params(
+    session_id: str, file_action: str, file_options: Optional[str]
+) -> dict:
+    """Validate and parse delete_session parameters (Issue #281: extracted)."""
     # Validate session ID
     if not validate_chat_session_id(session_id):
         (
@@ -407,9 +389,8 @@ async def delete_session(
         ) = get_exceptions_lazy()
         raise ValidationError("Invalid session ID format")
 
-    # Validate file_action
-    valid_file_actions = ["delete", "transfer_kb", "transfer_shared"]
-    if file_action not in valid_file_actions:
+    # Validate file_action (Issue #380: use module-level constant)
+    if file_action not in _VALID_FILE_ACTIONS:
         (
             AutoBotError,
             InternalError,
@@ -418,7 +399,7 @@ async def delete_session(
             get_error_code,
         ) = get_exceptions_lazy()
         raise ValidationError(
-            f"Invalid file_action. Must be one of: {valid_file_actions}"
+            f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}"
         )
 
     # Parse file_options if provided
@@ -436,10 +417,13 @@ async def delete_session(
             ) = get_exceptions_lazy()
             raise ValidationError("Invalid file_options JSON format")
 
-    # Get dependencies from request state
-    chat_history_manager = get_chat_history_manager(request)
+    return parsed_file_options
 
-    # Handle conversation files if file manager is available
+
+async def _handle_conversation_files(
+    request: Request, session_id: str, file_action: str, parsed_file_options: dict
+) -> dict:
+    """Handle conversation files during session deletion (Issue #281: extracted)."""
     file_deletion_result = {"files_handled": False, "action_taken": file_action}
     conversation_file_manager = getattr(
         request.app.state, "conversation_file_manager", None
@@ -447,7 +431,6 @@ async def delete_session(
 
     if conversation_file_manager:
         try:
-            # Use extracted helper for file actions (Issue #315)
             file_deletion_result = await _handle_session_file_action(
                 conversation_file_manager, session_id, file_action, parsed_file_options
             )
@@ -464,57 +447,107 @@ async def delete_session(
             f"skipping file handling for session {session_id}"
         )
 
-    # CRITICAL FIX: Clean up associated terminal sessions BEFORE deleting chat session
-    # This prevents orphaned terminal sessions with stale pending_approval states
+    return file_deletion_result
+
+
+async def _cleanup_terminal_sessions(request: Request, session_id: str) -> dict:
+    """Clean up associated terminal sessions (Issue #281: extracted)."""
     terminal_cleanup_result = {
         "terminal_sessions_closed": 0,
         "pending_approvals_cleared": 0,
     }
 
     agent_terminal_service = getattr(request.app.state, "agent_terminal_service", None)
-    if agent_terminal_service:
-        try:
-            # Find all terminal sessions associated with this chat session
-            terminal_sessions = await agent_terminal_service.list_sessions(
-                conversation_id=session_id
-            )
-
-            for terminal_session in terminal_sessions:
-                # Check if session has pending approval
-                if terminal_session.pending_approval is not None:
-                    terminal_cleanup_result["pending_approvals_cleared"] += 1
-                    logger.info(
-                        f"Clearing pending approval for terminal session "
-                        f"{terminal_session.session_id} "
-                        f"(command: {terminal_session.pending_approval.get('command')})"
-                    )
-
-                # Close the terminal session (clears pending_approval and removes from Redis)
-                await agent_terminal_service.close_session(terminal_session.session_id)
-                terminal_cleanup_result["terminal_sessions_closed"] += 1
-
-            if terminal_cleanup_result["terminal_sessions_closed"] > 0:
-                logger.info(
-                    f"Cleaned up {terminal_cleanup_result['terminal_sessions_closed']} "
-                    f"terminal session(s) for chat session {session_id}, "
-                    f"cleared {terminal_cleanup_result['pending_approvals_cleared']} "
-                    f"pending approval(s)"
-                )
-        except Exception as terminal_cleanup_error:
-            logger.error(
-                f"Failed to cleanup terminal sessions for chat {session_id}: "
-                f"{terminal_cleanup_error}",
-                exc_info=True,
-            )
-            # Don't fail the chat deletion if terminal cleanup fails
-            terminal_cleanup_result["error"] = str(terminal_cleanup_error)
-    else:
+    if not agent_terminal_service:
         logger.warning(
             f"AgentTerminalService not available, "
             f"skipping terminal session cleanup for session {session_id}"
         )
+        return terminal_cleanup_result
 
-    # Delete session from chat history (synchronous method)
+    try:
+        terminal_sessions = await agent_terminal_service.list_sessions(
+            conversation_id=session_id
+        )
+
+        for terminal_session in terminal_sessions:
+            if terminal_session.pending_approval is not None:
+                terminal_cleanup_result["pending_approvals_cleared"] += 1
+                logger.info(
+                    f"Clearing pending approval for terminal session "
+                    f"{terminal_session.session_id} "
+                    f"(command: {terminal_session.pending_approval.get('command')})"
+                )
+
+            await agent_terminal_service.close_session(terminal_session.session_id)
+            terminal_cleanup_result["terminal_sessions_closed"] += 1
+
+        if terminal_cleanup_result["terminal_sessions_closed"] > 0:
+            logger.info(
+                f"Cleaned up {terminal_cleanup_result['terminal_sessions_closed']} "
+                f"terminal session(s) for chat session {session_id}, "
+                f"cleared {terminal_cleanup_result['pending_approvals_cleared']} "
+                f"pending approval(s)"
+            )
+    except Exception as terminal_cleanup_error:
+        logger.error(
+            f"Failed to cleanup terminal sessions for chat {session_id}: "
+            f"{terminal_cleanup_error}",
+            exc_info=True,
+        )
+        terminal_cleanup_result["error"] = str(terminal_cleanup_error)
+
+    return terminal_cleanup_result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_session",
+    error_code_prefix="CHAT",
+)
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    request: Request,
+    ownership: Dict = Depends(
+        validate_session_ownership
+    ),  # SECURITY: Validate ownership
+    file_action: str = "delete",
+    file_options: Optional[str] = None,
+):
+    """
+    Delete a chat session with optional file handling.
+
+    Issue #281: Refactored from 176 lines to use extracted helper methods.
+
+    Args:
+        session_id: Chat session ID to delete
+        file_action: How to handle conversation files ("delete", "transfer_kb", "transfer_shared")
+        file_options: JSON string with transfer options
+
+    Returns:
+        Success response with deletion details
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "delete_session", request_id)
+
+    # Validate parameters (Issue #281: uses helper)
+    parsed_file_options = _validate_delete_session_params(
+        session_id, file_action, file_options
+    )
+
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
+
+    # Handle conversation files (Issue #281: uses helper)
+    file_deletion_result = await _handle_conversation_files(
+        request, session_id, file_action, parsed_file_options
+    )
+
+    # Clean up terminal sessions (Issue #281: uses helper)
+    terminal_cleanup_result = await _cleanup_terminal_sessions(request, session_id)
+
+    # Delete session from chat history
     deleted = chat_history_manager.delete_session(session_id)
 
     if not deleted:

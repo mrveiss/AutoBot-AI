@@ -21,9 +21,20 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozensets for Redis operation type checking
+_GET_OPERATIONS: FrozenSet[str] = frozenset({"get", "hget", "mget"})
+_SET_OPERATIONS: FrozenSet[str] = frozenset({"set", "hset"})
+_READ_OPERATIONS: FrozenSet[str] = frozenset({"get", "hget"})
+_WRITE_OPERATIONS: FrozenSet[str] = frozenset({"set", "hset"})
+_STRING_KEY_OPERATIONS: FrozenSet[str] = frozenset({"get", "set"})
+
+# Issue #380: Pre-compiled regex patterns for async function blocking detection
+_ASYNC_DEF_PATTERN_RE = re.compile(r"async\s+def\s+\w+.*?(?=async\s+def|\Z)", re.DOTALL)
+_SYNC_REDIS_CALL_RE = re.compile(r"(?<!await\s)redis\.(get|set|hget|hset)\(")
 
 
 class OptimizationSeverity(Enum):
@@ -512,13 +523,13 @@ class RedisOptimizer:
             if any(op.in_loop for op in group):
                 continue
 
-            gets = [op for op in group if op.operation in ("get", "hget", "mget")]
+            gets = [op for op in group if op.operation in _GET_OPERATIONS]
             if len(gets) >= 2:
                 results.append(self._create_sequential_ops_result(
                     file_path, gets, source_lines, "get", OptimizationType.SEQUENTIAL_GETS
                 ))
 
-            sets = [op for op in group if op.operation in ("set", "hset")]
+            sets = [op for op in group if op.operation in _SET_OPERATIONS]
             if len(sets) >= 2:
                 results.append(self._create_sequential_ops_result(
                     file_path, sets, source_lines, "set", OptimizationType.SEQUENTIAL_SETS
@@ -581,7 +592,7 @@ class RedisOptimizer:
         """Find a write operation following a read (Issue #335 - extracted helper)."""
         for j in range(start_idx + 1, min(start_idx + 5, len(operations))):
             next_op = operations[j]
-            if next_op.operation not in ("set", "hset"):
+            if next_op.operation not in _WRITE_OPERATIONS:
                 continue
             if next_op.line_number - read_op.line_number <= 10:
                 return next_op
@@ -629,7 +640,7 @@ class RedisOptimizer:
 
         # Look for read-modify-write patterns
         for i, op in enumerate(operations):
-            if op.operation not in ("get", "hget"):
+            if op.operation not in _READ_OPERATIONS:
                 continue
 
             write_op = self._find_following_write_op(operations, i, op)
@@ -649,7 +660,7 @@ class RedisOptimizer:
         results = []
         key_prefixes: Dict[str, List[RedisOperation]] = {}
         for op in operations:
-            if op.key_pattern and op.operation in ("get", "set"):
+            if op.key_pattern and op.operation in _STRING_KEY_OPERATIONS:
                 prefix = op.key_pattern.split(":")[0].split("{")[0]
                 if prefix not in key_prefixes:
                     key_prefixes[prefix] = []
@@ -753,11 +764,11 @@ class RedisOptimizer:
     def _detect_blocking_in_async(self, file_path: str, source: str) -> List[OptimizationResult]:
         """Detect blocking Redis calls in async functions."""
         results = []
-        async_pattern = r"async\s+def\s+\w+.*?(?=async\s+def|\Z)"
-        for async_match in re.finditer(async_pattern, source, re.DOTALL):
+        # Issue #380: Use pre-compiled patterns for async blocking detection
+        for async_match in _ASYNC_DEF_PATTERN_RE.finditer(source):
             block = async_match.group()
             block_start = source[: async_match.start()].count("\n") + 1
-            sync_calls = re.findall(r"(?<!await\s)redis\.(get|set|hget|hset)\(", block)
+            sync_calls = _SYNC_REDIS_CALL_RE.findall(block)
             if sync_calls:
                 results.append(OptimizationResult(
                     optimization_type=OptimizationType.BLOCKING_IN_ASYNC,

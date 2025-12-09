@@ -27,7 +27,18 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, List, Optional
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuples/frozensets for constant data
+_COMMENT_PREFIXES = ("#", '"""', "'''")
+_LINE_COUNT_TYPES = frozenset({"add", "context"})
+_SUPPORTED_CODE_SUFFIXES = (".py", ".vue", ".ts", ".js")
+
+# Issue #380: Pre-compiled regex patterns for diff parsing
+_OLD_PATH_RE = re.compile(r"a/(\S+)")
+_HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@")
 
 
 # ============================================================================
@@ -511,7 +522,7 @@ class CodeReviewEngine:
             for diff_line in hunk.lines:
                 if diff_line["type"] == "add":
                     changed_lines.add(line)
-                if diff_line["type"] in ("add", "context"):
+                if diff_line["type"] in _LINE_COUNT_TYPES:
                     line += 1
         return changed_lines
 
@@ -551,10 +562,9 @@ class CodeReviewEngine:
             if diff_file.is_deleted:
                 continue
 
-            # Get full file content
+            # Get full file content (Issue #380: use module-level constant)
             file_path = self.project_root / diff_file.path
-            supported_suffixes = [".py", ".vue", ".ts", ".js"]
-            if not file_path.exists() or file_path.suffix not in supported_suffixes:
+            if not file_path.exists() or file_path.suffix not in _SUPPORTED_CODE_SUFFIXES:
                 continue
 
             comments = self.review_file(str(file_path))
@@ -667,13 +677,13 @@ class CodeReviewEngine:
         """Parse diff --git line (Issue #335 - extracted helper)."""
         parts = line.split(" b/")
         file_path = parts[-1] if len(parts) > 1 else "unknown"
-        old_path_match = re.search(r"a/(\S+)", line)
+        old_path_match = _OLD_PATH_RE.search(line)
         old_path = old_path_match.group(1) if old_path_match else None
         return DiffFile(path=file_path, old_path=old_path)
 
     def _parse_hunk_header(self, line: str) -> Optional[DiffHunk]:
         """Parse hunk header line (Issue #335 - extracted helper)."""
-        match = re.match(r"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@", line)
+        match = _HUNK_HEADER_RE.match(line)
         if not match:
             return None
         return DiffHunk(
@@ -759,7 +769,7 @@ class CodeReviewEngine:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=TimingConstants.SHORT_TIMEOUT,
                 encoding="utf-8",
                 cwd=self.project_root,
             )
@@ -779,7 +789,7 @@ class CodeReviewEngine:
             if line.startswith(" " * (indent + 1)):
                 func_end = j + 1
                 continue
-            if line.strip().startswith(("#", '"""', "'''")):
+            if line.strip().startswith(_COMMENT_PREFIXES):
                 func_end = j + 1
                 continue
             # Found line with less or equal indent - function ends

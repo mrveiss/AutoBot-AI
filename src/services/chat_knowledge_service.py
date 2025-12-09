@@ -23,17 +23,21 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from backend.services.rag_service import RAGService
 from src.advanced_rag_optimizer import SearchResult
 from src.constants.network_constants import ServiceURLs
+from src.constants.path_constants import PATH
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("chat_knowledge_service")
 
-# Project root for documentation indexer
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Issue #380: Module-level frozenset for follow-up keywords
+_FOLLOWUP_KEYWORDS: FrozenSet[str] = frozenset({"more", "elaborate", "explain"})
+
+# Issue #380: Use centralized PathConstants instead of repeated computation
+PROJECT_ROOT = PATH.PROJECT_ROOT
 
 
 class QueryKnowledgeIntent(Enum):
@@ -404,7 +408,7 @@ class ConversationContextEnhancer:
             enhanced_parts.append(f" (regarding: {last_topic})")
 
         # If asking "more" about something, include last assistant response snippet
-        if any(word in query.lower() for word in ["more", "elaborate", "explain"]):
+        if any(word in query.lower() for word in _FOLLOWUP_KEYWORDS):
             if history:
                 last_response = history[-1].get("assistant", "")
                 if last_response:

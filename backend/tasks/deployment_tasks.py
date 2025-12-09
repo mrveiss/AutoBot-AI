@@ -17,6 +17,9 @@ from backend.services.ansible_executor import AnsibleExecutor
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for loggable deployment event types
+_DEPLOYMENT_LOGGABLE_EVENTS = frozenset({"runner_on_ok", "runner_on_failed", "runner_on_unreachable"})
+
 
 @celery_app.task(bind=True, name="tasks.deploy_host")
 def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
@@ -94,8 +97,8 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
             },
         )
 
-        # Log important events
-        if event_type in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable"}:
+        # Log important events (Issue #380: use module-level constant)
+        if event_type in _DEPLOYMENT_LOGGABLE_EVENTS:
             logger.info(f"Deployment event [{ip_address}]: {event_type}")
 
     # Generate Ansible inventory

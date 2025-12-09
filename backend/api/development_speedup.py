@@ -24,6 +24,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for valid severity levels
+_VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+
 # Type alias for analysis handlers (Issue #336)
 AnalysisHandler = Callable[[str], Awaitable[Any]]
 
@@ -421,13 +424,12 @@ async def analyze_quality_endpoint(
 
         result = await _get_dev_speedup_agent().analyze_code_quality_consistency(path)
 
-        # Filter by severity if specified
+        # Filter by severity if specified (Issue #380: use module-level constant)
         if severity:
-            valid_severities = ["low", "medium", "high", "critical"]
-            if severity not in valid_severities:
+            if severity not in _VALID_SEVERITIES:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid severity. Must be one of: {valid_severities}",
+                    detail=f"Invalid severity. Must be one of: {sorted(_VALID_SEVERITIES)}",
                 )
 
             filtered_issues = [

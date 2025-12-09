@@ -20,12 +20,19 @@ from typing import Any, Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel, Field
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/code-review", tags=["code-review", "analytics"])
 
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
 REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
+
+# Issue #380: Pre-compiled regex patterns for code review
+_HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?\d* \+(\d+),?\d* @@")
+_FUNC_DEFINITION_RE = re.compile(r'^(async\s+)?def\s+(\w+)\s*\(', re.MULTILINE)
+_NEXT_TOPLEVEL_RE = re.compile(r'\n(?=\S)')
 
 
 # ============================================================================
@@ -208,7 +215,7 @@ REVIEW_PATTERNS = {
 
 def _parse_hunk_header(line: str) -> dict[str, Any] | None:
     """Parse a diff hunk header line (Issue #315)."""
-    match = re.match(r"@@ -(\d+),?\d* \+(\d+),?\d* @@", line)
+    match = _HUNK_HEADER_RE.match(line)
     if match:
         return {
             "old_start": int(match.group(1)),
@@ -305,12 +312,11 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                 logger.warning(f"Invalid regex pattern: {pattern_id}")
 
     # Check for long functions
-    func_pattern = re.compile(r'^(async\s+)?def\s+(\w+)\s*\(', re.MULTILINE)
-    for match in func_pattern.finditer(content):
+    for match in _FUNC_DEFINITION_RE.finditer(content):
         func_start = content[:match.start()].count("\n") + 1
         # Find function end (simple heuristic)
         remaining = content[match.end():]
-        indent_match = re.search(r'\n(?=\S)', remaining)
+        indent_match = _NEXT_TOPLEVEL_RE.search(remaining)
         if indent_match:
             func_end = func_start + remaining[:indent_match.start()].count("\n")
             if func_end - func_start > 50:
@@ -390,12 +396,12 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
             stderr=asyncio.subprocess.PIPE
         )
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
             return stdout.decode("utf-8") if process.returncode == 0 else ""
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
-            logger.warning("Git diff timed out after 30 seconds")
+            logger.warning(f"Git diff timed out after {TimingConstants.SHORT_TIMEOUT} seconds")
             return ""
     except Exception as e:
         logger.warning(f"Failed to get git diff: {e}")

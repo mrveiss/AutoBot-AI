@@ -9,7 +9,10 @@ Eliminates code duplication across deployment, backup, and monitoring scripts
 
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import FrozenSet, Optional
+
+# Issue #380: Module-level frozenset for confirmation responses
+_CONFIRM_TRUE_RESPONSES: FrozenSet[str] = frozenset({"y", "yes", "true", "1"})
 
 
 class ScriptFormatter:
@@ -192,7 +195,7 @@ def confirm_action(message: str, default: bool = False) -> bool:
     if not response:
         return default
 
-    return response in ["y", "yes", "true", "1"]
+    return response in _CONFIRM_TRUE_RESPONSES
 
 
 # Legacy compatibility - these functions maintain the original interface

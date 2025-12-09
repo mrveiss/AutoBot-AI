@@ -33,6 +33,8 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
+from src.constants.threshold_constants import RetryConfig
+
 try:
     from src.utils.redis_client import get_redis_client
 except ImportError:
@@ -63,6 +65,14 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuples for error type classification
+_CRITICAL_ERROR_TYPES = (SystemExit, KeyboardInterrupt, MemoryError)
+_HIGH_SEVERITY_ERROR_TYPES = (ConnectionError, TimeoutError, OSError)
+_MEDIUM_SEVERITY_ERROR_TYPES = (ValueError, TypeError, AttributeError)
+_FALLBACK_ERROR_TYPES = (ValueError, TypeError)
+_RETRY_ERROR_TYPES = (ConnectionError, TimeoutError)
+_SYSTEM_RESTART_ERROR_TYPES = (MemoryError, SystemExit)
 
 
 class ErrorSeverity(Enum):
@@ -274,7 +284,7 @@ class RetryRecoveryHandler(ErrorRecoveryHandler):
 
     def __init__(
         self,
-        max_retries: int = 3,
+        max_retries: int = RetryConfig.DEFAULT_RETRIES,
         backoff_factor: float = 1.5,
         retry_exceptions: tuple = (Exception,),
     ):
@@ -455,8 +465,8 @@ class ErrorBoundaryManager:
         """Setup default recovery handlers for common error scenarios."""
         # Retry handler for network and external service errors
         retry_handler = RetryRecoveryHandler(
-            max_retries=3,
-            backoff_factor=2.0,
+            max_retries=RetryConfig.DEFAULT_RETRIES,
+            backoff_factor=RetryConfig.BACKOFF_BASE,
             retry_exceptions=(ConnectionError, TimeoutError, OSError),
         )
         self.add_recovery_handler(retry_handler)
@@ -565,11 +575,11 @@ class ErrorBoundaryManager:
         Returns:
             Error severity level
         """
-        if isinstance(error, (SystemExit, KeyboardInterrupt, MemoryError)):
+        if isinstance(error, _CRITICAL_ERROR_TYPES):  # Issue #380
             return ErrorSeverity.CRITICAL
-        elif isinstance(error, (ConnectionError, TimeoutError, OSError)):
+        elif isinstance(error, _HIGH_SEVERITY_ERROR_TYPES):  # Issue #380
             return ErrorSeverity.HIGH
-        elif isinstance(error, (ValueError, TypeError, AttributeError)):
+        elif isinstance(error, _MEDIUM_SEVERITY_ERROR_TYPES):  # Issue #380
             return ErrorSeverity.MEDIUM
         else:
             return ErrorSeverity.LOW
@@ -641,13 +651,13 @@ class ErrorBoundaryManager:
         """
         error_id = self.generate_error_id()
 
-        # Determine recovery strategy
+        # Determine recovery strategy (Issue #380: use module-level tuples)
         recovery_strategy = RecoveryStrategy.RETRY
-        if isinstance(error, (ValueError, TypeError)):
+        if isinstance(error, _FALLBACK_ERROR_TYPES):
             recovery_strategy = RecoveryStrategy.FALLBACK
-        elif isinstance(error, (ConnectionError, TimeoutError)):
+        elif isinstance(error, _RETRY_ERROR_TYPES):
             recovery_strategy = RecoveryStrategy.RETRY
-        elif isinstance(error, (MemoryError, SystemExit)):
+        elif isinstance(error, _SYSTEM_RESTART_ERROR_TYPES):
             recovery_strategy = RecoveryStrategy.SYSTEM_RESTART
 
         error_report = ErrorReport(
@@ -908,7 +918,7 @@ def error_boundary(
     component: str = None,
     function: str = None,
     recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY,
-    max_retries: int = 3,
+    max_retries: int = RetryConfig.DEFAULT_RETRIES,
 ):
     """
     Decorator for function-level error boundaries.

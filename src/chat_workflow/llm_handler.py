@@ -23,6 +23,9 @@ from .models import WorkflowSession
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for URL scheme validation
+_VALID_URL_SCHEMES = ("http://", "https://")
+
 
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
@@ -69,7 +72,7 @@ class LLMHandlerMixin:
         """Get Ollama endpoint from config with fallbacks."""
         try:
             endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", None)
-            if endpoint and endpoint.startswith(("http://", "https://")):
+            if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 return endpoint
             logger.error(f"Invalid endpoint URL: {endpoint}, using config-based default")
             return self._get_ollama_endpoint_fallback()

@@ -27,6 +27,17 @@ from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for compliance checks
+_CONSENT_REQUIRED_ACTIONS = frozenset({"data_export", "analytics", "marketing"})
+_COMPLIANCE_FRAMEWORKS_WITH_RETENTION = frozenset({"soc2", "gdpr", "iso27001"})
+_AUTH_ACTIONS = frozenset({"login", "authentication"})
+_MONITORING_ACTIONS = frozenset({"monitoring", "security_scan"})
+_ACCESS_ACTIONS = frozenset({"data_access", "data_export"})
+_MODIFICATION_ACTIONS = frozenset({"data_modification", "data_update"})
+_DELETION_ACTIONS = frozenset({"data_deletion", "account_deletion"})
+_PORTABILITY_ACTIONS = frozenset({"data_export", "data_portability"})
+_HIGH_SEVERITY_LEVELS = frozenset({"high", "critical"})
+
 
 class ComplianceFramework(Enum):
     """Supported compliance frameworks"""
@@ -243,7 +254,7 @@ class ComplianceManager:
 
         # Ensure compliance with framework requirements
         for framework in self.config.get("enabled_frameworks", []):
-            if framework in {"soc2", "gdpr", "iso27001"}:
+            if framework in _COMPLIANCE_FRAMEWORKS_WITH_RETENTION:
                 framework_enum = ComplianceFramework(framework)
                 requirements = self.compliance_requirements.get(framework_enum, {})
                 min_retention = requirements.get("retention_days", 365)
@@ -379,9 +390,9 @@ class ComplianceManager:
         # This would typically involve business logic to determine basis
         action = audit_event["action"]
 
-        if action in {"login", "authentication"}:
+        if action in _AUTH_ACTIONS:
             return "contract"  # Performance of contract
-        elif action in {"monitoring", "security_scan"}:
+        elif action in _MONITORING_ACTIONS:
             return "legitimate_interests"  # Legitimate interests
         elif "consent" in audit_event.get("details", {}):
             return "consent"  # Explicit consent
@@ -393,13 +404,13 @@ class ComplianceManager:
         rights = []
 
         action = audit_event["action"]
-        if action in {"data_access", "data_export"}:
+        if action in _ACCESS_ACTIONS:
             rights.append("right_of_access")
-        if action in {"data_modification", "data_update"}:
+        if action in _MODIFICATION_ACTIONS:
             rights.append("right_to_rectification")
-        if action in {"data_deletion", "account_deletion"}:
+        if action in _DELETION_ACTIONS:
             rights.append("right_to_erasure")
-        if action in {"data_export", "data_portability"}:
+        if action in _PORTABILITY_ACTIONS:
             rights.append("right_to_data_portability")
 
         return rights
@@ -461,8 +472,8 @@ class ComplianceManager:
             "encryption_applied": True,  # PII should always be encrypted
         }
 
-        # Log PII access for GDPR compliance
-        if audit_event["action"] in {"data_access", "data_export"}:
+        # Log PII access for GDPR compliance (Issue #380: use module constant)
+        if audit_event["action"] in _ACCESS_ACTIONS:
             await self._log_pii_access(audit_event)
 
     async def _verify_consent(self, audit_event: Dict) -> bool:
@@ -471,10 +482,8 @@ class ComplianceManager:
         # For now, return basic logic
         action = audit_event["action"]
 
-        # Check if consent is required for this action
-        consent_required_actions = ["data_export", "analytics", "marketing"]
-
-        if action in consent_required_actions:
+        # Check if consent is required for this action - Issue #380
+        if action in _CONSENT_REQUIRED_ACTIONS:
             # In production, check actual consent records
             return False  # Conservative default
 
@@ -677,8 +686,8 @@ class ComplianceManager:
             # Store violation record
             await self._store_violation_record(violation_event)
 
-            # Send alerts for high severity violations
-            if violation["severity"] in {"high", "critical"}:
+            # Send alerts for high severity violations (Issue #380: use module constant)
+            if violation["severity"] in _HIGH_SEVERITY_LEVELS:
                 await self._send_compliance_alert(violation_event)
 
     async def _store_violation_record(self, violation_event: Dict):

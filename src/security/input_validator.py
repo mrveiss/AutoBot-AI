@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level frozenset for URL scheme validation
 _VALID_URL_SCHEMES = frozenset({"http", "https"})
 
+# Issue #380: Pre-compiled regex patterns for frequently used operations
+_SCRIPT_TAG_RE = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+_EVENT_HANDLER_RE = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
+_DANGEROUS_LINK_RE = re.compile(
+    r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE
+)
+_URL_EXTRACT_RE = re.compile(
+    r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+)
+_WHITESPACE_RE = re.compile(r"\s+")
+
 
 class InputValidationError(Exception):
     """Exception raised when input validation fails"""
@@ -392,32 +403,30 @@ class WebResearchInputValidator:
 
     def _remove_script_tags(self, content: str, result: Dict) -> str:
         """Remove dangerous script tags. Updates result metadata."""
-        script_pattern = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
-        scripts_removed = len(script_pattern.findall(content))
+        # Use pre-compiled pattern (Issue #380)
+        scripts_removed = len(_SCRIPT_TAG_RE.findall(content))
         if scripts_removed > 0:
-            content = script_pattern.sub("", content)
+            content = _SCRIPT_TAG_RE.sub("", content)
             result["threats_detected"].append("SCRIPT_TAGS_REMOVED")
             result["metadata"]["scripts_removed"] = scripts_removed
         return content
 
     def _remove_event_handlers(self, content: str, result: Dict) -> str:
         """Remove dangerous event handlers. Updates result metadata."""
-        event_pattern = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
-        events_removed = len(event_pattern.findall(content))
+        # Use pre-compiled pattern (Issue #380)
+        events_removed = len(_EVENT_HANDLER_RE.findall(content))
         if events_removed > 0:
-            content = event_pattern.sub("", content)
+            content = _EVENT_HANDLER_RE.sub("", content)
             result["threats_detected"].append("EVENT_HANDLERS_REMOVED")
             result["metadata"]["events_removed"] = events_removed
         return content
 
     def _remove_dangerous_links(self, content: str, result: Dict) -> str:
         """Remove dangerous links. Updates result metadata."""
-        dangerous_link_pattern = re.compile(
-            r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE
-        )
-        dangerous_links = len(dangerous_link_pattern.findall(content))
+        # Use pre-compiled pattern (Issue #380)
+        dangerous_links = len(_DANGEROUS_LINK_RE.findall(content))
         if dangerous_links > 0:
-            content = dangerous_link_pattern.sub('href="#"', content)
+            content = _DANGEROUS_LINK_RE.sub('href="#"', content)
             result["threats_detected"].append("DANGEROUS_LINKS_REMOVED")
             result["metadata"]["dangerous_links_removed"] = dangerous_links
         return content
@@ -473,10 +482,8 @@ class WebResearchInputValidator:
 
     def _extract_urls(self, text: str) -> List[str]:
         """Extract URLs from text"""
-        url_pattern = re.compile(
-            r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
-        )
-        return url_pattern.findall(text)
+        # Use pre-compiled pattern (Issue #380)
+        return _URL_EXTRACT_RE.findall(text)
 
     def _validate_url_in_query(self, url: str) -> Dict[str, Any]:
         """Validate a URL found within a query"""
@@ -487,8 +494,8 @@ class WebResearchInputValidator:
         # Remove null bytes
         sanitized = query.replace("\x00", "")
 
-        # Remove excessive whitespace
-        sanitized = re.sub(r"\s+", " ", sanitized)
+        # Remove excessive whitespace using pre-compiled pattern (Issue #380)
+        sanitized = _WHITESPACE_RE.sub(" ", sanitized)
 
         # Remove dangerous characters
         dangerous_chars = ["<", ">", '"', "'", "&", "\n", "\r", "\t"]

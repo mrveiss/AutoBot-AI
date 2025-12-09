@@ -18,6 +18,9 @@ from src.unified_config_manager import config_manager
 # Module-level logger for logging_manager itself
 _logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for log types
+_LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
+
 
 class LoggingManager:
     """
@@ -158,11 +161,10 @@ class LoggingManager:
         Args:
             log_type: Specific log type to rotate, or None for all
         """
-        log_types = ["backend", "frontend", "llm", "debug", "audit"]
-        if log_type:
-            log_types = [log_type]
+        # Issue #380: Use module-level constant
+        log_types_to_rotate = list(_LOG_TYPES) if not log_type else [log_type]
 
-        for lt in log_types:
+        for lt in log_types_to_rotate:
             log_file = config_manager.get(f"logging.file_handlers.{lt}")
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths

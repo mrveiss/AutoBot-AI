@@ -28,6 +28,9 @@ from src.utils.monitoring_alerts import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Issue #380: Module-level frozenset for valid alert operators
+_VALID_ALERT_OPERATORS = frozenset({"gt", "gte", "lt", "lte", "eq"})
+
 
 # Pydantic models for API
 class AlertRuleRequest(BaseModel):
@@ -161,7 +164,7 @@ async def get_alerts_status():
             "enabled": enabled_channels,
             "disabled": [
                 name
-                for name in alerts_manager.notification_channels.keys()
+                for name in alerts_manager.notification_channels
                 if name not in enabled_channels
             ],
         },
@@ -195,28 +198,8 @@ async def get_active_alerts(
         filter_tags = set(tag.strip() for tag in tags.split(","))
         alerts = [a for a in alerts if filter_tags.intersection(set(a.tags))]
 
-    # Convert to response format
-    response_alerts = []
-    for alert in alerts:
-        response_alerts.append(
-            AlertResponse(
-                rule_id=alert.rule_id,
-                rule_name=alert.rule_name,
-                metric_path=alert.metric_path,
-                current_value=alert.current_value,
-                threshold=alert.threshold,
-                severity=alert.severity.value,
-                status=alert.status.value,
-                message=alert.message,
-                created_at=alert.created_at.isoformat(),
-                updated_at=alert.updated_at.isoformat(),
-                acknowledged_at=(
-                    alert.acknowledged_at.isoformat() if alert.acknowledged_at else None
-                ),
-                acknowledged_by=alert.acknowledged_by,
-                tags=alert.tags,
-            )
-        )
+    # Issue #372: Use model method to reduce feature envy
+    response_alerts = [AlertResponse(**alert.to_response_dict()) for alert in alerts]
 
     return response_alerts
 
@@ -300,9 +283,8 @@ async def create_alert_rule(rule_request: AlertRuleRequest):
             status_code=400, detail=f"Invalid severity: {rule_request.severity}"
         )
 
-    # Validate operator
-    valid_operators = ["gt", "gte", "lt", "lte", "eq"]
-    if rule_request.operator not in valid_operators:
+    # Validate operator (Issue #380: use module-level constant)
+    if rule_request.operator not in _VALID_ALERT_OPERATORS:
         raise HTTPException(
             status_code=400, detail=f"Invalid operator: {rule_request.operator}"
         )
@@ -360,9 +342,8 @@ async def update_alert_rule(rule_id: str, rule_request: AlertRuleRequest):
             status_code=400, detail=f"Invalid severity: {rule_request.severity}"
         )
 
-    # Validate operator
-    valid_operators = ["gt", "gte", "lt", "lte", "eq"]
-    if rule_request.operator not in valid_operators:
+    # Validate operator (Issue #380: use module-level constant)
+    if rule_request.operator not in _VALID_ALERT_OPERATORS:
         raise HTTPException(
             status_code=400, detail=f"Invalid operator: {rule_request.operator}"
         )

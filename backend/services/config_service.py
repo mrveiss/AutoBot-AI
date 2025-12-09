@@ -26,6 +26,9 @@ from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for LLM provider keys
+_LLM_PROVIDER_KEYS = frozenset({"ollama", "local", "cloud"})
+
 
 class ConfigService:
     """Centralized configuration management service"""
@@ -57,8 +60,112 @@ class ConfigService:
         logger.info("Configuration cache cleared")
 
     @staticmethod
+    def _get_nested_from_dict(data: dict, path: str, default=None):
+        """Get nested value from dict by dot-separated path (Issue #372 - helper)."""
+        keys = path.split(".")
+        value = data
+        for key in keys:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                return default
+        return value
+
+    @staticmethod
+    def _build_backend_config(get, llm_config: Metadata) -> Metadata:
+        """
+        Build backend configuration section.
+
+        Issue #281: Extracted helper for backend config building.
+
+        Args:
+            get: Config getter function
+            llm_config: LLM configuration dict
+
+        Returns:
+            Backend configuration dict
+        """
+        return {
+            "api_endpoint": get(
+                "backend.api_endpoint",
+                f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
+            ),
+            "server_host": get(
+                "backend.server_host", NetworkConstants.BIND_ALL_INTERFACES
+            ),
+            "server_port": get("backend.server_port", BACKEND_PORT),
+            "chat_data_dir": get("backend.chat_data_dir", "data/chats"),
+            "chat_history_file": get(
+                "backend.chat_history_file", "data/chat_history.json"
+            ),
+            "knowledge_base_db": get(
+                "backend.knowledge_base_db", "data/knowledge_base.db"
+            ),
+            "reliability_stats_file": get(
+                "backend.reliability_stats_file", "data/reliability_stats.json"
+            ),
+            "audit_log_file": get("backend.audit_log_file", "data/audit.log"),
+            "cors_origins": get("backend.cors_origins", []),
+            "timeout": get("backend.timeout", 60),
+            "max_retries": get("backend.max_retries", 3),
+            "streaming": get("backend.streaming", False),
+            "llm": llm_config,
+        }
+
+    @staticmethod
+    def _build_memory_config(get) -> Metadata:
+        """
+        Build memory configuration section.
+
+        Issue #281: Extracted helper for memory config building.
+
+        Args:
+            get: Config getter function
+
+        Returns:
+            Memory configuration dict
+        """
+        return {
+            "long_term": {
+                "enabled": get("memory.long_term.enabled", True),
+                "retention_days": get("memory.long_term.retention_days", 30),
+            },
+            "short_term": {
+                "enabled": get("memory.short_term.enabled", True),
+                "duration_minutes": get(
+                    "memory.short_term.duration_minutes", 30
+                ),
+            },
+            "vector_storage": {
+                "enabled": get("memory.vector_storage.enabled", True),
+                "update_frequency_days": get(
+                    "memory.vector_storage.update_frequency_days", 7
+                ),
+            },
+            "chromadb": {
+                "enabled": get("memory.chromadb.enabled", True),
+                "path": get("memory.chromadb.path", "data/chromadb"),
+                "collection_name": get(
+                    "memory.chromadb.collection_name", "autobot_memory"
+                ),
+            },
+            "redis": {
+                "enabled": get("memory.redis.enabled", False),
+                "host": get("memory.redis.host", REDIS_HOST_IP),
+                "port": get("memory.redis.port", NetworkConstants.REDIS_PORT),
+            },
+        }
+
+    @staticmethod
     def get_full_config() -> Metadata:
-        """Get complete application configuration"""
+        """
+        Get complete application configuration.
+
+        Issue #281: Refactored from 145 lines to use extracted helper methods.
+
+        Returns:
+            Complete configuration dictionary
+        """
         import time
 
         # Return cached config if still valid
@@ -69,204 +176,67 @@ class ConfigService:
         logger.debug("Refreshing configuration cache")
 
         try:
-            # Get the complete config once to avoid repeated calls
+            # Get the complete config once to avoid repeated calls (Issue #372)
             full_config = unified_config_manager.to_dict()
             llm_config = unified_config_manager.get_llm_config()
 
-            # Helper function to get nested values with default
-            def get_nested(path: str, default=None):
-                """Get nested config value by dot-separated path."""
-                keys = path.split(".")
-                value = full_config
-                for key in keys:
-                    if isinstance(value, dict) and key in value:
-                        value = value[key]
-                    else:
-                        return default
-                return value
+            # Use local helper to access already-fetched config (Issue #372 fix)
+            get = lambda path, default=None: ConfigService._get_nested_from_dict(
+                full_config, path, default
+            )
 
             # Build comprehensive config structure matching frontend expectations
             # Note: Prompts section is excluded as it's managed separately
+            # Issue #281: Uses extracted helpers for complex sections
             config_data = {
                 "message_display": {
-                    "show_thoughts": unified_config_manager.get_nested(
-                        "message_display.show_thoughts", True
-                    ),
-                    "show_json": unified_config_manager.get_nested(
-                        "message_display.show_json", False
-                    ),
-                    "show_utility": unified_config_manager.get_nested(
-                        "message_display.show_utility", False
-                    ),
-                    "show_planning": unified_config_manager.get_nested(
-                        "message_display.show_planning", True
-                    ),
-                    "show_debug": unified_config_manager.get_nested(
-                        "message_display.show_debug", False
-                    ),
+                    "show_thoughts": get("message_display.show_thoughts", True),
+                    "show_json": get("message_display.show_json", False),
+                    "show_utility": get("message_display.show_utility", False),
+                    "show_planning": get("message_display.show_planning", True),
+                    "show_debug": get("message_display.show_debug", False),
                 },
                 "chat": {
-                    "auto_scroll": unified_config_manager.get_nested(
-                        "chat.auto_scroll", True
-                    ),
-                    "max_messages": unified_config_manager.get_nested(
-                        "chat.max_messages", 100
-                    ),
-                    "message_retention_days": unified_config_manager.get_nested(
-                        "chat.message_retention_days", 30
-                    ),
+                    "auto_scroll": get("chat.auto_scroll", True),
+                    "max_messages": get("chat.max_messages", 100),
+                    "message_retention_days": get("chat.message_retention_days", 30),
                 },
-                "backend": {
-                    "api_endpoint": unified_config_manager.get_nested(
-                        "backend.api_endpoint",
-                        f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
-                    ),
-                    "server_host": unified_config_manager.get_nested(
-                        "backend.server_host", NetworkConstants.BIND_ALL_INTERFACES
-                    ),
-                    "server_port": unified_config_manager.get_nested(
-                        "backend.server_port", BACKEND_PORT
-                    ),
-                    "chat_data_dir": unified_config_manager.get_nested(
-                        "backend.chat_data_dir", "data/chats"
-                    ),
-                    "chat_history_file": unified_config_manager.get_nested(
-                        "backend.chat_history_file", "data/chat_history.json"
-                    ),
-                    "knowledge_base_db": unified_config_manager.get_nested(
-                        "backend.knowledge_base_db", "data/knowledge_base.db"
-                    ),
-                    "reliability_stats_file": unified_config_manager.get_nested(
-                        "backend.reliability_stats_file", "data/reliability_stats.json"
-                    ),
-                    "audit_log_file": unified_config_manager.get_nested(
-                        "backend.audit_log_file", "data/audit.log"
-                    ),
-                    "cors_origins": unified_config_manager.get_nested(
-                        "backend.cors_origins", []
-                    ),
-                    "timeout": unified_config_manager.get_nested("backend.timeout", 60),
-                    "max_retries": unified_config_manager.get_nested(
-                        "backend.max_retries", 3
-                    ),
-                    "streaming": unified_config_manager.get_nested(
-                        "backend.streaming", False
-                    ),
-                    # Use unified LLM configuration
-                    "llm": llm_config,
-                },
+                "backend": ConfigService._build_backend_config(get, llm_config),
                 "ui": {
-                    "theme": unified_config_manager.get_nested("ui.theme", "light"),
-                    "font_size": unified_config_manager.get_nested(
-                        "ui.font_size", "medium"
-                    ),
-                    "language": unified_config_manager.get_nested("ui.language", "en"),
-                    "animations": unified_config_manager.get_nested(
-                        "ui.animations", True
-                    ),
-                    "developer_mode": unified_config_manager.get_nested(
-                        "ui.developer_mode", False
-                    ),
+                    "theme": get("ui.theme", "light"),
+                    "font_size": get("ui.font_size", "medium"),
+                    "language": get("ui.language", "en"),
+                    "animations": get("ui.animations", True),
+                    "developer_mode": get("ui.developer_mode", False),
                 },
                 "security": {
-                    "enable_encryption": unified_config_manager.get_nested(
-                        "security.enable_encryption", False
-                    ),
-                    "session_timeout_minutes": unified_config_manager.get_nested(
+                    "enable_encryption": get("security.enable_encryption", False),
+                    "session_timeout_minutes": get(
                         "security.session_timeout_minutes", 30
                     ),
                 },
                 "logging": {
-                    "log_level": unified_config_manager.get_nested(
-                        "logging.log_level", "info"
-                    ),
-                    "log_to_file": unified_config_manager.get_nested(
-                        "logging.log_to_file", True
-                    ),
-                    "log_file_path": unified_config_manager.get_nested(
-                        "logging.log_file_path", "logs/autobot.log"
-                    ),
+                    "log_level": get("logging.log_level", "info"),
+                    "log_to_file": get("logging.log_to_file", True),
+                    "log_file_path": get("logging.log_file_path", "logs/autobot.log"),
                 },
                 "knowledge_base": {
-                    "enabled": unified_config_manager.get_nested(
-                        "knowledge_base.enabled", True
-                    ),
-                    "update_frequency_days": unified_config_manager.get_nested(
+                    "enabled": get("knowledge_base.enabled", True),
+                    "update_frequency_days": get(
                         "knowledge_base.update_frequency_days", 7
                     ),
                 },
                 "voice_interface": {
-                    "enabled": unified_config_manager.get_nested(
-                        "voice_interface.enabled", False
-                    ),
-                    "voice": unified_config_manager.get_nested(
-                        "voice_interface.voice", "default"
-                    ),
-                    "speech_rate": unified_config_manager.get_nested(
-                        "voice_interface.speech_rate", 1.0
-                    ),
+                    "enabled": get("voice_interface.enabled", False),
+                    "voice": get("voice_interface.voice", "default"),
+                    "speech_rate": get("voice_interface.speech_rate", 1.0),
                 },
-                "memory": {
-                    "long_term": {
-                        "enabled": unified_config_manager.get_nested(
-                            "memory.long_term.enabled", True
-                        ),
-                        "retention_days": unified_config_manager.get_nested(
-                            "memory.long_term.retention_days", 30
-                        ),
-                    },
-                    "short_term": {
-                        "enabled": unified_config_manager.get_nested(
-                            "memory.short_term.enabled", True
-                        ),
-                        "duration_minutes": unified_config_manager.get_nested(
-                            "memory.short_term.duration_minutes", 30
-                        ),
-                    },
-                    "vector_storage": {
-                        "enabled": unified_config_manager.get_nested(
-                            "memory.vector_storage.enabled", True
-                        ),
-                        "update_frequency_days": unified_config_manager.get_nested(
-                            "memory.vector_storage.update_frequency_days", 7
-                        ),
-                    },
-                    "chromadb": {
-                        "enabled": unified_config_manager.get_nested(
-                            "memory.chromadb.enabled", True
-                        ),
-                        "path": unified_config_manager.get_nested(
-                            "memory.chromadb.path", "data/chromadb"
-                        ),
-                        "collection_name": unified_config_manager.get_nested(
-                            "memory.chromadb.collection_name", "autobot_memory"
-                        ),
-                    },
-                    "redis": {
-                        "enabled": unified_config_manager.get_nested(
-                            "memory.redis.enabled", False
-                        ),
-                        "host": unified_config_manager.get_nested(
-                            "memory.redis.host", REDIS_HOST_IP
-                        ),
-                        "port": unified_config_manager.get_nested(
-                            "memory.redis.port", NetworkConstants.REDIS_PORT
-                        ),
-                    },
-                },
+                "memory": ConfigService._build_memory_config(get),
                 "developer": {
-                    "enabled": unified_config_manager.get_nested(
-                        "developer.enabled", False
-                    ),
-                    "enhanced_errors": unified_config_manager.get_nested(
-                        "developer.enhanced_errors", True
-                    ),
-                    "endpoint_suggestions": unified_config_manager.get_nested(
-                        "developer.endpoint_suggestions", True
-                    ),
-                    "debug_logging": unified_config_manager.get_nested(
-                        "developer.debug_logging", False
-                    ),
+                    "enabled": get("developer.enabled", False),
+                    "enhanced_errors": get("developer.enhanced_errors", True),
+                    "endpoint_suggestions": get("developer.endpoint_suggestions", True),
+                    "debug_logging": get("developer.debug_logging", False),
                 },
             }
 
@@ -338,9 +308,9 @@ class ConfigService:
                 )
                 unified_config_manager.update_llm_model(model_name)
 
-            # Handle legacy format updates
+            # Handle legacy format updates (Issue #380: use module-level frozenset)
             for key, value in config_data.items():
-                if key not in ["ollama", "local", "cloud"]:
+                if key not in _LLM_PROVIDER_KEYS:
                     unified_config_manager.set_nested(f"llm_config.{key}", value)
 
             # Save all changes

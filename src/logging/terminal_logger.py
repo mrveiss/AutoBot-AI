@@ -16,12 +16,21 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 import aiofiles
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for command statuses requiring command display
+_COMMAND_DISPLAY_STATUSES: FrozenSet[str] = frozenset({
+    "EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"
+})
+
+# Issue #380: Module-level frozensets for status matching (case-insensitive)
+_SUCCESS_STATUSES: FrozenSet[str] = frozenset({"success", "SUCCESS"})
+_ERROR_STATUSES: FrozenSet[str] = frozenset({"error", "ERROR"})
 
 # ANSI escape code regex pattern
 ANSI_ESCAPE_PATTERN = re.compile(
@@ -183,7 +192,7 @@ class TerminalLogger:
         line = f"[{timestamp}] [{run_type}] STATUS: {status}"
 
         # Add command if not just status update
-        if status in {"EXECUTING", "PENDING_APPROVAL", "SUCCESS", "ERROR"}:
+        if status in _COMMAND_DISPLAY_STATUSES:
             line += f" | COMMAND: {command}"
 
         # Add user info if available
@@ -388,10 +397,10 @@ class TerminalLogger:
         manual_count = sum(1 for cmd in commands if cmd.get("run_type") == "MANUAL")
 
         success_count = sum(
-            1 for cmd in commands if cmd.get("status") in {"success", "SUCCESS"}
+            1 for cmd in commands if cmd.get("status") in _SUCCESS_STATUSES
         )
         error_count = sum(
-            1 for cmd in commands if cmd.get("status") in {"error", "ERROR"}
+            1 for cmd in commands if cmd.get("status") in _ERROR_STATUSES
         )
 
         return {

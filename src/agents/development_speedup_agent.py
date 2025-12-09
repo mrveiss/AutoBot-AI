@@ -26,6 +26,9 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for import statement prefixes
+_IMPORT_PREFIXES = ("import ", "from ")
+
 
 @dataclass
 class DuplicateCode:
@@ -395,7 +398,7 @@ class DevelopmentSpeedupAgent:
 
     def _extract_module_name(self, import_line: str) -> Optional[str]:
         """Extract module name from import statement (Issue #334 - extracted helper)."""
-        if not import_line.startswith(("import ", "from ")):
+        if not import_line.startswith(_IMPORT_PREFIXES):
             return None
         if "import" not in import_line:
             return None
