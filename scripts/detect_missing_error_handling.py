@@ -31,6 +31,10 @@ class ErrorHandlingIssue:
     severity: str  # critical, high, medium, low
 
 
+# Issue #380: Module-level tuple for empty/skip statement AST types
+_SKIP_STMT_TYPES = (ast.Pass, ast.Continue)
+
+
 class ErrorHandlingAnalyzer(ast.NodeVisitor):
     """AST visitor to analyze error handling patterns."""
 
@@ -58,6 +62,7 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
     ERROR_HANDLING_DECORATORS = {"with_error_handling", "error_boundary"}
 
     def __init__(self, filename: str):
+        """Initialize error handling analyzer with filename and tracking structures."""
         self.filename = filename
         self.issues: List[ErrorHandlingIssue] = []
         self.current_function: Optional[str] = None
@@ -65,15 +70,18 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
         self.in_try_block = False
 
     def visit_ClassDef(self, node: ast.ClassDef):
+        """Visit a class definition and track current class name."""
         old_class = self.current_class
         self.current_class = node.name
         self.generic_visit(node)
         self.current_class = old_class
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
+        """Visit a function definition and analyze for error handling issues."""
         self._analyze_function(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        """Visit an async function definition and analyze for error handling issues."""
         self._analyze_function(node)
 
     def _analyze_function(self, node):
@@ -247,7 +255,7 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
                 # Check if body is just 'pass' or 'continue'
                 if len(child.body) == 1:
                     stmt = child.body[0]
-                    if isinstance(stmt, (ast.Pass, ast.Continue)):
+                    if isinstance(stmt, _SKIP_STMT_TYPES):  # Issue #380
                         silent.append({"line": child.lineno})
         return silent
 
@@ -305,7 +313,7 @@ def analyze_file(filepath: Path) -> List[ErrorHandlingIssue]:
 
 
 def main():
-    """Main entry point."""
+    """Main entry point with CLI argument parsing and error reporting."""
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
     summary_only = "--summary" in sys.argv
 
