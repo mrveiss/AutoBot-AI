@@ -101,344 +101,155 @@ class CommandManualManager:
             logger.error(f"Failed to initialize command manuals database: {e}")
             raise
 
+    def _get_high_risk_commands(self) -> List[str]:
+        """Get list of high-risk commands (destructive/privileged)."""
+        return [
+            "rm", "rmdir", "dd", "mkfs", "fdisk", "parted", "sudo", "su",
+            "chmod", "chown", "kill", "killall", "halt", "shutdown", "reboot",
+            "init", "systemctl", "service", "mount", "umount", "crontab", "at",
+        ]
+
+    def _get_medium_risk_commands(self) -> List[str]:
+        """Get list of medium-risk commands (network/package operations)."""
+        return [
+            "mv", "cp", "tar", "gzip", "gunzip", "zip", "unzip", "wget", "curl",
+            "ssh", "scp", "rsync", "netstat", "ss", "iptables", "ufw", "systemd",
+            "docker", "git", "npm", "pip", "apt", "yum", "dn",
+        ]
+
+    def _get_low_risk_commands(self) -> List[str]:
+        """Get list of low-risk commands (read-only/informational)."""
+        return [
+            "ls", "cd", "pwd", "cat", "less", "more", "head", "tail", "grep",
+            "find", "locate", "which", "whereis", "man", "info", "help", "ps",
+            "top", "htop", "free", "d", "du", "uptime", "whoami", "id", "groups",
+            "date", "cal", "echo", "print", "wc", "sort", "uniq", "cut", "awk",
+            "sed", "tr", "basename", "dirname", "realpath", "ifconfig", "ip",
+            "ping", "traceroute", "nslookup", "dig", "history",
+        ]
+
     def _load_risk_patterns(self) -> Dict[str, List[str]]:
         """Load patterns for determining command risk levels."""
         return {
-            "HIGH": [
-                "rm",
-                "rmdir",
-                "dd",
-                "mkfs",
-                "fdisk",
-                "parted",
-                "sudo",
-                "su",
-                "chmod",
-                "chown",
-                "kill",
-                "killall",
-                "halt",
-                "shutdown",
-                "reboot",
-                "init",
-                "systemctl",
-                "service",
-                "mount",
-                "umount",
-                "crontab",
-                "at",
-            ],
-            "MEDIUM": [
-                "mv",
-                "cp",
-                "tar",
-                "gzip",
-                "gunzip",
-                "zip",
-                "unzip",
-                "wget",
-                "curl",
-                "ssh",
-                "scp",
-                "rsync",
-                "netstat",
-                "ss",
-                "iptables",
-                "ufw",
-                "systemd",
-                "docker",
-                "git",
-                "npm",
-                "pip",
-                "apt",
-                "yum",
-                "dn",
-            ],
-            "LOW": [
-                "ls",
-                "cd",
-                "pwd",
-                "cat",
-                "less",
-                "more",
-                "head",
-                "tail",
-                "grep",
-                "find",
-                "locate",
-                "which",
-                "whereis",
-                "man",
-                "info",
-                "help",
-                "ps",
-                "top",
-                "htop",
-                "free",
-                "d",
-                "du",
-                "uptime",
-                "whoami",
-                "id",
-                "groups",
-                "date",
-                "cal",
-                "echo",
-                "print",
-                "wc",
-                "sort",
-                "uniq",
-                "cut",
-                "awk",
-                "sed",
-                "tr",
-                "basename",
-                "dirname",
-                "realpath",
-                "ifconfig",
-                "ip",
-                "ping",
-                "traceroute",
-                "nslookup",
-                "dig",
-                "history",
-            ],
+            "HIGH": self._get_high_risk_commands(),
+            "MEDIUM": self._get_medium_risk_commands(),
+            "LOW": self._get_low_risk_commands(),
         }
+
+    def _get_file_operation_commands(self) -> List[str]:
+        """Get file operation commands for categorization."""
+        return [
+            "ls", "cd", "pwd", "mkdir", "rmdir", "rm", "cp", "mv", "cat", "less",
+            "more", "head", "tail", "touch", "ln", "find", "locate", "which",
+            "whereis", "file", "stat", "chmod", "chown", "chgrp", "umask", "tar",
+            "gzip", "gunzip", "zip", "unzip", "basename", "dirname",
+        ]
+
+    def _get_text_processing_commands(self) -> List[str]:
+        """Get text processing commands for categorization."""
+        return [
+            "grep", "awk", "sed", "tr", "cut", "sort", "uniq", "wc", "dif",
+            "comm", "join", "paste", "fmt", "fold", "expand", "unexpand",
+            "split", "csplit",
+        ]
+
+    def _get_network_commands(self) -> List[str]:
+        """Get network commands for categorization."""
+        return [
+            "ping", "traceroute", "netstat", "ss", "ifconfig", "ip", "route",
+            "arp", "wget", "curl", "ssh", "scp", "rsync", "ftp", "sftp", "nc",
+            "nmap", "tcpdump", "wireshark", "iptables", "ufw", "nslookup", "dig",
+        ]
+
+    def _get_process_management_commands(self) -> List[str]:
+        """Get process management commands for categorization."""
+        return [
+            "ps", "top", "htop", "jobs", "bg", "fg", "nohup", "kill", "killall",
+            "pgrep", "pkill", "pido", "nice", "renice", "screen", "tmux",
+        ]
+
+    def _get_system_info_commands(self) -> List[str]:
+        """Get system info commands for categorization."""
+        return [
+            "uname", "whoami", "id", "groups", "w", "who", "uptime", "free",
+            "d", "du", "lscpu", "lsmem", "lsblk", "lsusb", "lspci", "dmidecode", "lshw",
+        ]
+
+    def _get_system_control_commands(self) -> List[str]:
+        """Get system control commands for categorization."""
+        return [
+            "sudo", "su", "systemctl", "service", "mount", "umount", "halt",
+            "shutdown", "reboot", "init", "crontab", "at", "chkconfig", "update-rc.d",
+        ]
+
+    def _get_package_management_commands(self) -> List[str]:
+        """Get package management commands for categorization."""
+        return [
+            "apt", "apt-get", "dpkg", "yum", "dn", "rpm", "zypper", "pacman",
+            "brew", "snap", "flatpak", "pip", "npm", "yarn", "gem", "cargo",
+        ]
+
+    def _get_development_commands(self) -> List[str]:
+        """Get development commands for categorization."""
+        return [
+            "git", "svn", "make", "cmake", "gcc", "g++", "clang", "python",
+            "node", "java", "javac", "ruby", "go", "rust", "docker", "kubectl",
+        ]
 
     def _load_category_patterns(self) -> Dict[str, List[str]]:
         """Load patterns for categorizing commands."""
         return {
-            "file_operations": [
-                "ls",
-                "cd",
-                "pwd",
-                "mkdir",
-                "rmdir",
-                "rm",
-                "cp",
-                "mv",
-                "cat",
-                "less",
-                "more",
-                "head",
-                "tail",
-                "touch",
-                "ln",
-                "find",
-                "locate",
-                "which",
-                "whereis",
-                "file",
-                "stat",
-                "chmod",
-                "chown",
-                "chgrp",
-                "umask",
-                "tar",
-                "gzip",
-                "gunzip",
-                "zip",
-                "unzip",
-                "basename",
-                "dirname",
-            ],
-            "text_processing": [
-                "grep",
-                "awk",
-                "sed",
-                "tr",
-                "cut",
-                "sort",
-                "uniq",
-                "wc",
-                "dif",
-                "comm",
-                "join",
-                "paste",
-                "fmt",
-                "fold",
-                "expand",
-                "unexpand",
-                "split",
-                "csplit",
-            ],
-            "network": [
-                "ping",
-                "traceroute",
-                "netstat",
-                "ss",
-                "ifconfig",
-                "ip",
-                "route",
-                "arp",
-                "wget",
-                "curl",
-                "ssh",
-                "scp",
-                "rsync",
-                "ftp",
-                "sftp",
-                "nc",
-                "nmap",
-                "tcpdump",
-                "wireshark",
-                "iptables",
-                "ufw",
-                "nslookup",
-                "dig",
-            ],
-            "process_management": [
-                "ps",
-                "top",
-                "htop",
-                "jobs",
-                "bg",
-                "fg",
-                "nohup",
-                "kill",
-                "killall",
-                "pgrep",
-                "pkill",
-                "pido",
-                "nice",
-                "renice",
-                "screen",
-                "tmux",
-            ],
-            "system_info": [
-                "uname",
-                "whoami",
-                "id",
-                "groups",
-                "w",
-                "who",
-                "uptime",
-                "free",
-                "d",
-                "du",
-                "lscpu",
-                "lsmem",
-                "lsblk",
-                "lsusb",
-                "lspci",
-                "dmidecode",
-                "lshw",
-            ],
-            "system_control": [
-                "sudo",
-                "su",
-                "systemctl",
-                "service",
-                "mount",
-                "umount",
-                "halt",
-                "shutdown",
-                "reboot",
-                "init",
-                "crontab",
-                "at",
-                "chkconfig",
-                "update-rc.d",
-            ],
-            "package_management": [
-                "apt",
-                "apt-get",
-                "dpkg",
-                "yum",
-                "dn",
-                "rpm",
-                "zypper",
-                "pacman",
-                "brew",
-                "snap",
-                "flatpak",
-                "pip",
-                "npm",
-                "yarn",
-                "gem",
-                "cargo",
-            ],
-            "development": [
-                "git",
-                "svn",
-                "make",
-                "cmake",
-                "gcc",
-                "g++",
-                "clang",
-                "python",
-                "node",
-                "java",
-                "javac",
-                "ruby",
-                "go",
-                "rust",
-                "docker",
-                "kubectl",
-            ],
+            "file_operations": self._get_file_operation_commands(),
+            "text_processing": self._get_text_processing_commands(),
+            "network": self._get_network_commands(),
+            "process_management": self._get_process_management_commands(),
+            "system_info": self._get_system_info_commands(),
+            "system_control": self._get_system_control_commands(),
+            "package_management": self._get_package_management_commands(),
+            "development": self._get_development_commands(),
         }
 
-    def _determine_risk_level(self, command_name: str, manual_text: str) -> str:
-        """Determine the risk level of a command.
-
-        Args:
-            command_name: Name of the command
-            manual_text: Full manual text
-
-        Returns:
-            Risk level: HIGH, MEDIUM, or LOW
-        """
-        command_base = command_name.split()[0] if command_name else ""
-
-        # Check explicit risk patterns
-        for risk_level, patterns in self.risk_patterns.items():
-            if command_base in patterns:
-                return risk_level
-
-        # Analyze manual text for risk indicators
-        high_risk_indicators = [
-            "delete",
-            "remove",
-            "destroy",
-            "format",
-            "partition",
-            "overwrite",
-            "irreversible",
-            "permanent",
-            "dangerous",
-            "root",
-            "administrator",
-            "privilege",
-            "system file",
+    def _get_high_risk_indicators(self) -> List[str]:
+        """Get indicators suggesting high risk in manual text."""
+        return [
+            "delete", "remove", "destroy", "format", "partition", "overwrite",
+            "irreversible", "permanent", "dangerous", "root", "administrator",
+            "privilege", "system file",
         ]
 
-        medium_risk_indicators = [
-            "modify",
-            "change",
-            "update",
-            "install",
-            "network",
-            "connection",
-            "download",
-            "upload",
-            "transfer",
+    def _get_medium_risk_indicators(self) -> List[str]:
+        """Get indicators suggesting medium risk in manual text."""
+        return [
+            "modify", "change", "update", "install", "network", "connection",
+            "download", "upload", "transfer",
         ]
 
+    def _analyze_risk_from_text(self, manual_text: str) -> str:
+        """Analyze manual text for risk indicators and return risk level."""
         manual_lower = manual_text.lower()
+        high_indicators = self._get_high_risk_indicators()
+        medium_indicators = self._get_medium_risk_indicators()
 
-        high_count = sum(
-            1 for indicator in high_risk_indicators if indicator in manual_lower
-        )
-        medium_count = sum(
-            1 for indicator in medium_risk_indicators if indicator in manual_lower
-        )
+        high_count = sum(1 for ind in high_indicators if ind in manual_lower)
+        medium_count = sum(1 for ind in medium_indicators if ind in manual_lower)
 
         if high_count >= 2:
             return "HIGH"
         elif medium_count >= 2 or high_count >= 1:
             return "MEDIUM"
-        else:
-            return "LOW"
+        return "LOW"
+
+    def _determine_risk_level(self, command_name: str, manual_text: str) -> str:
+        """Determine the risk level of a command."""
+        command_base = command_name.split()[0] if command_name else ""
+
+        # Check explicit risk patterns first
+        for risk_level, patterns in self.risk_patterns.items():
+            if command_base in patterns:
+                return risk_level
+
+        # Fall back to text analysis
+        return self._analyze_risk_from_text(manual_text)
 
     def _determine_category(self, command_name: str, manual_text: str) -> str:
         """Determine the category of a command.
@@ -738,103 +549,61 @@ class CommandManualManager:
             )
             return False
 
+    def _row_to_command_manual(self, row: tuple) -> CommandManual:
+        """Convert a database row to a CommandManual object."""
+        return CommandManual(
+            command_name=row[0],
+            description=row[1],
+            syntax=row[2],
+            common_options=json.loads(row[3]) if row[3] else [],
+            examples=json.loads(row[4]) if row[4] else [],
+            related_commands=json.loads(row[5]) if row[5] else [],
+            risk_level=row[6],
+            category=row[7],
+            manual_text=row[8],
+            section=row[9],
+        )
+
     def get_manual(self, command_name: str) -> Optional[CommandManual]:
-        """Retrieve a command manual from the database.
-
-        Args:
-            command_name: Name of the command
-
-        Returns:
-            CommandManual object or None if not found
-        """
+        """Retrieve a command manual from the database."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    SELECT command_name, description, syntax, common_options,
+                    """SELECT command_name, description, syntax, common_options,
                            examples, related_commands, risk_level, category,
                            manual_text, section
-                    FROM command_manuals
-                    WHERE command_name = ?
-                """,
+                    FROM command_manuals WHERE command_name = ?""",
                     (command_name,),
                 )
-
                 row = cursor.fetchone()
-                if row:
-                    return CommandManual(
-                        command_name=row[0],
-                        description=row[1],
-                        syntax=row[2],
-                        common_options=json.loads(row[3]) if row[3] else [],
-                        examples=json.loads(row[4]) if row[4] else [],
-                        related_commands=json.loads(row[5]) if row[5] else [],
-                        risk_level=row[6],
-                        category=row[7],
-                        manual_text=row[8],
-                        section=row[9],
-                    )
-                return None
-
+                return self._row_to_command_manual(row) if row else None
         except Exception as e:
             logger.error(f"Failed to retrieve manual for {command_name}: {e}")
             return None
 
-    def search_manuals(
-        self, query: str, category: Optional[str] = None
-    ) -> List[CommandManual]:
-        """Search command manuals by query and optional category.
+    def _build_search_query(self, query: str, category: Optional[str]) -> Tuple[str, List[str]]:
+        """Build SQL query and params for manual search."""
+        sql = """SELECT command_name, description, syntax, common_options,
+                       examples, related_commands, risk_level, category,
+                       manual_text, section
+                FROM command_manuals
+                WHERE (command_name LIKE ? OR description LIKE ? OR manual_text LIKE ?)"""
+        params = [f"%{query}%", f"%{query}%", f"%{query}%"]
+        if category:
+            sql += " AND category = ?"
+            params.append(category)
+        sql += " ORDER BY command_name"
+        return sql, params
 
-        Args:
-            query: Search query
-            category: Optional category filter
-
-        Returns:
-            List of matching CommandManual objects
-        """
+    def search_manuals(self, query: str, category: Optional[str] = None) -> List[CommandManual]:
+        """Search command manuals by query and optional category."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-
-                sql = """
-                    SELECT command_name, description, syntax, common_options,
-                           examples, related_commands, risk_level, category,
-                           manual_text, section
-                    FROM command_manuals
-                    WHERE (command_name LIKE ? OR description LIKE ?
-                           OR manual_text LIKE ?)
-                """
-                params = [f"%{query}%", f"%{query}%", f"%{query}%"]
-
-                if category:
-                    sql += " AND category = ?"
-                    params.append(category)
-
-                sql += " ORDER BY command_name"
-
+                sql, params = self._build_search_query(query, category)
                 cursor.execute(sql, params)
-                rows = cursor.fetchall()
-
-                manuals = []
-                for row in rows:
-                    manuals.append(
-                        CommandManual(
-                            command_name=row[0],
-                            description=row[1],
-                            syntax=row[2],
-                            common_options=json.loads(row[3]) if row[3] else [],
-                            examples=json.loads(row[4]) if row[4] else [],
-                            related_commands=json.loads(row[5]) if row[5] else [],
-                            risk_level=row[6],
-                            category=row[7],
-                            manual_text=row[8],
-                            section=row[9],
-                        )
-                    )
-
-                return manuals
-
+                return [self._row_to_command_manual(row) for row in cursor.fetchall()]
         except Exception as e:
             logger.error(f"Failed to search manuals for query '{query}': {e}")
             return []
