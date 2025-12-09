@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Module-level constants for O(1) lookups (Issue #326)
 YAML_FILE_EXTENSIONS = {".yaml", ".yml"}
 
+# Issue #380: Module-level tuple for container type checks
+_CONTAINER_TYPES = (dict, list)
+
 
 class AsyncOperationsMixin:
     """Mixin providing asynchronous config operations"""
@@ -73,7 +76,7 @@ class AsyncOperationsMixin:
                     if any(pattern in key_lower for pattern in sensitive_patterns):
                         obj[key] = "***REDACTED***"
                         logger.debug(f"Redacted sensitive field: {current_path}")
-                    elif isinstance(value, (dict, list)):
+                    elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
 
             elif isinstance(obj, list):
