@@ -63,80 +63,45 @@ class KnowledgeExtractionAgent:
 
         logger.info("Knowledge Extraction Agent initialized")
 
+    def _get_dynamic_indicators(self) -> List[str]:
+        """Get keywords indicating dynamic/changing information."""
+        return [
+            "currently", "now", "today", "recently", "latest", "updated",
+            "changed", "modified", "new", "current", "present", "as of",
+            "this year", "this month", "upcoming", "planned", "scheduled",
+        ]
+
+    def _get_static_indicators(self) -> List[str]:
+        """Get keywords indicating static/permanent information."""
+        return [
+            "always", "never", "permanent", "constant", "inherent",
+            "fundamental", "basic", "definition", "concept", "principle",
+            "established", "traditional", "historical", "original",
+        ]
+
+    def _get_future_indicators(self) -> List[str]:
+        """Get keywords indicating future events."""
+        return [
+            "will", "shall", "going to", "planned", "expected", "projected",
+            "forecast", "predicted", "anticipated", "scheduled", "upcoming",
+            "future", "next", "soon", "eventually", "later",
+        ]
+
+    def _get_past_indicators(self) -> List[str]:
+        """Get keywords indicating past events."""
+        return [
+            "was", "were", "had", "did", "used to", "previously", "formerly",
+            "historically", "originally", "initially", "before", "earlier",
+            "past", "old", "legacy", "deprecated",
+        ]
+
     def _load_temporal_keywords(self) -> Dict[str, List[str]]:
         """Load temporal keywords for classification."""
         return {
-            "dynamic_indicators": [
-                "currently",
-                "now",
-                "today",
-                "recently",
-                "latest",
-                "updated",
-                "changed",
-                "modified",
-                "new",
-                "current",
-                "present",
-                "as of",
-                "this year",
-                "this month",
-                "upcoming",
-                "planned",
-                "scheduled",
-            ],
-            "static_indicators": [
-                "always",
-                "never",
-                "permanent",
-                "constant",
-                "inherent",
-                "fundamental",
-                "basic",
-                "definition",
-                "concept",
-                "principle",
-                "established",
-                "traditional",
-                "historical",
-                "original",
-            ],
-            "future_indicators": [
-                "will",
-                "shall",
-                "going to",
-                "planned",
-                "expected",
-                "projected",
-                "forecast",
-                "predicted",
-                "anticipated",
-                "scheduled",
-                "upcoming",
-                "future",
-                "next",
-                "soon",
-                "eventually",
-                "later",
-            ],
-            "past_indicators": [
-                "was",
-                "were",
-                "had",
-                "did",
-                "used to",
-                "previously",
-                "formerly",
-                "historically",
-                "originally",
-                "initially",
-                "before",
-                "earlier",
-                "past",
-                "old",
-                "legacy",
-                "deprecated",
-            ],
+            "dynamic_indicators": self._get_dynamic_indicators(),
+            "static_indicators": self._get_static_indicators(),
+            "future_indicators": self._get_future_indicators(),
+            "past_indicators": self._get_past_indicators(),
         }
 
     def _build_extraction_prompt(
@@ -202,59 +167,31 @@ Guidelines:
 Respond only with valid JSON.
 """
 
-    def _classify_temporal_type(
-        self, fact_text: str, context: str = ""
-    ) -> TemporalType:
-        """
-        Classify the temporal type of a fact based on linguistic indicators.
+    def _count_keyword_matches(self, text_lower: str, keyword_type: str) -> int:
+        """Count how many keywords of a given type appear in text."""
+        return sum(1 for kw in self.temporal_keywords[keyword_type] if kw in text_lower)
 
-        Args:
-            fact_text: The fact text to analyze
-            context: Additional context for analysis
-
-        Returns:
-            TemporalType classification
-        """
-        text_lower = f"{fact_text} {context}".lower()
-
-        # Count indicators for each type
-        dynamic_count = sum(
-            1
-            for keyword in self.temporal_keywords["dynamic_indicators"]
-            if keyword in text_lower
-        )
-        static_count = sum(
-            1
-            for keyword in self.temporal_keywords["static_indicators"]
-            if keyword in text_lower
-        )
-        future_count = sum(
-            1
-            for keyword in self.temporal_keywords["future_indicators"]
-            if keyword in text_lower
-        )
-        past_count = sum(
-            1
-            for keyword in self.temporal_keywords["past_indicators"]
-            if keyword in text_lower
-        )
-
-        # Specific date/time patterns
+    def _has_temporal_bound_pattern(self, text_lower: str) -> bool:
+        """Check if text contains date/time/version patterns."""
         date_patterns = [
             r"\b\d{4}\b",  # Years
-            r"\b(january|february|march|april|may|june|july|august|september"
-            r"|october|november|december)\b",
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\b",
             r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b",
             r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",  # Dates
             r"\b(version|v)\s*\d+\b",  # Versions
         ]
+        return any(re.search(pattern, text_lower) for pattern in date_patterns)
 
-        has_temporal_bound = any(
-            re.search(pattern, text_lower) for pattern in date_patterns
-        )
+    def _classify_temporal_type(self, fact_text: str, context: str = "") -> TemporalType:
+        """Classify the temporal type of a fact based on linguistic indicators."""
+        text_lower = f"{fact_text} {context}".lower()
 
-        # Classification logic
-        if has_temporal_bound or future_count > 0 or past_count > 0:
+        dynamic_count = self._count_keyword_matches(text_lower, "dynamic_indicators")
+        static_count = self._count_keyword_matches(text_lower, "static_indicators")
+        future_count = self._count_keyword_matches(text_lower, "future_indicators")
+        past_count = self._count_keyword_matches(text_lower, "past_indicators")
+
+        if self._has_temporal_bound_pattern(text_lower) or future_count > 0 or past_count > 0:
             return TemporalType.TEMPORAL_BOUND
         elif dynamic_count > static_count:
             return TemporalType.DYNAMIC
@@ -263,62 +200,40 @@ Respond only with valid JSON.
         else:
             return TemporalType.ATEMPORAL
 
-    def _extract_entities(self, fact_text: str) -> List[str]:
-        """
-        Extract entities from fact text using simple pattern matching.
-
-        Args:
-            fact_text: Text to extract entities from
-
-        Returns:
-            List of identified entities
-        """
-        if not self.enable_entity_extraction:
-            return []
-
-        entities = []
-
-        # Capitalized words (potential proper nouns)
-        capitalized_pattern = r"\b[A-Z][a-zA-Z0-9_]*\b"
-        capitalized_entities = re.findall(capitalized_pattern, fact_text)
-        entities.extend(capitalized_entities)
-
-        # Technical terms and identifiers
-        technical_patterns = [
+    def _get_technical_patterns(self) -> List[str]:
+        """Get regex patterns for technical entity extraction."""
+        return [
             r"\b\w+\.\w+\b",  # Module.function or similar
             r"\b[a-zA-Z0-9_]+_[a-zA-Z0-9_]+\b",  # snake_case identifiers
             r"\b[A-Z]+\b",  # Acronyms
             r"\bv?\d+\.\d+(?:\.\d+)?\b",  # Version numbers
         ]
 
-        for pattern in technical_patterns:
-            matches = re.findall(pattern, fact_text)
-            entities.extend(matches)
+    def _get_common_words(self) -> set:
+        """Get common words to filter from entities."""
+        return {"the", "is", "are", "was", "were", "has", "have", "had", "will", "can", "could", "should"}
+
+    def _extract_entities(self, fact_text: str) -> List[str]:
+        """Extract entities from fact text using pattern matching."""
+        if not self.enable_entity_extraction:
+            return []
+
+        entities = []
+
+        # Capitalized words (potential proper nouns)
+        entities.extend(re.findall(r"\b[A-Z][a-zA-Z0-9_]*\b", fact_text))
+
+        # Technical terms and identifiers
+        for pattern in self._get_technical_patterns():
+            entities.extend(re.findall(pattern, fact_text))
 
         # Remove duplicates and common words
-        common_words = {
-            "the",
-            "is",
-            "are",
-            "was",
-            "were",
-            "has",
-            "have",
-            "had",
-            "will",
-            "can",
-            "could",
-            "should",
-        }
-        entities = list(
-            set(
-                entity
-                for entity in entities
-                if entity.lower() not in common_words and len(entity) > 1
-            )
-        )
+        common_words = self._get_common_words()
+        unique_entities = list(set(
+            e for e in entities if e.lower() not in common_words and len(e) > 1
+        ))
 
-        return entities[:10]  # Limit to 10 entities max
+        return unique_entities[:10]
 
     def _validate_fact(self, fact_data: Dict[str, Any]) -> bool:
         """
@@ -370,6 +285,117 @@ Respond only with valid JSON.
 
         return True
 
+    async def _get_llm_facts_response(
+        self, content: str, context: Optional[str]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get raw facts from LLM response. Returns None on error."""
+        prompt = self._build_extraction_prompt(content, context)
+        response = await self.llm_interface.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            llm_type=LLMType.EXTRACTION,
+            structured_output=True,
+        )
+
+        if not response or response.error:
+            error_msg = response.error if response else "No response"
+            logger.warning(f"No response from LLM for fact extraction: {error_msg}")
+            return None
+
+        try:
+            facts_data = json.loads(response.content)
+            if "facts" not in facts_data:
+                logger.warning("LLM response missing 'facts' field")
+                return None
+            return facts_data["facts"]
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            return None
+
+    def _enhance_fact_data(
+        self, fact_data: Dict[str, Any], content: str
+    ) -> None:
+        """Enhance fact with temporal classification and entity extraction."""
+        fact_text = (
+            f"{fact_data['subject']} {fact_data['predicate']} {fact_data['object']}"
+        )
+
+        # Enhance temporal classification if not confident
+        if fact_data.get("confidence", 0) < 0.8:
+            enhanced_temporal = self._classify_temporal_type(fact_text, content)
+            fact_data["temporal_type"] = enhanced_temporal.value
+
+        # Extract additional entities if needed
+        entities = fact_data.get("entities", [])
+        if not entities or len(entities) < 2:
+            additional_entities = self._extract_entities(fact_text)
+            fact_data["entities"] = list(set(entities + additional_entities))
+
+    def _create_atomic_fact(
+        self,
+        fact_data: Dict[str, Any],
+        source: str,
+        content: str,
+        context: Optional[str],
+        chunk_id: Optional[str],
+    ) -> AtomicFact:
+        """Create AtomicFact object from fact data."""
+        return AtomicFact(
+            subject=fact_data["subject"],
+            predicate=fact_data["predicate"],
+            object=fact_data["object"],
+            fact_type=FactType(fact_data["fact_type"]),
+            temporal_type=TemporalType(fact_data["temporal_type"]),
+            confidence=fact_data["confidence"],
+            source=source,
+            extraction_method="llm_guided_extraction",
+            valid_from=datetime.now(),
+            entities=fact_data.get("entities", []),
+            context=fact_data.get("context", context),
+            original_text=content if len(content) < 500 else content[:500] + "...",
+            chunk_id=chunk_id,
+            metadata={
+                "llm_reasoning": fact_data.get("reasoning", ""),
+                "extraction_timestamp": datetime.now().isoformat(),
+                "content_length": len(content),
+            },
+        )
+
+    def _convert_raw_facts(
+        self,
+        raw_facts: List[Dict[str, Any]],
+        source: str,
+        content: str,
+        context: Optional[str],
+        chunk_id: Optional[str],
+    ) -> tuple:
+        """Convert raw facts to AtomicFact objects. Returns (facts, error_count)."""
+        extracted_facts = []
+        validation_errors = 0
+
+        for fact_data in raw_facts:
+            try:
+                if not self._validate_fact(fact_data):
+                    validation_errors += 1
+                    continue
+
+                self._enhance_fact_data(fact_data, content)
+                atomic_fact = self._create_atomic_fact(
+                    fact_data, source, content, context, chunk_id
+                )
+
+                if atomic_fact.confidence >= self.confidence_threshold:
+                    extracted_facts.append(atomic_fact)
+                else:
+                    logger.debug(
+                        f"Fact below confidence threshold: {atomic_fact.confidence}"
+                    )
+
+            except Exception as e:
+                logger.error(f"Error creating AtomicFact: {e}")
+                validation_errors += 1
+
+        return extracted_facts, validation_errors
+
     async def extract_facts_from_text(
         self,
         content: str,
@@ -377,146 +403,30 @@ Respond only with valid JSON.
         context: Optional[str] = None,
         chunk_id: Optional[str] = None,
     ) -> FactExtractionResult:
-        """
-        Extract atomic facts from text content.
-
-        Args:
-            content: Text content to analyze
-            source: Source identifier for the content
-            context: Optional context information
-            chunk_id: Optional chunk identifier
-
-        Returns:
-            FactExtractionResult with extracted facts
-        """
+        """Extract atomic facts from text content."""
         start_time = time.time()
 
         try:
             logger.info(f"Extracting facts from {len(content)} character content")
 
-            # Build extraction prompt
-            prompt = self._build_extraction_prompt(content, context)
+            raw_facts = await self._get_llm_facts_response(content, context)
+            if raw_facts is None:
+                return FactExtractionResult(
+                    facts=[],
+                    extraction_metadata={"error": "LLM extraction failed", "content_length": len(content)},
+                )
 
-            # Get LLM response
-            response = await self.llm_interface.chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                llm_type=LLMType.EXTRACTION,
-                structured_output=True,
+            extracted_facts, validation_errors = self._convert_raw_facts(
+                raw_facts, source, content, context, chunk_id
             )
 
-            if not response or response.error:
-                error_msg = response.error if response else "No response"
-                logger.warning(f"No response from LLM for fact extraction: {error_msg}")
-                return FactExtractionResult(
-                    facts=[],
-                    extraction_metadata={
-                        "error": response.error if response else "No LLM response",
-                        "content_length": len(content),
-                    },
-                )
-
-            # Parse LLM response
-            response_content = response.content
-
-            try:
-                facts_data = json.loads(response_content)
-                if "facts" not in facts_data:
-                    logger.warning("LLM response missing 'facts' field")
-                    return FactExtractionResult(facts=[])
-
-                raw_facts = facts_data["facts"]
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse LLM response as JSON: {e}")
-                logger.debug(f"Raw response: {response_content[:500]}...")
-                return FactExtractionResult(
-                    facts=[],
-                    extraction_metadata={
-                        "error": "JSON parse error",
-                        "raw_response": response_content[:200],
-                    },
-                )
-
-            # Convert to AtomicFact objects
-            extracted_facts = []
-            validation_errors = 0
-
-            for fact_data in raw_facts:
-                try:
-                    if not self._validate_fact(fact_data):
-                        validation_errors += 1
-                        continue
-
-                    # Enhance temporal classification if not confident from LLM
-                    if fact_data.get("confidence", 0) < 0.8:
-                        fact_text = (
-                            f"{fact_data['subject']} {fact_data['predicate']} "
-                            f"{fact_data['object']}"
-                        )
-                        enhanced_temporal = self._classify_temporal_type(
-                            fact_text, content
-                        )
-                        fact_data["temporal_type"] = enhanced_temporal.value
-
-                    # Extract additional entities if not provided or insufficient
-                    entities = fact_data.get("entities", [])
-                    if not entities or len(entities) < 2:
-                        fact_text = (
-                            f"{fact_data['subject']} {fact_data['predicate']} "
-                            f"{fact_data['object']}"
-                        )
-                        additional_entities = self._extract_entities(fact_text)
-                        fact_data["entities"] = list(
-                            set(entities + additional_entities)
-                        )
-
-                    # Create AtomicFact object
-                    atomic_fact = AtomicFact(
-                        subject=fact_data["subject"],
-                        predicate=fact_data["predicate"],
-                        object=fact_data["object"],
-                        fact_type=FactType(fact_data["fact_type"]),
-                        temporal_type=TemporalType(fact_data["temporal_type"]),
-                        confidence=fact_data["confidence"],
-                        source=source,
-                        extraction_method="llm_guided_extraction",
-                        valid_from=datetime.now(),
-                        entities=fact_data.get("entities", []),
-                        context=fact_data.get("context", context),
-                        original_text=(
-                            content if len(content) < 500 else content[:500] + "..."
-                        ),
-                        chunk_id=chunk_id,
-                        metadata={
-                            "llm_reasoning": fact_data.get("reasoning", ""),
-                            "extraction_timestamp": datetime.now().isoformat(),
-                            "content_length": len(content),
-                        },
-                    )
-
-                    # Apply confidence threshold
-                    if atomic_fact.confidence >= self.confidence_threshold:
-                        extracted_facts.append(atomic_fact)
-                    else:
-                        logger.debug(
-                            f"Fact below confidence threshold: "
-                            f"{atomic_fact.confidence}"
-                        )
-
-                except Exception as e:
-                    logger.error(f"Error creating AtomicFact: {e}")
-                    logger.debug(f"Problematic fact data: {fact_data}")
-                    validation_errors += 1
-                    continue
-
             processing_time = time.time() - start_time
-
             logger.info(
                 f"Extracted {len(extracted_facts)} facts in "
                 f"{processing_time:.2f}s ({validation_errors} validation errors)"
             )
 
-            # Create result with metadata
-            result = FactExtractionResult(
+            return FactExtractionResult(
                 facts=extracted_facts,
                 processing_time=processing_time,
                 extraction_metadata={
@@ -530,61 +440,19 @@ Respond only with valid JSON.
                 },
             )
 
-            return result
-
         except Exception as e:
             processing_time = time.time() - start_time
             logger.error(f"Error in fact extraction: {e}")
-
             return FactExtractionResult(
                 facts=[],
                 processing_time=processing_time,
-                extraction_metadata={
-                    "error": str(e),
-                    "source": source,
-                    "content_length": len(content),
-                },
+                extraction_metadata={"error": str(e), "source": source, "content_length": len(content)},
             )
 
-    async def extract_facts_from_chunks(
-        self, chunks: List[Dict[str, Any]], source: str
-    ) -> FactExtractionResult:
-        """
-        Extract facts from multiple chunks in parallel.
-
-        Args:
-            chunks: List of chunk dictionaries with 'text' and metadata
-            source: Source identifier
-
-        Returns:
-            Combined FactExtractionResult
-        """
-        logger.info(f"Processing {len(chunks)} chunks for fact extraction")
-
-        # Process chunks in parallel with limited concurrency
-        semaphore = asyncio.Semaphore(3)  # Limit to 3 concurrent extractions
-
-        async def process_chunk(chunk: Dict[str, Any]) -> FactExtractionResult:
-            """Extract facts from single chunk with semaphore-limited concurrency."""
-            async with semaphore:
-                chunk_text = chunk.get("text", "")
-                chunk_context = str(chunk.get("metadata", {}))
-                chunk_id = chunk.get("id", chunk.get("chunk_id"))
-
-                return await self.extract_facts_from_text(
-                    content=chunk_text,
-                    source=source,
-                    context=chunk_context,
-                    chunk_id=chunk_id,
-                )
-
-        # Execute parallel processing
-        start_time = time.time()
-        chunk_results = await asyncio.gather(
-            *[process_chunk(chunk) for chunk in chunks], return_exceptions=True
-        )
-
-        # Combine results
+    def _aggregate_chunk_results(
+        self, chunk_results: List[Any]
+    ) -> tuple:
+        """Aggregate results from parallel chunk processing. Returns (facts, errors, success_count)."""
         all_facts = []
         total_errors = 0
         successful_extractions = 0
@@ -597,32 +465,52 @@ Respond only with valid JSON.
 
             if isinstance(result, FactExtractionResult):
                 all_facts.extend(result.facts)
-                metadata = result.extraction_metadata
-                total_errors += metadata.get("validation_errors", 0)
+                total_errors += result.extraction_metadata.get("validation_errors", 0)
                 successful_extractions += 1
 
+        return all_facts, total_errors, successful_extractions
+
+    async def extract_facts_from_chunks(
+        self, chunks: List[Dict[str, Any]], source: str
+    ) -> FactExtractionResult:
+        """Extract facts from multiple chunks in parallel."""
+        logger.info(f"Processing {len(chunks)} chunks for fact extraction")
+
+        semaphore = asyncio.Semaphore(3)
+
+        async def process_chunk(chunk: Dict[str, Any]) -> FactExtractionResult:
+            async with semaphore:
+                return await self.extract_facts_from_text(
+                    content=chunk.get("text", ""),
+                    source=source,
+                    context=str(chunk.get("metadata", {})),
+                    chunk_id=chunk.get("id", chunk.get("chunk_id")),
+                )
+
+        start_time = time.time()
+        chunk_results = await asyncio.gather(
+            *[process_chunk(chunk) for chunk in chunks], return_exceptions=True
+        )
+
+        all_facts, total_errors, successful = self._aggregate_chunk_results(chunk_results)
         processing_time = time.time() - start_time
 
         logger.info(
-            f"Extracted {len(all_facts)} total facts from "
-            f"{successful_extractions} chunks in {processing_time:.2f}s"
+            f"Extracted {len(all_facts)} total facts from {successful} chunks in {processing_time:.2f}s"
         )
 
-        # Create combined result
-        combined_result = FactExtractionResult(
+        return FactExtractionResult(
             facts=all_facts,
             processing_time=processing_time,
             extraction_metadata={
                 "source": source,
                 "total_chunks": len(chunks),
-                "successful_chunks": successful_extractions,
-                "failed_chunks": len(chunks) - successful_extractions,
+                "successful_chunks": successful,
+                "failed_chunks": len(chunks) - successful,
                 "total_validation_errors": total_errors,
                 "extraction_method": "parallel_chunk_processing",
             },
         )
-
-        return combined_result
 
     def filter_facts(
         self,
