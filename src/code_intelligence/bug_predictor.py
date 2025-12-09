@@ -29,7 +29,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuple for function definition prefixes (used in startswith)
+_FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
 
 # Issue #315 - Threshold-based score calculation to reduce nesting
@@ -280,9 +285,88 @@ class BugPredictor:
         self._change_freq_cache: Optional[dict[str, int]] = None
         self._author_stats_cache: Optional[dict[str, dict]] = None
 
+    def _collect_complexity_factors(
+        self, path: Path, complexity: dict[str, Any]
+    ) -> list[RiskFactorScore]:
+        """Collect complexity-related risk factor scores (Issue #281 - extracted helper)."""
+        return [
+            RiskFactorScore(
+                factor=RiskFactor.COMPLEXITY,
+                score=complexity["overall"],
+                weight=self.weights[RiskFactor.COMPLEXITY],
+                details=f"Lines: {complexity['lines']}, Functions: {complexity['functions']}",
+            ),
+            RiskFactorScore(
+                factor=RiskFactor.CYCLOMATIC_COMPLEXITY,
+                score=complexity["cyclomatic"],
+                weight=self.weights[RiskFactor.CYCLOMATIC_COMPLEXITY],
+                details=f"Cyclomatic complexity score: {complexity['cyclomatic']:.0f}",
+            ),
+            RiskFactorScore(
+                factor=RiskFactor.NESTING_DEPTH,
+                score=complexity["nesting"],
+                weight=self.weights[RiskFactor.NESTING_DEPTH],
+                details=f"Max nesting depth: {complexity['max_depth']}",
+            ),
+        ]
+
+    def _collect_history_factors(
+        self, rel_path: str
+    ) -> tuple[list[RiskFactorScore], dict[str, Any]]:
+        """Collect history-related risk factors (Issue #281 - extracted helper).
+
+        Returns tuple of (factor_scores, bug_data) for use in assessment.
+        """
+        change_data = self._get_change_frequency(rel_path)
+        bug_data = self._get_bug_history(rel_path)
+
+        scores = [
+            RiskFactorScore(
+                factor=RiskFactor.CHANGE_FREQUENCY,
+                score=change_data["score"],
+                weight=self.weights[RiskFactor.CHANGE_FREQUENCY],
+                details=f"Changes in 90 days: {change_data['count']}",
+            ),
+            RiskFactorScore(
+                factor=RiskFactor.BUG_HISTORY,
+                score=bug_data["score"],
+                weight=self.weights[RiskFactor.BUG_HISTORY],
+                details=f"Bug fixes: {bug_data['count']}",
+            ),
+        ]
+        return scores, bug_data
+
+    def _collect_structure_factors(self, path: Path) -> list[RiskFactorScore]:
+        """Collect file structure risk factors (Issue #281 - extracted helper)."""
+        size_score = self._calculate_file_size_score(path)
+        dep_score = self._analyze_dependencies(path)
+
+        return [
+            RiskFactorScore(
+                factor=RiskFactor.FILE_SIZE,
+                score=size_score["score"],
+                weight=self.weights[RiskFactor.FILE_SIZE],
+                details=f"Size: {size_score['lines']} lines",
+            ),
+            RiskFactorScore(
+                factor=RiskFactor.DEPENDENCY_COUNT,
+                score=dep_score["score"],
+                weight=self.weights[RiskFactor.DEPENDENCY_COUNT],
+                details=f"Imports: {dep_score['count']}",
+            ),
+            RiskFactorScore(
+                factor=RiskFactor.TEST_COVERAGE,
+                score=50.0,  # Default to medium if no coverage data
+                weight=self.weights[RiskFactor.TEST_COVERAGE],
+                details="Coverage data not available",
+            ),
+        ]
+
     def analyze_file(self, file_path: str) -> FileRiskAssessment:
         """
         Analyze a single file for bug risk.
+
+        Issue #281: Refactored to use extracted helpers.
 
         Args:
             file_path: Path to the file to analyze
@@ -294,118 +378,30 @@ class BugPredictor:
         if not path.is_absolute():
             path = self.project_root / path
 
-        # Calculate all risk factors
-        factor_scores = []
-
-        # Complexity analysis
-        complexity = self._analyze_complexity(path)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.COMPLEXITY,
-                score=complexity["overall"],
-                weight=self.weights[RiskFactor.COMPLEXITY],
-                details=f"Lines: {complexity['lines']}, Functions: {complexity['functions']}",
-            )
-        )
-
-        # Cyclomatic complexity
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.CYCLOMATIC_COMPLEXITY,
-                score=complexity["cyclomatic"],
-                weight=self.weights[RiskFactor.CYCLOMATIC_COMPLEXITY],
-                details=f"Cyclomatic complexity score: {complexity['cyclomatic']:.0f}",
-            )
-        )
-
-        # Nesting depth
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.NESTING_DEPTH,
-                score=complexity["nesting"],
-                weight=self.weights[RiskFactor.NESTING_DEPTH],
-                details=f"Max nesting depth: {complexity['max_depth']}",
-            )
-        )
-
-        # Change frequency
         rel_path = str(path.relative_to(self.project_root))
-        change_data = self._get_change_frequency(rel_path)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.CHANGE_FREQUENCY,
-                score=change_data["score"],
-                weight=self.weights[RiskFactor.CHANGE_FREQUENCY],
-                details=f"Changes in 90 days: {change_data['count']}",
-            )
-        )
 
-        # Bug history
-        bug_data = self._get_bug_history(rel_path)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.BUG_HISTORY,
-                score=bug_data["score"],
-                weight=self.weights[RiskFactor.BUG_HISTORY],
-                details=f"Bug fixes: {bug_data['count']}",
-            )
-        )
+        # Collect all risk factors using helpers
+        complexity = self._analyze_complexity(path)
+        factor_scores = self._collect_complexity_factors(path, complexity)
 
-        # File size
-        size_score = self._calculate_file_size_score(path)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.FILE_SIZE,
-                score=size_score["score"],
-                weight=self.weights[RiskFactor.FILE_SIZE],
-                details=f"Size: {size_score['lines']} lines",
-            )
-        )
+        history_factors, bug_data = self._collect_history_factors(rel_path)
+        factor_scores.extend(history_factors)
 
-        # Dependency count
-        dep_score = self._analyze_dependencies(path)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.DEPENDENCY_COUNT,
-                score=dep_score["score"],
-                weight=self.weights[RiskFactor.DEPENDENCY_COUNT],
-                details=f"Imports: {dep_score['count']}",
-            )
-        )
+        factor_scores.extend(self._collect_structure_factors(path))
 
-        # Test coverage (placeholder - would need actual coverage data)
-        factor_scores.append(
-            RiskFactorScore(
-                factor=RiskFactor.TEST_COVERAGE,
-                score=50.0,  # Default to medium if no coverage data
-                weight=self.weights[RiskFactor.TEST_COVERAGE],
-                details="Coverage data not available",
-            )
-        )
-
-        # Calculate overall risk score
+        # Calculate overall risk score and build assessment
         risk_score = sum(fs.weighted_score for fs in factor_scores)
-        risk_level = self._get_risk_level(risk_score)
-
-        # Generate prevention tips
-        prevention_tips = self._generate_prevention_tips(factor_scores)
-
-        # Generate test suggestions
-        suggested_tests = self._generate_test_suggestions(rel_path, factor_scores)
-
-        # Generate recommendation
-        recommendation = self._generate_recommendation(risk_score, factor_scores)
 
         return FileRiskAssessment(
             file_path=rel_path,
             risk_score=risk_score,
-            risk_level=risk_level,
+            risk_level=self._get_risk_level(risk_score),
             factor_scores=factor_scores,
             bug_count_history=bug_data["count"],
             last_bug_date=bug_data.get("last_date"),
-            prevention_tips=prevention_tips,
-            suggested_tests=suggested_tests,
-            recommendation=recommendation,
+            prevention_tips=self._generate_prevention_tips(factor_scores),
+            suggested_tests=self._generate_test_suggestions(rel_path, factor_scores),
+            recommendation=self._generate_recommendation(risk_score, factor_scores),
         )
 
     def analyze_directory(
@@ -567,100 +563,100 @@ class BugPredictor:
     # Private Analysis Methods
     # =========================================================================
 
+    # Issue #281 - Thresholds for complexity scoring
+    _LINE_COUNT_THRESHOLDS: list[tuple[int, int]] = [
+        (500, 30),  # > 500 lines = +30
+        (300, 20),  # > 300 lines = +20
+        (100, 10),  # > 100 lines = +10
+    ]
+
+    _FUNC_COUNT_THRESHOLDS: list[tuple[int, int]] = [
+        (20, 25),  # > 20 functions = +25
+        (10, 15),  # > 10 functions = +15
+        (5, 5),    # > 5 functions = +5
+    ]
+
+    # Keywords for cyclomatic complexity approximation
+    _CONTROL_FLOW_KEYWORDS: tuple[str, ...] = (
+        "if ", "elif ", "else:", "for ", "while ",
+        "try:", "except:", "and ", "or ",
+    )
+
+    def _get_default_complexity_result(self) -> dict[str, Any]:
+        """Return default complexity result for missing/failed files (Issue #281)."""
+        return {
+            "overall": 30.0,
+            "cyclomatic": 30.0,
+            "nesting": 30.0,
+            "lines": 0,
+            "functions": 0,
+            "max_depth": 0,
+        }
+
+    def _count_code_metrics(self, lines: list[str]) -> dict[str, int]:
+        """Count basic code metrics (Issue #281 - extracted helper)."""
+        func_count = sum(
+            1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
+        )
+
+        max_depth = 0
+        for line in lines:
+            if line.strip():
+                indent = len(line) - len(line.lstrip())
+                max_depth = max(max_depth, indent // 4)
+
+        conditionals = sum(
+            1 for line in lines
+            if any(kw in line for kw in self._CONTROL_FLOW_KEYWORDS)
+        )
+
+        return {
+            "func_count": func_count,
+            "max_depth": max_depth,
+            "conditionals": conditionals,
+        }
+
+    def _calculate_complexity_scores(
+        self, line_count: int, metrics: dict[str, int]
+    ) -> dict[str, float]:
+        """Calculate complexity scores from metrics (Issue #281 - extracted helper)."""
+        complexity_score = (
+            _calculate_threshold_score(line_count, self._LINE_COUNT_THRESHOLDS, 0)
+            + _calculate_threshold_score(metrics["func_count"], self._FUNC_COUNT_THRESHOLDS, 0)
+        )
+
+        nesting_score = min(100, metrics["max_depth"] * 15)
+        cyclomatic_score = min(100, metrics["conditionals"] * 2)
+
+        return {
+            "overall": min(100, complexity_score + (cyclomatic_score * 0.3)),
+            "cyclomatic": cyclomatic_score,
+            "nesting": nesting_score,
+        }
+
     def _analyze_complexity(self, path: Path) -> dict[str, Any]:
-        """Analyze code complexity metrics."""
+        """Analyze code complexity metrics (Issue #281 - refactored)."""
         try:
             if not path.exists():
-                return {
-                    "overall": 30.0,
-                    "cyclomatic": 30.0,
-                    "nesting": 30.0,
-                    "lines": 0,
-                    "functions": 0,
-                    "max_depth": 0,
-                }
+                return self._get_default_complexity_result()
 
             content = path.read_text(encoding="utf-8", errors="ignore")
             lines = content.split("\n")
             line_count = len(lines)
 
-            # Count functions
-            func_count = sum(
-                1 for line in lines if line.strip().startswith(("def ", "async def "))
-            )
-
-            # Calculate nesting depth
-            max_depth = 0
-            for line in lines:
-                if line.strip():
-                    indent = len(line) - len(line.lstrip())
-                    depth = indent // 4
-                    max_depth = max(max_depth, depth)
-
-            # Count conditionals (approximation of cyclomatic complexity)
-            conditionals = sum(
-                1
-                for line in lines
-                if any(
-                    kw in line
-                    for kw in [
-                        "if ",
-                        "elif ",
-                        "else:",
-                        "for ",
-                        "while ",
-                        "try:",
-                        "except:",
-                        "and ",
-                        "or ",
-                    ]
-                )
-            )
-
-            # Calculate scores
-            complexity_score = 0
-
-            # Line count factor
-            if line_count > 500:
-                complexity_score += 30
-            elif line_count > 300:
-                complexity_score += 20
-            elif line_count > 100:
-                complexity_score += 10
-
-            # Function count factor
-            if func_count > 20:
-                complexity_score += 25
-            elif func_count > 10:
-                complexity_score += 15
-            elif func_count > 5:
-                complexity_score += 5
-
-            # Nesting depth factor
-            nesting_score = min(100, max_depth * 15)
-
-            # Cyclomatic complexity approximation
-            cyclomatic_score = min(100, conditionals * 2)
+            metrics = self._count_code_metrics(lines)
+            scores = self._calculate_complexity_scores(line_count, metrics)
 
             return {
-                "overall": min(100, complexity_score + (cyclomatic_score * 0.3)),
-                "cyclomatic": cyclomatic_score,
-                "nesting": nesting_score,
+                **scores,
                 "lines": line_count,
-                "functions": func_count,
-                "max_depth": max_depth,
+                "functions": metrics["func_count"],
+                "max_depth": metrics["max_depth"],
             }
 
         except Exception as e:
             logger.warning(f"Failed to analyze complexity for {path}: {e}")
-            return {
-                "overall": 30.0,
-                "cyclomatic": 30.0,
-                "nesting": 30.0,
-                "lines": 0,
-                "functions": 0,
-                "max_depth": 0,
-            }
+            return self._get_default_complexity_result()
 
     def _get_change_frequency(self, file_path: str) -> dict[str, Any]:
         """Get change frequency for a file in the last 90 days."""
@@ -681,7 +677,7 @@ class BugPredictor:
                 ["git", "log", "--since=90 days ago", "--name-only", "--pretty=format:"],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=TimingConstants.SHORT_TIMEOUT,
                 encoding="utf-8",
                 cwd=self.project_root,
             )
@@ -753,7 +749,7 @@ class BugPredictor:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=TimingConstants.STANDARD_TIMEOUT,
                 encoding="utf-8",
                 cwd=self.project_root,
             )
