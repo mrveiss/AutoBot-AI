@@ -145,232 +145,146 @@ class OperationIntegrationManager:
         if self.redis_client:
             await self.redis_client.close()
 
+    async def _handle_create_operation(self, request: CreateOperationRequest) -> Dict[str, str]:
+        """Handle create operation request."""
+        try:
+            operation_type = OperationType(request.operation_type.lower())
+            priority = OperationPriority[request.priority.upper()]
+            operation_function = self._get_operation_function(operation_type, request.context)
+            operation_id = await self.operation_manager.create_operation(
+                operation_type=operation_type, name=request.name, description=request.description,
+                operation_function=operation_function, priority=priority,
+                estimated_items=request.estimated_items, context=request.context,
+                execute_immediately=request.execute_immediately,
+            )
+            return {"operation_id": operation_id, "status": "created"}
+        except ValueError as e:
+            raise_validation_error("API_0001", str(e))
+        except Exception as e:
+            logger.error(f"Failed to create operation: {e}")
+            raise_server_error("API_0003", "Internal server error")
+
+    def _calculate_operation_stats(self) -> tuple[int, int, int, int]:
+        """Calculate operation statistics."""
+        all_operations = list(self.operation_manager.operations.values())
+        return (
+            len(all_operations),
+            len([op for op in all_operations if op.status == OperationStatus.RUNNING]),
+            len([op for op in all_operations if op.status == OperationStatus.COMPLETED]),
+            len([op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]),
+        )
+
+    async def _handle_websocket_connection(self, websocket: WebSocket, operation_id: str):
+        """Handle WebSocket connection for progress updates."""
+        await websocket.accept()
+        async with self._ws_lock:
+            if operation_id not in self.websocket_connections:
+                self.websocket_connections[operation_id] = []
+            self.websocket_connections[operation_id].append(websocket)
+        try:
+            operation = self.operation_manager.get_operation(operation_id)
+            if operation:
+                await websocket.send_json({"type": "current_progress", "data": self._convert_operation_to_response(operation).dict()})
+            while True:
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                except asyncio.TimeoutError:
+                    await websocket.send_json({"type": "ping"})
+        except WebSocketDisconnect:
+            logger.debug("WebSocket client disconnected from operation %s", operation_id)
+        finally:
+            async with self._ws_lock:
+                if operation_id in self.websocket_connections and websocket in self.websocket_connections[operation_id]:
+                    self.websocket_connections[operation_id].remove(websocket)
+
+    async def _handle_resume_operation(self, operation_id: str) -> Dict[str, str]:
+        """Handle resume operation from latest checkpoint."""
+        try:
+            checkpoints = await self.operation_manager.checkpoint_manager.list_checkpoints(operation_id)
+            if not checkpoints:
+                raise_not_found_error("API_0002", "No checkpoints found for operation")
+            latest_checkpoint = checkpoints[-1]
+            new_operation_id = await self.operation_manager.resume_operation(latest_checkpoint.checkpoint_id)
+            return {"status": "resumed", "new_operation_id": new_operation_id, "resumed_from": latest_checkpoint.checkpoint_id}
+        except Exception as e:
+            logger.error(f"Failed to resume operation: {e}")
+            raise_server_error("API_0003", str(e))
+
+    async def _handle_update_progress(self, operation_id: str, request: ProgressUpdateRequest) -> Dict[str, str]:
+        """Handle update progress request."""
+        operation = self.operation_manager.get_operation(operation_id)
+        if not operation:
+            raise_not_found_error("API_0002", "Operation not found")
+        await self.operation_manager.progress_tracker.update_progress(
+            operation, request.current_step, request.processed_items, request.total_items, request.performance_metrics, request.status_message)
+        return {"status": "updated"}
+
+    async def _handle_start_indexing(self, codebase_path: str, file_patterns: Optional[List[str]] = None) -> Dict[str, str]:
+        """Handle start codebase indexing request."""
+        try:
+            operation_id = await execute_codebase_indexing(codebase_path, self.operation_manager, file_patterns)
+            return {"operation_id": operation_id, "status": "started"}
+        except Exception as e:
+            logger.error(f"Failed to start codebase indexing: {e}")
+            raise_server_error("API_0003", str(e))
+
+    async def _handle_start_testing(self, test_suite_path: str, test_patterns: Optional[List[str]] = None) -> Dict[str, str]:
+        """Handle start comprehensive testing request."""
+        try:
+            operation_id = await execute_comprehensive_test_suite(test_suite_path, self.operation_manager, test_patterns)
+            return {"operation_id": operation_id, "status": "started"}
+        except Exception as e:
+            logger.error(f"Failed to start comprehensive testing: {e}")
+            raise_server_error("API_0003", str(e))
+
     def _setup_routes(self):
-        """Setup FastAPI routes for operation management"""
+        """Setup FastAPI routes for operation management."""
 
         @self.router.post("/create", response_model=Dict[str, str])
         async def create_operation(request: CreateOperationRequest):
-            """Create a new long-running operation"""
-            try:
-                # Convert string enums to actual enums
-                operation_type = OperationType(request.operation_type.lower())
-                priority = OperationPriority[request.priority.upper()]
-
-                # Determine operation function based on type
-                operation_function = self._get_operation_function(
-                    operation_type, request.context
-                )
-
-                operation_id = await self.operation_manager.create_operation(
-                    operation_type=operation_type,
-                    name=request.name,
-                    description=request.description,
-                    operation_function=operation_function,
-                    priority=priority,
-                    estimated_items=request.estimated_items,
-                    context=request.context,
-                    execute_immediately=request.execute_immediately,
-                )
-
-                return {"operation_id": operation_id, "status": "created"}
-
-            except ValueError as e:
-                raise_validation_error("API_0001", str(e))
-            except Exception as e:
-                logger.error(f"Failed to create operation: {e}")
-                raise_server_error("API_0003", "Internal server error")
+            return await self._handle_create_operation(request)
 
         @self.router.get("/{operation_id}", response_model=OperationResponse)
         async def get_operation(operation_id: str):
-            """Get operation details"""
             operation = self.operation_manager.get_operation(operation_id)
             if not operation:
                 raise_not_found_error("API_0002", "Operation not found")
-
             return self._convert_operation_to_response(operation)
 
         @self.router.get("/", response_model=OperationListResponse)
-        async def list_operations(
-            status: Optional[str] = None,
-            operation_type: Optional[str] = None,
-            limit: int = 50,
-        ):
-            """List operations with optional filtering"""
+        async def list_operations(status: Optional[str] = None, operation_type: Optional[str] = None, limit: int = 50):
             status_filter = OperationStatus(status) if status else None
             type_filter = OperationType(operation_type) if operation_type else None
-
-            operations = self.operation_manager.list_operations(
-                status_filter, type_filter
-            )
-
-            # Limit results
-            operations = operations[:limit]
-
-            # Convert to response format
-            operation_responses = [
-                self._convert_operation_to_response(op) for op in operations
-            ]
-
-            # Calculate statistics
-            all_operations = list(self.operation_manager.operations.values())
-            total_count = len(all_operations)
-            active_count = len(
-                [op for op in all_operations if op.status == OperationStatus.RUNNING]
-            )
-            completed_count = len(
-                [op for op in all_operations if op.status == OperationStatus.COMPLETED]
-            )
-            failed_count = len(
-                [
-                    op
-                    for op in all_operations
-                    if op.status in FAILED_OPERATION_STATUSES
-                ]
-            )
-
-            return OperationListResponse(
-                operations=operation_responses,
-                total_count=total_count,
-                active_count=active_count,
-                completed_count=completed_count,
-                failed_count=failed_count,
-            )
+            operations = self.operation_manager.list_operations(status_filter, type_filter)[:limit]
+            operation_responses = [self._convert_operation_to_response(op) for op in operations]
+            total, active, completed, failed = self._calculate_operation_stats()
+            return OperationListResponse(operations=operation_responses, total_count=total, active_count=active, completed_count=completed, failed_count=failed)
 
         @self.router.post("/{operation_id}/cancel")
         async def cancel_operation(operation_id: str):
-            """Cancel a running operation"""
-            success = await self.operation_manager.cancel_operation(operation_id)
-            if not success:
+            if not await self.operation_manager.cancel_operation(operation_id):
                 raise_not_found_error("API_0002", "Operation not found")
-
             return {"status": "cancelled"}
 
         @self.router.post("/{operation_id}/resume")
         async def resume_operation_from_latest_checkpoint(operation_id: str):
-            """Resume operation from its latest checkpoint"""
-            try:
-                checkpoints = (
-                    await self.operation_manager.checkpoint_manager.list_checkpoints(
-                        operation_id
-                    )
-                )
-                if not checkpoints:
-                    raise_not_found_error(
-                        "API_0002", "No checkpoints found for operation"
-                    )
-
-                # Use latest checkpoint
-                latest_checkpoint = checkpoints[-1]
-                new_operation_id = await self.operation_manager.resume_operation(
-                    latest_checkpoint.checkpoint_id
-                )
-
-                return {
-                    "status": "resumed",
-                    "new_operation_id": new_operation_id,
-                    "resumed_from": latest_checkpoint.checkpoint_id,
-                }
-
-            except Exception as e:
-                logger.error(f"Failed to resume operation: {e}")
-                raise_server_error("API_0003", str(e))
+            return await self._handle_resume_operation(operation_id)
 
         @self.router.post("/{operation_id}/progress")
-        async def update_operation_progress(
-            operation_id: str, request: ProgressUpdateRequest
-        ):
-            """Manually update operation progress (for external integrations)"""
-            operation = self.operation_manager.get_operation(operation_id)
-            if not operation:
-                raise_not_found_error("API_0002", "Operation not found")
-
-            await self.operation_manager.progress_tracker.update_progress(
-                operation,
-                request.current_step,
-                request.processed_items,
-                request.total_items,
-                request.performance_metrics,
-                request.status_message,
-            )
-
-            return {"status": "updated"}
+        async def update_operation_progress(operation_id: str, request: ProgressUpdateRequest):
+            return await self._handle_update_progress(operation_id, request)
 
         @self.router.websocket("/{operation_id}/progress")
         async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
-            """WebSocket endpoint for real-time progress updates"""
-            await websocket.accept()
+            await self._handle_websocket_connection(websocket, operation_id)
 
-            # Add to connections (thread-safe)
-            async with self._ws_lock:
-                if operation_id not in self.websocket_connections:
-                    self.websocket_connections[operation_id] = []
-                self.websocket_connections[operation_id].append(websocket)
-
-            try:
-                # Send current progress if operation exists
-                operation = self.operation_manager.get_operation(operation_id)
-                if operation:
-                    await websocket.send_json(
-                        {
-                            "type": "current_progress",
-                            "data": (
-                                self._convert_operation_to_response(operation).dict()
-                            ),
-                        }
-                    )
-
-                # Keep connection alive
-                while True:
-                    # Wait for client messages (ping/pong)
-                    try:
-                        await asyncio.wait_for(websocket.receive_text(), timeout=30)
-                    except asyncio.TimeoutError:
-                        # Send ping to keep connection alive
-                        await websocket.send_json({"type": "ping"})
-
-            except WebSocketDisconnect:
-                logger.debug("WebSocket client disconnected from operation %s", operation_id)
-            finally:
-                # Remove from connections (thread-safe)
-                async with self._ws_lock:
-                    if (
-                        operation_id in self.websocket_connections
-                        and websocket in self.websocket_connections[operation_id]
-                    ):
-                        self.websocket_connections[operation_id].remove(websocket)
-
-        # Specialized operation endpoints
         @self.router.post("/codebase/index")
-        async def start_codebase_indexing(
-            codebase_path: str,
-            file_patterns: Optional[List[str]] = None,
-            background_tasks: BackgroundTasks = None,
-        ):
-            """Start codebase indexing operation"""
-            try:
-                operation_id = await execute_codebase_indexing(
-                    codebase_path, self.operation_manager, file_patterns
-                )
-                return {"operation_id": operation_id, "status": "started"}
-            except Exception as e:
-                logger.error(f"Failed to start codebase indexing: {e}")
-                raise_server_error("API_0003", str(e))
+        async def start_codebase_indexing(codebase_path: str, file_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+            return await self._handle_start_indexing(codebase_path, file_patterns)
 
         @self.router.post("/testing/comprehensive")
-        async def start_comprehensive_testing(
-            test_suite_path: str,
-            test_patterns: Optional[List[str]] = None,
-            background_tasks: BackgroundTasks = None,
-        ):
-            """Start comprehensive test suite operation"""
-            try:
-                operation_id = await execute_comprehensive_test_suite(
-                    test_suite_path, self.operation_manager, test_patterns
-                )
-                return {"operation_id": operation_id, "status": "started"}
-            except Exception as e:
-                logger.error(f"Failed to start comprehensive testing: {e}")
-                raise_server_error("API_0003", str(e))
+        async def start_comprehensive_testing(test_suite_path: str, test_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+            return await self._handle_start_testing(test_suite_path, test_patterns)
 
     def _get_operation_function(
         self, operation_type: OperationType, context: Dict[str, Any]
@@ -425,6 +339,49 @@ class OperationIntegrationManager:
 
         return operation_func
 
+    async def _collect_test_files(self, test_path: str, test_patterns: List[str]) -> List:
+        """Collect test files matching the given patterns."""
+        from pathlib import Path
+        test_files = []
+        for pattern in test_patterns:
+            # Issue #358 - avoid blocking
+            pattern_files = await asyncio.to_thread(
+                lambda p=pattern: list(Path(test_path).rglob(p))
+            )
+            test_files.extend(pattern_files)
+        return test_files
+
+    async def _run_single_test(self, test_file) -> Dict[str, Any]:
+        """Run a single test file and return the result."""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "python", "-m", "pytest", str(test_file), "-v",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=300
+            )
+            return {
+                "file": str(test_file),
+                "exit_code": process.returncode,
+                "output": stdout.decode("utf-8"),
+                "errors": stderr.decode("utf-8"),
+            }
+        except asyncio.TimeoutError:
+            return {
+                "file": str(test_file),
+                "exit_code": -1,
+                "error": "Test timed out",
+            }
+
+    def _calculate_test_success_rate(self, results: List[Dict[str, Any]]) -> float:
+        """Calculate the success rate from test results."""
+        if not results:
+            return 0.0
+        return len([r for r in results if r.get("exit_code") == 0]) / len(results) * 100
+
     def _test_suite_wrapper(self, context: Dict[str, Any]):
         """Wrapper for test suite operations"""
 
@@ -433,63 +390,22 @@ class OperationIntegrationManager:
             test_path = context.get("test_path", "/home/kali/Desktop/AutoBot/tests")
             test_patterns = context.get("test_patterns", ["test_*.py"])
 
-            # Implementation would integrate with actual test runners
-            # This shows the integration pattern
             await exec_context.update_progress("Starting test suite", 0, 1)
 
-            # Simulate test execution
-            from pathlib import Path
-
-            test_files = []
-            for pattern in test_patterns:
-                # Issue #358 - avoid blocking
-                pattern_files = await asyncio.to_thread(
-                    lambda p=pattern: list(Path(test_path).rglob(p))
-                )
-                test_files.extend(pattern_files)
+            test_files = await self._collect_test_files(test_path, test_patterns)
 
             results = []
             for i, test_file in enumerate(test_files):
                 await exec_context.update_progress(
                     f"Running {test_file.name}", i, len(test_files)
                 )
-
-                # Run actual test
-                try:
-                    process = await asyncio.create_subprocess_exec(
-                        "python", "-m", "pytest", str(test_file), "-v",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE
-                    )
-                    stdout, stderr = await asyncio.wait_for(
-                        process.communicate(),
-                        timeout=300
-                    )
-                    results.append(
-                        {
-                            "file": str(test_file),
-                            "exit_code": process.returncode,
-                            "output": stdout.decode("utf-8"),
-                            "errors": stderr.decode("utf-8"),
-                        }
-                    )
-                except asyncio.TimeoutError:
-                    results.append(
-                        {
-                            "file": str(test_file),
-                            "exit_code": -1,
-                            "error": "Test timed out",
-                        }
-                    )
+                result = await self._run_single_test(test_file)
+                results.append(result)
 
             return {
                 "total_tests": len(test_files),
                 "results": results,
-                "success_rate": (
-                    len([r for r in results if r.get("exit_code") == 0])
-                    / len(results)
-                    * 100
-                ),
+                "success_rate": self._calculate_test_success_rate(results),
             }
 
         return operation_func
