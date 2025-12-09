@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level tuple for literal value AST types
 _LITERAL_VALUE_TYPES = (ast.Str, ast.Num)
 
+# Issue #380: Module-level tuple for config file extensions
+_CONFIG_FILE_EXTENSIONS = ('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini')
+
 
 @dataclass
 class HardcodedValue:
@@ -333,7 +336,7 @@ class EnvironmentAnalyzer:
             # Paths
             value.startswith('/'),
             value.startswith('./'),
-            value.endswith(('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini')),
+            value.endswith(_CONFIG_FILE_EXTENSIONS),  # Issue #380
 
             # URLs and network
             value.startswith(('http://', 'https://', 'ws://', 'wss://', 'ftp://', 'redis://', 'postgresql://', 'mysql://')),
@@ -390,7 +393,7 @@ class EnvironmentAnalyzer:
                 return 'numeric', 'low'
 
         # Low severity (general configuration)
-        if value.endswith(('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini')):
+        if value.endswith(_CONFIG_FILE_EXTENSIONS):  # Issue #380
             return 'config_file', 'low'
 
         return category or 'string', 'low'
