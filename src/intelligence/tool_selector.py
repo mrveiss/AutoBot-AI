@@ -38,122 +38,126 @@ class OSAwareToolSelector:
         self.tool_mappings = self._initialize_tool_mappings()
 
     def _initialize_tool_mappings(self) -> Dict:
-        """Initialize OS-specific tool mappings."""
+        """Initialize OS-specific tool mappings (Issue #281 - uses helper methods)."""
         return {
-            GoalCategory.NETWORK_DISCOVERY: {
-                "get_ip_address": {
-                    OSType.LINUX: ["ip addr show", "ifconfig", "hostname -I"],
-                    OSType.MACOS: ["ifconfig", "ipconfig getifaddr en0"],
-                    OSType.WINDOWS: ["ipconfig", "Get-NetIPAddress"],
-                },
-                "scan_network": {
-                    OSType.LINUX: [
-                        "nmap -sn {network}",
-                        "arp-scan -l",
-                        "ping -c 1 {target}",
-                    ],
-                    OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
-                    OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
-                },
-                "discover_devices": {
-                    OSType.LINUX: [
-                        "nmap -sn {network}",
-                        "arp-scan {network}",
-                        "ping -c 1 {target}",
-                    ],
-                    OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
-                    OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
-                },
+            GoalCategory.NETWORK_DISCOVERY: self._get_network_discovery_tools(),
+            GoalCategory.SECURITY_SCAN: self._get_security_scan_tools(),
+            GoalCategory.SYSTEM_UPDATE: self._get_system_update_tools(),
+            GoalCategory.SYSTEM_INFO: self._get_system_info_tools(),
+            GoalCategory.PROCESS_MANAGEMENT: self._get_process_management_tools(),
+            GoalCategory.MONITORING: self._get_monitoring_tools(),
+        }
+
+    def _get_network_discovery_tools(self) -> Dict:
+        """Get network discovery tool mappings (Issue #281 - extracted helper)."""
+        return {
+            "get_ip_address": {
+                OSType.LINUX: ["ip addr show", "ifconfig", "hostname -I"],
+                OSType.MACOS: ["ifconfig", "ipconfig getifaddr en0"],
+                OSType.WINDOWS: ["ipconfig", "Get-NetIPAddress"],
             },
-            GoalCategory.SECURITY_SCAN: {
-                "port_scan": {
-                    OSType.LINUX: ["nmap -p- {target}", "nc -zv {target} {port}"],
-                    OSType.MACOS: ["nmap -p- {target}", "nc -zv {target} {port}"],
-                    OSType.WINDOWS: [
-                        "nmap -p- {target}",
-                        "Test-NetConnection {target} -Port {port}",
-                    ],
-                },
-                "vulnerability_scan": {
-                    OSType.LINUX: [
-                        "nmap -sV --script vuln {target}",
-                        "nikto -h {target}",
-                    ],
-                    OSType.MACOS: ["nmap -sV --script vuln {target}"],
-                    OSType.WINDOWS: ["nmap -sV --script vuln {target}"],
-                },
+            "scan_network": {
+                OSType.LINUX: ["nmap -sn {network}", "arp-scan -l", "ping -c 1 {target}"],
+                OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
+                OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
             },
-            GoalCategory.SYSTEM_UPDATE: {
-                "system_update": {
-                    OSType.LINUX: {
-                        LinuxDistro.UBUNTU: ["apt update && apt upgrade -y"],
-                        LinuxDistro.DEBIAN: ["apt update && apt upgrade -y"],
-                        LinuxDistro.CENTOS: ["yum update -y"],
-                        LinuxDistro.FEDORA: ["dnf update -y"],
-                        LinuxDistro.ARCH: ["pacman -Syu --noconfirm"],
-                        LinuxDistro.KALI: ["apt update && apt upgrade -y"],
-                    },
-                    OSType.MACOS: ["brew update && brew upgrade"],
-                    OSType.WINDOWS: ["winget upgrade --all"],
-                },
-                "os_update": {
-                    OSType.LINUX: {
-                        LinuxDistro.UBUNTU: ["apt update && apt upgrade -y"],
-                        LinuxDistro.DEBIAN: ["apt update && apt upgrade -y"],
-                        LinuxDistro.CENTOS: ["yum update -y"],
-                        LinuxDistro.FEDORA: ["dnf update -y"],
-                        LinuxDistro.ARCH: ["pacman -Syu --noconfirm"],
-                        LinuxDistro.KALI: ["apt update && apt upgrade -y"],
-                    },
-                    OSType.MACOS: ["softwareupdate -ia"],
-                    OSType.WINDOWS: ["Get-WindowsUpdate -Install -AcceptAll"],
-                },
+            "discover_devices": {
+                OSType.LINUX: ["nmap -sn {network}", "arp-scan {network}", "ping -c 1 {target}"],
+                OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
+                OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
             },
-            GoalCategory.SYSTEM_INFO: {
-                "system_info": {
-                    OSType.LINUX: ["uname -a", "hostnamectl", "cat /etc/os-release"],
-                    OSType.MACOS: ["system_profiler SPSoftwareDataType", "uname -a"],
-                    OSType.WINDOWS: ["systeminfo", "Get-ComputerInfo"],
-                },
-                "disk_usage": {
-                    OSType.LINUX: ["df -h", "du -sh /*"],
-                    OSType.MACOS: ["df -h", "du -sh /*"],
-                    OSType.WINDOWS: ["Get-PSDrive", "dir"],
-                },
-                "memory_info": {
-                    OSType.LINUX: ["free -h", "vmstat"],
-                    OSType.MACOS: ["vm_stat", "top -l 1 -s 0"],
-                    OSType.WINDOWS: ["Get-WmiObject -Class Win32_OperatingSystem"],
-                },
-                "hardware_info": {
-                    OSType.LINUX: ["lshw -short", "lscpu", "dmidecode"],
-                    OSType.MACOS: ["system_profiler SPHardwareDataType"],
-                    OSType.WINDOWS: ["Get-WmiObject -Class Win32_ComputerSystem"],
-                },
+        }
+
+    def _get_security_scan_tools(self) -> Dict:
+        """Get security scan tool mappings (Issue #281 - extracted helper)."""
+        return {
+            "port_scan": {
+                OSType.LINUX: ["nmap -p- {target}", "nc -zv {target} {port}"],
+                OSType.MACOS: ["nmap -p- {target}", "nc -zv {target} {port}"],
+                OSType.WINDOWS: ["nmap -p- {target}", "Test-NetConnection {target} -Port {port}"],
             },
-            GoalCategory.PROCESS_MANAGEMENT: {
-                "list_processes": {
-                    OSType.LINUX: ["ps aux", "top -n 1", "htop"],
-                    OSType.MACOS: ["ps aux", "top -l 1"],
-                    OSType.WINDOWS: ["Get-Process", "tasklist"],
-                },
-                "kill_process": {
-                    OSType.LINUX: ["kill {pid}", "killall {name}", "pkill {name}"],
-                    OSType.MACOS: ["kill {pid}", "killall {name}"],
-                    OSType.WINDOWS: ["Stop-Process -Id {pid}", "taskkill /PID {pid}"],
-                },
+            "vulnerability_scan": {
+                OSType.LINUX: ["nmap -sV --script vuln {target}", "nikto -h {target}"],
+                OSType.MACOS: ["nmap -sV --script vuln {target}"],
+                OSType.WINDOWS: ["nmap -sV --script vuln {target}"],
             },
-            GoalCategory.MONITORING: {
-                "system_monitor": {
-                    OSType.LINUX: ["top", "htop", "vmstat 1"],
-                    OSType.MACOS: ["top", "activity monitor"],
-                    OSType.WINDOWS: ["Get-Counter", "perfmon"],
-                },
-                "performance_check": {
-                    OSType.LINUX: ["top -n 1", "iotop", "nethogs"],
-                    OSType.MACOS: ["top -l 1", "fs_usage"],
-                    OSType.WINDOWS: ["Get-Counter", "typeper"],
-                },
+        }
+
+    def _get_system_update_tools(self) -> Dict:
+        """Get system update tool mappings (Issue #281 - extracted helper)."""
+        linux_update_cmds = {
+            LinuxDistro.UBUNTU: ["apt update && apt upgrade -y"],
+            LinuxDistro.DEBIAN: ["apt update && apt upgrade -y"],
+            LinuxDistro.CENTOS: ["yum update -y"],
+            LinuxDistro.FEDORA: ["dnf update -y"],
+            LinuxDistro.ARCH: ["pacman -Syu --noconfirm"],
+            LinuxDistro.KALI: ["apt update && apt upgrade -y"],
+        }
+        return {
+            "system_update": {
+                OSType.LINUX: linux_update_cmds,
+                OSType.MACOS: ["brew update && brew upgrade"],
+                OSType.WINDOWS: ["winget upgrade --all"],
+            },
+            "os_update": {
+                OSType.LINUX: linux_update_cmds,
+                OSType.MACOS: ["softwareupdate -ia"],
+                OSType.WINDOWS: ["Get-WindowsUpdate -Install -AcceptAll"],
+            },
+        }
+
+    def _get_system_info_tools(self) -> Dict:
+        """Get system info tool mappings (Issue #281 - extracted helper)."""
+        return {
+            "system_info": {
+                OSType.LINUX: ["uname -a", "hostnamectl", "cat /etc/os-release"],
+                OSType.MACOS: ["system_profiler SPSoftwareDataType", "uname -a"],
+                OSType.WINDOWS: ["systeminfo", "Get-ComputerInfo"],
+            },
+            "disk_usage": {
+                OSType.LINUX: ["df -h", "du -sh /*"],
+                OSType.MACOS: ["df -h", "du -sh /*"],
+                OSType.WINDOWS: ["Get-PSDrive", "dir"],
+            },
+            "memory_info": {
+                OSType.LINUX: ["free -h", "vmstat"],
+                OSType.MACOS: ["vm_stat", "top -l 1 -s 0"],
+                OSType.WINDOWS: ["Get-WmiObject -Class Win32_OperatingSystem"],
+            },
+            "hardware_info": {
+                OSType.LINUX: ["lshw -short", "lscpu", "dmidecode"],
+                OSType.MACOS: ["system_profiler SPHardwareDataType"],
+                OSType.WINDOWS: ["Get-WmiObject -Class Win32_ComputerSystem"],
+            },
+        }
+
+    def _get_process_management_tools(self) -> Dict:
+        """Get process management tool mappings (Issue #281 - extracted helper)."""
+        return {
+            "list_processes": {
+                OSType.LINUX: ["ps aux", "top -n 1", "htop"],
+                OSType.MACOS: ["ps aux", "top -l 1"],
+                OSType.WINDOWS: ["Get-Process", "tasklist"],
+            },
+            "kill_process": {
+                OSType.LINUX: ["kill {pid}", "killall {name}", "pkill {name}"],
+                OSType.MACOS: ["kill {pid}", "killall {name}"],
+                OSType.WINDOWS: ["Stop-Process -Id {pid}", "taskkill /PID {pid}"],
+            },
+        }
+
+    def _get_monitoring_tools(self) -> Dict:
+        """Get monitoring tool mappings (Issue #281 - extracted helper)."""
+        return {
+            "system_monitor": {
+                OSType.LINUX: ["top", "htop", "vmstat 1"],
+                OSType.MACOS: ["top", "activity monitor"],
+                OSType.WINDOWS: ["Get-Counter", "perfmon"],
+            },
+            "performance_check": {
+                OSType.LINUX: ["top -n 1", "iotop", "nethogs"],
+                OSType.MACOS: ["top -l 1", "fs_usage"],
+                OSType.WINDOWS: ["Get-Counter", "typeper"],
             },
         }
 
