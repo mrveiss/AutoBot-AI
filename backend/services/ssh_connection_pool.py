@@ -24,6 +24,8 @@ from typing import Dict, List, Optional
 
 import paramiko
 
+from backend.models.task_context import ConnectionCredentials
+
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +524,51 @@ class SSHConnectionPool:
                 }
 
             return stats
+
+    # Issue #322: Convenience methods accepting ConnectionCredentials context object
+    async def get_connection_from_creds(
+        self,
+        creds: ConnectionCredentials,
+    ) -> paramiko.SSHClient:
+        """
+        Get an SSH connection using ConnectionCredentials context.
+
+        Issue #322: Convenience method eliminating 5-parameter data clump.
+
+        Args:
+            creds: ConnectionCredentials with host, port, username, key_path, passphrase
+
+        Returns:
+            paramiko.SSHClient instance ready for use
+
+        Raises:
+            ConnectionError: If connection cannot be established
+        """
+        return await self.get_connection(
+            host=creds.host,
+            port=creds.port,
+            username=creds.username,
+            key_path=creds.key_path,
+            passphrase=creds.passphrase,
+        )
+
+    async def release_connection_with_creds(
+        self,
+        client: paramiko.SSHClient,
+        creds: ConnectionCredentials,
+    ) -> None:
+        """
+        Release a connection back to the pool using ConnectionCredentials context.
+
+        Issue #322: Convenience method eliminating 4-parameter data clump.
+
+        Args:
+            client: SSH client to release
+            creds: ConnectionCredentials with host, port, username
+        """
+        await self.release_connection(
+            client=client,
+            host=creds.host,
+            port=creds.port,
+            username=creds.username,
+        )

@@ -420,19 +420,17 @@ class TableListRequest(BaseModel):
 # MCP Tool Definitions
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_database_mcp_tools",
-    error_code_prefix="DB_MCP",
-)
-@router.get("/mcp/tools")
-async def get_database_mcp_tools() -> List[MCPTool]:
+def _get_database_query_tools() -> List[MCPTool]:
     """
-    Return all available Database MCP tools
+    Get MCP tools for database query and execute operations.
 
-    This endpoint follows the MCP specification for tool discovery.
+    Issue #281: Extracted from get_database_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for query/execute operations
     """
-    tools = [
+    return [
         MCPTool(
             name="database_query",
             description=(
@@ -501,6 +499,20 @@ async def get_database_mcp_tools() -> List[MCPTool]:
                 "required": ["database", "statement"],
             },
         ),
+    ]
+
+
+def _get_database_schema_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for database schema and metadata operations.
+
+    Issue #281: Extracted from get_database_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for schema/metadata operations
+    """
+    return [
         MCPTool(
             name="database_list_tables",
             description="List all tables in a SQLite database with row counts and basic info.",
@@ -572,6 +584,23 @@ async def get_database_mcp_tools() -> List[MCPTool]:
         ),
     ]
 
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_mcp_tools",
+    error_code_prefix="DB_MCP",
+)
+@router.get("/mcp/tools")
+async def get_database_mcp_tools() -> List[MCPTool]:
+    """
+    Return all available Database MCP tools
+
+    This endpoint follows the MCP specification for tool discovery.
+    """
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_database_query_tools())
+    tools.extend(_get_database_schema_tools())
     return tools
 
 
