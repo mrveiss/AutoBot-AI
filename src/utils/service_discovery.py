@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -68,8 +69,8 @@ class ServiceEndpoint:
     protocol: str = "http"
     health_endpoint: str = "/health"
     required: bool = True
-    timeout: float = 5.0
-    retry_count: int = 3
+    timeout: float = ServiceDiscoveryConfig.BACKEND_TIMEOUT
+    retry_count: int = RetryConfig.DEFAULT_RETRIES
 
     # Health status tracking
     status: ServiceStatus = ServiceStatus.UNKNOWN
@@ -113,8 +114,8 @@ class ServiceDiscovery:
             Path(__file__).parent.parent.parent / "config" / "services.json"
         )
         self.config_file = config_file or str(default_config)
-        self.health_check_interval = 30  # seconds
-        self.circuit_breaker_threshold = 5  # consecutive failures
+        self.health_check_interval = ServiceDiscoveryConfig.HEALTH_CHECK_INTERVAL_S
+        self.circuit_breaker_threshold = ServiceDiscoveryConfig.CIRCUIT_BREAKER_THRESHOLD
         self._health_check_task: Optional[asyncio.Task] = None
         self._http_client = get_http_client()  # Use singleton HTTP client
 
@@ -124,158 +125,117 @@ class ServiceDiscovery:
         # Service definitions for AutoBot's 6-VM architecture
         self._init_default_services()
 
-    def _init_default_services(self):
-        """Initialize default service definitions from unified configuration"""
+    def _get_service_config_with_fallback(
+        self, service_name: str, config_dict: Optional[dict], system_defaults: dict
+    ) -> tuple:
+        """Get host and port from config with system defaults fallback."""
+        if config_dict is None:
+            config_dict = {}
+        host = config_dict.get("host")
+        port = config_dict.get("port")
+        if not host or not port:
+            logger.error(f"Service {service_name} missing required 'host' or 'port' in configuration")
+            host = host or system_defaults.get(f"{service_name}_host", "localhost")
+            port = port or system_defaults.get(f"{service_name}_port", 8000)
+        return host, port
 
-        # Get configuration from unified config manager
-        from src.unified_config_manager import unified_config_manager
-
-        # Get service configurations
-        services_config = unified_config_manager.get_distributed_services_config()
-        backend_config = unified_config_manager.get_backend_config()
-        redis_config = unified_config_manager.get_redis_config()
-
-        # Get system defaults section for ultimate fallbacks
-        system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
-            or {}
+    def _register_frontend_service(self, services_config: dict, system_defaults: dict) -> None:
+        """Register VM1: Frontend (Web Interface) service."""
+        host, port = self._get_service_config_with_fallback(
+            "frontend", services_config.get("frontend", {}), system_defaults
         )
-
-        # Helper to get service config from unified configuration
-        def get_service_config(service_name, config_dict=None):
-            """Get host and port from unified configuration"""
-            if config_dict is None:
-                config_dict = services_config.get(service_name, {})
-
-            # Get from config, with no hardcoded fallbacks
-            # Config must provide these values
-            host = config_dict.get("host")
-            port = config_dict.get("port")
-
-            if not host or not port:
-                logger.error(
-                    f"Service {service_name} missing required 'host' or 'port' in configuration"
-                )
-                # Use system defaults as absolute last resort
-                host = host or system_defaults.get(f"{service_name}_host", "localhost")
-                port = port or system_defaults.get(f"{service_name}_port", 8000)
-
-            return host, port
-
-        # VM1: Frontend (Web Interface)
-        frontend_host, frontend_port = get_service_config("frontend")
         self.services["frontend"] = ServiceEndpoint(
-            name="frontend",
-            host=frontend_host,
-            port=frontend_port,
-            protocol="http",
-            health_endpoint="/",  # Vue.js app health check
-            timeout=10.0,
-            required=True,
+            name="frontend", host=host, port=port, protocol="http",
+            health_endpoint="/", timeout=ServiceDiscoveryConfig.FRONTEND_TIMEOUT, required=True,
         )
 
-        # VM2: NPU Worker (AI Hardware Acceleration)
-        npu_host, npu_port = get_service_config("npu_worker")
+    def _register_npu_worker_service(self, services_config: dict, system_defaults: dict) -> None:
+        """Register VM2: NPU Worker (AI Hardware Acceleration) service."""
+        host, port = self._get_service_config_with_fallback(
+            "npu_worker", services_config.get("npu_worker", {}), system_defaults
+        )
         self.services["npu_worker"] = ServiceEndpoint(
-            name="npu_worker",
-            host=npu_host,
-            port=npu_port,
-            protocol="http",
-            health_endpoint="/health",
-            timeout=15.0,
-            required=False,  # Optional AI acceleration
+            name="npu_worker", host=host, port=port, protocol="http",
+            health_endpoint="/health", timeout=ServiceDiscoveryConfig.NPU_WORKER_TIMEOUT, required=False,
         )
 
-        # VM3: Redis (Data Layer)
+    def _register_redis_service(self, redis_config: dict, system_defaults: dict) -> None:
+        """Register VM3: Redis (Data Layer) service."""
         redis_host = redis_config.get("host")
         redis_port = redis_config.get("port")
         if not redis_host or not redis_port:
             logger.error("Redis configuration missing required 'host' or 'port'")
-            redis_host = redis_host or system_defaults.get(
-                "redis_host", NetworkConstants.REDIS_VM_IP
-            )
-            redis_port = redis_port or system_defaults.get(
-                "redis_port", NetworkConstants.REDIS_PORT
-            )
-
+            redis_host = redis_host or system_defaults.get("redis_host", NetworkConstants.REDIS_VM_IP)
+            redis_port = redis_port or system_defaults.get("redis_port", NetworkConstants.REDIS_PORT)
         self.services["redis"] = ServiceEndpoint(
-            name="redis",
-            host=redis_host,
-            port=int(redis_port),
-            protocol="tcp",  # Redis uses TCP, not HTTP
-            health_endpoint="",  # Redis PING command
-            timeout=5.0,
-            required=True,
+            name="redis", host=redis_host, port=int(redis_port), protocol="tcp",
+            health_endpoint="", timeout=ServiceDiscoveryConfig.REDIS_TIMEOUT, required=True,
         )
 
-        # VM4: AI Stack (AI Processing)
-        ai_stack_host, ai_stack_port = get_service_config("ai_stack")
+    def _register_ai_stack_service(self, services_config: dict, system_defaults: dict) -> None:
+        """Register VM4: AI Stack (AI Processing) service."""
+        host, port = self._get_service_config_with_fallback(
+            "ai_stack", services_config.get("ai_stack", {}), system_defaults
+        )
         self.services["ai_stack"] = ServiceEndpoint(
-            name="ai_stack",
-            host=ai_stack_host,
-            port=ai_stack_port,
-            protocol="http",
-            health_endpoint="/health",
-            timeout=20.0,
-            required=False,  # Optional AI processing
+            name="ai_stack", host=host, port=port, protocol="http",
+            health_endpoint="/health", timeout=ServiceDiscoveryConfig.AI_STACK_TIMEOUT, required=False,
         )
 
-        # VM5: Browser Service (Playwright Automation)
-        browser_host, browser_port = get_service_config("browser_service")
+    def _register_browser_service(self, services_config: dict, system_defaults: dict) -> None:
+        """Register VM5: Browser Service (Playwright Automation)."""
+        host, port = self._get_service_config_with_fallback(
+            "browser_service", services_config.get("browser_service", {}), system_defaults
+        )
         self.services["browser_service"] = ServiceEndpoint(
-            name="browser_service",
-            host=browser_host,
-            port=browser_port,
-            protocol="http",
-            health_endpoint="/health",
-            timeout=10.0,
-            required=False,  # Optional browser automation
+            name="browser_service", host=host, port=port, protocol="http",
+            health_endpoint="/health", timeout=ServiceDiscoveryConfig.BROWSER_SERVICE_TIMEOUT, required=False,
         )
 
-        # Main Machine (WSL): Backend API
+    def _register_backend_service(self, backend_config: dict, system_defaults: dict) -> None:
+        """Register Main Machine (WSL): Backend API service."""
         backend_host = backend_config.get("host")
         backend_port = backend_config.get("port")
         if not backend_host or not backend_port:
             logger.error("Backend configuration missing required 'host' or 'port'")
-            backend_host = backend_host or system_defaults.get(
-                "backend_host", NetworkConstants.LOCALHOST_NAME
-            )
-            backend_port = backend_port or system_defaults.get(
-                "backend_port", NetworkConstants.BACKEND_PORT
-            )
-
+            backend_host = backend_host or system_defaults.get("backend_host", NetworkConstants.LOCALHOST_NAME)
+            backend_port = backend_port or system_defaults.get("backend_port", NetworkConstants.BACKEND_PORT)
         self.services["backend"] = ServiceEndpoint(
-            name="backend",
-            host=backend_host,
-            port=int(backend_port),
-            protocol="http",
-            health_endpoint="/api/health",
-            timeout=5.0,
-            required=True,
+            name="backend", host=backend_host, port=int(backend_port), protocol="http",
+            health_endpoint="/api/health", timeout=ServiceDiscoveryConfig.BACKEND_TIMEOUT, required=True,
         )
 
-        # Main Machine (WSL): Ollama LLM
+    def _register_ollama_service(self, services_config: dict, system_defaults: dict) -> None:
+        """Register Main Machine (WSL): Ollama LLM service."""
         ollama_config = services_config.get("ollama", {})
         ollama_host = ollama_config.get("host")
         ollama_port = ollama_config.get("port")
         if not ollama_host or not ollama_port:
             logger.error("Ollama configuration missing required 'host' or 'port'")
-            ollama_host = ollama_host or system_defaults.get(
-                "ollama_host", NetworkConstants.LOCALHOST_NAME
-            )
-            ollama_port = ollama_port or system_defaults.get(
-                "ollama_port", NetworkConstants.OLLAMA_PORT
-            )
-
+            ollama_host = ollama_host or system_defaults.get("ollama_host", NetworkConstants.LOCALHOST_NAME)
+            ollama_port = ollama_port or system_defaults.get("ollama_port", NetworkConstants.OLLAMA_PORT)
         self.services["ollama"] = ServiceEndpoint(
-            name="ollama",
-            host=ollama_host,
-            port=int(ollama_port),
-            protocol="http",
-            health_endpoint="/api/tags",  # Ollama health check
-            timeout=10.0,
-            required=True,
+            name="ollama", host=ollama_host, port=int(ollama_port), protocol="http",
+            health_endpoint="/api/tags", timeout=ServiceDiscoveryConfig.OLLAMA_TIMEOUT, required=True,
         )
+
+    def _init_default_services(self):
+        """Initialize default service definitions from unified configuration."""
+        from src.unified_config_manager import unified_config_manager
+
+        services_config = unified_config_manager.get_distributed_services_config()
+        backend_config = unified_config_manager.get_backend_config()
+        redis_config = unified_config_manager.get_redis_config()
+        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+
+        # Register all services
+        self._register_frontend_service(services_config, system_defaults)
+        self._register_npu_worker_service(services_config, system_defaults)
+        self._register_redis_service(redis_config, system_defaults)
+        self._register_ai_stack_service(services_config, system_defaults)
+        self._register_browser_service(services_config, system_defaults)
+        self._register_backend_service(backend_config, system_defaults)
+        self._register_ollama_service(services_config, system_defaults)
 
     async def start_health_monitoring(self):
         """Start continuous health monitoring of all services"""
@@ -308,7 +268,7 @@ class ServiceDiscovery:
                 break
             except Exception as e:
                 logger.error(f"Error in health monitor loop: {e}")
-                await asyncio.sleep(5)  # Brief pause on error
+                await asyncio.sleep(ServiceDiscoveryConfig.ERROR_RECOVERY_DELAY_S)
 
     async def check_all_services(self) -> Dict[str, ServiceStatus]:
         """Check health of all registered services concurrently (thread-safe)"""
@@ -345,9 +305,46 @@ class ServiceDiscovery:
 
         return results
 
+    def _should_skip_circuit_breaker_check(
+        self, consecutive_failures: int, last_check: Optional[datetime], current_status: ServiceStatus
+    ) -> Optional[ServiceStatus]:
+        """Check if health check should be skipped due to circuit breaker. Returns status to skip with, or None."""
+        if consecutive_failures < self.circuit_breaker_threshold:
+            return None
+        if not last_check:
+            return None
+        time_since_check = (datetime.now() - last_check).seconds
+        check_threshold = self.health_check_interval * ServiceDiscoveryConfig.CIRCUIT_BREAKER_CHECK_MULTIPLIER
+        return current_status if time_since_check < check_threshold else None
+
+    async def _update_service_health_status(
+        self, service: ServiceEndpoint, status: ServiceStatus, response_time: float
+    ) -> None:
+        """Update service status after health check (under lock)."""
+        async with self._lock:
+            service.status = status
+            service.last_check = datetime.now()
+            service.response_time = response_time
+            if status == ServiceStatus.HEALTHY:
+                service.consecutive_failures = 0
+                service.last_healthy = datetime.now()
+                service.error_message = None
+            else:
+                service.consecutive_failures += 1
+
+    async def _update_service_error_status(
+        self, service: ServiceEndpoint, error: str, response_time: float
+    ) -> None:
+        """Update service status after health check error (under lock)."""
+        async with self._lock:
+            service.status = ServiceStatus.UNHEALTHY
+            service.last_check = datetime.now()
+            service.consecutive_failures += 1
+            service.error_message = error
+            service.response_time = response_time
+
     async def check_service_health(self, service_name: str) -> ServiceStatus:
-        """Check health of a specific service with circuit breaker logic (thread-safe)"""
-        # Get service under lock
+        """Check health of a specific service with circuit breaker logic (thread-safe)."""
         async with self._lock:
             if service_name not in self.services:
                 logger.warning(f"Unknown service: {service_name}")
@@ -358,47 +355,16 @@ class ServiceDiscovery:
             current_status = service.status
             protocol = service.protocol
 
+        if skip_status := self._should_skip_circuit_breaker_check(consecutive_failures, last_check, current_status):
+            return skip_status
+
         start_time = time.time()
-
         try:
-            # Circuit breaker logic
-            if consecutive_failures >= self.circuit_breaker_threshold:
-                # Service is in circuit breaker mode - reduce check frequency
-                if last_check:
-                    time_since_check = (datetime.now() - last_check).seconds
-                    if time_since_check < (self.health_check_interval * 2):
-                        return current_status  # Skip check, too recent
-
-            # Perform health check based on service type
-            if protocol == "tcp":
-                status = await self._check_tcp_service(service)
-            else:
-                status = await self._check_http_service(service)
-
-            # Update service status under lock
-            async with self._lock:
-                service.status = status
-                service.last_check = datetime.now()
-                service.response_time = time.time() - start_time
-
-                if status == ServiceStatus.HEALTHY:
-                    service.consecutive_failures = 0
-                    service.last_healthy = datetime.now()
-                    service.error_message = None
-                else:
-                    service.consecutive_failures += 1
-
+            status = await (self._check_tcp_service(service) if protocol == "tcp" else self._check_http_service(service))
+            await self._update_service_health_status(service, status, time.time() - start_time)
             return status
-
         except Exception as e:
-            # Update service status under lock
-            async with self._lock:
-                service.status = ServiceStatus.UNHEALTHY
-                service.last_check = datetime.now()
-                service.consecutive_failures += 1
-                service.error_message = str(e)
-                service.response_time = time.time() - start_time
-
+            await self._update_service_error_status(service, str(e), time.time() - start_time)
             logger.error(f"Health check error for {service_name}: {e}")
             return ServiceStatus.UNHEALTHY
 
@@ -513,62 +479,51 @@ class ServiceDiscovery:
                 if service.status == ServiceStatus.HEALTHY
             ]
 
-    async def get_service_status_summary(self) -> Dict:
-        """Get comprehensive status summary of all services (thread-safe)"""
-        # Copy service data under lock
-        async with self._lock:
-            services_snapshot = {
-                name: {
-                    "status": service.status,
-                    "url": service.url,
-                    "required": service.required,
-                    "last_check": service.last_check,
-                    "response_time": service.response_time,
-                    "consecutive_failures": service.consecutive_failures,
-                    "error": service.error_message,
-                }
-                for name, service in self.services.items()
-            }
-
-        summary = {
-            "timestamp": datetime.now().isoformat(),
-            "total_services": len(services_snapshot),
-            "healthy": 0,
-            "degraded": 0,
-            "unhealthy": 0,
-            "unknown": 0,
-            "services": {},
+    def _format_service_data(self, service_data: dict) -> dict:
+        """Format service data for summary output."""
+        return {
+            "status": service_data["status"].value,
+            "url": service_data["url"],
+            "required": service_data["required"],
+            "last_check": service_data["last_check"].isoformat() if service_data["last_check"] else None,
+            "response_time": service_data["response_time"],
+            "consecutive_failures": service_data["consecutive_failures"],
+            "error": service_data["error"],
         }
 
-        for name, service_data in services_snapshot.items():
-            status = service_data["status"]
-            summary["services"][name] = {
-                "status": status.value,
-                "url": service_data["url"],
-                "required": service_data["required"],
-                "last_check": (
-                    service_data["last_check"].isoformat()
-                    if service_data["last_check"]
-                    else None
-                ),
-                "response_time": service_data["response_time"],
-                "consecutive_failures": service_data["consecutive_failures"],
-                "error": service_data["error"],
+    def _update_status_counters(self, status: ServiceStatus, summary: dict) -> None:
+        """Update summary status counters based on service status."""
+        counter_map = {
+            ServiceStatus.HEALTHY: "healthy", ServiceStatus.DEGRADED: "degraded",
+            ServiceStatus.UNHEALTHY: "unhealthy",
+        }
+        key = counter_map.get(status, "unknown")
+        summary[key] += 1
+
+    async def get_service_status_summary(self) -> Dict:
+        """Get comprehensive status summary of all services (thread-safe)."""
+        async with self._lock:
+            services_snapshot = {
+                name: {"status": s.status, "url": s.url, "required": s.required, "last_check": s.last_check,
+                       "response_time": s.response_time, "consecutive_failures": s.consecutive_failures,
+                       "error": s.error_message}
+                for name, s in self.services.items()
             }
 
-            # Update counters
-            if status == ServiceStatus.HEALTHY:
-                summary["healthy"] += 1
-            elif status == ServiceStatus.DEGRADED:
-                summary["degraded"] += 1
-            elif status == ServiceStatus.UNHEALTHY:
-                summary["unhealthy"] += 1
-            else:
-                summary["unknown"] += 1
+        summary = {"timestamp": datetime.now().isoformat(), "total_services": len(services_snapshot),
+                   "healthy": 0, "degraded": 0, "unhealthy": 0, "unknown": 0, "services": {}}
+
+        for name, service_data in services_snapshot.items():
+            summary["services"][name] = self._format_service_data(service_data)
+            self._update_status_counters(service_data["status"], summary)
 
         return summary
 
-    async def wait_for_service(self, service_name: str, timeout: float = 60.0) -> bool:
+    async def wait_for_service(
+        self,
+        service_name: str,
+        timeout: float = ServiceDiscoveryConfig.DEFAULT_SERVICE_WAIT_TIMEOUT,
+    ) -> bool:
         """Wait for a service to become healthy with timeout (thread-safe)"""
         async with self._lock:
             if service_name not in self.services:
@@ -581,12 +536,12 @@ class ServiceDiscovery:
             if status == ServiceStatus.HEALTHY:
                 return True
 
-            await asyncio.sleep(2)  # Check every 2 seconds
+            await asyncio.sleep(ServiceDiscoveryConfig.SERVICE_WAIT_INTERVAL_S)
 
         return False
 
     async def wait_for_core_services(
-        self, timeout: float = 120.0
+        self, timeout: float = ServiceDiscoveryConfig.CORE_SERVICES_WAIT_TIMEOUT
     ) -> Tuple[bool, List[str]]:
         """Wait for all required services to become healthy (thread-safe)"""
         # Get required services under lock
@@ -616,7 +571,7 @@ class ServiceDiscovery:
             missing = set(required_services) - set(ready_services)
             logger.info(f"Waiting for services: {list(missing)}")
 
-            await asyncio.sleep(5)  # Check every 5 seconds
+            await asyncio.sleep(ServiceDiscoveryConfig.CORE_SERVICES_WAIT_INTERVAL_S)
 
         return False, ready_services
 
