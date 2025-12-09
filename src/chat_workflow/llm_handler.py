@@ -57,176 +57,137 @@ class LLMHandlerMixin:
                 )
         return converted
 
-    async def _prepare_llm_request_params(
-        self, session: WorkflowSession, message: str, use_knowledge: bool = True
-    ) -> Dict[str, Any]:
-        """
-        Prepare LLM request parameters including endpoint, model, and prompt.
+    def _get_ollama_endpoint_fallback(self) -> str:
+        """Get Ollama endpoint from UnifiedConfigManager as fallback."""
+        from src.unified_config_manager import UnifiedConfigManager
+        config = UnifiedConfigManager()
+        ollama_host = config.get_host("ollama")
+        ollama_port = config.get_port("ollama")
+        return f"http://{ollama_host}:{ollama_port}/api/generate"
 
-        Args:
-            session: Current workflow session
-            message: User message
-            use_knowledge: Whether to use knowledge base for RAG (Issue #249)
-
-        Returns:
-            Dictionary with 'endpoint', 'model', and 'prompt' keys
-        """
-
-        # Get Ollama endpoint from config
+    def _get_ollama_endpoint(self) -> str:
+        """Get Ollama endpoint from config with fallbacks."""
         try:
-            ollama_endpoint = global_config_manager.get_nested(
-                "backend.llm.ollama.endpoint", None
-            )
+            endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", None)
+            if endpoint and endpoint.startswith(("http://", "https://")):
+                return endpoint
+            logger.error(f"Invalid endpoint URL: {endpoint}, using config-based default")
+            return self._get_ollama_endpoint_fallback()
+        except Exception as e:
+            logger.error(f"Failed to load Ollama endpoint from config: {e}")
+            return self._get_ollama_endpoint_fallback()
 
-            if not ollama_endpoint:
-                from src.unified_config_manager import UnifiedConfigManager
-
-                config = UnifiedConfigManager()
-                ollama_host = config.get_host("ollama")
-                ollama_port = config.get_port("ollama")
-                ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-            # Validate endpoint format
-            if not ollama_endpoint or not ollama_endpoint.startswith(
-                ("http://", "https://")
-            ):
-                logger.error(
-                    f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
-                )
-                from src.unified_config_manager import UnifiedConfigManager
-
-                config = UnifiedConfigManager()
-                ollama_host = config.get_host("ollama")
-                ollama_port = config.get_port("ollama")
-                ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-        except Exception as config_error:
-            logger.error(f"Failed to load Ollama endpoint from config: {config_error}")
-            from src.unified_config_manager import UnifiedConfigManager
-
-            config = UnifiedConfigManager()
-            ollama_host = config.get_host("ollama")
-            ollama_port = config.get_port("ollama")
-            ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-        # Load system prompt
+    def _get_system_prompt(self) -> str:
+        """Get system prompt with fallback."""
         try:
-            system_prompt = get_prompt("chat.system_prompt_simple")
+            prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-        except Exception as prompt_error:
-            logger.error(f"Failed to load system prompt from file: {prompt_error}")
-            system_prompt = """You are AutoBot. Execute commands using:
+            return prompt
+        except Exception as e:
+            logger.error(f"Failed to load system prompt from file: {e}")
+            return """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them."""
 
-        # Add minimal conversation history (last 2 messages only)
-        # Issue #383: Use list + join instead of += in loop
-        conversation_context = ""
-        if session.conversation_history:
-            context_parts = ["\n**Recent Context:**\n"]
-            context_parts.extend(
-                f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-                for msg in session.conversation_history[-2:]
-            )
-            conversation_context = "".join(context_parts)
+    def _build_conversation_context(self, session: WorkflowSession) -> str:
+        """Build conversation context from recent history."""
+        if not session.conversation_history:
+            return ""
+        context_parts = ["\n**Recent Context:**\n"]
+        context_parts.extend(
+            f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
+            for msg in session.conversation_history[-2:]
+        )
+        return "".join(context_parts)
 
-        # Issue #249 Phase 3: Conversation-aware knowledge retrieval
-        # Uses conversation history to enhance queries with context
-        knowledge_context = ""
-        citations = []
-        query_intent = None
-        enhanced_query = None
-        if self.knowledge_service and use_knowledge:
-            try:
-                # Use conversation-aware retrieval
-                # - Detects query intent (Phase 2)
-                # - Enhances query with conversation context (Phase 3)
-                # - Skips RAG for commands/greetings/short queries
-                knowledge_context, citations, query_intent, enhanced_query = (
-                    await self.knowledge_service.conversation_aware_retrieve(
-                        query=message,
-                        conversation_history=session.conversation_history or [],
-                        top_k=5,
-                        score_threshold=0.7,
-                        force_retrieval=False,  # Allow intent-based skipping
-                    )
+    async def _retrieve_knowledge_context(
+        self, message: str, session: WorkflowSession
+    ) -> tuple:
+        """Retrieve knowledge context for RAG. Returns (context, citations)."""
+        try:
+            knowledge_context, citations, query_intent, enhanced_query = (
+                await self.knowledge_service.conversation_aware_retrieve(
+                    query=message,
+                    conversation_history=session.conversation_history or [],
+                    top_k=5, score_threshold=0.7, force_retrieval=False,
                 )
-                if knowledge_context:
-                    logger.info(
-                        f"[RAG] Retrieved {len(citations)} knowledge facts "
-                        f"(intent: {query_intent.intent.value}, "
-                        f"enhanced: {enhanced_query.enhancement_applied if enhanced_query else False})"
-                    )
-                    # Store citations and context info in session metadata for frontend
-                    session.metadata["last_citations"] = citations
-                    session.metadata["used_knowledge"] = True
-                    session.metadata["query_intent"] = query_intent.intent.value
-                    if enhanced_query and enhanced_query.enhancement_applied:
-                        session.metadata["query_enhanced"] = True
-                        session.metadata["context_entities"] = enhanced_query.context_entities
-                else:
-                    session.metadata["used_knowledge"] = False
-                    session.metadata["query_enhanced"] = False
-                    if query_intent:
-                        session.metadata["query_intent"] = query_intent.intent.value
-                        session.metadata["rag_skipped_reason"] = query_intent.reasoning
-            except Exception as kb_error:
-                logger.warning(f"[RAG] Knowledge retrieval failed: {kb_error}")
+            )
+            if knowledge_context:
+                logger.info(
+                    f"[RAG] Retrieved {len(citations)} knowledge facts "
+                    f"(intent: {query_intent.intent.value}, "
+                    f"enhanced: {enhanced_query.enhancement_applied if enhanced_query else False})"
+                )
+                session.metadata["last_citations"] = citations
+                session.metadata["used_knowledge"] = True
+                session.metadata["query_intent"] = query_intent.intent.value
+                if enhanced_query and enhanced_query.enhancement_applied:
+                    session.metadata["query_enhanced"] = True
+                    session.metadata["context_entities"] = enhanced_query.context_entities
+            else:
                 session.metadata["used_knowledge"] = False
-                # Continue without knowledge - graceful degradation
+                session.metadata["query_enhanced"] = False
+                if query_intent:
+                    session.metadata["query_intent"] = query_intent.intent.value
+                    session.metadata["rag_skipped_reason"] = query_intent.reasoning
+            return knowledge_context, citations
+        except Exception as e:
+            logger.warning(f"[RAG] Knowledge retrieval failed: {e}")
+            session.metadata["used_knowledge"] = False
+            return "", []
+
+    def _build_full_prompt(
+        self, system_prompt: str, knowledge_context: str, conversation_context: str, message: str
+    ) -> str:
+        """Build full prompt with optional knowledge context."""
+        if knowledge_context:
+            return (system_prompt + "\n\n" + knowledge_context + "\n" +
+                    conversation_context + f"\n**Current user message:** {message}\n\nAssistant:")
+        return system_prompt + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+
+    def _get_selected_model(self) -> str:
+        """Get selected LLM model from config with fallback."""
+        try:
+            default_model = global_config_manager.get_default_llm_model()
+            selected = global_config_manager.get_nested("backend.llm.ollama.selected_model", default_model)
+            if selected and isinstance(selected, str):
+                logger.info(f"Using LLM model from config: {selected}")
+                return selected
+            logger.error(f"Invalid model selection: {selected}, using default")
+            return default_model
+        except Exception as e:
+            logger.error(f"Failed to load model from config: {e}")
+            import os
+            return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
+
+    async def _prepare_llm_request_params(
+        self, session: WorkflowSession, message: str, use_knowledge: bool = True
+    ) -> Dict[str, Any]:
+        """Prepare LLM request parameters including endpoint, model, and prompt."""
+        ollama_endpoint = self._get_ollama_endpoint()
+        system_prompt = self._get_system_prompt()
+        conversation_context = self._build_conversation_context(session)
+
+        # Knowledge retrieval for RAG
+        knowledge_context, citations = "", []
+        if self.knowledge_service and use_knowledge:
+            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
         else:
             session.metadata["used_knowledge"] = False
 
-        # Build complete prompt with optional knowledge context
-        if knowledge_context:
-            full_prompt = (
-                system_prompt
-                + "\n\n" + knowledge_context + "\n"
-                + conversation_context
-                + f"\n**Current user message:** {message}\n\nAssistant:"
-            )
-        else:
-            full_prompt = (
-                system_prompt
-                + conversation_context
-                + f"\n**Current user message:** {message}\n\nAssistant:"
-            )
+        full_prompt = self._build_full_prompt(system_prompt, knowledge_context, conversation_context, message)
+        selected_model = self._get_selected_model()
 
-        # Get selected model from config
-        try:
-            default_model = global_config_manager.get_default_llm_model()
-            selected_model = global_config_manager.get_nested(
-                "backend.llm.ollama.selected_model", default_model
-            )
-
-            if not selected_model or not isinstance(selected_model, str):
-                logger.error(
-                    f"Invalid model selection: {selected_model}, using default"
-                ),
-                selected_model = default_model
-
-            logger.info(f"Using LLM model from config: {selected_model}")
-
-        except Exception as config_error:
-            logger.error(f"Failed to load model from config: {config_error}")
-            import os
-
-            selected_model = os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
-            )
-
-        logger.info(
-            f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}"
-        )
+        logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
         logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
 
         return {
             "endpoint": ollama_endpoint,
             "model": selected_model,
             "prompt": full_prompt,
-            "system_prompt": system_prompt,  # Issue #352: For continuation loop
-            "citations": citations,  # Issue #249: RAG citations for frontend
+            "system_prompt": system_prompt,
+            "citations": citations,
             "used_knowledge": bool(knowledge_context),
         }
 
@@ -246,6 +207,78 @@ Return code: {return_code}
 
 Briefly explain what this output shows. Keep it concise (2-3 sentences max).
 Do NOT conclude the task or provide a final summary - just explain this specific result."""
+
+    def _get_interpretation_llm_options(self) -> Dict[str, Any]:
+        """Get LLM options for command interpretation."""
+        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048}
+
+    async def _interpret_non_streaming(
+        self,
+        ollama_endpoint: str,
+        selected_model: str,
+        interpretation_prompt: str,
+        llm_options: Dict[str, Any],
+    ):
+        """Handle non-streaming interpretation request (Issue #332)."""
+        http_client = get_http_client()
+        response_data = await http_client.post_json(
+            f"{ollama_endpoint}/api/generate",
+            json_data={
+                "model": selected_model,
+                "prompt": interpretation_prompt,
+                "stream": False,
+                "options": llm_options,
+            },
+        )
+        interpretation = response_data.get("response", "")
+        if interpretation:
+            yield WorkflowMessage(
+                type="response",
+                content=interpretation,
+                metadata={"message_type": "command_interpretation", "streaming": False},
+            )
+
+    async def _interpret_streaming(
+        self,
+        ollama_endpoint: str,
+        selected_model: str,
+        interpretation_prompt: str,
+        llm_options: Dict[str, Any],
+    ):
+        """Handle streaming interpretation request (Issue #332)."""
+        import aiohttp
+
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{ollama_endpoint}/api/generate",
+            json={
+                "model": selected_model,
+                "prompt": interpretation_prompt,
+                "stream": True,
+                "options": llm_options,
+            },
+            timeout=aiohttp.ClientTimeout(total=60.0),
+        ) as interp_response:
+            async for line in interp_response.content:
+                line_str = line.decode("utf-8").strip()
+                if not line_str:
+                    continue
+
+                try:
+                    data = json.loads(line_str)
+                except json.JSONDecodeError:
+                    continue
+
+                chunk = data.get("response", "")
+                if chunk:
+                    yield WorkflowMessage(
+                        type="stream",
+                        content=chunk,
+                        metadata={"message_type": "command_interpretation", "streaming": True},
+                    )
+
+                if data.get("done"):
+                    break
 
     async def _interpret_command_results(
         self,
@@ -270,71 +303,24 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             streaming: Whether to stream the response
 
         Yields:
-            WorkflowMessage chunks if streaming=True
-        Returns:
-            Full interpretation text
+            WorkflowMessage chunks
         """
         interpretation_prompt = self._build_interpretation_prompt(
             command, stdout, stderr, return_code
         )
-        llm_options = {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048}
-        interpretation = ""
+        llm_options = self._get_interpretation_llm_options()
 
-        http_client = get_http_client()
-
-        # Non-streaming path (Issue #332 - early return pattern)
         if not streaming:
-            response_data = await http_client.post_json(
-                f"{ollama_endpoint}/api/generate",
-                json_data={
-                    "model": selected_model,
-                    "prompt": interpretation_prompt,
-                    "stream": False,
-                    "options": llm_options,
-                },
-            )
-            interpretation = response_data.get("response", "")
-            if interpretation:
-                yield WorkflowMessage(
-                    type="response",
-                    content=interpretation,
-                    metadata={"message_type": "command_interpretation", "streaming": False},
-                )
+            async for msg in self._interpret_non_streaming(
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options
+            ):
+                yield msg
             return
 
-        # Streaming path (Issue #332 - refactored loop)
-        import aiohttp
-        async with await http_client.post(
-            f"{ollama_endpoint}/api/generate",
-            json={
-                "model": selected_model,
-                "prompt": interpretation_prompt,
-                "stream": True,
-                "options": llm_options,
-            },
-            timeout=aiohttp.ClientTimeout(total=60.0),
-        ) as interp_response:
-            async for line in interp_response.content:
-                line_str = line.decode("utf-8").strip()
-                if not line_str:
-                    continue
-
-                try:
-                    data = json.loads(line_str)
-                except json.JSONDecodeError:
-                    continue
-
-                chunk = data.get("response", "")
-                if chunk:
-                    interpretation += chunk
-                    yield WorkflowMessage(
-                        type="stream",
-                        content=chunk,
-                        metadata={"message_type": "command_interpretation", "streaming": True},
-                    )
-
-                if data.get("done"):
-                    break
+        async for msg in self._interpret_streaming(
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options
+        ):
+            yield msg
 
     async def _save_to_chat_history(
         self, session_id: str, interpretation: str
@@ -459,67 +445,57 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 exc_info=True,
             )
 
+    async def _get_interpretation_from_llm(
+        self, command: str, stdout: str, stderr: str, return_code: int
+    ) -> str:
+        """Get LLM interpretation for command results (non-streaming)."""
+        ollama_endpoint = global_config_manager.get_ollama_url()
+        selected_model = global_config_manager.get_selected_model()
+
+        logger.info(
+            f"[interpret_terminal_command] Starting interpretation "
+            f"for command: {command[:50]}..."
+        )
+
+        interpretation = ""
+        async for msg in self._interpret_command_results(
+            command=command,
+            stdout=stdout,
+            stderr=stderr,
+            return_code=return_code,
+            ollama_endpoint=ollama_endpoint,
+            selected_model=selected_model,
+            streaming=False,
+        ):
+            if hasattr(msg, "content"):
+                interpretation += msg.content
+
+        logger.info(
+            f"[interpret_terminal_command] Interpretation complete, "
+            f"length: {len(interpretation)}"
+        )
+        return interpretation
+
     async def interpret_terminal_command(
-        self,
-        command: str,
-        stdout: str,
-        stderr: str,
-        return_code: int,
-        session_id: str,
+        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str
     ) -> str:
         """
         Public method to interpret terminal command results.
 
-        This method is called by agent_terminal_service after command execution
-        to get LLM interpretation of the command output.
-
-        Args:
-            command: The executed command
-            stdout: Standard output
-            stderr: Standard error
-            return_code: Command return code
-            session_id: Chat session ID for saving interpretation
+        Called by agent_terminal_service after command execution.
 
         Returns:
             Full interpretation text from LLM
         """
         try:
-            # Get Ollama configuration
-            ollama_endpoint = global_config_manager.get_ollama_url()
-            selected_model = global_config_manager.get_selected_model()
-
-            logger.info(
-                f"[interpret_terminal_command] Starting interpretation "
-                f"for command: {command[:50]}..."
+            interpretation = await self._get_interpretation_from_llm(
+                command, stdout, stderr, return_code
             )
 
-            # Call the interpretation generator (non-streaming for terminal)
-            interpretation = ""
-            async for msg in self._interpret_command_results(
-                command=command,
-                stdout=stdout,
-                stderr=stderr,
-                return_code=return_code,
-                ollama_endpoint=ollama_endpoint,
-                selected_model=selected_model,
-                streaming=False,  # Non-streaming for terminal
-            ):
-                if hasattr(msg, "content"):
-                    interpretation += msg.content
-
-            logger.info(
-                f"[interpret_terminal_command] Interpretation complete, "
-                f"length: {len(interpretation)}"
-            )
-
-            # Early return if no session_id or interpretation to save
             if not session_id or not interpretation:
                 return interpretation
 
-            # Save interpretation to chat history
             await self._save_to_chat_history(session_id, interpretation)
-
-            # Persist to conversation history (chat:conversation) for LLM context
             await self._persist_to_conversation_history(session_id, interpretation)
 
             return interpretation
@@ -529,5 +505,4 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 f"[interpret_terminal_command] Error interpreting command: {e}",
                 exc_info=True,
             )
-            # Security: Don't expose internal error details to frontend
             return "Unable to interpret command results. Please check logs for details."
