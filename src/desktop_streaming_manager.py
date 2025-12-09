@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import websockets
 
+from src.constants.threshold_constants import TimingConstants
 from src.task_execution_tracker import TaskPriority, task_tracker
 from src.unified_config_manager import config_manager
 
@@ -135,18 +136,16 @@ class VNCServerManager:
         resolution: str = "1024x768",
         depth: int = 24,
     ) -> Dict[str, Any]:
-        """Create a new VNC session for desktop streaming"""
+        """Create a new VNC session for desktop streaming.
 
+        Issue #281: Refactored to use extracted helpers.
+        """
         async with task_tracker.track_task(
             "Create VNC Session",
             f"Creating desktop streaming session for user {user_id}",
             agent_type="desktop_streaming",
             priority=TaskPriority.HIGH,
-            inputs={
-                "session_id": session_id,
-                "user_id": user_id,
-                "resolution": resolution,
-            },
+            inputs={"session_id": session_id, "user_id": user_id, "resolution": resolution},
         ) as task_context:
             if not self.vnc_available:
                 error_msg = "VNC server not available on system"
@@ -159,92 +158,27 @@ class VNCServerManager:
             novnc_port = self.novnc_port_base + display_num
 
             try:
-                # Start Xvfb virtual display
-                xvfb_command = [
-                    "Xvfb",
-                    f":{display_num}",
-                    "-screen",
-                    "0",
-                    f"{resolution}x{depth}",
-                    "-nolisten",
-                    "tcp",
-                    "-dpi",
-                    "96",
-                ]
-
-                # Issue #358: Use async subprocess to avoid blocking event loop
-                xvfb_process = await asyncio.create_subprocess_exec(
-                    *xvfb_command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-
-                # Wait for display to be ready
-                await asyncio.sleep(2)
-
-                # Start VNC server
-                vnc_command = [
-                    "x11vnc",
-                    "-display",
-                    f":{display_num}",
-                    "-rfbport",
-                    str(vnc_port),
-                    "-shared",
-                    "-forever",
-                    "-noxdamage",
-                    "-noxfixes",
-                    "-noxcomposite",
-                ]
-
-                # Issue #358: Use async subprocess to avoid blocking event loop
-                vnc_process = await asyncio.create_subprocess_exec(
-                    *vnc_command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+                # Start Xvfb and VNC using extracted helpers (Issue #281)
+                xvfb_process = await self._start_xvfb(display_num, resolution, depth)
+                vnc_process = await self._start_vnc_server(display_num, vnc_port)
 
                 # Start NoVNC if available
                 novnc_process = None
                 if self.novnc_available:
                     novnc_process = await self._start_novnc(vnc_port, novnc_port)
 
-                # Create session record
-                session_data = {
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "display_num": display_num,
-                    "vnc_port": vnc_port,
-                    "novnc_port": novnc_port,
-                    "resolution": resolution,
-                    "depth": depth,
-                    "created_at": time.time(),
-                    "xvfb_process": xvfb_process,
-                    "vnc_process": vnc_process,
-                    "novnc_process": novnc_process,
-                    "status": "active",
-                }
-
+                # Build and store session data (Issue #281 - uses helper)
+                session_data = self._build_session_data(
+                    session_id, user_id, display_num, vnc_port, novnc_port,
+                    resolution, depth, xvfb_process, vnc_process, novnc_process,
+                )
                 self.active_sessions[session_id] = session_data
 
-                # Set task outputs
-                outputs = {
-                    "session_id": session_id,
-                    "vnc_port": vnc_port,
-                    "novnc_port": novnc_port if self.novnc_available else None,
-                    "display": f":{display_num}",
-                    "vnc_url": f"vnc://localhost:{vnc_port}",
-                    "web_url": (
-                        f"http://localhost:{novnc_port}"
-                        if self.novnc_available
-                        else None
-                    ),
-                }
-
+                # Build outputs (Issue #281 - uses helper)
+                outputs = self._build_session_output(session_id, display_num, vnc_port, novnc_port)
                 task_context.set_outputs(outputs)
 
-                logger.info(
-                    f"VNC session created: {session_id} on display :{display_num}"
-                )
+                logger.info(f"VNC session created: {session_id} on display :{display_num}")
                 return outputs
 
             except Exception as e:
@@ -306,6 +240,94 @@ class VNCServerManager:
                 return i
 
         raise RuntimeError("No available X display numbers")
+
+    # -------------------------------------------------------------------------
+    # Issue #281 - Extracted helper methods for create_session refactoring
+    # -------------------------------------------------------------------------
+
+    async def _start_xvfb(self, display_num: int, resolution: str, depth: int) -> asyncio.subprocess.Process:
+        """Start Xvfb virtual display (Issue #281 - extracted helper)."""
+        xvfb_command = [
+            "Xvfb",
+            f":{display_num}",
+            "-screen",
+            "0",
+            f"{resolution}x{depth}",
+            "-nolisten",
+            "tcp",
+            "-dpi",
+            "96",
+        ]
+
+        xvfb_process = await asyncio.create_subprocess_exec(
+            *xvfb_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        # Wait for display to be ready
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+        return xvfb_process
+
+    async def _start_vnc_server(self, display_num: int, vnc_port: int) -> asyncio.subprocess.Process:
+        """Start VNC server on display (Issue #281 - extracted helper)."""
+        vnc_command = [
+            "x11vnc",
+            "-display",
+            f":{display_num}",
+            "-rfbport",
+            str(vnc_port),
+            "-shared",
+            "-forever",
+            "-noxdamage",
+            "-noxfixes",
+            "-noxcomposite",
+        ]
+
+        return await asyncio.create_subprocess_exec(
+            *vnc_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+    def _build_session_data(
+        self, session_id: str, user_id: str, display_num: int, vnc_port: int,
+        novnc_port: int, resolution: str, depth: int,
+        xvfb_process: asyncio.subprocess.Process, vnc_process: asyncio.subprocess.Process,
+        novnc_process: Optional[asyncio.subprocess.Process],
+    ) -> Dict[str, Any]:
+        """Build session data dictionary (Issue #281 - extracted helper)."""
+        return {
+            "session_id": session_id,
+            "user_id": user_id,
+            "display_num": display_num,
+            "vnc_port": vnc_port,
+            "novnc_port": novnc_port,
+            "resolution": resolution,
+            "depth": depth,
+            "created_at": time.time(),
+            "xvfb_process": xvfb_process,
+            "vnc_process": vnc_process,
+            "novnc_process": novnc_process,
+            "status": "active",
+        }
+
+    def _build_session_output(
+        self, session_id: str, display_num: int, vnc_port: int, novnc_port: int
+    ) -> Dict[str, Any]:
+        """Build session output dictionary (Issue #281 - extracted helper)."""
+        return {
+            "session_id": session_id,
+            "vnc_port": vnc_port,
+            "novnc_port": novnc_port if self.novnc_available else None,
+            "display": f":{display_num}",
+            "vnc_url": f"vnc://localhost:{vnc_port}",
+            "web_url": (
+                f"http://localhost:{novnc_port}"
+                if self.novnc_available
+                else None
+            ),
+        }
 
     async def terminate_session(self, session_id: str) -> bool:
         """Terminate a VNC session (Issue #315, #358 - async process handling)."""
