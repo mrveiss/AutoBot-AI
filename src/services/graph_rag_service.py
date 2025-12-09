@@ -75,6 +75,52 @@ class GraphRAGMetrics(RAGMetrics):
     graph_expansion_enabled: bool = False
     graph_results_added: int = 0
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def copy_from_rag_metrics(self, rag_metrics: "RAGMetrics") -> None:
+        """Copy base metrics from RAG search (Issue #372 - reduces feature envy)."""
+        self.query_processing_time = rag_metrics.query_processing_time
+        self.retrieval_time = rag_metrics.retrieval_time
+        self.reranking_time = rag_metrics.reranking_time
+        self.documents_considered = rag_metrics.documents_considered
+        self.hybrid_search_enabled = rag_metrics.hybrid_search_enabled
+
+    def record_graph_results(
+        self, graph_traversal_time: float, results_added: int
+    ) -> None:
+        """Record graph expansion results (Issue #372 - reduces feature envy)."""
+        self.graph_expansion_enabled = True
+        self.graph_traversal_time = graph_traversal_time
+        self.graph_results_added = results_added
+
+    def finalize(self, final_count: int, total_time: float) -> None:
+        """Finalize metrics with final counts (Issue #372 - reduces feature envy)."""
+        self.final_results_count = final_count
+        self.total_time = total_time
+
+    def get_timing_summary(self) -> str:
+        """Get timing summary string (Issue #372 - reduces feature envy)."""
+        return (
+            f"{self.total_time:.3f}s total "
+            f"(RAG: {self.retrieval_time:.3f}s, "
+            f"Graph: {self.graph_traversal_time:.3f}s)"
+        )
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert metrics to API response dictionary (Issue #372 - reduces feature envy)."""
+        return {
+            "query_processing_time": self.query_processing_time,
+            "retrieval_time": self.retrieval_time,
+            "reranking_time": self.reranking_time,
+            "graph_traversal_time": self.graph_traversal_time,
+            "total_time": self.total_time,
+            "documents_considered": self.documents_considered,
+            "final_results_count": self.final_results_count,
+            "entities_explored": self.entities_explored,
+            "graph_expansion_enabled": self.graph_expansion_enabled,
+            "graph_results_added": self.graph_results_added,
+        }
+
 
 @dataclass
 class EntityMatch:
@@ -162,8 +208,7 @@ class GraphRAGService:
         """
         Perform graph-aware RAG search with relationship-based expansion.
 
-        This method combines semantic search with graph traversal to provide
-        context-enhanced results. It reuses existing RAG and graph components.
+        Issue #281: Refactored to use extracted helpers.
 
         Args:
             query: Search query string
@@ -175,103 +220,31 @@ class GraphRAGService:
 
         Returns:
             Tuple of (search_results, metrics)
-
-        Strategy:
-            1. RAG search: Use self.rag.advanced_search() (REUSE)
-            2. Entity extraction: Parse entities from top results
-            3. Graph expansion: Use self.graph.get_related_entities() (REUSE)
-            4. Context gathering: Retrieve observations from graph
-            5. Result merging: Combine RAG + graph results
-            6. Hybrid scoring: Weight by relevance + proximity
-            7. Deduplication: Remove duplicate content
-            8. Final ranking: Sort by hybrid score
-
-        Example:
-            >>> results, metrics = await graph_rag.graph_aware_search(
-            ...     query="Redis timeout issues",
-            ...     start_entity="Bug Fix 2024-01-15",
-            ...     max_depth=2,
-            ...     max_results=5
-            ... )
-            >>> print(f"Found {len(results)} results in {metrics.total_time:.2f}s")
-            Found 5 results in 0.87s
         """
         start_time = time.perf_counter()
         metrics = GraphRAGMetrics()
 
         try:
-            # Clear deduplication cache for new search
             self._seen_content.clear()
 
-            # Step 1: Initial RAG search (REUSE existing RAGService)
-            logger.info(f"Graph-RAG search: '{query[:50]}...' (max_depth={max_depth})")
-
-            rag_results, rag_metrics = await self.rag.advanced_search(
-                query=query,
-                max_results=max_results * 2,  # Get more for filtering
-                enable_reranking=enable_reranking,
-                timeout=timeout,
+            # Step 1: Initial RAG search
+            rag_results = await self._perform_initial_rag_search(
+                query, max_results, enable_reranking, timeout, metrics
             )
 
-            # Copy RAG metrics to extended metrics
-            metrics.query_processing_time = rag_metrics.query_processing_time
-            metrics.retrieval_time = rag_metrics.retrieval_time
-            metrics.reranking_time = rag_metrics.reranking_time
-            metrics.documents_considered = rag_metrics.documents_considered
-            metrics.hybrid_search_enabled = rag_metrics.hybrid_search_enabled
-
-            logger.info(
-                f"Initial RAG search: {len(rag_results)} results in {rag_metrics.total_time:.3f}s"
+            # Step 2-3: Extract entities and expand via graph
+            all_results = await self._extract_and_expand_graph(
+                query, rag_results, start_entity, max_depth, max_results, metrics
             )
 
-            # Step 2: Extract entities from top results (if enabled)
-            graph_start = time.perf_counter()
-            entity_matches: List[EntityMatch] = []
-
-            if self.enable_entity_extraction:
-                entity_matches = await self._extract_entities_from_results(
-                    rag_results[:5]  # Only top 5 for entity extraction
-                )
-                logger.info(f"Extracted {len(entity_matches)} entity matches")
-
-            # Step 3: Graph expansion from start_entity or extracted entities
-            if start_entity or entity_matches:
-                expanded_results = await self._expand_via_graph(
-                    query=query,
-                    start_entity=start_entity,
-                    entity_matches=entity_matches,
-                    max_depth=max_depth,
-                    max_results=max_results,
-                )
-
-                metrics.graph_expansion_enabled = True
-                metrics.graph_results_added = len(expanded_results)
-                logger.info(f"Graph expansion added {len(expanded_results)} results")
-
-                # Merge with RAG results
-                all_results = rag_results + expanded_results
-            else:
-                # No graph expansion - use RAG results only
-                all_results = rag_results
-                logger.info("No graph expansion (no start entity or matches)")
-
-            metrics.graph_traversal_time = time.perf_counter() - graph_start
-
-            # Step 4: Deduplicate and rank by hybrid score
-            final_results = await self._deduplicate_and_rank(
-                all_results, max_results=max_results
-            )
-
-            metrics.final_results_count = len(final_results)
-            metrics.total_time = time.perf_counter() - start_time
+            # Step 4: Deduplicate and rank
+            final_results = await self._deduplicate_and_rank(all_results, max_results)
+            metrics.finalize(len(final_results), time.perf_counter() - start_time)
 
             logger.info(
                 f"Graph-RAG search complete: {len(final_results)} results, "
-                f"{metrics.total_time:.3f}s total "
-                f"(RAG: {metrics.retrieval_time:.3f}s, "
-                f"Graph: {metrics.graph_traversal_time:.3f}s)"
+                f"{metrics.get_timing_summary()}"
             )
-
             return final_results, metrics
 
         except asyncio.TimeoutError:
@@ -290,61 +263,23 @@ class GraphRAGService:
         """
         Extract entity references from search results.
 
-        This method analyzes result metadata to identify entities referenced
-        in the content. It queries the memory graph to find matching entities.
+        Issue #281: Refactored to use extracted helpers.
 
         Args:
             results: Search results from RAG search
 
         Returns:
             List of EntityMatch objects with entity data and relevance scores
-
-        Strategy:
-            - Parse metadata for entity references
-            - Query memory graph for each entity name
-            - Calculate relevance score from RAG search position
         """
         entity_matches = []
 
         for idx, result in enumerate(results):
-            # Calculate relevance score (higher for earlier results)
             relevance = 1.0 - (idx / len(results) * 0.5)  # 1.0 → 0.5
+            entity_refs = self._collect_entity_refs_from_result(result)
 
-            # Check metadata for entity references
-            metadata = result.metadata or {}
-            entity_refs = metadata.get("entities", [])
-
-            # Also check for session_id (conversation entities)
-            if "session_id" in metadata:
-                entity_refs.append(f"Conversation {metadata['session_id'][:8]}")
-
-            # Query graph for all entity references in parallel - eliminates N+1
             if entity_refs:
-                entities = await asyncio.gather(
-                    *[
-                        self.graph.get_entity(entity_name=entity_ref, include_relations=False)
-                        for entity_ref in entity_refs
-                    ],
-                    return_exceptions=True
-                )
-
-                for entity_ref, entity in zip(entity_refs, entities):
-                    if isinstance(entity, Exception):
-                        logger.warning(f"Failed to query entity '{entity_ref}': {entity}")
-                        continue
-
-                    if entity:
-                        entity_matches.append(
-                            EntityMatch(
-                                entity=entity,
-                                relevance_score=relevance,
-                                graph_distance=0,  # Direct match
-                                relationship_path=[],
-                            )
-                        )
-                        logger.debug(
-                            f"Matched entity: {entity_ref} (relevance={relevance:.2f})"
-                        )
+                matches = await self._query_and_build_matches(entity_refs, relevance)
+                entity_matches.extend(matches)
 
         return entity_matches
 
@@ -359,9 +294,7 @@ class GraphRAGService:
         """
         Expand context using graph relationships.
 
-        This method traverses the graph from a start entity or extracted entities,
-        following relationships to find related content. It uses the existing
-        memory_graph.get_related_entities() method (REUSE).
+        Issue #281: Refactored to use extracted helpers.
 
         Args:
             query: Original search query (for relevance filtering)
@@ -372,42 +305,26 @@ class GraphRAGService:
 
         Returns:
             List of SearchResult objects from graph expansion
-
-        Strategy:
-            1. Determine starting points (start_entity or entity_matches)
-            2. Use memory_graph.get_related_entities() for traversal (REUSE)
-            3. Extract observations from related entities
-            4. Convert to SearchResult format
-            5. Score by graph proximity + relationship strength
         """
         expanded_results = []
-
-        # Determine starting points for traversal
-        start_points = []
-        if start_entity:
-            start_points.append((start_entity, 1.0))  # (name, base_score)
-
-        for match in entity_matches[:3]:  # Limit to top 3 entity matches
-            entity_name = match.entity.get("name")
-            if entity_name:
-                start_points.append((entity_name, match.relevance_score))
+        start_points = self._get_graph_starting_points(start_entity, entity_matches)
 
         logger.info(
             f"Graph expansion from {len(start_points)} starting points (max_depth={max_depth})"
         )
 
-        # Traverse graph from all starting points in parallel - eliminates N+1
+        # Traverse graph from all starting points in parallel
         all_related_results = await asyncio.gather(
             *[
                 self.graph.get_related_entities(
                     entity_name=entity_name,
-                    relation_type=None,  # All relation types
-                    direction="both",  # Bidirectional
+                    relation_type=None,
+                    direction="both",
                     max_depth=max_depth,
                 )
                 for entity_name, _ in start_points
             ],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         for (entity_name, base_score), related in zip(start_points, all_related_results):
@@ -415,56 +332,15 @@ class GraphRAGService:
                 logger.warning(f"Graph traversal failed for '{entity_name}': {related}")
                 continue
 
-            logger.debug(
-                f"Found {len(related)} related entities for '{entity_name}'"
-            )
+            logger.debug(f"Found {len(related)} related entities for '{entity_name}'")
 
-            # Convert related entities to SearchResult format
             for item in related:
-                related_entity = item["entity"]
-                relation = item["relation"]
-                direction = item["direction"]
-
-                # Calculate graph proximity score
-                # Closer entities (fewer hops) get higher scores
-                # Relationship strength also factors in
-                relationship_strength = relation.get("metadata", {}).get(
-                    "strength", 1.0
+                result = self._create_search_result_from_entity(
+                    item["entity"], item["relation"], item["direction"],
+                    base_score, max_depth
                 )
-                proximity_score = base_score * relationship_strength
-
-                # Create SearchResult from entity observations
-                observations = related_entity.get("observations", [])
-                if observations:
-                    content = "\n".join(observations)
-
-                    # Calculate hybrid score (base relevance + graph proximity)
-                    hybrid_score = (
-                        (1.0 - self.graph_weight) * base_score
-                        + self.graph_weight * proximity_score
-                    )
-
-                    result = SearchResult(
-                        content=content,
-                        metadata={
-                            "entity_id": related_entity.get("id"),
-                            "entity_type": related_entity.get("type"),
-                            "entity_name": related_entity.get("name"),
-                            "source": "graph_expansion",
-                            "relation_type": relation.get("type"),
-                            "direction": direction,
-                            "graph_distance": max_depth,  # Approximation
-                        },
-                        semantic_score=0.0,  # Not from semantic search
-                        keyword_score=0.0,  # Not from keyword search
-                        hybrid_score=hybrid_score,
-                        relevance_rank=0,  # Will be set later
-                        source_path=f"graph:{related_entity.get('name', 'unknown')}",
-                        chunk_index=0,
-                    )
-
+                if result:
                     expanded_results.append(result)
-                continue
 
         logger.info(f"Graph expansion yielded {len(expanded_results)} results")
         return expanded_results[:max_results]
@@ -520,6 +396,200 @@ class GraphRAGService:
         )
 
         return deduplicated[:max_results]
+
+    # === Issue #281: Extracted Helper Methods ===
+
+    async def _perform_initial_rag_search(
+        self,
+        query: str,
+        max_results: int,
+        enable_reranking: bool,
+        timeout: Optional[float],
+        metrics: GraphRAGMetrics,
+    ) -> List[SearchResult]:
+        """
+        Perform initial RAG search and update metrics.
+
+        Issue #281: Extracted from graph_aware_search.
+        """
+        logger.info(f"Graph-RAG search: '{query[:50]}...'")
+
+        rag_results, rag_metrics = await self.rag.advanced_search(
+            query=query,
+            max_results=max_results * 2,  # Get more for filtering
+            enable_reranking=enable_reranking,
+            timeout=timeout,
+        )
+
+        metrics.copy_from_rag_metrics(rag_metrics)
+        logger.info(
+            f"Initial RAG search: {len(rag_results)} results in {rag_metrics.total_time:.3f}s"
+        )
+        return rag_results
+
+    async def _extract_and_expand_graph(
+        self,
+        query: str,
+        rag_results: List[SearchResult],
+        start_entity: Optional[str],
+        max_depth: int,
+        max_results: int,
+        metrics: GraphRAGMetrics,
+    ) -> List[SearchResult]:
+        """
+        Extract entities and expand via graph traversal.
+
+        Issue #281: Extracted from graph_aware_search.
+        Returns combined RAG + graph results.
+        """
+        graph_start = time.perf_counter()
+        entity_matches: List[EntityMatch] = []
+
+        if self.enable_entity_extraction:
+            entity_matches = await self._extract_entities_from_results(
+                rag_results[:5]  # Only top 5 for entity extraction
+            )
+            logger.info(f"Extracted {len(entity_matches)} entity matches")
+
+        if start_entity or entity_matches:
+            expanded_results = await self._expand_via_graph(
+                query=query,
+                start_entity=start_entity,
+                entity_matches=entity_matches,
+                max_depth=max_depth,
+                max_results=max_results,
+            )
+
+            graph_traversal_time = time.perf_counter() - graph_start
+            metrics.record_graph_results(graph_traversal_time, len(expanded_results))
+            logger.info(f"Graph expansion added {len(expanded_results)} results")
+
+            return rag_results + expanded_results
+
+        metrics.graph_traversal_time = time.perf_counter() - graph_start
+        logger.info("No graph expansion (no start entity or matches)")
+        return rag_results
+
+    def _collect_entity_refs_from_result(
+        self, result: SearchResult
+    ) -> List[str]:
+        """
+        Collect entity references from a single search result.
+
+        Issue #281: Extracted from _extract_entities_from_results.
+        """
+        metadata = result.metadata or {}
+        entity_refs = list(metadata.get("entities", []))
+
+        if "session_id" in metadata:
+            entity_refs.append(f"Conversation {metadata['session_id'][:8]}")
+
+        return entity_refs
+
+    async def _query_and_build_matches(
+        self,
+        entity_refs: List[str],
+        relevance: float,
+    ) -> List[EntityMatch]:
+        """
+        Query graph for entities and build EntityMatch objects.
+
+        Issue #281: Extracted from _extract_entities_from_results.
+        """
+        matches = []
+
+        entities = await asyncio.gather(
+            *[
+                self.graph.get_entity(entity_name=entity_ref, include_relations=False)
+                for entity_ref in entity_refs
+            ],
+            return_exceptions=True,
+        )
+
+        for entity_ref, entity in zip(entity_refs, entities):
+            if isinstance(entity, Exception):
+                logger.warning(f"Failed to query entity '{entity_ref}': {entity}")
+                continue
+
+            if entity:
+                matches.append(
+                    EntityMatch(
+                        entity=entity,
+                        relevance_score=relevance,
+                        graph_distance=0,
+                        relationship_path=[],
+                    )
+                )
+                logger.debug(f"Matched entity: {entity_ref} (relevance={relevance:.2f})")
+
+        return matches
+
+    def _get_graph_starting_points(
+        self,
+        start_entity: Optional[str],
+        entity_matches: List[EntityMatch],
+    ) -> List[Tuple[str, float]]:
+        """
+        Determine starting points for graph traversal.
+
+        Issue #281: Extracted from _expand_via_graph.
+        """
+        start_points = []
+        if start_entity:
+            start_points.append((start_entity, 1.0))
+
+        for match in entity_matches[:3]:  # Limit to top 3
+            entity_name = match.entity.get("name")
+            if entity_name:
+                start_points.append((entity_name, match.relevance_score))
+
+        return start_points
+
+    def _create_search_result_from_entity(
+        self,
+        related_entity: Dict[str, Any],
+        relation: Dict[str, Any],
+        direction: str,
+        base_score: float,
+        max_depth: int,
+    ) -> Optional[SearchResult]:
+        """
+        Create SearchResult from a related graph entity.
+
+        Issue #281: Extracted from _expand_via_graph.
+        """
+        observations = related_entity.get("observations", [])
+        if not observations:
+            return None
+
+        content = "\n".join(observations)
+
+        relationship_strength = relation.get("metadata", {}).get("strength", 1.0)
+        proximity_score = base_score * relationship_strength
+
+        hybrid_score = (
+            (1.0 - self.graph_weight) * base_score
+            + self.graph_weight * proximity_score
+        )
+
+        return SearchResult(
+            content=content,
+            metadata={
+                "entity_id": related_entity.get("id"),
+                "entity_type": related_entity.get("type"),
+                "entity_name": related_entity.get("name"),
+                "source": "graph_expansion",
+                "relation_type": relation.get("type"),
+                "direction": direction,
+                "graph_distance": max_depth,
+            },
+            semantic_score=0.0,
+            keyword_score=0.0,
+            hybrid_score=hybrid_score,
+            relevance_rank=0,
+            source_path=f"graph:{related_entity.get('name', 'unknown')}",
+            chunk_index=0,
+        )
 
     async def get_metrics(self) -> Dict[str, Any]:
         """
