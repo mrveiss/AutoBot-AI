@@ -107,7 +107,10 @@ class SearchMixin:
         filters: Optional[Dict[str, Any]] = None,
         mode: str = "auto",
     ) -> List[Dict[str, Any]]:
-        """Search the knowledge base with multiple search modes.
+        """
+        Search the knowledge base with multiple search modes.
+
+        Issue #281: Refactored from 147 lines to use extracted helper methods.
 
         Args:
             query: Search query
@@ -133,106 +136,14 @@ class SearchMixin:
             return []
 
         try:
-            # Import here to avoid circular dependency
-            from llama_index.core import Settings
+            # Step 1: Get query embedding (with caching)
+            query_embedding = await self._get_query_embedding(query)
 
-            from src.knowledge.embedding_cache import get_embedding_cache
+            # Step 2: Query ChromaDB
+            results_data = await self._query_chromadb(query_embedding, similarity_top_k)
 
-            _embedding_cache = get_embedding_cache()
-
-            # Use direct ChromaDB queries to avoid VectorStoreIndex blocking with 545K vectors
-            chroma_collection = self.vector_store._collection
-
-            # Generate embedding for query using the same model
-            # P0 OPTIMIZATION: Use embedding cache to avoid regenerating identical queries
-            # Check cache first
-            query_embedding = await _embedding_cache.get(query)
-
-            if query_embedding is None:
-                # Cache miss - compute embedding
-                query_embedding = await asyncio.to_thread(
-                    Settings.embed_model.get_text_embedding, query
-                )
-                # Store in cache for future use
-                await _embedding_cache.put(query, query_embedding)
-            # else: Cache hit - embedding already loaded
-
-            # Query ChromaDB directly (avoids index creation overhead)
-            # Note: IDs are always returned by default, don't include in 'include' parameter
-            results_data = await asyncio.to_thread(
-                chroma_collection.query,
-                query_embeddings=[query_embedding],
-                n_results=similarity_top_k,
-                include=["documents", "metadatas", "distances"],
-            )
-
-            # Format results
-            results = []
-            seen_documents = (
-                {}
-            )  # Track unique documents by metadata to prevent duplicates
-
-            if (
-                results_data
-                and "documents" in results_data
-                and results_data["documents"][0]
-            ):
-                for i, doc in enumerate(results_data["documents"][0]):
-                    # Convert distance to similarity score (cosine: 0=identical, 2=opposite)
-                    distance = (
-                        results_data["distances"][0][i]
-                        if "distances" in results_data
-                        else 1.0
-                    )
-                    score = max(
-                        0.0, 1.0 - (distance / 2.0)
-                    )  # Convert to 0-1 similarity
-
-                    metadata = (
-                        results_data["metadatas"][0][i]
-                        if "metadatas" in results_data
-                        else {}
-                    )
-
-                    # Create unique document key to deduplicate chunks from same source
-                    # Use fact_id first (most reliable), fallback to title+category
-                    doc_key = metadata.get("fact_id")
-                    if not doc_key:
-                        title = metadata.get("title", "")
-                        category = metadata.get("category", "")
-                        doc_key = (
-                            f"{category}:{title}" if (title or category) else f"doc_{i}"
-                        )
-
-                    # Keep only highest-scoring result per unique document
-                    if (
-                        doc_key not in seen_documents
-                        or score > seen_documents[doc_key]["score"]
-                    ):
-                        result = {
-                            "content": doc,
-                            "score": score,
-                            "metadata": metadata,
-                            "node_id": (
-                                results_data["ids"][0][i]
-                                if "ids" in results_data
-                                else f"result_{i}"
-                            ),
-                            "doc_id": (
-                                results_data["ids"][0][i]
-                                if "ids" in results_data
-                                else f"result_{i}"
-                            ),  # V1 compatibility
-                        }
-                        seen_documents[doc_key] = result
-
-            # Convert to list and sort by score descending
-            results = sorted(
-                seen_documents.values(), key=lambda x: x["score"], reverse=True
-            )
-
-            # Limit to top_k after deduplication
-            results = results[:similarity_top_k]
+            # Step 3: Deduplicate and format results
+            results = self._deduplicate_results(results_data, similarity_top_k)
 
             logger.info(
                 f"ChromaDB direct search returned {len(results)} unique documents "
@@ -243,9 +154,87 @@ class SearchMixin:
         except Exception as e:
             logger.error(f"Knowledge base search failed: {e}")
             import traceback
-
             logger.error(traceback.format_exc())
             return []
+
+    async def _get_query_embedding(self, query: str) -> List[float]:
+        """Get embedding for query, using cache when available. Issue #281: Extracted helper."""
+        from llama_index.core import Settings
+        from src.knowledge.embedding_cache import get_embedding_cache
+
+        _embedding_cache = get_embedding_cache()
+        query_embedding = await _embedding_cache.get(query)
+
+        if query_embedding is None:
+            # Cache miss - compute embedding
+            query_embedding = await asyncio.to_thread(
+                Settings.embed_model.get_text_embedding, query
+            )
+            await _embedding_cache.put(query, query_embedding)
+
+        return query_embedding
+
+    async def _query_chromadb(
+        self, query_embedding: List[float], similarity_top_k: int
+    ) -> Dict[str, Any]:
+        """Query ChromaDB directly with embedding. Issue #281: Extracted helper."""
+        chroma_collection = self.vector_store._collection
+        return await asyncio.to_thread(
+            chroma_collection.query,
+            query_embeddings=[query_embedding],
+            n_results=similarity_top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+
+    def _deduplicate_results(
+        self, results_data: Dict[str, Any], similarity_top_k: int
+    ) -> List[Dict[str, Any]]:
+        """Deduplicate and format ChromaDB results. Issue #281: Extracted helper."""
+        seen_documents: Dict[str, Dict[str, Any]] = {}
+
+        if not (results_data and "documents" in results_data and results_data["documents"][0]):
+            return []
+
+        for i, doc in enumerate(results_data["documents"][0]):
+            score = self._calculate_similarity_score(results_data, i)
+            metadata = results_data["metadatas"][0][i] if "metadatas" in results_data else {}
+            doc_key = self._get_document_key(metadata, i)
+
+            if doc_key not in seen_documents or score > seen_documents[doc_key]["score"]:
+                seen_documents[doc_key] = self._build_result_dict(
+                    doc, score, metadata, results_data, i
+                )
+
+        results = sorted(seen_documents.values(), key=lambda x: x["score"], reverse=True)
+        return results[:similarity_top_k]
+
+    def _calculate_similarity_score(self, results_data: Dict[str, Any], index: int) -> float:
+        """Convert distance to similarity score. Issue #281: Extracted helper."""
+        distance = results_data["distances"][0][index] if "distances" in results_data else 1.0
+        return max(0.0, 1.0 - (distance / 2.0))
+
+    def _get_document_key(self, metadata: Dict[str, Any], index: int) -> str:
+        """Get unique key for document deduplication. Issue #281: Extracted helper."""
+        doc_key = metadata.get("fact_id")
+        if not doc_key:
+            title = metadata.get("title", "")
+            category = metadata.get("category", "")
+            doc_key = f"{category}:{title}" if (title or category) else f"doc_{index}"
+        return doc_key
+
+    def _build_result_dict(
+        self, doc: str, score: float, metadata: Dict[str, Any],
+        results_data: Dict[str, Any], index: int
+    ) -> Dict[str, Any]:
+        """Build result dictionary for a search result. Issue #281: Extracted helper."""
+        node_id = results_data["ids"][0][index] if "ids" in results_data else f"result_{index}"
+        return {
+            "content": doc,
+            "score": score,
+            "metadata": metadata,
+            "node_id": node_id,
+            "doc_id": node_id,  # V1 compatibility
+        }
 
     async def _perform_search(
         self,
@@ -260,138 +249,104 @@ class SearchMixin:
             query, similarity_top_k=similarity_top_k, filters=filters, mode=mode
         )
 
+    def _build_empty_query_response(self) -> Dict[str, Any]:
+        """Build response for empty query. Issue #281: Extracted helper."""
+        return {"success": False, "results": [], "total_count": 0, "message": "Empty query"}
+
+    def _build_no_tags_match_response(self, processed_query: str) -> Dict[str, Any]:
+        """Build response when no facts match tags. Issue #281: Extracted helper."""
+        return {
+            "success": True, "results": [], "total_count": 0,
+            "query_processed": processed_query, "message": "No facts match the specified tags"
+        }
+
+    async def _get_tag_filtered_ids(
+        self, tags: Optional[List[str]], tags_match_any: bool, processed_query: str
+    ) -> tuple:
+        """Get tag-filtered fact IDs. Returns (filtered_ids, early_return_response or None)."""
+        if not tags:
+            return None, None
+
+        tag_result = await self._get_fact_ids_by_tags(tags, match_all=not tags_match_any)
+        if tag_result["success"]:
+            tag_filtered_ids = tag_result["fact_ids"]
+            if not tag_filtered_ids:
+                return None, self._build_no_tags_match_response(processed_query)
+            return tag_filtered_ids, None
+        return None, None
+
+    async def _execute_search_by_mode(
+        self, mode: str, processed_query: str, fetch_limit: int, category: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Execute search based on mode. Issue #281: Extracted helper."""
+        if mode == "keyword":
+            return await self._keyword_search(processed_query, fetch_limit, category)
+        elif mode == "semantic":
+            return await self.search(
+                processed_query, top_k=fetch_limit,
+                filters={"category": category} if category else None, mode="vector"
+            )
+        else:  # hybrid mode
+            return await self._hybrid_search(processed_query, fetch_limit, category)
+
+    def _apply_post_search_filters(
+        self, results: List[Dict[str, Any]], tag_filtered_ids: Optional[Set[str]], min_score: float
+    ) -> List[Dict[str, Any]]:
+        """Apply tag and score filtering to results. Issue #281: Extracted helper."""
+        if tag_filtered_ids is not None:
+            results = [r for r in results if r.get("metadata", {}).get("fact_id") in tag_filtered_ids]
+        if min_score > 0:
+            results = [r for r in results if r.get("score", 0) >= min_score]
+        return results
+
+    def _build_success_response(
+        self, results: List[Dict[str, Any]], total_count: int, offset: int, limit: int,
+        processed_query: str, mode: str, tags: Optional[List[str]], min_score: float, enable_reranking: bool
+    ) -> Dict[str, Any]:
+        """Build successful search response. Issue #281: Extracted helper."""
+        return {
+            "success": True, "results": results[offset:offset + limit], "total_count": total_count,
+            "query_processed": processed_query, "mode": mode, "tags_applied": tags if tags else [],
+            "min_score_applied": min_score, "reranking_applied": enable_reranking,
+        }
+
     @error_boundary(component="knowledge_base", function="enhanced_search")
     async def enhanced_search(
-        self,
-        query: str,
-        limit: int = 10,
-        offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        tags_match_any: bool = False,
-        mode: str = "hybrid",
-        enable_reranking: bool = False,
-        min_score: float = 0.0,
+        self, query: str, limit: int = 10, offset: int = 0, category: Optional[str] = None,
+        tags: Optional[List[str]] = None, tags_match_any: bool = False, mode: str = "hybrid",
+        enable_reranking: bool = False, min_score: float = 0.0,
     ) -> Dict[str, Any]:
-        """
-        Enhanced search with tag filtering, hybrid mode, and query preprocessing.
-
-        Issue #78: Search Quality Improvements
-
-        Args:
-            query: Search query (will be preprocessed)
-            limit: Maximum results to return
-            offset: Pagination offset
-            category: Optional category filter
-            tags: Optional list of tags to filter by
-            tags_match_any: If True, match ANY tag. If False, match ALL tags.
-            mode: Search mode ("semantic", "keyword", "hybrid")
-            enable_reranking: Enable cross-encoder reranking for better relevance
-            min_score: Minimum similarity score threshold (0.0-1.0)
-
-        Returns:
-            Dict with results, total_count, and search metadata
-        """
+        """Enhanced search with tag filtering, hybrid mode, and query preprocessing (Issue #281 refactor)."""
         self.ensure_initialized()
 
         if not query.strip():
-            return {
-                "success": False,
-                "results": [],
-                "total_count": 0,
-                "message": "Empty query",
-            }
+            return self._build_empty_query_response()
 
         try:
-            # Step 1: Query preprocessing
             processed_query = self._preprocess_query(query)
 
-            # Step 2: Get candidate fact IDs from tags if specified
-            tag_filtered_ids: Optional[Set[str]] = None
-            if tags:
-                tag_result = await self._get_fact_ids_by_tags(
-                    tags, match_all=not tags_match_any
-                )
-                if tag_result["success"]:
-                    tag_filtered_ids = tag_result["fact_ids"]
-                    if not tag_filtered_ids:
-                        # No facts match the tag filter
-                        return {
-                            "success": True,
-                            "results": [],
-                            "total_count": 0,
-                            "query_processed": processed_query,
-                            "message": "No facts match the specified tags",
-                        }
+            tag_filtered_ids, early_return = await self._get_tag_filtered_ids(tags, tags_match_any, processed_query)
+            if early_return:
+                return early_return
 
-            # Step 3: Perform search based on mode
-            # Request more results than needed to allow for filtering
             fetch_multiplier = 3 if tags or min_score > 0 else 1.5
             fetch_limit = min(int((limit + offset) * fetch_multiplier), 500)
 
-            if mode == "keyword":
-                # Keyword-only search (uses Redis text search if available)
-                results = await self._keyword_search(
-                    processed_query, fetch_limit, category
-                )
-            elif mode == "semantic":
-                # Semantic-only search (existing ChromaDB search)
-                results = await self.search(
-                    processed_query,
-                    top_k=fetch_limit,
-                    filters={"category": category} if category else None,
-                    mode="vector",
-                )
-            else:
-                # Hybrid mode: combine semantic and keyword results
-                results = await self._hybrid_search(
-                    processed_query, fetch_limit, category
-                )
+            results = await self._execute_search_by_mode(mode, processed_query, fetch_limit, category)
+            results = self._apply_post_search_filters(results, tag_filtered_ids, min_score)
 
-            # Step 4: Filter by tags if specified
-            if tag_filtered_ids is not None:
-                results = [
-                    r
-                    for r in results
-                    if r.get("metadata", {}).get("fact_id") in tag_filtered_ids
-                ]
-
-            # Step 5: Apply minimum score threshold
-            if min_score > 0:
-                results = [r for r in results if r.get("score", 0) >= min_score]
-
-            # Step 6: Optional reranking with cross-encoder
             if enable_reranking and results:
                 results = await self._rerank_results(processed_query, results)
 
-            # Step 7: Get total before pagination
-            total_count = len(results)
-
-            # Step 8: Apply pagination
-            paginated_results = results[offset : offset + limit]
-
-            return {
-                "success": True,
-                "results": paginated_results,
-                "total_count": total_count,
-                "query_processed": processed_query,
-                "mode": mode,
-                "tags_applied": tags if tags else [],
-                "min_score_applied": min_score,
-                "reranking_applied": enable_reranking,
-            }
+            return self._build_success_response(
+                results, len(results), offset, limit, processed_query, mode, tags, min_score, enable_reranking
+            )
 
         except Exception as e:
             logger.error(f"Enhanced search failed: {e}")
             import traceback
-
             logger.error(traceback.format_exc())
-            return {
-                "success": False,
-                "results": [],
-                "total_count": 0,
-                "error": str(e),
-            }
+            return {"success": False, "results": [], "total_count": 0, "error": str(e)}
 
     def _preprocess_query(self, query: str) -> str:
         """
@@ -442,64 +397,48 @@ class SearchMixin:
 
         return processed.strip()
 
-    async def _get_fact_ids_by_tags(
-        self, tags: List[str], match_all: bool = True
-    ) -> Dict[str, Any]:
-        """
-        Get fact IDs matching specified tags.
+    def _decode_tag_results(self, tag_results: list) -> List[Set[str]]:
+        """Decode tag results from Redis to sets of fact IDs. Issue #281: Extracted helper."""
+        tag_fact_sets = []
+        for fact_ids in tag_results:
+            if fact_ids:
+                decoded_ids = {fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids}
+                tag_fact_sets.append(decoded_ids)
+            else:
+                tag_fact_sets.append(set())
+        return tag_fact_sets
 
-        Args:
-            tags: List of tags to match
-            match_all: If True, facts must have ALL tags
+    def _combine_tag_fact_sets(self, tag_fact_sets: List[Set[str]], match_all: bool) -> Set[str]:
+        """Combine fact sets based on match_all flag. Issue #281: Extracted helper."""
+        if not tag_fact_sets:
+            return set()
+        if match_all:
+            result_ids = tag_fact_sets[0]
+            for fact_set in tag_fact_sets[1:]:
+                result_ids = result_ids.intersection(fact_set)
+        else:
+            result_ids = set()
+            for fact_set in tag_fact_sets:
+                result_ids = result_ids.union(fact_set)
+        return result_ids
 
-        Returns:
-            Dict with success status and set of fact_ids
-        """
+    async def _get_fact_ids_by_tags(self, tags: List[str], match_all: bool = True) -> Dict[str, Any]:
+        """Get fact IDs matching specified tags (Issue #281 refactor)."""
         try:
             if not self.aioredis_client:
-                return {
-                    "success": False,
-                    "fact_ids": set(),
-                    "message": "Redis not initialized",
-                }
+                return {"success": False, "fact_ids": set(), "message": "Redis not initialized"}
 
-            # Normalize tags
             normalized_tags = [t.lower().strip() for t in tags if t.strip()]
             if not normalized_tags:
                 return {"success": False, "fact_ids": set(), "message": "No valid tags"}
 
-            # Get fact IDs for each tag using pipeline
             pipeline = self.aioredis_client.pipeline()
             for tag in normalized_tags:
                 pipeline.smembers(f"tag:{tag}")
             tag_results = await pipeline.execute()
 
-            # Convert to sets
-            tag_fact_sets = []
-            for fact_ids in tag_results:
-                if fact_ids:
-                    decoded_ids = {
-                        fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                        for fid in fact_ids
-                    }
-                    tag_fact_sets.append(decoded_ids)
-                else:
-                    tag_fact_sets.append(set())
-
-            # Calculate matching IDs
-            if not tag_fact_sets:
-                return {"success": True, "fact_ids": set()}
-
-            if match_all:
-                # Intersection - must have ALL tags
-                result_ids = tag_fact_sets[0]
-                for fact_set in tag_fact_sets[1:]:
-                    result_ids = result_ids.intersection(fact_set)
-            else:
-                # Union - ANY tag matches
-                result_ids = set()
-                for fact_set in tag_fact_sets:
-                    result_ids = result_ids.union(fact_set)
+            tag_fact_sets = self._decode_tag_results(tag_results)
+            result_ids = self._combine_tag_fact_sets(tag_fact_sets, match_all)
 
             return {"success": True, "fact_ids": result_ids}
 
@@ -507,66 +446,52 @@ class SearchMixin:
             logger.error(f"Failed to get fact IDs by tags: {e}")
             return {"success": False, "fact_ids": set(), "error": str(e)}
 
+    async def _process_keyword_batch(
+        self, keys: list, query_terms: Set[str], category: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Process a batch of Redis keys for keyword search. Issue #281: Extracted helper."""
+        results = []
+        pipeline = self.aioredis_client.pipeline()
+        for key in keys:
+            pipeline.hgetall(key)
+        facts_data = await pipeline.execute()
+
+        for key, fact_data in zip(keys, facts_data):
+            if not fact_data:
+                continue
+            decoded = _decode_redis_hash(fact_data)
+            if not _matches_category(decoded, category):
+                continue
+            score = _score_fact_by_terms(decoded, query_terms)
+            if score > 0:
+                results.append(_build_search_result(decoded, key, score))
+        return results
+
     async def _keyword_search(
         self, query: str, limit: int, category: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Perform keyword-based search using Redis.
-
-        Args:
-            query: Search query
-            limit: Maximum results
-            category: Optional category filter
-
-        Returns:
-            List of search results
-        """
+        """Perform keyword-based search using Redis (Issue #281 refactor)."""
         try:
             if not self.aioredis_client:
                 return []
 
-            # Tokenize query
             query_terms = set(query.lower().split())
             if not query_terms:
                 return []
 
-            # SCAN through facts and score by term matches
-            # This is a simple implementation; could be optimized with Redis Search module
-            results = []
-            cursor = b"0"
-            scanned = 0
-            max_scan = 10000  # Safety limit
+            results, cursor, scanned, max_scan = [], b"0", 0, 10000
 
             while scanned < max_scan:
-                cursor, keys = await self.aioredis_client.scan(
-                    cursor=cursor, match="fact:*", count=100
-                )
+                cursor, keys = await self.aioredis_client.scan(cursor=cursor, match="fact:*", count=100)
                 scanned += len(keys)
 
                 if keys:
-                    # Batch fetch and process (Issue #315 - reduced nesting)
-                    pipeline = self.aioredis_client.pipeline()
-                    for key in keys:
-                        pipeline.hgetall(key)
-                    facts_data = await pipeline.execute()
-
-                    for key, fact_data in zip(keys, facts_data):
-                        if not fact_data:
-                            continue
-
-                        decoded = _decode_redis_hash(fact_data)
-
-                        if not _matches_category(decoded, category):
-                            continue
-
-                        score = _score_fact_by_terms(decoded, query_terms)
-                        if score > 0:
-                            results.append(_build_search_result(decoded, key, score))
+                    batch_results = await self._process_keyword_batch(keys, query_terms, category)
+                    results.extend(batch_results)
 
                 if cursor == b"0":
                     break
 
-            # Sort by score and limit
             results.sort(key=lambda x: x["score"], reverse=True)
             return results[:limit]
 
@@ -574,105 +499,78 @@ class SearchMixin:
             logger.error(f"Keyword search failed: {e}")
             return []
 
+    def _process_rrf_results(
+        self, results: List[Dict[str, Any]], rrf_scores: Dict[str, float],
+        result_map: Dict[str, Dict[str, Any]], k: int, prefix: str
+    ) -> None:
+        """Process results for RRF scoring. Issue #281: Extracted helper."""
+        for rank, result in enumerate(results):
+            fact_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", f"{prefix}_{rank}")
+            rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
+            if fact_id not in result_map:
+                result_map[fact_id] = result
+
+    def _build_rrf_results(
+        self, rrf_scores: Dict[str, float], result_map: Dict[str, Dict[str, Any]], limit: int
+    ) -> List[Dict[str, Any]]:
+        """Build final RRF-ranked results. Issue #281: Extracted helper."""
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        max_rrf = max(rrf_scores.values()) if rrf_scores else 1
+        results = []
+        for fact_id in sorted_ids[:limit]:
+            result = result_map[fact_id].copy()
+            result["score"] = rrf_scores[fact_id] / max_rrf
+            result["rrf_score"] = rrf_scores[fact_id]
+            results.append(result)
+        return results
+
     async def _hybrid_search(
         self, query: str, limit: int, category: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Perform hybrid search combining semantic and keyword results.
-
-        Uses reciprocal rank fusion (RRF) to combine rankings.
-
-        Args:
-            query: Search query
-            limit: Maximum results
-            category: Optional category filter
-
-        Returns:
-            List of merged and re-ranked results
-        """
+        """Perform hybrid search combining semantic and keyword results (Issue #281 refactor)."""
         try:
-            # Run both searches in parallel
             semantic_task = asyncio.create_task(
-                self.search(
-                    query,
-                    top_k=limit,
-                    filters={"category": category} if category else None,
-                    mode="vector",
-                )
+                self.search(query, top_k=limit, filters={"category": category} if category else None, mode="vector")
             )
-            keyword_task = asyncio.create_task(
-                self._keyword_search(query, limit, category)
-            )
+            keyword_task = asyncio.create_task(self._keyword_search(query, limit, category))
+            semantic_results, keyword_results = await asyncio.gather(semantic_task, keyword_task)
 
-            semantic_results, keyword_results = await asyncio.gather(
-                semantic_task, keyword_task
-            )
+            # Reciprocal Rank Fusion with k=60 (standard constant)
+            k, rrf_scores, result_map = 60, {}, {}
+            self._process_rrf_results(semantic_results, rrf_scores, result_map, k, "sem")
+            self._process_rrf_results(keyword_results, rrf_scores, result_map, k, "kw")
 
-            # Reciprocal Rank Fusion (RRF)
-            # Score = sum(1 / (k + rank)) across all rankings
-            # Using k=60 as standard RRF constant
-            k = 60
-            rrf_scores: Dict[str, float] = {}
-            result_map: Dict[str, Dict[str, Any]] = {}
-
-            # Process semantic results
-            for rank, result in enumerate(semantic_results):
-                fact_id = result.get("metadata", {}).get("fact_id") or result.get(
-                    "node_id", f"sem_{rank}"
-                )
-                rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
-                if fact_id not in result_map:
-                    result_map[fact_id] = result
-
-            # Process keyword results
-            for rank, result in enumerate(keyword_results):
-                fact_id = result.get("metadata", {}).get("fact_id") or result.get(
-                    "node_id", f"kw_{rank}"
-                )
-                rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
-                if fact_id not in result_map:
-                    result_map[fact_id] = result
-
-            # Sort by RRF score
-            sorted_ids = sorted(
-                rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True
-            )
-
-            # Build final results with normalized scores
-            max_rrf = max(rrf_scores.values()) if rrf_scores else 1
-            results = []
-            for fact_id in sorted_ids[:limit]:
-                result = result_map[fact_id].copy()
-                # Normalize RRF score to 0-1 range
-                result["score"] = rrf_scores[fact_id] / max_rrf
-                result["rrf_score"] = rrf_scores[fact_id]
-                results.append(result)
-
-            return results
+            return self._build_rrf_results(rrf_scores, result_map, limit)
 
         except Exception as e:
             logger.error(f"Hybrid search failed: {e}")
             # Fallback to semantic search
             return await self.search(query, top_k=limit, mode="vector")
 
+    async def _ensure_cross_encoder(self):
+        """Ensure cross-encoder model is loaded. Issue #281: Extracted helper."""
+        from sentence_transformers import CrossEncoder
+
+        if not hasattr(self, "_cross_encoder") or self._cross_encoder is None:
+            self._cross_encoder = await asyncio.to_thread(CrossEncoder, "cross-encoder/ms-marco-MiniLM-L-6-v2")
+        return self._cross_encoder
+
+    def _apply_rerank_scores(self, results: List[Dict[str, Any]], scores: list) -> None:
+        """Apply rerank scores to results. Issue #281: Extracted helper."""
+        for i, result in enumerate(results):
+            result["rerank_score"] = float(scores[i])
+        results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+        for result in results:
+            result["original_score"] = result.get("score", 0)
+            result["score"] = result.get("rerank_score", 0)
+
     async def _rerank_results(
         self, query: str, results: List[Dict[str, Any]], top_k: int = None
     ) -> List[Dict[str, Any]]:
-        """
-        Rerank results using cross-encoder for improved relevance.
-
-        Args:
-            query: Original search query
-            results: Initial search results
-            top_k: Maximum results to return after reranking
-
-        Returns:
-            Reranked results
-        """
+        """Rerank results using cross-encoder for improved relevance (Issue #281 refactor)."""
         try:
-            # Check if cross-encoder is available
             try:
-                from sentence_transformers import CrossEncoder
+                from sentence_transformers import CrossEncoder  # noqa: F401
             except ImportError:
                 logger.warning("CrossEncoder not available, skipping reranking")
                 return results
@@ -680,34 +578,12 @@ class SearchMixin:
             if not results:
                 return results
 
-            # Use cached cross-encoder or create new one
-            if not hasattr(self, "_cross_encoder") or self._cross_encoder is None:
-                # Use a lightweight cross-encoder model
-                self._cross_encoder = await asyncio.to_thread(
-                    CrossEncoder, "cross-encoder/ms-marco-MiniLM-L-6-v2"
-                )
-
-            # Prepare pairs for scoring
+            cross_encoder = await self._ensure_cross_encoder()
             pairs = [(query, r.get("content", "")) for r in results]
+            scores = await asyncio.to_thread(cross_encoder.predict, pairs)
+            self._apply_rerank_scores(results, scores)
 
-            # Score all pairs
-            scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
-
-            # Attach scores and sort
-            for i, result in enumerate(results):
-                result["rerank_score"] = float(scores[i])
-
-            results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
-
-            # Update primary score to rerank score
-            for result in results:
-                result["original_score"] = result.get("score", 0)
-                result["score"] = result.get("rerank_score", 0)
-
-            if top_k:
-                results = results[:top_k]
-
-            return results
+            return results[:top_k] if top_k else results
 
         except Exception as e:
             logger.error(f"Reranking failed: {e}")
