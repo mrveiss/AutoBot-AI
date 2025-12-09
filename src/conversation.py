@@ -18,6 +18,7 @@ from src.agents.classification_agent import ClassificationAgent, ClassificationR
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.research_browser_manager import research_browser_manager
 from src.source_attribution import (
     SourceType,
@@ -93,8 +94,8 @@ class Conversation:
 
         # Conversation settings
         self.max_kb_results = 5
-        # Reduced from 10s to 8s - should be longer than KB circuit breaker (5s)
-        self.kb_timeout = 8.0
+        # KB timeout should be longer than KB circuit breaker (Issue #376 - use named constant)
+        self.kb_timeout = float(TimingConstants.LONG_DELAY)  # 10s - allows for circuit breaker recovery
         self.include_sources = True
 
         logger.info(f"Created conversation {self.conversation_id}")
@@ -133,7 +134,9 @@ class Conversation:
 
     async def process_user_message(self, user_message: str, **kwargs) -> Dict[str, Any]:
         """
-        Process a user message with full KB integration and source tracking
+        Process a user message with full KB integration and source tracking.
+
+        Issue #281: Refactored to use extracted helpers.
 
         Returns:
             Dict containing response, sources, and metadata
@@ -141,26 +144,15 @@ class Conversation:
         start_time = asyncio.get_event_loop().time()
 
         try:
-            # Clear previous sources for new response
+            # Clear previous sources and add user message
             clear_sources()
+            self._create_user_message(user_message)
 
-            # Add user message to conversation
-            user_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="user",
-                content=user_message,
-                timestamp=datetime.now(),
-                message_type="chat",
-            )
-            self.messages.append(user_msg)
-
-            # Step 1: Classify the request
+            # Step 1: Classify and search KB
             await self._classify_message(user_message)
-
-            # Step 2: Search Knowledge Base (always, regardless of complexity)
             kb_results = await self._search_knowledge_base(user_message)
 
-            # Step 3: Check if research is needed based on classification
+            # Step 2: Conduct research if needed
             research_results = None
             if (
                 self.state.classification
@@ -169,89 +161,121 @@ class Conversation:
             ):
                 research_results = await self._conduct_research(user_message)
 
-            # Step 4: Generate response with KB context and research
+            # Step 3: Generate response and add attribution
             response = await self._generate_response(
                 user_message, kb_results, research_results
             )
-
-            # Step 5: Add source attribution
             sources_block = get_attribution()
 
-            # Step 6: Create response message
-            assistant_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="assistant",
-                content=response,
-                timestamp=datetime.now(),
-                message_type="chat",
-                sources=source_manager.current_response_sources,
+            # Step 4: Create messages and update state
+            assistant_msg = self._create_assistant_message(
+                response, source_manager.current_response_sources
             )
-            self.messages.append(assistant_msg)
-
-            # Add source message if sources were found
-            if sources_block and self.include_sources:
-                source_msg = ConversationMessage(
-                    message_id=str(uuid.uuid4()),
-                    role="system",
-                    content=sources_block,
-                    timestamp=datetime.now(),
-                    message_type="source",
-                )
-                self.messages.append(source_msg)
+            self._add_source_message(sources_block)
 
             # Update conversation state
-            processing_time = asyncio.get_event_loop().time() - start_time
-            self.state.processing_time = processing_time
+            self.state.processing_time = asyncio.get_event_loop().time() - start_time
             self.state.sources_used = [
                 s.to_dict() for s in source_manager.current_response_sources
             ]
             self.updated_at = datetime.now()
 
-            # Return comprehensive response
-            result = {
-                "response": response,
-                "sources": sources_block,
-                "classification": (
-                    asdict(self.state.classification)
-                    if self.state.classification
-                    else None
-                ),
-                "kb_results_count": len(kb_results),
-                "processing_time": processing_time,
-                "conversation_id": self.conversation_id,
-                "message_id": assistant_msg.message_id,
-            }
-
-            # Add research information if available
-            if research_results:
-                result["research"] = research_results
-
-            return result
+            return self._build_process_result(
+                response, sources_block, kb_results, assistant_msg, research_results
+            )
 
         except Exception as e:
-            logger.error(
-                f"Error processing message in conversation {self.conversation_id}: {e}"
-            )
-            self.state.status = "error"
+            return self._handle_process_error(e)
 
-            # Add error message
-            error_msg = ConversationMessage(
+    def _create_user_message(self, user_message: str) -> ConversationMessage:
+        """Create and store user message (Issue #281 - extracted helper)."""
+        user_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="user",
+            content=user_message,
+            timestamp=datetime.now(),
+            message_type="chat",
+        )
+        self.messages.append(user_msg)
+        return user_msg
+
+    def _create_assistant_message(
+        self, response: str, sources: List[Dict[str, Any]]
+    ) -> ConversationMessage:
+        """Create assistant response message (Issue #281 - extracted helper)."""
+        assistant_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="assistant",
+            content=response,
+            timestamp=datetime.now(),
+            message_type="chat",
+            sources=sources,
+        )
+        self.messages.append(assistant_msg)
+        return assistant_msg
+
+    def _add_source_message(self, sources_block: str) -> None:
+        """Add source attribution message if applicable (Issue #281 - extracted helper)."""
+        if sources_block and self.include_sources:
+            source_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 role="system",
-                content=f"Error processing request: {str(e)}",
+                content=sources_block,
                 timestamp=datetime.now(),
-                message_type="debug",
-                metadata={"error": True},
+                message_type="source",
             )
-            self.messages.append(error_msg)
+            self.messages.append(source_msg)
 
-            return {
-                "response": (
-                    "I encountered an error processing your request. Please try again."
-                ),
-                "error": str(e),
-                "conversation_id": self.conversation_id,
-            }
+    def _build_process_result(
+        self,
+        response: str,
+        sources_block: str,
+        kb_results: List[Dict[str, Any]],
+        assistant_msg: ConversationMessage,
+        research_results: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build result dictionary for process_user_message (Issue #281 - extracted helper)."""
+        result = {
+            "response": response,
+            "sources": sources_block,
+            "classification": (
+                asdict(self.state.classification)
+                if self.state.classification
+                else None
+            ),
+            "kb_results_count": len(kb_results),
+            "processing_time": self.state.processing_time,
+            "conversation_id": self.conversation_id,
+            "message_id": assistant_msg.message_id,
+        }
+        if research_results:
+            result["research"] = research_results
+        return result
+
+    def _handle_process_error(self, error: Exception) -> Dict[str, Any]:
+        """Handle error during message processing (Issue #281 - extracted helper)."""
+        logger.error(
+            f"Error processing message in conversation {self.conversation_id}: {error}"
+        )
+        self.state.status = "error"
+
+        error_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content=f"Error processing request: {str(error)}",
+            timestamp=datetime.now(),
+            message_type="debug",
+            metadata={"error": True},
+        )
+        self.messages.append(error_msg)
+
+        return {
+            "response": (
+                "I encountered an error processing your request. Please try again."
+            ),
+            "error": str(error),
+            "conversation_id": self.conversation_id,
+        }
 
     async def _classify_message(self, message: str):
         """Classify the user message for workflow routing"""
@@ -378,57 +402,48 @@ class Conversation:
             self.messages.append(error_msg)
             return []
 
-    async def _generate_response(
-        self,
-        user_message: str,
-        kb_results: List[Dict[str, Any]],
-        research_results: Optional[Dict[str, Any]] = None,
+    def _build_kb_context(self, kb_results: List[Dict[str, Any]]) -> str:
+        """Build context from KB results. Issue #383: Uses list.join()."""
+        if not kb_results:
+            return ""
+
+        kb_lines = ["", "", "RELEVANT KNOWLEDGE BASE INFORMATION:"]
+        for i, doc in enumerate(kb_results[:3], 1):  # Limit to top 3 for context
+            title = doc.get("title", f"Document {i}")
+            content = doc.get("content", "")[:300]  # Limit content length
+            kb_lines.extend(["", f"{i}. {title}:", f"{content}..."])
+        return "\n".join(kb_lines)
+
+    def _build_research_context(
+        self, research_results: Optional[Dict[str, Any]]
     ) -> str:
-        """Generate response with KB context and source attribution"""
-        try:
-            # Issue #383: Build context from KB results using list.join()
-            kb_context = ""
-            if kb_results:
-                kb_lines = ["", "", "RELEVANT KNOWLEDGE BASE INFORMATION:"]
-                for i, doc in enumerate(
-                    kb_results[:3], 1
-                ):  # Limit to top 3 for context
-                    title = doc.get("title", f"Document {i}")
-                    content = doc.get("content", "")[:300]  # Limit content length
-                    kb_lines.extend(["", f"{i}. {title}:", f"{content}..."])
-                kb_context = "\n".join(kb_lines)
+        """Build context from research results. Issue #383: Uses list.join()."""
+        if not research_results or not research_results.get("success"):
+            return ""
+        if not research_results.get("results"):
+            return ""
 
-            # Issue #383: Build context from research results using list.join()
-            research_context = ""
-            if (
-                research_results
-                and research_results.get("success")
-                and research_results.get("results")
-            ):
-                research_lines = ["", "", "EXTERNAL RESEARCH RESULTS:"]
-                for i, result in enumerate(
-                    research_results["results"][:2], 1
-                ):  # Limit to top 2
-                    content_data = result.get("content", {})
-                    if content_data.get("success"):
-                        text_content = content_data.get("text_content", "")[
-                            :400
-                        ]  # Limit length
-                        research_lines.extend([
-                            "",
-                            f"{i}. Research Query: {result.get('query', 'Unknown')}",
-                            f"   Content: {text_content}...",
-                        ])
+        research_lines = ["", "", "EXTERNAL RESEARCH RESULTS:"]
+        for i, result in enumerate(research_results["results"][:2], 1):  # Limit to top 2
+            content_data = result.get("content", {})
+            if content_data.get("success"):
+                text_content = content_data.get("text_content", "")[:400]
+                research_lines.extend([
+                    "",
+                    f"{i}. Research Query: {result.get('query', 'Unknown')}",
+                    f"   Content: {text_content}...",
+                ])
 
-                        if result.get("interaction_required"):
-                            research_lines.extend([
-                                "   ⚠️ Browser session available for manual verification",
-                                f"   🌐 Browser URL: {result.get('browser_url', '')}",
-                            ])
-                research_context = "\n".join(research_lines)
+                if result.get("interaction_required"):
+                    research_lines.extend([
+                        "   ⚠️ Browser session available for manual verification",
+                        f"   🌐 Browser URL: {result.get('browser_url', '')}",
+                    ])
+        return "\n".join(research_lines)
 
-            # Create enhanced prompt with KB and research context
-            system_prompt = """You are AutoBot, an intelligent AI assistant. You have access to a knowledge base and can conduct external research.
+    def _get_system_prompt(self) -> str:
+        """Get the system prompt for response generation."""
+        return """You are AutoBot, an intelligent AI assistant. You have access to a knowledge base and can conduct external research.
 
 IMPORTANT INSTRUCTIONS:
 1. Always prioritize information from the Knowledge Base when available
@@ -438,8 +453,11 @@ IMPORTANT INSTRUCTIONS:
 5. Be conversational but accurate
 6. If you don't know something and it's not in KB or research, say so clearly"""
 
-            # Issue #382: Changed to f-string so kb_context and research_context are actually substituted
-            user_prompt = f"""User Message: {user_message}
+    def _build_user_prompt(
+        self, user_message: str, kb_context: str, research_context: str
+    ) -> str:
+        """Build user prompt with contexts. Issue #382: Uses f-string for substitution."""
+        return f"""User Message: {user_message}
 
 {kb_context}
 
@@ -447,25 +465,61 @@ IMPORTANT INSTRUCTIONS:
 
 Please provide a helpful, accurate response based on the available information. If you reference information from the knowledge base, mention AutoBot's documentation. If you reference research results, mention external sources. If research requires user interaction, explain how they can access the browser session."""
 
-            # Add planning message
-            planning_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content="Generating response with KB context and LLM",
-                timestamp=datetime.now(),
-                message_type="planning",
-            )
-            self.messages.append(planning_msg)
+    def _add_planning_message(self) -> None:
+        """Add planning message to conversation."""
+        planning_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content="Generating response with KB context and LLM",
+            timestamp=datetime.now(),
+            message_type="planning",
+        )
+        self.messages.append(planning_msg)
 
-            # Get LLM response with failover
+    def _add_utility_message(self, llm_response) -> None:
+        """Add utility message about LLM tier used."""
+        utility_msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content=f"Response generated using {llm_response.tier_used.value} LLM tier",
+            timestamp=datetime.now(),
+            message_type="utility",
+            metadata={
+                "tier_used": llm_response.tier_used.value,
+                "warnings": llm_response.warnings,
+            },
+        )
+        self.messages.append(utility_msg)
+
+    async def _generate_response(
+        self,
+        user_message: str,
+        kb_results: List[Dict[str, Any]],
+        research_results: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Generate response with KB context and source attribution.
+
+        Issue #281: Refactored from 129 lines to use extracted helper methods.
+        """
+        try:
+            # Build context strings
+            kb_context = self._build_kb_context(kb_results)
+            research_context = self._build_research_context(research_results)
+
+            # Build prompts
+            system_prompt = self._get_system_prompt()
+            user_prompt = self._build_user_prompt(user_message, kb_context, research_context)
+
+            # Add planning message and get LLM response
+            self._add_planning_message()
             llm_response = await get_robust_llm_response(
                 f"{system_prompt}\n\n{user_prompt}",
                 context={
                     "conversation_id": self.conversation_id,
                     "classification": (
                         self.state.classification.complexity.value
-                        if self.state.classification
-                        else "simple"
+                        if self.state.classification else "simple"
                     ),
                     "kb_results_count": len(kb_results),
                 },
@@ -483,30 +537,14 @@ Please provide a helpful, accurate response based on the available information. 
                 },
             )
 
-            response_content = llm_response.content
-
-            # Add utility message about LLM tier used
-            utility_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content=f"Response generated using {llm_response.tier_used.value} LLM tier",
-                timestamp=datetime.now(),
-                message_type="utility",
-                metadata={
-                    "tier_used": llm_response.tier_used.value,
-                    "warnings": llm_response.warnings,
-                },
-            )
-            self.messages.append(utility_msg)
-
+            # Add utility message and return response
+            self._add_utility_message(llm_response)
             logger.info(f"Response generated using {llm_response.tier_used.value} tier")
-            return response_content
+            return llm_response.content
 
         except Exception as e:
             logger.error(f"Response generation failed: {e}")
-            return (
-                "I'm having trouble generating a response right now. Please try again."
-            )
+            return "I'm having trouble generating a response right now. Please try again."
 
     def _needs_external_research(
         self, user_message: str, kb_results: List[Dict[str, Any]]
