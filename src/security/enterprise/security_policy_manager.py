@@ -301,170 +301,93 @@ class SecurityPolicyManager:
             },
         }
 
+    def _get_password_policy_definition(self) -> Dict:
+        """Get password security policy definition."""
+        return {
+            "name": "Password Security Policy",
+            "description": "Defines password strength and lifecycle requirements",
+            "policy_type": PolicyType.PASSWORD_POLICY,
+            "rules": [
+                {"name": "minimum_length", "value": 12, "description": "Passwords must be at least 12 characters long"},
+                {"name": "complexity_requirements", "value": {"uppercase": True, "lowercase": True, "numbers": True, "special_chars": True}, "description": "Passwords must contain uppercase, lowercase, numbers, and special characters"},
+                {"name": "password_history", "value": 12, "description": "Cannot reuse last 12 passwords"},
+                {"name": "max_age_days", "value": 90, "description": "Passwords must be changed every 90 days"},
+            ],
+        }
+
+    def _get_session_policy_definition(self) -> Dict:
+        """Get session management policy definition."""
+        return {
+            "name": "Session Management Policy",
+            "description": "Defines session timeout and security requirements",
+            "policy_type": PolicyType.SESSION_MANAGEMENT,
+            "rules": [
+                {"name": "idle_timeout_minutes", "value": 30, "description": "Sessions timeout after 30 minutes of inactivity"},
+                {"name": "absolute_timeout_hours", "value": 8, "description": "Sessions must be renewed every 8 hours"},
+                {"name": "concurrent_sessions", "value": 3, "description": "Maximum 3 concurrent sessions per user"},
+                {"name": "secure_cookies", "value": True, "description": "All session cookies must be secure"},
+            ],
+        }
+
+    def _get_data_protection_policy_definition(self) -> Dict:
+        """Get data protection policy definition."""
+        return {
+            "name": "Data Protection Policy",
+            "description": "Defines data classification and protection requirements",
+            "policy_type": PolicyType.DATA_PROTECTION,
+            "rules": [
+                {"name": "encryption_at_rest", "value": True, "description": "All sensitive data must be encrypted at rest"},
+                {"name": "encryption_in_transit", "value": True, "description": "All data transmission must be encrypted"},
+                {"name": "data_retention_days", "value": 2555, "description": "Data retention period for compliance (7 years)"},
+                {"name": "pii_handling", "value": {"detection_required": True, "anonymization_required": True, "consent_tracking": True}, "description": "PII must be detected, anonymized, and consent tracked"},
+            ],
+        }
+
+    def _get_access_control_policy_definition(self) -> Dict:
+        """Get access control policy definition."""
+        return {
+            "name": "Access Control Policy",
+            "description": "Defines user access and authorization requirements",
+            "policy_type": PolicyType.ACCESS_CONTROL,
+            "rules": [
+                {"name": "principle_of_least_privilege", "value": True, "description": "Users granted minimum necessary access"},
+                {"name": "role_based_access", "value": True, "description": "Access controlled through role assignments"},
+                {"name": "access_review_frequency_days", "value": 90, "description": "Access permissions reviewed quarterly"},
+                {"name": "admin_access_approval", "value": True, "description": "Administrative access requires approval"},
+            ],
+        }
+
+    def _get_audit_logging_policy_definition(self) -> Dict:
+        """Get audit logging policy definition."""
+        return {
+            "name": "Audit Logging Policy",
+            "description": "Defines audit logging and monitoring requirements",
+            "policy_type": PolicyType.AUDIT_LOGGING,
+            "rules": [
+                {"name": "log_authentication_events", "value": True, "description": "All authentication events must be logged"},
+                {"name": "log_authorization_events", "value": True, "description": "All authorization events must be logged"},
+                {"name": "log_data_access", "value": True, "description": "All data access events must be logged"},
+                {"name": "log_retention_days", "value": 2555, "description": "Audit logs retained for 7 years"},
+                {"name": "log_integrity_protection", "value": True, "description": "Audit logs must be protected from tampering"},
+            ],
+        }
+
+    def _get_default_policy_definitions(self) -> List[Dict]:
+        """Get all default policy definitions."""
+        return [
+            self._get_password_policy_definition(),
+            self._get_session_policy_definition(),
+            self._get_data_protection_policy_definition(),
+            self._get_access_control_policy_definition(),
+            self._get_audit_logging_policy_definition(),
+        ]
+
     def _initialize_default_policies(self):
-        """Initialize default security policies if none exist"""
+        """Initialize default security policies if none exist."""
         if len(self.policies) > 0:
             return
 
-        default_policies = [
-            {
-                "name": "Password Security Policy",
-                "description": "Defines password strength and lifecycle requirements",
-                "policy_type": PolicyType.PASSWORD_POLICY,
-                "rules": [
-                    {
-                        "name": "minimum_length",
-                        "value": 12,
-                        "description": "Passwords must be at least 12 characters long",
-                    },
-                    {
-                        "name": "complexity_requirements",
-                        "value": {
-                            "uppercase": True,
-                            "lowercase": True,
-                            "numbers": True,
-                            "special_chars": True,
-                        },
-                        "description": (
-                            "Passwords must contain uppercase, lowercase, numbers, and special characters"
-                        ),
-                    },
-                    {
-                        "name": "password_history",
-                        "value": 12,
-                        "description": "Cannot reuse last 12 passwords",
-                    },
-                    {
-                        "name": "max_age_days",
-                        "value": 90,
-                        "description": "Passwords must be changed every 90 days",
-                    },
-                ],
-            },
-            {
-                "name": "Session Management Policy",
-                "description": "Defines session timeout and security requirements",
-                "policy_type": PolicyType.SESSION_MANAGEMENT,
-                "rules": [
-                    {
-                        "name": "idle_timeout_minutes",
-                        "value": 30,
-                        "description": (
-                            "Sessions timeout after 30 minutes of inactivity"
-                        ),
-                    },
-                    {
-                        "name": "absolute_timeout_hours",
-                        "value": 8,
-                        "description": "Sessions must be renewed every 8 hours",
-                    },
-                    {
-                        "name": "concurrent_sessions",
-                        "value": 3,
-                        "description": "Maximum 3 concurrent sessions per user",
-                    },
-                    {
-                        "name": "secure_cookies",
-                        "value": True,
-                        "description": "All session cookies must be secure",
-                    },
-                ],
-            },
-            {
-                "name": "Data Protection Policy",
-                "description": (
-                    "Defines data classification and protection requirements"
-                ),
-                "policy_type": PolicyType.DATA_PROTECTION,
-                "rules": [
-                    {
-                        "name": "encryption_at_rest",
-                        "value": True,
-                        "description": "All sensitive data must be encrypted at rest",
-                    },
-                    {
-                        "name": "encryption_in_transit",
-                        "value": True,
-                        "description": "All data transmission must be encrypted",
-                    },
-                    {
-                        "name": "data_retention_days",
-                        "value": 2555,
-                        "description": "Data retention period for compliance (7 years)",
-                    },
-                    {
-                        "name": "pii_handling",
-                        "value": {
-                            "detection_required": True,
-                            "anonymization_required": True,
-                            "consent_tracking": True,
-                        },
-                        "description": (
-                            "PII must be detected, anonymized, and consent tracked"
-                        ),
-                    },
-                ],
-            },
-            {
-                "name": "Access Control Policy",
-                "description": "Defines user access and authorization requirements",
-                "policy_type": PolicyType.ACCESS_CONTROL,
-                "rules": [
-                    {
-                        "name": "principle_of_least_privilege",
-                        "value": True,
-                        "description": "Users granted minimum necessary access",
-                    },
-                    {
-                        "name": "role_based_access",
-                        "value": True,
-                        "description": "Access controlled through role assignments",
-                    },
-                    {
-                        "name": "access_review_frequency_days",
-                        "value": 90,
-                        "description": "Access permissions reviewed quarterly",
-                    },
-                    {
-                        "name": "admin_access_approval",
-                        "value": True,
-                        "description": "Administrative access requires approval",
-                    },
-                ],
-            },
-            {
-                "name": "Audit Logging Policy",
-                "description": "Defines audit logging and monitoring requirements",
-                "policy_type": PolicyType.AUDIT_LOGGING,
-                "rules": [
-                    {
-                        "name": "log_authentication_events",
-                        "value": True,
-                        "description": "All authentication events must be logged",
-                    },
-                    {
-                        "name": "log_authorization_events",
-                        "value": True,
-                        "description": "All authorization events must be logged",
-                    },
-                    {
-                        "name": "log_data_access",
-                        "value": True,
-                        "description": "All data access events must be logged",
-                    },
-                    {
-                        "name": "log_retention_days",
-                        "value": 2555,
-                        "description": "Audit logs retained for 7 years",
-                    },
-                    {
-                        "name": "log_integrity_protection",
-                        "value": True,
-                        "description": "Audit logs must be protected from tampering",
-                    },
-                ],
-            },
-        ]
+        default_policies = self._get_default_policy_definitions()
 
         for policy_data in default_policies:
             policy_id = self.create_policy(
@@ -474,8 +397,6 @@ class SecurityPolicyManager:
                 rules=policy_data["rules"],
                 author="system",
             )
-
-            # Auto-approve system policies
             self.approve_policy(policy_id, "system")
 
         logger.info(f"Initialized {len(default_policies)} default security policies")
@@ -696,56 +617,38 @@ class SecurityPolicyManager:
 
         return result
 
+    def _check_password_complexity(self, password: str, requirements: Dict, result: Dict) -> None:
+        """Check password complexity requirements."""
+        checks = [
+            ("uppercase", lambda p: any(c.isupper() for c in p), "uppercase_letter"),
+            ("lowercase", lambda p: any(c.islower() for c in p), "lowercase_letter"),
+            ("numbers", lambda p: any(c.isdigit() for c in p), "number"),
+            ("special_chars", lambda p: any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in p), "special_character"),
+        ]
+        for req_key, check_fn, missing_type in checks:
+            if requirements.get(req_key) and not check_fn(password):
+                result["compliant"] = False
+                result["violation_type"] = "password_complexity"
+                result["severity"] = "medium"
+                result["details"]["missing"] = missing_type
+
     async def _check_password_policy(
         self, policy: SecurityPolicy, context: Dict, result: Dict
     ) -> Dict:
-        """Check password policy compliance"""
+        """Check password policy compliance."""
         password = context.get("password", "")
         if not password:
             return result
 
         for rule in policy.rules:
-            if rule["name"] == "minimum_length":
-                if len(password) < rule["value"]:
-                    result["compliant"] = False
-                    result["violation_type"] = "password_too_short"
-                    result["severity"] = "medium"
-                    result["details"]["minimum_length"] = rule["value"]
-                    result["details"]["actual_length"] = len(password)
-
+            if rule["name"] == "minimum_length" and len(password) < rule["value"]:
+                result["compliant"] = False
+                result["violation_type"] = "password_too_short"
+                result["severity"] = "medium"
+                result["details"]["minimum_length"] = rule["value"]
+                result["details"]["actual_length"] = len(password)
             elif rule["name"] == "complexity_requirements":
-                requirements = rule["value"]
-                if requirements.get("uppercase") and not any(
-                    c.isupper() for c in password
-                ):
-                    result["compliant"] = False
-                    result["violation_type"] = "password_complexity"
-                    result["severity"] = "medium"
-                    result["details"]["missing"] = "uppercase_letter"
-
-                if requirements.get("lowercase") and not any(
-                    c.islower() for c in password
-                ):
-                    result["compliant"] = False
-                    result["violation_type"] = "password_complexity"
-                    result["severity"] = "medium"
-                    result["details"]["missing"] = "lowercase_letter"
-
-                if requirements.get("numbers") and not any(
-                    c.isdigit() for c in password
-                ):
-                    result["compliant"] = False
-                    result["violation_type"] = "password_complexity"
-                    result["severity"] = "medium"
-                    result["details"]["missing"] = "number"
-
-                if requirements.get("special_chars") and not any(
-                    c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password
-                ):
-                    result["compliant"] = False
-                    result["violation_type"] = "password_complexity"
-                    result["severity"] = "medium"
-                    result["details"]["missing"] = "special_character"
+                self._check_password_complexity(password, rule["value"], result)
 
         return result
 
@@ -893,72 +796,64 @@ class SecurityPolicyManager:
         """Get compliance framework mappings for a policy type"""
         return self.compliance_mappings.get(framework, {}).get(policy_type.value, [])
 
-    def generate_compliance_report(self, framework: str) -> Dict:
-        """Generate compliance report for a specific framework"""
-
-        report = {
-            "framework": framework,
-            "generated_at": datetime.utcnow().isoformat(),
-            "policy_coverage": {},
-            "violations_summary": {},
-            "compliance_score": 0.0,
-            "recommendations": [],
-        }
-
-        framework_mappings = self.compliance_mappings.get(framework, {})
-
+    def _calculate_policy_coverage(self, framework_mappings: Dict) -> Dict[str, Dict]:
+        """Calculate policy coverage for each policy type."""
+        coverage = {}
         for policy_type_str, controls in framework_mappings.items():
             policy_type = PolicyType(policy_type_str)
             active_policies = [
-                p
-                for p in self.policies.values()
+                p for p in self.policies.values()
                 if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
             ]
-
-            report["policy_coverage"][policy_type_str] = {
+            coverage[policy_type_str] = {
                 "required_controls": controls,
                 "active_policies": len(active_policies),
                 "policy_names": [p.name for p in active_policies],
-                "coverage_percentage": (
-                    len(active_policies) / len(controls) * 100 if controls else 100
-                ),
+                "coverage_percentage": len(active_policies) / len(controls) * 100 if controls else 100,
             }
+        return coverage
 
-        # Calculate violations by policy type
-        for violation in self.policy_violations[-100:]:  # Last 100 violations
+    def _calculate_violations_summary(self) -> Dict[str, int]:
+        """Calculate violations summary by policy type."""
+        summary = {}
+        for violation in self.policy_violations[-100:]:
             policy = self.policies.get(violation.policy_id)
             if policy:
                 policy_type_str = policy.policy_type.value
-                if policy_type_str not in report["violations_summary"]:
-                    report["violations_summary"][policy_type_str] = 0
-                report["violations_summary"][policy_type_str] += 1
+                summary[policy_type_str] = summary.get(policy_type_str, 0) + 1
+        return summary
 
-        # Calculate overall compliance score
-        total_coverage = sum(
-            pc["coverage_percentage"] for pc in report["policy_coverage"].values()
-        )
-        avg_coverage = (
-            total_coverage / len(report["policy_coverage"])
-            if report["policy_coverage"]
-            else 0
-        )
+    def _calculate_compliance_score(self, policy_coverage: Dict) -> float:
+        """Calculate overall compliance score."""
+        if not policy_coverage:
+            return 0.0
+        total_coverage = sum(pc["coverage_percentage"] for pc in policy_coverage.values())
+        avg_coverage = total_coverage / len(policy_coverage)
+        violation_penalty = min(20, len(self.policy_violations[-30:]))
+        return max(0, (avg_coverage - violation_penalty) / 100)
 
-        # Penalty for violations
-        violation_penalty = min(
-            20, len(self.policy_violations[-30:])
-        )  # Max 20% penalty for recent violations
+    def generate_compliance_report(self, framework: str) -> Dict:
+        """Generate compliance report for a specific framework."""
+        framework_mappings = self.compliance_mappings.get(framework, {})
+        policy_coverage = self._calculate_policy_coverage(framework_mappings)
+        compliance_score = self._calculate_compliance_score(policy_coverage)
 
-        report["compliance_score"] = max(0, (avg_coverage - violation_penalty) / 100)
-
-        # Generate recommendations
-        if report["compliance_score"] < 0.95:
-            for policy_type_str, coverage in report["policy_coverage"].items():
+        recommendations = []
+        if compliance_score < 0.95:
+            for policy_type_str, coverage in policy_coverage.items():
                 if coverage["coverage_percentage"] < 100:
-                    report["recommendations"].append(
+                    recommendations.append(
                         f"Implement policies for {policy_type_str} to cover required controls: {coverage['required_controls']}"
                     )
 
-        return report
+        return {
+            "framework": framework,
+            "generated_at": datetime.utcnow().isoformat(),
+            "policy_coverage": policy_coverage,
+            "violations_summary": self._calculate_violations_summary(),
+            "compliance_score": compliance_score,
+            "recommendations": recommendations,
+        }
 
     def _update_policy_statistics(self):
         """Update policy statistics"""
