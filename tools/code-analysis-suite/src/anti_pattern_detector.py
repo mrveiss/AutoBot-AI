@@ -33,6 +33,9 @@ from src.unified_config import UnifiedConfig
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for complexity calculation
+_COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
+
 
 class Severity(Enum):
     """Anti-pattern severity levels"""
@@ -153,6 +156,31 @@ class AntiPatternReport:
             "recommendations": self.recommendations,
             "analysis_time_seconds": round(self.analysis_time_seconds, 3)
         }
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def get_severity_counts(self) -> Dict[str, int]:
+        """Get severity counts dictionary (Issue #372 - reduces feature envy)."""
+        return {
+            "critical": self.critical_count,
+            "high": self.high_count,
+            "medium": self.medium_count,
+            "low": self.low_count,
+        }
+
+    def to_summary_response(self) -> Dict[str, Any]:
+        """Convert to summary response dictionary (Issue #372 - reduces feature envy)."""
+        return {
+            "total_issues": self.total_issues,
+            "severity_counts": self.get_severity_counts(),
+            "health_score": round(self.health_score, 2),
+            "summary_by_type": self.summary_by_type,
+            "analysis_time_seconds": round(self.analysis_time_seconds, 3),
+        }
+
+    def get_log_summary(self) -> str:
+        """Get log summary string (Issue #372 - reduces feature envy)."""
+        return f"{self.total_issues} issues, health score: {self.health_score:.1f}/100"
 
 
 class AntiPatternDetector:
@@ -402,7 +430,8 @@ class AntiPatternDetector:
         complexity = 1  # Base complexity
 
         for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+            # Issue #380: Use module-level constant
+            if isinstance(child, _COMPLEXITY_BRANCH_TYPES):
                 complexity += 1
             elif isinstance(child, ast.BoolOp):
                 complexity += len(child.values) - 1
