@@ -33,9 +33,37 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for enum base class checking
+_ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
+_ABSTRACT_DECORATORS: FrozenSet[str] = frozenset({"ABC", "abstractmethod"})
+_SELF_CLS_ARGS: FrozenSet[str] = frozenset({"self", "cls"})
+_SKIP_INHERITANCE_BASES: FrozenSet[str] = frozenset({"object", "ABC", "Enum"})
+
+# Issue #380: Module-level tuple for function definition AST nodes
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
+_SEQUENCE_TYPES = (ast.List, ast.Tuple)
+
+# Issue #380: Pre-compiled regex patterns for markdown-to-HTML conversion
+_MD_H5_RE = re.compile(r"^##### (.+)$", re.MULTILINE)
+_MD_H4_RE = re.compile(r"^#### (.+)$", re.MULTILINE)
+_MD_H3_RE = re.compile(r"^### (.+)$", re.MULTILINE)
+_MD_H2_RE = re.compile(r"^## (.+)$", re.MULTILINE)
+_MD_H1_RE = re.compile(r"^# (.+)$", re.MULTILINE)
+_MD_CODE_BLOCK_RE = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
+_MD_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+_MD_LIST_ITEM_RE = re.compile(r"^- (.+)$", re.MULTILINE)
+_MD_HR_RE = re.compile(r"^---$", re.MULTILINE)
+
+# Issue #380: Pre-compiled regex patterns for version/author extraction
+_VERSION_RE = re.compile(r'__version__\s*=\s*["\']([^"\']+)["\']')
+_SETUP_VERSION_RE = re.compile(r'version\s*=\s*["\']([^"\']+)["\']')
+_AUTHOR_RE = re.compile(r'__author__\s*=\s*["\']([^"\']+)["\']')
 
 
 # =============================================================================
@@ -328,12 +356,12 @@ class ClassDoc:
         self.decorators.append(decorator_name)
         if decorator_name == "dataclass":
             self.is_dataclass = True
-        elif decorator_name in ("ABC", "abstractmethod"):
+        elif decorator_name in _ABSTRACT_DECORATORS:
             self.is_abstract = True
 
     def check_enum_inheritance(self) -> None:
         """Check if this class inherits from Enum and set flag."""
-        if any(base in ["Enum", "IntEnum", "StrEnum"] for base in self.base_classes):
+        if any(base in _ENUM_BASE_CLASSES for base in self.base_classes):
             self.is_enum = True
 
     def add_method(self, method_doc: FunctionDoc) -> None:
@@ -772,7 +800,7 @@ class DocGenerator:
                 module_doc.classes.append(class_doc)
             return
 
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
             func_doc = self._analyze_function(node, source)
             if func_doc and self._should_include(func_doc.name):
                 module_doc.functions.append(func_doc)
@@ -782,7 +810,7 @@ class DocGenerator:
             self._process_module_constants(node, module_doc)
             return
 
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+        if isinstance(node, _IMPORT_TYPES):  # Issue #380
             for import_stmt in self._extract_imports(node):
                 module_doc.add_import(import_stmt)
 
@@ -922,7 +950,7 @@ class DocGenerator:
             source: Module source code
             class_doc: ClassDoc to populate
         """
-        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(item, _FUNCTION_DEF_TYPES):  # Issue #380
             if not self._should_include(item.name):
                 return
             func_doc = self._analyze_function(item, source)
@@ -1049,7 +1077,7 @@ class DocGenerator:
         defaults_offset = len(args.args) - len(args.defaults)
 
         for i, arg in enumerate(args.args):
-            if arg.arg == "self" or arg.arg == "cls":
+            if arg.arg in _SELF_CLS_ARGS:
                 continue
 
             param = ParameterDoc(
@@ -1271,7 +1299,7 @@ class DocGenerator:
         """Check if a function is a method (has self/cls parameter)."""
         if node.args.args:
             first_arg = node.args.args[0].arg
-            return first_arg in ("self", "cls")
+            return first_arg in _SELF_CLS_ARGS
         return False
 
     def _build_signature(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
@@ -1279,7 +1307,7 @@ class DocGenerator:
         params = []
 
         for arg in node.args.args:
-            if arg.arg in ("self", "cls"):
+            if arg.arg in _SELF_CLS_ARGS:
                 continue
             param_str = arg.arg
             if arg.annotation:
@@ -1388,7 +1416,7 @@ class DocGenerator:
 
     def _extract_all_values(self, value_node: ast.AST) -> List[str]:
         """Extract string values from __all__ list/tuple (Issue #315 - extracted helper)."""
-        if not isinstance(value_node, (ast.List, ast.Tuple)):
+        if not isinstance(value_node, _SEQUENCE_TYPES):  # Issue #380
             return []
         return [
             e.value
@@ -1432,7 +1460,7 @@ class DocGenerator:
             try:
                 with open(init_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
+                match = _VERSION_RE.search(content)
                 if match:
                     return match.group(1)
             except OSError:
@@ -1444,7 +1472,7 @@ class DocGenerator:
             try:
                 with open(setup_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+                match = _SETUP_VERSION_RE.search(content)
                 if match:
                     return match.group(1)
             except OSError:
@@ -1459,7 +1487,7 @@ class DocGenerator:
             try:
                 with open(init_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                match = re.search(r'__author__\s*=\s*["\']([^"\']+)["\']', content)
+                match = _AUTHOR_RE.search(content)
                 if match:
                     return match.group(1)
             except OSError:
@@ -1755,7 +1783,7 @@ class DocGenerator:
 
             # Add inheritance relationships
             for base in class_doc.base_classes:
-                if base not in ("object", "ABC", "Enum"):
+                if base not in _SKIP_INHERITANCE_BASES:
                     diagram.relationships.append((class_doc.name, base, "inherits"))
 
         return diagram
@@ -1814,32 +1842,27 @@ class DocGenerator:
         """Simple Markdown to HTML conversion."""
         html = markdown
 
-        # Headers
-        html = re.sub(r"^##### (.+)$", r"<h5>\1</h5>", html, flags=re.MULTILINE)
-        html = re.sub(r"^#### (.+)$", r"<h4>\1</h4>", html, flags=re.MULTILINE)
-        html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
-        html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
-        html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+        # Headers (Issue #380: use pre-compiled patterns)
+        html = _MD_H5_RE.sub(r"<h5>\1</h5>", html)
+        html = _MD_H4_RE.sub(r"<h4>\1</h4>", html)
+        html = _MD_H3_RE.sub(r"<h3>\1</h3>", html)
+        html = _MD_H2_RE.sub(r"<h2>\1</h2>", html)
+        html = _MD_H1_RE.sub(r"<h1>\1</h1>", html)
 
-        # Code blocks
-        html = re.sub(
-            r"```(\w+)?\n(.*?)```",
-            r"<pre><code>\2</code></pre>",
-            html,
-            flags=re.DOTALL,
-        )
+        # Code blocks (Issue #380: use pre-compiled pattern)
+        html = _MD_CODE_BLOCK_RE.sub(r"<pre><code>\2</code></pre>", html)
 
-        # Inline code
-        html = re.sub(r"`([^`]+)`", r"<code>\1</code>", html)
+        # Inline code (Issue #380: use pre-compiled pattern)
+        html = _MD_INLINE_CODE_RE.sub(r"<code>\1</code>", html)
 
-        # Bold
-        html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", html)
+        # Bold (Issue #380: use pre-compiled pattern)
+        html = _MD_BOLD_RE.sub(r"<strong>\1</strong>", html)
 
-        # Lists
-        html = re.sub(r"^- (.+)$", r"<li>\1</li>", html, flags=re.MULTILINE)
+        # Lists (Issue #380: use pre-compiled pattern)
+        html = _MD_LIST_ITEM_RE.sub(r"<li>\1</li>", html)
 
-        # Horizontal rules
-        html = re.sub(r"^---$", r"<hr>", html, flags=re.MULTILINE)
+        # Horizontal rules (Issue #380: use pre-compiled pattern)
+        html = _MD_HR_RE.sub(r"<hr>", html)
 
         # Paragraphs (simple approach)
         lines = html.split("\n")

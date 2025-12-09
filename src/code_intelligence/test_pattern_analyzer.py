@@ -25,6 +25,21 @@ from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for non-descriptive test name detection
+_BAD_TEST_NAME_PATTERNS = [
+    re.compile(r"^test\d+$"),  # test1, test2
+    re.compile(r"^test_\d+$"),  # test_1, test_2
+    re.compile(r"^test_it$"),
+    re.compile(r"^test_this$"),
+    re.compile(r"^test_stuff$"),
+    re.compile(r"^test_foo$"),
+    re.compile(r"^test_bar$"),
+]
+
+# Issue #380: Module-level tuples for AST node type checks
+_BRANCH_TYPES = (ast.If, ast.For, ast.While, ast.Try, ast.With)
+_EMPTY_STMT_TYPES = (ast.Pass, ast.Expr)
+
 
 # =============================================================================
 # Enums for Test Pattern Types and Severity
@@ -390,7 +405,7 @@ class TestPatternAnalyzer:
         """Count the number of branches (if/for/while/try) in an AST node."""
         count = 0
         for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.For, ast.While, ast.Try, ast.With)):
+            if isinstance(child, _BRANCH_TYPES):  # Issue #380
                 count += 1
         return count
 
@@ -463,8 +478,9 @@ class TestPatternAnalyzer:
         # Skip if already detected as empty
         if assertions == 0:
             # Check if there's actual code (not just pass/docstring)
+            # Issue #380: Use module-level constant
             has_code = any(
-                not isinstance(stmt, (ast.Pass, ast.Expr))
+                not isinstance(stmt, _EMPTY_STMT_TYPES)
                 or (isinstance(stmt, ast.Expr) and not isinstance(stmt.value, ast.Constant))
                 for stmt in func.body
             )
@@ -635,19 +651,9 @@ class TestPatternAnalyzer:
         """Detect poor test naming conventions."""
         name = func.name
 
-        # Check for non-descriptive names
-        bad_patterns = [
-            r"^test\d+$",  # test1, test2
-            r"^test_\d+$",  # test_1, test_2
-            r"^test_it$",
-            r"^test_this$",
-            r"^test_stuff$",
-            r"^test_foo$",
-            r"^test_bar$",
-        ]
-
-        for pattern in bad_patterns:
-            if re.match(pattern, name):
+        # Issue #380: Use pre-compiled patterns for non-descriptive name check
+        for pattern in _BAD_TEST_NAME_PATTERNS:
+            if pattern.match(name):
                 return TestAntiPatternResult(
                     pattern_type=TestAntiPatternType.TEST_NAMING,
                     severity=TestPatternSeverity.LOW,
