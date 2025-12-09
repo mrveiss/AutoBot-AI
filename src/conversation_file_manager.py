@@ -60,6 +60,22 @@ class ConversationFileManager:
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB max file size
     CLEANUP_DAYS = 30  # Schedule cleanup 30 days after session end
 
+    @staticmethod
+    def _get_default_paths() -> tuple:
+        """Get default storage directory and database path from environment or defaults."""
+        project_root = Path(__file__).parent.parent
+        storage = Path(os.getenv("AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")))
+        db = Path(os.getenv("AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")))
+        return storage, db
+
+    def _init_redis_config(self, redis_host: Optional[str], redis_port: Optional[int]) -> None:
+        """Initialize Redis configuration from params or unified config."""
+        redis_config = unified_config_manager.get_redis_config()
+        self.redis_host = redis_host or redis_config.get("host")
+        self.redis_port = redis_port or redis_config.get("port")
+        self._redis_manager = None
+        self._redis_sessions: Optional[async_redis.Redis] = None
+
     def __init__(
         self,
         storage_dir: Optional[Path] = None,
@@ -71,63 +87,22 @@ class ConversationFileManager:
         Initialize ConversationFileManager.
 
         Args:
-            storage_dir: Directory for file storage (default: env var or data/conversation_files/)
-            db_path: Path to SQLite database (default: env var or data/conversation_files.db)
-            redis_host: Redis server host (default: from config.yaml or env var)
-            redis_port: Redis server port (default: from config.yaml or env var)
-
-        Environment Variables:
-            AUTOBOT_STORAGE_DIR: Override default storage directory
-            AUTOBOT_DB_PATH: Override default database path
-            AUTOBOT_SCHEMA_DIR: Override default schema directory (for migrations)
-            AUTOBOT_REDIS_HOST: Override Redis host from config.yaml
-            AUTOBOT_REDIS_PORT: Override Redis port from config.yaml
-
-        Configuration:
-            Redis configuration is read from config.yaml via unified_config_manager.
-            Default values are defined in config/config.yaml under memory.redis section.
+            storage_dir: Directory for file storage
+            db_path: Path to SQLite database
+            redis_host: Redis server host
+            redis_port: Redis server port
         """
-        # Storage paths with environment variable support (no hardcoded absolute paths)
-        project_root = Path(__file__).parent.parent
-        default_storage = Path(
-            os.getenv(
-                "AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")
-            )
-        )
-        default_db = Path(
-            os.getenv(
-                "AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")
-            )
-        )
-
+        default_storage, default_db = self._get_default_paths()
         self.storage_dir = storage_dir or default_storage
         self.db_path = db_path or default_db
-
-        # Ensure storage directory exists
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # Redis configuration from unified config system (no hardcoded defaults)
-        redis_config = unified_config_manager.get_redis_config()
-        self.redis_host = redis_host or redis_config.get("host")
-        self.redis_port = redis_port or redis_config.get("port")
-        self._redis_manager = None
-        self._redis_sessions: Optional[async_redis.Redis] = None
-
-        # SQLite connection (will be created per-operation for thread safety)
+        self._init_redis_config(redis_host, redis_port)
         self._lock = asyncio.Lock()
 
-        # CRITICAL: Database initialization removed from __init__() (Bug Fix #1 and #5)
-        # Database creation must ONLY happen during initialize() via migration system
-        # This prevents:
-        #   1. Database creation before initialize() is called (wrong lifecycle phase)
-        #   2. Double schema application (once in __init__, once in initialize())
-        #   3. Race conditions during concurrent initialization
-        # Call initialize() explicitly to create database
-
         logger.info(
-            f"ConversationFileManager initialized - "
-            f"storage: {self.storage_dir}, db: {self.db_path} "
-            f"(database will be created during initialize() call)"
+            f"ConversationFileManager initialized - storage: {self.storage_dir}, "
+            f"db: {self.db_path} (database will be created during initialize() call)"
         )
 
     def _initialize_schema(self) -> None:
@@ -353,215 +328,222 @@ class ConversationFileManager:
         except Exception as e:
             logger.error(f"Unexpected error invalidating cache: {e}")
 
-    async def add_file(
-        self,
-        session_id: str,
-        file_content: bytes,
-        original_filename: str,
-        mime_type: Optional[str] = None,
-        uploaded_by: Optional[str] = None,
-        message_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Add a file to the conversation file system.
-
-        This method:
-        1. Validates file size
-        2. Computes file hash for deduplication
-        3. Checks for existing files with same hash
-        4. Stores file to disk
-        5. Records metadata in database
-        6. Logs access
-        7. Schedules cleanup
-        8. Invalidates cache
-
-        Args:
-            session_id: Chat session identifier
-            file_content: File content bytes
-            original_filename: Original filename from upload
-            mime_type: MIME type (optional)
-            uploaded_by: User identifier (optional)
-            message_id: Associated message ID (optional)
-            metadata: Additional metadata key-value pairs (optional)
-
-        Returns:
-            Dict[str, Any]: File metadata including file_id, stored_filename, file_path
-
-        Raises:
-            ValueError: If file size exceeds maximum
-            RuntimeError: If database operation fails
-        """
-        async with self._lock:
-            # Validate file size
-            file_size = len(file_content)
-            if file_size > self.MAX_FILE_SIZE:
-                raise ValueError(
-                    f"File size ({file_size} bytes) exceeds maximum "
-                    f"({self.MAX_FILE_SIZE} bytes)"
-                )
-
-            # Compute file hash for deduplication
-            file_hash = self._compute_file_hash(file_content)
-
-            # Generate unique identifiers
-            file_id = str(uuid.uuid4())
-            stored_filename = self._generate_stored_filename(
-                original_filename, file_hash
+    def _validate_file_size(self, file_content: bytes) -> int:
+        """Validate file size and return size in bytes."""
+        file_size = len(file_content)
+        if file_size > self.MAX_FILE_SIZE:
+            raise ValueError(
+                f"File size ({file_size} bytes) exceeds maximum "
+                f"({self.MAX_FILE_SIZE} bytes)"
             )
+        return file_size
+
+    async def _check_existing_file(self, connection, file_hash: str):
+        """Check for existing file with same hash for deduplication."""
+        async with connection.execute(
+            """
+            SELECT file_id, stored_filename, file_path
+            FROM conversation_files
+            WHERE file_hash = ? AND is_deleted = 0
+            LIMIT 1
+            """,
+            (file_hash,),
+        ) as cursor:
+            return await cursor.fetchone()
+
+    async def _create_file_association(
+        self, connection, session_id: str, file_id: str, message_id: Optional[str], association_type: str
+    ) -> None:
+        """Create session file association record."""
+        await connection.execute(
+            """
+            INSERT INTO session_file_associations
+            (session_id, file_id, message_id, association_type)
+            VALUES (?, ?, ?, ?)
+            """,
+            (session_id, file_id, message_id, association_type),
+        )
+
+    async def _handle_deduplicated_file(
+        self, connection, existing_file, session_id: str, original_filename: str,
+        file_size: int, file_hash: str, mime_type: Optional[str],
+        uploaded_by: Optional[str], message_id: Optional[str]
+    ) -> Dict[str, Any]:
+        """Handle case where file already exists (deduplication)."""
+        existing_file_id = existing_file["file_id"]
+        existing_path = Path(existing_file["file_path"])
+
+        logger.info(f"File with hash {file_hash[:8]}... already exists, creating association only")
+
+        await self._create_file_association(connection, session_id, existing_file_id, message_id, "reference")
+        await connection.commit()
+
+        await self._log_access(
+            existing_file_id, "reference", uploaded_by,
+            {"session_id": session_id, "deduplication": True},
+        )
+        await self._invalidate_session_cache(session_id)
+
+        return {
+            "file_id": existing_file_id,
+            "session_id": session_id,
+            "original_filename": original_filename,
+            "stored_filename": existing_file["stored_filename"],
+            "file_path": str(existing_path),
+            "file_size": file_size,
+            "file_hash": file_hash,
+            "mime_type": mime_type,
+            "uploaded_at": datetime.now().isoformat(),
+            "deduplicated": True,
+        }
+
+    async def _write_file_to_disk(self, file_path: Path, file_content: bytes) -> None:
+        """Write file content to disk asynchronously."""
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                await f.write(file_content)
+        except OSError as e:
+            logger.error(f"Failed to write file to disk {file_path}: {e}")
+            raise RuntimeError(f"Failed to write file to disk: {e}")
+
+    async def _insert_file_record(
+        self, connection, file_id: str, session_id: str, original_filename: str,
+        stored_filename: str, file_path: Path, file_size: int, file_hash: str,
+        mime_type: Optional[str], uploaded_by: Optional[str]
+    ) -> None:
+        """Insert file record into database."""
+        await connection.execute(
+            """
+            INSERT INTO conversation_files
+            (file_id, session_id, original_filename, stored_filename,
+             file_path, file_size, file_hash, mime_type, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (file_id, session_id, original_filename, stored_filename,
+             str(file_path), file_size, file_hash, mime_type, uploaded_by),
+        )
+
+    async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
+        """Insert file metadata records into database."""
+        for key, value in metadata.items():
+            await connection.execute(
+                """
+                INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
+                VALUES (?, ?, ?)
+                """,
+                (file_id, key, str(value)),
+            )
+
+    def _build_file_response(
+        self, file_id: str, session_id: str, original_filename: str, stored_filename: str,
+        file_path: Path, file_size: int, file_hash: str, mime_type: Optional[str], deduplicated: bool
+    ) -> Dict[str, Any]:
+        """Build standard file response dictionary."""
+        return {
+            "file_id": file_id, "session_id": session_id, "original_filename": original_filename,
+            "stored_filename": stored_filename, "file_path": str(file_path), "file_size": file_size,
+            "file_hash": file_hash, "mime_type": mime_type, "uploaded_at": datetime.now().isoformat(),
+            "deduplicated": deduplicated,
+        }
+
+    async def _store_new_file(
+        self, connection, file_id: str, session_id: str, original_filename: str,
+        stored_filename: str, file_path: Path, file_content: bytes, file_size: int,
+        file_hash: str, mime_type: Optional[str], uploaded_by: Optional[str],
+        message_id: Optional[str], metadata: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Store a new file to disk and database."""
+        await self._write_file_to_disk(file_path, file_content)
+        logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
+
+        await self._insert_file_record(
+            connection, file_id, session_id, original_filename, stored_filename,
+            file_path, file_size, file_hash, mime_type, uploaded_by
+        )
+        await self._create_file_association(connection, session_id, file_id, message_id, "upload")
+
+        if metadata:
+            await self._insert_file_metadata(connection, file_id, metadata)
+
+        await connection.commit()
+        logger.info(f"Added file {file_id} to session {session_id}: {original_filename} ({file_size} bytes)")
+        await self._invalidate_session_cache(session_id)
+
+        return self._build_file_response(
+            file_id, session_id, original_filename, stored_filename, file_path,
+            file_size, file_hash, mime_type, False
+        )
+
+    async def add_file(
+        self, session_id: str, file_content: bytes, original_filename: str,
+        mime_type: Optional[str] = None, uploaded_by: Optional[str] = None,
+        message_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Add a file to the conversation file system."""
+        async with self._lock:
+            file_size = self._validate_file_size(file_content)
+            file_hash = self._compute_file_hash(file_content)
+            file_id = str(uuid.uuid4())
+            stored_filename = self._generate_stored_filename(original_filename, file_hash)
             file_path = self.storage_dir / stored_filename
 
-            # Database operations using async connection
             connection = await self._get_async_db_connection()
-
             try:
-                # Check for existing file with same hash (deduplication)
-                async with connection.execute(
-                    """
-                    SELECT file_id, stored_filename, file_path
-                    FROM conversation_files
-                    WHERE file_hash = ? AND is_deleted = 0
-                    LIMIT 1
-                    """,
-                    (file_hash,),
-                ) as cursor:
-                    existing_file = await cursor.fetchone()
-
+                existing_file = await self._check_existing_file(connection, file_hash)
                 if existing_file:
-                    # File already exists, create association only
-                    existing_file_id = existing_file["file_id"]
-                    existing_path = Path(existing_file["file_path"])
-
-                    logger.info(
-                        f"File with hash {file_hash[:8]}... already exists, "
-                        f"creating association only"
+                    return await self._handle_deduplicated_file(
+                        connection, existing_file, session_id, original_filename,
+                        file_size, file_hash, mime_type, uploaded_by, message_id
                     )
-
-                    # Create session association
-                    await connection.execute(
-                        """
-                        INSERT INTO session_file_associations
-                        (session_id, file_id, message_id, association_type)
-                        VALUES (?, ?, ?, 'reference')
-                        """,
-                        (session_id, existing_file_id, message_id),
-                    )
-
-                    await connection.commit()
-
-                    # Log access
-                    await self._log_access(
-                        existing_file_id,
-                        "reference",
-                        uploaded_by,
-                        {"session_id": session_id, "deduplication": True},
-                    )
-
-                    # Invalidate cache
-                    await self._invalidate_session_cache(session_id)
-
-                    return {
-                        "file_id": existing_file_id,
-                        "session_id": session_id,
-                        "original_filename": original_filename,
-                        "stored_filename": existing_file["stored_filename"],
-                        "file_path": str(existing_path),
-                        "file_size": file_size,
-                        "file_hash": file_hash,
-                        "mime_type": mime_type,
-                        "uploaded_at": datetime.now().isoformat(),
-                        "deduplicated": True,
-                    }
-
-                # File doesn't exist, store it
-                # Write file to disk asynchronously
-                try:
-                    async with aiofiles.open(file_path, "wb") as f:
-                        await f.write(file_content)
-                except OSError as e:
-                    logger.error(
-                        f"Failed to write file to disk {file_path}: {e}"
-                    )
-                    raise RuntimeError(f"Failed to write file to disk: {e}")
-
-                logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
-
-                # Insert file record
-                await connection.execute(
-                    """
-                    INSERT INTO conversation_files
-                    (file_id, session_id, original_filename, stored_filename,
-                     file_path, file_size, file_hash, mime_type, uploaded_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        file_id,
-                        session_id,
-                        original_filename,
-                        stored_filename,
-                        str(file_path),
-                        file_size,
-                        file_hash,
-                        mime_type,
-                        uploaded_by,
-                    ),
+                return await self._store_new_file(
+                    connection, file_id, session_id, original_filename, stored_filename,
+                    file_path, file_content, file_size, file_hash, mime_type, uploaded_by,
+                    message_id, metadata
                 )
-
-                # Create session association
-                await connection.execute(
-                    """
-                    INSERT INTO session_file_associations
-                    (session_id, file_id, message_id, association_type)
-                    VALUES (?, ?, ?, 'upload')
-                    """,
-                    (session_id, file_id, message_id),
-                )
-
-                # Add metadata if provided
-                if metadata:
-                    for key, value in metadata.items():
-                        await connection.execute(
-                            """
-                            INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
-                            VALUES (?, ?, ?)
-                            """,
-                            (file_id, key, str(value)),
-                        )
-
-                await connection.commit()
-
-                logger.info(
-                    f"Added file {file_id} to session {session_id}: "
-                    f"{original_filename} ({file_size} bytes)"
-                )
-
-                # Invalidate cache
-                await self._invalidate_session_cache(session_id)
-
-                return {
-                    "file_id": file_id,
-                    "session_id": session_id,
-                    "original_filename": original_filename,
-                    "stored_filename": stored_filename,
-                    "file_path": str(file_path),
-                    "file_size": file_size,
-                    "file_hash": file_hash,
-                    "mime_type": mime_type,
-                    "uploaded_at": datetime.now().isoformat(),
-                    "deduplicated": False,
-                }
-
             except Exception as e:
                 await connection.rollback()
-                # Clean up file if database operation failed
-                # Issue #358 - avoid blocking
                 if await asyncio.to_thread(file_path.exists):
                     await asyncio.to_thread(file_path.unlink)
                 logger.error(f"Error adding file: {e}")
                 raise RuntimeError(f"Failed to add file: {e}")
-
             finally:
                 await connection.close()
+
+    async def _get_session_file_totals(self, connection, session_id: str) -> tuple:
+        """Get total file count and size for a session."""
+        async with connection.execute(
+            """
+            SELECT COUNT(*) as total, COALESCE(SUM(cf.file_size), 0) as total_size
+            FROM conversation_files cf
+            JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+            WHERE sfa.session_id = ? AND cf.is_deleted = 0
+            """,
+            (session_id,),
+        ) as cursor:
+            totals = await cursor.fetchone()
+        return totals["total"], totals["total_size"]
+
+    async def _get_paginated_files(self, connection, session_id: str, page_size: int, offset: int) -> List[Dict]:
+        """Get paginated files for a session."""
+        async with connection.execute(
+            """
+            SELECT
+                cf.file_id, cf.session_id, cf.original_filename as filename,
+                cf.original_filename, cf.stored_filename, cf.file_path,
+                cf.file_size as size, cf.file_hash, cf.mime_type, cf.uploaded_at,
+                cf.uploaded_by, cf.is_deleted, cf.deleted_at, sfa.association_type,
+                sfa.message_id, sfa.associated_at,
+                LOWER(SUBSTR(cf.original_filename, INSTR(cf.original_filename, '.') + 1)) as extension
+            FROM conversation_files cf
+            JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+            WHERE sfa.session_id = ? AND cf.is_deleted = 0
+            ORDER BY sfa.associated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (session_id, page_size, offset),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
     async def list_files(
         self, session_id: str, page: int = 1, page_size: int = 50
@@ -575,75 +557,21 @@ class ConversationFileManager:
             page_size: Number of files per page
 
         Returns:
-            Dict with keys:
-                - files: List of file metadata dictionaries
-                - total_files: Total number of files
-                - total_size: Total size of all files in bytes
+            Dict with files, total_files, and total_size
         """
         connection = await self._get_async_db_connection()
 
         try:
-            # Get total count
-            async with connection.execute(
-                """
-                SELECT COUNT(*) as total, COALESCE(SUM(cf.file_size), 0) as total_size
-                FROM conversation_files cf
-                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
-                WHERE sfa.session_id = ? AND cf.is_deleted = 0
-                """,
-                (session_id,),
-            ) as cursor:
-                totals = await cursor.fetchone()
-
-            total_files = totals["total"]
-            total_size = totals["total_size"]
-
-            # Get paginated files
+            total_files, total_size = await self._get_session_file_totals(connection, session_id)
             offset = (page - 1) * page_size
-            async with connection.execute(
-                """
-                SELECT
-                    cf.file_id,
-                    cf.session_id,
-                    cf.original_filename as filename,
-                    cf.original_filename,
-                    cf.stored_filename,
-                    cf.file_path,
-                    cf.file_size as size,
-                    cf.file_hash,
-                    cf.mime_type,
-                    cf.uploaded_at,
-                    cf.uploaded_by,
-                    cf.is_deleted,
-                    cf.deleted_at,
-                    sfa.association_type,
-                    sfa.message_id,
-                    sfa.associated_at,
-                    LOWER(SUBSTR(cf.original_filename, INSTR(cf.original_filename, '.') + 1)) as extension
-                FROM conversation_files cf
-                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
-                WHERE sfa.session_id = ? AND cf.is_deleted = 0
-                ORDER BY sfa.associated_at DESC
-                LIMIT ? OFFSET ?
-                """,
-                (session_id, page_size, offset),
-            ) as cursor:
-                rows = await cursor.fetchall()
-
-            files = []
-            for row in rows:
-                file_info = dict(row)
-                files.append(file_info)
+            files = await self._get_paginated_files(connection, session_id, page_size, offset)
 
             logger.info(
-                f"Listed {len(files)} files for session {session_id} (page {page}/{(total_files + page_size - 1) // page_size})"
+                f"Listed {len(files)} files for session {session_id} "
+                f"(page {page}/{(total_files + page_size - 1) // page_size})"
             )
 
-            return {
-                "files": files,
-                "total_files": total_files,
-                "total_size": total_size,
-            }
+            return {"files": files, "total_files": total_files, "total_size": total_size}
 
         except Exception as e:
             logger.error(f"Error listing files: {e}")
@@ -652,22 +580,8 @@ class ConversationFileManager:
         finally:
             await connection.close()
 
-    async def get_session_files(
-        self, session_id: str, include_deleted: bool = False
-    ) -> List[Dict[str, Any]]:
-        """
-        Get all files associated with a chat session.
-
-        Attempts to use Redis cache first, falls back to database query.
-
-        Args:
-            session_id: Chat session identifier
-            include_deleted: Include soft-deleted files (default: False)
-
-        Returns:
-            List[Dict[str, Any]]: List of file metadata dictionaries
-        """
-        # Try cache first
+    async def _try_get_cached_files(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Try to get cached files from Redis, return None on miss or error."""
         try:
             redis_db = await self._get_redis_sessions()
             cache_key = f"{self.CACHE_KEY_PREFIX}{session_id}"
@@ -676,63 +590,53 @@ class ConversationFileManager:
             if cached_data:
                 logger.debug(f"Cache hit for session {session_id}")
                 return json.loads(cached_data)
-
         except (RedisConnectionError, RedisTimeoutError) as e:
             logger.warning(f"Redis connection/timeout error during cache lookup: {e}")
         except RedisError as e:
             logger.warning(f"Redis error during cache lookup: {e}")
         except Exception as e:
             logger.error(f"Unexpected error during cache lookup: {e}")
+        return None
 
-        # Cache miss or error, query database using async connection
+    async def _query_session_files_from_db(
+        self, connection, session_id: str, include_deleted: bool
+    ) -> List[Dict[str, Any]]:
+        """Query session files from database."""
+        deleted_filter = "" if include_deleted else "AND cf.is_deleted = 0"
+        async with connection.execute(
+            f"""
+            SELECT cf.file_id, cf.session_id, cf.original_filename, cf.stored_filename,
+                   cf.file_path, cf.file_size, cf.file_hash, cf.mime_type, cf.uploaded_at,
+                   cf.uploaded_by, cf.is_deleted, cf.deleted_at, sfa.association_type,
+                   sfa.message_id, sfa.associated_at
+            FROM conversation_files cf
+            JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+            WHERE sfa.session_id = ? {deleted_filter}
+            ORDER BY sfa.associated_at DESC
+            """,
+            (session_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_session_files(
+        self, session_id: str, include_deleted: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get all files associated with a chat session (cache-first with DB fallback)."""
+        cached = await self._try_get_cached_files(session_id)
+        if cached is not None:
+            return cached
+
         connection = await self._get_async_db_connection()
-
         try:
-            deleted_filter = "" if include_deleted else "AND cf.is_deleted = 0"
-
-            async with connection.execute(
-                f"""
-                SELECT
-                    cf.file_id,
-                    cf.session_id,
-                    cf.original_filename,
-                    cf.stored_filename,
-                    cf.file_path,
-                    cf.file_size,
-                    cf.file_hash,
-                    cf.mime_type,
-                    cf.uploaded_at,
-                    cf.uploaded_by,
-                    cf.is_deleted,
-                    cf.deleted_at,
-                    sfa.association_type,
-                    sfa.message_id,
-                    sfa.associated_at
-                FROM conversation_files cf
-                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
-                WHERE sfa.session_id = ? {deleted_filter}
-                ORDER BY sfa.associated_at DESC
-                """,
-                (session_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
-
-            files = []
-            for row in rows:
-                file_info = dict(row)
-                files.append(file_info)
-
-            # Cache result
+            files = await self._query_session_files_from_db(connection, session_id, include_deleted)
             if not include_deleted:
                 await self._cache_session_files(session_id, files)
-
             logger.info(f"Retrieved {len(files)} files for session {session_id}")
             return files
-
         except Exception as e:
             logger.error(f"Error retrieving session files: {e}")
             return []
-
         finally:
             await connection.close()
 
@@ -758,60 +662,46 @@ class ConversationFileManager:
         )
         logger.info(f"Soft deleted file: {file_id}")
 
-    async def delete_session_files(
-        self, session_id: str, hard_delete: bool = False
-    ) -> int:
-        """
-        Delete all files associated with a session (Issue #315 - refactored depth 5 to 3).
+    async def _get_session_file_ids(self, connection, session_id: str) -> List:
+        """Get all file records for a session."""
+        async with connection.execute(
+            """
+            SELECT DISTINCT cf.file_id, cf.file_path, cf.stored_filename
+            FROM conversation_files cf
+            JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+            WHERE sfa.session_id = ? AND cf.is_deleted = 0
+            """,
+            (session_id,),
+        ) as cursor:
+            return await cursor.fetchall()
 
-        Args:
-            session_id: Chat session identifier
-            hard_delete: If True, permanently delete files. If False, soft delete.
+    async def _delete_files_batch(self, connection, files: List, hard_delete: bool) -> int:
+        """Delete a batch of files, returning count deleted."""
+        count = 0
+        for file_row in files:
+            file_id, file_path = file_row["file_id"], Path(file_row["file_path"])
+            if hard_delete:
+                await self._hard_delete_file(connection, file_id, file_path)
+            else:
+                await self._soft_delete_file(connection, file_id)
+            count += 1
+        return count
 
-        Returns:
-            int: Number of files deleted
-        """
+    async def delete_session_files(self, session_id: str, hard_delete: bool = False) -> int:
+        """Delete all files associated with a session."""
         async with self._lock:
             connection = await self._get_async_db_connection()
-
             try:
-                # Get all file IDs for session
-                async with connection.execute(
-                    """
-                    SELECT DISTINCT cf.file_id, cf.file_path, cf.stored_filename
-                    FROM conversation_files cf
-                    JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
-                    WHERE sfa.session_id = ? AND cf.is_deleted = 0
-                    """,
-                    (session_id,),
-                ) as cursor:
-                    files_to_delete = await cursor.fetchall()
-
-                deleted_count = 0
-                for file_row in files_to_delete:
-                    file_id = file_row["file_id"]
-                    file_path = Path(file_row["file_path"])
-
-                    if hard_delete:
-                        await self._hard_delete_file(connection, file_id, file_path)
-                    else:
-                        await self._soft_delete_file(connection, file_id)
-                    deleted_count += 1
-
+                files = await self._get_session_file_ids(connection, session_id)
+                deleted_count = await self._delete_files_batch(connection, files, hard_delete)
                 await connection.commit()
                 await self._invalidate_session_cache(session_id)
-
-                logger.info(
-                    f"Deleted {deleted_count} files from session {session_id} "
-                    f"(hard_delete={hard_delete})"
-                )
+                logger.info(f"Deleted {deleted_count} files from session {session_id} (hard_delete={hard_delete})")
                 return deleted_count
-
             except Exception as e:
                 await connection.rollback()
                 logger.error(f"Error deleting session files: {e}")
                 raise RuntimeError(f"Failed to delete session files: {e}")
-
             finally:
                 await connection.close()
 
@@ -906,115 +796,68 @@ class ConversationFileManager:
             logger.error(f"❌ Failed to initialize conversation files database: {e}")
             raise RuntimeError(f"Database initialization failed: {e}")
 
-    async def get_schema_version(self) -> str:
-        """
-        Get current database schema version.
-
-        This is a public method for use by health checks and monitoring systems.
-
-        Returns:
-            str: Current schema version or "unknown" if not found or table doesn't exist
-        """
+    def _query_schema_version_sync(self) -> str:
+        """Thread-safe database query for schema version (sync helper)."""
+        connection = sqlite3.connect(str(self.db_path), timeout=30.0, check_same_thread=False)
+        cursor = connection.cursor()
         try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
+            if not cursor.fetchone():
+                return "unknown"
+            cursor.execute("SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1")
+            result = cursor.fetchone()
+            return result[0] if result else "unknown"
+        finally:
+            cursor.close()
+            connection.close()
 
-            def _query_version():
-                """Thread-safe database query for schema version."""
-                connection = sqlite3.connect(
-                    str(self.db_path), timeout=30.0, check_same_thread=False
-                )
-                cursor = connection.cursor()
-
-                try:
-                    # CRITICAL: Check if schema_migrations table exists BEFORE querying (Bug Fix #3)
-                    # Prevents race condition where query runs before migration creates the table
-                    cursor.execute(
-                        """
-                        SELECT name FROM sqlite_master
-                        WHERE type='table' AND name='schema_migrations'
-                    """
-                    )
-
-                    if not cursor.fetchone():
-                        # Table doesn't exist yet - this is not an error during initialization
-                        return "unknown"
-
-                    # Table exists, safe to query version
-                    # Use migration_id for deterministic ordering (applied_at can have same
-                    # timestamp)
-                    cursor.execute(
-                        """
-                        SELECT version FROM schema_migrations
-                        ORDER BY migration_id DESC LIMIT 1
-                    """
-                    )
-                    result = cursor.fetchone()
-
-                    return result[0] if result else "unknown"
-
-                finally:
-                    cursor.close()
-                    connection.close()
-
-            # Execute query in thread pool to avoid blocking event loop
-            version = await asyncio.to_thread(_query_version)
-            return version
-
+    async def get_schema_version(self) -> str:
+        """Get current database schema version for health checks."""
+        try:
+            return await asyncio.to_thread(self._query_schema_version_sync)
         except Exception as e:
             logger.warning(f"Failed to get schema version: {e}")
             return "unknown"
 
+    async def _get_active_file_stats(self, connection) -> tuple:
+        """Get active file count and total size."""
+        async with connection.execute(
+            "SELECT COUNT(*) as total_files, SUM(file_size) as total_size FROM conversation_files WHERE is_deleted = 0"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["total_files"] or 0, row["total_size"] or 0
+
+    async def _get_session_count(self, connection) -> int:
+        """Get count of sessions with files."""
+        async with connection.execute(
+            "SELECT COUNT(DISTINCT session_id) as total_sessions FROM conversation_files WHERE is_deleted = 0"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["total_sessions"] or 0
+
+    async def _get_deleted_file_stats(self, connection) -> tuple:
+        """Get deleted file count and size."""
+        async with connection.execute(
+            "SELECT COUNT(*) as deleted_files, SUM(file_size) as deleted_size FROM conversation_files WHERE is_deleted = 1"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row["deleted_files"] or 0, row["deleted_size"] or 0
+
     async def get_storage_stats(self) -> Dict[str, Any]:
-        """
-        Get storage statistics.
-
-        Returns:
-            Dict[str, Any]: Storage statistics including file count, total size, etc.
-        """
+        """Get storage statistics."""
         connection = await self._get_async_db_connection()
-
         try:
-            # Total active files
-            async with connection.execute(
-                """
-                SELECT COUNT(*) as total_files, SUM(file_size) as total_size
-                FROM conversation_files
-                WHERE is_deleted = 0
-                """
-            ) as cursor:
-                totals = await cursor.fetchone()
-
-            # Files by session
-            async with connection.execute(
-                """
-                SELECT COUNT(DISTINCT session_id) as total_sessions
-                FROM conversation_files
-                WHERE is_deleted = 0
-                """
-            ) as cursor:
-                sessions = await cursor.fetchone()
-
-            # Deleted files
-            async with connection.execute(
-                """
-                SELECT COUNT(*) as deleted_files, SUM(file_size) as deleted_size
-                FROM conversation_files
-                WHERE is_deleted = 1
-                """
-            ) as cursor:
-                deleted = await cursor.fetchone()
+            total_files, total_size = await self._get_active_file_stats(connection)
+            total_sessions = await self._get_session_count(connection)
+            deleted_files, deleted_size = await self._get_deleted_file_stats(connection)
 
             return {
-                "total_files": totals["total_files"] or 0,
-                "total_size_bytes": totals["total_size"] or 0,
-                "total_size_mb": round((totals["total_size"] or 0) / (1024 * 1024), 2),
-                "total_sessions": sessions["total_sessions"] or 0,
-                "deleted_files": deleted["deleted_files"] or 0,
-                "deleted_size_bytes": deleted["deleted_size"] or 0,
-                "storage_directory": str(self.storage_dir),
-                "database_path": str(self.db_path),
-                "schema_version": "unknown",  # Will be updated by caller if needed
+                "total_files": total_files, "total_size_bytes": total_size,
+                "total_size_mb": round(total_size / (1024 * 1024), 2),
+                "total_sessions": total_sessions, "deleted_files": deleted_files,
+                "deleted_size_bytes": deleted_size, "storage_directory": str(self.storage_dir),
+                "database_path": str(self.db_path), "schema_version": "unknown",
             }
-
         finally:
             await connection.close()
 
