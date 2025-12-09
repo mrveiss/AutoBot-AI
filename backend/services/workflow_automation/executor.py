@@ -14,9 +14,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Dict
 
 from backend.type_defs.common import Metadata
+from src.constants.threshold_constants import TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
 
-from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus
+from .models import (
+    ActiveWorkflow,
+    PlanApprovalMode,
+    PlanApprovalRequest,
+    PlanApprovalStatus,
+    WorkflowStep,
+    WorkflowStepStatus,
+)
 from .step_evaluator import WorkflowStepEvaluator
 
 if TYPE_CHECKING:
@@ -33,6 +41,9 @@ class WorkflowExecutor:
         self.messenger = messenger
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()
+        # Issue #390: Track pending plan approvals
+        self._pending_plan_approvals: Dict[str, PlanApprovalRequest] = {}
+        self._plan_approval_events: Dict[str, asyncio.Event] = {}
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
@@ -219,7 +230,7 @@ class WorkflowExecutor:
             workflow.current_step_index += 1
 
             # Small delay before next step
-            await asyncio.sleep(2)
+            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             await self.process_next_step(workflow, workflows)
 
         except Exception as e:
@@ -261,7 +272,7 @@ class WorkflowExecutor:
             workflow.current_step_index += 1
 
             # Continue with next step
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
             await self.process_next_step(workflow, workflows)
 
     async def _execute_command(self, session_id: str, command: str) -> Metadata:
@@ -349,6 +360,9 @@ class WorkflowExecutor:
         workflow.is_cancelled = True
         workflow.completed_at = datetime.now()
 
+        # Issue #390: Clear any pending approval when workflow is cancelled
+        self.clear_pending_approval(workflow.workflow_id)
+
         # Record Prometheus workflow execution metric (cancelled)
         if workflow.prometheus_start_time:
             duration = time.time() - workflow.prometheus_start_time
@@ -376,3 +390,251 @@ class WorkflowExecutor:
             workflow.session_id,
             {"type": "workflow_cancelled", "workflow_id": workflow.workflow_id},
         )
+
+    # =========================================================================
+    # Issue #390: Plan Approval System - Present Plan Before Execution
+    # =========================================================================
+
+    # Issue #390: Currently only FULL_PLAN_APPROVAL is implemented
+    _SUPPORTED_APPROVAL_MODES = frozenset({PlanApprovalMode.FULL_PLAN_APPROVAL})
+
+    async def present_plan_for_approval(
+        self,
+        workflow: ActiveWorkflow,
+        approval_mode: PlanApprovalMode = PlanApprovalMode.FULL_PLAN_APPROVAL,
+        timeout_seconds: int = 300,
+    ) -> PlanApprovalRequest:
+        """
+        Present workflow plan to user and wait for approval before execution.
+
+        Issue #390: Multi-step tasks should present plan before execution.
+
+        Args:
+            workflow: The workflow to present for approval
+            approval_mode: How approval should be requested (currently only full_plan supported)
+            timeout_seconds: How long to wait for user approval
+
+        Returns:
+            PlanApprovalRequest with approval status
+
+        Raises:
+            ValueError: If unsupported approval_mode is requested
+        """
+        # Issue #390: Validate supported modes
+        if approval_mode not in self._SUPPORTED_APPROVAL_MODES:
+            supported = [m.value for m in self._SUPPORTED_APPROVAL_MODES]
+            raise ValueError(
+                f"Approval mode '{approval_mode.value}' is not yet implemented. "
+                f"Supported modes: {supported}"
+            )
+
+        # Validate timeout
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        if timeout_seconds > 3600:
+            logger.warning(
+                f"Timeout {timeout_seconds}s exceeds max 3600s, capping at 3600s"
+            )
+            timeout_seconds = 3600
+
+        # Check if approval already pending for this workflow
+        if workflow.workflow_id in self._pending_plan_approvals:
+            existing = self._pending_plan_approvals[workflow.workflow_id]
+            if existing.status in [
+                PlanApprovalStatus.AWAITING_APPROVAL,
+                PlanApprovalStatus.PRESENTED,
+            ]:
+                logger.warning(
+                    f"Approval already pending for {workflow.workflow_id}, returning existing"
+                )
+                return existing
+            # If resolved, cleanup first
+            self.clear_pending_approval(workflow.workflow_id)
+
+        # Calculate risk assessment
+        risk_assessment = self._assess_plan_risk(workflow)
+
+        # Calculate total estimated duration
+        total_duration = sum(step.estimated_duration for step in workflow.steps)
+
+        # Create approval request
+        approval_request = PlanApprovalRequest(
+            workflow_id=workflow.workflow_id,
+            plan_summary=f"Execute {len(workflow.steps)} steps: {workflow.description}",
+            total_steps=len(workflow.steps),
+            steps_preview=workflow.steps,
+            approval_mode=approval_mode,
+            status=PlanApprovalStatus.PENDING,
+            risk_assessment=risk_assessment,
+            estimated_total_duration=total_duration,
+            timeout_seconds=timeout_seconds,
+        )
+
+        # Store pending approval
+        self._pending_plan_approvals[workflow.workflow_id] = approval_request
+        self._plan_approval_events[workflow.workflow_id] = asyncio.Event()
+
+        # Present plan to user via WebSocket
+        await self._send_plan_presentation(workflow, approval_request)
+
+        # Update status
+        approval_request.status = PlanApprovalStatus.AWAITING_APPROVAL
+        approval_request.presented_at = datetime.now()
+
+        logger.info(
+            f"Plan presented for workflow {workflow.workflow_id}, "
+            f"awaiting approval (mode: {approval_mode.value})"
+        )
+
+        return approval_request
+
+    async def wait_for_plan_approval(
+        self,
+        workflow_id: str,
+        timeout_seconds: int = 300,
+    ) -> PlanApprovalRequest:
+        """
+        Wait for user to approve or reject the presented plan.
+
+        Issue #390: Block execution until user approves plan.
+
+        Args:
+            workflow_id: ID of the workflow awaiting approval
+            timeout_seconds: Maximum time to wait for approval
+
+        Returns:
+            PlanApprovalRequest with final status (approved/rejected/timeout)
+        """
+        if workflow_id not in self._pending_plan_approvals:
+            raise ValueError(f"No pending approval for workflow {workflow_id}")
+
+        approval_request = self._pending_plan_approvals[workflow_id]
+        approval_event = self._plan_approval_events[workflow_id]
+
+        try:
+            # Wait for approval event with timeout
+            await asyncio.wait_for(approval_event.wait(), timeout=timeout_seconds)
+
+            logger.info(
+                f"Plan approval received for workflow {workflow_id}: "
+                f"{approval_request.status.value}"
+            )
+
+        except asyncio.TimeoutError:
+            approval_request.status = PlanApprovalStatus.TIMEOUT
+            approval_request.resolved_at = datetime.now()
+            logger.warning(
+                f"Plan approval timeout for workflow {workflow_id} "
+                f"after {timeout_seconds}s"
+            )
+
+        finally:
+            # Cleanup
+            self._plan_approval_events.pop(workflow_id, None)
+
+        return approval_request
+
+    def handle_plan_approval_response(
+        self,
+        workflow_id: str,
+        approved: bool,
+        modifications: list[str] | None = None,
+        reason: str | None = None,
+    ) -> bool:
+        """
+        Handle user's response to plan approval request.
+
+        Issue #390: Process user's decision on presented plan.
+
+        Args:
+            workflow_id: ID of the workflow
+            approved: Whether user approved the plan
+            modifications: List of step IDs to modify/skip (optional)
+            reason: User's reason for rejection/modification (optional)
+
+        Returns:
+            True if response was processed, False if no pending approval
+        """
+        if workflow_id not in self._pending_plan_approvals:
+            logger.warning(f"No pending approval for workflow {workflow_id}")
+            return False
+
+        approval_request = self._pending_plan_approvals[workflow_id]
+
+        if approved:
+            approval_request.status = PlanApprovalStatus.APPROVED
+        elif modifications:
+            approval_request.status = PlanApprovalStatus.MODIFIED
+        else:
+            approval_request.status = PlanApprovalStatus.REJECTED
+
+        approval_request.resolved_at = datetime.now()
+        approval_request.user_response = reason
+
+        # Signal waiting coroutine
+        if workflow_id in self._plan_approval_events:
+            self._plan_approval_events[workflow_id].set()
+
+        logger.info(
+            f"Plan approval response for workflow {workflow_id}: "
+            f"approved={approved}, status={approval_request.status.value}"
+        )
+
+        return True
+
+    async def _send_plan_presentation(
+        self,
+        workflow: ActiveWorkflow,
+        approval_request: PlanApprovalRequest,
+    ) -> None:
+        """
+        Send plan presentation message to frontend.
+
+        Issue #390: WebSocket message to present full plan to user.
+        """
+        await self.messenger.send_message(
+            workflow.session_id,
+            {
+                "type": "workflow_plan_presented",
+                "workflow_id": workflow.workflow_id,
+                "plan": approval_request.to_presentation_dict(),
+                "approval_options": {
+                    "approve_all": "Approve entire plan and execute",
+                    "approve_step_by_step": "Review and approve each step",
+                    "modify": "Modify plan before execution",
+                    "reject": "Reject plan and cancel",
+                },
+            },
+        )
+
+    def _assess_plan_risk(self, workflow: ActiveWorkflow) -> str:
+        """
+        Assess overall risk level of workflow plan.
+
+        Issue #390: Provide risk assessment in plan presentation.
+        """
+        risk_counts = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+
+        for step in workflow.steps:
+            risk_level = step.risk_level.lower()
+            if risk_level in risk_counts:
+                risk_counts[risk_level] += 1
+
+        # Determine overall risk
+        if risk_counts["critical"] > 0:
+            return f"CRITICAL - {risk_counts['critical']} critical risk step(s)"
+        elif risk_counts["high"] > 0:
+            return f"HIGH - {risk_counts['high']} high risk step(s)"
+        elif risk_counts["medium"] > 0:
+            return f"MEDIUM - {risk_counts['medium']} medium risk step(s)"
+        else:
+            return f"LOW - All {risk_counts['low']} steps are low risk"
+
+    def get_pending_approval(self, workflow_id: str) -> PlanApprovalRequest | None:
+        """Get pending plan approval request for a workflow."""
+        return self._pending_plan_approvals.get(workflow_id)
+
+    def clear_pending_approval(self, workflow_id: str) -> None:
+        """Clear pending approval request (e.g., after workflow completes)."""
+        self._pending_plan_approvals.pop(workflow_id, None)
+        self._plan_approval_events.pop(workflow_id, None)
