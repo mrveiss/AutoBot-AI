@@ -48,63 +48,56 @@ class LangChainAgentOrchestrator:
         self.knowledge_base = knowledge_base
         self.available = worker_node is not None
 
-        if not self.available:
-            logging.warning(
-                "LangChain Agent Orchestrator disabled due to missing worker node"
-            )
+        if not self._validate_prerequisites():
             return
+
+        if not self._initialize_llm():
+            return
+
+        self._initialize_components()
+        logging.info("LangChain Agent Orchestrator initialized")
+
+    def _validate_prerequisites(self) -> bool:
+        """Validate prerequisites for orchestrator initialization."""
+        if not self.available:
+            logging.warning("LangChain Agent Orchestrator disabled due to missing worker node")
+            return False
 
         if Ollama is None:
-            logging.warning(
-                "LangChain Agent Orchestrator disabled due to missing Ollama import"
-            )
+            logging.warning("LangChain Agent Orchestrator disabled due to missing Ollama import")
             self.available = False
-            return
+            return False
 
-        # Initialize LLM for LangChain using centralized config
+        return True
+
+    def _get_llm_config(self) -> tuple:
+        """Get LLM model and base URL from config."""
         from src.unified_config_manager import config as global_config
 
         llm_config = global_config.get_llm_config()
-        # Use centralized model constants - reads from AUTOBOT_DEFAULT_LLM_MODEL env var
         llm_model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        llm_base_url = llm_config.get("ollama", {}).get(
-            "base_url", get_service_url("ollama")
-        )
+        llm_base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
+        return llm_model, llm_base_url
 
-        logging.info(
-            f"LangChain Agent initializing with model: {llm_model}, "
-            f"base_url: {llm_base_url}"
-        )
+    def _initialize_llm(self) -> bool:
+        """Initialize the LLM for LangChain."""
+        llm_model, llm_base_url = self._get_llm_config()
+        logging.info(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
 
         try:
-            logging.debug(
-                f"Passing model='{llm_model}' and "
-                f"base_url='{llm_base_url}' to Ollama constructor."
-            )
-            self.llm = Ollama(
-                model=llm_model,  # Explicitly set model here
-                base_url=llm_base_url,
-                temperature=0.7,
-            )
-            logging.info(
-                f"LangChain Agent LLM initialized successfully with model: {llm_model}"
-            )
+            logging.debug(f"Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor.")
+            self.llm = Ollama(model=llm_model, base_url=llm_base_url, temperature=0.7)
+            logging.info(f"LangChain Agent LLM initialized successfully with model: {llm_model}")
+            return True
         except Exception as e:
-            logging.error(
-                f"Failed to initialize LangChain Agent: {e}", exc_info=True
-            )
+            logging.error(f"Failed to initialize LangChain Agent: {e}", exc_info=True)
             self.available = False
-            return
+            return False
 
-        # Initialize unified tool registry to eliminate code duplication
-        self.tool_registry = ToolRegistry(
-            worker_node=worker_node, knowledge_base=knowledge_base
-        )
-
-        # Initialize tools
+    def _initialize_components(self) -> None:
+        """Initialize tool registry, tools, and agent."""
+        self.tool_registry = ToolRegistry(worker_node=self.worker_node, knowledge_base=self.knowledge_base)
         self.tools = self._create_tools()
-
-        # Initialize agent
         self.agent = initialize_agent(
             tools=self.tools,
             llm=self.llm,
@@ -114,14 +107,9 @@ class LangChainAgentOrchestrator:
             handle_parsing_errors=True,
         )
 
-        logging.info("LangChain Agent Orchestrator initialized")
-
-    def _create_tools(self) -> List[Tool]:
-        """Create LangChain Tools that wrap existing AutoBot functionality."""
-        tools = []
-
-        # System Integration Tools
-        tools.append(
+    def _create_system_tools(self) -> List[Tool]:
+        """Create system integration tools."""
+        return [
             Tool(
                 name="execute_system_command",
                 description=(
@@ -130,10 +118,7 @@ class LangChainAgentOrchestrator:
                     "Input should be the command to execute."
                 ),
                 func=self._execute_system_command,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="query_system_information",
                 description=(
@@ -141,20 +126,12 @@ class LangChainAgentOrchestrator:
                     "and system status. No input required."
                 ),
                 func=self._query_system_information,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="list_system_services",
-                description=(
-                    "List all system services and their status. No input required."
-                ),
+                description="List all system services and their status. No input required.",
                 func=self._list_system_services,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="manage_service",
                 description=(
@@ -163,128 +140,82 @@ class LangChainAgentOrchestrator:
                     "start, stop, restart, enable, disable."
                 ),
                 func=self._manage_service,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="get_process_info",
-                description=(
-                    "Get information about running processes. Input can be "
-                    "a process name or PID."
-                ),
+                description="Get information about running processes. Input can be a process name or PID.",
                 func=self._get_process_info,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="terminate_process",
-                description=(
-                    "Terminate a process by PID. Input should be "
-                    "the process ID (PID)."
-                ),
+                description="Terminate a process by PID. Input should be the process ID (PID).",
                 func=self._terminate_process,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="web_fetch",
-                description=(
-                    "Fetch content from a web URL. Input should be the URL to fetch."
-                ),
+                description="Fetch content from a web URL. Input should be the URL to fetch.",
                 func=self._web_fetch,
-            )
-        )
+            ),
+        ]
 
-        # Knowledge Base Tools
-        tools.append(
+    def _create_knowledge_tools(self) -> List[Tool]:
+        """Create knowledge base tools."""
+        return [
             Tool(
                 name="search_knowledge_base",
-                description=(
-                    "Search the knowledge base for relevant information. "
-                    "Input should be the search query."
-                ),
+                description="Search the knowledge base for relevant information. Input should be the search query.",
                 func=self._search_knowledge_base,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="add_file_to_knowledge_base",
                 description=(
                     "Add a file to the knowledge base. Input should be "
-                    "'file_path file_type' where file_type is one of: "
-                    "txt, pdf, csv, docx."
+                    "'file_path file_type' where file_type is one of: txt, pdf, csv, docx."
                 ),
                 func=self._add_file_to_knowledge_base,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="store_fact",
-                description=(
-                    "Store a fact in the knowledge base. Input should be "
-                    "the fact content to store."
-                ),
+                description="Store a fact in the knowledge base. Input should be the fact content to store.",
                 func=self._store_fact,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="get_fact",
-                description=(
-                    "Get facts from the knowledge base. Input can be "
-                    "a fact ID or search query."
-                ),
+                description="Get facts from the knowledge base. Input can be a fact ID or search query.",
                 func=self._get_fact,
-            )
-        )
+            ),
+        ]
 
-        # GUI Automation Tools (if available)
-        if (
+    def _create_gui_tools(self) -> List[Tool]:
+        """Create GUI automation tools if available."""
+        if not (
             self.worker_node
             and hasattr(self.worker_node, "gui_controller")
             and self.worker_node.gui_controller
         ):
-            tools.append(
-                Tool(
-                    name="type_text",
-                    description=(
-                        "Type text into the currently active window. "
-                        "Input should be the text to type."
-                    ),
-                    func=self._type_text,
-                )
-            )
+            return []
 
-            tools.append(
-                Tool(
-                    name="click_element",
-                    description=(
-                        "Click on a GUI element by image path. "
-                        "Input should be the path to the image template."
-                    ),
-                    func=self._click_element,
-                )
-            )
+        return [
+            Tool(
+                name="type_text",
+                description="Type text into the currently active window. Input should be the text to type.",
+                func=self._type_text,
+            ),
+            Tool(
+                name="click_element",
+                description="Click on a GUI element by image path. Input should be the path to the image template.",
+                func=self._click_element,
+            ),
+            Tool(
+                name="bring_window_to_front",
+                description="Bring a window to the front by application title. Input should be the window title.",
+                func=self._bring_window_to_front,
+            ),
+        ]
 
-            tools.append(
-                Tool(
-                    name="bring_window_to_front",
-                    description=(
-                        "Bring a window to the front by application title. "
-                        "Input should be the window title."
-                    ),
-                    func=self._bring_window_to_front,
-                )
-            )
-
-        # User Interaction Tools
-        tools.append(
+    def _create_user_interaction_tools(self) -> List[Tool]:
+        """Create user interaction tools."""
+        return [
             Tool(
                 name="ask_user_for_manual",
                 description=(
@@ -292,10 +223,7 @@ class LangChainAgentOrchestrator:
                     "a specific program. Input should be 'program_name question_text'."
                 ),
                 func=self._ask_user_for_manual,
-            )
-        )
-
-        tools.append(
+            ),
             Tool(
                 name="respond_conversationally",
                 description=(
@@ -303,9 +231,16 @@ class LangChainAgentOrchestrator:
                     "needed. Input should be the response text."
                 ),
                 func=self._respond_conversationally,
-            )
-        )
+            ),
+        ]
 
+    def _create_tools(self) -> List[Tool]:
+        """Create LangChain Tools that wrap existing AutoBot functionality."""
+        tools = []
+        tools.extend(self._create_system_tools())
+        tools.extend(self._create_knowledge_tools())
+        tools.extend(self._create_gui_tools())
+        tools.extend(self._create_user_interaction_tools())
         return tools
 
     # All tool methods now use the unified ToolRegistry to eliminate code duplication
