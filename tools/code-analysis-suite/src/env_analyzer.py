@@ -27,6 +27,11 @@ _LITERAL_VALUE_TYPES = (ast.Str, ast.Num)
 # Issue #380: Module-level tuple for config file extensions
 _CONFIG_FILE_EXTENSIONS = ('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini')
 
+# Issue #380: Module-level tuples for URL protocol prefixes
+_URL_PROTOCOL_PREFIXES = ('http://', 'https://', 'ws://', 'wss://', 'ftp://', 'redis://', 'postgresql://', 'mysql://')
+_WEB_PROTOCOL_PREFIXES = ('http://', 'https://', 'ws://', 'wss://')
+_DATABASE_PROTOCOL_PREFIXES = ('postgresql://', 'mysql://', 'redis://', 'mongodb://')
+
 
 @dataclass
 class HardcodedValue:
@@ -339,7 +344,7 @@ class EnvironmentAnalyzer:
             value.endswith(_CONFIG_FILE_EXTENSIONS),  # Issue #380
 
             # URLs and network
-            value.startswith(('http://', 'https://', 'ws://', 'wss://', 'ftp://', 'redis://', 'postgresql://', 'mysql://')),
+            value.startswith(_URL_PROTOCOL_PREFIXES),  # Issue #380
             value in ['localhost', '127.0.0.1', '0.0.0.0'],
 
             # API keys and tokens (basic heuristics)
@@ -370,10 +375,10 @@ class EnvironmentAnalyzer:
         if any(pattern in value.lower() for pattern in ['key', 'token', 'password', 'secret']):
             return 'security', 'high'
 
-        if value.startswith(('http://', 'https://', 'ws://', 'wss://')):
+        if value.startswith(_WEB_PROTOCOL_PREFIXES):  # Issue #380
             return 'url', 'high'
 
-        if value.startswith(('postgresql://', 'mysql://', 'redis://', 'mongodb://')):
+        if value.startswith(_DATABASE_PROTOCOL_PREFIXES):  # Issue #380
             return 'database_url', 'high'
 
         # Medium severity (configuration)
