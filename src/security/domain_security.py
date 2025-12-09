@@ -49,86 +49,58 @@ class DomainSecurityConfig:
             logger.error(f"Failed to load domain security config: {e}")
             return self._get_default_config()
 
+    def _get_default_blacklist(self) -> list:
+        """Get default blacklist patterns."""
+        return [
+            "*.malware.com", "*.phishing.net", "*.spam.org", "*.scam.info",
+            "*.tk", "*.ml", "*.ga", "*.cf",  # Suspicious TLDs
+            "*adult*", "*porn*", "*xxx*",  # Adult content
+        ]
+
+    def _get_default_whitelist(self) -> list:
+        """Get default whitelist of trusted domains."""
+        return [
+            "github.com", "stackoverflow.com", "docs.python.org", "python.org",
+            "fastapi.tiangolo.com", "vuejs.org", "docker.com", "redis.io",
+            "wikipedia.org", "*.wikipedia.org", "archlinux.org", "*.archlinux.org",
+            "ubuntu.com", "*.ubuntu.com", "microsoft.com", "*.microsoft.com",
+            "mozilla.org", "*.mozilla.org",
+        ]
+
+    def _get_default_reputation_services(self) -> dict:
+        """Get default reputation services configuration."""
+        return {
+            "virustotal": {"enabled": False, "api_key": "", "timeout": 5.0, "cache_duration": 7200},
+            "urlvoid": {"enabled": False, "api_key": "", "timeout": 5.0, "cache_duration": 7200},
+        }
+
+    def _get_default_threat_feeds(self) -> list:
+        """Get default threat feed configuration."""
+        return [{
+            "name": "urlhaus",
+            "url": os.getenv("AUTOBOT_URLHAUS_FEED_URL", "https://urlhaus.abuse.ch/downloads/text/"),
+            "format": "text", "enabled": True, "update_interval": 3600, "timeout": 10.0,
+        }]
+
+    def _get_default_network_validation(self) -> dict:
+        """Get default network validation configuration."""
+        return {
+            "block_private_ips": True, "block_local_ips": True, "block_cloud_metadata": True,
+            "allowed_ports": SecurityConstants.ALLOWED_WEB_PORTS,
+            "blocked_ip_ranges": SecurityConstants.BLOCKED_IP_RANGES,
+        }
+
     def _get_default_config(self) -> Dict[str, Any]:
-        """Default secure configuration for domain security"""
+        """Default secure configuration for domain security."""
         return {
             "domain_security": {
-                "enabled": True,
-                "default_action": "block",  # block, allow, warn
-                "whitelist_mode": False,
-                "cache_duration": 3600,  # 1 hour
-                "reputation_threshold": 0.7,  # 0.0 = unsafe, 1.0 = safe
-                "blacklist": [
-                    # Known malicious domain patterns
-                    "*.malware.com",
-                    "*.phishing.net",
-                    "*.spam.org",
-                    "*.scam.info",
-                    # Suspicious TLDs
-                    "*.tk",
-                    "*.ml",
-                    "*.ga",
-                    "*.cf",
-                    # Adult content (basic patterns)
-                    "*adult*",
-                    "*porn*",
-                    "*xxx*",
-                ],
-                "whitelist": [
-                    # Trusted domains for research
-                    "github.com",
-                    "stackoverflow.com",
-                    "docs.python.org",
-                    "python.org",
-                    "fastapi.tiangolo.com",
-                    "vuejs.org",
-                    "docker.com",
-                    "redis.io",
-                    "wikipedia.org",
-                    "*.wikipedia.org",
-                    "archlinux.org",
-                    "*.archlinux.org",
-                    "ubuntu.com",
-                    "*.ubuntu.com",
-                    "microsoft.com",
-                    "*.microsoft.com",
-                    "mozilla.org",
-                    "*.mozilla.org",
-                ],
-                "reputation_services": {
-                    "virustotal": {
-                        "enabled": False,  # Requires API key
-                        "api_key": "",
-                        "timeout": 5.0,
-                        "cache_duration": 7200,
-                    },
-                    "urlvoid": {
-                        "enabled": False,  # Requires API key
-                        "api_key": "",
-                        "timeout": 5.0,
-                        "cache_duration": 7200,
-                    },
-                },
-                "threat_feeds": [
-                    {
-                        "name": "urlhaus",
-                        "url": os.getenv(
-                            "AUTOBOT_URLHAUS_FEED_URL",
-                            "https://urlhaus.abuse.ch/downloads/text/",
-                        ),
-                        "format": "text",
-                        "enabled": True,
-                        "update_interval": 3600,
-                        "timeout": 10.0,
-                    }
-                ],
-                "network_validation": {
-                    "block_private_ips": True,
-                    "block_local_ips": True,
-                    "block_cloud_metadata": True,
-                    "allowed_ports": SecurityConstants.ALLOWED_WEB_PORTS,
-                    "blocked_ip_ranges": SecurityConstants.BLOCKED_IP_RANGES,
-                },
+                "enabled": True, "default_action": "block", "whitelist_mode": False,
+                "cache_duration": 3600, "reputation_threshold": 0.7,
+                "blacklist": self._get_default_blacklist(),
+                "whitelist": self._get_default_whitelist(),
+                "reputation_services": self._get_default_reputation_services(),
+                "threat_feeds": self._get_default_threat_feeds(),
+                "network_validation": self._get_default_network_validation(),
             }
         }
 
@@ -177,233 +149,215 @@ class DomainSecurityManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit - cleanup handled by singleton HTTPClientManager"""
 
-    async def validate_domain_safety(self, url: str) -> Dict[str, Any]:
-        """
-        Comprehensive domain safety validation
-
-        Returns:
-            Dict containing:
-            - safe: bool - Whether domain is safe to access
-            - reason: str - Reason for the decision
-            - reputation_score: float - Domain reputation (0.0-1.0)
-            - threats_detected: List[str] - List of detected threats
-            - metadata: Dict - Additional metadata
-        """
-        result = {
-            "safe": False,
-            "reason": "unknown",
-            "reputation_score": 0.0,
-            "threats_detected": [],
-            "metadata": {},
+    def _create_safety_result(self) -> Dict[str, Any]:
+        """Create initial domain safety result structure."""
+        return {
+            "safe": False, "reason": "unknown", "reputation_score": 0.0,
+            "threats_detected": [], "metadata": {},
         }
 
+    def _parse_domain_url(self, url: str, result: Dict) -> tuple:
+        """Parse URL and extract domain. Returns (domain, parsed, error_result or None)."""
+        parsed = urlparse(url)
+        if not parsed.hostname:
+            return None, None, {
+                "safe": False, "reason": "Invalid URL - no hostname",
+                "threats_detected": ["INVALID_URL"],
+            }
+        domain = parsed.hostname.lower()
+        result["metadata"]["domain"] = domain
+        result["metadata"]["scheme"] = parsed.scheme
+        result["metadata"]["port"] = parsed.port
+        return domain, parsed, None
+
+    def _check_domain_cache(self, domain: str) -> Dict[str, Any]:
+        """Check if domain result is cached. Returns cached result or None."""
+        cache_key = f"domain_{domain}"
+        if cache_key in self.domain_cache:
+            cached = self.domain_cache[cache_key]
+            cache_duration = self.config.config.get("domain_security", {}).get("cache_duration", 3600)
+            if time.time() - cached["timestamp"] < cache_duration:
+                logger.debug(f"Using cached domain validation for {domain}")
+                return cached["result"]
+        return None
+
+    async def _check_network_access(self, parsed, result: Dict, cache_key: str) -> Dict[str, Any]:
+        """Check network access. Returns error result if blocked, None if allowed."""
+        network_result = await self._validate_network_access(parsed)
+        if not network_result["allowed"]:
+            error = {
+                "safe": False, "reason": f"Network access blocked: {network_result['reason']}",
+                "threats_detected": ["NETWORK_ACCESS_BLOCKED"],
+            }
+            result.update(error)
+            self._cache_result(cache_key, result)
+            return result
+        return None
+
+    def _check_whitelist_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
+        """Check if domain is whitelisted. Returns result if whitelisted, None otherwise."""
+        if self._is_whitelisted(domain):
+            result.update({
+                "safe": True, "reason": "Domain is whitelisted", "reputation_score": 1.0,
+                "metadata": {**result["metadata"], "whitelisted": True},
+            })
+            self._cache_result(cache_key, result)
+            return result
+        return None
+
+    def _check_blacklist_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
+        """Check if domain is blacklisted. Returns result if blacklisted, None otherwise."""
+        blacklist_result = self._check_blacklist(domain)
+        if blacklist_result["blocked"]:
+            result.update({
+                "safe": False, "reason": f"Domain is blacklisted: {blacklist_result['reason']}",
+                "threats_detected": ["BLACKLISTED_DOMAIN"],
+                "metadata": {**result["metadata"], "blacklist_match": blacklist_result["pattern"]},
+            })
+            self._cache_result(cache_key, result)
+            return result
+        return None
+
+    async def _check_threat_intelligence_match(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
+        """Check threat intelligence. Returns result if threat found, None otherwise."""
+        await self._update_threat_intelligence()
+        if domain in self.threat_intelligence:
+            result.update({
+                "safe": False, "reason": "Domain found in threat intelligence feeds",
+                "threats_detected": ["THREAT_INTELLIGENCE"],
+                "metadata": {**result["metadata"], "threat_source": "feed"},
+            })
+            self._cache_result(cache_key, result)
+            return result
+        return None
+
+    async def _make_final_safety_decision(self, domain: str, result: Dict, cache_key: str) -> Dict[str, Any]:
+        """Make final safety decision based on reputation. Returns updated result."""
+        reputation_score = await self._check_reputation_services(domain)
+        result["reputation_score"] = reputation_score
+
+        domain_config = self.config.config.get("domain_security", {})
+        reputation_threshold = domain_config.get("reputation_threshold", 0.7)
+        whitelist_mode = domain_config.get("whitelist_mode", False)
+
+        if whitelist_mode:
+            result.update({
+                "safe": False, "reason": "Whitelist mode enabled - domain not in whitelist",
+                "threats_detected": ["NOT_WHITELISTED"],
+            })
+        elif reputation_score < reputation_threshold:
+            result.update({
+                "safe": False, "reason": f"Low reputation score: {reputation_score:.2f} < {reputation_threshold}",
+                "threats_detected": ["LOW_REPUTATION"],
+            })
+        else:
+            result.update({
+                "safe": True, "reason": "Domain passed all security checks",
+                "reputation_score": reputation_score,
+            })
+
+        self._cache_result(cache_key, result)
+        logger.info(f"Domain validation for {domain}: safe={result['safe']}, reason={result['reason']}")
+        return result
+
+    async def validate_domain_safety(self, url: str) -> Dict[str, Any]:
+        """Comprehensive domain safety validation."""
+        result = self._create_safety_result()
         try:
-            # Parse URL
-            parsed = urlparse(url)
-            if not parsed.hostname:
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": "Invalid URL - no hostname",
-                        "threats_detected": ["INVALID_URL"],
-                    }
-                )
+            domain, parsed, error = self._parse_domain_url(url, result)
+            if error:
+                result.update(error)
                 return result
 
-            domain = parsed.hostname.lower()
-            result["metadata"]["domain"] = domain
-            result["metadata"]["scheme"] = parsed.scheme
-            result["metadata"]["port"] = parsed.port
+            if cached := self._check_domain_cache(domain):
+                return cached
 
-            # Check cache first
             cache_key = f"domain_{domain}"
-            if cache_key in self.domain_cache:
-                cached = self.domain_cache[cache_key]
-                if time.time() - cached["timestamp"] < self.config.config.get(
-                    "domain_security", {}
-                ).get("cache_duration", 3600):
-                    logger.debug(f"Using cached domain validation for {domain}")
-                    return cached["result"]
 
             # Step 1: Network validation
-            network_result = await self._validate_network_access(parsed)
-            if not network_result["allowed"]:
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": f"Network access blocked: {network_result['reason']}",
-                        "threats_detected": ["NETWORK_ACCESS_BLOCKED"],
-                    }
-                )
-                self._cache_result(cache_key, result)
-                return result
+            if blocked := await self._check_network_access(parsed, result, cache_key):
+                return blocked
 
-            # Step 2: Whitelist check (if in whitelist mode or domain is whitelisted)
-            if self._is_whitelisted(domain):
-                result.update(
-                    {
-                        "safe": True,
-                        "reason": "Domain is whitelisted",
-                        "reputation_score": 1.0,
-                        "metadata": {**result["metadata"], "whitelisted": True},
-                    }
-                )
-                self._cache_result(cache_key, result)
-                return result
+            # Step 2: Whitelist check
+            if whitelisted := self._check_whitelist_match(domain, result, cache_key):
+                return whitelisted
 
             # Step 3: Blacklist check
-            blacklist_result = self._check_blacklist(domain)
-            if blacklist_result["blocked"]:
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": (
-                            f"Domain is blacklisted: {blacklist_result['reason']}"
-                        ),
-                        "threats_detected": ["BLACKLISTED_DOMAIN"],
-                        "metadata": {
-                            **result["metadata"],
-                            "blacklist_match": blacklist_result["pattern"],
-                        },
-                    }
-                )
-                self._cache_result(cache_key, result)
-                return result
+            if blacklisted := self._check_blacklist_match(domain, result, cache_key):
+                return blacklisted
 
             # Step 4: Threat intelligence check
-            await self._update_threat_intelligence()
-            if domain in self.threat_intelligence:
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": "Domain found in threat intelligence feeds",
-                        "threats_detected": ["THREAT_INTELLIGENCE"],
-                        "metadata": {**result["metadata"], "threat_source": "feed"},
-                    }
-                )
-                self._cache_result(cache_key, result)
-                return result
+            if threat := await self._check_threat_intelligence_match(domain, result, cache_key):
+                return threat
 
-            # Step 5: Reputation services check (if enabled and configured)
-            reputation_score = await self._check_reputation_services(domain)
-            result["reputation_score"] = reputation_score
-
-            # Step 6: Make final decision
-            reputation_threshold = self.config.config.get("domain_security", {}).get(
-                "reputation_threshold", 0.7
-            )
-            whitelist_mode = self.config.config.get("domain_security", {}).get(
-                "whitelist_mode", False
-            )
-
-            if whitelist_mode:
-                # In whitelist mode, block everything not explicitly allowed
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": "Whitelist mode enabled - domain not in whitelist",
-                        "threats_detected": ["NOT_WHITELISTED"],
-                    }
-                )
-            elif reputation_score < reputation_threshold:
-                result.update(
-                    {
-                        "safe": False,
-                        "reason": (
-                            f"Low reputation score: {reputation_score:.2f} < {reputation_threshold}"
-                        ),
-                        "threats_detected": ["LOW_REPUTATION"],
-                    }
-                )
-            else:
-                result.update(
-                    {
-                        "safe": True,
-                        "reason": "Domain passed all security checks",
-                        "reputation_score": reputation_score,
-                    }
-                )
-
-            # Cache the result
-            self._cache_result(cache_key, result)
-
-            logger.info(
-                f"Domain validation for {domain}: safe={result['safe']}, reason={result['reason']}"
-            )
-            return result
+            # Step 5-6: Reputation check and final decision
+            return await self._make_final_safety_decision(domain, result, cache_key)
 
         except Exception as e:
             logger.error(f"Error validating domain {url}: {e}")
-            result.update(
-                {
-                    "safe": False,
-                    "reason": f"Validation error: {str(e)}",
-                    "threats_detected": ["VALIDATION_ERROR"],
-                }
-            )
+            result.update({
+                "safe": False, "reason": f"Validation error: {str(e)}",
+                "threats_detected": ["VALIDATION_ERROR"],
+            })
             return result
 
-    async def _validate_network_access(self, parsed) -> Dict[str, Any]:
-        """Validate network-level access permissions"""
+    def _check_port_allowed(self, port: int) -> Dict[str, Any]:
+        """Check if port is allowed. Returns error result if blocked, None if allowed."""
+        allowed_ports = self.config.config.get("domain_security", {}).get(
+            "network_validation", {}).get("allowed_ports", [80, 443])
+        if port not in allowed_ports:
+            return {"allowed": False, "reason": f"Port {port} not in allowed ports"}
+        return None
+
+    def _resolve_domain_ip(self, domain: str) -> tuple:
+        """Resolve domain to IP. Returns (ip_addr, ip_obj, error_result or None)."""
         try:
-            domain = parsed.hostname
-            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            ip_addr = socket.gethostbyname(domain)
+            ip_obj = ipaddress.ip_address(ip_addr)
+            return ip_addr, ip_obj, None
+        except Exception as e:
+            return None, None, {"allowed": False, "reason": f"DNS resolution failed: {e}"}
 
-            # Check port restrictions
-            allowed_ports = (
-                self.config.config.get("domain_security", {})
-                .get("network_validation", {})
-                .get("allowed_ports", [80, 443])
-            )
-            if port not in allowed_ports:
-                return {"allowed": False, "reason": f"Port {port} not in allowed ports"}
+    def _check_ip_restrictions(self, ip_addr: str, ip_obj, network_config: dict) -> Dict[str, Any]:
+        """Check IP restrictions. Returns error result if blocked, None if allowed."""
+        if network_config.get("block_private_ips", True) and ip_obj.is_private:
+            return {"allowed": False, "reason": f"Private IP access blocked: {ip_addr}"}
+        if network_config.get("block_local_ips", True) and ip_obj.is_loopback:
+            return {"allowed": False, "reason": f"Loopback IP access blocked: {ip_addr}"}
+        if network_config.get("block_cloud_metadata", True):
+            if str(ip_addr) in SecurityConstants.CLOUD_METADATA_IPS:
+                return {"allowed": False, "reason": f"Cloud metadata access blocked: {ip_addr}"}
+        return None
 
-            # Resolve domain to IP
+    def _check_blocked_ip_ranges(self, ip_addr: str, ip_obj, network_config: dict) -> Dict[str, Any]:
+        """Check if IP is in blocked ranges. Returns error result if blocked, None if allowed."""
+        blocked_ranges = network_config.get("blocked_ip_ranges", [])
+        for range_str in blocked_ranges:
             try:
-                ip_addr = socket.gethostbyname(domain)
-                ip_obj = ipaddress.ip_address(ip_addr)
-            except Exception as e:
-                return {"allowed": False, "reason": f"DNS resolution failed: {e}"}
+                if ip_obj in ipaddress.ip_network(range_str):
+                    return {"allowed": False, "reason": f"IP in blocked range {range_str}: {ip_addr}"}
+            except ValueError:
+                continue
+        return None
 
-            # Check IP restrictions
-            network_config = self.config.config.get("domain_security", {}).get(
-                "network_validation", {}
-            )
+    async def _validate_network_access(self, parsed) -> Dict[str, Any]:
+        """Validate network-level access permissions."""
+        try:
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            if error := self._check_port_allowed(port):
+                return error
 
-            if network_config.get("block_private_ips", True) and ip_obj.is_private:
-                return {
-                    "allowed": False,
-                    "reason": f"Private IP access blocked: {ip_addr}",
-                }
+            ip_addr, ip_obj, error = self._resolve_domain_ip(parsed.hostname)
+            if error:
+                return error
 
-            if network_config.get("block_local_ips", True) and ip_obj.is_loopback:
-                return {
-                    "allowed": False,
-                    "reason": f"Loopback IP access blocked: {ip_addr}",
-                }
-
-            # Check cloud metadata endpoints
-            if network_config.get("block_cloud_metadata", True):
-                if str(ip_addr) in SecurityConstants.CLOUD_METADATA_IPS:
-                    return {
-                        "allowed": False,
-                        "reason": f"Cloud metadata access blocked: {ip_addr}",
-                    }
-
-            # Check blocked IP ranges
-            blocked_ranges = network_config.get("blocked_ip_ranges", [])
-            for range_str in blocked_ranges:
-                try:
-                    if ip_obj in ipaddress.ip_network(range_str):
-                        return {
-                            "allowed": False,
-                            "reason": f"IP in blocked range {range_str}: {ip_addr}",
-                        }
-                except ValueError:
-                    continue  # Invalid range format, skip
+            network_config = self.config.config.get("domain_security", {}).get("network_validation", {})
+            if error := self._check_ip_restrictions(ip_addr, ip_obj, network_config):
+                return error
+            if error := self._check_blocked_ip_ranges(ip_addr, ip_obj, network_config):
+                return error
 
             return {"allowed": True, "reason": "Network access permitted"}
-
         except Exception as e:
             logger.error(f"Network validation error for {parsed.hostname}: {e}")
             return {"allowed": False, "reason": f"Network validation failed: {e}"}
