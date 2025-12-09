@@ -11,11 +11,22 @@ Created: 2025-10-31
 """
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, List, Union
 
 import aiofiles
+
+# Issue #380: Pre-compiled ANSI escape sequence patterns for strip_ansi_codes()
+# These patterns are used frequently in terminal output processing
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")  # CSI sequences
+_ANSI_OSC_BEL_RE = re.compile(r"\x1b\][0-9;]*[^\x07]*\x07")  # OSC with BEL
+_ANSI_OSC_ST_RE = re.compile(r"\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?")  # OSC with ST
+_ANSI_SET_MODE_RE = re.compile(r"\x1b[=>]")  # Set modes
+_ANSI_CHARSET_RE = re.compile(r"\x1b[()][AB012]")  # Character sets
+_ANSI_BRACKET_RE = re.compile(r"\[[\?\d;]*[hlHJ]")  # Bracket sequences
+_ANSI_TITLE_RE = re.compile(r"\]0;[^\x07\n]*\x07?")  # Set title
 
 
 def safe_decode(
@@ -195,18 +206,73 @@ def strip_ansi_codes(text: str) -> str:
         >>> strip_ansi_codes('[?2004h]0;Title\\x07Prompt$')
         'Prompt$'
     """
-    import re
-
-    # Remove various ANSI escape sequences
-    text = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)  # CSI sequences
-    text = re.sub(r"\x1b\][0-9;]*[^\x07]*\x07", "", text)  # OSC with BEL
-    text = re.sub(r"\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?", "", text)  # OSC with ST
-    text = re.sub(r"\x1b[=>]", "", text)  # Set modes
-    text = re.sub(r"\x1b[()][AB012]", "", text)  # Character sets
-    text = re.sub(r"\[[\?\d;]*[hlHJ]", "", text)  # Bracket sequences
-    text = re.sub(r"\]0;[^\x07\n]*\x07?", "", text)  # Set title
+    # Remove various ANSI escape sequences using pre-compiled patterns (Issue #380)
+    text = _ANSI_CSI_RE.sub("", text)  # CSI sequences
+    text = _ANSI_OSC_BEL_RE.sub("", text)  # OSC with BEL
+    text = _ANSI_OSC_ST_RE.sub("", text)  # OSC with ST
+    text = _ANSI_SET_MODE_RE.sub("", text)  # Set modes
+    text = _ANSI_CHARSET_RE.sub("", text)  # Character sets
+    text = _ANSI_BRACKET_RE.sub("", text)  # Bracket sequences
+    text = _ANSI_TITLE_RE.sub("", text)  # Set title
 
     return text.strip()
+
+
+# Issue #281: Module-level constants for is_terminal_prompt()
+_BOX_CHARS = frozenset("┌┐└┘├┤┬┴┼─│╭╮╰╯╱╲╳")
+_PROMPT_SYMBOLS = frozenset("$#>%")
+_PROMPT_PATTERNS = [
+    r"^\s*[\$#>%]\s*$",  # Just a prompt symbol
+    r"└─[\$#>%]\s*$",  # Ending prompt line
+    r"┌──.*┘\s*$",  # Box prompt pattern
+    r"^\(.*\).*[\$#>%]\s*$",  # (env) or (venv) with prompt
+    r"^.*@.*:.*[\$#>%]\s*$",  # user@host:path$
+]
+
+
+def _has_box_drawing_chars(text: str) -> bool:
+    """Check if text contains box-drawing characters (Issue #281 - extracted helper)."""
+    return any(char in _BOX_CHARS for char in text)
+
+
+def _ends_with_prompt_symbol(text: str) -> bool:
+    """Check if text ends with a prompt symbol (Issue #281 - extracted helper)."""
+    return any(text.rstrip().endswith(sym) for sym in _PROMPT_SYMBOLS)
+
+
+def _is_mostly_symbols(text: str) -> bool:
+    """Check if text is mostly symbols (< 40% alphanumeric) (Issue #281 - extracted helper)."""
+    alphanumeric_count = sum(1 for c in text if c.isalnum())
+    total_chars = len(text.replace(" ", "").replace("\r", "").replace("\n", ""))
+    return total_chars > 0 and (alphanumeric_count / total_chars) < 0.4
+
+
+def _matches_prompt_pattern(text: str) -> bool:
+    """Check if text matches known prompt patterns (Issue #281 - extracted helper)."""
+    return any(re.search(pattern, text, re.MULTILINE) for pattern in _PROMPT_PATTERNS)
+
+
+def _is_prompt_line(line: str) -> bool:
+    """Check if a single line is a prompt line (Issue #281 - extracted helper)."""
+    return (
+        _has_box_drawing_chars(line)
+        or _ends_with_prompt_symbol(line)
+        or any(re.match(pattern, line) for pattern in _PROMPT_PATTERNS)
+    )
+
+
+def _has_command_output(lines: list) -> bool:
+    """Check if lines contain substantial command output (Issue #281 - extracted helper)."""
+    non_prompt_lines = []
+    for line in lines:
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+        # If it's a long line without prompt characteristics, it's likely output
+        if not _is_prompt_line(line_stripped) and len(line_stripped) > 10:
+            non_prompt_lines.append(line_stripped)
+
+    return len(non_prompt_lines) > 0 and sum(len(line) for line in non_prompt_lines) > 20
 
 
 def is_terminal_prompt(text: str) -> bool:
@@ -218,6 +284,8 @@ def is_terminal_prompt(text: str) -> bool:
     - Prompt symbols at end ($, #, >, %)
     - Typical prompt patterns without actual command output
     - Short length (< 300 chars) with mostly whitespace and symbols
+
+    Issue #281: Refactored from 111 lines to use extracted helper methods.
 
     Args:
         text: Text to check (should already have ANSI codes stripped)
@@ -237,89 +305,33 @@ def is_terminal_prompt(text: str) -> bool:
         >>> is_terminal_prompt("command output here")
         False
     """
-    import re
-
     if not text:
         return True  # Empty text is effectively a prompt
 
-    # Strip whitespace for analysis
     stripped = text.strip()
-
     if not stripped:
         return True  # Only whitespace
 
-    # Box-drawing characters commonly used in fancy prompts
-    box_chars = set("┌┐└┘├┤┬┴┼─│╭╮╰╯╱╲╳")
+    # Check for command output first (if present, it's not just a prompt)
+    if _has_command_output(stripped.split("\n")):
+        return False
 
-    # Prompt ending symbols
-    prompt_symbols = set("$#>%")
-
-    # Check for box-drawing characters
-    has_box_chars = any(char in box_chars for char in stripped)
-
-    # Check if it ends with a prompt symbol (possibly with trailing whitespace)
-    ends_with_prompt = any(stripped.rstrip().endswith(sym) for sym in prompt_symbols)
-
-    # Check if text is very short and only contains prompt-like content
-    # (Less than 300 chars and mostly symbols/whitespace)
+    # Check prompt characteristics
+    has_box_chars = _has_box_drawing_chars(stripped)
+    ends_with_prompt = _ends_with_prompt_symbol(stripped)
+    matches_pattern = _matches_prompt_pattern(stripped)
     is_short = len(stripped) < 300
-
-    # Calculate ratio of alphanumeric vs special characters
-    alphanumeric_count = sum(1 for c in stripped if c.isalnum())
-    total_chars = len(stripped.replace(" ", "").replace("\r", "").replace("\n", ""))
-
-    # If mostly special characters (less than 40% alphanumeric), likely a prompt
-    is_mostly_symbols = total_chars > 0 and (alphanumeric_count / total_chars) < 0.4
-
-    # Patterns that indicate this is a prompt
-    prompt_patterns = [
-        r"^\s*[\$#>%]\s*$",  # Just a prompt symbol
-        r"└─[\$#>%]\s*$",  # Ending prompt line
-        r"┌──.*┘\s*$",  # Box prompt pattern
-        r"^\(.*\).*[\$#>%]\s*$",  # (env) or (venv) with prompt
-        r"^.*@.*:.*[\$#>%]\s*$",  # user@host:path$
-    ]
-
-    matches_pattern = any(
-        re.search(pattern, stripped, re.MULTILINE) for pattern in prompt_patterns
-    )
-
-    # CRITICAL FIX: Check if there's actual command output before the prompt
-    # If text has multiple lines with substantial content, it's not just a prompt
-    lines = stripped.split("\n")
-    non_prompt_lines = []
-    for line in lines:
-        line_stripped = line.strip()
-        # Skip empty lines and lines that are just prompts
-        if not line_stripped:
-            continue
-        # Check if this line is just a prompt
-        is_prompt_line = (
-            any(char in box_chars for char in line_stripped)
-            or any(line_stripped.rstrip().endswith(sym) for sym in prompt_symbols)
-            or any(re.match(pattern, line_stripped) for pattern in prompt_patterns)
-        )
-        # If it's a long line without prompt symbols, it's likely output
-        if not is_prompt_line and len(line_stripped) > 10:
-            non_prompt_lines.append(line_stripped)
-
-    # If we have substantial non-prompt lines, this is command output (not just a prompt)
-    has_command_output = (
-        len(non_prompt_lines) > 0
-        and sum(len(line) for line in non_prompt_lines) > 20
-    )
+    mostly_symbols = _is_mostly_symbols(stripped)
 
     # It's a prompt if:
-    # 1. It has box-drawing chars AND ends with prompt symbol AND no real output, OR
-    # 2. It matches a known prompt pattern AND no real output, OR
-    # 3. It's short and mostly symbols with a prompt ending AND no real output
-    is_prompt = not has_command_output and (
+    # 1. It has box-drawing chars AND ends with prompt symbol, OR
+    # 2. It matches a known prompt pattern, OR
+    # 3. It's short and mostly symbols with a prompt ending
+    return (
         (has_box_chars and ends_with_prompt)
         or matches_pattern
-        or (is_short and is_mostly_symbols and ends_with_prompt)
+        or (is_short and mostly_symbols and ends_with_prompt)
     )
-
-    return is_prompt
 
 
 def normalize_line_endings(text: str, target: str = "\n") -> str:
