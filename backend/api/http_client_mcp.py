@@ -307,19 +307,17 @@ class HTTPHeadRequest(HTTPRequestBase):
 # MCP Tool Definitions
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_http_client_mcp_tools",
-    error_code_prefix="HTTP_MCP",
-)
-@router.get("/mcp/tools")
-async def get_http_client_mcp_tools() -> List[MCPTool]:
+def _get_http_read_tools() -> List[MCPTool]:
     """
-    Return all available HTTP Client MCP tools
+    Get MCP tools for HTTP read operations (GET, HEAD).
 
-    This endpoint follows the MCP specification for tool discovery.
+    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for read operations
     """
-    tools = [
+    return [
         MCPTool(
             name="http_get",
             description=(
@@ -357,6 +355,46 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
                 "required": ["url"],
             },
         ),
+        MCPTool(
+            name="http_head",
+            description=(
+                "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
+                "checking resource existence or metadata."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "Target URL to check",
+                    },
+                    "headers": {
+                        "type": "object",
+                        "description": "Optional HTTP headers",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
+                    },
+                },
+                "required": ["url"],
+            },
+        ),
+    ]
+
+
+def _get_http_write_tools() -> List[MCPTool]:
+    """
+    Get MCP tools for HTTP write operations (POST, PUT, PATCH, DELETE).
+
+    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length
+    and improve maintainability of tool definitions by category.
+
+    Returns:
+        List of MCPTool definitions for write operations
+    """
+    return [
         MCPTool(
             name="http_post",
             description=(
@@ -480,34 +518,25 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
                 "required": ["url"],
             },
         ),
-        MCPTool(
-            name="http_head",
-            description=(
-                "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
-                "checking resource existence or metadata."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL to check",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
     ]
 
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_http_client_mcp_tools",
+    error_code_prefix="HTTP_MCP",
+)
+@router.get("/mcp/tools")
+async def get_http_client_mcp_tools() -> List[MCPTool]:
+    """
+    Return all available HTTP Client MCP tools
+
+    This endpoint follows the MCP specification for tool discovery.
+    """
+    # Issue #281: Use extracted helpers for tool definitions by category
+    tools = []
+    tools.extend(_get_http_read_tools())
+    tools.extend(_get_http_write_tools())
     return tools
 
 
