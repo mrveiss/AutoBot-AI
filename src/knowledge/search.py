@@ -589,6 +589,226 @@ class SearchMixin:
             logger.error(f"Reranking failed: {e}")
             return results
 
+    @error_boundary(component="knowledge_base", function="enhanced_search_v2")
+    async def enhanced_search_v2(
+        self,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+        category: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        tags_match_any: bool = False,
+        mode: str = "hybrid",
+        enable_reranking: bool = False,
+        min_score: float = 0.0,
+        # Issue #78: New parameters for search quality improvements
+        enable_query_expansion: bool = False,
+        enable_relevance_scoring: bool = False,
+        enable_clustering: bool = False,
+        track_analytics: bool = True,
+        created_after: Optional[str] = None,  # ISO format datetime
+        created_before: Optional[str] = None,
+        exclude_terms: Optional[List[str]] = None,
+        require_terms: Optional[List[str]] = None,
+        exclude_sources: Optional[List[str]] = None,
+        verified_only: bool = False,
+        session_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Enhanced search v2 with full Issue #78 improvements.
+
+        Issue #78: Search quality improvements including:
+        - Query expansion with synonyms and related terms
+        - Relevance scoring with recency, popularity, authority
+        - Advanced filtering (date ranges, exclusions)
+        - Result clustering by topic
+        - Search analytics tracking
+
+        Args:
+            query: Search query string
+            limit: Maximum results to return (default: 10)
+            offset: Pagination offset (default: 0)
+            category: Optional category filter
+            tags: Optional list of tags to filter by
+            tags_match_any: If True, match ANY tag; False matches ALL
+            mode: Search mode ("semantic", "keyword", "hybrid")
+            enable_reranking: Enable cross-encoder reranking
+            min_score: Minimum similarity score threshold (0.0-1.0)
+            enable_query_expansion: Expand query with synonyms (Issue #78)
+            enable_relevance_scoring: Apply relevance boosting (Issue #78)
+            enable_clustering: Cluster results by topic (Issue #78)
+            track_analytics: Track search analytics (Issue #78)
+            created_after: Filter by creation date (ISO format)
+            created_before: Filter by creation date (ISO format)
+            exclude_terms: Terms to exclude from results
+            require_terms: Terms that must be present
+            exclude_sources: Sources to exclude
+            verified_only: Only return verified results
+            session_id: Session ID for analytics tracking
+
+        Returns:
+            Enhanced search response with optional clustering
+        """
+        import time
+        from datetime import datetime as dt
+
+        self.ensure_initialized()
+
+        if not query.strip():
+            return self._build_empty_query_response()
+
+        start_time = time.time()
+
+        try:
+            # Import search quality components
+            from src.knowledge.search_quality import (
+                get_query_expander,
+                get_relevance_scorer,
+                get_result_clusterer,
+                get_search_analytics,
+                SearchFilters,
+                AdvancedFilter,
+            )
+
+            processed_query = self._preprocess_query(query)
+            queries_to_search = [processed_query]
+
+            # Issue #78: Query expansion
+            if enable_query_expansion:
+                expander = get_query_expander()
+                queries_to_search = expander.expand_query(processed_query)
+                logger.debug(f"Query expansion: {len(queries_to_search)} variations")
+
+            # Get tag-filtered IDs if needed
+            tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
+                tags, tags_match_any, processed_query
+            )
+            if early_return:
+                return early_return
+
+            # Calculate fetch limit with multiplier for filtering
+            fetch_multiplier = 3 if (tags or min_score > 0 or exclude_terms) else 1.5
+            fetch_limit = min(int((limit + offset) * fetch_multiplier), 500)
+
+            # Execute search with all query variations
+            all_results = []
+            seen_ids: Set[str] = set()
+
+            for search_query in queries_to_search:
+                query_results = await self._execute_search_by_mode(
+                    mode, search_query, fetch_limit, category
+                )
+                for result in query_results:
+                    result_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", "")
+                    if result_id not in seen_ids:
+                        seen_ids.add(result_id)
+                        result["matched_query"] = search_query  # Track which query matched
+                        all_results.append(result)
+
+            # Apply tag and score filters
+            results = self._apply_post_search_filters(all_results, tag_filtered_ids, min_score)
+
+            # Issue #78: Advanced filtering
+            if any([created_after, created_before, exclude_terms, require_terms,
+                    exclude_sources, verified_only]):
+                filters = SearchFilters(
+                    created_after=dt.fromisoformat(created_after) if created_after else None,
+                    created_before=dt.fromisoformat(created_before) if created_before else None,
+                    exclude_terms=exclude_terms,
+                    require_terms=require_terms,
+                    exclude_sources=exclude_sources,
+                    verified_only=verified_only,
+                    min_score=min_score,
+                    max_results=fetch_limit,
+                )
+                advanced_filter = AdvancedFilter(filters)
+                results = advanced_filter.apply_filters(results)
+
+            # Issue #78: Relevance scoring
+            if enable_relevance_scoring and results:
+                scorer = get_relevance_scorer()
+                for result in results:
+                    original_score = result.get("score", 0)
+                    result["original_score"] = original_score
+                    result["score"] = scorer.calculate_relevance_score(
+                        original_score, processed_query, result
+                    )
+                # Re-sort by new scores
+                results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+            # Reranking with cross-encoder
+            if enable_reranking and results:
+                results = await self._rerank_results(processed_query, results)
+
+            # Calculate search duration
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # Issue #78: Search analytics
+            if track_analytics:
+                analytics = get_search_analytics()
+                analytics.record_search(
+                    query=query,
+                    result_count=len(results),
+                    duration_ms=duration_ms,
+                    session_id=session_id,
+                    filters={
+                        "mode": mode,
+                        "tags": tags,
+                        "category": category,
+                        "query_expansion": enable_query_expansion,
+                        "relevance_scoring": enable_relevance_scoring,
+                    },
+                )
+
+            # Issue #78: Result clustering
+            clusters = None
+            unclustered = results
+            if enable_clustering and results:
+                clusterer = get_result_clusterer()
+                cluster_objects, unclustered = clusterer.cluster_results(results)
+                clusters = [
+                    {
+                        "topic": c.topic,
+                        "keywords": c.keywords,
+                        "avg_score": c.avg_score,
+                        "result_count": len(c.results),
+                        "results": c.results[offset:offset + limit],
+                    }
+                    for c in cluster_objects
+                ]
+
+            # Build response
+            total_count = len(results)
+            paginated_results = unclustered[offset:offset + limit] if not enable_clustering else unclustered
+
+            response = {
+                "success": True,
+                "results": paginated_results,
+                "total_count": total_count,
+                "query_processed": processed_query,
+                "mode": mode,
+                "tags_applied": tags if tags else [],
+                "min_score_applied": min_score,
+                "reranking_applied": enable_reranking,
+                "search_duration_ms": duration_ms,
+                # Issue #78 additions
+                "query_expansion_applied": enable_query_expansion,
+                "queries_searched": len(queries_to_search) if enable_query_expansion else 1,
+                "relevance_scoring_applied": enable_relevance_scoring,
+            }
+
+            if enable_clustering and clusters:
+                response["clusters"] = clusters
+                response["unclustered_count"] = len(unclustered)
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Enhanced search v2 failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"success": False, "results": [], "total_count": 0, "error": str(e)}
+
     def ensure_initialized(self):
         """
         Ensure the knowledge base is initialized.
