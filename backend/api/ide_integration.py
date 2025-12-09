@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Issue #380: Module-level tuples for AST node type checks
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_CONTROL_FLOW_TYPES = (ast.If, ast.For, ast.While, ast.With)
+_NESTING_TYPES = (ast.If, ast.For, ast.While, ast.With, ast.Try)
+
 
 # =============================================================================
 # Enums and Constants
@@ -406,6 +411,49 @@ class IDEIntegrationEngine:
             return False
         return diagnostic.range.start.character <= character <= diagnostic.range.end.character
 
+    def _check_rule_on_lines(
+        self,
+        rule: dict,
+        lines: List[str],
+        severity: DiagnosticSeverity,
+    ) -> List[Diagnostic]:
+        """
+        Check a single rule against all lines and return matching diagnostics.
+
+        Issue #281: Extracted from analyze() to reduce nesting depth.
+
+        Args:
+            rule: Pattern rule to check
+            lines: Lines of code to analyze
+            severity: Severity level for diagnostics
+
+        Returns:
+            List of diagnostics for matches found
+        """
+        diagnostics = []
+        for line_num, line in enumerate(lines):
+            try:
+                matches = list(re.finditer(rule["pattern"], line, re.IGNORECASE))
+                for match in matches:
+                    diagnostic = Diagnostic(
+                        range=Range(
+                            start=Position(line=line_num, character=match.start()),
+                            end=Position(line=line_num, character=match.end()),
+                        ),
+                        severity=severity,
+                        code=rule["id"],
+                        message=rule["message"],
+                        category=rule["category"],
+                        data={
+                            "rule_name": rule["name"],
+                            "fix_template": rule.get("fix_template"),
+                        },
+                    )
+                    diagnostics.append(diagnostic)
+            except re.error as e:
+                logger.debug("Invalid regex pattern skipped: %s", e)
+        return diagnostics
+
     def _build_hover_contents(self, rule: dict, diagnostic: Diagnostic) -> str:
         """Build hover markdown contents for a rule. (Issue #315 - extracted)"""
         contents = f"""### {rule['name']}
@@ -470,31 +518,9 @@ class IDEIntegrationEngine:
 
             patterns_checked += 1
 
-            # Check each line
-            for line_num, line in enumerate(lines):
-                try:
-                    matches = list(re.finditer(rule["pattern"], line, re.IGNORECASE))
-                    for match in matches:
-                        start_char = match.start()
-                        end_char = match.end()
-
-                        diagnostic = Diagnostic(
-                            range=Range(
-                                start=Position(line=line_num, character=start_char),
-                                end=Position(line=line_num, character=end_char),
-                            ),
-                            severity=severity,
-                            code=rule["id"],
-                            message=rule["message"],
-                            category=rule["category"],
-                            data={
-                                "rule_name": rule["name"],
-                                "fix_template": rule.get("fix_template"),
-                            },
-                        )
-                        diagnostics.append(diagnostic)
-                except re.error as e:
-                    logger.debug("Invalid regex pattern skipped: %s", e)
+            # Issue #281: Use extracted helper for line checking
+            rule_diagnostics = self._check_rule_on_lines(rule, lines, severity)
+            diagnostics.extend(rule_diagnostics)
 
         # Also check for AST-based patterns
         if request.language == "python":
@@ -534,7 +560,7 @@ class IDEIntegrationEngine:
 
         for node in ast.walk(tree):
             # Check for complex functions
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                 if hasattr(node, "body") and len(node.body) > 50:
                     diagnostics.append(
                         Diagnostic(
@@ -554,8 +580,8 @@ class IDEIntegrationEngine:
                         )
                     )
 
-            # Check for deeply nested code
-            if isinstance(node, (ast.If, ast.For, ast.While, ast.With)):
+            # Check for deeply nested code - Issue #380: Use module-level constant
+            if isinstance(node, _CONTROL_FLOW_TYPES):
                 depth = self._get_nesting_depth(node)
                 if depth > 4:
                     diagnostics.append(
@@ -582,7 +608,8 @@ class IDEIntegrationEngine:
         """Calculate nesting depth of a node."""
         max_depth = depth
         for child in ast.iter_child_nodes(node):
-            if isinstance(child, (ast.If, ast.For, ast.While, ast.With, ast.Try)):
+            # Issue #380: Use module-level constant
+            if isinstance(child, _NESTING_TYPES):
                 child_depth = self._get_nesting_depth(child, depth + 1)
                 max_depth = max(max_depth, child_depth)
         return max_depth

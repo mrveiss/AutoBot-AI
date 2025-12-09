@@ -34,8 +34,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Issue #380: Module-level tuple for function definition AST nodes
+# Issue #380: Module-level tuples for AST node types used in isinstance checks
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_EXPRESSION_TYPES = (ast.Expr, ast.BinOp, ast.UnaryOp, ast.Compare)
+_CONTROL_FLOW_TYPES = (ast.If, ast.Try, ast.ExceptHandler)
+_LOOP_TYPES = (ast.For, ast.While)
+_ASSIGNMENT_TYPES = (ast.Assign, ast.AugAssign, ast.AnnAssign)
+_DEFINITION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 # =============================================================================
@@ -1359,20 +1364,18 @@ class ASTHasher:
         features["depth"] = max(features["depth"], depth)
         features["node_types"].add(type(node).__name__)
 
-        # Count specific node types
-        if isinstance(node, (ast.Expr, ast.BinOp, ast.UnaryOp, ast.Compare)):
+        # Count specific node types - Issue #380: Use module-level constants
+        if isinstance(node, _EXPRESSION_TYPES):
             features["expression_count"] += 1
-        if isinstance(node, (ast.If, ast.Try, ast.ExceptHandler)):
+        if isinstance(node, _CONTROL_FLOW_TYPES):
             features["control_flow_count"] += 1
-        if isinstance(node, (ast.For, ast.While)):
+        if isinstance(node, _LOOP_TYPES):
             features["loop_count"] += 1
         if isinstance(node, ast.Call):
             features["function_call_count"] += 1
-        if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        if isinstance(node, _ASSIGNMENT_TYPES):
             features["assignment_count"] += 1
-        if isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ):
+        if isinstance(node, _DEFINITION_TYPES):
             features["statement_count"] += 1
 
         # Track operator types

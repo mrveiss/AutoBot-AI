@@ -47,6 +47,33 @@ except ImportError as e:
 _ASYNCIO_LOCK_NAMES = frozenset(("Lock", "Semaphore", "Event", "Condition"))
 _THREADING_LOCK_NAMES = frozenset(("Lock", "RLock", "Semaphore", "Event", "Condition"))
 
+# Issue #380: Module-level tuple for function definition AST nodes
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
+
+# Issue #380: Module-level tuple for mutable type annotation checking
+_MUTABLE_TYPE_ANNOTATIONS = ("Dict", "List", "Set", "dict", "list", "set")
+
+# Issue #380: Pre-compiled regex patterns for hardcode detection
+_IP_ADDRESS_RE = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
+_URL_IN_QUOTES_RE = re.compile(r'[\'"`](https?://[^\'"` ]+)[\'"`]')
+_PORT_NUMBER_RE = re.compile(r"\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b")
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+# Issue #380: Module-level frozensets for file operation safety patterns
+_LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
+_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})
+_SAFE_FILE_TYPES = frozenset({
+    ".pid", ".lock", ".json", ".yaml", ".yml", ".toml", ".ini",
+    ".md", ".txt", ".csv", ".html", ".xml"
+})
+
+# Issue #380: Module-level tuple for collection AST types
+_COLLECTION_AST_TYPES = (ast.Dict, ast.List, ast.Set)
+
+# Issue #380: Module-level tuple for local IP prefixes
+_LOCAL_IP_PREFIXES = ("127.0.0.", "192.168.")
+
 
 def _check_import_from_lock(node: ast.ImportFrom) -> Tuple[bool, bool]:
     """Check ImportFrom node for lock imports. (Issue #315 - extracted)"""
@@ -87,7 +114,7 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     Returns:
         True if the value creates a mutable type
     """
-    if isinstance(value, (ast.Dict, ast.List, ast.Set)):
+    if isinstance(value, _COLLECTION_AST_TYPES):  # Issue #380: Use module-level constant
         return True
 
     if not isinstance(value, ast.Call):
@@ -128,10 +155,10 @@ def _process_ann_assign_node(
     # Check annotation for Dict, List, Set types
     if node.annotation:
         ann_str = ast.unparse(node.annotation) if hasattr(ast, "unparse") else ""
-        if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
+        if any(t in ann_str for t in _MUTABLE_TYPE_ANNOTATIONS):
             global_mutables.add(var_name)
 
-    if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
+    if node.value and isinstance(node.value, _COLLECTION_AST_TYPES):  # Issue #380
         global_mutables.add(var_name)
 
 
@@ -297,6 +324,64 @@ def _check_lazy_init_pattern(
     return None
 
 
+def _is_safe_file_write_context(
+    target_file: str,
+    mode_str: str,
+    file_path: str,
+    func_name: str,
+) -> bool:
+    """
+    Check if a file write operation is in a safe context that doesn't need locking.
+
+    Issue #281: Extracted helper to reduce complexity in _check_file_write_without_lock.
+    Issue #378: Consolidated safe pattern checks.
+
+    Args:
+        target_file: The file being written to (lowercased)
+        mode_str: File open mode string
+        file_path: Source file path containing the code
+        func_name: Name of the function containing the write
+
+    Returns:
+        True if the write is in a safe context, False otherwise
+    """
+    # Safe pattern 1: Log files (typically single-writer or properly managed)
+    if any(ind in target_file for ind in _LOG_INDICATORS):
+        return True
+
+    # Safe pattern 2: Temp files (typically unique names)
+    if any(ind in target_file for ind in _TEMP_INDICATORS):
+        return True
+
+    # Safe pattern 3: Common non-concurrent file types
+    if any(target_file.endswith(ext) for ext in _SAFE_FILE_TYPES):
+        return True
+
+    # Safe pattern 4: Append mode is generally safer
+    if "a" in mode_str:
+        return True
+
+    # Safe pattern 5: Context indicators in file path
+    safe_contexts = {
+        "scripts/", "test", "setup", "init", "install", "deploy",
+        "archive", "backup", "migration", "fixture", "mock"
+    }
+    file_path_lower = file_path.lower()
+    if any(ctx in file_path_lower for ctx in safe_contexts):
+        return True
+
+    # Safe pattern 6: Function name indicates non-concurrent context
+    safe_func_names = {
+        "init", "setup", "configure", "install", "migrate", "backup",
+        "export", "save_config", "write_config", "dump", "serialize"
+    }
+    func_name_lower = func_name.lower()
+    if any(safe in func_name_lower for safe in safe_func_names):
+        return True
+
+    return False
+
+
 def _check_file_write_without_lock(
     stmt: ast.With, file_path: str = "", func_name: str = ""
 ) -> Optional[Dict]:
@@ -329,7 +414,6 @@ def _check_file_write_without_lock(
             continue
 
         # Issue #378: Check for safe patterns that don't need locking
-
         # Get the file path argument if it's a constant or has a name
         file_arg = call.args[0] if call.args else None
         target_file = ""
@@ -338,44 +422,8 @@ def _check_file_write_without_lock(
         elif isinstance(file_arg, ast.Name):
             target_file = file_arg.id.lower()
 
-        # Safe pattern 1: Log files (typically single-writer or properly managed)
-        log_indicators = {"log", "logs", ".log", "logging", "debug", "trace"}
-        if any(ind in target_file for ind in log_indicators):
-            return None
-
-        # Safe pattern 2: Temp files (typically unique names)
-        temp_indicators = {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
-        if any(ind in target_file for ind in temp_indicators):
-            return None
-
-        # Safe pattern 3: Common non-concurrent file types
-        safe_file_types = {
-            ".pid", ".lock", ".json", ".yaml", ".yml", ".toml", ".ini",
-            ".md", ".txt", ".csv", ".html", ".xml"
-        }
-        if any(target_file.endswith(ext) for ext in safe_file_types):
-            return None
-
-        # Safe pattern 4: Append mode is generally safer
-        if "a" in mode_str:
-            return None
-
-        # Safe pattern 5: Context indicators in file path
-        safe_contexts = {
-            "scripts/", "test", "setup", "init", "install", "deploy",
-            "archive", "backup", "migration", "fixture", "mock"
-        }
-        file_path_lower = file_path.lower()
-        if any(ctx in file_path_lower for ctx in safe_contexts):
-            return None
-
-        # Safe pattern 6: Function name indicates non-concurrent context
-        safe_func_names = {
-            "init", "setup", "configure", "install", "migrate", "backup",
-            "export", "save_config", "write_config", "dump", "serialize"
-        }
-        func_name_lower = func_name.lower()
-        if any(safe in func_name_lower for safe in safe_func_names):
+        # Issue #281: Use extracted helper for all safe pattern checks
+        if _is_safe_file_write_context(target_file, mode_str, file_path, func_name):
             return None
 
         # This is a potentially risky file write - flag it
@@ -569,10 +617,10 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
 
 def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[Dict]:
     """Check if IP address is a known infrastructure IP."""
+    # Issue #380: Use module-level constant for local IP prefixes
     if not (
         ip.startswith(NetworkConstants.VM_IP_PREFIX)
-        or ip.startswith("127.0.0.")
-        or ip.startswith("192.168.")
+        or ip.startswith(_LOCAL_IP_PREFIXES)
     ):
         return None
 
@@ -601,19 +649,19 @@ def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
     hardcodes = []
 
     # Check for IP addresses
-    ip_matches = re.findall(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", line)
+    ip_matches = _IP_ADDRESS_RE.findall(line)
     for ip in ip_matches:
         result = _check_hardcoded_ip(ip, line_num, line)
         if result:
             hardcodes.append(result)
 
     # Check for URLs
-    url_matches = re.findall(r'[\'"`](https?://[^\'"` ]+)[\'"`]', line)
+    url_matches = _URL_IN_QUOTES_RE.findall(line)
     for url in url_matches:
         hardcodes.append({"type": "url", "value": url, "line": line_num, "context": line.strip()})
 
     # Check for ports
-    port_matches = re.findall(r"\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b", line)
+    port_matches = _PORT_NUMBER_RE.findall(line)
     for port in port_matches:
         result = _check_hardcoded_port(port, line_num, line)
         if result:
@@ -756,9 +804,38 @@ def _create_empty_analysis_result() -> Metadata:
     }
 
 
+def _extract_docstring_lines(first_stmt: ast.AST) -> Set[int]:
+    """Extract line numbers for a docstring statement (Issue #315: extracted helper)."""
+    if not isinstance(first_stmt, ast.Expr):
+        return set()
+    if not isinstance(first_stmt.value, ast.Constant):
+        return set()
+    if not isinstance(first_stmt.value.value, str):
+        return set()
+    end_line = first_stmt.end_lineno or first_stmt.lineno
+    return set(range(first_stmt.lineno, end_line + 1))
+
+
+def _find_all_docstring_lines(tree: ast.AST) -> Set[int]:
+    """Find all docstring line numbers in AST (Issue #315: extracted helper)."""
+    docstring_lines: Set[int] = set()
+
+    for node in ast.walk(tree):
+        # Check module-level docstring
+        if isinstance(node, ast.Module) and node.body:
+            docstring_lines.update(_extract_docstring_lines(node.body[0]))
+
+        # Check function/class docstrings
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+            docstring_lines.update(_extract_docstring_lines(node.body[0]))
+
+    return docstring_lines
+
+
 def _count_python_line_types(content: str, tree: ast.AST) -> Dict[str, int]:
     """
     Count different line types in Python code (Issue #368).
+    Issue #315: Refactored with extracted helpers to reduce nesting.
 
     Distinguishes between:
     - code_lines: Lines containing executable code
@@ -776,27 +853,7 @@ def _count_python_line_types(content: str, tree: ast.AST) -> Dict[str, int]:
     lines = content.splitlines()
     total_lines = len(lines)
 
-    # Track which lines are part of docstrings
-    docstring_line_numbers: Set[int] = set()
-
-    # Find all docstrings in functions, classes, and module level
-    for node in ast.walk(tree):
-        # Check module-level docstring
-        if isinstance(node, ast.Module) and node.body:
-            first_stmt = node.body[0]
-            if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Constant):
-                if isinstance(first_stmt.value.value, str):
-                    for line_num in range(first_stmt.lineno, (first_stmt.end_lineno or first_stmt.lineno) + 1):
-                        docstring_line_numbers.add(line_num)
-
-        # Check function/class docstrings
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            if node.body:
-                first_stmt = node.body[0]
-                if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Constant):
-                    if isinstance(first_stmt.value.value, str):
-                        for line_num in range(first_stmt.lineno, (first_stmt.end_lineno or first_stmt.lineno) + 1):
-                            docstring_line_numbers.add(line_num)
+    docstring_line_numbers = _find_all_docstring_lines(tree)
 
     blank_lines = 0
     comment_lines = 0
@@ -958,7 +1015,7 @@ def _analyze_ast_nodes(tree: ast.AST) -> Tuple[List[Dict], List[Dict], List[str]
         elif isinstance(node, ast.ClassDef):
             classes.append(_extract_class_info(node))
 
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+        elif isinstance(node, _IMPORT_TYPES):  # Issue #380
             imports.extend(_extract_imports_from_node(node))
 
     return functions, classes, imports, problems
@@ -1065,9 +1122,7 @@ IMPORTANT: Return ONLY the JSON object, no other text."""
             return result
         else:
             # Try to find JSON object in response
-            import re
-
-            json_match = re.search(r"\{.*\}", result_text, re.DOTALL)
+            json_match = _JSON_OBJECT_RE.search(result_text)
             if json_match:
                 result = json.loads(json_match.group())
                 return result
@@ -1106,7 +1161,7 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
 
     # Pass 3-7: Analyze functions for race conditions
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if not isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
             continue
 
         # Check for global state modifications (Pass 3)
@@ -1261,10 +1316,10 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
             # Find IP addresses
             ip_matches = ip_pattern.findall(line)
             for ip in ip_matches:
+                # Issue #380: Use module-level constant for local IP prefixes
                 if (
                     ip.startswith(NetworkConstants.VM_IP_PREFIX)
-                    or ip.startswith("127.0.0.")
-                    or ip.startswith("192.168.")
+                    or ip.startswith(_LOCAL_IP_PREFIXES)
                 ):
                     hardcodes.append(
                         {"type": "ip", "value": ip, "line": i, "context": line.strip()}
