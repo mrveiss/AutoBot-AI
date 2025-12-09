@@ -888,126 +888,58 @@ class LLMInterface:
         timeout=config.get_timeout("llm", "default"),
     )
     async def _ollama_chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """
-        Enhanced Ollama chat completion with improved streaming and timeout handling
-        """
-        # CRITICAL FIX: Ensure Ollama host from environment variables
-        import os
+        """Enhanced Ollama chat completion with improved streaming and timeout handling.
 
-        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
-        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
-        if not ollama_host or not ollama_port:
-            raise ValueError(
-                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
-            )
-        self.ollama_host = f"http://{ollama_host}:{ollama_port}"
-        logger.debug(f"[REQUEST] Using Ollama URL from environment: {self.ollama_host}")
+        Issue #281: Refactored to use extracted helpers.
+        """
+        # Get Ollama host from environment (Issue #281 - uses helper)
+        self.ollama_host = self._get_ollama_host_from_env()
 
         url = f"{self.ollama_host}/api/chat"
         headers = {"Content-Type": "application/json"}
 
-        # Extract parameters from request
+        # Build request data (Issue #281 - uses helper)
         model = request.model_name or self.settings.default_model
-        messages = request.messages
-        temperature = request.temperature
-        structured_output = request.structured_output
         use_streaming = self._should_use_streaming(model)
-
-        data = {
-            "model": model,
-            "messages": messages,
-            "stream": use_streaming,
-            "temperature": temperature,
-            "format": "json" if structured_output else "",
-            "options": {
-                "seed": 42,
-                "top_k": self.settings.top_k,
-                "top_p": self.settings.top_p,
-                "repeat_penalty": self.settings.repeat_penalty,
-                "num_ctx": self.settings.num_ctx,
-            },
-        }
+        data = self._build_ollama_request_data(request, model, use_streaming)
 
         start_time = time.time()
 
         try:
             if use_streaming:
-                # Use improved streaming with timeout protection
                 response = await self._stream_ollama_response_with_protection(
                     url, headers, data, request.request_id, model
                 )
                 self._record_streaming_success(model)
             else:
-                # Non-streaming fallback
                 response = await self._non_streaming_ollama_request(
                     url, headers, data, request.request_id
                 )
 
             processing_time = time.time() - start_time
 
-            # ROOT CAUSE FIX: Add type checking for streaming response
+            # Type check for streaming response
             if not isinstance(response, dict):
-                logger.error(
-                    f"Streaming response is not a dict: {type(response)} - {response}"
-                ),
+                logger.error(f"Streaming response is not a dict: {type(response)} - {response}")
                 response = {"message": {"content": str(response)}, "model": model}
 
-            # Safely extract content with fallback handling
-            content = ""
-            if "message" in response and isinstance(response["message"], dict):
-                content = response["message"].get("content", "")
-            elif "response" in response:  # Alternative Ollama format
-                content = response.get("response", "")
-            else:
-                logger.warning(f"Unexpected streaming response structure: {response}")
-                content = str(response)
-
-            return LLMResponse(
-                content=content,
-                model=response.get("model", model),
-                provider="ollama",
-                processing_time=processing_time,
-                request_id=request.request_id,
-                metadata=response.get("stats", {}),
-                usage=response.get("usage", {}),
-            )
+            # Extract content and build response (Issue #281 - uses helpers)
+            content = self._extract_content_from_response(response)
+            return self._build_llm_response(content, response, model, processing_time, request.request_id)
 
         except Exception as e:
             if use_streaming:
                 self._record_streaming_failure(model)
-                # CRITICAL: LLM MUST BE STREAMED AT ALL TIMES - No non-streaming fallback
                 logger.error(f"Streaming REQUIRED but failed for {model}: {e}")
-                # Create minimal response to maintain streaming contract
                 processing_time = time.time() - start_time
-                response = {
-                    "message": {
-                        "role": "assistant",
-                        "content": f"Streaming error occurred: {str(e)}",
-                    },
-                    "model": model,
-                    "error": str(e),
-                }
 
-                # Safely extract content with fallback handling
-                content = ""
-                if "message" in response and isinstance(response["message"], dict):
-                    content = response["message"].get("content", "")
-                elif "response" in response:  # Alternative Ollama format
-                    content = response.get("response", "")
-                else:
-                    logger.warning(f"Unexpected response structure: {response}")
-                    content = str(response)
-
-                return LLMResponse(
-                    content=content,
-                    model=response.get("model", model),
-                    provider="ollama",
-                    processing_time=processing_time,
-                    request_id=request.request_id,
-                    fallback_used=True,
+                # Build error response (Issue #281 - uses helpers)
+                response = self._build_streaming_error_response(model, e)
+                content = self._extract_content_from_response(response)
+                return self._build_llm_response(
+                    content, response, model, processing_time, request.request_id, fallback_used=True
                 )
 
-            # If not streaming or other error, raise the original exception
             raise e
 
     async def _stream_ollama_response_with_protection(
@@ -1377,6 +1309,80 @@ class LLMInterface:
             response.metadata["cache_hit_rate"] = cache_hit_rate
 
         return response
+
+    # -------------------------------------------------------------------------
+    # Issue #281 - Extracted helper methods for _ollama_chat_completion refactoring
+    # -------------------------------------------------------------------------
+
+    def _get_ollama_host_from_env(self) -> str:
+        """Get Ollama host URL from environment variables (Issue #281 - extracted helper)."""
+        import os
+
+        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+        if not ollama_host or not ollama_port:
+            raise ValueError(
+                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
+            )
+        host_url = f"http://{ollama_host}:{ollama_port}"
+        logger.debug(f"[REQUEST] Using Ollama URL from environment: {host_url}")
+        return host_url
+
+    def _build_ollama_request_data(
+        self, request: LLMRequest, model: str, use_streaming: bool
+    ) -> dict:
+        """Build Ollama API request data dictionary (Issue #281 - extracted helper)."""
+        return {
+            "model": model,
+            "messages": request.messages,
+            "stream": use_streaming,
+            "temperature": request.temperature,
+            "format": "json" if request.structured_output else "",
+            "options": {
+                "seed": 42,
+                "top_k": self.settings.top_k,
+                "top_p": self.settings.top_p,
+                "repeat_penalty": self.settings.repeat_penalty,
+                "num_ctx": self.settings.num_ctx,
+            },
+        }
+
+    def _extract_content_from_response(self, response: dict) -> str:
+        """Safely extract content from Ollama response (Issue #281 - extracted helper)."""
+        if "message" in response and isinstance(response["message"], dict):
+            return response["message"].get("content", "")
+        elif "response" in response:  # Alternative Ollama format
+            return response.get("response", "")
+        else:
+            logger.warning(f"Unexpected response structure: {response}")
+            return str(response)
+
+    def _build_llm_response(
+        self, content: str, response: dict, model: str, processing_time: float,
+        request_id: str, fallback_used: bool = False,
+    ) -> LLMResponse:
+        """Build LLMResponse from extracted content (Issue #281 - extracted helper)."""
+        return LLMResponse(
+            content=content,
+            model=response.get("model", model),
+            provider="ollama",
+            processing_time=processing_time,
+            request_id=request_id,
+            metadata=response.get("stats", {}),
+            usage=response.get("usage", {}),
+            fallback_used=fallback_used,
+        )
+
+    def _build_streaming_error_response(self, model: str, error: Exception) -> dict:
+        """Build error response dict for streaming failures (Issue #281 - extracted helper)."""
+        return {
+            "message": {
+                "role": "assistant",
+                "content": f"Streaming error occurred: {str(error)}",
+            },
+            "model": model,
+            "error": str(error),
+        }
 
     async def cleanup(self):
         """Cleanup resources - HTTP session managed by singleton HTTPClientManager"""
