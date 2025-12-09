@@ -42,6 +42,14 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for CAPTCHA type detection
+_MATH_OPERATORS = frozenset({"+", "-", "=", "×", "÷", "*"})
+
+# Issue #380: Pre-compiled regex patterns for CAPTCHA processing
+_NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
+_TRAILING_EQUALS_RE = re.compile(r"=\s*\??\s*$")
+_MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/])\s*(\d+)")
+
 
 class CaptchaType(Enum):
     """Types of CAPTCHAs that can be encountered"""
@@ -221,10 +229,10 @@ class CaptchaSolver:
         if width > height * 2:
             return CaptchaType.TEXT
 
-        # Math CAPTCHAs often contain +, -, =
+        # Math CAPTCHAs often contain +, -, = - Issue #380: Use module-level frozenset
         if self._tesseract_available:
             text = await self._quick_ocr(image)
-            if any(op in text for op in ["+", "-", "=", "×", "÷", "*"]):
+            if any(op in text for op in _MATH_OPERATORS):
                 return CaptchaType.MATH
 
         return CaptchaType.TEXT
@@ -456,8 +464,8 @@ class CaptchaSolver:
         Returns:
             Cleaned text
         """
-        # Remove spaces and special characters
-        text = re.sub(r"[^A-Za-z0-9]", "", text)
+        # Remove spaces and special characters (Issue #380: use pre-compiled pattern)
+        text = _NON_ALNUM_RE.sub("", text)
 
         # Common OCR mistakes
         replacements = {
@@ -496,8 +504,8 @@ class CaptchaSolver:
             Cleaned expression with normalized operators
         """
         expr = expression.upper()
-        # Remove "= ?" or "= " at the end
-        expr = re.sub(r"=\s*\??\s*$", "", expr)
+        # Remove "= ?" or "= " at the end (Issue #380: use pre-compiled pattern)
+        expr = _TRAILING_EQUALS_RE.sub("", expr)
         # Replace text/symbol operators with standard operators
         replacements = [
             ("×", "*"), ("÷", "/"), ("X", "*"),
@@ -534,7 +542,8 @@ class CaptchaSolver:
         """
         try:
             expr = self._clean_math_expression(expression)
-            match = re.search(r"(\d+)\s*([+\-*/])\s*(\d+)", expr)
+            # Issue #380: use pre-compiled pattern
+            match = _MATH_EXPR_RE.search(expr)
             if not match:
                 return None
 

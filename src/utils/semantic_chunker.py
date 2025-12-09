@@ -22,15 +22,26 @@ os.environ["TRANSFORMERS_OFFLINE"] = "0"  # Allow downloads but cache aggressive
 os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 # Import centralized logging
+from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("semantic_chunker")
+
+# Issue #380: Pre-compiled regex patterns for sentence splitting
+_SENTENCE_ENDINGS_RE = re.compile(r"([.!?]+(?:\s|$))")
+_SENTENCE_ENDING_MATCH_RE = re.compile(r"[.!?]+(?:\s|$)")
+_ABBREVIATIONS_RE = re.compile(
+    r"(?:Mr|Mrs|Dr|Prof|Sr|Jr|vs|etc|Inc|Ltd|Corp|Co|St|Ave|Rd|Blvd|"
+    r"Apt|No|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|"
+    r"Wed|Thu|Fri|Sat|Sun)\.(?!\s*$)"
+)
 
 
 @dataclass
@@ -85,6 +96,49 @@ class AutoBotSemanticChunker:
 
         logger.info(f"SemanticChunker initialized with model: {embedding_model}")
 
+    def _get_adaptive_batch_params(
+        self, num_sentences: int, cpu_load: float, cpu_count: int, has_gpu: bool
+    ) -> tuple[int, int]:
+        """
+        Determine adaptive batch size and worker count based on system load.
+
+        Issue #281: Extracted helper to reduce repetition in _compute_sentence_embeddings_async.
+
+        Args:
+            num_sentences: Total number of sentences to process
+            cpu_load: Current CPU load percentage
+            cpu_count: Number of available CPU cores
+            has_gpu: Whether GPU acceleration is available
+
+        Returns:
+            Tuple of (max_workers, batch_size)
+        """
+        if has_gpu:
+            # GPU mode: Use larger batches and more CPU workers for preprocessing
+            if cpu_load > 80:
+                max_workers = min(4, cpu_count // 4)  # Still use multiple workers
+                batch_size = min(50, num_sentences)  # Larger batches for GPU
+            elif cpu_load > 50:
+                max_workers = min(8, cpu_count // 2)  # More workers available
+                batch_size = min(100, num_sentences)  # Bigger batches
+            else:
+                # Low CPU load: maximize parallel processing
+                max_workers = min(12, cpu_count)  # Use more of your 22 cores
+                batch_size = min(200, num_sentences)  # Large GPU batches
+        else:
+            # CPU-only mode: More conservative batching
+            if cpu_load > 80:
+                max_workers = min(2, cpu_count // 8)
+                batch_size = min(10, num_sentences)
+            elif cpu_load > 50:
+                max_workers = min(4, cpu_count // 4)
+                batch_size = min(25, num_sentences)
+            else:
+                max_workers = min(6, cpu_count // 2)  # Still use good parallelism
+                batch_size = min(50, num_sentences)
+
+        return max_workers, batch_size
+
     def _detect_device(self):
         """Detect best available device for model loading (Issue #333 - extracted helper)."""
         import torch
@@ -136,8 +190,8 @@ class AutoBotSemanticChunker:
 
         from sentence_transformers import SentenceTransformer
 
-        max_retries = 3
-        retry_delay = 2
+        max_retries = RetryConfig.DEFAULT_RETRIES
+        retry_delay = TimingConstants.SERVICE_STARTUP_DELAY
 
         for attempt in range(max_retries):
             try:
@@ -284,19 +338,10 @@ class AutoBotSemanticChunker:
         Returns:
             List of sentence strings
         """
-        import re
-
-        # Improved sentence splitting regex that handles common abbreviations
-        sentence_endings = r"[.!?]+(?:\s|$)"
-        abbreviations = (
-            r"(?:Mr|Mrs|Dr|Prof|Sr|Jr|vs|etc|Inc|Ltd|Corp|Co|St|Ave|Rd|Blvd|"
-            r"Apt|No|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|"
-            r"Wed|Thu|Fri|Sat|Sun)\.(?!\s*$)"
-        )
-
         # Issue #383 - Use regex split instead of character-by-character string building
+        # Issue #380 - Use pre-compiled patterns from module level
         # Split text by sentence endings, keeping the delimiters
-        raw_splits = re.split(f"({sentence_endings})", text)
+        raw_splits = _SENTENCE_ENDINGS_RE.split(text)
 
         # Recombine splits: each sentence is content + delimiter
         sentences = []
@@ -304,9 +349,9 @@ class AutoBotSemanticChunker:
         for i, part in enumerate(raw_splits):
             current_sentence += part
             # Check if this part is a sentence ending (odd indices after split with group)
-            if re.match(sentence_endings, part):
+            if _SENTENCE_ENDING_MATCH_RE.match(part):
                 # Check if this is likely an abbreviation
-                if not re.search(abbreviations, current_sentence):
+                if not _ABBREVIATIONS_RE.search(current_sentence):
                     stripped = current_sentence.strip()
                     if stripped:
                         sentences.append(stripped)
@@ -327,6 +372,8 @@ class AutoBotSemanticChunker:
         """
         Compute embeddings for a list of sentences asynchronously and non-blocking.
 
+        Issue #281: Refactored from 111 lines to use extracted _get_adaptive_batch_params helper.
+
         Args:
             sentences: List of sentence strings
 
@@ -338,6 +385,7 @@ class AutoBotSemanticChunker:
         import os
 
         import psutil
+        import torch
 
         # Ensure model is loaded before use
         await self._initialize_model()
@@ -347,10 +395,6 @@ class AutoBotSemanticChunker:
             cpu_count = os.cpu_count() or 4
             cpu_load = psutil.cpu_percent(interval=0.1)
 
-            # Adaptive batch sizing optimized for your Intel Ultra 9 185H (22 cores)
-            # and RTX 4070 GPU setup
-            import torch
-
             # Check if we have GPU acceleration
             has_gpu = (
                 torch.cuda.is_available()
@@ -359,29 +403,10 @@ class AutoBotSemanticChunker:
                 and next(self._embedding_model.parameters()).device.type == "cuda"
             )
 
-            if has_gpu:
-                # GPU mode: Use larger batches and more CPU workers for preprocessing
-                if cpu_load > 80:
-                    max_workers = min(4, cpu_count // 4)  # Still use multiple workers
-                    batch_size = min(50, len(sentences))  # Larger batches for GPU
-                elif cpu_load > 50:
-                    max_workers = min(8, cpu_count // 2)  # More workers available
-                    batch_size = min(100, len(sentences))  # Bigger batches
-                else:
-                    # Low CPU load: maximize parallel processing
-                    max_workers = min(12, cpu_count)  # Use more of your 22 cores
-                    batch_size = min(200, len(sentences))  # Large GPU batches
-            else:
-                # CPU-only mode: More conservative batching
-                if cpu_load > 80:
-                    max_workers = min(2, cpu_count // 8)
-                    batch_size = min(10, len(sentences))
-                elif cpu_load > 50:
-                    max_workers = min(4, cpu_count // 4)
-                    batch_size = min(25, len(sentences))
-                else:
-                    max_workers = min(6, cpu_count // 2)  # Still use good parallelism
-                    batch_size = min(50, len(sentences))
+            # Get adaptive batch parameters (Issue #281: uses extracted helper)
+            max_workers, batch_size = self._get_adaptive_batch_params(
+                len(sentences), cpu_load, cpu_count, has_gpu
+            )
 
             logger.info(
                 f"Processing {len(sentences)} sentences with {max_workers} workers, "

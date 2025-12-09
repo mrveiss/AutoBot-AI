@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import redis
 
 from src.autobot_types import TaskComplexity
+from src.constants.threshold_constants import StringParsingConstants
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,16 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for workflow classification (Issue #326)
 CRITICAL_CATEGORIES = {"security", "network", "system"}
 INSTALLATION_KEYWORDS = {"install", "setup", "configure"}
+
+# Issue #380: Module-level frozensets to avoid repeated list creation in classify_complexity
+_SECURITY_NETWORK_KEYWORDS = frozenset({"scan", "security", "vulnerabilities"})
+_NETWORK_KEYWORDS = frozenset({"network", "port", "firewall"})
+_COMPLEX_KEYWORDS = frozenset({
+    "install", "setup", "configure", "guide", "tutorial", "how to"
+})
+_RESEARCH_KEYWORDS = frozenset({
+    "find", "search", "tools", "best", "recommend", "compare"
+})
 
 
 class WorkflowClassifier:
@@ -229,27 +240,17 @@ class WorkflowClassifier:
 
     def _fallback_classification(self, message_lower: str) -> TaskComplexity:
         """Simple fallback classification without Redis."""
-        # Simple keyword-based classification
-        complex_keywords = [
-            "install",
-            "setup",
-            "configure",
-            "guide",
-            "tutorial",
-            "how to",
-        ]
-        research_keywords = ["find", "search", "tools", "best", "recommend", "compare"]
-
+        # Issue #380: Use module-level frozensets instead of recreating lists
         # Check for security/network combined
         has_security = any(
-            kw in message_lower for kw in ["scan", "security", "vulnerabilities"]
+            kw in message_lower for kw in _SECURITY_NETWORK_KEYWORDS
         )
-        has_network = any(kw in message_lower for kw in ["network", "port", "firewall"])
+        has_network = any(kw in message_lower for kw in _NETWORK_KEYWORDS)
         if has_security and has_network:
             return TaskComplexity.COMPLEX
 
-        # Check for complex tasks
-        complex_count = sum(1 for kw in complex_keywords if kw in message_lower)
+        # Check for complex tasks - Issue #380: Use module-level frozenset
+        complex_count = sum(1 for kw in _COMPLEX_KEYWORDS if kw in message_lower)
         if complex_count >= 2:
             return TaskComplexity.COMPLEX
 
@@ -257,8 +258,8 @@ class WorkflowClassifier:
         if any(kw in message_lower for kw in INSTALLATION_KEYWORDS):
             return TaskComplexity.COMPLEX
 
-        # Check for research tasks
-        research_count = sum(1 for kw in research_keywords if kw in message_lower)
+        # Check for research tasks - Issue #380: Use module-level frozenset
+        research_count = sum(1 for kw in _RESEARCH_KEYWORDS if kw in message_lower)
         if research_count >= 1:
             return TaskComplexity.COMPLEX
 
@@ -285,7 +286,7 @@ class WorkflowClassifier:
                 # Convert to appropriate type for evaluation
                 if isinstance(value, str) and value.isdigit():
                     eval_context[var_name] = int(value)
-                elif isinstance(value, str) and value.lower() in ("true", "false"):
+                elif isinstance(value, str) and value.lower() in StringParsingConstants.BOOL_STRING_VALUES:
                     eval_context[var_name] = value.lower() == "true"
                 else:
                     eval_context[var_name] = value

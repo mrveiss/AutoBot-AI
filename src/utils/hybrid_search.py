@@ -17,6 +17,9 @@ from src.unified_config_manager import UnifiedConfigManager
 # Create singleton config instance
 config = UnifiedConfigManager()
 
+# Issue #380: Pre-compiled regex for word extraction
+_WORD_BOUNDARY_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
+
 
 class HybridSearchEngine:
     """
@@ -93,8 +96,8 @@ class HybridSearchEngine:
 
     def extract_keywords(self, text: str) -> List[str]:
         """Extract meaningful keywords from text."""
-        # Convert to lowercase and split into words
-        words = re.findall(r"\b[a-zA-Z0-9]+\b", text.lower())
+        # Convert to lowercase and split into words (Issue #380: use pre-compiled pattern)
+        words = _WORD_BOUNDARY_RE.findall(text.lower())
 
         # Filter out stop words and short words
         keywords = [
@@ -124,7 +127,8 @@ class HybridSearchEngine:
             return 0.0
 
         document_text_lower = document_text.lower()
-        document_words = re.findall(r"\b[a-zA-Z0-9]+\b", document_text_lower)
+        # Issue #380: use pre-compiled pattern
+        document_words = _WORD_BOUNDARY_RE.findall(document_text_lower)
         document_word_count = defaultdict(int)
 
         # Count word frequencies in document

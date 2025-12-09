@@ -37,6 +37,9 @@ rum_config = {
 # Lock for thread-safe access to RUM state
 _rum_lock = asyncio.Lock()
 
+# Issue #380: Module-level frozenset for error event types
+_ERROR_EVENT_TYPES = frozenset({"error", "promise_rejection"})
+
 # In-memory storage for RUM events (in production, this would use Redis or database)
 rum_events = []
 rum_sessions = {}
@@ -106,7 +109,7 @@ def _log_rum_event_by_type(
         interaction_tracking: Whether interaction tracking is enabled
         rum_logger: Logger instance to use
     """
-    if event_type in ("error", "promise_rejection"):
+    if event_type in _ERROR_EVENT_TYPES:
         rum_logger.error(log_message)
         return
 

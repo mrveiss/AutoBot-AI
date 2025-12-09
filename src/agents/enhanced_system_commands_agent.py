@@ -12,8 +12,9 @@ import json
 import logging
 import re
 import shlex
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
+from src.constants.threshold_constants import LLMDefaults
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config as global_config_manager
 
@@ -21,6 +22,9 @@ from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for dangerous rm flags
+_DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})
 
 
 class EnhancedSystemCommandsAgent(StandardizedAgent):
@@ -176,7 +180,7 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 messages=messages,
                 llm_type="system_commands",  # Uses system_commands model
                 temperature=0.3,  # Lower temperature for more predictable commands
-                max_tokens=256,  # Commands should be concise
+                max_tokens=LLMDefaults.CONCISE_MAX_TOKENS,
                 top_p=0.8,
             )
 
@@ -370,7 +374,7 @@ and suggest alternatives."""
 
             # Additional checks for specific commands
             if main_command == "rm" and any(
-                flag in parts for flag in ["-r", "-r", "-f"]
+                flag in parts for flag in _DANGEROUS_RM_FLAGS
             ):
                 return {
                     "is_safe": False,

@@ -37,6 +37,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for numeric type checks
+_NUMERIC_TYPES = (int, float)
+
 
 class MetricType(Enum):
     COUNTER = "counter"
@@ -242,7 +245,7 @@ class WorkflowMetricsCollector:
 
             # Record resource metrics
             for metric_name, value in resource_data.items():
-                if isinstance(value, (int, float)):
+                if isinstance(value, _NUMERIC_TYPES):  # Issue #380
                     self._record_metric(
                         workflow_id=workflow_id,
                         metric_type=MetricType.GAUGE.value,

@@ -60,6 +60,27 @@ class CircuitBreakerDefaults:
     DEFAULT_FAILURE_THRESHOLD = 5
     DEFAULT_RECOVERY_TIMEOUT = 60.0
     DEFAULT_TIMEOUT = 30.0
+    DEFAULT_SUCCESS_THRESHOLD = 3  # Successes to close circuit from half-open
+
+    # Database service circuit breaker
+    DATABASE_FAILURE_THRESHOLD = 5
+    DATABASE_RECOVERY_TIMEOUT = 15.0
+    DATABASE_TIMEOUT = 10.0
+    DATABASE_SLOW_CALL_THRESHOLD = 2.0  # Database calls should be fast
+
+    # Network service circuit breaker
+    NETWORK_FAILURE_THRESHOLD = 3
+    NETWORK_RECOVERY_TIMEOUT = 20.0
+    NETWORK_TIMEOUT = 15.0
+
+    # Performance monitoring
+    SLOW_CALL_THRESHOLD = 10.0  # Seconds - what constitutes a slow call
+    SLOW_CALL_RATE_THRESHOLD = 0.5  # 50% of calls being slow opens circuit
+    MIN_CALLS_FOR_EVALUATION = 10  # Minimum calls before evaluating performance
+    RECENT_CALLS_WINDOW = 60.0  # Seconds - window for recent call analysis
+    PERFORMANCE_WINDOW = 300.0  # Seconds (5 minutes) - window for performance metrics
+    QUANTILE_SAMPLE_SIZE = 20  # Minimum samples for p95 calculation
+    MAX_HISTORY_SIZE = 100  # Maximum call records to keep
 
 
 class VoiceRecognitionConfig:
@@ -92,6 +113,8 @@ class TimingConstants:
     """Common timing values used throughout the codebase."""
 
     # Short delays (sub-second)
+    POLL_INTERVAL = 0.01  # Short polling loop delay to prevent CPU spinning
+    STREAMING_CHUNK_DELAY = 0.05  # Delay between streaming chunks for UX
     MICRO_DELAY = 0.1
     SHORT_DELAY = 0.5
     STANDARD_DELAY = 1.0
@@ -105,6 +128,17 @@ class TimingConstants:
     STANDARD_TIMEOUT = 60
     LONG_TIMEOUT = 120
     VERY_LONG_TIMEOUT = 300
+
+    # Long interval values
+    HOURLY_INTERVAL = 3600  # 1 hour in seconds
+
+    # Error recovery
+    ERROR_RECOVERY_DELAY = 5.0  # Standard delay after errors
+    ERROR_RECOVERY_LONG_DELAY = 30.0  # Extended delay after errors in monitoring loops
+
+    # Service lifecycle
+    SERVICE_STARTUP_DELAY = 2.0  # Wait for service to initialize after start/stop/restart
+    KB_INIT_DELAY = 3.0  # Wait for knowledge base async initialization
 
 
 class RetryConfig:
@@ -132,3 +166,174 @@ class BatchConfig:
     SMALL_BATCH = 10
     MEDIUM_BATCH = 50
     LARGE_BATCH = 100
+
+
+class LLMDefaults:
+    """Default values for LLM inference operations."""
+
+    # Token limits - Minimal
+    MINIMAL_MAX_TOKENS = 10  # Connection tests, simple checks
+    SHORT_MAX_TOKENS = 50  # Short classification responses
+    COMMAND_MAX_TOKENS = 75  # Command extraction
+    DEFAULT_MAX_TOKENS = 100  # Default for simple operations
+    RETRIEVAL_MAX_TOKENS = 150  # Knowledge retrieval responses
+    ANALYSIS_MAX_TOKENS = 200  # Analysis operations
+    CONCISE_MAX_TOKENS = 256  # Commands and concise responses
+
+    # Token limits - Standard
+    STANDARD_MAX_TOKENS = 500  # Standard chat responses
+    CHAT_MAX_TOKENS = 512  # Chat agent responses
+    ENRICHED_MAX_TOKENS = 1000  # Enriched/multi-context responses
+
+    # Token limits - Long
+    SYNTHESIS_MAX_TOKENS = 1024  # RAG synthesis responses
+    EXTENDED_MAX_TOKENS = 1500  # Extended synthesis
+    LONG_MAX_TOKENS = 2048  # Long form responses
+    VERY_LONG_MAX_TOKENS = 4000  # Comprehensive analysis
+
+    # Sampling parameters
+    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TOP_P = 0.9
+
+    # Concurrency
+    DEFAULT_CONCURRENT_WORKERS = 3
+
+
+class ResourceThresholds:
+    """System resource monitoring thresholds."""
+
+    # Memory thresholds (as percentage, 0.0-1.0)
+    MEMORY_WARNING_THRESHOLD = 0.8  # 80% - trigger warning
+    MEMORY_CRITICAL_THRESHOLD = 0.9  # 90% - trigger critical alert
+
+    # CPU thresholds
+    CPU_HIGH_THRESHOLD = 0.9  # 90% - high usage
+    CPU_OPTIMAL_MAX = 0.2  # 20% - low usage / good headroom
+
+    # GPU thresholds (as percentage, 0.0-100.0)
+    GPU_LOW_UTILIZATION = 0.2  # 20% - underutilized
+    GPU_RECOMMENDATION_THRESHOLD = 0.3  # 30% - recommend optimization
+    GPU_SATURATED = 0.95  # 95% - saturated
+    GPU_BUSY_THRESHOLD = 80.0  # 80% - GPU considered busy
+    GPU_MODERATE_THRESHOLD = 70.0  # 70% - moderate utilization threshold
+    GPU_AVAILABLE_THRESHOLD = 60.0  # 60% - NPU can handle if GPU above this
+
+    # NPU thresholds (as percentage, 0.0-100.0)
+    NPU_BUSY_THRESHOLD = 80.0  # 80% - NPU considered busy
+    NPU_AVAILABLE_THRESHOLD = 60.0  # 60% - NPU can accept moderate tasks
+
+    # CPU core thresholds
+    HIGH_CORE_COUNT = 16  # Systems with more cores benefit from parallel optimization
+
+
+class HardwareAcceleratorConfig:
+    """Hardware accelerator configuration constants."""
+
+    # NPU device thresholds
+    NPU_MAX_MODEL_SIZE_MB = 2000  # NPU handles < 2GB models
+    NPU_MAX_RESPONSE_TIME_S = 2.0  # NPU for < 2s tasks
+    NPU_BASE_TEMPERATURE_C = 45.0  # Base temperature for NPU
+    NPU_TEMP_UTILIZATION_FACTOR = 0.3  # Temperature increase per utilization %
+    NPU_BASE_POWER_W = 2.0  # Base power consumption
+    NPU_MAX_POWER_W = 10.0  # 2-10W range (delta = 8W)
+    NPU_MEMORY_MB = 1024.0  # NPU memory estimation
+    NPU_UTILIZATION_PER_MODEL = 25.0  # Estimated utilization per loaded model
+
+    # Monitoring
+    HARDWARE_CHECK_INTERVAL_S = 30  # Hardware check interval in seconds
+
+    # Model dimensions
+    UNIFIED_EMBEDDING_DIM = 512  # Common embedding dimension
+    MINILM_OUTPUT_DIM = 384  # MiniLM output dimension
+    CLIP_OUTPUT_DIM = 512  # CLIP output dimension
+    WAV2VEC_OUTPUT_DIM = 768  # Wav2Vec2 output dimension
+
+    # Task complexity thresholds
+    TEXT_LIGHTWEIGHT_LENGTH = 500  # Text length for lightweight task
+    TEXT_MODERATE_LENGTH = 2000  # Text length for moderate task
+    DOC_LIGHTWEIGHT_COUNT = 100  # Document count for lightweight search
+    DOC_MODERATE_COUNT = 1000  # Document count for moderate search
+
+    # Performance cap
+    PERFORMANCE_FACTOR_CAP = 2.0  # Cap at 2x base duration
+
+
+class WorkflowConfig:
+    """Workflow scheduler configuration constants."""
+
+    # Queue defaults
+    DEFAULT_MAX_CONCURRENT = 3  # Maximum concurrent workflow executions
+
+    # Scheduler timing
+    SCHEDULER_CHECK_INTERVAL_S = 10  # Check scheduler every 10 seconds
+    SCHEDULER_ERROR_BACKOFF_S = 30  # Back off on scheduler error
+
+    # Priority scoring
+    PRIORITY_BASE_MULTIPLIER = 100  # Base score multiplier for priority
+    MAX_OVERDUE_BONUS = 50  # Maximum priority bonus for overdue workflows
+    OVERDUE_BONUS_RATE = 0.1  # Priority bonus per overdue minute
+    DEPENDENCY_PENALTY = 0.9  # Priority reduction when dependencies not met
+
+    # Duration thresholds
+    DEFAULT_ESTIMATED_DURATION_MIN = 30  # Default workflow duration estimate
+    DEFAULT_TIMEOUT_MIN = 120  # Default workflow timeout
+    MIN_DURATION_FACTOR = 0.5  # Minimum duration factor for priority
+
+    # Complexity multipliers
+    COMPLEXITY_SIMPLE = 0.8
+    COMPLEXITY_RESEARCH = 1.0
+    COMPLEXITY_INSTALL = 1.1
+    COMPLEXITY_COMPLEX = 1.2
+    COMPLEXITY_SECURITY_SCAN = 1.3
+
+
+class ServiceDiscoveryConfig:
+    """Service discovery and health monitoring configuration."""
+
+    # Health check intervals
+    HEALTH_CHECK_INTERVAL_S = 30  # Default health check interval
+    CIRCUIT_BREAKER_THRESHOLD = 5  # Consecutive failures to open circuit
+    CIRCUIT_BREAKER_CHECK_MULTIPLIER = 2  # Skip check if < interval * multiplier
+
+    # Service timeouts
+    FRONTEND_TIMEOUT = 10.0
+    NPU_WORKER_TIMEOUT = 15.0
+    REDIS_TIMEOUT = 5.0
+    AI_STACK_TIMEOUT = 20.0
+    BROWSER_SERVICE_TIMEOUT = 10.0
+    BACKEND_TIMEOUT = 5.0
+    OLLAMA_TIMEOUT = 10.0
+
+    # Wait/retry intervals
+    SERVICE_WAIT_INTERVAL_S = 2  # Check every 2 seconds when waiting for service
+    CORE_SERVICES_WAIT_INTERVAL_S = 5  # Check every 5 seconds for core services
+    ERROR_RECOVERY_DELAY_S = 5  # Delay after error in health monitor
+
+    # Default wait timeouts
+    DEFAULT_SERVICE_WAIT_TIMEOUT = 60.0
+    CORE_SERVICES_WAIT_TIMEOUT = 120.0
+
+
+class StringParsingConstants:
+    """String parsing constants for boolean/truthy value detection.
+
+    Issue #380: Centralized constants to eliminate duplicate definitions.
+    These frozensets provide O(1) lookup for string parsing operations.
+    """
+
+    # Boolean string values (for strict true/false parsing)
+    BOOL_STRING_VALUES = frozenset({"true", "false"})
+
+    # Truthy string values (for flexible boolean interpretation)
+    TRUTHY_STRING_VALUES = frozenset({"true", "1", "yes", "on"})
+
+    # Falsy string values (for flexible boolean interpretation)
+    FALSY_STRING_VALUES = frozenset({"false", "0", "no", "off"})
+
+
+class FileWatcherConfig:
+    """File watcher configuration for config file monitoring."""
+
+    # Check intervals
+    CHECK_INTERVAL_S = 1.0  # Normal check interval
+    ERROR_RETRY_INTERVAL_S = 5.0  # Retry interval after error

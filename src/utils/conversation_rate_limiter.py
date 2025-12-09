@@ -18,6 +18,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for JSON-serializable types
+_JSON_SERIALIZABLE_TYPES = (list, tuple)
+
 
 @dataclass
 class RequestInfo:
@@ -71,7 +74,7 @@ class PayloadSizeTracker:
                 return len(payload.encode("utf-8"))
             elif isinstance(payload, dict):
                 return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-            elif isinstance(payload, (list, tuple)):
+            elif isinstance(payload, _JSON_SERIALIZABLE_TYPES):  # Issue #380
                 return len(str(payload).encode("utf-8"))
             else:
                 return len(str(payload).encode("utf-8"))

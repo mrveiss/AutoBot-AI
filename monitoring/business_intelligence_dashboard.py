@@ -20,6 +20,9 @@ from jinja2 import Template
 from src.constants.network_constants import NetworkConstants
 from performance_monitor import ALERT_THRESHOLDS
 
+# Issue #380: Module-level tuple for numeric type checks
+_NUMERIC_TYPES = (int, float)
+
 
 @dataclass
 class ROIMetrics:
@@ -357,9 +360,9 @@ class BusinessIntelligenceDashboard:
             system = metrics.get("system", {})
 
             utilization = {
-                "cpu": system.get("cpu_percent", 0) if isinstance(system.get("cpu_percent"), (int, float)) else 0,
-                "memory": system.get("memory_percent", 0) if isinstance(system.get("memory_percent"), (int, float)) else 0,
-                "storage": system.get("disk_percent", 0) if isinstance(system.get("disk_percent"), (int, float)) else 0,
+                "cpu": system.get("cpu_percent", 0) if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES) else 0,  # Issue #380
+                "memory": system.get("memory_percent", 0) if isinstance(system.get("memory_percent"), _NUMERIC_TYPES) else 0,  # Issue #380
+                "storage": system.get("disk_percent", 0) if isinstance(system.get("disk_percent"), _NUMERIC_TYPES) else 0,  # Issue #380
                 "gpu": system.get("gpu_utilization", 0) if system.get("gpu_utilization") is not None else 0,
                 "npu": system.get("npu_utilization", 0) if system.get("npu_utilization") is not None else 0,
                 "network": 30.0  # Estimated network utilization

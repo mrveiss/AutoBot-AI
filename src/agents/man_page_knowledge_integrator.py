@@ -13,7 +13,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 import aiofiles
 import yaml
@@ -21,6 +21,9 @@ import yaml
 from src.intelligence.os_detector import get_os_detector
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for common command line starters
+_COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})
 
 
 @dataclass
@@ -195,8 +198,7 @@ class ManPageParser:
                 if line.startswith("$") or line.startswith("# "):
                     command_line = line.lstrip("$# ").strip()
                 elif command_line is None and any(
-                    line.startswith(cmd)
-                    for cmd in ["ls", "cat", "grep", "find", "awk", "sed"]
+                    line.startswith(cmd) for cmd in _COMMON_COMMAND_STARTERS
                 ):
                     command_line = line
                 else:

@@ -16,7 +16,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 import aiohttp
 import psutil
@@ -31,6 +31,9 @@ from src.utils.http_client import get_http_client
 # Import existing monitoring infrastructure
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for critical service status checks
+_CRITICAL_SERVICE_STATUSES: FrozenSet[str] = frozenset({"critical", "offline"})
 
 
 @dataclass
@@ -55,6 +58,18 @@ class GPUMetrics:
     thermal_throttling: bool = False
     power_throttling: bool = False
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_query_dict(self) -> Dict[str, Any]:
+        """Convert to dict for query response (Issue #372 - reduces feature envy)."""
+        return {
+            "timestamp": self.timestamp,
+            "utilization_percent": self.utilization_percent,
+            "memory_utilization_percent": self.memory_utilization_percent,
+            "temperature_celsius": self.temperature_celsius,
+            "power_draw_watts": self.power_draw_watts,
+        }
+
 
 @dataclass
 class NPUMetrics:
@@ -73,6 +88,18 @@ class NPUMetrics:
     power_efficiency_rating: float  # 0-100
     acceleration_ratio: float  # NPU vs CPU speedup
     wsl_limitation: bool = False
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_query_dict(self) -> Dict[str, Any]:
+        """Convert to dict for query response (Issue #372 - reduces feature envy)."""
+        return {
+            "timestamp": self.timestamp,
+            "utilization_percent": self.utilization_percent,
+            "acceleration_ratio": self.acceleration_ratio,
+            "inference_count": self.inference_count,
+            "average_inference_time_ms": self.average_inference_time_ms,
+        }
 
 
 @dataclass
@@ -143,6 +170,18 @@ class SystemPerformanceMetrics:
     autobot_processes: List[Dict[str, Any]] = field(default_factory=list)
     autobot_memory_usage_mb: float = 0
     autobot_cpu_usage_percent: float = 0
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_query_dict(self) -> Dict[str, Any]:
+        """Convert to dict for query response (Issue #372 - reduces feature envy)."""
+        return {
+            "timestamp": self.timestamp,
+            "cpu_usage_percent": self.cpu_usage_percent,
+            "memory_usage_percent": self.memory_usage_percent,
+            "cpu_load_1m": self.cpu_load_1m,
+            "network_latency_ms": self.network_latency_ms,
+        }
 
 
 @dataclass
@@ -525,7 +564,7 @@ class Phase9PerformanceMonitor:
 
     def _analyze_service_alerts(self, service: Dict, alerts: List[Dict]) -> None:
         """Analyze service metrics and generate alerts (Issue #333 - extracted helper)."""
-        if service["status"] in ["critical", "offline"]:
+        if service["status"] in _CRITICAL_SERVICE_STATUSES:
             alerts.append({
                 "category": "service", "severity": "critical",
                 "message": f"Service {service['service_name']} is {service['status']}",
@@ -1226,35 +1265,102 @@ class Phase9PerformanceMonitor:
         async with self._lock:
             self.alert_callbacks.append(callback)
 
+    def _fetch_recommendation_data(self):
+        """Fetch metrics data from Redis for recommendations (Issue #361)."""
+        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+        npu_data = (
+            self.redis_client.zrange("performance_metrics:npu", -1, -1)
+            if self.npu_available else []
+        )
+        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+        return gpu_data, npu_data, system_data
+
+    def _get_gpu_recommendations(self, latest_gpu) -> List[Dict[str, Any]]:
+        """Generate GPU optimization recommendations."""
+        recommendations = []
+        if not latest_gpu:
+            return recommendations
+
+        if latest_gpu.utilization_percent < 50:
+            recommendations.append({
+                "category": "gpu",
+                "priority": "medium",
+                "recommendation": "GPU underutilized - verify AI workloads use GPU acceleration",
+                "action": "Check CUDA availability and batch sizes in semantic chunking",
+                "expected_improvement": "2-3x performance increase for AI tasks",
+            })
+
+        if latest_gpu.memory_utilization_percent > 90:
+            recommendations.append({
+                "category": "gpu",
+                "priority": "high",
+                "recommendation": "GPU memory near capacity - optimize memory usage",
+                "action": "Reduce batch sizes or implement gradient checkpointing",
+                "expected_improvement": "Prevent out-of-memory errors",
+            })
+        return recommendations
+
+    def _get_npu_recommendations(self, latest_npu) -> List[Dict[str, Any]]:
+        """Generate NPU optimization recommendations."""
+        if not latest_npu:
+            return []
+
+        if latest_npu.acceleration_ratio < 3.0:
+            return [{
+                "category": "npu",
+                "priority": "medium",
+                "recommendation": "NPU acceleration below optimal - check model optimization",
+                "action": "Verify OpenVINO model optimization and NPU driver status",
+                "expected_improvement": "Up to 5x speedup for inference tasks",
+            }]
+        return []
+
+    def _get_system_recommendations(self, latest_system) -> List[Dict[str, Any]]:
+        """Generate system/memory optimization recommendations."""
+        recommendations = []
+        if not latest_system:
+            return recommendations
+
+        if latest_system.memory_usage_percent > 85:
+            recommendations.append({
+                "category": "memory",
+                "priority": "high",
+                "recommendation": "High memory usage detected",
+                "action": "Enable aggressive cleanup in chat history and conversation managers",
+                "expected_improvement": "Prevent system slowdown and swapping",
+            })
+
+        if latest_system.cpu_load_1m > 20:  # High for 22-core system
+            recommendations.append({
+                "category": "cpu",
+                "priority": "medium",
+                "recommendation": "High CPU load detected",
+                "action": "Optimize parallel processing and check for CPU-intensive tasks",
+                "expected_improvement": "Better system responsiveness",
+            })
+        return recommendations
+
     async def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
-        """Generate performance optimization recommendations (thread-safe)
+        """
+        Generate performance optimization recommendations (thread-safe).
 
         DEPRECATED: Local buffers removed in Phase 5 (Issue #348).
         Recommendations now based on latest metrics from Redis.
+        Issue #281: Refactored from 130 lines to use extracted helper methods.
         """
-        recommendations = []
-
         try:
-            # Fetch latest metrics from Redis instead of local buffers
-            latest_gpu = None
-            latest_npu = None
-            latest_system = None
+            # Fetch latest metrics from Redis
+            latest_gpu, latest_npu, latest_system = None, None, None
 
             if self.redis_client:
                 try:
-                    # Issue #361 - fetch all data in single thread call to avoid blocking
-                    def _fetch_recommendation_data():
-                        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
-                        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1) if self.npu_available else []
-                        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
-                        return gpu_data, npu_data, system_data
-
-                    gpu_data, npu_data, system_data = await asyncio.to_thread(_fetch_recommendation_data)
+                    gpu_data, npu_data, system_data = await asyncio.to_thread(
+                        self._fetch_recommendation_data
+                    )
 
                     # Convert dict to object-like structure for compatibility
                     class MetricObj:
                         def __init__(self, d):
-                            """Initialize metric object from dict."""
                             self.__dict__.update(d)
 
                     if gpu_data:
@@ -1267,90 +1373,11 @@ class Phase9PerformanceMonitor:
                 except Exception as e:
                     self.logger.debug(f"Could not fetch metrics for recommendations: {e}")
 
-            # GPU optimization recommendations (process outside lock)
-            if latest_gpu:
-                if latest_gpu.utilization_percent < 50:
-                    recommendations.append(
-                        {
-                            "category": "gpu",
-                            "priority": "medium",
-                            "recommendation": (
-                                "GPU underutilized - verify AI workloads use GPU acceleration"
-                            ),
-                            "action": (
-                                "Check CUDA availability and batch sizes in semantic chunking"
-                            ),
-                            "expected_improvement": (
-                                "2-3x performance increase for AI tasks"
-                            ),
-                        }
-                    )
-
-                if latest_gpu.memory_utilization_percent > 90:
-                    recommendations.append(
-                        {
-                            "category": "gpu",
-                            "priority": "high",
-                            "recommendation": (
-                                "GPU memory near capacity - optimize memory usage"
-                            ),
-                            "action": (
-                                "Reduce batch sizes or implement gradient checkpointing"
-                            ),
-                            "expected_improvement": "Prevent out-of-memory errors",
-                        }
-                    )
-
-            # NPU optimization recommendations
-            if latest_npu:
-                if latest_npu.acceleration_ratio < 3.0:
-                    recommendations.append(
-                        {
-                            "category": "npu",
-                            "priority": "medium",
-                            "recommendation": (
-                                "NPU acceleration below optimal - check model optimization"
-                            ),
-                            "action": (
-                                "Verify OpenVINO model optimization and NPU driver status"
-                            ),
-                            "expected_improvement": (
-                                "Up to 5x speedup for inference tasks"
-                            ),
-                        }
-                    )
-
-            # System optimization recommendations
-            if latest_system:
-                if latest_system.memory_usage_percent > 85:
-                    recommendations.append(
-                        {
-                            "category": "memory",
-                            "priority": "high",
-                            "recommendation": "High memory usage detected",
-                            "action": (
-                                "Enable aggressive cleanup in chat history "
-                                "and conversation managers"
-                            ),
-                            "expected_improvement": (
-                                "Prevent system slowdown and swapping"
-                            ),
-                        }
-                    )
-
-                if latest_system.cpu_load_1m > 20:  # High for 22-core system
-                    recommendations.append(
-                        {
-                            "category": "cpu",
-                            "priority": "medium",
-                            "recommendation": "High CPU load detected",
-                            "action": (
-                                "Optimize parallel processing and check for CPU-intensive tasks"
-                            ),
-                            "expected_improvement": "Better system responsiveness",
-                        }
-                    )
-
+            # Collect recommendations from all sources
+            recommendations = []
+            recommendations.extend(self._get_gpu_recommendations(latest_gpu))
+            recommendations.extend(self._get_npu_recommendations(latest_npu))
+            recommendations.extend(self._get_system_recommendations(latest_system))
             return recommendations
 
         except Exception as e:

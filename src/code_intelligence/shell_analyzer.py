@@ -27,6 +27,15 @@ from src.code_intelligence.base_analyzer import (
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for dangerous shell commands
+_DANGEROUS_COMMANDS = frozenset({"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"})
+
+# Issue #380: Pre-compiled regex patterns for set options checking
+_SET_E_RE = re.compile(r"set\s+-[a-z]*e")
+_SET_U_RE = re.compile(r"set\s+-[a-z]*u")
+_SET_PIPEFAIL_RE = re.compile(r"set\s+-o\s+pipefail")
+_SET_EUO_PIPEFAIL_RE = re.compile(r"set\s+-euo\s+pipefail")
+
 
 # =============================================================================
 # Security Patterns - Critical
@@ -485,14 +494,15 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         has_set_u = False
         has_pipefail = False
 
+        # Issue #380: Use pre-compiled patterns for set option checking
         for line in self.lines[:30]:  # Check first 30 lines
-            if re.search(r"set\s+-[a-z]*e", line):
+            if _SET_E_RE.search(line):
                 has_set_e = True
-            if re.search(r"set\s+-[a-z]*u", line):
+            if _SET_U_RE.search(line):
                 has_set_u = True
-            if re.search(r"set\s+-o\s+pipefail", line):
+            if _SET_PIPEFAIL_RE.search(line):
                 has_pipefail = True
-            if re.search(r"set\s+-euo\s+pipefail", line):
+            if _SET_EUO_PIPEFAIL_RE.search(line):
                 has_set_e = has_set_u = has_pipefail = True
 
         missing = []
@@ -528,14 +538,12 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
 
     def _check_unquoted_variables(self) -> None:
         """Advanced check for unquoted variables in dangerous contexts."""
-        dangerous_commands = {"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"}
-
-        for line_num, line in enumerate(self.lines, start=1):
+        for line_num, line in enumerate(self.lines, start=1):  # Issue #380: use _DANGEROUS_COMMANDS
             if self._should_skip_line(line):
                 continue
 
             # Check for unquoted $VAR after dangerous commands
-            for cmd in dangerous_commands:
+            for cmd in _DANGEROUS_COMMANDS:  # Issue #380: use module constant
                 # Pattern: cmd ... $var (not "$var" or "${var}")
                 pattern = rf"\b{cmd}\s+[^|;&\n]*\$([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_\"}}])"
                 match = re.search(pattern, line)

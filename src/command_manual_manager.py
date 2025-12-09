@@ -19,6 +19,13 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex for section header detection (Issue #380)
+_SECTION_HEADER_RE = re.compile(r"^[A-Z][A-Z\s]+$")
+_RELATED_COMMAND_RE = re.compile(r"\b(\w+)\(\d+\)")
+_OPTION_LINE_RE = re.compile(r"^\s*(-\w|--\w+)")
+_OPTION_EXTRACT_RE = re.compile(r"^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)")
+_SECTION_NUMBER_RE = re.compile(r"\((\d+)\)")
+
 
 @dataclass
 class CommandManual:
@@ -346,7 +353,7 @@ class CommandManualManager:
         for line in lines:
             line = line.strip()
 
-            if re.match(r"^[A-Z][A-Z\s]+$", line):
+            if _SECTION_HEADER_RE.match(line):
                 in_name_section = line.startswith("NAME")
                 continue
 
@@ -380,7 +387,7 @@ class CommandManualManager:
         for line in lines:
             line = line.strip()
 
-            if re.match(r"^[A-Z][A-Z\s]+$", line):
+            if _SECTION_HEADER_RE.match(line):
                 in_synopsis_section = line.startswith("SYNOPSIS")
                 continue
 
@@ -407,7 +414,7 @@ class CommandManualManager:
         for line in lines:
             line = line.strip()
 
-            if re.match(r"^[A-Z][A-Z\s]+$", line):
+            if _SECTION_HEADER_RE.match(line):
                 in_examples_section = line.startswith("EXAMPLES")
                 continue
 
@@ -427,13 +434,11 @@ class CommandManualManager:
             List of common options
         """
         common_options = []
-        option_pattern = r"^\s*(-\w|--\w+)"
 
         for line in lines:
-            if re.match(option_pattern, line):
-                option_match = re.match(
-                    r"^\s*((?:-\w|--\w+)(?:\s*,\s*(?:-\w|--\w+))*)", line
-                )
+            # Use pre-compiled patterns (Issue #380)
+            if _OPTION_LINE_RE.match(line):
+                option_match = _OPTION_EXTRACT_RE.match(line)
                 if option_match:
                     common_options.append(option_match.group(1))
 
@@ -454,13 +459,13 @@ class CommandManualManager:
         for line in lines:
             line = line.strip()
 
-            if re.match(r"^[A-Z][A-Z\s]+$", line):
+            if _SECTION_HEADER_RE.match(line):
                 in_see_also_section = line.startswith("SEE ALSO")
                 continue
 
             if in_see_also_section and line:
                 # Extract command names (format: command(1), command(8), etc.)
-                related_matches = re.findall(r"\b(\w+)\(\d+\)", line)
+                related_matches = _RELATED_COMMAND_RE.findall(line)
                 related_commands.extend(related_matches)
 
         return related_commands
@@ -474,7 +479,8 @@ class CommandManualManager:
         Returns:
             Section number (defaults to 1)
         """
-        section_match = re.search(r"\((\d+)\)", manual_text[:200])
+        # Use pre-compiled pattern (Issue #380)
+        section_match = _SECTION_NUMBER_RE.search(manual_text[:200])
         if section_match:
             return int(section_match.group(1))
         return 1

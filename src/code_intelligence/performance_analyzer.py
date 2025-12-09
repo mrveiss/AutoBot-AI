@@ -22,9 +22,19 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for legacy DB operation fallback
+_LEGACY_DB_OPERATIONS: FrozenSet[str] = frozenset(
+    {"execute", "executemany", "fetchone", "fetchall", "fetchmany"}
+)
+
+# Issue #380: Module-level frozenset for DB context object names
+_DB_OBJECTS: FrozenSet[str] = frozenset(
+    {"cursor", "conn", "connection", "session", "db", "redis_client", "pipe", "pipeline", "collection"}
+)
 
 
 class PerformanceSeverity(Enum):
@@ -624,11 +634,8 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 parts = call_name.split(".")
                 if len(parts) >= 2:
                     obj_name = parts[-2].lower()
-                    method_name = parts[-1].lower()
                     # Check if object name suggests DB context
-                    db_objects = {"cursor", "conn", "connection", "session", "db",
-                                  "redis_client", "pipe", "pipeline", "collection"}
-                    if obj_name in db_objects:
+                    if obj_name in _DB_OBJECTS:  # Issue #380: use module constant
                         return True, 0.90
 
         # Step 3: Check contextual patterns
@@ -645,7 +652,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
 
         # Step 4: Legacy fallback with low confidence (for backward compatibility)
         # Only flag if it's a clear DB method name AND has suggestive prefix
-        for db_op in {"execute", "executemany", "fetchone", "fetchall", "fetchmany"}:
+        for db_op in _LEGACY_DB_OPERATIONS:
             if call_name_lower.endswith("." + db_op):
                 return True, 0.70
 
@@ -680,103 +687,70 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 )
             )
 
-    def _check_blocking_in_async(self, node: ast.Call) -> None:
-        """Check for blocking operations in async context.
-
-        Issue #385: Uses context-aware detection with confidence scoring.
-        - HIGH confidence patterns are exact matches (definitely blocking)
-        - MEDIUM confidence patterns are flagged with potential_false_positive
-        - SAFE patterns reduce confidence or skip entirely
+    def _create_blocking_issue(
+        self,
+        call_name: str,
+        node: ast.Call,
+        code: str,
+        severity: PerformanceSeverity,
+        confidence: float,
+        recommendation: str,
+        is_potential: bool = False,
+        false_positive_reason: str | None = None,
+    ) -> None:
         """
-        if not self.async_context:
-            return
+        Create and append a blocking I/O performance issue.
 
-        call_name = self._get_call_name(node)
-        if not call_name:
-            return
+        Issue #281: Extracted helper to reduce repetition in _check_blocking_in_async.
 
-        call_name_lower = call_name.lower()
-        code = self._get_source_segment(node.lineno, node.lineno)
+        Args:
+            call_name: Name of the blocking call
+            node: AST node for line info
+            code: Source code segment
+            severity: Issue severity level
+            confidence: Confidence score (0.0-1.0)
+            recommendation: Suggested fix
+            is_potential: Whether this is a potential (not definite) issue
+            false_positive_reason: Reason why this might be a false positive
+        """
+        desc_prefix = "Potential " if is_potential else ""
+        desc_suffix = " (needs review)" if severity == PerformanceSeverity.LOW else ""
+        complexity = "May block event loop" if is_potential else "Blocks event loop"
+        impact = "Review needed - may degrade async performance" if is_potential else "Degrades async performance"
+        if severity == PerformanceSeverity.LOW:
+            impact = "Review needed"
 
-        # Skip if already using async version
-        if "async" in call_name_lower or "aio" in call_name_lower:
-            return
+        self.findings.append(
+            PerformanceIssue(
+                issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
+                severity=severity,
+                file_path=self.file_path,
+                line_start=node.lineno,
+                line_end=node.lineno,
+                description=f"{desc_prefix}Blocking operation '{call_name}' in async function{desc_suffix}",
+                recommendation=recommendation,
+                estimated_complexity=complexity,
+                estimated_impact=impact,
+                current_code=code,
+                confidence=confidence,
+                potential_false_positive=is_potential,
+                false_positive_reason=false_positive_reason,
+            )
+        )
 
-        # Step 1: Check HIGH confidence patterns (exact match)
-        for pattern, (recommendation, confidence, is_exact) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
-            if is_exact and call_name == pattern:
-                self.findings.append(
-                    PerformanceIssue(
-                        issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
-                        severity=PerformanceSeverity.HIGH if confidence >= 0.9 else PerformanceSeverity.MEDIUM,
-                        file_path=self.file_path,
-                        line_start=node.lineno,
-                        line_end=node.lineno,
-                        description=f"Blocking operation '{call_name}' in async function",
-                        recommendation=recommendation,
-                        estimated_complexity="Blocks event loop",
-                        estimated_impact="Degrades async performance",
-                        current_code=code,
-                        confidence=confidence,
-                        potential_false_positive=False,
-                    )
-                )
-                return  # Found definite match, no need to check further
+    def _check_time_sleep_in_async(self, call_name: str, node: ast.Call) -> bool:
+        """
+        Check for time.sleep() in async context (high confidence special case).
 
-        # Step 2: Check SAFE patterns - if matched, either skip or flag as potential FP
-        for safe_pattern, reason in SAFE_PATTERNS.items():
-            if safe_pattern in call_name_lower:
-                # This looks like a blocking op but matches a safe pattern
-                # Still report it but with low confidence and potential_false_positive flag
-                # This ensures we DON'T MISS real issues while reducing noise
-                return  # Skip known safe patterns entirely
+        Issue #281: Extracted helper for time.sleep detection.
 
-        # Step 3: Check MEDIUM confidence patterns (substring match)
-        for pattern, (recommendation, confidence, _) in BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items():
-            if pattern in call_name_lower:
-                self.findings.append(
-                    PerformanceIssue(
-                        issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
-                        severity=PerformanceSeverity.MEDIUM,
-                        file_path=self.file_path,
-                        line_start=node.lineno,
-                        line_end=node.lineno,
-                        description=f"Potential blocking operation '{call_name}' in async function",
-                        recommendation=recommendation,
-                        estimated_complexity="May block event loop",
-                        estimated_impact="Review needed - may degrade async performance",
-                        current_code=code,
-                        confidence=confidence,
-                        potential_false_positive=True,
-                        false_positive_reason="Generic pattern match - verify if this is actual I/O",
-                    )
-                )
-                return
+        Args:
+            call_name: Name of the call
+            node: AST node
 
-        # Step 4: Legacy fallback - check old patterns but flag as potential FP
-        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
-            if blocking_op in call_name_lower:
-                # Low confidence - generic match
-                self.findings.append(
-                    PerformanceIssue(
-                        issue_type=PerformanceIssueType.BLOCKING_IO_IN_ASYNC,
-                        severity=PerformanceSeverity.LOW,
-                        file_path=self.file_path,
-                        line_start=node.lineno,
-                        line_end=node.lineno,
-                        description=f"Possible blocking operation '{call_name}' in async function (needs review)",
-                        recommendation=recommendation,
-                        estimated_complexity="May block event loop",
-                        estimated_impact="Review needed",
-                        current_code=code,
-                        confidence=0.4,
-                        potential_false_positive=True,
-                        false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
-                    )
-                )
-                return
-
-        # Check for time.sleep in async (high confidence special case)
+        Returns:
+            True if time.sleep was found and issue added
+        """
         if call_name == "time.sleep" or (
             call_name == "sleep" and "time" in str(self._get_call_module(node))
         ):
@@ -797,6 +771,66 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                     confidence=0.95,
                 )
             )
+            return True
+        return False
+
+    def _check_blocking_in_async(self, node: ast.Call) -> None:
+        """
+        Check for blocking operations in async context.
+
+        Issue #281: Refactored from 117 lines to use extracted helper methods.
+        Issue #385: Uses context-aware detection with confidence scoring.
+        """
+        if not self.async_context:
+            return
+
+        call_name = self._get_call_name(node)
+        if not call_name:
+            return
+
+        call_name_lower = call_name.lower()
+        code = self._get_source_segment(node.lineno, node.lineno)
+
+        # Skip if already using async version
+        if "async" in call_name_lower or "aio" in call_name_lower:
+            return
+
+        # Step 1: Check HIGH confidence patterns (exact match)
+        for pattern, (recommendation, confidence, is_exact) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
+            if is_exact and call_name == pattern:
+                severity = PerformanceSeverity.HIGH if confidence >= 0.9 else PerformanceSeverity.MEDIUM
+                self._create_blocking_issue(
+                    call_name, node, code, severity, confidence, recommendation
+                )
+                return  # Found definite match
+
+        # Step 2: Check SAFE patterns - skip known safe patterns
+        for safe_pattern in SAFE_PATTERNS:
+            if safe_pattern in call_name_lower:
+                return
+
+        # Step 3: Check MEDIUM confidence patterns (substring match)
+        for pattern, (recommendation, confidence, _) in BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items():
+            if pattern in call_name_lower:
+                self._create_blocking_issue(
+                    call_name, node, code, PerformanceSeverity.MEDIUM, confidence,
+                    recommendation, is_potential=True,
+                    false_positive_reason="Generic pattern match - verify if this is actual I/O",
+                )
+                return
+
+        # Step 4: Legacy fallback - low confidence generic match
+        for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
+            if blocking_op in call_name_lower:
+                self._create_blocking_issue(
+                    call_name, node, code, PerformanceSeverity.LOW, 0.4,
+                    recommendation, is_potential=True,
+                    false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
+                )
+                return
+
+        # Step 5: Check for time.sleep (Issue #281: uses helper)
+        self._check_time_sleep_in_async(call_name, node)
 
     def _check_sequential_awaits(self, node: ast.AsyncFunctionDef) -> None:
         """Check for sequential awaits that could be parallel."""

@@ -70,6 +70,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for embedding field names in result extraction
+_EMBEDDING_FIELDS = ("clip_features", "audio_embedding", "embeddings")
+
 # Performance optimization: O(1) lookup for command classification (Issue #326)
 LAUNCH_COMMAND_WORDS = {"open", "launch", "start", "run"}
 CLOSE_COMMAND_WORDS = {"close", "quit", "exit", "stop"}
@@ -1068,8 +1071,7 @@ class UnifiedMultiModalProcessor:
             return None
 
         # Try different embedding field names
-        embedding_fields = ["clip_features", "audio_embedding", "embeddings"]
-        for field in embedding_fields:
+        for field in _EMBEDDING_FIELDS:  # Issue #380: use module constant
             if field in result.result_data:
                 return result.result_data.get(field)
 

@@ -23,6 +23,9 @@ from ..utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for prompt pattern matching
+_YES_NO_KEYWORDS = frozenset({"yes", "no", "y/n"})
+
 # Import configuration for fallback defaults
 try:
     from src.unified_config_manager import unified_config_manager
@@ -174,8 +177,8 @@ class TerminalInputHandler:
         """Generate intelligent default responses based on prompt content (Issue #315)."""
         prompt_lower = prompt.lower()
 
-        # Check yes/no pattern first
-        if any(word in prompt_lower for word in ["yes", "no", "y/n"]):
+        # Check yes/no pattern first - Issue #380: Use module-level frozenset
+        if any(word in prompt_lower for word in _YES_NO_KEYWORDS):
             return "y"
 
         # Check choice pattern with digits

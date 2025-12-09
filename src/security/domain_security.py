@@ -27,6 +27,10 @@ from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex for domain pattern analysis
+_CONSECUTIVE_DIGITS_RE = re.compile(r"\d{4,}")
+_MIXED_DIGIT_LETTER_RE = re.compile(r"[0-9]{1,}[a-z]{1,}[0-9]{1,}")
+
 
 class DomainSecurityConfig:
     """Configuration for domain security settings"""
@@ -502,11 +506,11 @@ class DomainSecurityManager:
         elif len(domain) > 63:
             score -= 0.1  # Very long domains can be suspicious
 
-        # Character patterns
-        if re.search(r"\d{4,}", domain):
+        # Character patterns (Issue #380: use pre-compiled patterns)
+        if _CONSECUTIVE_DIGITS_RE.search(domain):
             score -= 0.2  # Domains with many consecutive numbers
 
-        if re.search(r"[0-9]{1,}[a-z]{1,}[0-9]{1,}", domain):
+        if _MIXED_DIGIT_LETTER_RE.search(domain):
             score -= 0.1  # Mixed numbers and letters pattern
 
         # Suspicious keywords

@@ -41,6 +41,12 @@ class ImpactLevel(str, Enum):
 # Performance optimization: O(1) lookup for high-severity impact levels (Issue #326)
 HIGH_SEVERITY_IMPACT_LEVELS = {ImpactLevel.CRITICAL, ImpactLevel.HIGH}
 
+# Issue #380: Module-level frozenset for blocking call detection in async context
+_BLOCKING_CALLS = frozenset({"sleep", "get", "post", "put", "delete", "request"})
+
+# Issue #380: Module-level tuple for mutable default types
+_MUTABLE_DEFAULT_TYPES = (ast.List, ast.Dict, ast.Set)
+
 
 class PatternCategory(str, Enum):
     """Categories of performance patterns."""
@@ -301,7 +307,7 @@ class PerformanceVisitor(ast.NodeVisitor):
         self.current_function = node.name
         # Check for mutable default arguments
         for default in node.args.defaults:
-            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+            if isinstance(default, _MUTABLE_DEFAULT_TYPES):  # Issue #380
                 self.issues.append(
                     PerformanceIssue(
                         id=f"issue-{len(self.issues)}",
@@ -359,8 +365,7 @@ class PerformanceVisitor(ast.NodeVisitor):
             elif isinstance(node.func, ast.Name):
                 func_name = node.func.id
 
-            blocking_calls = {"sleep", "get", "post", "put", "delete", "request"}
-            if func_name in blocking_calls:
+            if func_name in _BLOCKING_CALLS:  # Issue #380: use module constant
                 self.issues.append(
                     PerformanceIssue(
                         id=f"issue-{len(self.issues)}",

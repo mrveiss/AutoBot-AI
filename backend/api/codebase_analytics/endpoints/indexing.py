@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..scanner import (
@@ -71,9 +72,8 @@ async def index_codebase():
                     }
                 )
 
-        # Always use project root (4 levels up from backend/api/codebase_analytics/endpoints/indexing.py)
-        project_root = Path(__file__).parent.parent.parent.parent.parent
-        root_path = str(project_root)
+        # Use centralized PathConstants (Issue #380)
+        root_path = str(PATH.PROJECT_ROOT)
         logger.info(f"📁 project_root = {root_path}")
 
         # Generate unique task ID

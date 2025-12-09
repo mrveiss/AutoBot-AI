@@ -16,8 +16,12 @@ import threading
 from typing import Optional
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for PTY event types
+_PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
 
 
 def _read_pty_data(fd: int) -> tuple:
@@ -205,7 +209,7 @@ class SimplePTY:
 
                 if ready:
                     event_type, content, should_break = _read_pty_data(fd)
-                    if event_type in ("output", "eof"):
+                    if event_type in _PTY_OUTPUT_EVENTS:
                         self.output_queue.put((event_type, content))
                     if should_break:
                         break
@@ -358,7 +362,7 @@ class SimplePTY:
                 # Give process a moment to terminate gracefully
                 import time
 
-                time.sleep(0.1)
+                time.sleep(TimingConstants.MICRO_DELAY)
                 if self.process.poll() is None:
                     # Process didn't terminate, force kill
                     self.process.kill()

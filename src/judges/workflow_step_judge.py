@@ -10,13 +10,16 @@ This judge evaluates workflow steps before execution to ensure quality, safety, 
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 from src.constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for approval recommendations
+_APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})
 
 
 class WorkflowStepJudge(BaseLLMJudge):
@@ -209,7 +212,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                     f"Quality score ({quality_score:.2f}) below threshold ({self.quality_threshold})",
                 )
 
-            if judgment.recommendation in ["APPROVE", "CONDITIONAL"]:
+            if judgment.recommendation in _APPROVAL_RECOMMENDATIONS:
                 return True, f"Approved: {judgment.reasoning[:100]}..."
             else:
                 return False, judgment.reasoning

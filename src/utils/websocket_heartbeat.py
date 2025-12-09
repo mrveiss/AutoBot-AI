@@ -12,10 +12,11 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,12 @@ class ConnectionState(Enum):
     DISCONNECTING = "disconnecting"
     DISCONNECTED = "disconnected"
     ERROR = "error"
+
+
+# Issue #380: Module-level frozenset for disconnected states
+_DISCONNECTED_STATES: FrozenSet[ConnectionState] = frozenset({
+    ConnectionState.ERROR, ConnectionState.DISCONNECTED
+})
 
 
 @dataclass
@@ -98,11 +105,11 @@ class WebSocketManager:
                     await self._check_connection_health(connection_id, current_time)
 
                 # Wait before next check
-                await asyncio.sleep(1.0)  # Check every second
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
 
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
-                await asyncio.sleep(5.0)  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
 
     async def _check_connection_health(self, connection_id: str, current_time: float):
         """Check health of a specific connection (thread-safe)"""
@@ -230,7 +237,7 @@ class WebSocketManager:
 
         try:
             # Send disconnect message if possible (outside lock)
-            if state not in [ConnectionState.ERROR, ConnectionState.DISCONNECTED]:
+            if state not in _DISCONNECTED_STATES:
                 await websocket.send_json(
                     {
                         "type": "disconnecting",

@@ -38,6 +38,9 @@ from src.agents.graph_entity_extractor import (
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
+# Issue #380: Module-level frozenset for valid message roles
+_VALID_ROLES = frozenset({"user", "assistant", "system"})
+
 # ====================================================================
 # Router Configuration
 # ====================================================================
@@ -59,9 +62,8 @@ class Message(BaseModel):
     @validator("role")
     def validate_role(cls, v):
         """Validate role is valid."""
-        valid_roles = {"user", "assistant", "system"}
-        if v not in valid_roles:
-            raise ValueError(f"Role must be one of {valid_roles}")
+        if v not in _VALID_ROLES:  # Issue #380: use module constant
+            raise ValueError(f"Role must be one of {_VALID_ROLES}")
         return v
 
 
@@ -282,6 +284,87 @@ async def extract_entities(
         )
 
 
+def _build_extraction_tasks(
+    batch_request: "BatchExtractionRequest", extractor: GraphEntityExtractor
+) -> List:
+    """
+    Build extraction tasks for batch processing.
+
+    Issue #281: Extracted helper for task building.
+
+    Args:
+        batch_request: Batch extraction request
+        extractor: GraphEntityExtractor instance
+
+    Returns:
+        List of extraction coroutine tasks
+    """
+    tasks = []
+    for conv_request in batch_request.conversations:
+        messages_dict = [msg.dict() for msg in conv_request.messages]
+
+        task = extractor.extract_and_populate(
+            conversation_id=conv_request.conversation_id,
+            messages=messages_dict,
+            session_metadata=conv_request.session_metadata,
+        )
+        tasks.append(task)
+    return tasks
+
+
+def _process_extraction_results(
+    results: List, batch_request: "BatchExtractionRequest", request_id: str
+) -> tuple:
+    """
+    Process extraction results into successful and failed lists.
+
+    Issue #281: Extracted helper for result processing.
+
+    Args:
+        results: Raw results from asyncio.gather
+        batch_request: Original batch request
+        request_id: Request tracking ID
+
+    Returns:
+        Tuple of (successful_results, failed_results)
+    """
+    successful_results = []
+    failed_results = []
+
+    for idx, result in enumerate(results):
+        conv_id = batch_request.conversations[idx].conversation_id
+
+        if isinstance(result, Exception):
+            logger.error(f"[{request_id}] Extraction failed for {conv_id}: {result}")
+            failed_results.append(
+                {
+                    "success": False,
+                    "conversation_id": conv_id,
+                    "facts_analyzed": 0,
+                    "entities_created": 0,
+                    "relations_created": 0,
+                    "processing_time": 0.0,
+                    "errors": [str(result)],
+                    "request_id": request_id,
+                }
+            )
+        else:
+            successful_results.append(
+                {
+                    "success": len(result.errors) == 0,
+                    "conversation_id": result.conversation_id,
+                    "facts_analyzed": result.facts_analyzed,
+                    "entities_created": result.entities_created,
+                    "relations_created": result.relations_created,
+                    "processing_time": result.processing_time,
+                    "errors": result.errors,
+                    "request_id": request_id,
+                }
+            )
+
+    return successful_results, failed_results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_entity_extraction",
@@ -295,6 +378,8 @@ async def extract_entities_batch(
     """
     Extract entities from multiple conversations in batch.
 
+    Issue #281: Refactored from 137 lines to use extracted helper methods.
+
     This endpoint processes multiple conversations in parallel for efficient
     batch entity extraction.
 
@@ -307,35 +392,6 @@ async def extract_entities_batch(
 
     Raises:
         HTTPException: If batch extraction fails
-
-    Example Request:
-        ```json
-        {
-            "conversations": [
-                {
-                    "conversation_id": "conv-1",
-                    "messages": [...]
-                },
-                {
-                    "conversation_id": "conv-2",
-                    "messages": [...]
-                }
-            ]
-        }
-        ```
-
-    Example Response:
-        ```json
-        {
-            "success": true,
-            "total_conversations": 2,
-            "successful_extractions": 2,
-            "failed_extractions": 0,
-            "results": [...],
-            "total_processing_time": 2.45,
-            "request_id": "req-ghi-789"
-        }
-        ```
     """
     import time
     import asyncio
@@ -348,55 +404,16 @@ async def extract_entities_batch(
             f"[{request_id}] Batch extraction: {len(batch_request.conversations)} conversations"
         )
 
-        # Process all conversations concurrently
-        tasks = []
-        for conv_request in batch_request.conversations:
-            messages_dict = [msg.dict() for msg in conv_request.messages]
-
-            task = extractor.extract_and_populate(
-                conversation_id=conv_request.conversation_id,
-                messages=messages_dict,
-                session_metadata=conv_request.session_metadata,
-            )
-            tasks.append(task)
+        # Build extraction tasks (Issue #281: uses helper)
+        tasks = _build_extraction_tasks(batch_request, extractor)
 
         # Wait for all extractions to complete
         results: List[ExtractionResult] = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Count successes and failures
-        successful_results = []
-        failed_results = []
-
-        for idx, result in enumerate(results):
-            conv_id = batch_request.conversations[idx].conversation_id
-
-            if isinstance(result, Exception):
-                logger.error(f"[{request_id}] Extraction failed for {conv_id}: {result}")
-                failed_results.append(
-                    {
-                        "success": False,
-                        "conversation_id": conv_id,
-                        "facts_analyzed": 0,
-                        "entities_created": 0,
-                        "relations_created": 0,
-                        "processing_time": 0.0,
-                        "errors": [str(result)],
-                        "request_id": request_id,
-                    }
-                )
-            else:
-                successful_results.append(
-                    {
-                        "success": len(result.errors) == 0,
-                        "conversation_id": result.conversation_id,
-                        "facts_analyzed": result.facts_analyzed,
-                        "entities_created": result.entities_created,
-                        "relations_created": result.relations_created,
-                        "processing_time": result.processing_time,
-                        "errors": result.errors,
-                        "request_id": request_id,
-                    }
-                )
+        # Process results (Issue #281: uses helper)
+        successful_results, failed_results = _process_extraction_results(
+            results, batch_request, request_id
+        )
 
         total_time = time.perf_counter() - start_time
 

@@ -27,7 +27,7 @@ from src.utils.redis_client import get_redis_client as get_redis_manager
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin
-from .models import WorkflowSession
+from .models import LLMIterationContext, WorkflowSession
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
@@ -40,6 +40,10 @@ _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({
 
 # Issue #380: Module-level frozenset for block content types
 _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
+
+# Issue #380: Pre-compiled regex for tool call normalization
+_TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
+_TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 
 
 class ChatWorkflowManager(
@@ -141,8 +145,9 @@ class ChatWorkflowManager(
 
     def _normalize_tool_call_text(self, text: str) -> str:
         """Normalize TOOL_CALL spacing in LLM response text (Issue #332)."""
-        text = re.sub(r"<TOOL_\s+CALL", "<TOOL_CALL", text)
-        text = re.sub(r"</TOOL_\s+CALL>", "</TOOL_CALL>", text)
+        # Issue #380: Use pre-compiled patterns
+        text = _TOOL_CALL_OPEN_RE.sub("<TOOL_CALL", text)
+        text = _TOOL_CALL_CLOSE_RE.sub("</TOOL_CALL>", text)
         return text
 
     def _find_last_tag_positions(self, content: str) -> Dict[str, int]:
@@ -537,39 +542,49 @@ class ChatWorkflowManager(
         yield (new_execution_results, not new_execution_results)
 
     async def _collect_llm_iteration_response(
-        self, http_client, ollama_endpoint: str, selected_model: str, current_prompt: str,
-        terminal_session_id: str, used_knowledge: bool, rag_citations: List[Dict[str, Any]],
-        iteration: int, workflow_messages: List[WorkflowMessage]
+        self,
+        http_client,
+        current_prompt: str,
+        iteration: int,
+        ctx: LLMIterationContext,
     ):
-        """Collect LLM response from iteration. Yields messages, then (llm_response, tool_calls)."""
+        """
+        Collect LLM response from iteration. Yields messages, then (llm_response, tool_calls).
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 4.
+        """
         llm_response = None
         tool_calls = None
 
         async for item in self._process_single_llm_iteration(
-            http_client, ollama_endpoint, selected_model, current_prompt,
-            terminal_session_id, used_knowledge, rag_citations, iteration
+            http_client, ctx.ollama_endpoint, ctx.selected_model, current_prompt,
+            ctx.terminal_session_id, ctx.used_knowledge, ctx.rag_citations, iteration
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
-                workflow_messages.append(item)
+                ctx.workflow_messages.append(item)
                 yield item
 
         yield (llm_response, tool_calls)
 
     async def _run_continuation_iteration(
-        self, http_client, ollama_endpoint: str, selected_model: str, current_prompt: str,
-        terminal_session_id: str, used_knowledge: bool, rag_citations: List[Dict[str, Any]],
-        iteration: int, session_id: str, execution_history: List[Dict[str, Any]],
-        workflow_messages: List[WorkflowMessage],
+        self,
+        http_client,
+        current_prompt: str,
+        iteration: int,
+        ctx: LLMIterationContext,
     ):
-        """Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue)."""
+        """
+        Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        """
         llm_response = None
         tool_calls = None
 
         async for item in self._collect_llm_iteration_response(
-            http_client, ollama_endpoint, selected_model, current_prompt,
-            terminal_session_id, used_knowledge, rag_citations, iteration, workflow_messages
+            http_client, current_prompt, iteration, ctx
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
@@ -587,8 +602,8 @@ class ChatWorkflowManager(
 
         should_break = False
         async for item in self._process_tool_results(
-            tool_calls, session_id, terminal_session_id, ollama_endpoint, selected_model,
-            execution_history, workflow_messages
+            tool_calls, ctx.session_id, ctx.terminal_session_id, ctx.ollama_endpoint,
+            ctx.selected_model, ctx.execution_history, ctx.workflow_messages
         ):
             if isinstance(item, tuple):
                 _, should_break = item
@@ -618,18 +633,15 @@ class ChatWorkflowManager(
     async def _run_continuation_loop_iteration(
         self,
         http_client,
-        ollama_endpoint: str,
-        selected_model: str,
         current_prompt: str,
-        terminal_session_id: str,
-        used_knowledge: bool,
-        rag_citations: List[Dict[str, Any]],
         iteration: int,
-        session_id: str,
-        execution_history: List[Dict[str, Any]],
-        workflow_messages: List[WorkflowMessage],
+        ctx: LLMIterationContext,
     ):
-        """Run a single loop iteration. Yields (llm_response, should_continue) at end."""
+        """
+        Run a single loop iteration. Yields (llm_response, should_continue) at end.
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        """
         logger.info(
             f"[ChatWorkflowManager] Continuation iteration "
             f"{iteration}/{self.MAX_CONTINUATION_ITERATIONS}"
@@ -639,9 +651,7 @@ class ChatWorkflowManager(
         should_continue = False
 
         async for item in self._run_continuation_iteration(
-            http_client, ollama_endpoint, selected_model, current_prompt,
-            terminal_session_id, used_knowledge, rag_citations, iteration,
-            session_id, execution_history, workflow_messages
+            http_client, current_prompt, iteration, ctx
         ):
             if isinstance(item, tuple) and len(item) == 3:
                 llm_response, _, should_continue = item
@@ -651,23 +661,24 @@ class ChatWorkflowManager(
         yield (llm_response, should_continue)
 
     async def _run_llm_iterations(
-        self, http_client, ollama_endpoint: str, selected_model: str, initial_prompt: str,
-        system_prompt: str, terminal_session_id: str, used_knowledge: bool,
-        rag_citations: List[Dict[str, Any]], session_id: str, message: str,
-        workflow_messages: List[WorkflowMessage]
+        self,
+        http_client,
+        ctx: LLMIterationContext,
     ):
-        """Run LLM continuation iterations. Yields messages, then (all_responses, history, error)."""
-        execution_history = []
+        """
+        Run LLM continuation iterations. Yields messages, then (all_responses, history, error).
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 11 to 2.
+        """
+        execution_history = ctx.execution_history
         all_llm_responses = []
-        current_prompt = initial_prompt
+        current_prompt = ctx.initial_prompt
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             llm_response, should_continue = None, False
 
             async for item in self._run_continuation_loop_iteration(
-                http_client, ollama_endpoint, selected_model, current_prompt,
-                terminal_session_id, used_knowledge, rag_citations, iteration,
-                session_id, execution_history, workflow_messages
+                http_client, current_prompt, iteration, ctx
             ):
                 if isinstance(item, tuple) and len(item) == 2:
                     llm_response, should_continue = item
@@ -682,7 +693,9 @@ class ChatWorkflowManager(
             if not should_continue:
                 break
 
-            current_prompt = self._build_continuation_prompt(message, execution_history, system_prompt)
+            current_prompt = self._build_continuation_prompt(
+                ctx.message, execution_history, ctx.system_prompt
+            )
             logger.info(f"[Issue #352] Continuation prompt built: {len(current_prompt)} chars")
 
         if iteration >= self.MAX_CONTINUATION_ITERATIONS:
@@ -691,29 +704,29 @@ class ChatWorkflowManager(
         yield (all_llm_responses, execution_history, None)
 
     async def _execute_llm_continuation_loop(
-        self, ollama_endpoint: str, selected_model: str, initial_prompt: str, system_prompt: str,
-        terminal_session_id: str, used_knowledge: bool, rag_citations: List[Dict[str, Any]],
-        session_id: str, message: str, workflow_messages: List[WorkflowMessage],
+        self,
+        ctx: LLMIterationContext,
     ):
-        """Execute the multi-step LLM continuation loop."""
+        """
+        Execute the multi-step LLM continuation loop.
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 1.
+        """
         import aiohttp
         from src.utils.http_client import get_http_client
 
         try:
             http_client = get_http_client()
-            async for item in self._run_llm_iterations(
-                http_client, ollama_endpoint, selected_model, initial_prompt, system_prompt,
-                terminal_session_id, used_knowledge, rag_citations, session_id, message, workflow_messages
-            ):
+            async for item in self._run_llm_iterations(http_client, ctx):
                 yield item
 
         except aiohttp.ClientError as error:
-            error_msg = self._create_llm_error_message(error, workflow_messages)
+            error_msg = self._create_llm_error_message(error, ctx.workflow_messages)
             yield error_msg
             yield ([], [], error_msg)
 
         except Exception as error:
-            error_msg = self._create_llm_error_message(error, workflow_messages)
+            error_msg = self._create_llm_error_message(error, ctx.workflow_messages)
             yield error_msg
             yield ([], [], error_msg)
 
@@ -870,13 +883,21 @@ class ChatWorkflowManager(
             f"[ChatWorkflowManager] Initial prompt length: {len(current_prompt)} characters"
         )
 
-        # Stage 3: Continuation loop for multi-step tasks
+        # Stage 3: Continuation loop for multi-step tasks (Issue #375: use context object)
+        ctx = LLMIterationContext(
+            ollama_endpoint=ollama_endpoint,
+            selected_model=selected_model,
+            session_id=session_id,
+            terminal_session_id=terminal_session_id,
+            used_knowledge=used_knowledge,
+            rag_citations=rag_citations,
+            workflow_messages=workflow_messages,
+            system_prompt=system_prompt,
+            initial_prompt=current_prompt,
+            message=message,
+        )
         all_llm_responses = []
-        async for item in self._execute_llm_continuation_loop(
-            ollama_endpoint, selected_model, current_prompt, system_prompt,
-            terminal_session_id, used_knowledge, rag_citations,
-            session_id, message, workflow_messages
-        ):
+        async for item in self._execute_llm_continuation_loop(ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 all_llm_responses, _, error = item
                 if error:

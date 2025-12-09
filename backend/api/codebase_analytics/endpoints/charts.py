@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Issue #380: Module-level tuple for severity ordering in charts
+_CHART_SEVERITY_ORDER = ("high", "medium", "low", "info", "hint")
+
 
 def _aggregate_problem_data(
     metadata: dict,
@@ -71,6 +74,32 @@ async def _aggregate_from_redis(
         return total_problems
 
     return await asyncio.to_thread(_scan_and_aggregate)
+
+
+def _dict_to_chart_data(
+    data: Dict[str, int],
+    key_name: str,
+    limit: int = None,
+    descending: bool = True,
+) -> list[dict]:
+    """
+    Convert aggregation dict to chart-friendly list of dicts.
+
+    Issue #281: Extracted helper to reduce repetition in get_chart_data.
+
+    Args:
+        data: Dict mapping keys to counts
+        key_name: Name for key field in output dicts (e.g., 'type', 'severity')
+        limit: Max items to return (None = all)
+        descending: Sort by count descending (True) or ascending (False)
+
+    Returns:
+        List of dicts with key_name and 'count' fields, sorted by count
+    """
+    sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=descending)
+    if limit:
+        sorted_items = sorted_items[:limit]
+    return [{key_name: key, "count": count} for key, count in sorted_items]
 
 
 @with_error_handling(
@@ -138,42 +167,26 @@ async def get_chart_data():
                 status_code=500,
             )
 
-    # Convert to chart-friendly format
+    # Convert to chart-friendly format (Issue #281: uses _dict_to_chart_data helper)
 
     # Problem types for pie chart (sorted by count descending)
-    problem_types_data = [
-        {"type": ptype, "count": count}
-        for ptype, count in sorted(
-            problem_types.items(), key=lambda x: x[1], reverse=True
-        )
-    ]
+    problem_types_data = _dict_to_chart_data(problem_types, "type")
 
-    # Severity for bar chart (ordered by severity level)
-    severity_order = ["high", "medium", "low", "info", "hint"]
+    # Severity for bar chart (Issue #380: use module-level constant for ordering)
     severity_data = []
-    for sev in severity_order:
+    for sev in _CHART_SEVERITY_ORDER:
         if sev in severity_counts:
             severity_data.append({"severity": sev, "count": severity_counts[sev]})
     # Add any unlisted severities
     for sev, count in severity_counts.items():
-        if sev not in severity_order:
+        if sev not in _CHART_SEVERITY_ORDER:
             severity_data.append({"severity": sev, "count": count})
 
     # Race conditions for donut chart
-    race_conditions_data = [
-        {"category": cat, "count": count}
-        for cat, count in sorted(
-            race_conditions.items(), key=lambda x: x[1], reverse=True
-        )
-    ]
+    race_conditions_data = _dict_to_chart_data(race_conditions, "category")
 
     # Top files for horizontal bar chart (top 15)
-    top_files_data = [
-        {"file": file_path, "count": count}
-        for file_path, count in sorted(
-            file_problems.items(), key=lambda x: x[1], reverse=True
-        )[:15]
-    ]
+    top_files_data = _dict_to_chart_data(file_problems, "file", limit=15)
 
     return JSONResponse(
         {

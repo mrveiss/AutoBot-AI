@@ -13,6 +13,9 @@ from urllib.parse import urlparse
 from src.constants.network_constants import NetworkConstants
 from src.constants.security_constants import SecurityConstants
 
+# Issue #380: Module-level tuple for URL scheme validation
+_VALID_URL_SCHEMES = ("http://", "https://")
+
 
 class URLValidator:
     """Validates URLs to prevent SSRF attacks"""
@@ -123,8 +126,8 @@ class URLValidator:
         # Basic cleanup
         url = url.strip()
 
-        # Add scheme if missing
-        if not url.startswith(("http://", "https://")):
+        # Add scheme if missing (Issue #380: use module-level tuple)
+        if not url.startswith(_VALID_URL_SCHEMES):
             url = "https://" + url
 
         # Validate

@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.constants.path_constants import PATH
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.http_client import get_http_client
 
@@ -324,8 +325,8 @@ class StartupValidator:
         try:
             import shutil
 
-            project_root = Path(__file__).parent.parent
-            _, _, free_space = shutil.disk_usage(project_root)
+            # Use centralized PathConstants (Issue #380)
+            _, _, free_space = shutil.disk_usage(PATH.PROJECT_ROOT)
             free_gb = free_space / (1024**3)
 
             if free_gb < 1:

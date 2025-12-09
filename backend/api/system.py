@@ -23,6 +23,14 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for allowed dynamic import modules
+_ALLOWED_IMPORT_MODULES = (
+    "src.config",
+    "src.llm_interface",
+    "backend.services",
+    "backend.utils",
+)
+
 
 async def _check_conversation_files_db(request: Request, health_status: dict) -> None:
     """Check conversation files database health (Issue #315 - extracted)."""
@@ -322,15 +330,8 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
     """Dynamically import a module (admin only)"""
     logger.info(f"Dynamic import requested for module: {module_name}")
 
-    # Security check - only allow specific modules
-    allowed_modules = [
-        "src.config",
-        "src.llm_interface",
-        "backend.services",
-        "backend.utils",
-    ]
-
-    if not any(module_name.startswith(allowed) for allowed in allowed_modules):
+    # Security check - only allow specific modules (Issue #380: use module-level constant)
+    if not any(module_name.startswith(allowed) for allowed in _ALLOWED_IMPORT_MODULES):
         raise HTTPException(
             status_code=403, detail="Module import not allowed for security reasons"
         )

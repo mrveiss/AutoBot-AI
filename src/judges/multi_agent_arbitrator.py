@@ -10,13 +10,16 @@ resolving conflicts, and selecting optimal agent responses in multi-agent scenar
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 from src.constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for approval recommendations
+_APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})
 
 
 class MultiAgentArbitrator(BaseLLMJudge):
@@ -499,7 +502,7 @@ Focus on identifying real conflicts that would confuse or mislead users, not min
         approved_responses = [
             e
             for e in evaluations
-            if e["evaluation"].recommendation in ["APPROVE", "CONDITIONAL"]
+            if e["evaluation"].recommendation in _APPROVAL_RECOMMENDATIONS
         ]
 
         if approved_responses:

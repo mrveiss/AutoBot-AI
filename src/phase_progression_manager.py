@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 import aiofiles
 
 from scripts.phase_validation_system import PhaseValidator
+from src.constants.path_constants import PATH
 from src.project_state_manager import ProjectStateManager
 
 # Setup logging
@@ -50,7 +51,8 @@ class PhaseProgressionManager:
 
     def __init__(self, project_root: Path = None):
         """Initialize phase progression manager with validator and configuration."""
-        self.project_root = project_root or Path(__file__).parent.parent
+        # Use centralized PathConstants (Issue #380)
+        self.project_root = project_root or PATH.PROJECT_ROOT
         self.validator = PhaseValidator(self.project_root)
         self.project_state = ProjectStateManager()
 

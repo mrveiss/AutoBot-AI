@@ -37,6 +37,9 @@ DEPRECATION_MSG = (
     "This endpoint will be removed in v3.0."
 )
 
+# Issue #380: Module-level tuple for monitored service names
+_MONITORED_SERVICES = ("backend", "redis", "ollama", "npu-worker", "frontend")
+
 
 async def query_prometheus_instant(query: str) -> Optional[float]:
     """
@@ -340,11 +343,10 @@ async def get_services_health():
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     logger.warning(f"Deprecated endpoint called: /metrics/services/health - {DEPRECATION_MSG}")
 
-    # Query service status for each service
-    services = ["backend", "redis", "ollama", "npu-worker", "frontend"]
+    # Query service status for each service (Issue #380: use module-level constant)
     health_data = {}
 
-    for service in services:
+    for service in _MONITORED_SERVICES:
         service_status = await query_prometheus_instant(
             f'autobot_service_status{{service_name="{service}",status="online"}}'
         )

@@ -32,7 +32,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 import redis.asyncio as async_redis  # Modern async Redis with JSON support
 from cachetools import LRUCache
@@ -44,6 +44,10 @@ from src.utils.error_boundaries import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozensets for relation direction checks
+_OUTGOING_DIRECTIONS: FrozenSet[str] = frozenset({"outgoing", "both"})
+_INCOMING_DIRECTIONS: FrozenSet[str] = frozenset({"incoming", "both"})
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -683,7 +687,7 @@ class AutoBotMemoryGraph:
                 visited.add(current_id)
 
                 # Process outgoing relations
-                if direction in {"outgoing", "both"}:
+                if direction in _OUTGOING_DIRECTIONS:
                     outgoing = await self._get_outgoing_relations(current_id)
                     outgoing_related = await self._process_direction_relations(
                         outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
@@ -691,7 +695,7 @@ class AutoBotMemoryGraph:
                     related.extend(outgoing_related)
 
                 # Process incoming relations
-                if direction in {"incoming", "both"}:
+                if direction in _INCOMING_DIRECTIONS:
                     incoming = await self._get_incoming_relations(current_id)
                     incoming_related = await self._process_direction_relations(
                         incoming, relation_type, "incoming", "from", depth, max_depth, queue

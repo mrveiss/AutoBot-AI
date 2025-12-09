@@ -29,8 +29,13 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozensets to avoid repeated list creation in detection methods
+_SENSITIVE_RESOURCE_KEYWORDS = frozenset({"admin", "config", "secret", "key", "password"})
+_FILE_OPERATION_ACTIONS = frozenset({"file_read", "file_write", "file_delete", "file_upload"})
 
 
 class ThreatLevel(Enum):
@@ -109,7 +114,7 @@ class SecurityEvent:
 
     def is_file_operation(self) -> bool:
         """Check if event is a file system operation."""
-        return self.action in {"file_read", "file_write", "file_delete", "file_upload"}
+        return self.action in _FILE_OPERATION_ACTIONS
 
     def is_api_request(self) -> bool:
         """Check if event is an API request."""
@@ -144,6 +149,27 @@ class SecurityEvent:
     def get_data_volume(self) -> int:
         """Get data volume in bytes from event details."""
         return self.details.get("data_volume", 0)
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def get_threat_base_fields(self) -> Dict:
+        """Get base fields for ThreatEvent creation (Issue #372 - reduces feature envy).
+
+        Returns dict with common fields needed when creating a ThreatEvent from this event.
+        """
+        return {
+            "timestamp": self.timestamp,
+            "user_id": self.user_id,
+            "source_ip": self.source_ip,
+            "action": self.action,
+            "resource": self.resource,
+            "raw_event": self.raw_event,
+        }
+
+    def generate_threat_id(self, prefix: str) -> str:
+        """Generate a unique threat ID based on this event (Issue #372 - reduces feature envy)."""
+        event_hash = hash(f"{self.user_id}_{self.resource}") % 10000
+        return f"{prefix}_{int(time.time())}_{event_hash}"
 
 
 @dataclass
@@ -322,6 +348,17 @@ class UserProfile:
     def is_high_risk(self) -> bool:
         """Check if user is considered high risk"""
         return self.risk_score > 0.7
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def get_baseline_comparison(self, action: str, current_frequency: int) -> Dict:
+        """Get baseline comparison dict for threat details (Issue #372 - reduces feature envy)."""
+        return {
+            "normal_action_frequency": self.baseline_actions.get(action, 0),
+            "current_frequency": current_frequency,
+            "typical_hours": list(self.typical_hours),
+            "typical_ip_count": len(self.typical_ips),
+        }
 
     def update_with_event(self, event: SecurityEvent):
         """Update profile with new event data"""
@@ -563,34 +600,26 @@ class BehavioralAnomalyAnalyzer(ThreatAnalyzer):
                 ThreatLevel.HIGH if len(anomalies) >= 3 else ThreatLevel.MEDIUM
             )
 
+            # Issue #372: Use model methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
             return ThreatEvent(
-                event_id=f"behavioral_{int(time.time())}_{hash(event.user_id) % 10000}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("behavioral"),
                 threat_category=ThreatCategory.BEHAVIORAL_ANOMALY,
                 threat_level=threat_level,
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action=event.action,
-                resource=event.resource,
                 details={
                     "anomalies_detected": anomalies,
                     "user_risk_score": profile.risk_score,
-                    "baseline_comparison": {
-                        "normal_action_frequency": profile.baseline_actions.get(
-                            event.action, 0
-                        ),
-                        "current_frequency": recent_frequency,
-                        "typical_hours": list(profile.typical_hours),
-                        "typical_ip_count": len(profile.typical_ips),
-                    },
+                    "baseline_comparison": profile.get_baseline_comparison(
+                        event.action, recent_frequency
+                    ),
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=[
                     "monitor_user",
                     "require_additional_auth",
                     "alert_security_team",
                 ],
+                **base_fields,
             )
 
         return None
@@ -648,6 +677,50 @@ class BruteForceAnalyzer(ThreatAnalyzer):
 class MaliciousFileAnalyzer(ThreatAnalyzer):
     """Analyzes events for malicious file uploads"""
 
+    def _check_signature_patterns(
+        self,
+        signature: dict,
+        key: str,
+        target: str,
+        threat_prefix: str,
+        match_type: str = "contains",
+    ) -> List[str]:
+        """
+        Check signature patterns against a target string.
+
+        Issue #281: Extracted helper to reduce repetition in analyze.
+
+        Args:
+            signature: Signature dict containing pattern lists
+            key: Key in signature dict to check (e.g., "extension", "suspicious_names")
+            target: Target string to check against
+            threat_prefix: Prefix for threat identifiers
+            match_type: "contains", "endswith", or "exact"
+
+        Returns:
+            List of detected threat identifiers
+        """
+        threats = []
+        if key not in signature:
+            return threats
+
+        target_lower = target.lower()
+        for pattern in signature[key]:
+            pattern_lower = pattern.lower()
+            matched = False
+
+            if match_type == "endswith":
+                matched = target_lower.endswith(pattern_lower)
+            elif match_type == "contains":
+                matched = pattern_lower in target_lower
+            elif match_type == "exact":
+                matched = pattern in target
+
+            if matched:
+                threats.append(f"{threat_prefix}_{pattern}")
+
+        return threats
+
     async def analyze(
         self, event: SecurityEvent, context: AnalysisContext
     ) -> Optional[ThreatEvent]:
@@ -661,25 +734,32 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
 
         threats = []
 
-        # Check file signatures
+        # Check file signatures (Issue #281: Using extracted helper)
         for signature in context.file_signatures:
             # Check extensions
-            if "extension" in signature:
-                for ext in signature["extension"]:
-                    if filename.lower().endswith(ext.lower()):
-                        threats.append(f"suspicious_extension_{ext}")
+            threats.extend(
+                self._check_signature_patterns(
+                    signature, "extension", filename,
+                    "suspicious_extension", match_type="endswith"
+                )
+            )
 
             # Check content patterns
-            if "content_patterns" in signature and file_content:
-                for pattern in signature["content_patterns"]:
-                    if pattern in file_content:
-                        threats.append(f"malicious_content_{pattern}")
+            if file_content:
+                threats.extend(
+                    self._check_signature_patterns(
+                        signature, "content_patterns", file_content,
+                        "malicious_content", match_type="exact"
+                    )
+                )
 
             # Check suspicious names
-            if "suspicious_names" in signature:
-                for name in signature["suspicious_names"]:
-                    if name.lower() in filename.lower():
-                        threats.append(f"suspicious_name_{name}")
+            threats.extend(
+                self._check_signature_patterns(
+                    signature, "suspicious_names", filename,
+                    "suspicious_name", match_type="contains"
+                )
+            )
 
         # Check file size anomalies
         size_threshold = (
@@ -778,18 +858,16 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
                 if "bulk_data_download" in threats
                 else ThreatLevel.MEDIUM
             )
-            event_hash = hash(f"{event.user_id}_{event.resource}") % 10000
+            # Issue #372: Use SecurityEvent methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
 
             return ThreatEvent(
-                event_id=f"api_abuse_{int(time.time())}_{event_hash}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("api_abuse"),
+                **base_fields,
                 threat_category=ThreatCategory.API_ABUSE,
                 threat_level=threat_level,
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action="api_request",
-                resource=event.resource,
+                action="api_request",  # Override base action
                 details={
                     "abuse_patterns": threats,
                     "request_rate": recent_requests,
@@ -797,7 +875,6 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
                     "response_size": response_size,
                     "endpoint": event.resource,
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=[
                     "rate_limit_user",
                     "monitor_api_usage",
@@ -837,9 +914,10 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
             risk_indicators.append("off_hours_access")
 
         # Check for unusual resource access
+        # Issue #380: Use module-level frozenset for O(1) lookup
         if event.resource and any(
             sensitive in event.resource.lower()
-            for sensitive in ["admin", "config", "secret", "key", "password"]
+            for sensitive in _SENSITIVE_RESOURCE_KEYWORDS
         ):
             risk_indicators.append("sensitive_resource_access")
 
@@ -858,16 +936,15 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
                 ThreatLevel.CRITICAL if len(risk_indicators) >= 4 else ThreatLevel.HIGH
             )
 
+            # Issue #372: Use SecurityEvent methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
+
             return ThreatEvent(
-                event_id=f"insider_{int(time.time())}_{hash(event.user_id) % 10000}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("insider"),
+                **base_fields,
                 threat_category=ThreatCategory.INSIDER_THREAT,
                 threat_level=threat_level,
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action=event.action,
-                resource=event.resource,
                 details={
                     "risk_indicators": risk_indicators,
                     "user_risk_score": user_profile.risk_score if user_profile else 0.0,
@@ -880,7 +957,6 @@ class InsiderThreatAnalyzer(ThreatAnalyzer):
                         else "medium"
                     ),
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=[
                     "enhanced_monitoring",
                     "require_manager_approval",
@@ -1190,7 +1266,7 @@ class ThreatDetectionEngine:
         """Periodic cleanup of old data and statistics"""
         while True:
             try:
-                await asyncio.sleep(3600)  # Cleanup every hour
+                await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)  # Cleanup every hour
                 await self._cleanup_old_data()
             except Exception as e:
                 logger.error(f"Error in periodic cleanup: {e}")

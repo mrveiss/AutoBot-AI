@@ -19,7 +19,12 @@ from typing import Callable, Dict, Optional
 from backend.type_defs.common import Metadata
 import ansible_runner
 
+from src.constants.path_constants import PATH
+
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for loggable ansible event types
+_ANSIBLE_LOGGABLE_EVENTS = frozenset({"runner_on_ok", "runner_on_failed", "runner_on_unreachable"})
 
 
 class AnsibleExecutor:
@@ -173,7 +178,7 @@ class AnsibleExecutor:
     def _default_event_handler(self, event: Dict):
         """Default event handler for logging"""
         event_type = event.get("event", "unknown")
-        if event_type in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable"}:
+        if event_type in _ANSIBLE_LOGGABLE_EVENTS:
             logger.info(f"Ansible event: {event_type} - {event.get('event_data', {})}")
         else:
             logger.debug(f"Ansible event: {event_type}")
@@ -188,9 +193,8 @@ class AnsibleExecutor:
         Returns:
             Full path to playbook
         """
-        # Assuming AutoBot ansible directory structure
-        base_path = Path(__file__).parent.parent.parent / "ansible"
-        playbook_path = base_path / "playbooks" / playbook_name
+        # Use centralized PathConstants (Issue #380)
+        playbook_path = PATH.ANSIBLE_PLAYBOOKS_DIR / playbook_name
 
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(playbook_path.exists):

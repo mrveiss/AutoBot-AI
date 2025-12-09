@@ -36,6 +36,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex for tag prefix validation
+_TAG_PREFIX_RE = re.compile(r"^[a-z0-9_-]*$")
+
 # Create router for tag management endpoints
 router = APIRouter(tags=["knowledge-tags"])
 
@@ -291,7 +294,7 @@ async def list_all_tags(
     # Validate prefix if provided
     if prefix:
         prefix = prefix.lower().strip()
-        if not re.match(r"^[a-z0-9_-]*$", prefix):
+        if not _TAG_PREFIX_RE.match(prefix):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid prefix format: only lowercase alphanumeric allowed",

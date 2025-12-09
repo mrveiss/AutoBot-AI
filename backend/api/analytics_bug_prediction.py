@@ -20,12 +20,17 @@ from typing import Any, Optional
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 
 # Performance optimization: O(1) lookup for control flow keywords (Issue #326)
 CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "while "}
+
+# Issue #380: Module-level tuple for function definition prefixes
+_FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
 
 def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
@@ -45,6 +50,37 @@ def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
             current_files = []
 
     return file_bug_counts
+
+
+def _build_file_risk_dict(
+    file_path: str,
+    risk_score: float,
+    factors: dict[str, float],
+    bug_count_history: int = 0,
+) -> dict[str, Any]:
+    """
+    Build a file risk analysis dict with standardized structure.
+
+    Issue #281: Extracted helper to reduce repetition in analyze_codebase.
+
+    Args:
+        file_path: Relative path to the file
+        risk_score: Calculated risk score (0-100)
+        factors: Dict of risk factor values
+        bug_count_history: Historical bug count for file
+
+    Returns:
+        Dict with risk assessment for the file
+    """
+    return {
+        "file_path": file_path,
+        "risk_score": round(risk_score, 1),
+        "risk_level": get_risk_level(risk_score).value,
+        "factors": factors,
+        "bug_count_history": bug_count_history,
+        "prevention_tips": get_prevention_tips(factors),
+        "suggested_tests": get_suggested_tests(file_path, factors),
+    }
 
 
 # ============================================================================
@@ -231,7 +267,7 @@ async def get_git_bug_history() -> dict[str, Any]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -264,7 +300,7 @@ async def get_file_change_frequency() -> dict[str, int]:
         )
 
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
@@ -286,6 +322,29 @@ async def get_file_change_frequency() -> dict[str, int]:
         return {}
 
 
+def _score_from_thresholds(
+    value: float,
+    thresholds: list[tuple[float, int]],
+) -> int:
+    """
+    Calculate score based on threshold levels.
+
+    Issue #281: Extracted helper to reduce repetition in analyze_file_complexity.
+    Each threshold is (min_value, score_to_add) - checked in order, first match wins.
+
+    Args:
+        value: The metric value to evaluate
+        thresholds: List of (threshold, score) tuples, checked in order
+
+    Returns:
+        Score for the first matching threshold, or 0 if none match
+    """
+    for threshold, score in thresholds:
+        if value > threshold:
+            return score
+    return 0
+
+
 async def analyze_file_complexity(file_path: str) -> float:
     """Estimate file complexity (0-100 score)."""
     try:
@@ -301,13 +360,10 @@ async def analyze_file_complexity(file_path: str) -> float:
         # Simple complexity heuristics
         complexity_score = 0
 
-        # Line count factor
-        if line_count > 500:
-            complexity_score += 30
-        elif line_count > 300:
-            complexity_score += 20
-        elif line_count > 100:
-            complexity_score += 10
+        # Line count factor (Issue #281: use extracted helper)
+        complexity_score += _score_from_thresholds(
+            line_count, [(500, 30), (300, 20), (100, 10)]
+        )
 
         # Nesting depth estimation (count indentation levels)
         max_indent = 0
@@ -317,12 +373,9 @@ async def analyze_file_complexity(file_path: str) -> float:
                 spaces = indent // 4 if "    " in line[:indent] else indent // 2
                 max_indent = max(max_indent, spaces)
 
-        if max_indent > 6:
-            complexity_score += 25
-        elif max_indent > 4:
-            complexity_score += 15
-        elif max_indent > 2:
-            complexity_score += 5
+        complexity_score += _score_from_thresholds(
+            max_indent, [(6, 25), (4, 15), (2, 5)]
+        )
 
         # Conditional density
         conditionals = sum(
@@ -331,21 +384,15 @@ async def analyze_file_complexity(file_path: str) -> float:
             if any(kw in line for kw in CONTROL_FLOW_KEYWORDS)
         )
         conditional_density = conditionals / max(line_count, 1) * 100
-        if conditional_density > 15:
-            complexity_score += 25
-        elif conditional_density > 10:
-            complexity_score += 15
-        elif conditional_density > 5:
-            complexity_score += 5
-
-        # Function count estimation
-        func_count = sum(
-            1 for line in lines if line.strip().startswith(("def ", "async def "))
+        complexity_score += _score_from_thresholds(
+            conditional_density, [(15, 25), (10, 15), (5, 5)]
         )
-        if func_count > 20:
-            complexity_score += 20
-        elif func_count > 10:
-            complexity_score += 10
+
+        # Function count estimation (Issue #380: use module-level tuple)
+        func_count = sum(
+            1 for line in lines if line.strip().startswith(_FUNCTION_DEF_PREFIXES)
+        )
+        complexity_score += _score_from_thresholds(func_count, [(20, 20), (10, 10)])
 
         return min(100, complexity_score)
 
@@ -495,7 +542,7 @@ async def analyze_codebase(
         files_to_analyze = await asyncio.to_thread(_find_files_sync)
 
         if not files_to_analyze:
-            # Return demo data if no files found
+            # Return demo data if no files found (Issue #281: uses _build_file_risk_dict)
             demo = generate_demo_predictions()
             return {
                 "timestamp": datetime.now().isoformat(),
@@ -503,14 +550,9 @@ async def analyze_codebase(
                 "analyzed_files": len(demo["files"]),
                 "high_risk_count": demo["high_risk_count"],
                 "files": [
-                    {
-                        **f,
-                        "risk_level": get_risk_level(f["risk_score"]).value,
-                        "prevention_tips": get_prevention_tips(f["factors"]),
-                        "suggested_tests": get_suggested_tests(
-                            f["file_path"], f["factors"]
-                        ),
-                    }
+                    _build_file_risk_dict(
+                        f["file_path"], f["risk_score"], f["factors"]
+                    )
                     for f in demo["files"]
                 ],
             }
@@ -543,16 +585,9 @@ async def analyze_codebase(
                 if factor.value in factors
             )
 
+            # Issue #281: Uses _build_file_risk_dict helper
             analyzed_files.append(
-                {
-                    "file_path": rel_path,
-                    "risk_score": round(risk_score, 1),
-                    "risk_level": get_risk_level(risk_score).value,
-                    "factors": factors,
-                    "bug_count_history": bug_count,
-                    "prevention_tips": get_prevention_tips(factors),
-                    "suggested_tests": get_suggested_tests(rel_path, factors),
-                }
+                _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
             )
 
         # Sort by risk score

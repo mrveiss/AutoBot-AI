@@ -47,6 +47,9 @@ router = APIRouter(tags=["http_client_mcp", "mcp"])
 # Performance optimization: O(1) lookup for allowed HTTP schemes (Issue #326)
 ALLOWED_HTTP_SCHEMES = {"http", "https"}
 
+# Issue #380: Module-level tuple for URL scheme validation
+_VALID_URL_SCHEMES = ("http://", "https://")
+
 # Security Configuration
 
 # Domain whitelist - configurable list of allowed domains
@@ -188,7 +191,7 @@ def validate_headers(headers: Dict[str, str]) -> bool:
     if not headers:
         return True
 
-    for key in headers.keys():
+    for key in headers:
         if key.lower() in BLOCKED_HEADERS:
             logger.warning(f"Blocked sensitive header: {key}")
             return False
@@ -253,7 +256,7 @@ class HTTPRequestBase(BaseModel):
     @classmethod
     def validate_url_format(cls, v):
         """Ensure URL is properly formatted"""
-        if not v.startswith(("http://", "https://")):
+        if not v.startswith(_VALID_URL_SCHEMES):  # Issue #380
             raise ValueError("URL must start with http:// or https://")
         return v
 

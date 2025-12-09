@@ -40,6 +40,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["database_mcp", "mcp"])
 
+# Issue #380: Module-level tuple for allowed DML operations
+_ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")
+
 
 # Security Configuration
 
@@ -392,11 +395,10 @@ class SQLExecuteRequest(BaseModel):
     @field_validator("statement")
     @classmethod
     def validate_statement_type(cls, v):
-        """Ensure statement is DML operation"""
+        """Ensure statement is DML operation (Issue #380: use module-level constant)"""
         normalized = v.strip().upper()
-        allowed = ["INSERT", "UPDATE", "DELETE"]
-        if not any(normalized.startswith(op) for op in allowed):
-            raise ValueError(f"Only {', '.join(allowed)} statements allowed")
+        if not any(normalized.startswith(op) for op in _ALLOWED_DML_OPERATIONS):
+            raise ValueError(f"Only {', '.join(_ALLOWED_DML_OPERATIONS)} statements allowed")
         return v
 
 

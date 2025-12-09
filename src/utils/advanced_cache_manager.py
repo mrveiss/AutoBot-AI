@@ -21,6 +21,9 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for user data types
+_USER_DATA_TYPES = ("user_preferences", "user_history")
+
 
 class CacheStrategy(Enum):
     """Cache strategies for different data types"""
@@ -691,7 +694,8 @@ async def get_cached_system_status() -> Optional[Dict[str, Any]]:
 async def invalidate_user_cache(user_id: str) -> int:
     """Invalidate all cache entries for a specific user"""
     count = 0
-    for data_type in ["user_preferences", "user_history"]:
+    # Issue #380: Use module-level tuple
+    for data_type in _USER_DATA_TYPES:
         count += await advanced_cache.invalidate(data_type, "*", user_id)
     return count
 

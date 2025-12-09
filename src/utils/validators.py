@@ -67,6 +67,10 @@ from urllib.parse import urlparse
 
 from src.utils.path_validation import contains_path_traversal
 
+# Issue #380: Pre-compiled regex patterns for validation
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
 # ============================================================================
 # String Validators
 # ============================================================================
@@ -555,10 +559,8 @@ def validate_email(value: str, field_name: str = "Email") -> str:
         >>> validate_email("invalid.email")
         ValueError: Invalid Email format
     """
-    # Basic email pattern
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-
-    if not re.match(pattern, value):
+    # Issue #380: Use pre-compiled pattern
+    if not _EMAIL_RE.match(value):
         raise ValueError(f"Invalid {field_name} format")
 
     return value
@@ -630,10 +632,8 @@ def validate_uuid(value: str, field_name: str = "UUID") -> str:
         >>> validate_uuid("not-a-uuid")
         ValueError: Invalid UUID format
     """
-    # UUID v4 pattern
-    pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-
-    if not re.match(pattern, value.lower()):
+    # Issue #380: Use pre-compiled pattern
+    if not _UUID_RE.match(value.lower()):
         raise ValueError(f"Invalid {field_name} format")
 
     return value

@@ -12,6 +12,7 @@ from functools import cached_property
 from typing import Any, Dict
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -283,14 +284,11 @@ class ServiceConfigMixin:
         if path:
             return str(path)
 
-        # Fallback defaults
-        from pathlib import Path
-
-        project_root = Path(__file__).parent.parent.parent
+        # Fallback defaults using centralized PathConstants (Issue #380)
         defaults = {
-            "logs": str(project_root / "logs"),
-            "data": str(project_root / "data"),
-            "config": str(project_root / "config"),
-            "reports": str(project_root / "reports"),
+            "logs": str(PATH.LOGS_DIR),
+            "data": str(PATH.DATA_DIR),
+            "config": str(PATH.CONFIG_DIR),
+            "reports": str(PATH.REPORTS_DIR),
         }
-        return defaults.get(category, str(project_root))
+        return defaults.get(category, str(PATH.PROJECT_ROOT))

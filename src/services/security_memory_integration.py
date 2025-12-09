@@ -15,9 +15,12 @@ Issue: #260
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, FrozenSet, Optional
 
 from src.autobot_memory_graph import AutoBotMemoryGraph
+
+# Issue #380: Module-level frozenset for security-related tags
+_SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
 
 
 @dataclass
@@ -329,6 +332,53 @@ class SecurityMemoryIntegration:
         logger.info(f"Created service entity: {entity_name}")
         return entity
 
+    def _build_vuln_observations(
+        self,
+        vuln_name: str,
+        severity: str,
+        host_ip: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        references: Optional[list[str]],
+    ) -> list[str]:
+        """Build observations list for vulnerability (Issue #281 - extracted helper)."""
+        observations = [
+            f"Vulnerability: {vuln_name}",
+            f"Severity: {severity.upper()}",
+            f"Affected host: {host_ip}",
+        ]
+        if description:
+            observations.append(f"Description: {description}")
+        if affected_port:
+            observations.append(f"Affected port: {affected_port}")
+        if affected_service:
+            observations.append(f"Affected service: {affected_service}")
+        if references:
+            observations.append(f"References: {', '.join(references[:3])}")
+        return observations
+
+    async def _create_vuln_relations(
+        self,
+        host_ip: str,
+        entity_name: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+    ) -> None:
+        """Create relations for vulnerability entity (Issue #281 - extracted helper)."""
+        await self._create_security_relation(
+            from_entity=f"Host: {host_ip}",
+            to_entity=entity_name,
+            relation_type="relates_to",
+        )
+        if affected_port and affected_service:
+            service_entity = f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
+            await self._create_security_relation(
+                from_entity=service_entity,
+                to_entity=entity_name,
+                relation_type="relates_to",
+            )
+
     async def create_vulnerability_entity(
         self,
         request: Optional[VulnerabilityRequest] = None,
@@ -347,6 +397,7 @@ class SecurityMemoryIntegration:
         """
         Create a memory entity for a discovered vulnerability.
 
+        Issue #281: Refactored from 110 lines to use extracted helper methods.
         Issue #319: Supports both request object and individual parameters.
 
         Args:
@@ -365,7 +416,7 @@ class SecurityMemoryIntegration:
         Returns:
             Created entity data
         """
-        # Issue #319: Extract from request object if provided
+        # Extract from request object if provided
         if request is not None:
             assessment_id = request.assessment_id
             host_ip = request.host_ip
@@ -387,22 +438,11 @@ class SecurityMemoryIntegration:
         vuln_name = cve_id or title or "Unknown Vulnerability"
         entity_name = f"Vuln: {vuln_name} on {host_ip}"
 
-        observations = [
-            f"Vulnerability: {vuln_name}",
-            f"Severity: {severity.upper()}",
-            f"Affected host: {host_ip}",
-        ]
+        observations = self._build_vuln_observations(
+            vuln_name, severity, host_ip, description,
+            affected_port, affected_service, references
+        )
 
-        if description:
-            observations.append(f"Description: {description}")
-        if affected_port:
-            observations.append(f"Affected port: {affected_port}")
-        if affected_service:
-            observations.append(f"Affected service: {affected_service}")
-        if references:
-            observations.append(f"References: {', '.join(references[:3])}")
-
-        # Use 'bug_fix' type for vulnerabilities (closest semantic match)
         entity = await self._memory_graph.create_entity(
             entity_type="bug_fix",
             name=entity_name,
@@ -421,22 +461,7 @@ class SecurityMemoryIntegration:
             tags=["security", "vulnerability", severity, cve_id or "no-cve"],
         )
 
-        # Create relationship to host
-        await self._create_security_relation(
-            from_entity=f"Host: {host_ip}",
-            to_entity=entity_name,
-            relation_type="relates_to",
-        )
-
-        # Create relationship to service if specified
-        if affected_port and affected_service:
-            service_entity = f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
-            await self._create_security_relation(
-                from_entity=service_entity,
-                to_entity=entity_name,
-                relation_type="relates_to",
-            )
-
+        await self._create_vuln_relations(host_ip, entity_name, affected_port, affected_service)
         logger.info(f"Created vulnerability entity: {entity_name}")
         return entity
 
@@ -514,7 +539,7 @@ class SecurityMemoryIntegration:
         security_results = [
             r for r in results
             if r.get("metadata", {}).get("type") in SECURITY_ENTITY_TYPES
-            or any(tag in r.get("tags", []) for tag in ["security", "vulnerability", "host", "service"])
+            or any(tag in r.get("tags", []) for tag in _SECURITY_TAGS)
         ]
 
         return security_results

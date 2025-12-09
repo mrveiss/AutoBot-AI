@@ -15,6 +15,7 @@ from typing import Dict, Optional
 from fastapi import HTTPException
 
 from backend.type_defs.common import Metadata
+from src.constants.path_constants import PATH
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
 from .storage import get_code_collection_async
@@ -111,7 +112,7 @@ _current_indexing_task_id: Optional[str] = None
 
 
 # =============================================================================
-# Helper Functions (Issue #298 - Reduce Deep Nesting)
+# Helper Functions (Issue #298 - Reduce Deep Nesting, Issue #281 - Long Functions)
 # =============================================================================
 
 
@@ -267,6 +268,307 @@ async def _process_file_problems(
 
 
 # =============================================================================
+# Helper Functions for do_indexing_with_progress (Issue #281)
+# =============================================================================
+
+
+def _create_initial_task_state() -> Dict:
+    """Create initial task state structure (Issue #281: extracted)."""
+    return {
+        "status": "running",
+        "progress": {
+            "current": 0,
+            "total": 0,
+            "percent": 0,
+            "current_file": "Initializing...",
+            "operation": "Starting indexing",
+        },
+        "phases": {
+            "current_phase": "init",
+            "phases_completed": [],
+            "phase_list": [
+                {"id": "init", "name": "Initialization", "status": "running"},
+                {"id": "scan", "name": "Scanning Files", "status": "pending"},
+                {"id": "prepare", "name": "Preparing Data", "status": "pending"},
+                {"id": "store", "name": "Storing to ChromaDB", "status": "pending"},
+                {"id": "finalize", "name": "Finalizing", "status": "pending"},
+            ],
+        },
+        "batches": {
+            "total_batches": 0,
+            "completed_batches": 0,
+            "current_batch": 0,
+            "batch_size": 5000,
+            "items_per_batch": [],
+        },
+        "stats": {
+            "files_scanned": 0,
+            "problems_found": 0,
+            "functions_found": 0,
+            "classes_found": 0,
+            "items_stored": 0,
+        },
+        "result": None,
+        "error": None,
+        "started_at": datetime.now().isoformat(),
+    }
+
+
+async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
+    """Initialize and clear ChromaDB collection (Issue #281: extracted)."""
+    from .storage import get_code_collection_async
+
+    update_phase("init", "running")
+    await update_progress(
+        operation="Preparing ChromaDB",
+        current=0,
+        total=1,
+        current_file="Connecting to ChromaDB...",
+        phase="init",
+    )
+
+    code_collection = await get_code_collection_async()
+
+    if code_collection:
+        await update_progress(
+            operation="Clearing old ChromaDB data",
+            current=0,
+            total=1,
+            current_file="Removing existing entries...",
+            phase="init",
+        )
+
+        try:
+            existing_data = await code_collection.get()
+            existing_ids = existing_data["ids"]
+            if existing_ids:
+                await code_collection.delete(ids=existing_ids)
+                logger.info(
+                    f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB"
+                )
+        except Exception as e:
+            logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
+
+    return code_collection
+
+
+def _prepare_function_document(func: Dict, idx: int) -> tuple:
+    """Prepare a function document for ChromaDB storage (Issue #281: extracted)."""
+    doc_text = f"""
+Function: {func['name']}
+File: {func.get('file_path', 'unknown')}
+Line: {func.get('line', 0)}
+Parameters: {', '.join(func.get('args', []))}
+Docstring: {func.get('docstring', 'No documentation')}
+    """.strip()
+
+    metadata = {
+        "type": "function",
+        "name": func["name"],
+        "file_path": func.get("file_path", ""),
+        "start_line": str(func.get("line", 0)),
+        "parameters": ",".join(func.get("args", [])),
+        "language": (
+            "python"
+            if func.get("file_path", "").endswith(".py")
+            else "javascript"
+        ),
+    }
+
+    return f"function_{idx}_{func['name']}", doc_text, metadata
+
+
+def _prepare_class_document(cls: Dict, idx: int) -> tuple:
+    """Prepare a class document for ChromaDB storage (Issue #281: extracted)."""
+    doc_text = f"""
+Class: {cls['name']}
+File: {cls.get('file_path', 'unknown')}
+Line: {cls.get('line', 0)}
+Methods: {', '.join(cls.get('methods', []))}
+Docstring: {cls.get('docstring', 'No documentation')}
+    """.strip()
+
+    metadata = {
+        "type": "class",
+        "name": cls["name"],
+        "file_path": cls.get("file_path", ""),
+        "start_line": str(cls.get("line", 0)),
+        "methods": ",".join(cls.get("methods", [])),
+        "language": "python",
+    }
+
+    return f"class_{idx}_{cls['name']}", doc_text, metadata
+
+
+def _prepare_stats_document(analysis_results: Dict) -> tuple:
+    """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
+    stats = analysis_results["stats"]
+    stats_doc = f"""
+Codebase Statistics:
+Total Files: {stats['total_files']}
+Total Lines: {stats['total_lines']}
+Python Files: {stats['python_files']}
+JavaScript Files: {stats['javascript_files']}
+Vue Files: {stats['vue_files']}
+Total Functions: {stats['total_functions']}
+Total Classes: {stats['total_classes']}
+Last Indexed: {stats['last_indexed']}
+    """.strip()
+
+    metadata = {
+        "type": "stats",
+        **{k: str(v) for k, v in stats.items()},
+    }
+
+    return "codebase_stats", stats_doc, metadata
+
+
+async def _prepare_batch_data(
+    analysis_results: Dict,
+    task_id: str,
+    update_progress,
+    update_phase,
+) -> tuple:
+    """Prepare all batch data for ChromaDB storage (Issue #281: extracted)."""
+    update_phase("prepare", "running")
+
+    batch_ids = []
+    batch_documents = []
+    batch_metadatas = []
+
+    total_items_to_store = (
+        len(analysis_results["all_functions"])
+        + len(analysis_results["all_classes"])
+        + 1  # stats
+    )
+    items_prepared = 0
+
+    await update_progress(
+        operation="Preparing functions",
+        current=0,
+        total=total_items_to_store,
+        current_file="Processing functions...",
+        phase="prepare",
+    )
+
+    # Prepare functions
+    for idx, func in enumerate(analysis_results["all_functions"]):
+        doc_id, doc_text, metadata = _prepare_function_document(func, idx)
+        batch_ids.append(doc_id)
+        batch_documents.append(doc_text)
+        batch_metadatas.append(metadata)
+
+        items_prepared += 1
+        if items_prepared % 100 == 0:
+            await update_progress(
+                operation="Storing functions",
+                current=items_prepared,
+                total=total_items_to_store,
+                current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}",
+            )
+
+    # Prepare classes
+    await update_progress(
+        operation="Storing classes",
+        current=items_prepared,
+        total=total_items_to_store,
+        current_file="Processing classes...",
+    )
+
+    for idx, cls in enumerate(analysis_results["all_classes"]):
+        doc_id, doc_text, metadata = _prepare_class_document(cls, idx)
+        batch_ids.append(doc_id)
+        batch_documents.append(doc_text)
+        batch_metadatas.append(metadata)
+
+        items_prepared += 1
+        if items_prepared % 50 == 0:
+            await update_progress(
+                operation="Storing classes",
+                current=items_prepared,
+                total=total_items_to_store,
+                current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}",
+            )
+
+    # Prepare stats
+    stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results)
+    batch_ids.append(stats_id)
+    batch_documents.append(stats_doc)
+    batch_metadatas.append(stats_meta)
+
+    update_phase("prepare", "completed")
+
+    return batch_ids, batch_documents, batch_metadatas
+
+
+async def _store_batches_to_chromadb(
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    task_id: str,
+    update_progress,
+    update_phase,
+    update_batch_info,
+    update_stats,
+) -> int:
+    """Store prepared data to ChromaDB in batches (Issue #281: extracted)."""
+    update_phase("store", "running")
+
+    BATCH_SIZE = 5000
+    total_items = len(batch_ids)
+    items_stored = 0
+    total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
+
+    update_batch_info(0, total_batches, 0)
+
+    await update_progress(
+        operation="Writing to ChromaDB",
+        current=0,
+        total=total_items,
+        current_file="Batch storage in progress...",
+        phase="store",
+        batch_info={"current": 0, "total": total_batches, "items": 0}
+    )
+
+    for i in range(0, total_items, BATCH_SIZE):
+        batch_slice_ids = batch_ids[i : i + BATCH_SIZE]
+        batch_slice_docs = batch_documents[i : i + BATCH_SIZE]
+        batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+
+        await code_collection.add(
+            ids=batch_slice_ids,
+            documents=batch_slice_docs,
+            metadatas=batch_slice_metas,
+        )
+        items_stored += len(batch_slice_ids)
+
+        indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
+
+        await update_progress(
+            operation="Writing to ChromaDB",
+            current=items_stored,
+            total=total_items,
+            current_file=f"Batch {batch_num}/{total_batches}",
+            phase="store",
+            batch_info={"current": batch_num, "total": total_batches, "items": len(batch_slice_ids)}
+        )
+
+        update_stats(items_stored=items_stored)
+
+        logger.info(
+            f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
+            f"{len(batch_slice_ids)} items ({items_stored}/{total_items})"
+        )
+
+    update_phase("store", "completed")
+    logger.info(f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB")
+
+    return items_stored
+
+
+# =============================================================================
 # End of Helper Functions
 # =============================================================================
 
@@ -277,10 +579,9 @@ async def scan_codebase(
     immediate_store_collection=None,
 ) -> Metadata:
     """Scan the entire codebase using MCP-like file operations (Issue #315 - reduced nesting)."""
-    # Use project-relative path if not specified
+    # Use centralized PathConstants (Issue #380)
     if root_path is None:
-        project_root = Path(__file__).parent.parent.parent
-        root_path = str(project_root)
+        root_path = str(PATH.PROJECT_ROOT)
 
     analysis_results = {
         "files": {},
@@ -402,7 +703,9 @@ async def scan_codebase(
 
 async def do_indexing_with_progress(task_id: str, root_path: str):
     """
-    Background task: Index codebase with real-time progress updates
+    Background task: Index codebase with real-time progress updates.
+
+    Issue #281: Refactored from 397 lines to use extracted helper methods.
 
     Updates indexing_tasks[task_id] with progress information:
     - status: "running" | "completed" | "failed"
@@ -415,46 +718,9 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             f"[Task {task_id}] Starting background codebase indexing for: {root_path}"
         )
 
-        # Initialize task status with enhanced phase and batch tracking
+        # Initialize task status (Issue #281: uses helper)
         async with _tasks_lock:
-            indexing_tasks[task_id] = {
-                "status": "running",
-                "progress": {
-                    "current": 0,
-                    "total": 0,
-                    "percent": 0,
-                    "current_file": "Initializing...",
-                    "operation": "Starting indexing",
-                },
-                "phases": {
-                    "current_phase": "init",
-                    "phases_completed": [],
-                    "phase_list": [
-                        {"id": "init", "name": "Initialization", "status": "running"},
-                        {"id": "scan", "name": "Scanning Files", "status": "pending"},
-                        {"id": "prepare", "name": "Preparing Data", "status": "pending"},
-                        {"id": "store", "name": "Storing to ChromaDB", "status": "pending"},
-                        {"id": "finalize", "name": "Finalizing", "status": "pending"},
-                    ],
-                },
-                "batches": {
-                    "total_batches": 0,
-                    "completed_batches": 0,
-                    "current_batch": 0,
-                    "batch_size": 5000,  # ChromaDB max batch size
-                    "items_per_batch": [],
-                },
-                "stats": {
-                    "files_scanned": 0,
-                    "problems_found": 0,
-                    "functions_found": 0,
-                    "classes_found": 0,
-                    "items_stored": 0,
-                },
-                "result": None,
-                "error": None,
-                "started_at": datetime.now().isoformat(),
-            }
+            indexing_tasks[task_id] = _create_initial_task_state()
 
         # Helper to update phase status
         def update_phase(phase_id: str, status: str):
@@ -499,11 +765,9 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 "operation": operation,
             }
 
-            # Update phase if specified
             if phase:
                 update_phase(phase, "running")
 
-            # Update batch info if specified
             if batch_info:
                 update_batch_info(
                     batch_info.get("current", 0),
@@ -515,48 +779,17 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)"
             )
 
-        # Get ChromaDB collection FIRST so we can store problems immediately
-        update_phase("init", "running")
-        await update_progress(
-            operation="Preparing ChromaDB",
-            current=0,
-            total=1,
-            current_file="Connecting to ChromaDB...",
-            phase="init",
+        # Initialize ChromaDB collection (Issue #281: uses helper)
+        code_collection = await _initialize_chromadb_collection(
+            task_id, update_progress, update_phase
         )
-
-        # Issue #369: Use native async collection to prevent event loop blocking
-        code_collection = await get_code_collection_async()
         storage_type = "chromadb" if code_collection else "memory"
-
-        if code_collection:
-            # Clear existing data before scanning
-            await update_progress(
-                operation="Clearing old ChromaDB data",
-                current=0,
-                total=1,
-                current_file="Removing existing entries...",
-                phase="init",
-            )
-
-            try:
-                # Issue #369: Use native async methods from AsyncChromaCollection
-                existing_data = await code_collection.get()
-                existing_ids = existing_data["ids"]
-                if existing_ids:
-                    await code_collection.delete(ids=existing_ids)
-                    logger.info(
-                        f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB"
-                    )
-            except Exception as e:
-                logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
 
         # Mark init phase as completed, start scan phase
         update_phase("init", "completed")
         update_phase("scan", "running")
 
         # Scan the codebase with progress tracking
-        # Pass collection so problems can be stored immediately as they're found
         analysis_results = await scan_codebase(
             root_path,
             progress_callback=update_progress,
@@ -575,198 +808,23 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         update_phase("scan", "completed")
 
         if code_collection:
-            # Start prepare phase
-            update_phase("prepare", "running")
-
-            # Problems were already stored during scan, now store functions and classes
-            # Prepare batch data for ChromaDB (excluding problems which are already stored)
-            batch_ids = []
-            batch_documents = []
-            batch_metadatas = []
-
-            # Store functions and classes (problems were already stored during scan)
-            total_items_to_store = (
-                len(analysis_results["all_functions"])
-                + len(analysis_results["all_classes"])
-                + 1  # stats (problems already stored)
-            )
-            items_prepared = 0
-
-            await update_progress(
-                operation="Preparing functions",
-                current=0,
-                total=total_items_to_store,
-                current_file="Processing functions...",
-                phase="prepare",
+            # Prepare batch data (Issue #281: uses helper)
+            batch_ids, batch_documents, batch_metadatas = await _prepare_batch_data(
+                analysis_results, task_id, update_progress, update_phase
             )
 
-            for idx, func in enumerate(analysis_results["all_functions"]):
-                doc_text = """
-Function: {func['name']}
-File: {func.get('file_path', 'unknown')}
-Line: {func.get('line', 0)}
-Parameters: {', '.join(func.get('args', []))}
-Docstring: {func.get('docstring', 'No documentation')}
-                """.strip()
-
-                batch_ids.append(f"function_{idx}_{func['name']}")
-                batch_documents.append(doc_text)
-                batch_metadatas.append(
-                    {
-                        "type": "function",
-                        "name": func["name"],
-                        "file_path": func.get("file_path", ""),
-                        "start_line": str(func.get("line", 0)),
-                        "parameters": ",".join(func.get("args", [])),
-                        "language": (
-                            "python"
-                            if func.get("file_path", "").endswith(".py")
-                            else "javascript"
-                        ),
-                    }
-                )
-
-                items_prepared += 1
-                if items_prepared % 100 == 0:
-                    await update_progress(
-                        operation="Storing functions",
-                        current=items_prepared,
-                        total=total_items_to_store,
-                        current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}",
-                    )
-
-            # Store classes
-            await update_progress(
-                operation="Storing classes",
-                current=items_prepared,
-                total=total_items_to_store,
-                current_file="Processing classes...",
-            )
-
-            for idx, cls in enumerate(analysis_results["all_classes"]):
-                doc_text = """
-Class: {cls['name']}
-File: {cls.get('file_path', 'unknown')}
-Line: {cls.get('line', 0)}
-Methods: {', '.join(cls.get('methods', []))}
-Docstring: {cls.get('docstring', 'No documentation')}
-                """.strip()
-
-                batch_ids.append(f"class_{idx}_{cls['name']}")
-                batch_documents.append(doc_text)
-                batch_metadatas.append(
-                    {
-                        "type": "class",
-                        "name": cls["name"],
-                        "file_path": cls.get("file_path", ""),
-                        "start_line": str(cls.get("line", 0)),
-                        "methods": ",".join(cls.get("methods", [])),
-                        "language": "python",
-                    }
-                )
-
-                items_prepared += 1
-                if items_prepared % 50 == 0:
-                    await update_progress(
-                        operation="Storing classes",
-                        current=items_prepared,
-                        total=total_items_to_store,
-                        current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}",
-                    )
-
-            # NOTE: Problems were already stored immediately during scan phase
-            # No need to store them again here
-
-            # Store stats as a special document
-            stats_doc = """
-Codebase Statistics:
-Total Files: {analysis_results['stats']['total_files']}
-Total Lines: {analysis_results['stats']['total_lines']}
-Python Files: {analysis_results['stats']['python_files']}
-JavaScript Files: {analysis_results['stats']['javascript_files']}
-Vue Files: {analysis_results['stats']['vue_files']}
-Total Functions: {analysis_results['stats']['total_functions']}
-Total Classes: {analysis_results['stats']['total_classes']}
-Last Indexed: {analysis_results['stats']['last_indexed']}
-            """.strip()
-
-            batch_ids.append("codebase_stats")
-            batch_documents.append(stats_doc)
-            batch_metadatas.append(
-                {
-                    "type": "stats",
-                    **{k: str(v) for k, v in analysis_results["stats"].items()},
-                }
-            )
-
-            items_prepared += 1
-
-            # Mark prepare phase completed
-            update_phase("prepare", "completed")
-
-            # Add all to ChromaDB in batches (ChromaDB has max batch size limit)
+            # Store to ChromaDB in batches (Issue #281: uses helper)
             if batch_ids:
-                # Start store phase
-                update_phase("store", "running")
-
-                BATCH_SIZE = (
-                    5000  # ChromaDB max batch size is ~5461, use 5000 for safety
-                )
-                total_items = len(batch_ids)
-                items_stored = 0
-                total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
-
-                # Initialize batch tracking
-                update_batch_info(0, total_batches, 0)
-
-                await update_progress(
-                    operation="Writing to ChromaDB",
-                    current=0,
-                    total=total_items,
-                    current_file="Batch storage in progress...",
-                    phase="store",
-                    batch_info={"current": 0, "total": total_batches, "items": 0}
-                )
-
-                for i in range(0, total_items, BATCH_SIZE):
-                    batch_slice_ids = batch_ids[i : i + BATCH_SIZE]
-                    batch_slice_docs = batch_documents[i : i + BATCH_SIZE]
-                    batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
-                    batch_num = i // BATCH_SIZE + 1
-
-                    # Issue #369: Use native async add from AsyncChromaCollection
-                    await code_collection.add(
-                        ids=batch_slice_ids,
-                        documents=batch_slice_docs,
-                        metadatas=batch_slice_metas,
-                    )
-                    items_stored += len(batch_slice_ids)
-
-                    # Update batch tracking with completed batch info
-                    indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
-
-                    await update_progress(
-                        operation="Writing to ChromaDB",
-                        current=items_stored,
-                        total=total_items,
-                        current_file=f"Batch {batch_num}/{total_batches}",
-                        phase="store",
-                        batch_info={"current": batch_num, "total": total_batches, "items": len(batch_slice_ids)}
-                    )
-
-                    # Update items stored stats
-                    update_stats(items_stored=items_stored)
-
-                    logger.info(
-                        f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
-                        f"{len(batch_slice_ids)} items ({items_stored}/{total_items})"
-                    )
-
-                # Mark store phase completed
-                update_phase("store", "completed")
-
-                logger.info(
-                    f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB"
+                await _store_batches_to_chromadb(
+                    code_collection,
+                    batch_ids,
+                    batch_documents,
+                    batch_metadatas,
+                    task_id,
+                    update_progress,
+                    update_phase,
+                    update_batch_info,
+                    update_stats,
                 )
         else:
             storage_type = "failed"

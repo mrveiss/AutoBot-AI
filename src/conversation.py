@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for comparison query keywords (Issue #326)
 COMPARISON_QUERY_KEYWORDS = {"compare", "vs", "versus"}
 
+# Issue #380: Module-level tuple for default message types in get_messages
+_DEFAULT_MESSAGE_TYPES = ("chat", "source")
+
 
 @dataclass
 class ConversationMessage:
@@ -717,7 +720,7 @@ Please provide a helpful, accurate response based on the available information. 
     def get_messages(self, message_types: List[str] = None) -> List[Dict[str, Any]]:
         """Get conversation messages, optionally filtered by type"""
         if message_types is None:
-            message_types = ["chat", "source"]  # Default to user-facing messages
+            message_types = _DEFAULT_MESSAGE_TYPES  # Issue #380: use module constant
 
         filtered_messages = []
         for msg in self.messages:

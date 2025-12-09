@@ -12,6 +12,12 @@ from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for required timeout categories
+_REQUIRED_TIMEOUT_CATEGORIES = ("redis", "llamaindex", "documents", "http", "llm")
+
+# Issue #380: Module-level tuple for numeric types
+_NUMERIC_TYPES = (int, float)
+
 
 def _validate_timeout_value(
     value: Any, path: str, issues: list, warnings: list
@@ -24,7 +30,7 @@ def _validate_timeout_value(
         issues: List to append validation errors
         warnings: List to append validation warnings
     """
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, _NUMERIC_TYPES):  # Issue #380
         return
 
     if value <= 0:
@@ -144,7 +150,7 @@ class TimeoutConfigMixin:
         # Convert all values to float
         result = {}
         for k, v in base_config.items():
-            if isinstance(v, (int, float)):
+            if isinstance(v, _NUMERIC_TYPES):  # Issue #380
                 result[k] = float(v)
 
         return result
@@ -160,9 +166,8 @@ class TimeoutConfigMixin:
         issues = []
         warnings = []
 
-        # Check required timeout categories
-        required_categories = ["redis", "llamaindex", "documents", "http", "llm"]
-        for category in required_categories:
+        # Check required timeout categories - Issue #380: Use module-level tuple
+        for category in _REQUIRED_TIMEOUT_CATEGORIES:
             timeout_config = self.get_nested(f"timeouts.{category}")
             if timeout_config is None:
                 issues.append(f"Missing timeout configuration for '{category}'")

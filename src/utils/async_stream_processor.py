@@ -11,10 +11,13 @@ import json
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for O(1) lookup
+_OPENAI_PROVIDERS = frozenset({"openai", "gpt"})
 
 
 class StreamCompletionSignal(Enum):
@@ -193,6 +196,84 @@ class OpenAIStreamProcessor(StreamProcessor):
         return False, None
 
 
+async def _process_stream_loop(
+    response,
+    processor: StreamProcessor,
+    max_chunks: int,
+) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
+    """
+    Process stream chunks in a loop until completion or limit.
+
+    Issue #281: Extracted from process_llm_stream to reduce function length
+    and improve testability of the core streaming logic.
+
+    Args:
+        response: HTTP response object with streaming content
+        processor: Provider-specific stream processor
+        max_chunks: Maximum chunks to process (safety limit)
+
+    Returns:
+        Tuple of (content_parts, chunk_count, completion_signal)
+    """
+    content_parts = []
+    chunk_count = 0
+    completion_signal = None
+
+    async for chunk_bytes in response.content:
+        chunk_count += 1
+
+        # Safety limit to prevent infinite loops
+        if chunk_count > max_chunks:
+            logger.warning(f"⚠️ Reached maximum chunk limit ({max_chunks})")
+            completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
+            break
+
+        # Decode chunk
+        try:
+            chunk_data = chunk_bytes.decode("utf-8")
+        except UnicodeDecodeError as e:
+            logger.warning(f"Unicode decode error in chunk {chunk_count}: {e}")
+            continue
+
+        if not chunk_data.strip():
+            continue
+
+        # Check for error conditions
+        error = processor.detect_error_condition(chunk_data)
+        if error:
+            completion_signal = StreamCompletionSignal.ERROR_CONDITION
+            logger.error(f"❌ Stream error detected: {error}")
+            break
+
+        # Process chunk through provider-specific processor
+        is_complete, content_to_add = await processor.process_chunk(chunk_data)
+
+        # Add content if available
+        if content_to_add:
+            content_parts.append(content_to_add)
+
+        # Check for completion
+        if is_complete:
+            accumulated_content = "".join(content_parts)
+            if processor.is_natural_completion(chunk_data, accumulated_content):
+                completion_signal = StreamCompletionSignal.DONE_CHUNK_RECEIVED
+                logger.info(
+                    f"✅ Stream completed naturally after {chunk_count} chunks"
+                )
+            else:
+                completion_signal = StreamCompletionSignal.PROVIDER_SPECIFIC
+                logger.info(
+                    f"✅ Stream completed (provider signal) after {chunk_count} chunks"
+                )
+            break
+
+        # Brief yield to prevent blocking
+        if chunk_count % 10 == 0:  # Every 10 chunks
+            await asyncio.sleep(0)
+
+    return content_parts, chunk_count, completion_signal
+
+
 class StreamProcessorFactory:
     """Factory for creating provider-specific processors"""
 
@@ -203,7 +284,7 @@ class StreamProcessorFactory:
 
         if provider_lower == "ollama":
             return OllamaStreamProcessor(max_chunks)
-        elif provider_lower in ["openai", "gpt"]:
+        elif provider_lower in _OPENAI_PROVIDERS:  # Issue #380
             return OpenAIStreamProcessor(max_chunks)
         else:
             # Generic processor for unknown providers
@@ -228,69 +309,18 @@ async def process_llm_stream(
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_event_loop().time()
 
-    # Issue #383 - Use list and join instead of string concatenation
-    content_parts = []
-    chunk_count = 0
-    completion_signal = None
-
     logger.info(f"🔄 Starting {provider} stream processing (max_chunks: {max_chunks})")
 
+    # Issue #281: Use extracted helper for stream processing loop
     try:
-        async for chunk_bytes in response.content:
-            chunk_count += 1
-
-            # Safety limit to prevent infinite loops
-            if chunk_count > max_chunks:
-                logger.warning(f"⚠️ Reached maximum chunk limit ({max_chunks})")
-                completion_signal = StreamCompletionSignal.MAX_CHUNKS_REACHED
-                break
-
-            # Decode chunk
-            try:
-                chunk_data = chunk_bytes.decode("utf-8")
-            except UnicodeDecodeError as e:
-                logger.warning(f"Unicode decode error in chunk {chunk_count}: {e}")
-                continue
-
-            if not chunk_data.strip():
-                continue
-
-            # Check for error conditions
-            error = processor.detect_error_condition(chunk_data)
-            if error:
-                completion_signal = StreamCompletionSignal.ERROR_CONDITION
-                logger.error(f"❌ Stream error detected: {error}")
-                break
-
-            # Process chunk through provider-specific processor
-            is_complete, content_to_add = await processor.process_chunk(chunk_data)
-
-            # Add content if available
-            if content_to_add:
-                content_parts.append(content_to_add)
-
-            # Check for completion
-            if is_complete:
-                accumulated_content = "".join(content_parts)
-                if processor.is_natural_completion(chunk_data, accumulated_content):
-                    completion_signal = StreamCompletionSignal.DONE_CHUNK_RECEIVED
-                    logger.info(
-                        f"✅ Stream completed naturally after {chunk_count} chunks"
-                    )
-                else:
-                    completion_signal = StreamCompletionSignal.PROVIDER_SPECIFIC
-                    logger.info(
-                        f"✅ Stream completed (provider signal) after {chunk_count} chunks"
-                    )
-                break
-
-            # Brief yield to prevent blocking
-            if chunk_count % 10 == 0:  # Every 10 chunks
-                await asyncio.sleep(0)
-
+        content_parts, chunk_count, completion_signal = await _process_stream_loop(
+            response, processor, max_chunks
+        )
     except Exception as e:
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
         logger.error(f"❌ Stream processing error: {e}")
+        content_parts = []
+        chunk_count = 0
 
     # Final processing - join content parts
     accumulated_content = "".join(content_parts)

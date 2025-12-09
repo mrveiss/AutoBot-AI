@@ -22,12 +22,26 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for placeholder patterns (Issue #326)
 PLACEHOLDER_PATTERNS = {"example", "placeholder", "your_", "xxx", "changeme", "todo"}
+
+# Issue #380: Module-level frozensets for security pattern checking
+_HTTP_METHODS: FrozenSet[str] = frozenset(
+    {"get", "post", "put", "delete", "patch", "route"}
+)
+_INSECURE_RANDOM_FUNCS: FrozenSet[str] = frozenset(
+    {"random", "randint", "choice", "shuffle"}
+)
+_PICKLE_MODULES: FrozenSet[str] = frozenset({"pickle", "cPickle"})
+_YAML_LOADER_ARGS: FrozenSet[str] = frozenset({"Loader", "SafeLoader"})
+_DEBUG_MODE_VARS: FrozenSet[str] = frozenset({"DEBUG", "DEBUG_MODE"})
+_LOAD_FUNCS: FrozenSet[str] = frozenset({"load", "loads"})  # Issue #380
+_VALIDATION_FUNCS: FrozenSet[str] = frozenset({"validate", "Validator", "Schema"})
+_VALIDATION_ATTRS: FrozenSet[str] = frozenset({"validate", "parse_obj", "model_validate"})
 
 
 class SecuritySeverity(Enum):
@@ -355,26 +369,23 @@ class SecurityASTVisitor(ast.NodeVisitor):
             if isinstance(decorator, ast.Call):
                 func = decorator.func
                 if isinstance(func, ast.Attribute):
-                    if func.attr in ("get", "post", "put", "delete", "patch", "route"):
+                    if func.attr in _HTTP_METHODS:
                         return True
             elif isinstance(decorator, ast.Attribute):
-                if decorator.attr in ("get", "post", "put", "delete", "patch", "route"):
+                if decorator.attr in _HTTP_METHODS:
                     return True
         return False
 
     def _has_validation_call(self, node) -> bool:
         """Check if node has validation call patterns (Issue #335 - extracted helper)."""
-        validation_funcs = {"validate", "Validator", "Schema"}
-        validation_attrs = {"validate", "parse_obj", "model_validate"}
-
         for child in ast.walk(node):
             if not isinstance(child, ast.Call):
                 continue
             func = child.func
-            if isinstance(func, ast.Name) and func.id in validation_funcs:
-                return True
-            if isinstance(func, ast.Attribute) and func.attr in validation_attrs:
-                return True
+            if isinstance(func, ast.Name) and func.id in _VALIDATION_FUNCS:
+                return True  # Issue #380: use module constant
+            if isinstance(func, ast.Attribute) and func.attr in _VALIDATION_ATTRS:
+                return True  # Issue #380: use module constant
         return False
 
     def _has_type_annotations(self, node) -> bool:
@@ -468,7 +479,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                 )
 
             # Check for random module (not cryptographically secure)
-            if func.attr in ("random", "randint", "choice", "shuffle"):
+            if func.attr in _INSECURE_RANDOM_FUNCS:
                 module = self._get_module_name(func)
                 if module == "random":
                     code = self._get_source_segment(node.lineno, node.lineno)
@@ -498,10 +509,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
         if isinstance(func, ast.Attribute):
             # Pickle is dangerous
-            if func.attr in ("load", "loads") and self._get_module_name(func) in (
-                "pickle",
-                "cPickle",
-            ):
+            if func.attr in _LOAD_FUNCS and self._get_module_name(func) in _PICKLE_MODULES:
                 code = self._get_source_segment(node.lineno, node.lineno)
                 self.findings.append(
                     SecurityFinding(
@@ -524,7 +532,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
             if func.attr == "load" and self._get_module_name(func) == "yaml":
                 # Check if safe_load or Loader is specified
                 has_loader = any(
-                    kw.arg in ("Loader", "SafeLoader") for kw in node.keywords
+                    kw.arg in _YAML_LOADER_ARGS for kw in node.keywords
                 )
                 if not has_loader:
                     code = self._get_source_segment(node.lineno, node.lineno)
@@ -582,7 +590,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
         """Check for debug mode enabled."""
         for target in node.targets:
             if isinstance(target, ast.Name):
-                if target.id.upper() in ("DEBUG", "DEBUG_MODE"):
+                if target.id.upper() in _DEBUG_MODE_VARS:
                     if self._is_truthy(node.value):
                         code = self._get_source_segment(node.lineno, node.lineno)
                         self.findings.append(

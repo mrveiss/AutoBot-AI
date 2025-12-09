@@ -35,6 +35,20 @@ from src.utils.redis_client import RedisDatabase, get_redis_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for code analysis and extraction
+_FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name
+_PYTHON_CODE_BLOCK_RE = re.compile(r"```python\n(.*?)```", re.DOTALL)
+_FUNC_SIGNATURE_RE = re.compile(r"(\s*)def (\w+)\((.*?)\):")
+_OPT_PYTHON_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
+_FUNC_WITH_RETURN_RE = re.compile(r"(\s*)def (\w+)\((.*?)\).*:")
+_MULTI_LANG_BLOCK_RE = re.compile(
+    r"```(?:python|typescript|javascript)?\n(.*?)```", re.DOTALL
+)
+
+# Issue #380: Module-level tuple for import AST nodes
+_IMPORT_TYPES = (ast.Import, ast.ImportFrom
+)
+
 # Performance optimization: O(1) lookup for excluded language keys (Issue #326)
 EXCLUDED_LANGUAGE_KEYS = {"total", "success", "tokens"}
 
@@ -366,7 +380,7 @@ class CodeValidator:
             warnings.extend(func_warnings)
         elif isinstance(node, ast.ClassDef):
             classes.append(CodeValidator._extract_class_info(node))
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+        elif isinstance(node, _IMPORT_TYPES):  # Issue #380
             imports.extend(CodeValidator._extract_imports(node))
 
     @staticmethod
@@ -535,12 +549,12 @@ class CodeGenerationEngine:
             if line.startswith("+") and not line.startswith("+++"):
                 additions += 1
                 # Check for function definitions
-                func_match = re.search(r"def\s+(\w+)", line)
+                func_match = _FUNC_DEF_RE.search(line)
                 if func_match:
                     modified_functions.add(f"Added/modified function: {func_match.group(1)}")
             elif line.startswith("-") and not line.startswith("---"):
                 deletions += 1
-                func_match = re.search(r"def\s+(\w+)", line)
+                func_match = _FUNC_DEF_RE.search(line)
                 if func_match:
                     modified_functions.add(f"Removed/modified function: {func_match.group(1)}")
 
@@ -593,7 +607,7 @@ class CodeGenerationEngine:
     def _mock_type_hints_response(self, prompt: str) -> str:
         """Generate mock type hints response"""
         # Extract code from prompt
-        code_match = re.search(r"```python\n(.*?)```", prompt, re.DOTALL)
+        code_match = _PYTHON_CODE_BLOCK_RE.search(prompt)
         if not code_match:
             return "# No code found to add type hints"
 
@@ -604,7 +618,7 @@ class CodeGenerationEngine:
 
         for line in lines:
             # Add return type hints to functions
-            func_match = re.match(r"(\s*)def (\w+)\((.*?)\):", line)
+            func_match = _FUNC_SIGNATURE_RE.match(line)
             if func_match:
                 indent, name, args = func_match.groups()
                 result.append(f"{indent}def {name}({args}) -> None:")
@@ -615,7 +629,7 @@ class CodeGenerationEngine:
 
     def _mock_docstrings_response(self, prompt: str) -> str:
         """Generate mock docstrings response"""
-        code_match = re.search(r"```(?:python)?\n(.*?)```", prompt, re.DOTALL)
+        code_match = _OPT_PYTHON_BLOCK_RE.search(prompt)
         if not code_match:
             return "# No code found to add docstrings"
 
@@ -626,7 +640,7 @@ class CodeGenerationEngine:
         for i, line in enumerate(lines):
             result.append(line)
             # Add docstring after function definition
-            func_match = re.match(r"(\s*)def (\w+)\((.*?)\).*:", line)
+            func_match = _FUNC_WITH_RETURN_RE.match(line)
             if func_match:
                 indent = func_match.group(1)
                 name = func_match.group(2)
@@ -638,7 +652,7 @@ class CodeGenerationEngine:
 
     def _mock_simplify_response(self, prompt: str) -> str:
         """Generate mock simplify response"""
-        code_match = re.search(r"```(?:python)?\n(.*?)```", prompt, re.DOTALL)
+        code_match = _OPT_PYTHON_BLOCK_RE.search(prompt)
         if not code_match:
             return "# No code found to simplify"
 
@@ -648,7 +662,7 @@ class CodeGenerationEngine:
 
     def _mock_general_response(self, prompt: str) -> str:
         """Generate mock general refactoring response"""
-        code_match = re.search(r"```(?:python|typescript|javascript)?\n(.*?)```", prompt, re.DOTALL)
+        code_match = _MULTI_LANG_BLOCK_RE.search(prompt)
         if not code_match:
             # Check if it's a generation request
             if "generate" in prompt.lower():

@@ -13,13 +13,20 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level constants to avoid repeated Path computation
+_SRC_ROOT = Path(__file__).parent.parent  # src/
+_PROJECT_ROOT = _SRC_ROOT.parent  # project root
+
+# Issue #380: Module-level frozenset for valid source root directories
+_SOURCE_ROOTS: FrozenSet[str] = frozenset({"src", "backend"})
 
 
 class ModuleReloadHandler(FileSystemEventHandler):
@@ -84,12 +91,11 @@ class HotReloadManager:
             handler = ModuleReloadHandler(self)
 
             # Watch the src directory for changes
-            src_path = Path(__file__).parent.parent
-            self.observer.schedule(handler, str(src_path), recursive=True)
-            self.watched_paths.add(src_path)
+            self.observer.schedule(handler, str(_SRC_ROOT), recursive=True)
+            self.watched_paths.add(_SRC_ROOT)
 
             # Watch backend/api directory for API changes
-            api_path = Path(__file__).parent.parent.parent / "backend" / "api"
+            api_path = _PROJECT_ROOT / "backend" / "api"
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(api_path.exists):
                 self.observer.schedule(handler, str(api_path), recursive=True)
@@ -224,12 +230,11 @@ class HotReloadManager:
         """Convert a file path to a Python module name"""
         try:
             # Get path relative to project root
-            project_root = Path(__file__).parent.parent.parent
-            relative_path = file_path.relative_to(project_root)
+            relative_path = file_path.relative_to(_PROJECT_ROOT)
 
             # Convert to module name
             parts = relative_path.with_suffix("").parts
-            if parts[0] in ["src", "backend"]:
+            if parts[0] in _SOURCE_ROOTS:
                 return ".".join(parts)
 
             return None

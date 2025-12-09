@@ -15,12 +15,51 @@ import platform
 import shutil
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Set, Tuple
+from functools import lru_cache
+from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 import aiofiles
 
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level cached tool category sets to avoid repeated set creation
+_NETWORK_TOOLS: FrozenSet[str] = frozenset({
+    "ping", "curl", "wget", "netstat", "ss", "nmap", "arp",
+    "dig", "nslookup", "traceroute", "ifconfig", "ip",
+})
+
+_SYSTEM_TOOLS: FrozenSet[str] = frozenset({
+    "ps", "top", "htop", "d", "du", "free", "uname", "whoami",
+    "id", "groups", "sudo", "su", "crontab", "systemctl", "service",
+})
+
+_FILE_TOOLS: FrozenSet[str] = frozenset({
+    "ls", "find", "grep", "sed", "awk", "cat", "head", "tail",
+    "less", "more", "wc", "sort", "uniq", "tar", "zip", "unzip",
+})
+
+_DEV_TOOLS: FrozenSet[str] = frozenset({
+    "git", "python", "python3", "pip", "pip3", "node", "npm",
+    "docker", "docker-compose", "vim", "nano", "emacs",
+})
+
+# Issue #380: Root-required package managers frozenset
+_ROOT_REQUIRED_MANAGERS: FrozenSet[str] = frozenset({
+    "apt", "yum", "dnf", "pacman", "zypper"
+})
+
+# Issue #380: Package manager command templates (static parts cached)
+_PM_INSTALL_TEMPLATES: Dict[str, str] = {
+    "apt": "sudo apt update && sudo apt install -y {}",
+    "dnf": "sudo dnf install -y {}",
+    "yum": "sudo yum install -y {}",
+    "pacman": "sudo pacman -S --noconfirm {}",
+    "zypper": "sudo zypper install -y {}",
+    "brew": "brew install {}",
+    "winget": "winget install {}",
+    "choco": "choco install {}",
+}
 
 
 class OSType(Enum):
@@ -146,50 +185,63 @@ class OSDetector:
         else:
             return OSType.UNKNOWN
 
+    # Issue #315 - Distro detection mapping for os-release file
+    _DISTRO_KEYWORDS = [
+        ("kali", LinuxDistro.KALI),
+        ("ubuntu", LinuxDistro.UBUNTU),
+        ("debian", LinuxDistro.DEBIAN),
+        ("fedora", LinuxDistro.FEDORA),
+        ("centos", LinuxDistro.CENTOS),
+        ("rhel", LinuxDistro.RHEL),
+        ("red hat", LinuxDistro.RHEL),
+        ("arch", LinuxDistro.ARCH),
+        ("opensuse", LinuxDistro.OPENSUSE),
+        ("suse", LinuxDistro.OPENSUSE),
+    ]
+
+    # Issue #315 - Fallback file detection mapping
+    _FALLBACK_FILES = {
+        "/etc/debian_version": LinuxDistro.DEBIAN,
+        "/etc/fedora-release": LinuxDistro.FEDORA,
+        "/etc/centos-release": LinuxDistro.CENTOS,
+        "/etc/arch-release": LinuxDistro.ARCH,
+    }
+
+    def _match_distro_keyword(self, content: str) -> Optional[LinuxDistro]:
+        """Match distro from content keywords (Issue #315 - extracted helper)."""
+        for keyword, distro in self._DISTRO_KEYWORDS:
+            if keyword in content:
+                return distro
+        return None
+
+    async def _detect_from_os_release(self) -> Optional[LinuxDistro]:
+        """Detect distro from /etc/os-release (Issue #315 - extracted helper)."""
+        os_release_exists = await asyncio.to_thread(os.path.exists, "/etc/os-release")
+        if not os_release_exists:
+            return None
+
+        async with aiofiles.open("/etc/os-release", "r", encoding="utf-8") as f:
+            content = (await f.read()).lower()
+            return self._match_distro_keyword(content)
+
+    async def _detect_from_fallback_files(self) -> Optional[LinuxDistro]:
+        """Detect distro from fallback files (Issue #315 - extracted helper)."""
+        for file_path, distro in self._FALLBACK_FILES.items():
+            file_exists = await asyncio.to_thread(os.path.exists, file_path)
+            if file_exists:
+                return distro
+        return None
+
     async def _detect_linux_distro(self) -> LinuxDistro:
-        """Detect Linux distribution."""
-        # Distro detection mapping for os-release file
-        DISTRO_KEYWORDS = [
-            ("kali", LinuxDistro.KALI),
-            ("ubuntu", LinuxDistro.UBUNTU),
-            ("debian", LinuxDistro.DEBIAN),
-            ("fedora", LinuxDistro.FEDORA),
-            ("centos", LinuxDistro.CENTOS),
-            ("rhel", LinuxDistro.RHEL),
-            ("red hat", LinuxDistro.RHEL),
-            ("arch", LinuxDistro.ARCH),
-            ("opensuse", LinuxDistro.OPENSUSE),
-            ("suse", LinuxDistro.OPENSUSE),
-        ]
-
-        # Fallback file detection mapping
-        FALLBACK_FILES = {
-            "/etc/debian_version": LinuxDistro.DEBIAN,
-            "/etc/fedora-release": LinuxDistro.FEDORA,
-            "/etc/centos-release": LinuxDistro.CENTOS,
-            "/etc/arch-release": LinuxDistro.ARCH,
-        }
-
+        """Detect Linux distribution (Issue #315 - refactored)."""
         try:
-            # Try /etc/os-release first
-            os_release_exists = await asyncio.to_thread(
-                os.path.exists, "/etc/os-release"
-            )
-            if os_release_exists:
-                async with aiofiles.open("/etc/os-release", "r", encoding="utf-8") as f:
-                    content = (await f.read()).lower()
+            distro = await self._detect_from_os_release()
+            if distro:
+                return distro
 
-                    # Check each keyword in priority order
-                    for keyword, distro in DISTRO_KEYWORDS:
-                        if keyword in content:
-                            return distro
-
-            # Fallback to other detection methods
-            for file_path, distro in FALLBACK_FILES.items():
-                file_exists = await asyncio.to_thread(os.path.exists, file_path)
-                if file_exists:
-                    return distro
-
+            distro = await self._detect_from_fallback_files()
+            if distro:
+                return distro
         except Exception as e:
             logger.warning(f"Error detecting Linux distribution: {e}")
 
@@ -212,50 +264,42 @@ class OSDetector:
 
         return False
 
+    # Issue #315 - Package manager mappings
+    _LINUX_DISTRO_PM = {
+        LinuxDistro.UBUNTU: "apt",
+        LinuxDistro.DEBIAN: "apt",
+        LinuxDistro.KALI: "apt",
+        LinuxDistro.FEDORA: "dnf",
+        LinuxDistro.CENTOS: "yum",
+        LinuxDistro.RHEL: "yum",
+        LinuxDistro.ARCH: "pacman",
+        LinuxDistro.OPENSUSE: "zypper",
+    }
+    _MACOS_PM = ["brew", "port"]
+    _WINDOWS_PM = ["winget", "choco"]
+    _LINUX_PM_FALLBACK = ["apt", "dnf", "yum", "pacman", "zypper"]
+
+    def _find_available_pm(self, pm_list: list[str]) -> Optional[str]:
+        """Find first available package manager (Issue #315 - extracted helper)."""
+        for pm in pm_list:
+            if shutil.which(pm):
+                return pm
+        return None
+
     async def _detect_package_manager(
         self, os_type: OSType, distro: Optional[LinuxDistro]
     ) -> str:
-        """Detect the system package manager."""
-        # Linux distro to package manager mapping
-        LINUX_DISTRO_PM = {
-            LinuxDistro.UBUNTU: "apt",
-            LinuxDistro.DEBIAN: "apt",
-            LinuxDistro.KALI: "apt",
-            LinuxDistro.FEDORA: "dnf",
-            LinuxDistro.CENTOS: "yum",
-            LinuxDistro.RHEL: "yum",
-            LinuxDistro.ARCH: "pacman",
-            LinuxDistro.OPENSUSE: "zypper",
-        }
-
-        # macOS package managers (in order of preference)
-        MACOS_PM = ["brew", "port"]
-
-        # Windows package managers (in order of preference)
-        WINDOWS_PM = ["winget", "choco"]
-
-        # Linux package managers (for auto-detection)
-        LINUX_PM_FALLBACK = ["apt", "dnf", "yum", "pacman", "zypper"]
-
+        """Detect the system package manager (Issue #315 - refactored)."""
         if os_type == OSType.LINUX:
-            # Try distro-specific detection first
-            if distro and distro in LINUX_DISTRO_PM:
-                return LINUX_DISTRO_PM[distro]
+            if distro and distro in self._LINUX_DISTRO_PM:
+                return self._LINUX_DISTRO_PM[distro]
+            return self._find_available_pm(self._LINUX_PM_FALLBACK) or "unknown"
 
-            # Auto-detect common package managers
-            for pm in LINUX_PM_FALLBACK:
-                if shutil.which(pm):
-                    return pm
+        if os_type == OSType.MACOS:
+            return self._find_available_pm(self._MACOS_PM) or "unknown"
 
-        elif os_type == OSType.MACOS:
-            for pm in MACOS_PM:
-                if shutil.which(pm):
-                    return pm
-
-        elif os_type == OSType.WINDOWS:
-            for pm in WINDOWS_PM:
-                if shutil.which(pm):
-                    return pm
+        if os_type == OSType.WINDOWS:
+            return self._find_available_pm(self._WINDOWS_PM) or "unknown"
 
         return "unknown"
 
@@ -367,10 +411,9 @@ class OSDetector:
             return False, f"Package manager {self._os_info.package_manager} not found"
 
         # Check permissions for common package managers that need root
-        root_required_managers = ["apt", "yum", "dnf", "pacman", "zypper"]
-
+        # Issue #380: Use module-level frozenset
         if (
-            self._os_info.package_manager in root_required_managers
+            self._os_info.package_manager in _ROOT_REQUIRED_MANAGERS
             and not self._os_info.is_root
             and not shutil.which("sudo")
         ):
@@ -394,93 +437,11 @@ class OSDetector:
 
         capabilities = self._os_info.capabilities
 
-        # Categorize capabilities
-        network_tools = [
-            tool
-            for tool in capabilities
-            if tool
-            in {
-                "ping",
-                "curl",
-                "wget",
-                "netstat",
-                "ss",
-                "nmap",
-                "arp",
-                "dig",
-                "nslookup",
-                "traceroute",
-                "ifconfig",
-                "ip",
-            }
-        ]
-
-        system_tools = [
-            tool
-            for tool in capabilities
-            if tool
-            in {
-                "ps",
-                "top",
-                "htop",
-                "d",
-                "du",
-                "free",
-                "uname",
-                "whoami",
-                "id",
-                "groups",
-                "sudo",
-                "su",
-                "crontab",
-                "systemctl",
-                "service",
-            }
-        ]
-
-        file_tools = [
-            tool
-            for tool in capabilities
-            if tool
-            in {
-                "ls",
-                "find",
-                "grep",
-                "sed",
-                "awk",
-                "cat",
-                "head",
-                "tail",
-                "less",
-                "more",
-                "wc",
-                "sort",
-                "uniq",
-                "tar",
-                "zip",
-                "unzip",
-            }
-        ]
-
-        dev_tools = [
-            tool
-            for tool in capabilities
-            if tool
-            in {
-                "git",
-                "python",
-                "python3",
-                "pip",
-                "pip3",
-                "node",
-                "npm",
-                "docker",
-                "docker-compose",
-                "vim",
-                "nano",
-                "emacs",
-            }
-        ]
+        # Issue #380: Use module-level cached sets instead of recreating each call
+        network_tools = [tool for tool in capabilities if tool in _NETWORK_TOOLS]
+        system_tools = [tool for tool in capabilities if tool in _SYSTEM_TOOLS]
+        file_tools = [tool for tool in capabilities if tool in _FILE_TOOLS]
+        dev_tools = [tool for tool in capabilities if tool in _DEV_TOOLS]
 
         return {
             "total_count": len(capabilities),
@@ -528,24 +489,16 @@ class OSDetector:
         Returns:
             Optional[str]: Installation command or None if not available
         """
-        # Package manager command templates
-        PM_INSTALL_COMMANDS = {
-            "apt": f"sudo apt update && sudo apt install -y {tool_name}",
-            "dnf": f"sudo dnf install -y {tool_name}",
-            "yum": f"sudo yum install -y {tool_name}",
-            "pacman": f"sudo pacman -S --noconfirm {tool_name}",
-            "zypper": f"sudo zypper install -y {tool_name}",
-            "brew": f"brew install {tool_name}",
-            "winget": f"winget install {tool_name}",
-            "choco": f"choco install {tool_name}",
-        }
-
         if not self._os_info:
             await self.detect_system()
 
         package_manager = self._os_info.package_manager
 
-        return PM_INSTALL_COMMANDS.get(package_manager, None)
+        # Issue #380: Use module-level cached templates instead of recreating dict
+        template = _PM_INSTALL_TEMPLATES.get(package_manager)
+        if template:
+            return template.format(tool_name)
+        return None
 
 
 # Global detector instance (thread-safe)

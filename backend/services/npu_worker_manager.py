@@ -25,10 +25,14 @@ from backend.models.npu_models import (
     WorkerStatus,
     WorkerTestResult,
 )
+from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for worker events that include full data
+_WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated"})
 
 
 class NPUWorkerManager:
@@ -196,7 +200,8 @@ class NPUWorkerManager:
                 break
             except Exception as e:
                 logger.error(f"Health check loop error: {e}")
-                await asyncio.sleep(10)  # Brief pause before retry
+                # Error recovery delay before retry
+                await asyncio.sleep(TimingConstants.LONG_DELAY)
 
     async def _check_worker_health(self, worker_id: str):
         """Check health of a specific worker"""
@@ -302,7 +307,7 @@ class NPUWorkerManager:
     async def _emit_worker_event(
         self, event_type: str, worker_details: NPUWorkerDetails
     ):
-        """Emit worker event via event_manager"""
+        """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
             event_data = {
                 "event": event_type,
@@ -314,38 +319,9 @@ class NPUWorkerManager:
                 },
             }
 
-            # Add full worker data for certain events
-            if event_type in {"worker.added", "worker.updated"}:
-                event_data["worker"] = {
-                    "id": worker_details.config.id,
-                    "name": worker_details.config.name,
-                    "platform": worker_details.config.platform,
-                    "ip_address": (
-                        worker_details.config.url.split("//")[1].split(":")[0]
-                        if "://" in worker_details.config.url
-                        else ""
-                    ),
-                    "port": (
-                        int(worker_details.config.url.split(":")[-1])
-                        if ":" in worker_details.config.url
-                        else 0
-                    ),
-                    "status": worker_details.status.status.value,
-                    "current_load": worker_details.status.current_load,
-                    "max_capacity": worker_details.config.max_concurrent_tasks,
-                    "uptime": f"{int(worker_details.status.uptime_seconds)}s",
-                    "performance_metrics": (
-                        worker_details.metrics.dict() if worker_details.metrics else {}
-                    ),
-                    "priority": worker_details.config.priority,
-                    "weight": worker_details.config.weight,
-                    "last_heartbeat": (
-                        worker_details.status.last_heartbeat.isoformat() + "Z"
-                        if worker_details.status.last_heartbeat
-                        else ""
-                    ),
-                    "created_at": "",  # Not tracked in current model
-                }
+            # Add full worker data for certain events (Issue #372, #380)
+            if event_type in _WORKER_FULL_DATA_EVENTS:
+                event_data["worker"] = worker_details.to_event_dict()
 
             await event_manager.publish(f"npu.{event_type}", event_data)
             logger.debug(

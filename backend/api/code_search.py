@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for index status validation (Issue #326)
 SUCCESSFUL_INDEX_STATUSES = {"success", "already_indexed"}
 
+# Issue #380: Module-level frozenset for valid search types
+_VALID_SEARCH_TYPES = frozenset({"semantic", "exact", "regex", "element"})
+
 # Lazy initialization for NPU code search agent (thread-safe)
 import threading
 
@@ -140,12 +143,11 @@ async def search_code(request: SearchRequest):
     try:
         logger.info(f"Code search: '{request.query}' (type: {request.search_type})")
 
-        # Validate search type
-        valid_types = ["semantic", "exact", "regex", "element"]
-        if request.search_type not in valid_types:
+        # Validate search type (Issue #380: use module-level constant)
+        if request.search_type not in _VALID_SEARCH_TYPES:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid search_type. Must be one of: {valid_types}",
+                detail=f"Invalid search_type. Must be one of: {sorted(_VALID_SEARCH_TYPES)}",
             )
 
         # Perform search
@@ -585,6 +587,59 @@ def _build_reusability_insights(analysis_results: dict) -> dict:
     }
 
 
+def _build_similar_block_entry(result) -> dict:
+    """
+    Build a single similar block entry from a search result.
+
+    Issue #281: Extracted from find_code_duplicates to reduce function length
+    and improve readability of result processing.
+
+    Args:
+        result: Search result with file_path, line_number, content, etc.
+
+    Returns:
+        Dict with formatted block entry for duplicate detection
+    """
+    return {
+        "file_path": result.file_path,
+        "line_number": result.line_number,
+        "content": (
+            result.content[:200] + "..."
+            if len(result.content) > 200
+            else result.content
+        ),
+        "confidence": result.confidence,
+        "context": result.context_lines[:3],  # First 3 context lines
+    }
+
+
+def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
+    """
+    Build a duplicate candidate entry from similar blocks.
+
+    Issue #281: Extracted from find_code_duplicates to reduce function length
+    and centralize candidate building logic.
+
+    Args:
+        pattern: The pattern name that matched
+        similar_blocks: List of similar block entries
+
+    Returns:
+        Dict with duplicate candidate info including refactor priority
+    """
+    return {
+        "pattern": pattern,
+        "similar_blocks": similar_blocks,
+        "potential_savings": (
+            f"Could refactor {len(similar_blocks)} similar blocks"
+        ),
+        "refactor_priority": (
+            len(similar_blocks)
+            * max(block["confidence"] for block in similar_blocks)
+        ),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_declarations",
@@ -700,6 +755,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
 
         duplicate_candidates = []
 
+        # Issue #281: Use extracted helpers for cleaner loop
         for pattern in duplicate_patterns:
             # Use semantic search to find similar code blocks
             results = await search_codebase(
@@ -707,38 +763,15 @@ async def find_code_duplicates(request: AnalyticsRequest):
             )
 
             if len(results) > 1:  # Found potential duplicates
-                # Group by similarity
-                similar_blocks = []
-                for result in results:
-                    similar_blocks.append(
-                        {
-                            "file_path": result.file_path,
-                            "line_number": result.line_number,
-                            "content": (
-                                result.content[:200] + "..."
-                                if len(result.content) > 200
-                                else result.content
-                            ),
-                            "confidence": result.confidence,
-                            "context": result.context_lines[
-                                :3
-                            ],  # First 3 context lines
-                        }
-                    )
+                # Group by similarity using extracted helper
+                similar_blocks = [
+                    _build_similar_block_entry(result) for result in results
+                ]
 
                 if len(similar_blocks) > 1:
+                    # Build candidate using extracted helper
                     duplicate_candidates.append(
-                        {
-                            "pattern": pattern,
-                            "similar_blocks": similar_blocks,
-                            "potential_savings": (
-                                f"Could refactor {len(similar_blocks)} similar blocks"
-                            ),
-                            "refactor_priority": (
-                                len(similar_blocks)
-                                * max(block["confidence"] for block in similar_blocks)
-                            ),
-                        }
+                        _build_duplicate_candidate(pattern, similar_blocks)
                     )
 
         # Sort by refactor priority

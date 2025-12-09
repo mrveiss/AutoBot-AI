@@ -20,7 +20,19 @@ import logging
 import re
 import shlex
 from dataclasses import dataclass
-from typing import Dict, List, Union
+from typing import Dict, List, Pattern, Union
+
+# Issue #380: Pre-compiled dangerous patterns for command validation
+_DANGEROUS_PATTERNS: List[Pattern] = [
+    re.compile(pattern, re.IGNORECASE) for pattern in [
+        r"rm\s+-r", r"rm\s.*/", r";\s*rm", r"&&\s*rm", r"\|\s*rm",  # rm patterns
+        r">\s*/dev/", r"curl.*\|\s*sh", r"wget.*\|\s*sh",  # Dangerous redirects/downloads
+        r"eval\s*\(", r"exec\s*\(", r"system\s*\(",  # Dangerous function calls
+        r"`.*`", r"\$\(",  # Command substitution
+        r">\s*/etc/", r">\s*/usr/", r">\s*/var/",  # System directory writes
+        r"chmod.*777", r"chown.*root", r"sudo\s+", r"su\s+",  # Privilege changes
+    ]
+]
 
 
 @dataclass
@@ -78,24 +90,12 @@ class CommandValidator:
             "tail": CommandPattern(command="tail", allowed_args=["-n"], arg_patterns={"-n": r"^-n$"}, max_args=3, description="Display last lines of file", shell_required=True),
         }
 
-    def _get_dangerous_patterns(self) -> List[str]:
-        """Get dangerous command patterns to block."""
-        return [
-            r"rm\s+-r", r"rm\s.*/", r";\s*rm", r"&&\s*rm", r"\|\s*rm",  # rm patterns
-            r">\s*/dev/", r"curl.*\|\s*sh", r"wget.*\|\s*sh",  # Dangerous redirects/downloads
-            r"eval\s*\(", r"exec\s*\(", r"system\s*\(",  # Dangerous function calls
-            r"`.*`", r"\$\(",  # Command substitution
-            r">\s*/etc/", r">\s*/usr/", r">\s*/var/",  # System directory writes
-            r"chmod.*777", r"chown.*root", r"sudo\s+", r"su\s+",  # Privilege changes
-        ]
-
     def _init_whitelist(self) -> None:
         """Initialize the whitelist of allowed commands and their patterns."""
         self.whitelist: Dict[str, CommandPattern] = {}
         self.whitelist.update(self._get_system_commands())
         self.whitelist.update(self._get_network_commands())
         self.whitelist.update(self._get_file_commands())
-        self.dangerous_patterns = self._get_dangerous_patterns()
 
     def _invalid_result(self, reason: str) -> Dict[str, Union[bool, str, List[str]]]:
         """Create an invalid validation result."""
@@ -166,12 +166,13 @@ class CommandValidator:
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, Union[bool, str]]:
         """Check if command contains dangerous patterns."""
-        for pattern in self.dangerous_patterns:
-            if re.search(pattern, command, re.IGNORECASE):
+        # Issue #380: Use pre-compiled patterns from module level
+        for compiled_pattern in _DANGEROUS_PATTERNS:
+            if compiled_pattern.search(command):
                 self.logger.warning(
-                    f"Dangerous pattern detected: {pattern} in command: " f"{command}"
+                    f"Dangerous pattern detected: {compiled_pattern.pattern} in command: " f"{command}"
                 )
-                return {"safe": False, "pattern": pattern}
+                return {"safe": False, "pattern": compiled_pattern.pattern}
         return {"safe": True, "pattern": ""}
 
     def _validate_arguments(

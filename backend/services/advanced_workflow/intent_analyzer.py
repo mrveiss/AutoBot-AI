@@ -18,6 +18,17 @@ from .models import WorkflowComplexity, WorkflowIntent
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level constants for intent keyword detection
+# Moved from _fallback_intent_analysis to avoid repeated dict creation
+_INTENT_KEYWORDS = {
+    WorkflowIntent.INSTALLATION: ("install", "setup", "add", "get"),
+    WorkflowIntent.CONFIGURATION: ("configure", "config", "set up", "adjust"),
+    WorkflowIntent.DEPLOYMENT: ("deploy", "release", "publish", "launch"),
+    WorkflowIntent.SECURITY: ("secure", "harden", "protect", "firewall"),
+    WorkflowIntent.DEVELOPMENT: ("develop", "code", "build", "compile"),
+    WorkflowIntent.MAINTENANCE: ("update", "upgrade", "maintain", "clean"),
+}
+
 
 class IntentAnalyzer:
     """Analyzes user intent using AI and fallback heuristics"""
@@ -66,18 +77,9 @@ complexity, and requirements:
         """Fallback intent analysis using keywords"""
         request_lower = user_request.lower()
 
-        # Intent detection
-        intent_keywords = {
-            WorkflowIntent.INSTALLATION: ["install", "setup", "add", "get"],
-            WorkflowIntent.CONFIGURATION: ["configure", "config", "set up", "adjust"],
-            WorkflowIntent.DEPLOYMENT: ["deploy", "release", "publish", "launch"],
-            WorkflowIntent.SECURITY: ["secure", "harden", "protect", "firewall"],
-            WorkflowIntent.DEVELOPMENT: ["develop", "code", "build", "compile"],
-            WorkflowIntent.MAINTENANCE: ["update", "upgrade", "maintain", "clean"],
-        }
-
+        # Intent detection (Issue #380: use module-level constant)
         detected_intent = WorkflowIntent.CONFIGURATION
-        for intent, keywords in intent_keywords.items():
+        for intent, keywords in _INTENT_KEYWORDS.items():
             if any(keyword in request_lower for keyword in keywords):
                 detected_intent = intent
                 break

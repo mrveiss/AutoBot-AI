@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 # Module-level constants for O(1) lookups (Issue #326)
 DOCX_EXTENSIONS = {".docx", ".doc"}
 
+# Issue #380: Module-level tuple for numpy numeric type checks
+_NUMPY_NUMERIC_TYPES = (np.integer, np.floating)
+
 
 class NumpyJSONEncoder(json.JSONEncoder):
     """
@@ -62,7 +65,7 @@ class NumpyJSONEncoder(json.JSONEncoder):
 
     def default(self, obj):
         """Convert NumPy types to JSON-serializable Python types."""
-        if isinstance(obj, (np.integer, np.floating)):
+        if isinstance(obj, _NUMPY_NUMERIC_TYPES):  # Issue #380
             return obj.item()
         elif isinstance(obj, np.ndarray):
             return obj.tolist()

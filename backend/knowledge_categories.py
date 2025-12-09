@@ -13,6 +13,10 @@ Defines the 3 main categories for AutoBot's knowledge base:
 from enum import Enum
 from typing import Dict, List
 
+# Issue #380: Module-level tuples for source category detection
+_AUTOBOT_DOC_KEYWORDS = ("autobot", "docs/", "documentation")
+_SYSTEM_KNOWLEDGE_KEYWORDS = ("man_page", "manpage", "system", "command", "os_", "machine")
+
 
 class KnowledgeCategory(str, Enum):
     """Main knowledge base categories"""
@@ -80,16 +84,11 @@ def get_category_for_source(source: str) -> str:
     source_lower = source.lower()
 
     # AutoBot documentation sources
-    if any(
-        keyword in source_lower for keyword in ["autobot", "docs/", "documentation"]
-    ):
+    if any(keyword in source_lower for keyword in _AUTOBOT_DOC_KEYWORDS):
         return KnowledgeCategory.AUTOBOT_DOCUMENTATION
 
     # System knowledge sources
-    if any(
-        keyword in source_lower
-        for keyword in ["man_page", "manpage", "system", "command", "os_", "machine"]
-    ):
+    if any(keyword in source_lower for keyword in _SYSTEM_KNOWLEDGE_KEYWORDS):
         return KnowledgeCategory.SYSTEM_KNOWLEDGE
 
     # Default to user knowledge

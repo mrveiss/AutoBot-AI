@@ -18,6 +18,9 @@ from src.utils.chromadb_client import (
 
 logger = logging.getLogger(__name__)
 
+# Module-level project root constant (Issue #380 - avoid repeated Path computation)
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
 
 async def get_redis_connection():
     """
@@ -46,9 +49,8 @@ def get_code_collection():
     For async contexts, use get_code_collection_async() instead.
     """
     try:
-        # Get project root
-        project_root = Path(__file__).parent.parent.parent.parent
-        chroma_path = project_root / "data" / "chromadb"
+        # Use module-level constant
+        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
 
         # Create persistent client with telemetry disabled using shared utility
         chroma_client = get_chromadb_client(
@@ -85,9 +87,8 @@ async def get_code_collection_async():
         AsyncChromaCollection wrapper or None on failure
     """
     try:
-        # Get project root
-        project_root = Path(__file__).parent.parent.parent.parent
-        chroma_path = project_root / "data" / "chromadb"
+        # Use module-level constant
+        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
 
         # Get async ChromaDB client
         async_client = await get_async_chromadb_client(
@@ -152,7 +153,7 @@ class InMemoryStorage:
     def scan_iter(self, match: str):
         """Iterate over keys matching a glob-style pattern."""
         pattern = match.replace("*", ".*")
-        for key in self.data.keys():
+        for key in self.data:
             if re.match(pattern, key):
                 yield key
 

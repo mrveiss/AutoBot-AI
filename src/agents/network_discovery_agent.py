@@ -9,29 +9,34 @@ Provides network mapping and asset discovery capabilities
 import ipaddress
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, FrozenSet, List
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import TimingConstants
 from src.utils.agent_command_helpers import run_agent_command
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level constants for agent configuration
+_SERVER_PORTS: FrozenSet[str] = frozenset({"22", "80", "443"})
+_SUPPORTED_DISCOVERY_TASKS = (
+    "network_scan",
+    "host_discovery",
+    "arp_scan",
+    "traceroute",
+    "network_map",
+    "asset_inventory",
+)
 
 
 class NetworkDiscoveryAgent:
     """Agent for network discovery and asset mapping"""
 
     def __init__(self):
-        """Initialize network discovery agent with supported task types."""
+        """Initialize network discovery agent (Issue #380: use module-level constant)."""
         self.name = "network_discovery"
         self.description = "Discovers network assets and creates network maps"
-        self.supported_tasks = [
-            "network_scan",
-            "host_discovery",
-            "arp_scan",
-            "traceroute",
-            "network_map",
-            "asset_inventory",
-        ]
+        self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS
 
         # Get default network from configuration or environment
         import os
@@ -201,7 +206,7 @@ class NetworkDiscoveryAgent:
             # Use traceroute command
             cmd = ["traceroute", "-m", str(max_hops), target]
 
-            result = await run_agent_command(cmd, timeout=60)
+            result = await run_agent_command(cmd, timeout=TimingConstants.STANDARD_TIMEOUT)
 
             if result["status"] == "success":
                 hops = self._parse_traceroute(result["output"])
@@ -299,7 +304,7 @@ class NetworkDiscoveryAgent:
         # Quick port scan for common ports
         common_ports = "22,80,443,445,3389"
         port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
-        port_result = await run_agent_command(port_cmd, timeout=30)
+        port_result = await run_agent_command(port_cmd, timeout=TimingConstants.SHORT_TIMEOUT)
 
         if port_result["status"] == "success":
             open_ports = self._parse_nmap_output(port_result["output"])
@@ -310,7 +315,7 @@ class NetworkDiscoveryAgent:
 
     def _categorize_asset(self, asset: Dict[str, Any]) -> str:
         """Determine asset category (Issue #334 - extracted helper)."""
-        if any(port in asset["open_ports"] for port in ["22", "80", "443"]):
+        if any(port in asset["open_ports"] for port in _SERVER_PORTS):
             return "servers"
         if "3389" in asset["open_ports"] or "445" in asset["open_ports"]:
             return "workstations"

@@ -23,6 +23,8 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from src.constants.threshold_constants import TimingConstants
+
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
 # Import all optimization components
@@ -34,6 +36,9 @@ from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuple for batchable request types
+_BATCHABLE_TYPES = ("read", "search", "analyze", "tool_call")
 
 
 class OptimizationMode(Enum):
@@ -282,11 +287,112 @@ class ClaudeAPIOptimizationSuite:
             "source": fallback.source,
         }
 
+    async def _apply_payload_optimization(
+        self, request_data: Dict[str, Any], optimization_applied: List[str]
+    ) -> Dict[str, Any]:
+        """Apply payload optimization if available."""
+        if not self.payload_optimizer:
+            return request_data
+
+        optimization_result = await self.payload_optimizer.optimize_payload(request_data)
+        if optimization_result.optimized:
+            optimization_applied.append("payload_optimization")
+            async with self._lock:
+                self.metrics.total_response_time_saved += (
+                    optimization_result.size_reduction / 1000
+                )
+            return optimization_result.optimized_payload
+        return request_data
+
+    async def _try_request_batching(
+        self, request_data: Dict[str, Any], request_type: str, optimization_applied: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Try to batch the request if appropriate."""
+        if not self.request_batcher or not self._should_batch_request(request_type):
+            return None
+
+        batched = await self._attempt_request_batching(request_data, request_type)
+        if batched:
+            optimization_applied.append("request_batching")
+            async with self._lock:
+                self.metrics.requests_batched += 1
+                self.metrics.api_calls_saved += 1
+            return batched
+        return None
+
+    async def _record_success_and_cache(
+        self, request_data: Dict[str, Any], request_type: str,
+        response: Dict[str, Any], start_time: float, optimization_applied: List[str]
+    ) -> Dict[str, Any]:
+        """Record success metrics and cache response."""
+        # Record pattern analysis
+        if self.pattern_analyzer:
+            self.pattern_analyzer.record_tool_call(
+                tool_name=request_type,
+                parameters=request_data,
+                response_time=time.time() - start_time,
+                success=True,
+            )
+
+        # Cache successful response for degradation
+        if self.degradation_manager and response.get("status") == "success":
+            await self.degradation_manager._cache_response(str(request_data), response["data"])
+
+        # Update metrics
+        if optimization_applied:
+            async with self._lock:
+                self.metrics.requests_optimized += 1
+
+        # Record optimization history
+        async with self._lock:
+            self.optimization_history.append({
+                "timestamp": datetime.now().isoformat(),
+                "request_type": request_type,
+                "optimizations_applied": optimization_applied,
+                "response_time": time.time() - start_time,
+                "success": True,
+            })
+
+        return {
+            "status": "success",
+            "data": response.get("data"),
+            "optimizations_applied": optimization_applied,
+            "response_time": time.time() - start_time,
+        }
+
+    async def _handle_optimization_error(
+        self, error: Exception, request_data: Dict[str, Any],
+        request_type: str, start_time: float
+    ) -> Dict[str, Any]:
+        """Handle optimization errors with pattern analysis and degradation."""
+        logger.error(f"Error optimizing request: {error}")
+
+        if self.pattern_analyzer:
+            self.pattern_analyzer.record_tool_call(
+                tool_name=request_type,
+                parameters=request_data,
+                response_time=time.time() - start_time,
+                success=False,
+                error_message=str(error),
+            )
+
+        if self.degradation_manager:
+            fallback = await self.degradation_manager.handle_request(
+                str(request_data), {"type": request_type, "error": str(error)}
+            )
+            if fallback.success:
+                return {"status": "fallback", "data": fallback.response, "source": fallback.source}
+
+        return {"status": "error", "error": str(error)}
+
     async def optimize_request(
         self, request_data: Dict[str, Any], request_type: str = "general"
     ) -> Dict[str, Any]:
         """
         Optimize a Claude API request through the complete optimization pipeline (thread-safe).
+
+        Issue #281: Refactored from 129 lines to use extracted helper methods.
+        Issue #315: Refactored to reduce nesting depth from 5 to 3.
 
         Args:
             request_data: The request data to optimize
@@ -294,8 +400,6 @@ class ClaudeAPIOptimizationSuite:
 
         Returns:
             Optimized request data or fallback response
-
-        Issue #315: Refactored to reduce nesting depth from 5 to 3.
         """
         start_time = time.time()
         optimization_applied = []
@@ -318,99 +422,21 @@ class ClaudeAPIOptimizationSuite:
                     return optimized
 
             # Step 3: Payload optimization
-            if self.payload_optimizer:
-                optimization_result = await self.payload_optimizer.optimize_payload(
-                    request_data
-                )
-                if optimization_result.optimized:
-                    request_data = optimization_result.optimized_payload
-                    optimization_applied.append("payload_optimization")
-                    async with self._lock:
-                        self.metrics.total_response_time_saved += (
-                            optimization_result.size_reduction / 1000
-                        )  # Estimate time saved
+            request_data = await self._apply_payload_optimization(request_data, optimization_applied)
 
             # Step 4: Request batching
-            if self.request_batcher and self._should_batch_request(request_type):
-                batched = await self._attempt_request_batching(
-                    request_data, request_type
-                )
-                if batched:
-                    optimization_applied.append("request_batching")
-                    async with self._lock:
-                        self.metrics.requests_batched += 1
-                        self.metrics.api_calls_saved += 1
-                    return batched
+            batched = await self._try_request_batching(request_data, request_type, optimization_applied)
+            if batched:
+                return batched
 
-            # Step 5: Record tool usage for pattern analysis
-            if self.pattern_analyzer:
-                self.pattern_analyzer.record_tool_call(
-                    tool_name=request_type,
-                    parameters=request_data,
-                    response_time=time.time() - start_time,
-                    success=True,
-                )
-
-            # Step 6: Execute request (simulated - in real implementation this would call Claude
-            # API)
+            # Step 5: Execute and record
             response = await self._execute_optimized_request(request_data, request_type)
-
-            # Step 7: Cache successful response for degradation
-            if self.degradation_manager and response.get("status") == "success":
-                await self.degradation_manager._cache_response(
-                    str(request_data), response["data"]
-                )
-
-            # Update metrics (thread-safe)
-            if optimization_applied:
-                async with self._lock:
-                    self.metrics.requests_optimized += 1
-
-            # Record optimization history (thread-safe)
-            async with self._lock:
-                self.optimization_history.append(
-                    {
-                        "timestamp": datetime.now().isoformat(),
-                        "request_type": request_type,
-                        "optimizations_applied": optimization_applied,
-                        "response_time": time.time() - start_time,
-                        "success": True,
-                    }
-                )
-
-            return {
-                "status": "success",
-                "data": response.get("data"),
-                "optimizations_applied": optimization_applied,
-                "response_time": time.time() - start_time,
-            }
+            return await self._record_success_and_cache(
+                request_data, request_type, response, start_time, optimization_applied
+            )
 
         except Exception as e:
-            logger.error(f"Error optimizing request: {e}")
-
-            # Record pattern analysis for failed request
-            if self.pattern_analyzer:
-                self.pattern_analyzer.record_tool_call(
-                    tool_name=request_type,
-                    parameters=request_data,
-                    response_time=time.time() - start_time,
-                    success=False,
-                    error_message=str(e),
-                )
-
-            # Try graceful degradation for errors
-            if self.degradation_manager:
-                fallback = await self.degradation_manager.handle_request(
-                    str(request_data), {"type": request_type, "error": str(e)}
-                )
-                if fallback.success:
-                    return {
-                        "status": "fallback",
-                        "data": fallback.response,
-                        "source": fallback.source,
-                    }
-
-            return {"status": "error", "error": str(e)}
+            return await self._handle_optimization_error(e, request_data, request_type, start_time)
 
     async def _check_rate_limits(self, request_data: Dict[str, Any]) -> bool:
         """Check if request can proceed based on rate limits"""
@@ -462,8 +488,7 @@ class ClaudeAPIOptimizationSuite:
 
     def _should_batch_request(self, request_type: str) -> bool:
         """Determine if request type should be considered for batching"""
-        batchable_types = ["read", "search", "analyze", "tool_call"]
-        return any(btype in request_type.lower() for btype in batchable_types)
+        return any(btype in request_type.lower() for btype in _BATCHABLE_TYPES)  # Issue #380
 
     async def _attempt_request_batching(
         self, request_data: Dict[str, Any], request_type: str
@@ -540,13 +565,13 @@ class ClaudeAPIOptimizationSuite:
                 await self._process_pattern_analysis()
             except Exception as e:
                 logger.error(f"Error in background pattern analysis: {e}")
-                await asyncio.sleep(60)  # Wait before retrying
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
 
     async def _background_api_monitoring(self):
         """Background task for API monitoring"""
         while self.is_active:
             try:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Check every minute
 
                 # Check for approaching rate limits
                 rate_limit_risk = self.api_monitor.predict_rate_limit_risk()
@@ -563,7 +588,7 @@ class ClaudeAPIOptimizationSuite:
 
             except Exception as e:
                 logger.error(f"Error in background API monitoring: {e}")
-                await asyncio.sleep(60)
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 
     # Issue #315: Degradation level to optimization mode mapping
     _DEGRADATION_MODE_MAP: Dict[str, OptimizationMode] = {
@@ -587,11 +612,11 @@ class ClaudeAPIOptimizationSuite:
         """Background task for degradation monitoring (Issue #315 - refactored depth 5 to 3)."""
         while self.is_active:
             try:
-                await asyncio.sleep(30)  # Check every 30 seconds
+                await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)  # Check every 30 seconds
                 await self._check_degradation_status()
             except Exception as e:
                 logger.error(f"Error in degradation monitoring: {e}")
-                await asyncio.sleep(60)
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 
     async def _adjust_optimization_mode(self, new_mode: OptimizationMode):
         """Dynamically adjust optimization mode based on conditions (thread-safe)"""

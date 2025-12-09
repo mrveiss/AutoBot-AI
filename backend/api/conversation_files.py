@@ -28,6 +28,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for dangerous filename characters
+_DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
+
 # Maximum file size (50MB) - consistent with general file API
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
@@ -236,9 +239,8 @@ def is_safe_file(filename: str) -> bool:
     if not filename:
         return False
 
-    # Check for dangerous characters
-    dangerous_chars = {"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"}
-    if any(char in filename for char in dangerous_chars):
+    # Check for dangerous characters (Issue #380: use module-level constant)
+    if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
         return False
 
     # Check filename length
@@ -270,6 +272,46 @@ def is_safe_file(filename: str) -> bool:
         return False
 
     return True
+
+
+async def _validate_and_read_upload_file(
+    file: UploadFile,
+) -> bytes:
+    """
+    Validate and read uploaded file content.
+
+    Issue #281: Extracted from upload_conversation_file to reduce function
+    length and improve reusability of validation logic.
+
+    Args:
+        file: Uploaded file object
+
+    Returns:
+        File content as bytes
+
+    Raises:
+        HTTPException: If validation fails (400, 413)
+    """
+    # Validate filename
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    if not is_safe_file(file.filename):
+        raise HTTPException(
+            status_code=400, detail=f"File type not allowed: {file.filename}"
+        )
+
+    # Read file content
+    content = await file.read()
+
+    # Check file size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+        )
+
+    return content
 
 
 @with_error_handling(
@@ -317,24 +359,8 @@ async def upload_conversation_file(
         # Validate session ownership
         await validate_session_ownership(request, session_id, user_data)
 
-        # Validate file
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No filename provided")
-
-        if not is_safe_file(file.filename):
-            raise HTTPException(
-                status_code=400, detail=f"File type not allowed: {file.filename}"
-            )
-
-        # Read file content
-        content = await file.read()
-
-        # Check file size
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
-            )
+        # Issue #281: Use extracted helper for file validation
+        content = await _validate_and_read_upload_file(file)
 
         # Get conversation file manager
         file_manager = get_conversation_file_manager(request)

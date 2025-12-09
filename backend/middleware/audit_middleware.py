@@ -43,6 +43,16 @@ from backend.services.audit_logger import AuditResult, get_audit_logger
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for audit checks
+_MODIFYING_HTTP_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+_SENSITIVE_PATH_PREFIXES = (
+    "/api/auth/",
+    "/api/security/",
+    "/api/elevation/",
+    "/api/files/",
+    "/api/config/",
+)
+
 
 # Operations that should be automatically audited
 AUTO_AUDIT_OPERATIONS = {
@@ -117,20 +127,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
     def _is_sensitive_operation(self, path: str, method: str) -> bool:
         """Check if operation is security-sensitive"""
-        # Methods that modify data
-        if method in ["POST", "PUT", "DELETE", "PATCH"]:
+        # Methods that modify data (Issue #380: use module-level frozenset)
+        if method in _MODIFYING_HTTP_METHODS:
             return True
 
-        # Specific sensitive read operations
-        sensitive_patterns = [
-            "/api/auth/",
-            "/api/security/",
-            "/api/elevation/",
-            "/api/files/",
-            "/api/config/",
-        ]
-
-        return any(path.startswith(pattern) for pattern in sensitive_patterns)
+        # Specific sensitive read operations (Issue #380: use module-level tuple)
+        return any(path.startswith(pattern) for pattern in _SENSITIVE_PATH_PREFIXES)
 
     async def dispatch(self, request: Request, call_next):
         """Process request with audit logging"""
@@ -263,13 +265,212 @@ class AuditMiddleware(BaseHTTPMiddleware):
             logger.error(f"Failed to log audit entry: {e}")
 
 
+def _extract_request_context(args: tuple) -> tuple:
+    """
+    Extract request and user context from function arguments.
+
+    Issue #281: Extracted helper for request context extraction.
+
+    Args:
+        args: Function arguments tuple
+
+    Returns:
+        Tuple of (request, user_id, session_id, ip_address)
+    """
+    request = None
+    for arg in args:
+        if isinstance(arg, Request):
+            request = arg
+            break
+
+    user_id = None
+    session_id = None
+    ip_address = None
+
+    if request:
+        user_id = _extract_user(request)
+        session_id = _extract_session(request)
+        ip_address = _extract_ip(request)
+
+    return request, user_id, session_id, ip_address
+
+
+def _determine_resource(
+    resource_handler: Optional[Callable[..., str]], args: tuple, kwargs: dict
+) -> Optional[str]:
+    """
+    Determine resource from handler if provided.
+
+    Issue #281: Extracted helper for resource determination.
+
+    Args:
+        resource_handler: Optional function to determine resource
+        args: Function arguments
+        kwargs: Function keyword arguments
+
+    Returns:
+        Resource string or None
+    """
+    if not resource_handler:
+        return None
+
+    try:
+        return resource_handler(*args, **kwargs)
+    except Exception:
+        return None
+
+
+def _schedule_audit_log(
+    operation: str,
+    result: AuditResult,
+    user_id: Optional[str],
+    session_id: Optional[str],
+    ip_address: Optional[str],
+    resource: Optional[str],
+    performance_ms: float,
+    error_details: Optional[str],
+) -> None:
+    """
+    Schedule audit log entry as non-blocking task.
+
+    Issue #281: Extracted helper for audit log scheduling.
+
+    Args:
+        operation: Operation type
+        result: Operation result
+        user_id: User identifier
+        session_id: Session identifier
+        ip_address: Client IP address
+        resource: Resource being accessed
+        performance_ms: Execution time in milliseconds
+        error_details: Error message if any
+    """
+    asyncio.create_task(
+        _log_audit_async(
+            operation=operation,
+            result=result,
+            user_id=user_id,
+            session_id=session_id,
+            ip_address=ip_address,
+            resource=resource,
+            performance_ms=performance_ms,
+            details={"error": error_details} if error_details else {},
+        )
+    )
+
+
+def _create_async_audit_wrapper(
+    func: Callable,
+    operation: str,
+    result_handler: Optional[Callable[[Any], AuditResult]],
+    resource_handler: Optional[Callable[..., str]],
+) -> Callable:
+    """
+    Create async wrapper function with audit logging.
+
+    Issue #281: Extracted helper for async wrapper creation.
+
+    Args:
+        func: Function to wrap
+        operation: Operation type for audit
+        result_handler: Optional result handler
+        resource_handler: Optional resource handler
+
+    Returns:
+        Wrapped async function
+    """
+
+    @functools.wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        """Async wrapper that executes function with audit logging and timing."""
+        start_time = time.time()
+
+        # Extract context (Issue #281: uses helper)
+        request, user_id, session_id, ip_address = _extract_request_context(args)
+
+        result: AuditResult = "success"
+        error_details = None
+
+        try:
+            return_value = await func(*args, **kwargs)
+            result = result_handler(return_value) if result_handler else "success"
+            return return_value
+
+        except Exception as e:
+            result = "error"
+            error_details = str(e)
+            raise
+
+        finally:
+            performance_ms = (time.time() - start_time) * 1000
+            resource = _determine_resource(resource_handler, args, kwargs)
+            _schedule_audit_log(
+                operation, result, user_id, session_id, ip_address,
+                resource, performance_ms, error_details
+            )
+
+    return async_wrapper
+
+
+def _create_sync_audit_wrapper(
+    func: Callable,
+    operation: str,
+    result_handler: Optional[Callable[[Any], AuditResult]],
+    resource_handler: Optional[Callable[..., str]],
+) -> Callable:
+    """
+    Create sync wrapper function with audit logging.
+
+    Issue #281: Extracted helper for sync wrapper creation.
+
+    Args:
+        func: Function to wrap
+        operation: Operation type for audit
+        result_handler: Optional result handler
+        resource_handler: Optional resource handler
+
+    Returns:
+        Wrapped sync function
+    """
+
+    @functools.wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        """Sync wrapper that executes function with audit logging and timing."""
+        start_time = time.time()
+
+        result: AuditResult = "success"
+        error_details = None
+
+        try:
+            return_value = func(*args, **kwargs)
+            result = result_handler(return_value) if result_handler else "success"
+            return return_value
+
+        except Exception as e:
+            result = "error"
+            error_details = str(e)
+            raise
+
+        finally:
+            performance_ms = (time.time() - start_time) * 1000
+            resource = _determine_resource(resource_handler, args, kwargs)
+            _schedule_audit_log(
+                operation, result, None, None, None,
+                resource, performance_ms, error_details
+            )
+
+    return sync_wrapper
+
+
 def audit_operation(
     operation: str,
     result_handler: Optional[Callable[[Any], AuditResult]] = None,
     resource_handler: Optional[Callable[..., str]] = None,
 ):
     """
-    Decorator for audit logging function/endpoint calls
+    Decorator for audit logging function/endpoint calls.
+
+    Issue #281: Refactored from 146 lines to use extracted helper methods.
 
     Args:
         operation: Operation type (e.g., "auth.login", "file.delete")
@@ -292,121 +493,14 @@ def audit_operation(
 
     def decorator(func: Callable):
         """Create wrapper function with audit logging and result tracking."""
-
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            """Async wrapper that executes function with audit logging and timing."""
-            start_time = time.time()
-
-            # Extract request if available
-            request = None
-            for arg in args:
-                if isinstance(arg, Request):
-                    request = arg
-                    break
-
-            # Get user context
-            user_id = None
-            session_id = None
-            ip_address = None
-
-            if request:
-                user_id = _extract_user(request)
-                session_id = _extract_session(request)
-                ip_address = _extract_ip(request)
-
-            # Execute function
-            result: AuditResult = "success"
-            resource = None
-            error_details = None
-            return_value = None
-
-            try:
-                return_value = await func(*args, **kwargs)
-
-                # Determine result from return value
-                if result_handler:
-                    result = result_handler(return_value)
-                else:
-                    result = "success"
-
-                return return_value
-
-            except Exception as e:
-                result = "error"
-                error_details = str(e)
-                raise
-
-            finally:
-                # Calculate performance
-                performance_ms = (time.time() - start_time) * 1000
-
-                # Determine resource
-                if resource_handler:
-                    try:
-                        resource = resource_handler(*args, **kwargs)
-                    except Exception:
-                        resource = None
-
-                # Log audit entry (non-blocking)
-                asyncio.create_task(
-                    _log_audit_async(
-                        operation=operation,
-                        result=result,
-                        user_id=user_id,
-                        session_id=session_id,
-                        ip_address=ip_address,
-                        resource=resource,
-                        performance_ms=performance_ms,
-                        details={"error": error_details} if error_details else {},
-                    )
-                )
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            """Sync wrapper that executes function with audit logging and timing."""
-            # For synchronous functions, create async logging task
-            start_time = time.time()
-
-            result: AuditResult = "success"
-            error_details = None
-            return_value = None
-
-            try:
-                return_value = func(*args, **kwargs)
-
-                if result_handler:
-                    result = result_handler(return_value)
-
-                return return_value
-
-            except Exception as e:
-                result = "error"
-                error_details = str(e)
-                raise
-
-            finally:
-                performance_ms = (time.time() - start_time) * 1000
-
-                # Log asynchronously
-                asyncio.create_task(
-                    _log_audit_async(
-                        operation=operation,
-                        result=result,
-                        user_id=None,
-                        session_id=None,
-                        ip_address=None,
-                        resource=None,
-                        performance_ms=performance_ms,
-                        details={"error": error_details} if error_details else {},
-                    )
-                )
-
-        # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return _create_async_audit_wrapper(
+                func, operation, result_handler, resource_handler
+            )
         else:
-            return sync_wrapper
+            return _create_sync_audit_wrapper(
+                func, operation, result_handler, resource_handler
+            )
 
     return decorator
 

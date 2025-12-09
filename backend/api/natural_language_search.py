@@ -26,6 +26,15 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for query parsing and code analysis
+_NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
+_CAMEL_CASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", re.IGNORECASE)
+_SNAKE_CASE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
+_QUOTED_STRING_RE = re.compile(r'"([^"]+)"|\'([^\']+)\'')
+_FUNC_DEF_RE = re.compile(r"def\s+(\w+)")
+_CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
+_ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
+
 # Issue #336: Keyword heuristics dispatch table for intent classification
 KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
 
@@ -472,7 +481,7 @@ class NaturalLanguageQueryParser:
         # Remove extra whitespace
         query = " ".join(query.split())
         # Remove punctuation except hyphens and underscores
-        query = re.sub(r"[^\w\s\-_]", " ", query)
+        query = _NON_WORD_CHARS_RE.sub(" ", query)
         return query.strip()
 
     def _classify_intent(self, query: str) -> Tuple[QueryIntent, float]:
@@ -513,15 +522,15 @@ class NaturalLanguageQueryParser:
         entities = []
 
         # Look for CamelCase words
-        camel_case = re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", query, re.IGNORECASE)
+        camel_case = _CAMEL_CASE_RE.findall(query)
         entities.extend(camel_case)
 
         # Look for snake_case words
-        snake_case = re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", query)
+        snake_case = _SNAKE_CASE_RE.findall(query)
         entities.extend(snake_case)
 
         # Look for quoted strings
-        quoted = re.findall(r'"([^"]+)"|\'([^\']+)\'', query)
+        quoted = _QUOTED_STRING_RE.findall(query)
         for match in quoted:
             entities.extend([m for m in match if m])
 
@@ -863,7 +872,7 @@ CONCEPTS: <comma-separated list>
 
         # Analyze code structure
         if "def " in code:
-            match = re.search(r"def\s+(\w+)", code)
+            match = _FUNC_DEF_RE.search(code)
             if match:
                 func_name = match.group(1)
                 summary = f"Function definition: {func_name}"
@@ -871,7 +880,7 @@ CONCEPTS: <comma-separated list>
                 concepts.append("function")
 
         elif "class " in code:
-            match = re.search(r"class\s+(\w+)", code)
+            match = _CLASS_DEF_RE.search(code)
             if match:
                 class_name = match.group(1)
                 summary = f"Class definition: {class_name}"
@@ -879,7 +888,7 @@ CONCEPTS: <comma-separated list>
                 concepts.append("class")
 
         elif "async def " in code:
-            match = re.search(r"async\s+def\s+(\w+)", code)
+            match = _ASYNC_FUNC_RE.search(code)
             if match:
                 func_name = match.group(1)
                 summary = f"Async function: {func_name}"

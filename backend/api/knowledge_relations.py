@@ -24,6 +24,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for valid relation directions
+_VALID_DIRECTIONS = frozenset({"outgoing", "incoming", "both"})
+
 router = APIRouter(prefix="/relations", tags=["knowledge-relations"])
 
 
@@ -202,7 +205,7 @@ async def get_fact_relations(
             status_code=503, detail="Knowledge base not available"
         )
 
-    if direction not in ("outgoing", "incoming", "both"):
+    if direction not in _VALID_DIRECTIONS:
         raise HTTPException(
             status_code=400,
             detail="Direction must be 'outgoing', 'incoming', or 'both'",

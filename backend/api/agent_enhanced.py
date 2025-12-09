@@ -40,6 +40,12 @@ COORDINATION_KEYWORDS = {"analyze", "research", "comprehensive"}
 # Performance optimization: O(1) lookup for research agent names (Issue #326)
 RESEARCH_AGENT_NAMES = {"research", "web_research_assistant"}
 
+# Issue #380: Module-level tuple for fallback agent list
+_FALLBACK_AGENTS = ("chat", "rag", "research")
+
+# Issue #380: Module-level tuple for development analysis agents
+_DEV_AGENTS = ("development_speedup", "npu_code_search")
+
 # ====================================================================
 # Request/Response Models
 # ====================================================================
@@ -188,7 +194,7 @@ async def execute_enhanced_goal(
         available_agents = agents_info.get("agents", [])
     except Exception as e:
         logger.warning(f"Could not get agent list: {e}")
-        available_agents = ["chat", "rag", "research"]  # Fallback
+        available_agents = list(_FALLBACK_AGENTS)  # Issue #380: use module constant
 
     # Determine which agents to use
     if payload.agents:
@@ -410,9 +416,7 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
     try:
         ai_client = await get_ai_stack_client()
 
-        # Use development-focused agents
-        dev_agents = ["development_speedup", "npu_code_search"]
-
+        # Issue #380: Use module-level constant for dev agents
         # Execute development analysis
         analysis_result = await ai_client.analyze_development_speedup(
             code_path=request_data.target_path, analysis_type=request_data.analysis_type
@@ -424,7 +428,7 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
                 "target_path": request_data.target_path,
                 "include_performance": request_data.include_performance,
                 "include_optimization": request_data.include_optimization,
-                "agents_used": dev_agents,
+                "agents_used": _DEV_AGENTS,  # Issue #380: use module constant
                 "result": analysis_result,
             }
         )

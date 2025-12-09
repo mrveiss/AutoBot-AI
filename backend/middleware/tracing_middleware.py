@@ -17,6 +17,7 @@ AutoBot-specific attributes and custom trace handling.
 """
 
 import logging
+import re
 import time
 from typing import Callable, Optional
 
@@ -29,6 +30,9 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from backend.services.tracing_service import get_tracing_service
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex for path pattern normalization
+_NUMERIC_PATH_RE = re.compile(r"/\d+")
 
 
 class TracingMiddleware(BaseHTTPMiddleware):
@@ -191,8 +195,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Replace numeric path segments with {id} for better aggregation
-        import re
-        pattern = re.sub(r"/\d+", "/{id}", path)
+        pattern = _NUMERIC_PATH_RE.sub("/{id}", path)
         return pattern
 
     def _get_client_ip(self, request: Request) -> Optional[str]:

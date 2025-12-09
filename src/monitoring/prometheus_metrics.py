@@ -16,6 +16,10 @@ from prometheus_client import (
     generate_latest,
 )
 
+# Issue #380: Module-level dicts for state value mapping (avoid repeated dict creation)
+_CIRCUIT_BREAKER_STATE_VALUES = {"closed": 0, "open": 1, "half_open": 2}
+_SERVICE_STATUS_VALUES = {"offline": 0, "online": 1, "degraded": 2}
+
 
 class PrometheusMetricsManager:
     """Centralized Prometheus metrics manager"""
@@ -271,7 +275,7 @@ class PrometheusMetricsManager:
         self, database: str, state: str, failure_count: int
     ):
         """Update circuit breaker state gauge"""
-        state_value = {"closed": 0, "open": 1, "half_open": 2}.get(state, 0)
+        state_value = _CIRCUIT_BREAKER_STATE_VALUES.get(state, 0)
         self.circuit_breaker_state.labels(database=database).set(state_value)
         self.circuit_breaker_failures.labels(database=database).set(failure_count)
 
@@ -551,9 +555,7 @@ class PrometheusMetricsManager:
 
     def update_service_status(self, service_name: str, status: str):
         """Update service status"""
-        status_value = {"offline": 0, "online": 1, "degraded": 2}.get(
-            status.lower(), 0
-        )
+        status_value = _SERVICE_STATUS_VALUES.get(status.lower(), 0)
         self.service_status.labels(service_name=service_name, status=status).set(
             status_value
         )

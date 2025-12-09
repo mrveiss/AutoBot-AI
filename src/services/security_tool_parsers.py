@@ -20,6 +20,11 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for security tool parsing
+_NUCLEI_FORMAT_RE = re.compile(r"\[\w+\]\s+\[[^\]]+\]\s+\[")
+_URL_HOST_RE = re.compile(r"(?:https?://)?([^:/]+)")
+_URL_PORT_RE = re.compile(r":(\d+)")
+
 
 @dataclass
 class ParsedHost:
@@ -469,7 +474,8 @@ class NucleiParser(BaseToolParser):
 
     def can_parse(self, output: str) -> bool:
         """Check if output is from nuclei."""
-        return "nuclei" in output.lower() or re.search(r"\[\w+\]\s+\[[^\]]+\]\s+\[", output) is not None
+        # Issue #380: use pre-compiled pattern
+        return "nuclei" in output.lower() or _NUCLEI_FORMAT_RE.search(output) is not None
 
     def parse(self, output: str) -> ParsedToolOutput:
         """Parse nuclei output."""
@@ -485,12 +491,12 @@ class NucleiParser(BaseToolParser):
                 protocol = match.group(3)
                 url = match.group(4)
 
-                # Extract host from URL
-                host_match = re.search(r"(?:https?://)?([^:/]+)", url)
+                # Extract host from URL (Issue #380: use pre-compiled pattern)
+                host_match = _URL_HOST_RE.search(url)
                 host = host_match.group(1) if host_match else url
 
-                # Extract port from URL
-                port_match = re.search(r":(\d+)", url)
+                # Extract port from URL (Issue #380: use pre-compiled pattern)
+                port_match = _URL_PORT_RE.search(url)
                 port = int(port_match.group(1)) if port_match else None
 
                 vuln = ParsedVulnerability(

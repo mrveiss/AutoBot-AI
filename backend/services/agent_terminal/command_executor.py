@@ -16,11 +16,23 @@ from typing import Optional
 
 from backend.type_defs.common import Metadata
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level tuple for error detection patterns
+_ERROR_PATTERNS = (
+    r"command not found",
+    r"permission denied",
+    r"no such file or directory",
+    r"cannot access",
+    r"error:",
+    r"fatal:",
+    r"failed",
+)
 
 
 def _extract_terminal_output(messages: list) -> str:
@@ -54,6 +66,61 @@ class CommandExecutor:
             chat_history_manager: ChatHistoryManager instance for output polling
         """
         self.chat_history_manager = chat_history_manager
+
+    def _send_sigint_to_pty(
+        self, session: AgentTerminalSession
+    ) -> bool:
+        """
+        Send SIGINT (Ctrl+C) to PTY for graceful command termination.
+
+        Issue #281: Extracted from cancel_command to reduce function length
+        and improve testability of signal handling logic.
+
+        Args:
+            session: Agent terminal session
+
+        Returns:
+            True if SIGINT was sent successfully, False otherwise
+        """
+        try:
+            self._write_to_pty(session, "\x03")  # Ctrl+C
+            logger.info(
+                f"[CANCEL] Sent SIGINT (Ctrl+C) to PTY {session.pty_session_id}"
+            )
+            return True
+        except Exception as sigint_error:
+            logger.warning(f"[CANCEL] Failed to send SIGINT: {sigint_error}")
+            return False
+
+    async def _log_cancellation_to_chat(
+        self, session: AgentTerminalSession, reason: str
+    ) -> None:
+        """
+        Log command cancellation to chat history.
+
+        Issue #281: Extracted from cancel_command to reduce function length
+        and separate logging concerns.
+
+        Args:
+            session: Agent terminal session
+            reason: Reason for cancellation
+        """
+        if not session.has_conversation() or not self.chat_history_manager:
+            return
+
+        try:
+            await self.chat_history_manager.add_message(
+                sender="system",
+                text=f"⚠️ Command cancelled due to {reason}",
+                message_type="command_cancellation",
+                session_id=session.conversation_id,
+                metadata=session.get_cancellation_metadata(reason),
+            )
+            logger.info("[CANCEL] Logged cancellation to chat history")
+        except Exception as log_error:
+            logger.warning(
+                f"[CANCEL] Failed to log cancellation to chat: {log_error}"
+            )
 
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
@@ -137,7 +204,7 @@ class CommandExecutor:
         Returns:
             True if command was cancelled successfully
         """
-        if not session.pty_session_id:
+        if not session.has_pty_session():
             logger.warning(
                 f"[CANCEL] No PTY session to cancel for {session.session_id}"
             )
@@ -159,18 +226,11 @@ class CommandExecutor:
                 f"PTY {session.pty_session_id}"
             )
 
-            # Step 1: Send SIGTERM for graceful shutdown
-            try:
-                # Send Ctrl+C to the shell (SIGINT)
-                self._write_to_pty(session, "\x03")  # Ctrl+C
-                logger.info(
-                    f"[CANCEL] Sent SIGINT (Ctrl+C) to PTY {session.pty_session_id}"
-                )
-            except Exception as sigint_error:
-                logger.warning(f"[CANCEL] Failed to send SIGINT: {sigint_error}")
+            # Issue #281: Step 1 - Send SIGINT using extracted helper
+            self._send_sigint_to_pty(session)
 
-            # Step 2: Wait 2 seconds for graceful shutdown
-            await asyncio.sleep(2.0)
+            # Step 2: Wait for graceful shutdown
+            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
 
             # Step 3: Check if process is still running
             if pty.is_alive():
@@ -192,38 +252,16 @@ class CommandExecutor:
             else:
                 logger.info("[CANCEL] Process terminated gracefully after SIGINT")
 
-            # Step 4: Clean up session state
-            if session.running_command_task and not session.running_command_task.done():
-                session.running_command_task.cancel()
-                try:
-                    await session.running_command_task
-                except asyncio.CancelledError:
-                    logger.info(
-                        f"[CANCEL] Cancelled running command task for "
-                        f"session {session.session_id}"
-                    )
+            # Step 4: Clean up session state (Issue #372 - use model method)
+            task_was_running = await session.cancel_running_task()
+            if task_was_running:
+                logger.info(
+                    f"[CANCEL] Cancelled running command task for "
+                    f"session {session.session_id}"
+                )
 
-            session.running_command_task = None
-
-            # Log cancellation to chat history
-            if session.conversation_id and self.chat_history_manager:
-                try:
-                    await self.chat_history_manager.add_message(
-                        sender="system",
-                        text=f"⚠️ Command cancelled due to {reason}",
-                        message_type="command_cancellation",
-                        session_id=session.conversation_id,
-                        metadata={
-                            "reason": reason,
-                            "terminal_session_id": session.session_id,
-                            "pty_session_id": session.pty_session_id,
-                        },
-                    )
-                    logger.info("[CANCEL] Logged cancellation to chat history")
-                except Exception as log_error:
-                    logger.warning(
-                        f"[CANCEL] Failed to log cancellation to chat: {log_error}"
-                    )
+            # Issue #281: Log cancellation using extracted helper
+            await self._log_cancellation_to_chat(session, reason)
 
             logger.info(
                 f"[CANCEL] ✅ Command cancellation complete for "
@@ -290,7 +328,7 @@ class CommandExecutor:
         logger.debug(f"[PTY_EXEC] Injected unique marker: {marker}")
 
         # Poll with exponential backoff
-        base_delay = 0.1  # Start with 100ms
+        base_delay = TimingConstants.MICRO_DELAY  # Start with 100ms
         for attempt in range(max_attempts):
             await asyncio.sleep(base_delay * (1.5**attempt))  # Exponential backoff
 
@@ -341,16 +379,7 @@ class CommandExecutor:
         if not self.chat_history_manager:
             return 0
 
-        error_patterns = [
-            r"command not found",
-            r"permission denied",
-            r"no such file or directory",
-            r"cannot access",
-            r"error:",
-            r"fatal:",
-            r"failed",
-        ]
-
+        # Issue #380: use module-level constant
         try:
             if not session.conversation_id:
                 return 0  # Assume success if no conversation
@@ -363,8 +392,8 @@ class CommandExecutor:
                 if msg.get("sender") != "terminal" or not msg.get("text"):
                     continue
                 clean_text = strip_ansi_codes(msg["text"]).lower()
-                # Use helper to check patterns (Issue #315)
-                if self._check_error_patterns_in_text(clean_text, error_patterns):
+                # Use helper to check patterns (Issue #315, #380: use module constant)
+                if self._check_error_patterns_in_text(clean_text, _ERROR_PATTERNS):
                     return 1  # Error detected
 
         except Exception as e:

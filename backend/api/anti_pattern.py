@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for refactoring recommendation keywords (Issue #326)
 REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}
 
+# Issue #380: Module-level frozenset for code smell pattern types
+_CODE_SMELL_TYPES = frozenset({"long_method", "long_parameter_list", "lazy_class", "data_clump"})
+
 # Lazy initialization for detector (thread-safe)
 import asyncio
 
@@ -151,16 +154,13 @@ async def analyze_anti_patterns(request: AnalysisRequest):
             exclude_patterns=request.exclude_patterns
         )
 
+        # Issue #372: Use model method to get severity counts (reduces feature envy)
+        severity_counts = report.get_severity_counts()
         response = AnalysisResponse(
             success=True,
             summary=AntiPatternSummary(
                 total_issues=report.total_issues,
-                severity_counts=SeveritySummary(
-                    critical=report.critical_count,
-                    high=report.high_count,
-                    medium=report.medium_count,
-                    low=report.low_count
-                ),
+                severity_counts=SeveritySummary(**severity_counts),
                 health_score=report.health_score,
                 summary_by_type=report.summary_by_type,
                 analysis_time_seconds=report.analysis_time_seconds
@@ -169,10 +169,8 @@ async def analyze_anti_patterns(request: AnalysisRequest):
             recommendations=report.recommendations
         )
 
-        logger.info(
-            f"Anti-pattern analysis complete: {report.total_issues} issues, "
-            f"health score: {report.health_score:.1f}/100"
-        )
+        # Issue #372: Use model method for log summary
+        logger.info(f"Anti-pattern analysis complete: {report.get_log_summary()}")
 
         return response
 
@@ -387,11 +385,10 @@ async def detect_code_smells(request: AnalysisRequest):
             exclude_patterns=request.exclude_patterns
         )
 
-        # Filter to code smell types
-        smell_types = {"long_method", "long_parameter_list", "lazy_class", "data_clump"}
+        # Filter to code smell types (Issue #380: use module-level constant)
         code_smells = [
             ap.to_dict() for ap in report.anti_patterns
-            if ap.pattern_type.value in smell_types
+            if ap.pattern_type.value in _CODE_SMELL_TYPES
         ]
 
         # Group by type

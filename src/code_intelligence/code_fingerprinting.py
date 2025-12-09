@@ -41,6 +41,7 @@ _CONTROL_FLOW_TYPES = (ast.If, ast.Try, ast.ExceptHandler)
 _LOOP_TYPES = (ast.For, ast.While)
 _ASSIGNMENT_TYPES = (ast.Assign, ast.AugAssign, ast.AnnAssign)
 _DEFINITION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+_NUMERIC_TYPES = (int, float)  # Issue #380: For constant normalization
 
 
 # =============================================================================
@@ -463,7 +464,7 @@ class ASTNormalizer(ast.NodeTransformer):
         # Keep type but normalize value for string/number comparisons
         if isinstance(node.value, str):
             return ast.Constant(value="$STRING$")
-        elif isinstance(node.value, (int, float)):
+        elif isinstance(node.value, _NUMERIC_TYPES):  # Issue #380
             return ast.Constant(value=0)  # Normalize numbers
         return node
 
@@ -2274,6 +2275,67 @@ class CloneDetector:
 
         return clone_groups
 
+    def _create_type3_clone_group(
+        self,
+        frag1: CodeFragment,
+        similar_fragments: List[Tuple[CodeFragment, float]],
+    ) -> CloneGroup:
+        """
+        Create a Type 3 clone group from a fragment and its similar matches.
+
+        Issue #281: Extracted from _detect_type3_clones to reduce nesting.
+
+        Args:
+            frag1: Primary fragment
+            similar_fragments: List of (fragment, similarity) tuples
+
+        Returns:
+            CloneGroup for the similar fragments
+        """
+        instances = [
+            CloneInstance(
+                fragment=frag1,
+                fingerprint=Fingerprint(
+                    hash_value="",
+                    fingerprint_type=FingerprintType.AST_STRUCTURAL,
+                    fragment=frag1,
+                ),
+                similarity_score=1.0,
+            )
+        ]
+
+        similarities = [1.0]
+        for frag, sim in similar_fragments:
+            instances.append(
+                CloneInstance(
+                    fragment=frag,
+                    fingerprint=Fingerprint(
+                        hash_value="",
+                        fingerprint_type=FingerprintType.AST_STRUCTURAL,
+                        fragment=frag,
+                    ),
+                    similarity_score=sim,
+                )
+            )
+            similarities.append(sim)
+
+        total_lines = sum(i.fragment.line_count for i in instances)
+        severity = self._calculate_severity(len(instances), total_lines)
+
+        # Generate a hash for this group
+        group_hash = hashlib.sha256(
+            f"{frag1.file_path}:{frag1.start_line}".encode()
+        ).hexdigest()[:16]
+
+        return CloneGroup(
+            clone_type=CloneType.TYPE_3,
+            severity=severity,
+            instances=instances,
+            canonical_fingerprint=group_hash,
+            similarity_range=(min(similarities), max(similarities)),
+            total_duplicated_lines=total_lines,
+        )
+
     def _detect_type3_clones(
         self,
         fragments: List[CodeFragment],
@@ -2333,54 +2395,14 @@ class CloneDetector:
                     similar_fragments.append((frag2, similarity))
 
             if similar_fragments:
-                # Create clone group
-                instances = [
-                    CloneInstance(
-                        fragment=frag1,
-                        fingerprint=Fingerprint(
-                            hash_value="",
-                            fingerprint_type=FingerprintType.AST_STRUCTURAL,
-                            fragment=frag1,
-                        ),
-                        similarity_score=1.0,
-                    )
-                ]
-
-                similarities = [1.0]
-                for frag, sim in similar_fragments:
-                    instances.append(
-                        CloneInstance(
-                            fragment=frag,
-                            fingerprint=Fingerprint(
-                                hash_value="",
-                                fingerprint_type=FingerprintType.AST_STRUCTURAL,
-                                fragment=frag,
-                            ),
-                            similarity_score=sim,
-                        )
-                    )
-                    similarities.append(sim)
-                    processed.add((frag.file_path, frag.start_line, frag.end_line))
-
-                processed.add((frag1.file_path, frag1.start_line, frag1.end_line))
-
-                total_lines = sum(i.fragment.line_count for i in instances)
-                severity = self._calculate_severity(len(instances), total_lines)
-
-                # Generate a hash for this group
-                group_hash = hashlib.sha256(
-                    f"{frag1.file_path}:{frag1.start_line}".encode()
-                ).hexdigest()[:16]
-
-                group = CloneGroup(
-                    clone_type=CloneType.TYPE_3,
-                    severity=severity,
-                    instances=instances,
-                    canonical_fingerprint=group_hash,
-                    similarity_range=(min(similarities), max(similarities)),
-                    total_duplicated_lines=total_lines,
-                )
+                # Issue #281: Use extracted helper for clone group creation
+                group = self._create_type3_clone_group(frag1, similar_fragments)
                 clone_groups.append(group)
+
+                # Mark all fragments as processed
+                processed.add((frag1.file_path, frag1.start_line, frag1.end_line))
+                for frag, _ in similar_fragments:
+                    processed.add((frag.file_path, frag.start_line, frag.end_line))
 
         return clone_groups
 

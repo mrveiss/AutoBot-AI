@@ -17,9 +17,30 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Pattern, Set
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex patterns for string literal extraction
+_STRING_PATTERNS_PYTHON: List[Pattern] = [
+    re.compile(r'"""[\s\S]*?"""'),
+    re.compile(r"'''[\s\S]*?'''"),
+    re.compile(r'"(?:[^"\\]|\\.)*"'),
+    re.compile(r"'(?:[^'\\]|\\.)*'"),
+]
+_STRING_PATTERNS_JS_TS: List[Pattern] = [
+    re.compile(r'"(?:[^"\\]|\\.)*"'),
+    re.compile(r"'(?:[^'\\]|\\.)*'"),
+    re.compile(r"`(?:[^`\\]|\\.)*`"),
+]
+_STRING_PATTERNS_SHELL: List[Pattern] = [
+    re.compile(r'"(?:[^"\\]|\\.)*"'),
+    re.compile(r"'[^']*'"),
+]
+_STRING_PATTERNS_DEFAULT: List[Pattern] = [
+    re.compile(r'"(?:[^"\\]|\\.)*"'),
+    re.compile(r"'(?:[^'\\]|\\.)*'"),
+]
 
 
 class Language(Enum):
@@ -493,30 +514,17 @@ def extract_string_literals(source: str, language: Language) -> List[str]:
     """Extract all string literals from source code."""
     strings = []
 
+    # Issue #380: Use pre-compiled patterns based on language
     if language == Language.PYTHON:
-        # Python strings: "...", '...', """...""", '''...'''
-        patterns = [
-            r'"""[\s\S]*?"""',
-            r"'''[\s\S]*?'''",
-            r'"(?:[^"\\]|\\.)*"',
-            r"'(?:[^'\\]|\\.)*'",
-        ]
+        compiled_patterns = _STRING_PATTERNS_PYTHON
     elif language in (Language.TYPESCRIPT, Language.JAVASCRIPT, Language.VUE):
-        # JS/TS strings: "...", '...', `...`
-        patterns = [
-            r'"(?:[^"\\]|\\.)*"',
-            r"'(?:[^'\\]|\\.)*'",
-            r"`(?:[^`\\]|\\.)*`",
-        ]
+        compiled_patterns = _STRING_PATTERNS_JS_TS
     elif language == Language.SHELL:
-        patterns = [
-            r'"(?:[^"\\]|\\.)*"',
-            r"'[^']*'",
-        ]
+        compiled_patterns = _STRING_PATTERNS_SHELL
     else:
-        patterns = [r'"(?:[^"\\]|\\.)*"', r"'(?:[^'\\]|\\.)*'"]
+        compiled_patterns = _STRING_PATTERNS_DEFAULT
 
-    for pattern in patterns:
-        strings.extend(re.findall(pattern, source))
+    for compiled_pattern in compiled_patterns:
+        strings.extend(compiled_pattern.findall(source))
 
     return strings

@@ -20,6 +20,10 @@ from src.utils.command_utils import execute_shell_command
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozensets for path checking
+_SYSTEM_PATHS = frozenset({"/etc", "/usr", "/bin", "/sbin", "/lib"})
+_SENSITIVE_REDIRECT_PATHS = frozenset({"/etc/", "/boot/", "/sys/"})
+
 
 class CommandRisk(Enum):
     """Risk levels for commands"""
@@ -35,103 +39,56 @@ class SecurityPolicy:
     """Security policy for command execution"""
 
     def __init__(self):
-        """Initialize security policy with command classifications and path restrictions."""
-        # Safe commands that can run without approval
-        self.safe_commands = {
-            "echo",
-            "date",
-            "pwd",
-            "whoami",
-            "hostname",
-            "uname",
-            "cat",
-            "head",
-            "tail",
-            "wc",
-            "sort",
-            "uniq",
-            "grep",
-            "find",
-            "ls",
-            "tree",
-            "which",
-            "env",
-            "printenv",
-            "ps",
-            "top",
-            "htop",
-            "d",
-            "du",
-            "free",
-            "uptime",
-            "ping",
-            "curl",
-            "wget",
-            "git",
-            "npm",
-            "python",
-            "pip",
+        """
+        Initialize security policy with command classifications and path restrictions.
+
+        Issue #281: Refactored from 148 lines to use extracted helper methods.
+        """
+        self.safe_commands = self._get_safe_commands()
+        self.moderate_commands = self._get_moderate_commands()
+        self.high_risk_commands = self._get_high_risk_commands()
+        self.forbidden_commands = self._get_forbidden_commands()
+        self.dangerous_patterns = self._get_dangerous_patterns()
+        self.allowed_paths = self._get_allowed_paths()
+        self.allowed_extensions = self._get_allowed_extensions()
+
+    def _get_safe_commands(self) -> set:
+        """Safe commands that can run without approval. Issue #281: Extracted helper."""
+        return {
+            "echo", "date", "pwd", "whoami", "hostname", "uname",
+            "cat", "head", "tail", "wc", "sort", "uniq", "grep", "find",
+            "ls", "tree", "which", "env", "printenv",
+            "ps", "top", "htop", "d", "du", "free", "uptime",
+            "ping", "curl", "wget", "git", "npm", "python", "pip",
         }
 
-        # Commands that need approval for certain arguments
-        self.moderate_commands = {
-            "cp",
-            "mv",
-            "mkdir",
-            "touch",
-            "chmod",
-            "chown",
-            "tar",
-            "zip",
-            "unzip",
-            "gzip",
-            "gunzip",
-            "sed",
-            "awk",
-            "cut",
-            "paste",
-            "join",
+    def _get_moderate_commands(self) -> set:
+        """Commands that need approval for certain arguments. Issue #281: Extracted helper."""
+        return {
+            "cp", "mv", "mkdir", "touch", "chmod", "chown",
+            "tar", "zip", "unzip", "gzip", "gunzip",
+            "sed", "awk", "cut", "paste", "join",
         }
 
-        # High-risk commands that always need approval
-        self.high_risk_commands = {
-            "rm",
-            "rmdir",
-            "dd",
-            "mkfs",
-            "fdisk",
-            "parted",
-            "mount",
-            "umount",
-            "chroot",
-            "sudo",
-            "su",
-            "systemctl",
-            "service",
-            "apt",
-            "apt-get",
-            "dpkg",
-            "yum",
-            "dn",
-            "zypper",
-            "pacman",
+    def _get_high_risk_commands(self) -> set:
+        """High-risk commands that always need approval. Issue #281: Extracted helper."""
+        return {
+            "rm", "rmdir", "dd", "mkfs", "fdisk", "parted",
+            "mount", "umount", "chroot", "sudo", "su",
+            "systemctl", "service", "apt", "apt-get", "dpkg",
+            "yum", "dn", "zypper", "pacman",
         }
 
-        # Forbidden commands that should never run
-        self.forbidden_commands = {
-            "shutdown",
-            "reboot",
-            "halt",
-            "powerof",
-            "init",
-            "telinit",
-            "kill",
-            "killall",
-            "pkill",
+    def _get_forbidden_commands(self) -> set:
+        """Forbidden commands that should never run. Issue #281: Extracted helper."""
+        return {
+            "shutdown", "reboot", "halt", "powerof",
+            "init", "telinit", "kill", "killall", "pkill",
         }
 
-        # Dangerous patterns in arguments
-        self.dangerous_patterns = [
+    def _get_dangerous_patterns(self) -> list:
+        """Dangerous patterns in arguments. Issue #281: Extracted helper."""
+        return [
             r"rm\s+-rf\s+/",  # rm -rf /
             r">\s*/dev/sd[a-z]",  # Overwrite disk
             r"dd\s+.*of=/dev/",  # dd to device
@@ -145,42 +102,23 @@ class SecurityPolicy:
             r"\|\s*rm\s+-r",  # Piped to rm
         ]
 
-        # Allowed directories for file operations
-        self.allowed_paths = [
+    def _get_allowed_paths(self) -> list:
+        """Allowed directories for file operations. Issue #281: Extracted helper."""
+        return [
             Path.home(),  # User home directory
             Path("/tmp"),  # Temporary directory
             Path("/var/tmp"),  # Var temporary
             Path.cwd(),  # Current working directory
         ]
 
-        # File extensions that can be modified
-        self.allowed_extensions = {
-            ".txt",
-            ".log",
-            ".json",
-            ".yaml",
-            ".yml",
-            ".md",
-            ".py",
-            ".js",
-            ".ts",
-            ".jsx",
-            ".tsx",
-            ".vue",
-            ".html",
-            ".css",
-            ".scss",
-            ".sass",
-            ".sh",
-            ".bash",
-            ".zsh",
-            ".con",
-            ".cfg",
-            ".ini",
-            ".env",
-            ".csv",
-            ".tsv",
-            ".xml",
+    def _get_allowed_extensions(self) -> set:
+        """File extensions that can be modified. Issue #281: Extracted helper."""
+        return {
+            ".txt", ".log", ".json", ".yaml", ".yml", ".md",
+            ".py", ".js", ".ts", ".jsx", ".tsx", ".vue",
+            ".html", ".css", ".scss", ".sass",
+            ".sh", ".bash", ".zsh", ".con", ".cfg", ".ini", ".env",
+            ".csv", ".tsv", ".xml",
         }
 
 
@@ -273,10 +211,8 @@ class SecureCommandExecutor:
 
         if base_command in self.policy.moderate_commands:
             reasons.append(f"Moderate-risk command: {base_command}")
-            # Check if it involves system paths
-            if any(
-                path in command for path in {"/etc", "/usr", "/bin", "/sbin", "/lib"}
-            ):
+            # Check if it involves system paths - Issue #380: Use module-level frozenset
+            if any(path in command for path in _SYSTEM_PATHS):
                 reasons.append("Operates on system paths")
                 return CommandRisk.HIGH, reasons
             return CommandRisk.MODERATE, reasons
@@ -287,11 +223,9 @@ class SecureCommandExecutor:
                 reasons.append("Uses sudo elevation")
                 return CommandRisk.HIGH, reasons
 
-            # Check for output redirection to sensitive files
+            # Check for output redirection to sensitive files - Issue #380
             if ">" in command or ">>" in command:
-                if any(
-                    sensitive in command for sensitive in {"/etc/", "/boot/", "/sys/"}
-                ):
+                if any(sensitive in command for sensitive in _SENSITIVE_REDIRECT_PATHS):
                     reasons.append("Redirects to sensitive location")
                     return CommandRisk.HIGH, reasons
 
@@ -345,11 +279,74 @@ class SecureCommandExecutor:
         ]
         return " ".join(docker_cmd)
 
+    def _build_blocked_result(
+        self,
+        risk: CommandRisk,
+        reasons: List[str],
+        message: str,
+    ) -> Dict[str, Any]:
+        """
+        Build result dict for blocked/denied commands.
+
+        Issue #281: Extracted helper for blocked result building.
+
+        Args:
+            risk: Risk level of command
+            reasons: List of risk reasons
+            message: Error message for stderr
+
+        Returns:
+            Result dict with error status and security info
+        """
+        return {
+            "stdout": "",
+            "stderr": message,
+            "return_code": 1,
+            "status": "error",
+            "security": {"risk": risk.value, "reasons": reasons, "blocked": True},
+        }
+
+    def _build_error_result(
+        self,
+        risk: CommandRisk,
+        reasons: List[str],
+        error_type: str,
+        error_msg: str,
+    ) -> Dict[str, Any]:
+        """
+        Build result dict for execution errors.
+
+        Issue #281: Extracted helper for error result building.
+
+        Args:
+            risk: Risk level of command
+            reasons: List of risk reasons
+            error_type: Type of error (timeout, error)
+            error_msg: Error message
+
+        Returns:
+            Result dict with error status
+        """
+        return_code = 124 if error_type == "timeout" else 1
+        security_info = {"risk": risk.value, "reasons": reasons, error_type: True}
+        if error_type == "error":
+            security_info["error"] = error_msg
+
+        return {
+            "stdout": "",
+            "stderr": error_msg,
+            "return_code": return_code,
+            "status": "error",
+            "security": security_info,
+        }
+
     async def run_shell_command(
         self, command: str, force_approval: bool = False
     ) -> Dict[str, Any]:
         """
-        Securely execute a shell command with risk assessment and sandboxing
+        Securely execute a shell command with risk assessment and sandboxing.
+
+        Issue #281: Refactored from 111 lines to use extracted helper methods.
 
         Args:
             command: The shell command to execute
@@ -358,10 +355,8 @@ class SecureCommandExecutor:
         Returns:
             Dictionary containing execution results and security info
         """
-        # Assess command risk
         risk, reasons = self.assess_command_risk(command)
 
-        # Log command attempt
         log_entry = {
             "command": command,
             "risk": risk.value,
@@ -371,24 +366,17 @@ class SecureCommandExecutor:
             "executed": False,
         }
 
-        # Check if command is forbidden
+        # Handle forbidden commands (Issue #281: uses helper)
         if risk == CommandRisk.FORBIDDEN:
             logger.error(f"Forbidden command blocked: {command}")
             log_entry["error"] = "Command forbidden by security policy"
             self.command_history.append(log_entry)
-            return {
-                "stdout": "",
-                "stderr": f"Command forbidden: {'; '.join(reasons)}",
-                "return_code": 1,
-                "status": "error",
-                "security": {"risk": risk.value, "reasons": reasons, "blocked": True},
-            }
+            return self._build_blocked_result(
+                risk, reasons, f"Command forbidden: {'; '.join(reasons)}"
+            )
 
-        # Check if approval is needed
-        needs_approval = force_approval or risk in {
-            CommandRisk.HIGH,
-            CommandRisk.MODERATE,
-        }
+        # Handle approval flow
+        needs_approval = force_approval or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
 
         if needs_approval:
             approved = await self._request_approval(command, risk, reasons)
@@ -398,21 +386,12 @@ class SecureCommandExecutor:
                 logger.warning(f"Command denied by user: {command}")
                 log_entry["error"] = "User denied execution"
                 self.command_history.append(log_entry)
-                return {
-                    "stdout": "",
-                    "stderr": "Command execution denied by user",
-                    "return_code": 1,
-                    "status": "error",
-                    "security": {
-                        "risk": risk.value,
-                        "reasons": reasons,
-                        "blocked": True,
-                    },
-                }
+                return self._build_blocked_result(
+                    risk, reasons, "Command execution denied by user"
+                )
 
         # Prepare command for execution
         if self.use_docker_sandbox and risk != CommandRisk.SAFE:
-            # Use Docker sandbox for non-safe commands
             actual_command = self._build_docker_command(command)
             logger.info(f"Executing in Docker sandbox: {command}")
         else:
@@ -438,24 +417,16 @@ class SecureCommandExecutor:
             logger.error(f"Command timed out: {command}")
             log_entry["error"] = "Command timed out"
             self.command_history.append(log_entry)
-            return {
-                "stdout": "",
-                "stderr": "Command execution timed out after 5 minutes",
-                "return_code": 124,  # Standard timeout exit code
-                "status": "error",
-                "security": {"risk": risk.value, "reasons": reasons, "timeout": True},
-            }
+            return self._build_error_result(
+                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
+            )
         except Exception as e:
             logger.error(f"Command execution error: {e}")
             log_entry["error"] = str(e)
             self.command_history.append(log_entry)
-            return {
-                "stdout": "",
-                "stderr": f"Error executing command: {e}",
-                "return_code": 1,
-                "status": "error",
-                "security": {"risk": risk.value, "reasons": reasons, "error": str(e)},
-            }
+            return self._build_error_result(
+                risk, reasons, "error", f"Error executing command: {e}"
+            )
 
     def get_command_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent command history for audit purposes"""

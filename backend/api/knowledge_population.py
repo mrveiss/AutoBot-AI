@@ -26,9 +26,13 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Request
 
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Pre-compiled regex for ANSI escape sequence removal
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Create router for population endpoints
 router = APIRouter(tags=["knowledge-population"])
@@ -89,6 +93,75 @@ async def _store_system_command(kb_to_use, cmd_info: dict) -> bool:
 
     except Exception as e:
         logger.error(f"Error adding command {cmd_info['command']}: {e}")
+        return False
+
+
+async def _store_autobot_config_info(kb_to_use) -> bool:
+    """
+    Generate and store AutoBot system configuration in knowledge base.
+
+    Issue #281: Extracted helper for config info generation and storage.
+
+    Args:
+        kb_to_use: Knowledge base instance
+
+    Returns:
+        True if stored successfully, False otherwise
+    """
+    try:
+        # Import constants for network configuration reference
+        from src.constants.network_constants import NetworkConstants
+        from src.constants.path_constants import PATH
+
+        config_info = f"""AutoBot System Configuration
+
+Network Layout:
+- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
+  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
+  Desktop/Terminal VNC (port 6080)
+- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
+  (SINGLE FRONTEND SERVER)
+- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
+- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
+- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
+  Web automation (Playwright)
+
+Key Commands:
+- Setup: bash setup.sh [--full|--minimal|--distributed]
+- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+
+Critical Rules:
+- NEVER edit code directly on remote VMs (VM1-VM5)
+- ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
+- Use ./sync-frontend.sh or sync scripts to deploy changes
+- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
+- NO temporary fixes or workarounds allowed
+
+Source: AutoBot System Configuration
+Category: AutoBot
+Type: System Configuration
+"""
+
+        metadata = {
+            "title": "AutoBot System Configuration",
+            "source": "autobot_docs_population",
+            "category": "configuration",
+            "type": "system_configuration",
+        }
+
+        if hasattr(kb_to_use, "store_fact"):
+            result = await kb_to_use.store_fact(content=config_info, metadata=metadata)
+        else:
+            result = await kb_to_use.store_fact(text=config_info, metadata=metadata)
+
+        if result and result.get("fact_id"):
+            logger.info("Added AutoBot system configuration")
+            return True
+        return False
+
+    except Exception as e:
+        logger.error(f"Error adding AutoBot configuration: {e}")
         return False
 
 
@@ -310,7 +383,7 @@ async def populate_system_commands(request: dict, req: Request):
             if await _store_system_command(kb_to_use, cmd_info):
                 items_added += 1
         # Small delay between batches to prevent overload
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     logger.info(f"System commands population completed. Added {items_added} commands.")
 
@@ -369,7 +442,7 @@ async def _fetch_man_page(command: str) -> str | None:
 
         man_content = stdout.decode("utf-8").strip()
         # Remove ANSI escape sequences
-        return re.sub(r"\x1b\[[0-9;]*m", "", man_content)
+        return _ANSI_ESCAPE_RE.sub("", man_content)
 
     except Exception as e:
         logger.error(f"Error fetching man page for {command}: {e}")
@@ -429,7 +502,8 @@ async def _populate_man_pages_background(kb_to_use):
                 if await _process_single_man_page(kb_to_use, command):
                     items_added += 1
 
-            await asyncio.sleep(0.1)
+            # Batch processing delay
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         logger.info(f"Manual pages population completed. Added {items_added} man pages.")
         return items_added
@@ -749,7 +823,11 @@ async def _store_system_config(kb_to_use) -> bool:
 )
 @router.post("/populate_autobot_docs")
 async def populate_autobot_docs(request: dict, req: Request):
-    """Populate knowledge base with AutoBot-specific documentation"""
+    """
+    Populate knowledge base with AutoBot-specific documentation.
+
+    Issue #281: Refactored from 145 lines to use extracted helper method.
+    """
     from backend.models.knowledge_import_tracking import ImportTracker
 
     # Check if force reindex is requested
@@ -809,71 +887,11 @@ async def populate_autobot_docs(request: dict, req: Request):
             logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
 
         # Small delay between files
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-    # Add AutoBot configuration information
-    try:
-        # Import constants for network configuration reference
-        from src.constants.network_constants import NetworkConstants
-        from src.constants.path_constants import PATH
-
-        config_info = f"""AutoBot System Configuration
-
-Network Layout:
-- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
-  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
-  Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
-  (SINGLE FRONTEND SERVER)
-- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
-- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
-- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
-- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
-  Web automation (Playwright)
-
-Key Commands:
-- Setup: bash setup.sh [--full|--minimal|--distributed]
-- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
-
-Critical Rules:
-- NEVER edit code directly on remote VMs (VM1-VM5)
-- ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
-- Use ./sync-frontend.sh or sync scripts to deploy changes
-- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
-- NO temporary fixes or workarounds allowed
-
-Source: AutoBot System Configuration
-Category: AutoBot
-Type: System Configuration
-"""
-
-        if hasattr(kb_to_use, "store_fact"):
-            result = await kb_to_use.store_fact(
-                content=config_info,
-                metadata={
-                    "title": "AutoBot System Configuration",
-                    "source": "autobot_docs_population",
-                    "category": "configuration",
-                    "type": "system_configuration",
-                },
-            )
-        else:
-            result = await kb_to_use.store_fact(
-                text=config_info,
-                metadata={
-                    "title": "AutoBot System Configuration",
-                    "source": "autobot_docs_population",
-                    "category": "configuration",
-                    "type": "system_configuration",
-                },
-            )
-
-        if result and result.get("fact_id"):
-            items_added += 1
-            logger.info("Added AutoBot system configuration")
-
-    except Exception as e:
-        logger.error(f"Error adding AutoBot configuration: {e}")
+    # Add AutoBot configuration information (Issue #281: uses extracted helper)
+    if await _store_autobot_config_info(kb_to_use):
+        items_added += 1
 
     logger.info(
         f"AutoBot documentation population completed. Added {items_added} documents "

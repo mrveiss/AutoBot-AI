@@ -27,6 +27,9 @@ from src.utils.background_llm_sync import BackgroundLLMSync
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for backend logger names
+_BACKEND_LOGGER_NAMES = ("backend", "backend.api", "backend.api.codebase_analytics")
+
 # Lock for thread-safe access to app_state
 _app_state_lock = asyncio.Lock()
 
@@ -61,7 +64,7 @@ def configure_logging():
     logging.root.setLevel(LOG_LEVEL_VALUE)
 
     # Set level for all backend loggers
-    for logger_name in ["backend", "backend.api", "backend.api.codebase_analytics"]:
+    for logger_name in _BACKEND_LOGGER_NAMES:
         logging.getLogger(logger_name).setLevel(LOG_LEVEL_VALUE)
 
     logger.info(f"📊 Logging level set to: {LOG_LEVEL} ({LOG_LEVEL_VALUE})")
@@ -164,9 +167,187 @@ async def initialize_critical_services(app: FastAPI):
         raise  # Re-raise to prevent app from starting
 
 
+async def _init_knowledge_base(app: FastAPI):
+    """
+    Initialize knowledge base (NON-CRITICAL).
+
+    Issue #281: Extracted helper for knowledge base initialization.
+
+    Args:
+        app: FastAPI application instance
+    """
+    logger.info("✅ [ 70%] Knowledge Base: Initializing knowledge base...")
+    try:
+        knowledge_base = await get_or_create_knowledge_base(app)
+        app.state.knowledge_base = knowledge_base
+        await update_app_state("knowledge_base", knowledge_base)
+        logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
+    except Exception as kb_error:
+        logger.warning(f"Knowledge base initialization failed: {kb_error}")
+        app.state.knowledge_base = None
+
+
+async def _init_npu_worker_websocket():
+    """
+    Initialize NPU Worker WebSocket subscriptions (NON-CRITICAL).
+
+    Issue #281: Extracted helper for NPU WebSocket initialization.
+    """
+    logger.info("✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions...")
+    try:
+        from backend.api.websockets import init_npu_worker_websocket
+
+        init_npu_worker_websocket()
+        logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
+    except Exception as npu_ws_error:
+        logger.warning(f"NPU worker WebSocket initialization failed: {npu_ws_error}")
+
+
+async def _init_graph_rag_service(app: FastAPI, memory_graph):
+    """
+    Initialize Graph-RAG service (depends on knowledge base and memory graph).
+
+    Issue #281: Extracted helper for Graph-RAG initialization.
+
+    Args:
+        app: FastAPI application instance
+        memory_graph: Initialized memory graph instance
+    """
+    logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
+    try:
+        from backend.services.rag_config import RAGConfig
+        from backend.services.rag_service import RAGService
+        from src.services.graph_rag_service import GraphRAGService
+
+        if app.state.knowledge_base:
+            rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
+            rag_service = RAGService(
+                knowledge_base=app.state.knowledge_base, config=rag_config
+            )
+            await rag_service.initialize()
+
+            graph_rag_service = GraphRAGService(
+                rag_service=rag_service,
+                memory_graph=memory_graph,
+                graph_weight=0.3,
+                enable_entity_extraction=True,
+            )
+            app.state.graph_rag_service = graph_rag_service
+            await update_app_state("graph_rag_service", graph_rag_service)
+            logger.info(
+                "✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully"
+            )
+        else:
+            logger.info("🔄 [ 87%] Graph-RAG: Skipped (knowledge base not available)")
+    except Exception as graph_rag_error:
+        logger.warning(f"Graph-RAG service initialization failed: {graph_rag_error}")
+        app.state.graph_rag_service = None
+
+
+async def _init_entity_extractor(app: FastAPI, memory_graph):
+    """
+    Initialize entity extractor (depends on memory graph).
+
+    Issue #281: Extracted helper for entity extractor initialization.
+
+    Args:
+        app: FastAPI application instance
+        memory_graph: Initialized memory graph instance
+    """
+    logger.info("✅ [ 88%] Entity Extractor: Initializing entity extractor...")
+    try:
+        from src.agents.graph_entity_extractor import GraphEntityExtractor
+        from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+
+        knowledge_extraction_agent = KnowledgeExtractionAgent()
+        entity_extractor = GraphEntityExtractor(
+            extraction_agent=knowledge_extraction_agent,
+            memory_graph=memory_graph,
+            confidence_threshold=0.6,
+            enable_relationship_inference=True,
+        )
+        app.state.entity_extractor = entity_extractor
+        await update_app_state("entity_extractor", entity_extractor)
+        logger.info(
+            "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
+        )
+    except Exception as entity_error:
+        logger.warning(f"Entity extractor initialization failed: {entity_error}")
+        app.state.entity_extractor = None
+
+
+async def _init_memory_graph(app: FastAPI):
+    """
+    Initialize memory graph with dependent services (NON-CRITICAL).
+
+    Issue #281: Extracted helper for memory graph initialization.
+
+    Args:
+        app: FastAPI application instance
+    """
+    logger.info("✅ [ 85%] Memory Graph: Initializing memory graph...")
+    try:
+        from src.autobot_memory_graph import AutoBotMemoryGraph
+
+        memory_graph = AutoBotMemoryGraph(
+            chat_history_manager=app.state.chat_history_manager
+        )
+        await memory_graph.initialize()
+        app.state.memory_graph = memory_graph
+        await update_app_state("memory_graph", memory_graph)
+        logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
+
+        # Initialize dependent services (Issue #281: uses helpers)
+        await _init_graph_rag_service(app, memory_graph)
+        await _init_entity_extractor(app, memory_graph)
+
+    except Exception as memory_error:
+        logger.warning(f"Memory graph initialization failed: {memory_error}")
+        app.state.memory_graph = None
+        app.state.graph_rag_service = None
+        app.state.entity_extractor = None
+
+
+async def _init_background_llm_sync(app: FastAPI):
+    """
+    Initialize background LLM sync and AI Stack client (NON-CRITICAL).
+
+    Issue #281: Extracted helper for LLM sync initialization.
+
+    Args:
+        app: FastAPI application instance
+    """
+    logger.info("✅ [ 90%] Background LLM Sync: Initializing AI Stack integration...")
+    try:
+        from backend.services.ai_stack_client import AIStackClient
+
+        ai_stack_client = AIStackClient()
+        app.state.ai_stack_client = ai_stack_client
+
+        background_llm_sync = BackgroundLLMSync()
+        await background_llm_sync.start()
+        app.state.background_llm_sync = background_llm_sync
+        await update_app_state("background_llm_sync", background_llm_sync)
+
+        # Test AI Stack availability
+        try:
+            ai_stack_health = await ai_stack_client.health_check()
+            if ai_stack_health.get("status") == "healthy":
+                logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
+            else:
+                logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+        except Exception:
+            logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+
+    except Exception as sync_error:
+        logger.warning(f"Background LLM sync initialization failed: {sync_error}")
+
+
 async def initialize_background_services(app: FastAPI):
     """
-    Phase 2: Initialize background services (NON-BLOCKING)
+    Phase 2: Initialize background services (NON-BLOCKING).
+
+    Issue #281: Refactored from 162 lines to use extracted helper methods.
 
     These services can fail gracefully without preventing app startup.
     Initialization happens in background while app serves requests.
@@ -181,141 +362,11 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
-        # Initialize Knowledge Base - NON-CRITICAL (slow, can fail gracefully)
-        logger.info("✅ [ 70%] Knowledge Base: Initializing knowledge base...")
-        try:
-            knowledge_base = await get_or_create_knowledge_base(app)
-            app.state.knowledge_base = knowledge_base
-            await update_app_state("knowledge_base", knowledge_base)
-            logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
-        except Exception as kb_error:
-            logger.warning(f"Knowledge base initialization failed: {kb_error}")
-            app.state.knowledge_base = None
-
-        # Initialize NPU Worker WebSocket subscriptions - NON-CRITICAL
-        logger.info(
-            "✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions..."
-        )
-        try:
-            from backend.api.websockets import init_npu_worker_websocket
-
-            init_npu_worker_websocket()
-            logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
-        except Exception as npu_ws_error:
-            logger.warning(
-                f"NPU worker WebSocket initialization failed: {npu_ws_error}"
-            )
-
-        # Initialize Memory Graph - NON-CRITICAL
-        logger.info("✅ [ 85%] Memory Graph: Initializing memory graph...")
-        try:
-            from src.autobot_memory_graph import AutoBotMemoryGraph
-
-            memory_graph = AutoBotMemoryGraph(
-                chat_history_manager=app.state.chat_history_manager
-            )
-            await memory_graph.initialize()
-            app.state.memory_graph = memory_graph
-            await update_app_state("memory_graph", memory_graph)
-            logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
-
-            # Initialize Graph-RAG Service - depends on knowledge base and memory graph
-            logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
-            try:
-                from backend.services.rag_config import RAGConfig
-                from backend.services.rag_service import RAGService
-                from src.services.graph_rag_service import GraphRAGService
-
-                if app.state.knowledge_base:
-                    # Create RAGConfig with custom settings
-                    rag_config = RAGConfig(
-                        enable_advanced_rag=True,
-                        timeout_seconds=10.0,
-                    )
-                    rag_service = RAGService(
-                        knowledge_base=app.state.knowledge_base,
-                        config=rag_config,
-                    )
-                    await rag_service.initialize()
-
-                    graph_rag_service = GraphRAGService(
-                        rag_service=rag_service,
-                        memory_graph=memory_graph,
-                        graph_weight=0.3,
-                        enable_entity_extraction=True,
-                    )
-                    app.state.graph_rag_service = graph_rag_service
-                    await update_app_state("graph_rag_service", graph_rag_service)
-                    logger.info(
-                        "✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully"
-                    )
-                else:
-                    logger.info(
-                        "🔄 [ 87%] Graph-RAG: Skipped (knowledge base not available)"
-                    )
-            except Exception as graph_rag_error:
-                logger.warning(
-                    f"Graph-RAG service initialization failed: {graph_rag_error}"
-                )
-                app.state.graph_rag_service = None
-
-            # Initialize Entity Extractor - depends on memory graph
-            logger.info("✅ [ 88%] Entity Extractor: Initializing entity extractor...")
-            try:
-                from src.agents.graph_entity_extractor import GraphEntityExtractor
-                from src.agents.knowledge_extraction_agent import (
-                    KnowledgeExtractionAgent,
-                )
-
-                knowledge_extraction_agent = KnowledgeExtractionAgent()
-                entity_extractor = GraphEntityExtractor(
-                    extraction_agent=knowledge_extraction_agent,
-                    memory_graph=memory_graph,
-                    confidence_threshold=0.6,
-                    enable_relationship_inference=True,
-                )
-                app.state.entity_extractor = entity_extractor
-                await update_app_state("entity_extractor", entity_extractor)
-                logger.info(
-                    "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
-                )
-            except Exception as entity_error:
-                logger.warning(f"Entity extractor initialization failed: {entity_error}")
-                app.state.entity_extractor = None
-
-        except Exception as memory_error:
-            logger.warning(f"Memory graph initialization failed: {memory_error}")
-            app.state.memory_graph = None
-            app.state.graph_rag_service = None
-            app.state.entity_extractor = None
-
-        # Initialize Background LLM Sync - NON-CRITICAL
-        logger.info(
-            "✅ [ 90%] Background LLM Sync: Initializing AI Stack integration..."
-        )
-        try:
-            from backend.services.ai_stack_client import AIStackClient
-
-            ai_stack_client = AIStackClient()
-            app.state.ai_stack_client = ai_stack_client
-
-            background_llm_sync = BackgroundLLMSync()
-            await background_llm_sync.start()
-            app.state.background_llm_sync = background_llm_sync
-            await update_app_state("background_llm_sync", background_llm_sync)
-
-            # Test AI Stack availability
-            try:
-                ai_stack_health = await ai_stack_client.health_check()
-                if ai_stack_health.get("status") == "healthy":
-                    logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
-                else:
-                    logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
-            except Exception:
-                logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
-
-        except Exception as sync_error:
-            logger.warning(f"Background LLM sync initialization failed: {sync_error}")
+        # Initialize services (Issue #281: uses helpers)
+        await _init_knowledge_base(app)
+        await _init_npu_worker_websocket()
+        await _init_memory_graph(app)
+        await _init_background_llm_sync(app)
 
         await update_app_state_multi(
             initialization_status="ready",

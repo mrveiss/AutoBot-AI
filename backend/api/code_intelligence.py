@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
+_SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
+
 
 # =============================================================================
 # Helper Functions for Score Grading (Issue #315 - extracted/refactored)
@@ -262,13 +265,12 @@ async def analyze_codebase(request: AnalysisRequest):
 
         # Filter by severity if specified
         if request.min_severity:
-            severity_order = ["info", "low", "medium", "high", "critical"]
             try:
-                min_idx = severity_order.index(request.min_severity.lower())
+                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
                 filtered_patterns = [
                     p
                     for p in report.anti_patterns
-                    if severity_order.index(p.severity.value) >= min_idx
+                    if _SEVERITY_ORDER.index(p.severity.value) >= min_idx
                 ]
                 report.anti_patterns = filtered_patterns
             except ValueError:
@@ -593,15 +595,14 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
                 exclude_patterns=request.exclude_patterns,
             )
 
-        # Filter by severity if specified
+        # Filter by severity if specified (Issue #380: use module-level constant)
         if request.min_severity:
-            severity_order = ["info", "low", "medium", "high", "critical"]
             try:
-                min_idx = severity_order.index(request.min_severity.lower())
+                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
                 results = [
                     r
                     for r in results
-                    if severity_order.index(r.severity.value) >= min_idx
+                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
                 ]
             except ValueError:
                 logger.warning(f"Invalid severity filter: {request.min_severity}")
@@ -915,15 +916,14 @@ async def security_analyze(request: SecurityAnalysisRequest):
         )
         results = await asyncio.to_thread(analyzer.analyze_directory)
 
-        # Filter by severity if specified
+        # Filter by severity if specified (Issue #380: use module-level constant)
         if request.min_severity:
-            severity_order = ["info", "low", "medium", "high", "critical"]
             try:
-                min_idx = severity_order.index(request.min_severity.lower())
+                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
                 results = [
                     r
                     for r in results
-                    if severity_order.index(r.severity.value) >= min_idx
+                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
                 ]
             except ValueError as e:
                 logger.debug("Value parsing failed during severity filtering: %s", e)
@@ -1237,15 +1237,14 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
         )
         results = await asyncio.to_thread(analyzer.analyze_directory)
 
-        # Filter by severity if specified
+        # Filter by severity if specified (Issue #380: use module-level constant)
         if request.min_severity:
-            severity_order = ["info", "low", "medium", "high", "critical"]
             try:
-                min_idx = severity_order.index(request.min_severity.lower())
+                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
                 results = [
                     r
                     for r in results
-                    if severity_order.index(r.severity.value) >= min_idx
+                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
                 ]
             except ValueError as e:
                 logger.debug("Value parsing failed during severity filtering: %s", e)

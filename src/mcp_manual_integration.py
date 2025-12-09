@@ -23,6 +23,27 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for searchable doc source types (Issue #326)
 SEARCHABLE_DOC_SOURCE_TYPES = {"autobot_docs", "readme"}
 
+# Issue #380: Module-level frozensets for command safety checks
+_SAFE_COMMANDS = frozenset({
+    "ls", "grep", "cat", "echo", "pwd", "date", "whoami", "id", "curl", "wget",
+    "git", "python", "python3", "pip", "pip3", "node", "npm", "yarn", "docker",
+    "kubectl", "terraform", "ansible", "ssh", "scp", "rsync", "find", "locate",
+    "which", "man", "info", "help", "type", "alias", "history", "env", "ps",
+    "top", "htop", "free", "df", "du", "mount", "lsblk", "systemctl", "service",
+    "journalctl", "awk", "sed", "sort", "uniq", "wc", "head", "tail", "tr",
+    "cut", "paste", "join",
+})
+
+_DANGEROUS_COMMANDS = frozenset({
+    "rm", "rmdir", "mv", "cp", "dd", "mkfs", "fdisk", "parted", "shutdown",
+    "reboot", "halt", "init", "kill", "killall", "pkill", "chmod", "chown",
+    "chgrp", "su", "sudo", "passwd", "crontab", "at", "batch",
+})
+
+_HELP_ARGS = frozenset({"--help", "-h", "help"})
+_HELP_COMMAND_PREFIXES = ("help", "man", "info")  # Tuple for startswith()
+_HELP_SKIP_PREFIXES = ("-", "Usage:", "usage:")  # Issue #380: Tuple for startswith()
+
 # MCP tools are available directly through the environment
 # No need for separate client manager - we can use MCP tools directly
 MCP_AVAILABLE = True
@@ -488,106 +509,17 @@ class MCPManualService:
 
         command = cmd_args[0].lower()
 
-        # Whitelist of safe commands
-        safe_commands = {
-            "ls",
-            "grep",
-            "cat",
-            "echo",
-            "pwd",
-            "date",
-            "whoami",
-            "id",
-            "curl",
-            "wget",
-            "git",
-            "python",
-            "python3",
-            "pip",
-            "pip3",
-            "node",
-            "npm",
-            "yarn",
-            "docker",
-            "kubectl",
-            "terraform",
-            "ansible",
-            "ssh",
-            "scp",
-            "rsync",
-            "find",
-            "locate",
-            "which",
-            "man",
-            "info",
-            "help",
-            "type",
-            "alias",
-            "history",
-            "env",
-            "ps",
-            "top",
-            "htop",
-            "free",
-            "df",
-            "du",
-            "mount",
-            "lsblk",
-            "systemctl",
-            "service",
-            "journalctl",
-            "awk",
-            "sed",
-            "sort",
-            "uniq",
-            "wc",
-            "head",
-            "tail",
-            "tr",
-            "cut",
-            "paste",
-            "join",
-        }
-
-        # Blacklist of dangerous commands
-        dangerous_commands = {
-            "rm",
-            "rmdir",
-            "mv",
-            "cp",
-            "dd",
-            "mkfs",
-            "fdisk",
-            "parted",
-            "shutdown",
-            "reboot",
-            "halt",
-            "init",
-            "kill",
-            "killall",
-            "pkill",
-            "chmod",
-            "chown",
-            "chgrp",
-            "su",
-            "sudo",
-            "passwd",
-            "crontab",
-            "at",
-            "batch",
-        }
-
-        if command in dangerous_commands:
+        # Issue #380: Use module-level frozensets for O(1) lookups
+        if command in _DANGEROUS_COMMANDS:
             return False
 
         # Only allow help-related arguments
-        help_args = {"--help", "-h", "help"}
-        if len(cmd_args) > 1 and not any(arg in help_args for arg in cmd_args[1:]):
+        if len(cmd_args) > 1 and not any(arg in _HELP_ARGS for arg in cmd_args[1:]):
             # Special case for 'help command'
             if cmd_args[0] != "help":
                 return False
 
-        return command in safe_commands or command.startswith(("help", "man", "info"))
+        return command in _SAFE_COMMANDS or command.startswith(_HELP_COMMAND_PREFIXES)
 
     def _is_valid_help_output(self, output: str) -> bool:
         """Check if output looks like valid help text."""
@@ -623,7 +555,7 @@ class MCPManualService:
         # Look for description patterns
         for line in lines[:10]:  # Check first 10 lines
             line = line.strip()
-            if line and not line.startswith(("-", "Usage:", "usage:")):
+            if line and not line.startswith(_HELP_SKIP_PREFIXES):
                 # Skip lines that are just the command name
                 if len(line.split()) > 2:
                     return line

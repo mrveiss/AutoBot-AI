@@ -33,6 +33,54 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for LLM patterns (Issue #326)
 SIMPLE_LLM_MODELS = {"gpt-3.5", "haiku", "llama"}
 
+# Issue #380: Module-level frozenset for backoff strategy validation
+_VALID_BACKOFF_STRATEGIES = frozenset({"exponential", "linear"})
+
+# Issue #380: Pre-compiled regex patterns for prompt analysis
+_REDUNDANT_PATTERNS = [
+    re.compile(r"please\s+please", re.IGNORECASE),
+    re.compile(r"make\s+sure\s+to\s+make\s+sure", re.IGNORECASE),
+    re.compile(r"you\s+must\s+always\s+you\s+must", re.IGNORECASE),
+    re.compile(r"important:\s*important", re.IGNORECASE),
+]
+_EXCESSIVE_CONTEXT_PATTERNS = [
+    re.compile(r"here\s+is\s+the\s+entire", re.IGNORECASE),
+    re.compile(r"the\s+complete\s+history", re.IGNORECASE),
+    re.compile(r"all\s+previous\s+messages", re.IGNORECASE),
+    re.compile(r"full\s+conversation\s+log", re.IGNORECASE),
+]
+_FORMAT_INEFFICIENCY_PATTERNS = [
+    re.compile(r"```[\s\S]{5000,}```"),
+    re.compile(r"\n{4,}"),
+    re.compile(r"#{5,}\s"),
+]
+
+# Issue #380: Pre-compiled regex patterns for template variable extraction
+_TEMPLATE_VAR_PATTERNS = [
+    re.compile(r"\{(\w+)\}"),
+    re.compile(r"\{\{(\w+)\}\}"),
+    re.compile(r"\$\{(\w+)\}"),
+    re.compile(r"\$(\w+)"),
+]
+
+# Issue #380: Pre-compiled regex patterns for retry count extraction
+_RETRY_COUNT_PATTERNS = [
+    re.compile(r"max_retries\s*=\s*(\d+)"),
+    re.compile(r"retries\s*=\s*(\d+)"),
+    re.compile(r"tries\s*=\s*(\d+)"),
+    re.compile(r"range\((\d+)\)"),
+]
+
+# Issue #380: Pre-compiled regex patterns for retry logic detection
+_RETRY_LOGIC_PATTERNS = [
+    re.compile(r"@retry\(", re.IGNORECASE),
+    re.compile(r"tenacity\.retry", re.IGNORECASE),
+    re.compile(r"for\s+\w+\s+in\s+range\([^)]+\):.*(?:try|except)", re.IGNORECASE),
+    re.compile(r"while\s+.*retry", re.IGNORECASE),
+    re.compile(r"max_retries\s*=", re.IGNORECASE),
+    re.compile(r"backoff\.", re.IGNORECASE),
+]
+
 
 # =============================================================================
 # Enums
@@ -355,7 +403,7 @@ class RetryPattern:
         if not self.has_timeout:
             recommendations.append("Add timeout to prevent infinite hangs")
 
-        if self.backoff_strategy not in ("exponential", "linear"):
+        if self.backoff_strategy not in _VALID_BACKOFF_STRATEGIES:
             recommendations.append("Use exponential or linear backoff")
 
         return recommendations
@@ -597,26 +645,11 @@ class PromptAnalyzer:
     Refactored to use PromptAnalysisResult (Issue #312)
     """
 
-    # Patterns that indicate potential issues
-    REDUNDANT_PATTERNS = [
-        r"please\s+please",
-        r"make\s+sure\s+to\s+make\s+sure",
-        r"you\s+must\s+always\s+you\s+must",
-        r"important:\s*important",
-    ]
-
-    EXCESSIVE_CONTEXT_MARKERS = [
-        r"here\s+is\s+the\s+entire",
-        r"the\s+complete\s+history",
-        r"all\s+previous\s+messages",
-        r"full\s+conversation\s+log",
-    ]
-
-    FORMAT_INEFFICIENCIES = [
-        (r"```[\s\S]{5000,}```", "Large code blocks could be summarized"),
-        (r"\n{4,}", "Excessive whitespace"),
-        (r"#{5,}\s", "Too many header levels"),
-    ]
+    # Issue #380: Class patterns reference module-level pre-compiled patterns
+    # (Legacy access preserved for backward compatibility)
+    REDUNDANT_PATTERNS = _REDUNDANT_PATTERNS
+    EXCESSIVE_CONTEXT_MARKERS = _EXCESSIVE_CONTEXT_PATTERNS
+    FORMAT_INEFFICIENCIES = _FORMAT_INEFFICIENCY_PATTERNS
 
     @classmethod
     def analyze_prompt(cls, prompt: str) -> List[PromptIssueType]:
@@ -631,21 +664,21 @@ class PromptAnalyzer:
         """
         issues = []
 
-        # Check for redundant patterns
-        for pattern in cls.REDUNDANT_PATTERNS:
-            if re.search(pattern, prompt, re.IGNORECASE):
+        # Check for redundant patterns (Issue #380: use pre-compiled patterns)
+        for pattern in _REDUNDANT_PATTERNS:
+            if pattern.search(prompt):
                 issues.append(PromptIssueType.REDUNDANT_INSTRUCTIONS)
                 break
 
-        # Check for excessive context
-        for pattern in cls.EXCESSIVE_CONTEXT_MARKERS:
-            if re.search(pattern, prompt, re.IGNORECASE):
+        # Check for excessive context (Issue #380: use pre-compiled patterns)
+        for pattern in _EXCESSIVE_CONTEXT_PATTERNS:
+            if pattern.search(prompt):
                 issues.append(PromptIssueType.EXCESSIVE_CONTEXT)
                 break
 
-        # Check for format inefficiencies
-        for pattern, _ in cls.FORMAT_INEFFICIENCIES:
-            if re.search(pattern, prompt):
+        # Check for format inefficiencies (Issue #380: use pre-compiled patterns)
+        for pattern in _FORMAT_INEFFICIENCY_PATTERNS:
+            if pattern.search(prompt):
                 issues.append(PromptIssueType.INEFFICIENT_FORMAT)
                 break
 
@@ -691,17 +724,10 @@ class PromptAnalyzer:
         Returns:
             List of variable names found
         """
-        # Match {variable}, {{variable}}, ${variable}, etc.
-        patterns = [
-            r"\{(\w+)\}",
-            r"\{\{(\w+)\}\}",
-            r"\$\{(\w+)\}",
-            r"\$(\w+)",
-        ]
-
+        # Issue #380: Use pre-compiled patterns for variable extraction
         variables = set()
-        for pattern in patterns:
-            matches = re.findall(pattern, template)
+        for pattern in _TEMPLATE_VAR_PATTERNS:
+            matches = pattern.findall(template)
             variables.update(matches)
 
         return list(variables)
@@ -839,26 +865,19 @@ class CodePatternScanner:
     prompt templates, and usage patterns in the codebase.
     """
 
-    # Patterns to detect LLM API calls
+    # Issue #380: Pre-compiled patterns to detect LLM API calls
     LLM_CALL_PATTERNS = [
-        (r"\.chat\.completions\.create", UsagePatternType.CHAT_COMPLETION),
-        (r"\.completions\.create", UsagePatternType.TEXT_GENERATION),
-        (r"\.embeddings\.create", UsagePatternType.EMBEDDING),
-        (r"ollama\.generate", UsagePatternType.TEXT_GENERATION),
-        (r"ollama\.chat", UsagePatternType.CHAT_COMPLETION),
-        (r"anthropic\.\w+\.messages", UsagePatternType.CHAT_COMPLETION),
-        (r"stream=True", UsagePatternType.STREAMING),
+        (re.compile(r"\.chat\.completions\.create", re.IGNORECASE), UsagePatternType.CHAT_COMPLETION),
+        (re.compile(r"\.completions\.create", re.IGNORECASE), UsagePatternType.TEXT_GENERATION),
+        (re.compile(r"\.embeddings\.create", re.IGNORECASE), UsagePatternType.EMBEDDING),
+        (re.compile(r"ollama\.generate", re.IGNORECASE), UsagePatternType.TEXT_GENERATION),
+        (re.compile(r"ollama\.chat", re.IGNORECASE), UsagePatternType.CHAT_COMPLETION),
+        (re.compile(r"anthropic\.\w+\.messages", re.IGNORECASE), UsagePatternType.CHAT_COMPLETION),
+        (re.compile(r"stream=True", re.IGNORECASE), UsagePatternType.STREAMING),
     ]
 
-    # Patterns to detect retry logic
-    RETRY_PATTERNS = [
-        r"@retry\(",
-        r"tenacity\.retry",
-        r"for\s+\w+\s+in\s+range\([^)]+\):.*(?:try|except)",
-        r"while\s+.*retry",
-        r"max_retries\s*=",
-        r"backoff\.",
-    ]
+    # Issue #380: Reference pre-compiled patterns for retry logic
+    RETRY_PATTERNS = _RETRY_LOGIC_PATTERNS
 
     @classmethod
     def scan_file(cls, file_path: Path) -> Tuple[List[UsagePattern], List[RetryPattern]]:
@@ -880,11 +899,11 @@ class CodePatternScanner:
         usage_patterns = []
         retry_patterns = []
 
-        # Scan for LLM calls using regex
+        # Issue #380: Scan for LLM calls using pre-compiled regex patterns
         lines = content.split("\n")
         for line_num, line in enumerate(lines, 1):
             for pattern, pattern_type in cls.LLM_CALL_PATTERNS:
-                if re.search(pattern, line, re.IGNORECASE):
+                if pattern.search(line):
                     usage_pattern = UsagePattern(
                         pattern_id=cls._generate_pattern_id(file_path, line_num),
                         pattern_type=pattern_type,
@@ -895,10 +914,10 @@ class CodePatternScanner:
                     )
                     usage_patterns.append(usage_pattern)
 
-        # Scan for retry patterns
+        # Issue #380: Scan for retry patterns using pre-compiled patterns
         for line_num, line in enumerate(lines, 1):
             for pattern in cls.RETRY_PATTERNS:
-                if re.search(pattern, line, re.IGNORECASE):
+                if pattern.search(line):
                     retry_pattern = RetryPattern(
                         pattern_id=cls._generate_pattern_id(file_path, line_num, "retry"),
                         file_path=str(file_path),
@@ -950,16 +969,9 @@ class CodePatternScanner:
         end = min(len(lines), line_num + 5)
         context = "\n".join(lines[start:end])
 
-        # Look for retry count patterns
-        patterns = [
-            r"max_retries\s*=\s*(\d+)",
-            r"retries\s*=\s*(\d+)",
-            r"tries\s*=\s*(\d+)",
-            r"range\((\d+)\)",
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, context)
+        # Issue #380: Use pre-compiled patterns for retry count extraction
+        for pattern in _RETRY_COUNT_PATTERNS:
+            match = pattern.search(context)
             if match:
                 return int(match.group(1))
 
@@ -1186,33 +1198,16 @@ class RecommendationEngine:
     Combines insights from all analyzers to produce actionable recommendations.
 
     Refactored to use data class methods (Issue #312)
+    Issue #281: Extracted helper methods for each recommendation category.
     """
 
     @classmethod
-    def generate_recommendations(
+    def _get_caching_recommendations(
         cls,
-        patterns: List[UsagePattern],
         cache_opportunities: List[CacheOpportunity],
-        batching_opportunities: List[BatchingOpportunity],
-        retry_patterns: List[RetryPattern],
-        cost_estimates: List[CostEstimate],
     ) -> List[OptimizationRecommendation]:
-        """
-        Generate optimization recommendations.
-
-        Args:
-            patterns: Usage patterns found
-            cache_opportunities: Caching opportunities
-            batching_opportunities: Batching opportunities
-            retry_patterns: Retry patterns
-            cost_estimates: Cost estimates
-
-        Returns:
-            List of optimization recommendations
-        """
+        """Generate caching recommendations from cache opportunities."""
         recommendations = []
-
-        # Caching recommendations - use CacheOpportunity methods
         for cache_opp in cache_opportunities:
             if cache_opp.should_implement():
                 rec = OptimizationRecommendation(
@@ -1227,95 +1222,126 @@ class RecommendationEngine:
                     effort=cache_opp.implementation_effort,
                 )
                 recommendations.append(rec)
+        return recommendations
 
-        # Batching recommendations - use BatchingOpportunity methods
+    @classmethod
+    def _get_batching_recommendations(
+        cls,
+        batching_opportunities: List[BatchingOpportunity],
+    ) -> List[OptimizationRecommendation]:
+        """Generate batching recommendations from batching opportunities."""
         significant_batching = [b for b in batching_opportunities if b.is_significant()]
-        if significant_batching:
-            files = list(set(b.file_path for b in significant_batching))
-            rec = OptimizationRecommendation(
-                recommendation_id="rec_batching_001",
-                category=OptimizationCategory.BATCHING,
-                priority=OptimizationPriority.MEDIUM,
-                title="Batch similar LLM calls",
-                description=f"Found {len(significant_batching)} opportunities to batch LLM calls",
-                impact="~1.5x throughput improvement, reduced latency",
-                implementation_steps=[
-                    "Collect similar requests into batches",
-                    "Use async parallel processing",
-                    "Implement request deduplication",
-                    "Add batch size limits",
-                ],
-                estimated_savings_percent=20.0,
-                effort="medium",
-                affected_files=files[:5],
-            )
-            recommendations.append(rec)
+        if not significant_batching:
+            return []
 
-        # Retry strategy recommendations - use RetryPattern methods
+        files = list(set(b.file_path for b in significant_batching))
+        return [OptimizationRecommendation(
+            recommendation_id="rec_batching_001",
+            category=OptimizationCategory.BATCHING,
+            priority=OptimizationPriority.MEDIUM,
+            title="Batch similar LLM calls",
+            description=f"Found {len(significant_batching)} opportunities to batch LLM calls",
+            impact="~1.5x throughput improvement, reduced latency",
+            implementation_steps=[
+                "Collect similar requests into batches",
+                "Use async parallel processing",
+                "Implement request deduplication",
+                "Add batch size limits",
+            ],
+            estimated_savings_percent=20.0,
+            effort="medium",
+            affected_files=files[:5],
+        )]
+
+    @classmethod
+    def _get_retry_recommendations(
+        cls,
+        retry_patterns: List[RetryPattern],
+    ) -> List[OptimizationRecommendation]:
+        """Generate retry strategy recommendations from retry patterns."""
         suboptimal_retries = [r for r in retry_patterns if not r.is_optimal()]
-        if suboptimal_retries:
-            # Aggregate recommendations from all patterns
-            all_recs = []
-            for retry_pat in suboptimal_retries:
-                all_recs.extend(retry_pat.get_optimization_recommendations())
+        if not suboptimal_retries:
+            return []
 
-            rec = OptimizationRecommendation(
-                recommendation_id="rec_retry_001",
-                category=OptimizationCategory.RETRY_STRATEGY,
-                priority=OptimizationPriority.HIGH,
-                title="Optimize retry strategies",
-                description=f"Found {len(suboptimal_retries)} suboptimal retry patterns",
-                impact="Reduced latency, better error handling",
-                implementation_steps=list(set(all_recs)),  # Deduplicate
-                estimated_savings_percent=10.0,
-                effort="low",
-                affected_files=list(set(r.file_path for r in suboptimal_retries))[:5],
-            )
-            recommendations.append(rec)
+        # Aggregate recommendations from all patterns
+        all_recs = []
+        for retry_pat in suboptimal_retries:
+            all_recs.extend(retry_pat.get_optimization_recommendations())
 
-        # Token optimization recommendations - use UsagePattern methods
+        return [OptimizationRecommendation(
+            recommendation_id="rec_retry_001",
+            category=OptimizationCategory.RETRY_STRATEGY,
+            priority=OptimizationPriority.HIGH,
+            title="Optimize retry strategies",
+            description=f"Found {len(suboptimal_retries)} suboptimal retry patterns",
+            impact="Reduced latency, better error handling",
+            implementation_steps=list(set(all_recs)),  # Deduplicate
+            estimated_savings_percent=10.0,
+            effort="low",
+            affected_files=list(set(r.file_path for r in suboptimal_retries))[:5],
+        )]
+
+    @classmethod
+    def _get_token_recommendations(
+        cls,
+        patterns: List[UsagePattern],
+    ) -> List[OptimizationRecommendation]:
+        """Generate token optimization recommendations from usage patterns."""
         high_token_patterns = [p for p in patterns if p.is_high_token_usage()]
-        if high_token_patterns:
-            rec = OptimizationRecommendation(
-                recommendation_id="rec_tokens_001",
-                category=OptimizationCategory.TOKEN_OPTIMIZATION,
-                priority=OptimizationPriority.MEDIUM,
-                title="Reduce token usage in prompts",
-                description=f"Found {len(high_token_patterns)} high-token patterns",
-                impact="15-30% cost reduction per call",
-                implementation_steps=[
-                    "Review and compress system prompts",
-                    "Remove redundant instructions",
-                    "Use structured output formats",
-                    "Implement context window management",
-                ],
-                estimated_savings_percent=25.0,
-                effort="medium",
-            )
-            recommendations.append(rec)
+        if not high_token_patterns:
+            return []
 
-        # Model selection recommendations - use CostEstimate methods
+        return [OptimizationRecommendation(
+            recommendation_id="rec_tokens_001",
+            category=OptimizationCategory.TOKEN_OPTIMIZATION,
+            priority=OptimizationPriority.MEDIUM,
+            title="Reduce token usage in prompts",
+            description=f"Found {len(high_token_patterns)} high-token patterns",
+            impact="15-30% cost reduction per call",
+            implementation_steps=[
+                "Review and compress system prompts",
+                "Remove redundant instructions",
+                "Use structured output formats",
+                "Implement context window management",
+            ],
+            estimated_savings_percent=25.0,
+            effort="medium",
+        )]
+
+    @classmethod
+    def _get_model_selection_recommendations(
+        cls,
+        patterns: List[UsagePattern],
+        cost_estimates: List[CostEstimate],
+    ) -> List[OptimizationRecommendation]:
+        """Generate model selection recommendations from cost estimates."""
         expensive_models = [e for e in cost_estimates if e.is_expensive_model()]
-        if expensive_models and len(patterns) > 5:
-            rec = OptimizationRecommendation(
-                recommendation_id="rec_model_001",
-                category=OptimizationCategory.MODEL_SELECTION,
-                priority=OptimizationPriority.HIGH,
-                title="Use appropriate models for task complexity",
-                description="Consider cheaper models for simple tasks",
-                impact="50-80% cost reduction for eligible tasks",
-                implementation_steps=[
-                    "Classify tasks by complexity",
-                    "Route simple tasks to smaller models",
-                    "Implement model fallback chain",
-                    "A/B test quality vs cost tradeoffs",
-                ],
-                estimated_savings_percent=40.0,
-                effort="high",
-            )
-            recommendations.append(rec)
+        if not expensive_models or len(patterns) <= 5:
+            return []
 
-        # Sort by priority
+        return [OptimizationRecommendation(
+            recommendation_id="rec_model_001",
+            category=OptimizationCategory.MODEL_SELECTION,
+            priority=OptimizationPriority.HIGH,
+            title="Use appropriate models for task complexity",
+            description="Consider cheaper models for simple tasks",
+            impact="50-80% cost reduction for eligible tasks",
+            implementation_steps=[
+                "Classify tasks by complexity",
+                "Route simple tasks to smaller models",
+                "Implement model fallback chain",
+                "A/B test quality vs cost tradeoffs",
+            ],
+            estimated_savings_percent=40.0,
+            effort="high",
+        )]
+
+    @classmethod
+    def _sort_by_priority(
+        cls,
+        recommendations: List[OptimizationRecommendation],
+    ) -> List[OptimizationRecommendation]:
+        """Sort recommendations by priority order."""
         priority_order = {
             OptimizationPriority.CRITICAL: 0,
             OptimizationPriority.HIGH: 1,
@@ -1324,8 +1350,39 @@ class RecommendationEngine:
             OptimizationPriority.INFO: 4,
         }
         recommendations.sort(key=lambda r: priority_order[r.priority])
-
         return recommendations
+
+    @classmethod
+    def generate_recommendations(
+        cls,
+        patterns: List[UsagePattern],
+        cache_opportunities: List[CacheOpportunity],
+        batching_opportunities: List[BatchingOpportunity],
+        retry_patterns: List[RetryPattern],
+        cost_estimates: List[CostEstimate],
+    ) -> List[OptimizationRecommendation]:
+        """
+        Generate optimization recommendations.
+
+        Issue #281: Refactored from 137 lines to use extracted helper methods.
+
+        Args:
+            patterns: Usage patterns found
+            cache_opportunities: Caching opportunities
+            batching_opportunities: Batching opportunities
+            retry_patterns: Retry patterns
+            cost_estimates: Cost estimates
+
+        Returns:
+            List of optimization recommendations sorted by priority
+        """
+        recommendations = []
+        recommendations.extend(cls._get_caching_recommendations(cache_opportunities))
+        recommendations.extend(cls._get_batching_recommendations(batching_opportunities))
+        recommendations.extend(cls._get_retry_recommendations(retry_patterns))
+        recommendations.extend(cls._get_token_recommendations(patterns))
+        recommendations.extend(cls._get_model_selection_recommendations(patterns, cost_estimates))
+        return cls._sort_by_priority(recommendations)
 
 
 # =============================================================================

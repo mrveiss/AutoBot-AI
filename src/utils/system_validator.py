@@ -24,6 +24,10 @@ config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants
 
 
+# Issue #380: Module-level tuple for expected system metrics
+_EXPECTED_SYSTEM_METRICS = ("cpu_percent", "memory_percent", "disk_usage")
+
+
 class ValidationSeverity(Enum):
     """Validation result severity levels"""
 
@@ -316,22 +320,21 @@ class SystemValidator:
     def _validate_system_metrics_result(
         self, component: str, system_metrics: Dict, collection_time: float
     ) -> None:
-        """Validate system metrics collection result (Issue #333 - extracted helper)."""
-        expected_metrics = ["cpu_percent", "memory_percent", "disk_usage"]
-        found_metrics = [name for name in expected_metrics if name in system_metrics]
+        """Validate system metrics collection result (Issue #380: use module constant)."""
+        found_metrics = [name for name in _EXPECTED_SYSTEM_METRICS if name in system_metrics]
 
-        if len(found_metrics) != len(expected_metrics):
+        if len(found_metrics) != len(_EXPECTED_SYSTEM_METRICS):
             self._add_result(
                 component, "System Metrics", ValidationSeverity.WARNING, False,
-                f"Missing system metrics: {len(found_metrics)}/{len(expected_metrics)}",
-                {"found_metrics": found_metrics, "expected_metrics": expected_metrics},
+                f"Missing system metrics: {len(found_metrics)}/{len(_EXPECTED_SYSTEM_METRICS)}",
+                {"found_metrics": found_metrics, "expected_metrics": list(_EXPECTED_SYSTEM_METRICS)},
             )
             return
 
         severity = ValidationSeverity.SUCCESS if collection_time < 1000 else ValidationSeverity.WARNING
         self._add_result(
             component, "System Metrics", severity, True,
-            f"All system metrics collected: {len(found_metrics)}/{len(expected_metrics)}",
+            f"All system metrics collected: {len(found_metrics)}/{len(_EXPECTED_SYSTEM_METRICS)}",
             {"collection_time_ms": collection_time, "metrics": list(system_metrics.keys())},
             collection_time,
         )

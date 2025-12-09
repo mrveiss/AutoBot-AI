@@ -20,6 +20,9 @@ from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for noise indicators in false positive detection
+_NOISE_INDICATORS = ("said", "mentioned", "talking about", "the word", "called")
+
 
 class WakeWordState(Enum):
     """Wake word detection states"""
@@ -114,7 +117,7 @@ class WakeWordDetector:
     def add_wake_word(self, wake_word: str) -> bool:
         """Add a new wake word to detection list"""
         wake_word_lower = wake_word.lower().strip()
-        if wake_word_lower not in [w.lower() for w in self.config.wake_words]:
+        if wake_word_lower not in {w.lower() for w in self.config.wake_words}:
             self.config.wake_words.append(wake_word_lower)
             self._adaptive_thresholds[wake_word_lower] = (
                 self.config.confidence_threshold
@@ -293,9 +296,8 @@ class WakeWordDetector:
         elif text_ratio > 0.8:  # Wake word is most of text (ideal)
             confidence *= 1.1
 
-        # Penalty for noise words that indicate normal conversation
-        noise_indicators = ["said", "mentioned", "talking about", "the word", "called"]
-        for noise in noise_indicators:
+        # Penalty for noise words that indicate normal conversation (Issue #380)
+        for noise in _NOISE_INDICATORS:
             if noise in text:
                 confidence *= 0.5
                 break

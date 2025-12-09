@@ -28,6 +28,15 @@ _ANSI_CHARSET_RE = re.compile(r"\x1b[()][AB012]")  # Character sets
 _ANSI_BRACKET_RE = re.compile(r"\[[\?\d;]*[hlHJ]")  # Bracket sequences
 _ANSI_TITLE_RE = re.compile(r"\]0;[^\x07\n]*\x07?")  # Set title
 
+# Issue #380: Pre-compiled patterns for prompt detection
+_PROMPT_PATTERNS = [
+    re.compile(r"^\s*[\$#>%]\s*$", re.MULTILINE),
+    re.compile(r"└─[\$#>%]\s*$", re.MULTILINE),
+    re.compile(r"┌──.*┘\s*$", re.MULTILINE),
+    re.compile(r"^\(.*\).*[\$#>%]\s*$", re.MULTILINE),
+    re.compile(r"^.*@.*:.*[\$#>%]\s*$", re.MULTILINE),
+]
+
 
 def safe_decode(
     data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace"

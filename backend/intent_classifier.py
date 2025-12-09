@@ -23,6 +23,9 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level frozenset for acknowledgment word detection
+_ACKNOWLEDGMENT_WORDS = frozenset({"ok", "okay", "yes", "no", "sure", "thanks", "thank you"})
+
 
 class ConversationIntent(Enum):
     """Intent categories for conversation management"""
@@ -237,6 +240,130 @@ class IntentClassifier:
             message, message_lower, words, signals, conversation_history
         )
 
+    def _check_exit_phrase_intent(
+        self, signals: Dict[str, bool]
+    ) -> Optional[IntentClassification]:
+        """
+        Check if exit phrase signals indicate END or CONTINUE intent.
+
+        Issue #281: Extracted helper for exit phrase rule.
+
+        Args:
+            signals: Detected signals dictionary
+
+        Returns:
+            IntentClassification if exit phrase detected, None otherwise
+        """
+        if not signals["has_exit_phrase"]:
+            return None
+
+        # Exit phrase as question = clarification
+        if signals["has_question_mark"]:
+            return IntentClassification(
+                intent=ConversationIntent.CLARIFICATION,
+                confidence=0.85,
+                reasoning=(
+                    "Exit phrase detected but in question form - "
+                    "user asking about exiting"
+                ),
+                signals=signals,
+            )
+
+        # Exit phrase with continuation context = continue
+        if signals["has_continuation_word"]:
+            return IntentClassification(
+                intent=ConversationIntent.CONTINUE,
+                confidence=0.90,
+                reasoning="Exit word present but continuation context detected",
+                signals=signals,
+            )
+
+        # Clear exit intent
+        return IntentClassification(
+            intent=ConversationIntent.END,
+            confidence=0.95,
+            reasoning="Explicit exit phrase detected without question context",
+            signals=signals,
+        )
+
+    def _check_question_intent(
+        self, signals: Dict[str, bool]
+    ) -> Optional[IntentClassification]:
+        """
+        Check if question signals indicate CLARIFICATION or CONTINUE intent.
+
+        Issue #281: Extracted helper for question rule.
+
+        Args:
+            signals: Detected signals dictionary
+
+        Returns:
+            IntentClassification if question detected, None otherwise
+        """
+        if not (signals["has_question_mark"] or signals["starts_with_question_word"]):
+            return None
+
+        if signals["has_clarification_word"]:
+            return IntentClassification(
+                intent=ConversationIntent.CLARIFICATION,
+                confidence=0.90,
+                reasoning="Question with clarification indicators",
+                signals=signals,
+            )
+
+        return IntentClassification(
+            intent=ConversationIntent.CONTINUE,
+            confidence=0.90,
+            reasoning="Question detected - user wants information",
+            signals=signals,
+        )
+
+    def _check_short_message_intent(
+        self,
+        words: List[str],
+        signals: Dict[str, bool],
+        conversation_history: Optional[List[Dict[str, str]]],
+    ) -> Optional[IntentClassification]:
+        """
+        Check if short message context indicates continuation intent.
+
+        Issue #281: Extracted helper for short message rule.
+
+        Args:
+            words: List of words in message
+            signals: Detected signals dictionary
+            conversation_history: Previous conversation messages
+
+        Returns:
+            IntentClassification if short message pattern detected, None otherwise
+        """
+        if not signals["is_very_short"]:
+            return None
+
+        # Check if responding to assistant's question
+        if conversation_history and len(conversation_history) > 0:
+            last_msg = conversation_history[-1]
+            if last_msg.get("role") == "assistant" and "?" in last_msg.get(
+                "content", ""
+            ):
+                return IntentClassification(
+                    intent=ConversationIntent.CONTINUE,
+                    confidence=0.75,
+                    reasoning="Short response to assistant's question",
+                    signals=signals,
+                )
+
+        # Single word acknowledgments - Issue #380: use module constant
+        if len(words) == 1 and words[0] in _ACKNOWLEDGMENT_WORDS:
+            return IntentClassification(
+                intent=ConversationIntent.CONTINUE,
+                confidence=0.70,
+                reasoning="Acknowledgment - likely continuing conversation",
+                signals=signals,
+            )
+
+        return None
+
     def _classify_from_signals(
         self,
         message: str,
@@ -245,53 +372,32 @@ class IntentClassifier:
         signals: Dict[str, bool],
         conversation_history: Optional[List[Dict[str, str]]],
     ) -> IntentClassification:
-        """Internal classification logic based on detected signals"""
+        """
+        Internal classification logic based on detected signals.
 
+        Issue #281: Refactored from 123 lines to use extracted helper methods.
+
+        Args:
+            message: Original message
+            message_lower: Lowercased message
+            words: List of words in message
+            signals: Detected signals dictionary
+            conversation_history: Previous conversation messages
+
+        Returns:
+            IntentClassification with intent, confidence, and reasoning
+        """
         # RULE 1: Check for explicit exit phrases (highest priority)
-        if signals["has_exit_phrase"]:
-            # But NOT if it's a question about exiting
-            if signals["has_question_mark"]:
-                return IntentClassification(
-                    intent=ConversationIntent.CLARIFICATION,
-                    confidence=0.85,
-                    reasoning=(
-                        "Exit phrase detected but in question form -"
-                        "user asking about exiting"
-                    ),
-                    signals=signals,
-                )
-
-            # Check if exit phrase is actually part of larger context
-            if signals["has_continuation_word"]:
-                return IntentClassification(
-                    intent=ConversationIntent.CONTINUE,
-                    confidence=0.90,
-                    reasoning="Exit word present but continuation context detected",
-                    signals=signals,
-                )
-
-            return IntentClassification(
-                intent=ConversationIntent.END,
-                confidence=0.95,
-                reasoning="Explicit exit phrase detected without question context",
-                signals=signals,
-            )
+        # Issue #281: uses helper
+        exit_result = self._check_exit_phrase_intent(signals)
+        if exit_result:
+            return exit_result
 
         # RULE 2: Question indicators (high priority for continuation)
-        if signals["has_question_mark"] or signals["starts_with_question_word"]:
-            if signals["has_clarification_word"]:
-                return IntentClassification(
-                    intent=ConversationIntent.CLARIFICATION,
-                    confidence=0.90,
-                    reasoning="Question with clarification indicators",
-                    signals=signals,
-                )
-            return IntentClassification(
-                intent=ConversationIntent.CONTINUE,
-                confidence=0.90,
-                reasoning="Question detected - user wants information",
-                signals=signals,
-            )
+        # Issue #281: uses helper
+        question_result = self._check_question_intent(signals)
+        if question_result:
+            return question_result
 
         # RULE 3: Task request indicators
         if signals["has_task_word"]:
@@ -312,37 +418,12 @@ class IntentClassifier:
             )
 
         # RULE 5: Very short messages - likely acknowledgment or continuation
-        if signals["is_very_short"]:
-            # Check conversation history for context
-            if conversation_history and len(conversation_history) > 0:
-                # If assistant just asked a question, user is probably responding
-                last_msg = conversation_history[-1]
-                if last_msg.get("role") == "assistant" and "?" in last_msg.get(
-                    "content", ""
-                ):
-                    return IntentClassification(
-                        intent=ConversationIntent.CONTINUE,
-                        confidence=0.75,
-                        reasoning="Short response to assistant's question",
-                        signals=signals,
-                    )
-
-            # Single word greetings/acknowledgments
-            if len(words) == 1 and words[0] in {
-                "ok",
-                "okay",
-                "yes",
-                "no",
-                "sure",
-                "thanks",
-                "thank you",
-            }:
-                return IntentClassification(
-                    intent=ConversationIntent.CONTINUE,
-                    confidence=0.70,
-                    reasoning="Acknowledgment - likely continuing conversation",
-                    signals=signals,
-                )
+        # Issue #281: uses helper
+        short_msg_result = self._check_short_message_intent(
+            words, signals, conversation_history
+        )
+        if short_msg_result:
+            return short_msg_result
 
         # RULE 6: Continuation words indicate ongoing conversation
         if signals["has_continuation_word"]:

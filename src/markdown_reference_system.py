@@ -19,6 +19,15 @@ from src.enhanced_memory_manager import EnhancedMemoryManager
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for markdown parsing
+_WORD_RE = re.compile(r"\b\w+\b")
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
+_TAGS_RE = re.compile(r"tags:\s*\[(.*?)\]")
+_INLINE_TAGS_RE = re.compile(r"#(\w+)")
+_HEADER_RE = re.compile(r"^(#{1,6})\s+(.+)")
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+_MD_FILE_MENTION_RE = re.compile(r"(?:^|[\s`])([a-zA-Z0-9_/-]+\.md)(?=$|[\s`])")
+
 
 class MarkdownReferenceSystem:
     """
@@ -179,8 +188,8 @@ class MarkdownReferenceSystem:
         created_at = datetime.fromtimestamp(stat.st_ctime)
         last_modified = datetime.fromtimestamp(stat.st_mtime)
 
-        # Count words
-        word_count = len(re.findall(r"\b\w+\b", content))
+        # Count words using pre-compiled pattern (Issue #380)
+        word_count = len(_WORD_RE.findall(content))
 
         # Extract tags from content (look for tags in frontmatter or special comments)
         tags = self._extract_tags(content)
@@ -243,21 +252,21 @@ class MarkdownReferenceSystem:
         }
 
     def _extract_tags(self, content: str) -> List[str]:
-        """Extract tags from markdown content"""
+        """Extract tags from markdown content using pre-compiled patterns (Issue #380)"""
         tags = set()
 
         # Look for YAML frontmatter tags
-        frontmatter_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+        frontmatter_match = _FRONTMATTER_RE.match(content)
         if frontmatter_match:
             frontmatter = frontmatter_match.group(1)
             # Simple tag extraction from YAML
-            tag_matches = re.findall(r"tags:\s*\[(.*?)\]", frontmatter)
+            tag_matches = _TAGS_RE.findall(frontmatter)
             for tag_list in tag_matches:
                 for tag in tag_list.split(","):
                     tags.add(tag.strip().strip("\"'"))
 
         # Look for inline tags (e.g., #tag)
-        inline_tags = re.findall(r"#(\w+)", content)
+        inline_tags = _INLINE_TAGS_RE.findall(content)
         tags.update(inline_tags)
 
         return sorted(list(tags))
@@ -277,8 +286,8 @@ class MarkdownReferenceSystem:
         sections = []
 
         for line_num, line in enumerate(lines, 1):
-            # Check for headers
-            header_match = re.match(r"^(#{1,6})\s+(.+)", line.strip())
+            # Check for headers using pre-compiled pattern (Issue #380)
+            header_match = _HEADER_RE.match(line.strip())
             if header_match:
                 # Save previous section if exists
                 if current_section:
@@ -366,8 +375,8 @@ class MarkdownReferenceSystem:
         lines = content.split("\n")
 
         for line_num, line in enumerate(lines, 1):
-            # Find markdown links [text](url)
-            link_matches = re.findall(r"\[([^\]]*)\]\(([^)]+)\)", line)
+            # Find markdown links [text](url) using pre-compiled pattern (Issue #380)
+            link_matches = _MARKDOWN_LINK_RE.findall(line)
             for link_text, link_url in link_matches:
                 # Check if it's a reference to another markdown file
                 if link_url.endswith(".md") or "/docs/" in link_url:
@@ -393,10 +402,8 @@ class MarkdownReferenceSystem:
                             ),
                         )
 
-            # Find file mentions (looking for .md files mentioned in text)
-            file_mentions = re.findall(
-                r"(?:^|[\s`])([a-zA-Z0-9_/-]+\.md)(?=$|[\s`])", line
-            )
+            # Find file mentions using pre-compiled pattern (Issue #380)
+            file_mentions = _MD_FILE_MENTION_RE.findall(line)
             for mentioned_file in file_mentions:
                 target_file = self._resolve_markdown_reference(
                     mentioned_file, source_file, all_files

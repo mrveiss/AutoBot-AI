@@ -47,6 +47,19 @@ class LogLevel(Enum):
     CRITICAL = "critical"
 
 
+# Module-level constants for repeated level checks (Issue #380)
+_ERROR_CRITICAL_LEVELS = (LogLevel.ERROR, LogLevel.CRITICAL)
+_ERROR_CRITICAL_WARNING_LEVELS = (LogLevel.ERROR, LogLevel.CRITICAL, LogLevel.WARNING)
+
+# Pre-compiled regex patterns for _normalize_error_message() (Issue #380)
+# Called per error entry, so pre-compilation avoids repeated compilation
+_NORMALIZE_TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")
+_NORMALIZE_ID_RE = re.compile(r"[a-f0-9]{24,}")
+_NORMALIZE_IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+_NORMALIZE_PATH_RE = re.compile(r"[/\\][\w/\\.-]+\.\w+")
+_NORMALIZE_NUMBER_RE = re.compile(r"\b\d+\b")
+
+
 class PatternType(Enum):
     """Types of detected patterns."""
 
@@ -536,7 +549,7 @@ class LogPatternMiner:
         """Extract recurring error patterns."""
         error_entries = [
             e for e in self.entries
-            if e.level in (LogLevel.ERROR, LogLevel.CRITICAL, LogLevel.WARNING)
+            if e.level in _ERROR_CRITICAL_WARNING_LEVELS
         ]
 
         if not error_entries:
@@ -689,7 +702,7 @@ class LogPatternMiner:
             if entry.duration_ms:
                 session.total_duration_ms += entry.duration_ms
 
-            if entry.level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            if entry.level in _ERROR_CRITICAL_LEVELS:
                 session.errors.append(entry.message[:100])
 
         # Create session flow patterns for sessions with errors
@@ -755,7 +768,7 @@ class LogPatternMiner:
         for entry in self.entries:
             hour_key = entry.timestamp.strftime("%Y-%m-%d %H:00")
             hourly_total[hour_key] += 1
-            if entry.level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            if entry.level in _ERROR_CRITICAL_LEVELS:
                 hourly_errors[hour_key] += 1
 
         if len(hourly_errors) >= 3:
@@ -786,18 +799,12 @@ class LogPatternMiner:
 
     def _normalize_error_message(self, message: str) -> str:
         """Normalize error message by removing variable parts."""
-        # Remove timestamps
-        normalized = re.sub(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", "<TIMESTAMP>", message)
-        # Remove IDs and hashes
-        normalized = re.sub(r"[a-f0-9]{24,}", "<ID>", normalized)
-        # Remove IP addresses
-        normalized = re.sub(
-            r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "<IP>", normalized
-        )
-        # Remove file paths
-        normalized = re.sub(r"[/\\][\w/\\.-]+\.\w+", "<PATH>", normalized)
-        # Remove numbers
-        normalized = re.sub(r"\b\d+\b", "<NUM>", normalized)
+        # Use pre-compiled patterns (Issue #380)
+        normalized = _NORMALIZE_TIMESTAMP_RE.sub("<TIMESTAMP>", message)
+        normalized = _NORMALIZE_ID_RE.sub("<ID>", normalized)
+        normalized = _NORMALIZE_IP_RE.sub("<IP>", normalized)
+        normalized = _NORMALIZE_PATH_RE.sub("<PATH>", normalized)
+        normalized = _NORMALIZE_NUMBER_RE.sub("<NUM>", normalized)
 
         return normalized
 
@@ -828,7 +835,7 @@ class LogPatternMiner:
         """Generate analysis summary."""
         critical_patterns = [
             p for p in self.patterns
-            if p.severity in (LogLevel.ERROR, LogLevel.CRITICAL)
+            if p.severity in _ERROR_CRITICAL_LEVELS
         ]
         warning_patterns = [
             p for p in self.patterns if p.severity == LogLevel.WARNING
@@ -863,7 +870,7 @@ class LogPatternMiner:
         # Deduct for errors
         error_rate = sum(
             1 for e in self.entries
-            if e.level in (LogLevel.ERROR, LogLevel.CRITICAL)
+            if e.level in _ERROR_CRITICAL_LEVELS
         ) / len(self.entries)
         score -= min(30, error_rate * 100)
 

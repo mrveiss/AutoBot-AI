@@ -37,6 +37,15 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for code generation
+_DEF_FUNCTION_RE = re.compile(r"\s*def\s+(\w+)")
+_TYPE_HINT_SUB_RE = re.compile(r"def (\w+)\((.*?)\):")
+_CODE_BLOCK_RE = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
+
+# Issue #380: Module-level tuples for AST type checking
+_MUTABLE_DEFAULT_TYPES = (ast.List, ast.Dict, ast.Set)
+_CONTROL_FLOW_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
+
 
 # =============================================================================
 # Enums
@@ -313,7 +322,7 @@ class CodeValidator:
         if not isinstance(child, ast.FunctionDef):
             return
         for default in child.args.defaults:
-            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+            if isinstance(default, _MUTABLE_DEFAULT_TYPES):  # Issue #380
                 warnings.append(
                     f"Function '{child.name}' has mutable default argument"
                 )
@@ -340,7 +349,7 @@ class CodeValidator:
             Complexity value for this node
         """
         # Decision points that add 1 to complexity
-        if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+        if isinstance(child, _CONTROL_FLOW_TYPES):  # Issue #380
             return 1.0
         # Boolean operators add (n-1) for n operands
         if isinstance(child, ast.BoolOp):
@@ -807,11 +816,119 @@ class LLMCodeGenerator:
         content = f"{request.refactoring_type.value}:{request.context.code_snippet}"
         return hashlib.md5(content.encode()).hexdigest()
 
+    def _get_cached_result(
+        self,
+        request: RefactoringRequest,
+        request_id: str,
+        cache_key: str,
+    ) -> Optional[RefactoringResult]:
+        """
+        Check cache and return cached result if available.
+
+        Issue #281: Extracted helper for cache lookup.
+
+        Args:
+            request: The refactoring request
+            request_id: Generated request ID
+            cache_key: Cache key for the request
+
+        Returns:
+            Cached RefactoringResult if available, None otherwise
+        """
+        if cache_key in self._cache:
+            cached = self._cache[cache_key]
+            return RefactoringResult(
+                request_id=request_id,
+                status=GenerationStatus.SUCCESS,
+                request=request,
+                generated_code=cached,
+                rollback_code=request.context.code_snippet,
+            )
+        return None
+
+    def _validate_and_check_behavior(
+        self, code: str, request: RefactoringRequest
+    ) -> ValidationResult:
+        """
+        Validate generated code and check behavior preservation.
+
+        Issue #281: Extracted helper for validation logic.
+
+        Args:
+            code: Generated code to validate
+            request: Original refactoring request
+
+        Returns:
+            ValidationResult with any warnings
+        """
+        if self.validate_output:
+            validation = CodeValidator.validate(code)
+        else:
+            validation = ValidationResult(
+                status=ValidationStatus.UNKNOWN,
+                is_valid=True,
+            )
+
+        if self.preserve_behavior and validation.is_valid:
+            preserved, differences = CodeValidator.compare_behavior(
+                request.context.code_snippet, code
+            )
+            if not preserved:
+                validation.warnings.extend(
+                    [f"Behavior change: {d}" for d in differences]
+                )
+
+        return validation
+
+    def _build_generated_code(
+        self,
+        code: str,
+        request: RefactoringRequest,
+        validation: ValidationResult,
+        generated_text: str,
+        generation_time: float,
+    ) -> GeneratedCode:
+        """
+        Build GeneratedCode object from generation results.
+
+        Issue #281: Extracted helper for result building.
+
+        Args:
+            code: Generated code
+            request: Original request
+            validation: Validation result
+            generated_text: Raw LLM response
+            generation_time: Time taken in ms
+
+        Returns:
+            GeneratedCode object
+        """
+        diff = DiffGenerator.generate_diff(
+            request.context.code_snippet,
+            code,
+            request.context.file_path,
+        )
+        confidence = self._calculate_confidence(validation, generated_text)
+
+        return GeneratedCode(
+            code=code,
+            refactoring_type=request.refactoring_type,
+            validation=validation,
+            original_code=request.context.code_snippet,
+            diff=diff,
+            explanation=self._extract_explanation(generated_text),
+            confidence_score=confidence,
+            generation_time_ms=generation_time,
+            model_used=self.model_name,
+        )
+
     async def generate(
         self, request: RefactoringRequest
     ) -> RefactoringResult:
         """
         Generate refactored code based on the request.
+
+        Issue #281: Refactored from 113 lines to use extracted helper methods.
 
         Args:
             request: The refactoring request
@@ -822,74 +939,30 @@ class LLMCodeGenerator:
         import time
         start_time = time.time()
         request_id = await self._generate_request_id()
-
-        # Check cache
         cache_key = self._get_cache_key(request)
-        if cache_key in self._cache:
-            cached = self._cache[cache_key]
-            return RefactoringResult(
-                request_id=request_id,
-                status=GenerationStatus.SUCCESS,
-                request=request,
-                generated_code=cached,
-                rollback_code=request.context.code_snippet,
-            )
+
+        # Check cache (Issue #281: uses helper)
+        cached_result = self._get_cached_result(request, request_id, cache_key)
+        if cached_result:
+            return cached_result
 
         try:
-            # Format the prompt
+            # Format the prompt and call LLM
             system_prompt, user_prompt = self._format_prompt(request)
-
-            # Call LLM
             if self.llm_client:
                 generated_text = await self._call_llm(system_prompt, user_prompt)
             else:
-                # Mock response for testing
                 generated_text = self._mock_generate(request)
 
             generation_time = (time.time() - start_time) * 1000
-
-            # Extract code from response
             code = self._extract_code(generated_text)
 
-            # Validate the generated code
-            if self.validate_output:
-                validation = CodeValidator.validate(code)
-            else:
-                validation = ValidationResult(
-                    status=ValidationStatus.UNKNOWN,
-                    is_valid=True,
-                )
+            # Validate code (Issue #281: uses helper)
+            validation = self._validate_and_check_behavior(code, request)
 
-            # Check behavior preservation
-            if self.preserve_behavior and validation.is_valid:
-                preserved, differences = CodeValidator.compare_behavior(
-                    request.context.code_snippet, code
-                )
-                if not preserved:
-                    validation.warnings.extend(
-                        [f"Behavior change: {d}" for d in differences]
-                    )
-
-            # Generate diff
-            diff = DiffGenerator.generate_diff(
-                request.context.code_snippet,
-                code,
-                request.context.file_path,
-            )
-
-            # Calculate confidence score
-            confidence = self._calculate_confidence(validation, generated_text)
-
-            generated_code = GeneratedCode(
-                code=code,
-                refactoring_type=request.refactoring_type,
-                validation=validation,
-                original_code=request.context.code_snippet,
-                diff=diff,
-                explanation=self._extract_explanation(generated_text),
-                confidence_score=confidence,
-                generation_time_ms=generation_time,
-                model_used=self.model_name,
+            # Build generated code object (Issue #281: uses helper)
+            generated_code = self._build_generated_code(
+                code, request, validation, generated_text, generation_time
             )
 
             # Cache successful results
@@ -973,7 +1046,7 @@ class LLMCodeGenerator:
                 result.append(line)
                 if line.strip().startswith("def "):
                     # Extract function name
-                    match = re.match(r"\s*def\s+(\w+)", line)
+                    match = _DEF_FUNCTION_RE.match(line)
                     if match:
                         func_name = match.group(1)
                         indent = len(line) - len(line.lstrip()) + 4
@@ -983,16 +1056,15 @@ class LLMCodeGenerator:
 
         elif request.refactoring_type == RefactoringType.ADD_TYPE_HINTS:
             # Simple type hint addition (mock)
-            code = re.sub(r"def (\w+)\((.*?)\):", r"def \1(\2) -> None:", code)
+            code = _TYPE_HINT_SUB_RE.sub(r"def \1(\2) -> None:", code)
             return "```python\n" + code + "\n```"
 
         return "```python\n" + code + "\n```"
 
     def _extract_code(self, response: str) -> str:
         """Extract code from LLM response."""
-        # Try to find code block
-        code_block_pattern = r"```(?:python)?\s*\n(.*?)```"
-        matches = re.findall(code_block_pattern, response, re.DOTALL)
+        # Try to find code block (Issue #380: use pre-compiled pattern)
+        matches = _CODE_BLOCK_RE.findall(response)
 
         if matches:
             return matches[0].strip()
