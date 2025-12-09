@@ -18,6 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class CircuitBreakerState(Enum):
 class CircuitBreaker:
     """Circuit breaker for web research services (thread-safe)"""
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = TimingConstants.STANDARD_TIMEOUT):
         """Initialize circuit breaker with failure threshold and recovery timeout."""
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -176,13 +177,13 @@ class WebResearchIntegration:
         # Initialize circuit breakers for different research methods
         self.circuit_breakers = {
             ResearchType.BASIC: CircuitBreaker(
-                failure_threshold=3, recovery_timeout=30
+                failure_threshold=3, recovery_timeout=TimingConstants.SHORT_TIMEOUT
             ),
             ResearchType.ADVANCED: CircuitBreaker(
-                failure_threshold=5, recovery_timeout=60
+                failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT
             ),
             ResearchType.API_BASED: CircuitBreaker(
-                failure_threshold=2, recovery_timeout=45
+                failure_threshold=2, recovery_timeout=45  # Custom value between SHORT and STANDARD
             ),
         }
 
@@ -240,6 +241,92 @@ class WebResearchIntegration:
         logger.info("Web research disabled")
         return True
 
+    def _build_disabled_response(self, query: str) -> Dict[str, Any]:
+        """Build response for disabled state (Issue #281 - extracted helper)."""
+        return {
+            "status": "disabled",
+            "message": "Web research is disabled. Enable it in settings to use this feature.",
+            "query": query,
+            "results": [],
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def _build_rate_limited_response(self, query: str) -> Dict[str, Any]:
+        """Build response for rate limited state (Issue #281 - extracted helper)."""
+        return {
+            "status": "rate_limited",
+            "message": "Too many research requests. Please wait and try again.",
+            "query": query,
+            "results": [],
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def _build_failure_response(
+        self, query: str, methods_tried: List[ResearchType], last_error: Optional[str]
+    ) -> Dict[str, Any]:
+        """Build response for all methods failed (Issue #281 - extracted helper)."""
+        return {
+            "status": "failed",
+            "message": f"All research methods failed. Last error: {last_error}",
+            "query": query,
+            "results": [],
+            "methods_tried": [m.value for m in methods_tried],
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def _get_fallback_methods(self, method: ResearchType) -> List[ResearchType]:
+        """Get list of methods to try with fallbacks (Issue #281 - extracted helper)."""
+        methods = [method]
+        if method != ResearchType.BASIC:
+            methods.append(ResearchType.BASIC)
+        if method != ResearchType.ADVANCED and ResearchType.ADVANCED not in methods:
+            methods.insert(-1, ResearchType.ADVANCED)
+        return methods
+
+    async def _try_research_method(
+        self,
+        research_method: ResearchType,
+        query: str,
+        max_res: int,
+        timeout_secs: int,
+        cache_key: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Try a single research method (Issue #281 - extracted helper).
+
+        Returns result dict on success, None on failure.
+        """
+        circuit_breaker = self.circuit_breakers[research_method]
+
+        if not circuit_breaker.can_execute():
+            logger.warning(f"Circuit breaker open for {research_method.value}, skipping")
+            return None
+
+        try:
+            logger.info(f"Attempting research using {research_method.value} method")
+            research_task = asyncio.create_task(
+                self._execute_research_method(research_method, query, max_res)
+            )
+            result = await asyncio.wait_for(research_task, timeout=timeout_secs)
+
+            circuit_breaker.call_succeeded()
+            result["method_used"] = research_method.value
+            result["timestamp"] = datetime.now().isoformat()
+
+            if result.get("status") == "success":
+                self._cache_result(cache_key, result)
+
+            logger.info(f"Research completed successfully using {research_method.value}")
+            return result
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Research timed out after {timeout_secs}s using {research_method.value}")
+            circuit_breaker.call_failed()
+        except Exception as e:
+            logger.error(f"Research failed using {research_method.value}: {str(e)}")
+            circuit_breaker.call_failed()
+
+        return None
+
     async def conduct_research(
         self,
         query: str,
@@ -250,27 +337,11 @@ class WebResearchIntegration:
         """
         Conduct web research using the best available method.
 
-        Args:
-            query: Search query
-            research_type: Preferred research method (optional)
-            max_results: Maximum number of results (optional)
-            timeout: Timeout in seconds (optional)
-
-        Returns:
-            Research results dictionary
+        Issue #281: Refactored to use extracted helpers.
         """
         if not self.enabled:
-            return {
-                "status": "disabled",
-                "message": (
-                    "Web research is disabled. Enable it in settings to use this feature."
-                ),
-                "query": query,
-                "results": [],
-                "timestamp": datetime.now().isoformat(),
-            }
+            return self._build_disabled_response(query)
 
-        # Check cache first
         cache_key = self._generate_cache_key(query, research_type, max_results)
         cached_result = self._get_cached_result(cache_key)
         if cached_result:
@@ -278,95 +349,22 @@ class WebResearchIntegration:
             cached_result["from_cache"] = True
             return cached_result
 
-        # Apply rate limiting
         if not await self.rate_limiter.acquire():
-            return {
-                "status": "rate_limited",
-                "message": "Too many research requests. Please wait and try again.",
-                "query": query,
-                "results": [],
-                "timestamp": datetime.now().isoformat(),
-            }
+            return self._build_rate_limited_response(query)
 
-        # Determine research method
         method = research_type or self.preferred_method
         max_res = max_results or self.max_results
         timeout_secs = timeout or self.timeout_seconds
-
-        # Try research with fallback methods
-        methods_to_try = [method]
-
-        # Add fallback methods if primary fails
-        if method != ResearchType.BASIC:
-            methods_to_try.append(ResearchType.BASIC)
-        if (
-            method != ResearchType.ADVANCED
-            and ResearchType.ADVANCED not in methods_to_try
-        ):
-            methods_to_try.insert(-1, ResearchType.ADVANCED)
-
-        last_error = None
+        methods_to_try = self._get_fallback_methods(method)
 
         for research_method in methods_to_try:
-            circuit_breaker = self.circuit_breakers[research_method]
-
-            if not circuit_breaker.can_execute():
-                logger.warning(
-                    f"Circuit breaker open for {research_method.value}, skipping"
-                )
-                continue
-
-            try:
-                logger.info(f"Attempting research using {research_method.value} method")
-
-                # Execute research with timeout
-                research_task = asyncio.create_task(
-                    self._execute_research_method(research_method, query, max_res)
-                )
-
-                result = await asyncio.wait_for(research_task, timeout=timeout_secs)
-
-                # Success - record and cache result
-                circuit_breaker.call_succeeded()
-                result["method_used"] = research_method.value
-                result["timestamp"] = datetime.now().isoformat()
-
-                # Cache successful results
-                if result.get("status") == "success":
-                    self._cache_result(cache_key, result)
-
-                logger.info(
-                    f"Research completed successfully using {research_method.value}"
-                )
+            result = await self._try_research_method(
+                research_method, query, max_res, timeout_secs, cache_key
+            )
+            if result:
                 return result
 
-            except asyncio.TimeoutError:
-                error_msg = (
-                    f"Research timed out after {timeout_secs}s using"
-                    f"{research_method.value}"
-                )
-
-                logger.warning(error_msg)
-                circuit_breaker.call_failed()
-                last_error = error_msg
-                continue
-
-            except Exception as e:
-                error_msg = f"Research failed using {research_method.value}: {str(e)}"
-                logger.error(error_msg)
-                circuit_breaker.call_failed()
-                last_error = error_msg
-                continue
-
-        # All methods failed
-        return {
-            "status": "failed",
-            "message": f"All research methods failed. Last error: {last_error}",
-            "query": query,
-            "results": [],
-            "methods_tried": [m.value for m in methods_to_try],
-            "timestamp": datetime.now().isoformat(),
-        }
+        return self._build_failure_response(query, methods_to_try, "All methods exhausted")
 
     async def _execute_research_method(
         self, method: ResearchType, query: str, max_results: int
