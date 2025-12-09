@@ -45,6 +45,14 @@ class TaintLevel(str, Enum):
     SANITIZED = "sanitized"  # Was tainted, now sanitized
 
 
+# Issue #380: Module-level constant for taint level checking
+# This tuple is used repeatedly throughout the analysis engine
+_TAINTED_LEVELS = (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED)
+
+# Issue #380: Module-level tuple for constant AST types
+_CONSTANT_TYPES = (ast.Constant, ast.Num, ast.Str)
+
+
 class SourceType(str, Enum):
     """Types of data sources."""
 
@@ -490,7 +498,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for value in node.values:
             if isinstance(value, ast.FormattedValue):
                 taint = self._get_taint_from_expr(value.value)
-                if taint in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+                if taint in _TAINTED_LEVELS:
                     return taint
         return TaintLevel.UNTAINTED
 
@@ -508,8 +516,8 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         if handler:
             return handler(node)
 
-        # Constants are untainted
-        if isinstance(node, (ast.Constant, ast.Num, ast.Str)):
+        # Constants are untainted - Issue #380: Use module-level constant
+        if isinstance(node, _CONSTANT_TYPES):
             return TaintLevel.UNTAINTED
 
         # Propagate through subscript/attribute
@@ -554,7 +562,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for use in self.uses:
             taint_level = self.taint_map.get(use.name, TaintLevel.UNTAINTED)
 
-            if taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+            if taint_level in _TAINTED_LEVELS:
                 # Check if this use is in a dangerous context
                 # This is tracked during visit_Call
                 pass
@@ -748,7 +756,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             for arg in node.args:
                 taint_level = self._get_taint_from_expr(arg)
 
-                if taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+                if taint_level in _TAINTED_LEVELS:
                     # Get variable name if it's a name reference
                     if isinstance(arg, ast.Name):
                         var_name = arg.id
@@ -1020,7 +1028,7 @@ async def analyze_code(request: AnalyzeRequest):
 
             # Collect tainted variables
             for d in graph.definitions:
-                if d.taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+                if d.taint_level in _TAINTED_LEVELS:
                     all_tainted.add(d.name)
 
         return AnalysisResponse(
@@ -1103,7 +1111,7 @@ async def analyze_file(request: AnalyzeFileRequest):
             total_vulns += len(graph.vulnerabilities)
 
             for d in graph.definitions:
-                if d.taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+                if d.taint_level in _TAINTED_LEVELS:
                     all_tainted.add(d.name)
 
         return AnalysisResponse(
@@ -1172,7 +1180,7 @@ def _aggregate_graph_taint_stats(
 ) -> None:
     """Aggregate taint statistics from a single graph. (Issue #315 - extracted)"""
     for d in graph.definitions:
-        if d.taint_level in (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED):
+        if d.taint_level in _TAINTED_LEVELS:
             tainted_vars.add(d.name)
             if d.source_type:
                 counts["sources"] += 1

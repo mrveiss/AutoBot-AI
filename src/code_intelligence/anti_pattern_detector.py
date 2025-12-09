@@ -27,6 +27,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Pre-compiled regex patterns for naming convention checks
+_SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_CAMEL_CASE_RE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
+
+# Issue #380: Module-level tuple for function definition AST nodes
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+_EXIT_STMT_TYPES = (ast.Return, ast.Raise)
+
 
 class AntiPatternSeverity(Enum):
     """Severity levels for anti-patterns."""
@@ -276,7 +284,7 @@ class AntiPatternDetector:
                 class_count += 1
                 patterns.extend(self._analyze_class(node, file_path, lines))
                 patterns.extend(self._detect_lazy_class(node, file_path))
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            elif isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                 function_count += 1
                 patterns.extend(self._analyze_function(node, file_path, lines))
 
@@ -332,7 +340,7 @@ class AntiPatternDetector:
         """Extract method definitions from a class."""
         return [
             n for n in node.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            if isinstance(n, _FUNCTION_DEF_TYPES)  # Issue #380
         ]
 
     def _calculate_class_size(self, node: ast.ClassDef) -> int:
@@ -777,7 +785,7 @@ class AntiPatternDetector:
         single_letter_vars: List[Tuple[str, int]] = []
 
         for child in ast.walk(node):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(child, _FUNCTION_DEF_TYPES):  # Issue #380
                 self._classify_function_name(child, snake_case_names, camel_case_names)
             if isinstance(child, ast.Name):
                 self._check_single_letter_var(child, single_letter_vars)
@@ -821,11 +829,11 @@ class AntiPatternDetector:
 
     def _is_snake_case(self, name: str) -> bool:
         """Check if name follows snake_case convention."""
-        return bool(re.match(r"^[a-z][a-z0-9_]*$", name))
+        return bool(_SNAKE_CASE_RE.match(name))
 
     def _is_camel_case(self, name: str) -> bool:
         """Check if name follows camelCase convention."""
-        return bool(re.match(r"^[a-z][a-zA-Z0-9]*$", name)) and "_" not in name
+        return bool(_CAMEL_CASE_RE.match(name)) and "_" not in name
 
     def _detect_message_chains(
         self, node: ast.FunctionDef, file_path: str
@@ -956,7 +964,7 @@ class AntiPatternDetector:
         self, child: ast.AST, file_path: str
     ) -> Optional[AntiPatternResult]:
         """Check if public function lacks docstring (Issue #335 - extracted helper)."""
-        if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if not isinstance(child, _FUNCTION_DEF_TYPES):  # Issue #380
             return None
         if child.name.startswith("_"):
             return None
@@ -1024,7 +1032,7 @@ class AntiPatternDetector:
         methods = [
             n
             for n in node.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            if isinstance(n, _FUNCTION_DEF_TYPES)  # Issue #380
             and not (n.name.startswith("__") and n.name.endswith("__"))
         ]
 
@@ -1158,7 +1166,7 @@ class AntiPatternDetector:
         param_sets: List[Tuple[str, int, frozenset]] = []
 
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                 params = frozenset(
                     arg.arg for arg in node.args.args if arg.arg != "self"
                 )
@@ -1208,7 +1216,7 @@ class AntiPatternDetector:
     ) -> Optional[AntiPatternResult]:
         """Check for unreachable code after return (Issue #335 - extracted helper)."""
         for i, stmt in enumerate(node.body[:-1]):
-            if not isinstance(stmt, (ast.Return, ast.Raise)):
+            if not isinstance(stmt, _EXIT_STMT_TYPES):  # Issue #380
                 continue
             next_stmt = node.body[i + 1]
             if self._is_docstring_or_pass(next_stmt):
@@ -1256,7 +1264,7 @@ class AntiPatternDetector:
         patterns: List[AntiPatternResult] = []
 
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
                 result = self._check_unreachable_after_return(node, file_path)
                 if result:
                     patterns.append(result)

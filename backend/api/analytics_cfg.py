@@ -31,6 +31,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cfg", tags=["control-flow", "analytics"])
 
+# Issue #380: Module-level tuples for AST type checking
+_EXIT_STMT_TYPES = (ast.Return, ast.Raise)
+_BREAK_CONTINUE_TYPES = (ast.Break, ast.Continue)
+_CONDITION_TYPES = (ast.Compare, ast.BoolOp)
+
 
 # ============================================================================
 # Enums and Constants
@@ -380,10 +385,10 @@ class CFGBuilder(ast.NodeVisitor):
             stmt_exits = self._process_statement(stmt)
 
             # Check if this terminates control flow
-            if isinstance(stmt, (ast.Return, ast.Raise)):
+            if isinstance(stmt, _EXIT_STMT_TYPES):  # Issue #380
                 unreachable_start = stmt.lineno
                 exit_nodes.extend(stmt_exits)
-            elif isinstance(stmt, (ast.Break, ast.Continue)):
+            elif isinstance(stmt, _BREAK_CONTINUE_TYPES):  # Issue #380
                 unreachable_start = stmt.lineno
                 # Don't add to exit_nodes - these are handled specially
             else:
@@ -623,7 +628,7 @@ class CFGBuilder(ast.NodeVisitor):
                 self._current_graph.issues.append(issue)
 
         # Check for while loop without variable modification
-        elif isinstance(stmt.test, (ast.Compare, ast.BoolOp)):
+        elif isinstance(stmt.test, _CONDITION_TYPES):  # Issue #380
             # Get variables in condition
             condition_vars = self._get_names_in_expr(stmt.test)
             # Check if any are modified in body
