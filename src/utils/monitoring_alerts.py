@@ -34,6 +34,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.constants.threshold_constants import TimingConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 # Create singleton config instance
@@ -143,6 +144,147 @@ class Alert:
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def to_redis_alert_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for Redis pub/sub alert (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing alert data for Redis channel.
+        """
+        return {
+            "type": "alert",
+            "rule_id": self.rule_id,
+            "rule_name": self.rule_name,
+            "severity": self.severity.value,
+            "message": self.message,
+            "current_value": self.current_value,
+            "threshold": self.threshold,
+            "metric_path": self.metric_path,
+            "created_at": self.created_at.isoformat(),
+            "tags": self.tags,
+            "metadata": self.metadata,
+        }
+
+    def to_redis_recovery_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for Redis pub/sub recovery (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing recovery data for Redis channel.
+        """
+        return {
+            "type": "recovery",
+            "rule_id": self.rule_id,
+            "rule_name": self.rule_name,
+            "severity": self.severity.value,
+            "resolved_at": (
+                self.resolved_at.isoformat()
+                if self.resolved_at
+                else datetime.now().isoformat()
+            ),
+            "tags": self.tags,
+        }
+
+    def to_websocket_alert_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for WebSocket alert message (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing alert data for WebSocket broadcast.
+        """
+        return {
+            "type": "system_alert",
+            "data": {
+                "rule_id": self.rule_id,
+                "rule_name": self.rule_name,
+                "severity": self.severity.value,
+                "message": self.message,
+                "current_value": self.current_value,
+                "threshold": self.threshold,
+                "metric_path": self.metric_path,
+                "created_at": self.created_at.isoformat(),
+                "tags": self.tags,
+                "status": self.status.value,
+            },
+        }
+
+    def to_websocket_recovery_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for WebSocket recovery message (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing recovery data for WebSocket broadcast.
+        """
+        return {
+            "type": "alert_recovery",
+            "data": {
+                "rule_id": self.rule_id,
+                "rule_name": self.rule_name,
+                "severity": self.severity.value,
+                "resolved_at": (
+                    self.resolved_at.isoformat()
+                    if self.resolved_at
+                    else datetime.now().isoformat()
+                ),
+                "tags": self.tags,
+            },
+        }
+
+    def get_log_message(self) -> str:
+        """Get formatted log message for alert (Issue #372 - reduces feature envy).
+
+        Returns:
+            Formatted string for logging.
+        """
+        return (
+            f"{self.rule_name}: {self.message} "
+            f"(Value: {self.current_value}, Threshold: {self.threshold})"
+        )
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary containing all alert data for API response.
+        """
+        return {
+            "rule_id": self.rule_id,
+            "rule_name": self.rule_name,
+            "metric_path": self.metric_path,
+            "current_value": self.current_value,
+            "threshold": self.threshold,
+            "severity": self.severity.value,
+            "status": self.status.value,
+            "message": self.message,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "acknowledged_at": (
+                self.acknowledged_at.isoformat() if self.acknowledged_at else None
+            ),
+            "acknowledged_by": self.acknowledged_by,
+            "tags": self.tags,
+        }
+
+    def copy(self) -> "Alert":
+        """Create a deep copy of this alert (Issue #372 - reduces feature envy).
+
+        Returns:
+            New Alert instance with copied data.
+        """
+        return Alert(
+            rule_id=self.rule_id,
+            rule_name=self.rule_name,
+            metric_path=self.metric_path,
+            current_value=self.current_value,
+            threshold=self.threshold,
+            severity=self.severity,
+            status=self.status,
+            message=self.message,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+            acknowledged_at=self.acknowledged_at,
+            resolved_at=self.resolved_at,
+            acknowledged_by=self.acknowledged_by,
+            tags=list(self.tags),
+            metadata=dict(self.metadata),
+        )
+
 
 class AlertNotificationChannel:
     """Base class for notification channels"""
@@ -165,20 +307,20 @@ class AlertNotificationChannel:
 class LogNotificationChannel(AlertNotificationChannel):
     """Log-based notification channel"""
 
-    async def send_alert(self, alert: Alert) -> bool:
-        """Log the alert to the application logger."""
-        try:
-            severity_emoji = {
-                AlertSeverity.LOW: "ℹ️",
-                AlertSeverity.MEDIUM: "⚠️",
-                AlertSeverity.HIGH: "🚨",
-                AlertSeverity.CRITICAL: "🔥",
-            }
+    # Severity emoji mapping
+    _SEVERITY_EMOJI = {
+        AlertSeverity.LOW: "ℹ️",
+        AlertSeverity.MEDIUM: "⚠️",
+        AlertSeverity.HIGH: "🚨",
+        AlertSeverity.CRITICAL: "🔥",
+    }
 
-            emoji = severity_emoji.get(alert.severity, "⚠️")
+    async def send_alert(self, alert: Alert) -> bool:
+        """Log the alert to the application logger (Issue #372 - uses model method)."""
+        try:
+            emoji = self._SEVERITY_EMOJI.get(alert.severity, "⚠️")
             logger.warning(
-                f"{emoji} ALERT [{alert.severity.value.upper()}] {alert.rule_name}: "
-                f"{alert.message} (Value: {alert.current_value}, Threshold: {alert.threshold})"
+                f"{emoji} ALERT [{alert.severity.value.upper()}] {alert.get_log_message()}"
             )
             return True
         except Exception as e:
@@ -221,29 +363,16 @@ class RedisNotificationChannel(AlertNotificationChannel):
             logger.warning(f"Could not initialize Redis for alerts: {e}")
 
     async def send_alert(self, alert: Alert) -> bool:
-        """Publish alert to Redis channel"""
+        """Publish alert to Redis channel (Issue #372 - uses model method)."""
         try:
             if not self.redis_client:
                 return False
 
-            alert_data = {
-                "type": "alert",
-                "rule_id": alert.rule_id,
-                "rule_name": alert.rule_name,
-                "severity": alert.severity.value,
-                "message": alert.message,
-                "current_value": alert.current_value,
-                "threshold": alert.threshold,
-                "metric_path": alert.metric_path,
-                "created_at": alert.created_at.isoformat(),
-                "tags": alert.tags,
-                "metadata": alert.metadata,
-            }
-
             channel = self.config.get("alert_channel", "system_alerts")
             # Issue #361: Execute sync Redis publish in thread pool
+            # Issue #372: Use model method for serialization
             await asyncio.to_thread(
-                self.redis_client.publish, channel, json.dumps(alert_data)
+                self.redis_client.publish, channel, json.dumps(alert.to_redis_alert_dict())
             )
             return True
         except Exception as e:
@@ -251,7 +380,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
-        """Publish recovery to Redis channel.
+        """Publish recovery to Redis channel (Issue #372 - uses model method).
 
         Issue #361: Uses asyncio.to_thread() to avoid blocking event loop.
         """
@@ -259,23 +388,11 @@ class RedisNotificationChannel(AlertNotificationChannel):
             if not self.redis_client:
                 return False
 
-            recovery_data = {
-                "type": "recovery",
-                "rule_id": alert.rule_id,
-                "rule_name": alert.rule_name,
-                "severity": alert.severity.value,
-                "resolved_at": (
-                    alert.resolved_at.isoformat()
-                    if alert.resolved_at
-                    else datetime.now().isoformat()
-                ),
-                "tags": alert.tags,
-            }
-
             channel = self.config.get("recovery_channel", "system_recoveries")
             # Issue #361: Execute sync Redis publish in thread pool
+            # Issue #372: Use model method for serialization
             await asyncio.to_thread(
-                self.redis_client.publish, channel, json.dumps(recovery_data)
+                self.redis_client.publish, channel, json.dumps(alert.to_redis_recovery_dict())
             )
             return True
         except Exception as e:
@@ -296,55 +413,28 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
         self.websocket_manager = manager
 
     async def send_alert(self, alert: Alert) -> bool:
-        """Send alert via WebSocket to connected clients"""
+        """Send alert via WebSocket to connected clients (Issue #372 - uses model method)."""
         try:
             if not self.websocket_manager:
                 return False
 
-            alert_message = {
-                "type": "system_alert",
-                "data": {
-                    "rule_id": alert.rule_id,
-                    "rule_name": alert.rule_name,
-                    "severity": alert.severity.value,
-                    "message": alert.message,
-                    "current_value": alert.current_value,
-                    "threshold": alert.threshold,
-                    "metric_path": alert.metric_path,
-                    "created_at": alert.created_at.isoformat(),
-                    "tags": alert.tags,
-                    "status": alert.status.value,
-                },
-            }
-
-            await self.websocket_manager.broadcast(json.dumps(alert_message))
+            await self.websocket_manager.broadcast(
+                json.dumps(alert.to_websocket_alert_dict())
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to send WebSocket alert: {e}")
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
-        """Send recovery via WebSocket to connected clients"""
+        """Send recovery via WebSocket to connected clients (Issue #372 - uses model method)."""
         try:
             if not self.websocket_manager:
                 return False
 
-            recovery_message = {
-                "type": "alert_recovery",
-                "data": {
-                    "rule_id": alert.rule_id,
-                    "rule_name": alert.rule_name,
-                    "severity": alert.severity.value,
-                    "resolved_at": (
-                        alert.resolved_at.isoformat()
-                        if alert.resolved_at
-                        else datetime.now().isoformat()
-                    ),
-                    "tags": alert.tags,
-                },
-            }
-
-            await self.websocket_manager.broadcast(json.dumps(recovery_message))
+            await self.websocket_manager.broadcast(
+                json.dumps(alert.to_websocket_recovery_dict())
+            )
             return True
         except Exception as e:
             logger.error(f"Failed to send WebSocket recovery: {e}")
@@ -414,9 +504,23 @@ class MonitoringAlertsManager:
         )
 
     def _load_default_rules(self):
-        """Load default alert rules based on system configuration"""
-        default_rules = [
-            # CPU Usage Alerts
+        """Load default alert rules based on system configuration (Issue #281 - uses helpers)."""
+        default_rules = (
+            self._get_cpu_alert_rules()
+            + self._get_memory_alert_rules()
+            + self._get_disk_alert_rules()
+            + self._get_load_alert_rules()
+            + self._get_service_health_rules()
+        )
+
+        for rule in default_rules:
+            self.alert_rules[rule.id] = rule
+
+        logger.info(f"Loaded {len(default_rules)} default alert rules")
+
+    def _get_cpu_alert_rules(self) -> List[AlertRule]:
+        """Get CPU usage alert rules (Issue #281 - extracted helper)."""
+        return [
             AlertRule(
                 id="vm0_high_cpu",
                 name="VM0 High CPU Usage",
@@ -424,7 +528,7 @@ class MonitoringAlertsManager:
                 threshold=80.0,
                 operator="gt",
                 severity=AlertSeverity.HIGH,
-                duration=300,  # 5 minutes
+                duration=300,
                 description="VM0 CPU usage exceeds 80%",
                 tags=["cpu", "performance", "vm0"],
             ),
@@ -435,11 +539,15 @@ class MonitoringAlertsManager:
                 threshold=95.0,
                 operator="gt",
                 severity=AlertSeverity.CRITICAL,
-                duration=120,  # 2 minutes
+                duration=120,
                 description="VM0 CPU usage exceeds 95%",
                 tags=["cpu", "performance", "vm0", "critical"],
             ),
-            # Memory Usage Alerts
+        ]
+
+    def _get_memory_alert_rules(self) -> List[AlertRule]:
+        """Get memory usage alert rules (Issue #281 - extracted helper)."""
+        return [
             AlertRule(
                 id="vm0_high_memory",
                 name="VM0 High Memory Usage",
@@ -447,7 +555,7 @@ class MonitoringAlertsManager:
                 threshold=85.0,
                 operator="gt",
                 severity=AlertSeverity.HIGH,
-                duration=600,  # 10 minutes
+                duration=600,
                 description="VM0 memory usage exceeds 85%",
                 tags=["memory", "performance", "vm0"],
             ),
@@ -458,11 +566,15 @@ class MonitoringAlertsManager:
                 threshold=95.0,
                 operator="gt",
                 severity=AlertSeverity.CRITICAL,
-                duration=180,  # 3 minutes
+                duration=180,
                 description="VM0 memory usage exceeds 95%",
                 tags=["memory", "performance", "vm0", "critical"],
             ),
-            # Disk Usage Alerts
+        ]
+
+    def _get_disk_alert_rules(self) -> List[AlertRule]:
+        """Get disk usage alert rules (Issue #281 - extracted helper)."""
+        return [
             AlertRule(
                 id="vm0_high_disk",
                 name="VM0 High Disk Usage",
@@ -470,7 +582,7 @@ class MonitoringAlertsManager:
                 threshold=85.0,
                 operator="gt",
                 severity=AlertSeverity.MEDIUM,
-                duration=3600,  # 1 hour
+                duration=3600,
                 description="VM0 disk usage exceeds 85%",
                 tags=["disk", "storage", "vm0"],
             ),
@@ -481,31 +593,39 @@ class MonitoringAlertsManager:
                 threshold=95.0,
                 operator="gt",
                 severity=AlertSeverity.CRITICAL,
-                duration=900,  # 15 minutes
+                duration=900,
                 description="VM0 disk usage exceeds 95%",
                 tags=["disk", "storage", "vm0", "critical"],
             ),
-            # Load Average Alerts
+        ]
+
+    def _get_load_alert_rules(self) -> List[AlertRule]:
+        """Get load average alert rules (Issue #281 - extracted helper)."""
+        return [
             AlertRule(
                 id="vm0_high_load",
                 name="VM0 High Load Average",
                 metric_path="vm0.stats.cpu_load_1m",
-                threshold=4.0,  # Assuming typical 4-core system
+                threshold=4.0,
                 operator="gt",
                 severity=AlertSeverity.MEDIUM,
-                duration=600,  # 10 minutes
+                duration=600,
                 description="VM0 1-minute load average exceeds 4.0",
                 tags=["load", "performance", "vm0"],
             ),
-            # Service Health Alerts
+        ]
+
+    def _get_service_health_rules(self) -> List[AlertRule]:
+        """Get service health alert rules (Issue #281 - extracted helper)."""
+        return [
             AlertRule(
                 id="backend_api_down",
                 name="Backend API Unavailable",
                 metric_path="vm0.services.core.backend_api.status",
-                threshold=0,  # 0 = offline/error, 1 = online
+                threshold=0,
                 operator="eq",
                 severity=AlertSeverity.CRITICAL,
-                duration=60,  # 1 minute
+                duration=60,
                 description="Backend API is not responding",
                 tags=["service", "api", "critical"],
             ),
@@ -532,12 +652,6 @@ class MonitoringAlertsManager:
                 tags=["service", "llm", "high"],
             ),
         ]
-
-        # Add rules to manager
-        for rule in default_rules:
-            self.alert_rules[rule.id] = rule
-
-        logger.info(f"Loaded {len(default_rules)} default alert rules")
 
     async def add_alert_rule(self, rule: AlertRule):
         """Add or update an alert rule (thread-safe)"""
@@ -741,24 +855,8 @@ class MonitoringAlertsManager:
             alert.status = AlertStatus.RESOLVED
             alert.resolved_at = datetime.now()
             alert.updated_at = datetime.now()
-            # Copy alert data for external operations
-            alert_copy = Alert(
-                rule_id=alert.rule_id,
-                rule_name=alert.rule_name,
-                metric_path=alert.metric_path,
-                current_value=alert.current_value,
-                threshold=alert.threshold,
-                severity=alert.severity,
-                status=alert.status,
-                message=alert.message,
-                created_at=alert.created_at,
-                updated_at=alert.updated_at,
-                acknowledged_at=alert.acknowledged_at,
-                resolved_at=alert.resolved_at,
-                acknowledged_by=alert.acknowledged_by,
-                tags=list(alert.tags),
-                metadata=dict(alert.metadata),
-            )
+            # Issue #372: Use copy() method to reduce feature envy
+            alert_copy = alert.copy()
             # Remove from active alerts
             del self.active_alerts[rule_id]
 
@@ -948,7 +1046,7 @@ class MonitoringAlertsManager:
 
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(30)  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait longer on error
 
     def stop_monitoring(self):
         """Stop the monitoring loop"""
