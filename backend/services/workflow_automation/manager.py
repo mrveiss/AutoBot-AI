@@ -21,6 +21,8 @@ from .messaging import WorkflowMessenger
 from .models import (
     ActiveWorkflow,
     AutomationMode,
+    PlanApprovalMode,
+    PlanApprovalRequest,
     WorkflowControlRequest,
     WorkflowStep,
 )
@@ -155,47 +157,12 @@ class WorkflowAutomationManager:
         )
 
     def get_workflow_status(self, workflow_id: str) -> Optional[Metadata]:
-        """Get current workflow status"""
+        """Get current workflow status (Issue #372 - uses model method)."""
         if workflow_id not in self.active_workflows:
             return None
 
         workflow = self.active_workflows[workflow_id]
-
-        return {
-            "workflow_id": workflow_id,
-            "name": workflow.name,
-            "description": workflow.description,
-            "session_id": workflow.session_id,
-            "current_step": workflow.current_step_index + 1,
-            "total_steps": len(workflow.steps),
-            "is_paused": workflow.is_paused,
-            "is_cancelled": workflow.is_cancelled,
-            "automation_mode": workflow.automation_mode.value,
-            "created_at": workflow.created_at.isoformat(),
-            "started_at": (
-                workflow.started_at.isoformat() if workflow.started_at else None
-            ),
-            "completed_at": (
-                workflow.completed_at.isoformat() if workflow.completed_at else None
-            ),
-            "steps": [
-                {
-                    "step_id": step.step_id,
-                    "command": step.command,
-                    "description": step.description,
-                    "status": step.status.value,
-                    "requires_confirmation": step.requires_confirmation,
-                    "started_at": (
-                        step.started_at.isoformat() if step.started_at else None
-                    ),
-                    "completed_at": (
-                        step.completed_at.isoformat() if step.completed_at else None
-                    ),
-                }
-                for step in workflow.steps
-            ],
-            "user_interventions": workflow.user_interventions,
-        }
+        return workflow.to_status_dict()
 
     def get_template_workflow(
         self, template_name: str, session_id: str
@@ -206,3 +173,107 @@ class WorkflowAutomationManager:
     def list_templates(self) -> List[str]:
         """List available workflow templates"""
         return self.template_manager.list_templates()
+
+    # =========================================================================
+    # Issue #390: Plan Approval System Methods
+    # =========================================================================
+
+    async def present_plan_for_approval(
+        self,
+        workflow_id: str,
+        approval_mode: PlanApprovalMode = PlanApprovalMode.FULL_PLAN_APPROVAL,
+        timeout_seconds: int = 300,
+    ) -> Optional[PlanApprovalRequest]:
+        """
+        Present workflow plan to user for approval before execution.
+
+        Issue #390: Multi-step tasks should present plan before execution.
+
+        Args:
+            workflow_id: ID of the workflow to present
+            approval_mode: How approval should be requested
+            timeout_seconds: How long to wait for approval
+
+        Returns:
+            PlanApprovalRequest with presentation data, or None if workflow not found
+        """
+        if workflow_id not in self.active_workflows:
+            logger.error(f"Workflow {workflow_id} not found for plan presentation")
+            return None
+
+        workflow = self.active_workflows[workflow_id]
+        return await self.executor.present_plan_for_approval(
+            workflow, approval_mode, timeout_seconds
+        )
+
+    async def wait_for_plan_approval(
+        self,
+        workflow_id: str,
+        timeout_seconds: int = 300,
+    ) -> Optional[PlanApprovalRequest]:
+        """
+        Wait for user to approve or reject the presented plan.
+
+        Issue #390: Block execution until user approves plan.
+
+        Args:
+            workflow_id: ID of the workflow awaiting approval
+            timeout_seconds: Maximum time to wait
+
+        Returns:
+            PlanApprovalRequest with final status, or None on error
+        """
+        try:
+            return await self.executor.wait_for_plan_approval(
+                workflow_id, timeout_seconds
+            )
+        except ValueError as e:
+            logger.error(f"Error waiting for plan approval: {e}")
+            return None
+
+    def handle_plan_approval_response(
+        self,
+        workflow_id: str,
+        approved: bool,
+        modifications: list[str] | None = None,
+        reason: str | None = None,
+    ) -> bool:
+        """
+        Handle user's response to plan approval request.
+
+        Issue #390: Process user's decision on presented plan.
+
+        Args:
+            workflow_id: ID of the workflow
+            approved: Whether user approved the plan
+            modifications: List of step IDs to modify/skip
+            reason: User's reason for rejection/modification
+
+        Returns:
+            True if response was processed successfully
+        """
+        return self.executor.handle_plan_approval_response(
+            workflow_id, approved, modifications, reason
+        )
+
+    def get_pending_approval(self, workflow_id: str) -> Optional[PlanApprovalRequest]:
+        """
+        Get pending plan approval request for a workflow.
+
+        Issue #390: Check pending approval status.
+        """
+        return self.executor.get_pending_approval(workflow_id)
+
+    async def cancel_workflow(self, workflow_id: str) -> bool:
+        """
+        Cancel a workflow (e.g., after plan rejection).
+
+        Issue #390: Allow cancellation after plan rejection.
+        """
+        if workflow_id not in self.active_workflows:
+            logger.error(f"Workflow {workflow_id} not found for cancellation")
+            return False
+
+        workflow = self.active_workflows[workflow_id]
+        await self.executor.cancel_workflow(workflow, self.active_workflows)
+        return True

@@ -18,6 +18,12 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from src.circuit_breaker import circuit_breaker_async
+from src.constants.threshold_constants import (
+    AgentThresholds,
+    CircuitBreakerDefaults,
+    RetryConfig,
+    TimingConstants,
+)
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 
@@ -136,9 +142,7 @@ class EnhancedOrchestrator:
 
         # Auto-documentation settings
         self.auto_doc_enabled = True
-        self.doc_generation_threshold = (
-            0.8  # Generate docs for workflows with >80% completion
-        )
+        self.doc_generation_threshold = AgentThresholds.CONSENSUS_THRESHOLD  # Issue #376
         self.knowledge_extraction_enabled = True
 
         # Initialize default agents
@@ -247,17 +251,32 @@ class EnhancedOrchestrator:
         )
 
     @circuit_breaker_async(
-        "workflow_execution", failure_threshold=3, recovery_timeout=30.0
+        "workflow_execution",
+        failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
+        recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
     )
-    @retry_async(max_attempts=2, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
+    @retry_async(max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
     async def execute_enhanced_workflow(
         self,
         user_request: str,
         context: Dict[str, Any] = None,
         auto_document: bool = True,
+        require_plan_approval: bool = False,
+        plan_approval_callback: Optional[callable] = None,
     ) -> Dict[str, Any]:
         """
-        Execute workflow with enhanced orchestration and auto-documentation
+        Execute workflow with enhanced orchestration and auto-documentation.
+
+        Issue #390: Added require_plan_approval and plan_approval_callback
+        to present plan before execution.
+
+        Args:
+            user_request: The user's request to process
+            context: Additional context for the workflow
+            auto_document: Whether to auto-generate documentation
+            require_plan_approval: If True, waits for approval before execution
+            plan_approval_callback: Async function to present plan and get approval.
+                                   Should return (approved: bool, reason: str | None)
         """
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
@@ -292,6 +311,30 @@ class EnhancedOrchestrator:
             enhanced_steps = await self._plan_enhanced_workflow_steps(
                 user_request, complexity, context
             )
+
+            # Issue #390: Present plan for approval before execution
+            if require_plan_approval:
+                approval_result = await self._request_plan_approval(
+                    workflow_id,
+                    user_request,
+                    enhanced_steps,
+                    plan_approval_callback,
+                )
+
+                if not approval_result.get("approved", False):
+                    logger.info(
+                        f"Workflow {workflow_id} plan rejected: "
+                        f"{approval_result.get('reason', 'No reason provided')}"
+                    )
+                    return {
+                        "workflow_id": workflow_id,
+                        "status": "plan_rejected",
+                        "reason": approval_result.get("reason"),
+                        "plan": approval_result.get("plan"),
+                        "execution_time": time.time() - start_time,
+                    }
+
+                logger.info(f"Workflow {workflow_id} plan approved, proceeding")
 
             # Execute workflow with agent coordination
             execution_result = await self._execute_coordinated_workflow(
@@ -338,6 +381,140 @@ class EnhancedOrchestrator:
                 "error": str(e),
                 "execution_time": time.time() - start_time,
             }
+
+    # =========================================================================
+    # Issue #390: Plan Approval Methods
+    # =========================================================================
+
+    async def _request_plan_approval(
+        self,
+        workflow_id: str,
+        user_request: str,
+        enhanced_steps: List[Dict[str, Any]],
+        approval_callback: Optional[callable] = None,
+    ) -> Dict[str, Any]:
+        """
+        Request approval for the workflow plan before execution.
+
+        Issue #390: Present plan to user and wait for approval.
+
+        Args:
+            workflow_id: ID of the workflow
+            user_request: Original user request
+            enhanced_steps: Planned workflow steps
+            approval_callback: Optional async callback to present plan and get approval
+
+        Returns:
+            Dict with 'approved' (bool), 'reason' (str), and 'plan' (dict)
+        """
+        # Create plan summary for presentation
+        plan_summary = {
+            "workflow_id": workflow_id,
+            "request": user_request,
+            "total_steps": len(enhanced_steps),
+            "estimated_total_duration": sum(
+                step.get("estimated_duration", 10.0) for step in enhanced_steps
+            ),
+            "steps": [
+                {
+                    "id": step.get("id"),
+                    "action": step.get("action"),
+                    "agent_type": step.get("agent_type"),
+                    "assigned_agent": step.get("assigned_agent"),
+                    "estimated_duration": step.get("estimated_duration"),
+                    "requires_approval": step.get("user_approval_required", False),
+                    "dependencies": step.get("dependencies", []),
+                }
+                for step in enhanced_steps
+            ],
+            "agents_involved": list(
+                set(
+                    step.get("assigned_agent")
+                    for step in enhanced_steps
+                    if step.get("assigned_agent")
+                )
+            ),
+        }
+
+        # If callback provided, use it to get approval
+        if approval_callback:
+            try:
+                approved, reason = await approval_callback(plan_summary)
+                return {
+                    "approved": approved,
+                    "reason": reason,
+                    "plan": plan_summary,
+                }
+            except Exception as e:
+                logger.error(f"Plan approval callback failed: {e}")
+                return {
+                    "approved": False,
+                    "reason": f"Approval callback error: {str(e)}",
+                    "plan": plan_summary,
+                }
+
+        # Default behavior: log plan and auto-approve (for backward compatibility)
+        logger.info(
+            f"Workflow {workflow_id} plan: {len(enhanced_steps)} steps, "
+            f"estimated {plan_summary['estimated_total_duration']:.1f}s total"
+        )
+
+        # Log each step for visibility
+        for step in plan_summary["steps"]:
+            logger.info(
+                f"  Step {step['id']}: {step['action']} "
+                f"(agent: {step['assigned_agent']}, ~{step['estimated_duration']:.1f}s)"
+            )
+
+        # Auto-approve if no callback (backward compatibility)
+        return {
+            "approved": True,
+            "reason": "Auto-approved (no approval callback provided)",
+            "plan": plan_summary,
+        }
+
+    def get_plan_summary(
+        self,
+        user_request: str,
+        context: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get workflow plan summary without executing.
+
+        Issue #390: Allow viewing plan before committing to execution.
+
+        Args:
+            user_request: The user's request to plan
+            context: Additional context
+
+        Returns:
+            Plan summary with steps and estimates
+        """
+        context = context or {}
+
+        # Classify complexity
+        complexity = self.base_orchestrator.classify_request_complexity(user_request)
+
+        # Get base steps synchronously (no agent assignment yet)
+        base_steps = self.base_orchestrator.plan_workflow_steps(
+            user_request, complexity
+        )
+
+        return {
+            "request": user_request,
+            "complexity": complexity.value,
+            "total_steps": len(base_steps),
+            "steps": [
+                {
+                    "id": step.id,
+                    "action": step.action,
+                    "agent_type": step.agent_type,
+                    "requires_approval": step.user_approval_required,
+                    "dependencies": step.dependencies or [],
+                }
+                for step in base_steps
+            ],
+        }
 
     async def _plan_enhanced_workflow_steps(
         self, user_request: str, complexity: TaskComplexity, context: Dict[str, Any]
@@ -627,8 +804,8 @@ class EnhancedOrchestrator:
         # In real implementation, this would delegate to actual agents
         action = step["action"]
 
-        # Add small delay to simulate work
-        await asyncio.sleep(0.1)
+        # Add small delay to simulate work (Issue #376)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         return {"action_completed": action, "timestamp": time.time(), "simulated": True}
 
