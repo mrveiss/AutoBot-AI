@@ -26,6 +26,7 @@ from src.task_execution_tracker import Priority, TaskType, task_tracker
 from src.unified_config_manager import config_manager
 from src.unified_memory_manager import LongTermMemoryManager
 from src.utils.logging_manager import get_logger
+from src.constants.threshold_constants import LLMDefaults, TimingConstants
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
 from src.utils.agent_selection import (
@@ -409,7 +410,7 @@ class ConsolidatedOrchestrator:
         """
         try:
             test_response = await self.llm_interface.generate_response(
-                "Test connection", model=model_name, max_tokens=10
+                "Test connection", model=model_name, max_tokens=LLMDefaults.MINIMAL_MAX_TOKENS
             )
             return bool(test_response)
         except Exception as e:
@@ -492,7 +493,7 @@ class ConsolidatedOrchestrator:
             logger.info(
                 f"Waiting for {len(self.active_tasks)} active tasks to complete..."
             )
-            await asyncio.sleep(2)  # Brief wait for tasks to complete
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Brief wait for tasks
 
         # Issue #379: Cleanup components in parallel
         try:
@@ -521,7 +522,10 @@ class ConsolidatedOrchestrator:
         priority: TaskPriority = TaskPriority.NORMAL,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Process user request with enhanced orchestration"""
+        """Process user request with enhanced orchestration.
+
+        Issue #281: Refactored to use extracted helpers.
+        """
         start_time = time.time()
         task_id = str(uuid.uuid4())
 
@@ -537,57 +541,14 @@ class ConsolidatedOrchestrator:
                 context=context or {},
             )
 
-            # Classify task if available
-            classification_result = None
-            if self.classification_agent:
-                try:
-                    classification_result = (
-                        await self.classification_agent.classify_user_request(
-                            user_message
-                        )
-                    )
-                    logger.info(
-                        f"Task classified: {classification_result.complexity.value} complexity"
-                    )
-                except Exception as e:
-                    logger.warning(f"Classification failed: {e}")
+            # Classify and select model (Issue #281 - uses helpers)
+            classification_result = await self._classify_task(user_message)
+            target_llm_model = self._select_model_for_task(classification_result)
 
-            # Generate execution plan
-            target_llm_model = self.config.orchestrator_llm_model
-
-            if (
-                classification_result
-                and classification_result.complexity == TaskComplexity.SIMPLE
-            ):
-                # Use faster model for simple tasks
-                target_llm_model = config_manager.get_default_llm_model()
-                logger.info(f"Using fast model for simple task: {target_llm_model}")
-            else:
-                logger.info(
-                    f"Generating plan using Orchestrator LLM: {target_llm_model}"
-                )
-
-            # Generate response based on mode
-            if mode == OrchestrationMode.SIMPLE:
-                result = await self._process_simple_request(
-                    user_message, task_id, target_llm_model, context
-                )
-            elif mode == OrchestrationMode.ENHANCED:
-                result = await self._process_enhanced_request(
-                    user_message,
-                    task_id,
-                    target_llm_model,
-                    classification_result,
-                    context,
-                )
-            elif mode == OrchestrationMode.PARALLEL:
-                result = await self._process_parallel_request(
-                    user_message, task_id, target_llm_model, context
-                )
-            else:  # SEQUENTIAL
-                result = await self._process_sequential_request(
-                    user_message, task_id, target_llm_model, context
-                )
+            # Execute based on mode (Issue #281 - uses helper)
+            result = await self._execute_mode_request(
+                mode, user_message, task_id, target_llm_model, classification_result, context
+            )
 
             # Update metrics
             processing_time = time.time() - start_time
@@ -599,47 +560,117 @@ class ConsolidatedOrchestrator:
 
             # Complete task tracking
             task_tracker.complete_task(task_id, result)
-
             logger.info(f"✅ Request {task_id} completed in {processing_time:.2f}s")
 
-            return {
-                "task_id": task_id,
-                "success": True,
-                "result": result,
-                "processing_time": processing_time,
-                "classification": (
-                    classification_result.to_dict() if classification_result else None
-                ),
-                "model_used": target_llm_model,
-                "mode": mode.value,
-            }
+            return self._build_success_response(
+                task_id, result, processing_time, classification_result, target_llm_model, mode
+            )
 
         except Exception as e:
             # Update failure metrics
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
-
-            # Track failure
             task_tracker.fail_task(task_id, str(e))
+            logger.error(f"❌ Request {task_id} failed after {processing_time:.2f}s: {e}")
 
-            logger.error(
-                f"❌ Request {task_id} failed after {processing_time:.2f}s: {e}"
+            return self._build_failure_response(task_id, e, processing_time, mode)
+
+    async def _classify_task(
+        self, user_message: str
+    ) -> Optional[Any]:
+        """Classify user request if classification agent is available (Issue #281 - extracted helper)."""
+        if not self.classification_agent:
+            return None
+        try:
+            result = await self.classification_agent.classify_user_request(user_message)
+            logger.info(f"Task classified: {result.complexity.value} complexity")
+            return result
+        except Exception as e:
+            logger.warning(f"Classification failed: {e}")
+            return None
+
+    def _select_model_for_task(
+        self, classification_result: Optional[Any]
+    ) -> str:
+        """Select appropriate LLM model based on task classification (Issue #281 - extracted helper)."""
+        if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
+            model = config_manager.get_default_llm_model()
+            logger.info(f"Using fast model for simple task: {model}")
+            return model
+        logger.info(f"Generating plan using Orchestrator LLM: {self.config.orchestrator_llm_model}")
+        return self.config.orchestrator_llm_model
+
+    async def _execute_mode_request(
+        self,
+        mode: OrchestrationMode,
+        user_message: str,
+        task_id: str,
+        target_llm_model: str,
+        classification_result: Optional[Any],
+        context: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Execute request based on orchestration mode (Issue #281 - extracted helper)."""
+        if mode == OrchestrationMode.SIMPLE:
+            return await self._process_simple_request(
+                user_message, task_id, target_llm_model, context
+            )
+        elif mode == OrchestrationMode.ENHANCED:
+            return await self._process_enhanced_request(
+                user_message, task_id, target_llm_model, classification_result, context
+            )
+        elif mode == OrchestrationMode.PARALLEL:
+            return await self._process_parallel_request(
+                user_message, task_id, target_llm_model, context
+            )
+        else:  # SEQUENTIAL
+            return await self._process_sequential_request(
+                user_message, task_id, target_llm_model, context
             )
 
-            return {
-                "task_id": task_id,
-                "success": False,
-                "error": str(e),
-                "processing_time": processing_time,
-                "mode": mode.value,
-            }
+    def _build_success_response(
+        self,
+        task_id: str,
+        result: Dict[str, Any],
+        processing_time: float,
+        classification_result: Optional[Any],
+        target_llm_model: str,
+        mode: OrchestrationMode,
+    ) -> Dict[str, Any]:
+        """Build success response for process_user_request (Issue #281 - extracted helper)."""
+        return {
+            "task_id": task_id,
+            "success": True,
+            "result": result,
+            "processing_time": processing_time,
+            "classification": (
+                classification_result.to_dict() if classification_result else None
+            ),
+            "model_used": target_llm_model,
+            "mode": mode.value,
+        }
+
+    def _build_failure_response(
+        self,
+        task_id: str,
+        error: Exception,
+        processing_time: float,
+        mode: OrchestrationMode,
+    ) -> Dict[str, Any]:
+        """Build failure response for process_user_request (Issue #281 - extracted helper)."""
+        return {
+            "task_id": task_id,
+            "success": False,
+            "error": str(error),
+            "processing_time": processing_time,
+            "mode": mode.value,
+        }
 
     async def _process_simple_request(
         self, user_message: str, task_id: str, model: str, context: Optional[Dict]
     ) -> Dict[str, Any]:
         """Process simple request with minimal orchestration"""
         response = await self.llm_interface.generate_response(
-            user_message, model=model, max_tokens=1000, context=context
+            user_message, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS, context=context
         )
 
         return {
@@ -694,7 +725,7 @@ class ConsolidatedOrchestrator:
         # Create parallel tasks
         tasks = [
             self.llm_interface.generate_response(
-                user_message, model=model, max_tokens=500
+                user_message, model=model, max_tokens=LLMDefaults.STANDARD_MAX_TOKENS
             ),
             self.memory_manager.search_relevant_context(user_message),
             # Add more parallel tasks as needed
@@ -729,7 +760,7 @@ class ConsolidatedOrchestrator:
 
         # Step 3: Generate response
         response = await self.llm_interface.generate_response(
-            enhanced_prompt, model=model, max_tokens=1000
+            enhanced_prompt, model=model, max_tokens=LLMDefaults.ENRICHED_MAX_TOKENS
         )
 
         return {
@@ -816,7 +847,7 @@ class ConsolidatedOrchestrator:
 
         # Generate synthesis
         synthesis = await self.llm_interface.generate_response(
-            synthesis_prompt, model=self.config.orchestrator_llm_model, max_tokens=1500
+            synthesis_prompt, model=self.config.orchestrator_llm_model, max_tokens=LLMDefaults.EXTENDED_MAX_TOKENS
         )
 
         return synthesis
