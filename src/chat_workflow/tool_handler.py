@@ -318,7 +318,8 @@ class ToolHandlerMixin:
             poll_count += 1
 
             try:
-                session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
+                # Issue #321: Use delegation method to reduce message chains
+                session_info = await self.terminal_tool.get_session_info(
                     terminal_session_id
                 )
 

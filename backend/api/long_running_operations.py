@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Add AutoBot paths
@@ -486,8 +487,8 @@ async def list_operations(
             manager._convert_operation_to_response(op) for op in operations
         ]
 
-        # Calculate statistics
-        all_operations = list(manager.operation_manager.operations.values())
+        # Issue #321: Use helper method to reduce message chains
+        all_operations = manager.get_all_operations()
         total_count = len(all_operations)
         active_count = len(
             [op for op in all_operations if op.status == OperationStatus.RUNNING]
@@ -547,11 +548,8 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
 async def resume_operation(operation_id: str, manager=Depends(get_operation_manager)):
     """Resume operation from latest checkpoint"""
     try:
-        checkpoints = (
-            await manager.operation_manager.checkpoint_manager.list_checkpoints(
-                operation_id
-            )
-        )
+        # Issue #321: Use helper method to reduce message chains
+        checkpoints = await manager.list_operation_checkpoints(operation_id)
         if not checkpoints:
             raise HTTPException(
                 status_code=404, detail="No checkpoints found for operation"
@@ -609,7 +607,7 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
         # Keep connection alive
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 await websocket.send_json({"type": "ping"})
@@ -647,21 +645,16 @@ async def operations_health():
         )
 
     try:
-        # Check if manager is properly initialized
+        # Issue #321: Use helper method to reduce message chains
+        all_operations = operation_integration_manager.get_all_operations()
         active_operations = len(
-            [
-                op
-                for op in operation_integration_manager.operation_manager.operations.values()
-                if op.status == OperationStatus.RUNNING
-            ]
+            [op for op in all_operations if op.status == OperationStatus.RUNNING]
         )
 
         return {
             "status": "healthy",
             "active_operations": active_operations,
-            "total_operations": len(
-                operation_integration_manager.operation_manager.operations
-            ),
+            "total_operations": len(all_operations),
             "redis_connected": operation_integration_manager.redis_client is not None,
             "background_processor_running": (
                 operation_integration_manager.operation_manager._background_processor_task

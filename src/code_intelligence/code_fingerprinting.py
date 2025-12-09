@@ -34,6 +34,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for function definition AST nodes
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
 
 # =============================================================================
 # Enums and Constants
@@ -1471,7 +1474,7 @@ class SemanticHasher:
                 defined.add(child.id)
             elif isinstance(child.ctx, ast.Load):
                 used.add(child.id)
-        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        elif isinstance(child, _FUNCTION_DEF_TYPES):  # Issue #380
             for arg in child.args.args:
                 defined.add(arg.arg)
 
@@ -2106,7 +2109,7 @@ class CloneDetector:
         Returns:
             CodeFragment if node is function/class and meets threshold, None otherwise
         """
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
             return self._create_fragment_from_node(node, file_path, lines, "function")
         if isinstance(node, ast.ClassDef):
             return self._create_fragment_from_node(node, file_path, lines, "class")

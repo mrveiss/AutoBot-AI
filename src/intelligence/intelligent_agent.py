@@ -55,6 +55,40 @@ class AgentState:
         if self.active_processes is None:
             self.active_processes = []
 
+    # Issue #321: Helper methods to reduce message chains (Law of Demeter)
+    def get_os_type_value(self) -> Optional[str]:
+        """Get OS type value, reducing self.state.os_info.os_type.value chains."""
+        return self.os_info.os_type.value if self.os_info else None
+
+    def get_distro_value(self) -> Optional[str]:
+        """Get distro value, reducing self.state.os_info.distro.value chains."""
+        if self.os_info and self.os_info.distro:
+            return self.os_info.distro.value
+        return None
+
+    def get_os_info_dict(self) -> Dict[str, Any]:
+        """Get OS info as dictionary, reducing multiple attribute chains."""
+        if not self.os_info:
+            return {}
+        return {
+            "os_type": self.os_info.os_type.value,
+            "distro": self.os_info.distro.value if self.os_info.distro else None,
+            "version": self.os_info.version,
+            "architecture": self.os_info.architecture,
+            "user": self.os_info.user,
+            "is_root": self.os_info.is_root,
+            "is_wsl": self.os_info.is_wsl,
+            "package_manager": self.os_info.package_manager,
+            "shell": self.os_info.shell,
+            "capabilities": list(self.os_info.capabilities) if self.os_info.capabilities else [],
+        }
+
+    def add_to_context(self, entry_type: str, content: Any, **extra) -> None:
+        """Add entry to conversation context, reducing append chain usage."""
+        entry = {"type": entry_type, "content": content, "timestamp": time.time()}
+        entry.update(extra)
+        self.conversation_context.append(entry)
+
 
 class IntelligentAgent:
     """Main intelligent agent orchestrator."""
@@ -135,23 +169,12 @@ class IntelligentAgent:
 
             self.state.initialized = True
 
+            # Issue #321: Use helper method to reduce message chains
+            os_info_dict = self.state.get_os_info_dict()
             init_result = {
                 "status": "initialized",
                 "initialization_time": initialization_time,
-                "os_info": {
-                    "os_type": self.state.os_info.os_type.value,
-                    "distro": (
-                        self.state.os_info.distro.value
-                        if self.state.os_info.distro
-                        else None
-                    ),
-                    "version": self.state.os_info.version,
-                    "architecture": self.state.os_info.architecture,
-                    "user": self.state.os_info.user,
-                    "is_root": self.state.os_info.is_root,
-                    "is_wsl": self.state.os_info.is_wsl,
-                    "package_manager": self.state.os_info.package_manager,
-                },
+                "os_info": os_info_dict,
                 "capabilities": capabilities_info,
                 "can_install_tools": can_install,
                 "install_capability_reason": install_reason,
@@ -159,9 +182,11 @@ class IntelligentAgent:
             }
 
             logger.info(f"Agent initialized successfully in {initialization_time:.2f}s")
-            logger.info(f"OS: {self.state.os_info.os_type.value}")
-            if self.state.os_info.distro:
-                logger.info(f"Distribution: {self.state.os_info.distro.value}")
+            # Issue #321: Use helper methods to reduce message chains
+            logger.info(f"OS: {self.state.get_os_type_value()}")
+            distro_value = self.state.get_distro_value()
+            if distro_value:
+                logger.info(f"Distribution: {distro_value}")
             logger.info(
                 f"Total capabilities: {capabilities_info.get('total_count', 0)}"
             )
@@ -208,9 +233,8 @@ class IntelligentAgent:
         )
 
         tool_selection = await self.tool_selector.select_tool(processed_goal)
-        self.state.conversation_context.append(
-            {"type": "tool_selection", "content": tool_selection, "timestamp": time.time()}
-        )
+        # Issue #321: Use helper method to reduce message chains
+        self.state.add_to_context("tool_selection", tool_selection)
 
         async for chunk in self._execute_tool_selection(tool_selection, processed_goal, user_input):
             yield chunk
@@ -272,9 +296,8 @@ class IntelligentAgent:
             return
 
         logger.info(f"Processing natural language goal: {user_input}")
-        self.state.conversation_context.append(
-            {"type": "user_input", "content": user_input, "timestamp": time.time(), "context": context or {}}
-        )
+        # Issue #321: Use helper method to reduce message chains
+        self.state.add_to_context("user_input", user_input, context=context or {})
 
         try:
             yield StreamChunk(
@@ -285,9 +308,8 @@ class IntelligentAgent:
             )
 
             processed_goal = await self.goal_processor.process_goal(user_input)
-            self.state.conversation_context.append(
-                {"type": "processed_goal", "content": processed_goal, "timestamp": time.time()}
-            )
+            # Issue #321: Use helper method to reduce message chains
+            self.state.add_to_context("processed_goal", processed_goal)
 
             if processed_goal.confidence > 0.5:
                 async for chunk in self._handle_high_confidence_goal(processed_goal, user_input):
@@ -367,13 +389,12 @@ class IntelligentAgent:
         ):
             yield chunk
             if chunk.chunk_type == ChunkType.COMPLETE:
-                self.state.conversation_context.append(
-                    {
-                        "type": "command_result",
-                        "command": tool_selection.primary_command,
-                        "timestamp": time.time(),
-                        "metadata": chunk.metadata,
-                    }
+                # Issue #321: Use helper method to reduce message chains
+                self.state.add_to_context(
+                    "command_result",
+                    tool_selection.primary_command,
+                    command=tool_selection.primary_command,
+                    metadata=chunk.metadata,
                 )
                 return
 
@@ -608,19 +629,19 @@ suggest alternatives.
 
     async def _update_system_context(self):
         """Update LLM and knowledge base with current system context."""
-        context = """System Information for Intelligent Agent:
-- OS: {self.state.os_info.os_type.value}
-- Distribution: {
-            self.state.os_info.distro.value if self.state.os_info.distro else 'N/A'
-        }
-- Version: {self.state.os_info.version}
-- Architecture: {self.state.os_info.architecture}
-- User: {self.state.os_info.user}
-- Root Access: {self.state.os_info.is_root}
-- WSL Environment: {self.state.os_info.is_wsl}
-- Package Manager: {self.state.os_info.package_manager}
-- Shell: {self.state.os_info.shell}
-- Available Capabilities: {', '.join(self.state.os_info.capabilities)}
+        # Issue #321: Use helper method to reduce message chains
+        os_info = self.state.get_os_info_dict()
+        context = f"""System Information for Intelligent Agent:
+- OS: {os_info.get('os_type', 'Unknown')}
+- Distribution: {os_info.get('distro', 'N/A')}
+- Version: {os_info.get('version', 'Unknown')}
+- Architecture: {os_info.get('architecture', 'Unknown')}
+- User: {os_info.get('user', 'Unknown')}
+- Root Access: {os_info.get('is_root', False)}
+- WSL Environment: {os_info.get('is_wsl', False)}
+- Package Manager: {os_info.get('package_manager', 'Unknown')}
+- Shell: {os_info.get('shell', 'Unknown')}
+- Available Capabilities: {', '.join(os_info.get('capabilities', []))}
 
 I am an intelligent system assistant running on this system.
 I can execute commands, install tools, and provide real-time analysis of results.
@@ -634,7 +655,7 @@ OS-specific commands.
                 content=context,
                 metadata={
                     "type": "system_context",
-                    "os_type": self.state.os_info.os_type.value,
+                    "os_type": os_info.get('os_type', 'Unknown'),
                     "timestamp": time.time(),
                     "agent_version": "1.0",
                 },
@@ -666,20 +687,10 @@ OS-specific commands.
         # Get capability summary
         capabilities_info = await self.os_detector.get_capabilities_info()
 
+        # Issue #321: Use helper method to reduce message chains
         return {
             "status": "initialized",
-            "os_info": {
-                "os_type": self.state.os_info.os_type.value,
-                "distro": (
-                    self.state.os_info.distro.value
-                    if self.state.os_info.distro
-                    else None
-                ),
-                "version": self.state.os_info.version,
-                "user": self.state.os_info.user,
-                "is_root": self.state.os_info.is_root,
-                "package_manager": self.state.os_info.package_manager,
-            },
+            "os_info": self.state.get_os_info_dict(),
             "capabilities": capabilities_info,
             "active_processes": len(active_processes),
             "conversation_context_length": len(self.state.conversation_context),

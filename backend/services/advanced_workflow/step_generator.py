@@ -18,6 +18,22 @@ from .models import SmartWorkflowStep, WorkflowIntent
 
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for high-risk command patterns
+_HIGH_RISK_PATTERNS = (
+    "rm ",
+    "delete",
+    "drop",
+    "truncate",
+    "sudo ",
+    "chmod",
+    "chown",
+    "systemctl",
+    "service",
+    "firewall",
+    "iptables",
+    "ufw",
+)
+
 
 class StepGenerator:
     """Generates intelligent workflow steps"""
@@ -41,11 +57,9 @@ class StepGenerator:
                 TaskComplexity.SIMPLE,
             )
 
-            # Generate base steps using existing orchestrator
-            base_steps = (
-                self.enhanced_orchestrator.base_orchestrator.plan_workflow_steps(
-                    user_request, complexity
-                )
+            # Issue #321: Use delegation method to reduce message chains
+            base_steps = self.enhanced_orchestrator.plan_workflow_steps(
+                user_request, complexity
             )
 
             # Convert to smart steps with AI enhancements
@@ -156,23 +170,8 @@ class StepGenerator:
         return None
 
     def _step_requires_confirmation(self, command: str) -> bool:
-        """Determine if step requires user confirmation"""
-        high_risk_patterns = [
-            "rm ",
-            "delete",
-            "drop",
-            "truncate",
-            "sudo ",
-            "chmod",
-            "chown",
-            "systemctl",
-            "service",
-            "firewall",
-            "iptables",
-            "ufw",
-        ]
-
-        return any(pattern in command.lower() for pattern in high_risk_patterns)
+        """Determine if step requires user confirmation (Issue #380: use module constant)"""
+        return any(pattern in command.lower() for pattern in _HIGH_RISK_PATTERNS)
 
     async def _add_intelligent_bookends(
         self, steps: List[SmartWorkflowStep], intent_analysis: Metadata

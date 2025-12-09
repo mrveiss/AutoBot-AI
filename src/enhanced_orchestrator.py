@@ -148,6 +148,11 @@ class EnhancedOrchestrator:
         # Initialize default agents
         self._initialize_default_agents()
 
+    # Issue #321: Delegation methods to reduce message chains (Law of Demeter)
+    def plan_workflow_steps(self, user_request: str, complexity: "TaskComplexity") -> List:
+        """Delegate workflow step planning to base orchestrator."""
+        return self.base_orchestrator.plan_workflow_steps(user_request, complexity)
+
     def _initialize_default_agents(self):
         """Initialize default agent profiles"""
         default_agents = [
