@@ -303,84 +303,18 @@ class OSDetector:
         return "unknown"
 
     async def _detect_capabilities(self) -> Set[str]:
-        """Detect available system capabilities and tools."""
+        """Detect available system capabilities and tools.
+
+        Issue #281: Refactored to use module-level frozensets.
+        Reduced from 88 to ~15 lines (83% reduction).
+        """
         if self._capabilities_cache is not None:
             return set(self._capabilities_cache.keys())
 
         capabilities = set()
 
-        # Network tools
-        network_tools = [
-            "ping",
-            "curl",
-            "wget",
-            "netstat",
-            "ss",
-            "nmap",
-            "arp",
-            "dig",
-            "nslookup",
-            "traceroute",
-            "ifconfig",
-            "ip",
-        ]
-
-        # System tools
-        system_tools = [
-            "ps",
-            "top",
-            "htop",
-            "d",
-            "du",
-            "free",
-            "uname",
-            "whoami",
-            "id",
-            "groups",
-            "sudo",
-            "su",
-            "crontab",
-            "systemctl",
-            "service",
-        ]
-
-        # File tools
-        file_tools = [
-            "ls",
-            "find",
-            "grep",
-            "sed",
-            "awk",
-            "cat",
-            "head",
-            "tail",
-            "less",
-            "more",
-            "wc",
-            "sort",
-            "uniq",
-            "tar",
-            "zip",
-            "unzip",
-        ]
-
-        # Development tools
-        dev_tools = [
-            "git",
-            "python",
-            "python3",
-            "pip",
-            "pip3",
-            "node",
-            "npm",
-            "docker",
-            "docker-compose",
-            "vim",
-            "nano",
-            "emacs",
-        ]
-
-        all_tools = network_tools + system_tools + file_tools + dev_tools
+        # Issue #281: Use module-level frozensets instead of recreating lists
+        all_tools = _NETWORK_TOOLS | _SYSTEM_TOOLS | _FILE_TOOLS | _DEV_TOOLS
 
         # Test each tool
         for tool in all_tools:
