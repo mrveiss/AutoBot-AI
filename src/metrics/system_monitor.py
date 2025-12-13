@@ -56,96 +56,114 @@ class SystemResourceMonitor:
                 logger.error(f"System monitoring error: {e}")
                 await asyncio.sleep(self.collection_interval)
 
+    def _collect_autobot_processes(self) -> List[Dict[str, Any]]:
+        """
+        Collect metrics for AutoBot-related processes.
+
+        Issue #281: Extracted from collect_system_metrics to reduce function length.
+        """
+        autobot_processes = []
+        for proc in psutil.process_iter(
+            ["pid", "name", "cpu_percent", "memory_percent", "memory_info"]
+        ):
+            try:
+                if "python" in proc.info[
+                    "name"
+                ].lower() or "autobot" in proc.info.get("cmdline", []):
+                    autobot_processes.append(
+                        {
+                            "pid": proc.info["pid"],
+                            "name": proc.info["name"],
+                            "cpu_percent": proc.info["cpu_percent"],
+                            "memory_percent": proc.info["memory_percent"],
+                            "memory_mb": (
+                                proc.info["memory_info"].rss / 1024 / 1024
+                                if proc.info["memory_info"]
+                                else 0
+                            ),
+                        }
+                    )
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return autobot_processes
+
+    def _build_metrics_dict(
+        self, cpu_percent, cpu_count, cpu_freq, memory, swap,
+        disk_usage, disk_io, network_io, autobot_processes
+    ) -> Dict[str, Any]:
+        """
+        Build the metrics dictionary from collected data.
+
+        Issue #281: Extracted from collect_system_metrics to reduce function length.
+        """
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "cpu": {
+                "percent": cpu_percent,
+                "count": cpu_count,
+                "frequency_mhz": cpu_freq.current if cpu_freq else None,
+            },
+            "memory": {
+                "total_mb": memory.total / 1024 / 1024,
+                "available_mb": memory.available / 1024 / 1024,
+                "used_mb": memory.used / 1024 / 1024,
+                "percent": memory.percent,
+            },
+            "swap": {
+                "total_mb": swap.total / 1024 / 1024,
+                "used_mb": swap.used / 1024 / 1024,
+                "percent": swap.percent,
+            },
+            "disk": {
+                "total_gb": disk_usage.total / 1024 / 1024 / 1024,
+                "used_gb": disk_usage.used / 1024 / 1024 / 1024,
+                "free_gb": disk_usage.free / 1024 / 1024 / 1024,
+                "percent": (disk_usage.used / disk_usage.total) * 100,
+                "io": {
+                    "read_mb": disk_io.read_bytes / 1024 / 1024 if disk_io else 0,
+                    "write_mb": disk_io.write_bytes / 1024 / 1024 if disk_io else 0,
+                },
+            },
+            "network": {
+                "bytes_sent_mb": (
+                    network_io.bytes_sent / 1024 / 1024 if network_io else 0
+                ),
+                "bytes_recv_mb": (
+                    network_io.bytes_recv / 1024 / 1024 if network_io else 0
+                ),
+                "packets_sent": network_io.packets_sent if network_io else 0,
+                "packets_recv": network_io.packets_recv if network_io else 0,
+            },
+            "autobot_processes": autobot_processes,
+            "total_autobot_memory_mb": sum(
+                p["memory_mb"] for p in autobot_processes
+            ),
+            "total_autobot_cpu_percent": sum(
+                p["cpu_percent"] for p in autobot_processes if p["cpu_percent"]
+            ),
+        }
+
     async def collect_system_metrics(self) -> Dict[str, Any]:
-        """Collect current system resource metrics"""
+        """Collect current system resource metrics."""
         try:
-            # CPU metrics
+            # Collect raw metrics
             cpu_percent = psutil.cpu_percent(interval=1)
             cpu_count = psutil.cpu_count()
             cpu_freq = psutil.cpu_freq()
-
-            # Memory metrics
             memory = psutil.virtual_memory()
             swap = psutil.swap_memory()
-
-            # Disk metrics
             disk_usage = psutil.disk_usage("/")
             disk_io = psutil.disk_io_counters()
-
-            # Network metrics
             network_io = psutil.net_io_counters()
 
-            # Process metrics for AutoBot
-            autobot_processes = []
-            for proc in psutil.process_iter(
-                ["pid", "name", "cpu_percent", "memory_percent", "memory_info"]
-            ):
-                try:
-                    if "python" in proc.info[
-                        "name"
-                    ].lower() or "autobot" in proc.info.get("cmdline", []):
-                        autobot_processes.append(
-                            {
-                                "pid": proc.info["pid"],
-                                "name": proc.info["name"],
-                                "cpu_percent": proc.info["cpu_percent"],
-                                "memory_percent": proc.info["memory_percent"],
-                                "memory_mb": (
-                                    proc.info["memory_info"].rss / 1024 / 1024
-                                    if proc.info["memory_info"]
-                                    else 0
-                                ),
-                            }
-                        )
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+            # Collect AutoBot process metrics
+            autobot_processes = self._collect_autobot_processes()
 
-            return {
-                "timestamp": datetime.now().isoformat(),
-                "cpu": {
-                    "percent": cpu_percent,
-                    "count": cpu_count,
-                    "frequency_mhz": cpu_freq.current if cpu_freq else None,
-                },
-                "memory": {
-                    "total_mb": memory.total / 1024 / 1024,
-                    "available_mb": memory.available / 1024 / 1024,
-                    "used_mb": memory.used / 1024 / 1024,
-                    "percent": memory.percent,
-                },
-                "swap": {
-                    "total_mb": swap.total / 1024 / 1024,
-                    "used_mb": swap.used / 1024 / 1024,
-                    "percent": swap.percent,
-                },
-                "disk": {
-                    "total_gb": disk_usage.total / 1024 / 1024 / 1024,
-                    "used_gb": disk_usage.used / 1024 / 1024 / 1024,
-                    "free_gb": disk_usage.free / 1024 / 1024 / 1024,
-                    "percent": (disk_usage.used / disk_usage.total) * 100,
-                    "io": {
-                        "read_mb": disk_io.read_bytes / 1024 / 1024 if disk_io else 0,
-                        "write_mb": disk_io.write_bytes / 1024 / 1024 if disk_io else 0,
-                    },
-                },
-                "network": {
-                    "bytes_sent_mb": (
-                        network_io.bytes_sent / 1024 / 1024 if network_io else 0
-                    ),
-                    "bytes_recv_mb": (
-                        network_io.bytes_recv / 1024 / 1024 if network_io else 0
-                    ),
-                    "packets_sent": network_io.packets_sent if network_io else 0,
-                    "packets_recv": network_io.packets_recv if network_io else 0,
-                },
-                "autobot_processes": autobot_processes,
-                "total_autobot_memory_mb": sum(
-                    p["memory_mb"] for p in autobot_processes
-                ),
-                "total_autobot_cpu_percent": sum(
-                    p["cpu_percent"] for p in autobot_processes if p["cpu_percent"]
-                ),
-            }
+            # Build and return metrics dict
+            return self._build_metrics_dict(
+                cpu_percent, cpu_count, cpu_freq, memory, swap,
+                disk_usage, disk_io, network_io, autobot_processes
+            )
 
         except Exception as e:
             logger.error(f"Failed to collect system metrics: {e}")

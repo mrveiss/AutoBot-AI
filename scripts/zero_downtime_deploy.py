@@ -238,22 +238,19 @@ class ZeroDowntimeDeployer:
 
             return False
 
-    async def _deploy_blue_green(
-        self, deployment_record: Dict[str, Any], version: str, **kwargs
-    ) -> bool:
-        """Execute blue-green deployment."""
-        self.print_step("Starting blue-green deployment", "deploy")
+    async def _deploy_green_services(
+        self,
+        deployment_record: Dict[str, Any],
+        version: str,
+    ) -> Dict[str, Any]:
+        """
+        Deploy services to green environment.
 
-        deployment_record["status"] = DeploymentStatus.DEPLOYING
+        Issue #281: Extracted from _deploy_blue_green to reduce function length.
 
-        # Step 1: Deploy green environment
-        self.print_step("Phase 1: Deploying green environment", "deploy")
-
-        # Get current environment (blue)
-        current_env = "blue"
-        target_env = "green"
-
-        # Deploy services to green environment
+        Returns:
+            Dict of green services with port/health_url, or empty dict on failure.
+        """
         green_services = {}
 
         for service_name in ["backend", "frontend"]:  # Core services for blue-green
@@ -271,7 +268,7 @@ class ZeroDowntimeDeployer:
             if not success:
                 self.print_step(f"Failed to deploy {service_name} to green", "error")
                 await self._cleanup_green_environment(green_services)
-                return False
+                return {}
 
             green_services[service_name] = {
                 "port": green_port,
@@ -285,6 +282,66 @@ class ZeroDowntimeDeployer:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
+
+        return green_services
+
+    async def _verify_green_under_load(
+        self,
+        green_services: Dict[str, Any],
+        monitoring_duration: int = 120,
+    ) -> bool:
+        """
+        Verify green environment stability under load.
+
+        Issue #281: Extracted from _deploy_blue_green to reduce function length.
+
+        Args:
+            green_services: Dict of service info with health_url
+            monitoring_duration: How long to monitor in seconds
+
+        Returns:
+            True if all services remain healthy, False otherwise.
+        """
+        self.print_step(
+            f"Monitoring green environment for {monitoring_duration}s", "info"
+        )
+
+        for i in range(monitoring_duration // int(TimingConstants.LONG_DELAY)):
+            await asyncio.sleep(TimingConstants.LONG_DELAY)
+
+            # Check health of all green services
+            all_healthy = True
+            for service_name, service_info in green_services.items():
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                            service_info["health_url"], timeout=5
+                        ) as response:
+                            if response.status != 200:
+                                all_healthy = False
+                                break
+                except Exception:
+                    all_healthy = False
+                    break
+
+            if not all_healthy:
+                return False
+
+        return True
+
+    async def _deploy_blue_green(
+        self, deployment_record: Dict[str, Any], version: str, **kwargs
+    ) -> bool:
+        """Execute blue-green deployment."""
+        self.print_step("Starting blue-green deployment", "deploy")
+
+        deployment_record["status"] = DeploymentStatus.DEPLOYING
+
+        # Step 1: Deploy green environment (Issue #281: uses extracted helper)
+        self.print_step("Phase 1: Deploying green environment", "deploy")
+        green_services = await self._deploy_green_services(deployment_record, version)
+        if not green_services:
+            return False
 
         # Step 2: Health check green environment
         self.print_step("Phase 2: Health checking green environment", "test")
@@ -312,39 +369,14 @@ class ZeroDowntimeDeployer:
             await self._cleanup_green_environment(green_services)
             return False
 
-        # Step 4: Verify green environment under load
+        # Step 4: Verify green environment under load (Issue #281: uses extracted helper)
         self.print_step("Phase 4: Verifying green environment under load", "test")
 
-        # Wait and monitor for a few minutes
-        monitoring_duration = 120  # 2 minutes
-        self.print_step(
-            f"Monitoring green environment for {monitoring_duration}s", "info"
-        )
-
-        for i in range(monitoring_duration // int(TimingConstants.LONG_DELAY)):
-            await asyncio.sleep(TimingConstants.LONG_DELAY)
-
-            # Check health of all green services
-            all_healthy = True
-            for service_name, service_info in green_services.items():
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(
-                            service_info["health_url"], timeout=5
-                        ) as response:
-                            if response.status != 200:
-                                all_healthy = False
-                                break
-                except Exception:
-                    all_healthy = False
-                    break
-
-            if not all_healthy:
-                self.print_step("Green environment became unhealthy", "error")
-                # Switch back to blue
-                await self._switch_traffic_to_blue()
-                await self._cleanup_green_environment(green_services)
-                return False
+        if not await self._verify_green_under_load(green_services, monitoring_duration=120):
+            self.print_step("Green environment became unhealthy", "error")
+            await self._switch_traffic_to_blue()
+            await self._cleanup_green_environment(green_services)
+            return False
 
         # Step 5: Cleanup blue environment
         self.print_step("Phase 5: Cleaning up blue environment", "deploy")
