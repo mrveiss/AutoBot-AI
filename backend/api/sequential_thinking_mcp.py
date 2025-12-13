@@ -34,6 +34,76 @@ thinking_sessions: Dict[str, List[Metadata]] = {}
 # Lock for thread-safe access to thinking_sessions
 _thinking_sessions_lock = asyncio.Lock()
 
+# Issue #281: MCP tool definition extracted from get_sequential_thinking_mcp_tools
+# Tuple of (name, description, input_schema) for sequential thinking tool
+SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION = (
+    "sequential_thinking",
+    (
+        "A tool for dynamic and reflective problem-solving through a structured thinking process. "
+        "Enables breaking down complex problems into steps, revising thoughts as understanding deepens, "
+        "and branching into alternative reasoning paths. Adjusts total thoughts dynamically and "
+        "generates/verifies solution hypotheses."
+    ),
+    {
+        "type": "object",
+        "properties": {
+            "thought": {
+                "type": "string",
+                "description": "Your current thinking step and analysis",
+            },
+            "thought_number": {
+                "type": "integer",
+                "description": "Current thought number in the sequence",
+                "minimum": 1,
+            },
+            "total_thoughts": {
+                "type": "integer",
+                "description": "Estimated total thoughts needed (can be adjusted)",
+                "minimum": 1,
+            },
+            "next_thought_needed": {
+                "type": "boolean",
+                "description": "Whether another thought step is needed after this one",
+            },
+            "is_revision": {
+                "type": "boolean",
+                "description": "Whether this thought revises previous thinking",
+                "default": False,
+            },
+            "revises_thought": {
+                "type": "integer",
+                "description": "Which thought number is being reconsidered (if is_revision is true)",
+                "minimum": 1,
+            },
+            "branch_from_thought": {
+                "type": "integer",
+                "description": "Thought number to branch from (for alternative reasoning paths)",
+                "minimum": 1,
+            },
+            "branch_id": {
+                "type": "string",
+                "description": "Identifier for the current reasoning branch",
+            },
+            "needs_more_thoughts": {
+                "type": "boolean",
+                "description": "If more thoughts are needed beyond initial estimate",
+                "default": False,
+            },
+            "session_id": {
+                "type": "string",
+                "description": "Thinking session identifier for tracking multiple sessions",
+                "default": "default",
+            },
+        },
+        "required": [
+            "thought",
+            "thought_number",
+            "total_thoughts",
+            "next_thought_needed",
+        ],
+    },
+)
+
 
 class MCPTool(BaseModel):
     """Standard MCP tool definition"""
@@ -149,89 +219,14 @@ class SequentialThinkingRequest(BaseModel):
 )
 @router.get("/mcp/tools")
 async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for sequential thinking"""
-    tools = [
-        MCPTool(
-            name="sequential_thinking",
-            description=(
-                "A tool for dynamic and reflective problem-solving through a structured thinking process. "
-                "Enables breaking down complex problems into steps, revising thoughts as understanding deepens, "
-                "and branching into alternative reasoning paths. Adjusts total thoughts dynamically and "
-                "generates/verifies solution hypotheses."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "thought": {
-                        "type": "string",
-                        "description": "Your current thinking step and analysis",
-                    },
-                    "thought_number": {
-                        "type": "integer",
-                        "description": "Current thought number in the sequence",
-                        "minimum": 1,
-                    },
-                    "total_thoughts": {
-                        "type": "integer",
-                        "description": (
-                            "Estimated total thoughts needed (can be adjusted)"
-                        ),
-                        "minimum": 1,
-                    },
-                    "next_thought_needed": {
-                        "type": "boolean",
-                        "description": (
-                            "Whether another thought step is needed after this one"
-                        ),
-                    },
-                    "is_revision": {
-                        "type": "boolean",
-                        "description": "Whether this thought revises previous thinking",
-                        "default": False,
-                    },
-                    "revises_thought": {
-                        "type": "integer",
-                        "description": (
-                            "Which thought number is being reconsidered (if is_revision is true)"
-                        ),
-                        "minimum": 1,
-                    },
-                    "branch_from_thought": {
-                        "type": "integer",
-                        "description": (
-                            "Thought number to branch from (for alternative reasoning paths)"
-                        ),
-                        "minimum": 1,
-                    },
-                    "branch_id": {
-                        "type": "string",
-                        "description": "Identifier for the current reasoning branch",
-                    },
-                    "needs_more_thoughts": {
-                        "type": "boolean",
-                        "description": (
-                            "If more thoughts are needed beyond initial estimate"
-                        ),
-                        "default": False,
-                    },
-                    "session_id": {
-                        "type": "string",
-                        "description": (
-                            "Thinking session identifier for tracking multiple sessions"
-                        ),
-                        "default": "default",
-                    },
-                },
-                "required": [
-                    "thought",
-                    "thought_number",
-                    "total_thoughts",
-                    "next_thought_needed",
-                ],
-            },
-        )
-    ]
-    return tools
+    """
+    Get available MCP tools for sequential thinking.
+
+    Issue #281: Refactored to use module-level SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION.
+    Reduced from 84 lines to ~10 lines (88% reduction).
+    """
+    name, description, input_schema = SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION
+    return [MCPTool(name=name, description=description, input_schema=input_schema)]
 
 
 @with_error_handling(
