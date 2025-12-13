@@ -475,27 +475,12 @@ class AutoBotMonitor:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def print_status_dashboard(self):
-        """Print a comprehensive status dashboard."""
-        print("\n" + "=" * 80)
-        print(
-            f"🚀 AutoBot System Monitor - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-        print("=" * 80)
+    def _print_hardware_status(self) -> None:
+        """
+        Print GPU and NPU hardware status.
 
-        # System Health
-        health = self.get_system_health()
-        print(f"\n📊 System Health: {health.get('status', 'unknown').upper()}")
-        if health.get("status") == "healthy":
-            print(f"   LLM Model: {health.get('current_model', 'unknown')}")
-            print(
-                f"   Embedding Model: {health.get('current_embedding_model', 'unknown')}"
-            )
-            print(f"   Redis: {health.get('redis_status', 'unknown')}")
-            print(f"   Ollama: {health.get('ollama', 'unknown')}")
-        else:
-            print(f"   Error: {health.get('message', 'Unknown error')}")
-
+        Issue #281: Extracted from print_status_dashboard to reduce function length.
+        """
         # GPU Status
         gpu = self.get_gpu_status()
         print(f"\n🎮 GPU Status:")
@@ -532,30 +517,12 @@ class AutoBotMonitor:
             print(f"   Hardware: ❌ No Intel NPU detected")
             print(f"   Current CPU: Check if NPU-capable processor")
 
-        # System Resources
-        resources = self.get_system_resources()
-        if "error" not in resources:
-            print(f"\n💾 System Resources:")
-            print(
-                f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
-            )
-            print(
-                f"   Memory: {resources['memory']['used_gb']:.1f}/{resources['memory']['total_gb']:.1f} GB ({resources['memory']['percent']:.1f}%)"
-            )
-            print(
-                f"   Disk: {resources['disk']['used_gb']:.1f}/{resources['disk']['total_gb']:.1f} GB ({resources['disk']['percent']:.1f}%)"
-            )
+    def _print_service_details(self, services: dict) -> None:
+        """
+        Print detailed service status.
 
-        # Frontend Status
-        frontend = self.check_frontend_status()
-        print(
-            f"\n🖥️  Frontend: {'✅ Available' if frontend.get('available') else '❌ Unavailable'}"
-        )
-        if not frontend.get("available") and frontend.get("error"):
-            print(f"   Error: {frontend['error']}")
-
-        # Service Status
-        services = self.get_service_status()
+        Issue #281: Extracted from print_status_dashboard to reduce function length.
+        """
         print(f"\n🔧 Service Status:")
         for service_name, service_info in services.items():
             service_display = service_name.replace("_", " ").title()
@@ -599,7 +566,12 @@ class AutoBotMonitor:
             ):
                 print(f"      Response Time: {service_info['response_time_ms']}ms")
 
-        # Ollama Models with detailed info
+    def _print_model_status(self) -> None:
+        """
+        Print LLM model status.
+
+        Issue #281: Extracted from print_status_dashboard to reduce function length.
+        """
         models = self.get_ollama_models()
         print(f"\n🤖 LLM Models (Ollama):")
         if models.get("available"):
@@ -613,6 +585,63 @@ class AutoBotMonitor:
                     print(f"      Status: Not responding to test prompts")
         else:
             print(f"   Error: {models.get('error', 'Unknown')}")
+
+    def print_status_dashboard(self):
+        """
+        Print a comprehensive status dashboard.
+
+        Issue #281: Extracted hardware, service, and model printing to
+        _print_hardware_status(), _print_service_details(), and _print_model_status()
+        to reduce function length from 140 to ~45 lines.
+        """
+        print("\n" + "=" * 80)
+        print(
+            f"🚀 AutoBot System Monitor - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        print("=" * 80)
+
+        # System Health
+        health = self.get_system_health()
+        print(f"\n📊 System Health: {health.get('status', 'unknown').upper()}")
+        if health.get("status") == "healthy":
+            print(f"   LLM Model: {health.get('current_model', 'unknown')}")
+            print(
+                f"   Embedding Model: {health.get('current_embedding_model', 'unknown')}"
+            )
+            print(f"   Redis: {health.get('redis_status', 'unknown')}")
+            print(f"   Ollama: {health.get('ollama', 'unknown')}")
+        else:
+            print(f"   Error: {health.get('message', 'Unknown error')}")
+
+        # Issue #281: Use extracted helpers for hardware, services, and models
+        self._print_hardware_status()
+
+        # System Resources
+        resources = self.get_system_resources()
+        if "error" not in resources:
+            print(f"\n💾 System Resources:")
+            print(
+                f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
+            )
+            print(
+                f"   Memory: {resources['memory']['used_gb']:.1f}/{resources['memory']['total_gb']:.1f} GB ({resources['memory']['percent']:.1f}%)"
+            )
+            print(
+                f"   Disk: {resources['disk']['used_gb']:.1f}/{resources['disk']['total_gb']:.1f} GB ({resources['disk']['percent']:.1f}%)"
+            )
+
+        # Frontend Status
+        frontend = self.check_frontend_status()
+        print(
+            f"\n🖥️  Frontend: {'✅ Available' if frontend.get('available') else '❌ Unavailable'}"
+        )
+        if not frontend.get("available") and frontend.get("error"):
+            print(f"   Error: {frontend['error']}")
+
+        # Issue #281: Use extracted helpers
+        services = self.get_service_status()
+        self._print_service_details(services)
+        self._print_model_status()
 
         print("\n" + "=" * 80)
 
