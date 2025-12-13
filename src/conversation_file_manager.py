@@ -85,6 +85,8 @@ class FileInfo:
             self.mime_type,
             self.uploaded_by,
         )
+
+
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import (
     RedisError,

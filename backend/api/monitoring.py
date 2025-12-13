@@ -824,8 +824,6 @@ async def test_performance_monitoring():
     }
 
 
-
-
 # ===== PROMETHEUS METRICS ENDPOINTS =====
 
 from src.monitoring.prometheus_metrics import get_metrics_manager

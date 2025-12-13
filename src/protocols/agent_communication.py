@@ -54,6 +54,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
             return MessagePriority.NORMAL
     return MessagePriority.NORMAL
 
+
 # noqa: E402
 from src.utils.redis_client import get_redis_client  # noqa: E402
 

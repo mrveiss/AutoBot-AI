@@ -60,20 +60,20 @@ async def query_prometheus_instant(query: str) -> Optional[float]:
             params=params,
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
-                if response.status != 200:
-                    logger.warning(f"Prometheus query failed: {response.status}")
-                    return None
+            if response.status != 200:
+                logger.warning(f"Prometheus query failed: {response.status}")
+                return None
 
-                data = await response.json()
-                if data.get("status") != "success":
-                    return None
+            data = await response.json()
+            if data.get("status") != "success":
+                return None
 
-                results = data.get("data", {}).get("result", [])
-                if not results:
-                    return None
+            results = data.get("data", {}).get("result", [])
+            if not results:
+                return None
 
-                # Return the first result value
-                return float(results[0]["value"][1])
+            # Return the first result value
+            return float(results[0]["value"][1])
 
     except aiohttp.ClientError as e:
         logger.error(f"Prometheus connection error: {e}")
@@ -110,36 +110,36 @@ async def query_prometheus_range(
         async with await http_client.get(
             f"{PROMETHEUS_URL}/api/v1/query_range",
             params=params,
-            timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status != 200:
-                    logger.warning(f"Prometheus range query failed: {response.status}")
-                    return []
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as response:
+            if response.status != 200:
+                logger.warning(f"Prometheus range query failed: {response.status}")
+                return []
 
-                data = await response.json()
-                if data.get("status") != "success":
-                    return []
+            data = await response.json()
+            if data.get("status") != "success":
+                return []
 
-                results = data.get("data", {}).get("result", [])
-                if not results:
-                    return []
+            results = data.get("data", {}).get("result", [])
+            if not results:
+                return []
 
-                # Format data points
-                points = []
-                for result in results:
-                    metric = result.get("metric", {})
-                    values = result.get("values", [])
+            # Format data points
+            points = []
+            for result in results:
+                metric = result.get("metric", {})
+                values = result.get("values", [])
 
-                    for timestamp, value in values:
-                        points.append(
-                            {
-                                "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
-                                "value": float(value),
-                                "labels": metric,
-                            }
-                        )
+                for timestamp, value in values:
+                    points.append(
+                        {
+                            "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                            "value": float(value),
+                            "labels": metric,
+                        }
+                    )
 
-                return points
+            return points
 
     except aiohttp.ClientError as e:
         logger.error(f"Prometheus connection error: {e}")

@@ -29,6 +29,7 @@ STDLIB_MODULES = {
     "weakref", "types", "operator", "string", "textwrap", "codecs",
 }
 
+
 # Project root helper
 def get_project_root() -> Path:
     """

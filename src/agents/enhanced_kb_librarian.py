@@ -808,10 +808,8 @@ class InstructionParser:
         return bool(instructions["installation"] or instructions["usage"])
 
 
-
-
-
 # NEW DATA CLASSES TO FIX FEATURE ENVY
+
 
 class ToolInfoData:
     """Data class for tool information - encapsulates tool data with methods"""
@@ -954,8 +952,6 @@ class ResearchResultsProcessor:
             return match.group(1)
 
         return self.tool_name.lower()
-
-
 
 
 class EnhancedKBLibrarian:

@@ -8,6 +8,9 @@ Creates HTML dashboards for system monitoring and performance tracking
 """
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -18,19 +21,16 @@ from src.utils.html_dashboard_utils import (
 )
 
 
-def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
-    """Generate comprehensive HTML dashboard"""
+def _get_additional_dashboard_css() -> str:
+    """
+    Get additional CSS styles for dashboard-specific elements.
 
-    # Generate dashboard components using utility functions
-    light_theme_css = get_light_theme_css()
-    header_html = create_dashboard_header(
-        title="🤖 AutoBot Monitoring Dashboard",
-        subtitle="Real-time system performance and health monitoring",
-        theme="light"
-    )
+    Issue #281: Extracted from generate_dashboard_html to reduce function length.
 
-    # Additional CSS for dashboard-specific elements
-    additional_css = """
+    Returns:
+        CSS string for dashboard grid, cards, metrics, progress bars, etc.
+    """
+    return """
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -201,6 +201,25 @@ def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
             color: #4a5568;
         }
     """
+
+
+def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
+    """
+    Generate comprehensive HTML dashboard.
+
+    Issue #281: Extracted CSS to _get_additional_dashboard_css() to reduce
+    function length from 281 to ~110 lines.
+    """
+    # Generate dashboard components using utility functions
+    light_theme_css = get_light_theme_css()
+    header_html = create_dashboard_header(
+        title="🤖 AutoBot Monitoring Dashboard",
+        subtitle="Real-time system performance and health monitoring",
+        theme="light"
+    )
+
+    # Issue #281: Use extracted helper for additional CSS
+    additional_css = _get_additional_dashboard_css()
 
     dashboard_html = '''
 <!DOCTYPE html>
@@ -623,8 +642,8 @@ def create_monitoring_dashboard():
     with open(dashboard_file, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    print(f"📊 Dashboard created: {dashboard_file}")
-    print(f"🌐 Open in browser: file://{dashboard_file.absolute()}")
+    logger.info("Dashboard created: %s", dashboard_file)
+    logger.info("Open in browser: file://%s", dashboard_file.absolute())
 
     return dashboard_file
 
