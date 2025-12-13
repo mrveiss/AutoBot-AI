@@ -30,6 +30,88 @@ _SANITIZE_SYSTEM_RE = re.compile(r"\[SYSTEM\]", re.IGNORECASE)
 _SANITIZE_INST_RE = re.compile(r"\[INST\]", re.IGNORECASE)
 _SANITIZE_IGNORE_RE = re.compile(r"ignore\s+previous\s+instructions", re.IGNORECASE)
 
+# Issue #281: Extracted pattern lists from __init__ for reuse and reduced function length
+# Shell metacharacters and command control sequences
+SHELL_METACHARACTERS = (
+    "&&", "||", ";", "|", "`", "$(", "${", ">", "<", ">>", "<<",
+    "&", "\n;", "\n|", "\n&&", "\n||", "${IFS}",
+)
+
+# Prompt injection control patterns (regex patterns)
+INJECTION_PATTERNS = (
+    # Direct instruction override
+    r"ignore\s+previous\s+instructions",
+    r"ignore\s+above",
+    r"disregard\s+previous",
+    r"forget\s+previous",
+    r"forget\s+all",
+    r"new\s+instructions",
+    r"override\s+instructions",
+    # System prompt manipulation
+    r"system\s*:\s*",
+    r"assistant\s*:\s*",
+    r"user\s*:\s*",
+    r"\[SYSTEM\]",
+    r"\[INST\]",
+    # Command injection in prompts
+    r"COMMAND\s*:\s*.*[;&|`]",
+    r"execute\s*:\s*.*[;&|`]",
+    r"run\s*:\s*.*[;&|`]",
+    # Dangerous sudo commands
+    r"sudo\s+(rm|dd|mkfs|chmod|chown)",
+    # Remote code execution patterns
+    r"curl.*\|\s*bash",
+    r"wget.*\|\s*sh",
+    r"fetch.*\|\s*sh",
+    r"nc\s+-e",
+    r"netcat\s+-e",
+    # Sensitive file access
+    r"/etc/passwd",
+    r"/etc/shadow",
+    r"/etc/sudoers",
+    r"~/.ssh/",
+    # Destructive flags
+    r"--no-preserve-root",
+    r"-rf\s+/",
+    r"--force",
+)
+
+# Dangerous command patterns (regex patterns)
+DANGEROUS_PATTERNS = (
+    # File system destruction
+    r"rm\s+-r",
+    r"rm\s+--recursive",
+    r"rm\s+-rf",
+    r"dd\s+if=.*of=/dev/",
+    r"mkfs\.",
+    # Fork bombs and resource exhaustion
+    r":\(\)\{.*\}\;",
+    r"while\s+true.*do",
+    r"for\s+i\s+in.*\{1\.\.999",
+    # Privilege escalation
+    r"chmod\s+777",
+    r"chmod\s+\+s",
+    r"chown\s+.*root",
+    # Backdoors and reverse shells
+    r"nc\s+-l.*-e",
+    r"bash\s+-i\s+>&",
+    r"/dev/tcp/",
+    # Data exfiltration
+    r"base64.*\|\s*curl",
+    r"tar.*\|\s*ssh",
+    r"scp\s+.*\./",
+)
+
+# Context poisoning indicators (regex patterns)
+CONTEXT_POISON_PATTERNS = (
+    r"previous\s+successful\s+command",
+    r"last\s+executed",
+    r"you\s+previously\s+ran",
+    r"earlier\s+you\s+executed",
+    r"do\s+the\s+same",
+    r"run\s+that\s+again",
+)
+
 
 class InjectionRisk(Enum):
     """Risk levels for detected injection patterns"""
@@ -66,108 +148,21 @@ class PromptInjectionDetector:
 
     def __init__(self, strict_mode: bool = True):
         """
-        Initialize the prompt injection detector
+        Initialize the prompt injection detector.
+
+        Issue #281: Refactored to use module-level constants for pattern lists.
+        Reduced from 106 lines to ~15 lines.
 
         Args:
             strict_mode: If True, apply stricter validation rules
         """
         self.strict_mode = strict_mode
 
-        # Shell metacharacters and command control sequences
-        self.shell_metacharacters = [
-            "&&",
-            "||",
-            ";",
-            "|",
-            "`",
-            "$(",
-            "${",
-            ">",
-            "<",
-            ">>",
-            "<<",
-            "&",
-            "\n;",
-            "\n|",
-            "\n&&",
-            "\n||",
-            "${IFS}",
-        ]
-
-        # Prompt injection control patterns
-        self.injection_patterns = [
-            # Direct instruction override
-            r"ignore\s+previous\s+instructions",
-            r"ignore\s+above",
-            r"disregard\s+previous",
-            r"forget\s+previous",
-            r"forget\s+all",
-            r"new\s+instructions",
-            r"override\s+instructions",
-            # System prompt manipulation
-            r"system\s*:\s*",
-            r"assistant\s*:\s*",
-            r"user\s*:\s*",
-            r"\[SYSTEM\]",
-            r"\[INST\]",
-            # Command injection in prompts
-            r"COMMAND\s*:\s*.*[;&|`]",
-            r"execute\s*:\s*.*[;&|`]",
-            r"run\s*:\s*.*[;&|`]",
-            # Dangerous sudo commands
-            r"sudo\s+(rm|dd|mkfs|chmod|chown)",
-            # Remote code execution patterns
-            r"curl.*\|\s*bash",
-            r"wget.*\|\s*sh",
-            r"fetch.*\|\s*sh",
-            r"nc\s+-e",
-            r"netcat\s+-e",
-            # Sensitive file access
-            r"/etc/passwd",
-            r"/etc/shadow",
-            r"/etc/sudoers",
-            r"~/.ssh/",
-            # Destructive flags
-            r"--no-preserve-root",
-            r"-rf\s+/",
-            r"--force",
-        ]
-
-        # Dangerous command patterns
-        self.dangerous_patterns = [
-            # File system destruction
-            r"rm\s+-r",
-            r"rm\s+--recursive",
-            r"rm\s+-rf",
-            r"dd\s+if=.*of=/dev/",
-            r"mkfs\.",
-            # Fork bombs and resource exhaustion
-            r":\(\)\{.*\}\;",
-            r"while\s+true.*do",
-            r"for\s+i\s+in.*\{1\.\.999",
-            # Privilege escalation
-            r"chmod\s+777",
-            r"chmod\s+\+s",
-            r"chown\s+.*root",
-            # Backdoors and reverse shells
-            r"nc\s+-l.*-e",
-            r"bash\s+-i\s+>&",
-            r"/dev/tcp/",
-            # Data exfiltration
-            r"base64.*\|\s*curl",
-            r"tar.*\|\s*ssh",
-            r"scp\s+.*\./",
-        ]
-
-        # Context poisoning indicators
-        self.context_poison_patterns = [
-            r"previous\s+successful\s+command",
-            r"last\s+executed",
-            r"you\s+previously\s+ran",
-            r"earlier\s+you\s+executed",
-            r"do\s+the\s+same",
-            r"run\s+that\s+again",
-        ]
+        # Issue #281: Use module-level constants for pattern lists
+        self.shell_metacharacters = list(SHELL_METACHARACTERS)
+        self.injection_patterns = list(INJECTION_PATTERNS)
+        self.dangerous_patterns = list(DANGEROUS_PATTERNS)
+        self.context_poison_patterns = list(CONTEXT_POISON_PATTERNS)
 
         logger.info(f"PromptInjectionDetector initialized (strict_mode={strict_mode})")
 
