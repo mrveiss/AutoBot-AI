@@ -71,6 +71,34 @@ async def _compute_category_counts(
             category_counts[main_category] += 1
 
 
+def _format_knowledge_entry(fact_id: bytes | str, fact: dict) -> dict:
+    """
+    Format a knowledge fact into a frontend-compatible entry.
+
+    Issue #281: Extracted from get_knowledge_entries to reduce function length
+    and improve testability.
+
+    Args:
+        fact_id: Redis key for the fact (bytes or string)
+        fact: Parsed fact dictionary with content and metadata
+
+    Returns:
+        Formatted entry dict with id, content, title, source, category,
+        type, created_at, and metadata fields
+    """
+    metadata = fact.get("metadata", {})
+    return {
+        "id": fact_id.decode() if isinstance(fact_id, bytes) else fact_id,
+        "content": fact.get("content", ""),
+        "title": metadata.get("title", "Untitled"),
+        "source": metadata.get("source", "unknown"),
+        "category": metadata.get("category", "general"),
+        "type": metadata.get("type", "document"),
+        "created_at": metadata.get("created_at"),
+        "metadata": metadata,
+    }
+
+
 def _parse_man_page_fact(fact_json: bytes) -> tuple:
     """Parse a man page fact and extract counts (Issue #315: extracted).
 
@@ -471,6 +499,8 @@ async def get_knowledge_entries(
     Uses Redis SCAN for memory-efficient iteration over large datasets.
     Returns cursor for next page - pass "0" or omit for first page.
 
+    Issue #281: Uses _format_knowledge_entry helper for entry formatting.
+
     Args:
         limit: Number of entries to return (1-1000)
         cursor: Redis cursor for pagination (default "0" for first page)
@@ -525,18 +555,8 @@ async def get_knowledge_entries(
                 ):
                     continue
 
-                # Format entry for frontend
-                entry = {
-                    "id": fact_id.decode() if isinstance(fact_id, bytes) else fact_id,
-                    "content": fact.get("content", ""),
-                    "title": fact.get("metadata", {}).get("title", "Untitled"),
-                    "source": fact.get("metadata", {}).get("source", "unknown"),
-                    "category": fact.get("metadata", {}).get("category", "general"),
-                    "type": fact.get("metadata", {}).get("type", "document"),
-                    "created_at": fact.get("metadata", {}).get("created_at"),
-                    "metadata": fact.get("metadata", {}),
-                }
-                entries.append(entry)
+                # Issue #281: Use extracted helper for entry formatting
+                entries.append(_format_knowledge_entry(fact_id, fact))
 
                 # Stop when we have enough entries
                 if len(entries) >= limit:
