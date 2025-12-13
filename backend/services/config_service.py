@@ -181,9 +181,8 @@ class ConfigService:
             llm_config = unified_config_manager.get_llm_config()
 
             # Use local helper to access already-fetched config (Issue #372 fix)
-            get = lambda path, default=None: ConfigService._get_nested_from_dict(
-                full_config, path, default
-            )
+            def get(path, default=None):
+                return ConfigService._get_nested_from_dict(full_config, path, default)
 
             # Build comprehensive config structure matching frontend expectations
             # Note: Prompts section is excluded as it's managed separately
