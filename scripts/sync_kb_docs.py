@@ -2,6 +2,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# NOTE: CLI tool uses print() for user-facing output per LOGGING_STANDARDS.md
 """Sync documentation changes to knowledge base"""
 
 import os
@@ -105,10 +106,10 @@ async def sync_docs():
             else:
                 print(f"❌ Failed to sync {rel_path}: {result['message']}")
 
-        except Exception as e:
+        except Exception as _e:
             print(f"❌ Error syncing {file_path}: {str(e)}")
 
-    print(f"\\n=== Sync Results ===")
+    print("\\n=== Sync Results ===")
     print(f"✓ Successfully synced: {success_count} documents")
     print(f"📁 Categories: {len(set(metadata.get('category') for metadata in []))}")
 
@@ -126,7 +127,7 @@ async def sync_docs():
         with open("data/kb_sync_state.json", "w") as f:
             json.dump(sync_data, f, indent=2)
 
-        print(f"✅ Sync state saved to data/kb_sync_state.json")
+        print("✅ Sync state saved to data/kb_sync_state.json")
 
         # Test search functionality
         print("\\n=== Testing Search Functionality ===")
@@ -136,7 +137,7 @@ async def sync_docs():
             try:
                 results = await kb.get_fact(query=query)
                 print(f"Search '{query}': {len(results)} results found")
-            except Exception as e:
+            except Exception as _e:
                 print(f"Search '{query}': error - {str(e)}")
 
         print("\\n🎉 Knowledge base documentation sync completed successfully!")
@@ -156,7 +157,7 @@ async def incremental_sync():
         # Use the new incremental sync system
         metrics = await run_incremental_sync()
 
-        print(f"\\n=== Incremental Sync Results ===")
+        print("\\n=== Incremental Sync Results ===")
         print(f"📁 Files scanned: {metrics.total_files_scanned}")
         print(f"🔄 Files changed: {metrics.files_changed}")
         print(f"➕ Files added: {metrics.files_added}")
@@ -191,13 +192,13 @@ async def incremental_sync():
                 try:
                     results = await kb.get_fact(query=query)
                     print(f"Search '{query}': {len(results)} results found")
-                except Exception as e:
+                except Exception as _e:
                     print(f"Search '{query}': error - {str(e)}")
 
         print("\\n✅ Incremental sync completed successfully!")
         return True
 
-    except Exception as e:
+    except Exception as _e:
         print(f"❌ Incremental sync failed: {e}")
         print("Falling back to legacy full sync...")
         return await sync_docs()
