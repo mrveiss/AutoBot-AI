@@ -10,7 +10,7 @@ passed together, improving code maintainability and type safety.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from src.worker_node import WorkerNode
@@ -268,3 +268,235 @@ class SearchQueryContext:
     enable_reranking: bool = True
     timeout: Optional[float] = None
     score_threshold: float = 0.0
+
+
+# Issue #375: Enhanced search context dataclasses for long parameter list refactoring
+
+
+@dataclass
+class EnhancedSearchQuery:
+    """
+    Query parameters for enhanced search operations.
+
+    Issue #375: Groups query-related parameters from enhanced_search_v2.
+
+    Attributes:
+        query: The search query string
+        limit: Maximum results to return
+        offset: Pagination offset
+        tags: Optional list of tags to filter by
+        tags_match_any: If True, match ANY tag; False matches ALL
+        exclude_terms: Terms to exclude from results
+        require_terms: Terms that must be present
+    """
+
+    query: str
+    limit: int = 10
+    offset: int = 0
+    tags: Optional[List[str]] = None
+    tags_match_any: bool = False
+    exclude_terms: Optional[List[str]] = None
+    require_terms: Optional[List[str]] = None
+
+
+@dataclass
+class EnhancedSearchFilters:
+    """
+    Filter parameters for enhanced search operations.
+
+    Issue #375: Groups filter-related parameters from enhanced_search_v2.
+
+    Attributes:
+        category: Optional category filter
+        created_after: Filter by creation date (ISO format)
+        created_before: Filter by creation date (ISO format)
+        exclude_sources: Sources to exclude
+        verified_only: Only return verified results
+    """
+
+    category: Optional[str] = None
+    created_after: Optional[str] = None
+    created_before: Optional[str] = None
+    exclude_sources: Optional[List[str]] = None
+    verified_only: bool = False
+
+
+@dataclass
+class EnhancedSearchOptions:
+    """
+    Search option parameters for enhanced search operations.
+
+    Issue #375: Groups search option parameters from enhanced_search_v2.
+
+    Attributes:
+        mode: Search mode ("semantic", "keyword", "hybrid")
+        enable_reranking: Enable cross-encoder reranking
+        min_score: Minimum similarity score threshold (0.0-1.0)
+        enable_query_expansion: Expand query with synonyms
+        enable_relevance_scoring: Apply relevance boosting
+        enable_clustering: Cluster results by topic
+        track_analytics: Track search analytics
+    """
+
+    mode: str = "hybrid"
+    enable_reranking: bool = False
+    min_score: float = 0.0
+    enable_query_expansion: bool = False
+    enable_relevance_scoring: bool = False
+    enable_clustering: bool = False
+    track_analytics: bool = True
+
+
+@dataclass
+class EnhancedSearchContext:
+    """
+    Complete context for enhanced search operations.
+
+    Issue #375: Combines all search parameters into a single context object,
+    reducing the 20-parameter signature of enhanced_search_v2 to 4 parameters.
+
+    Attributes:
+        query_params: Query-related parameters
+        filters: Filter-related parameters
+        options: Search option parameters
+        session_id: Session ID for analytics tracking
+    """
+
+    query_params: EnhancedSearchQuery
+    filters: EnhancedSearchFilters = field(default_factory=EnhancedSearchFilters)
+    options: EnhancedSearchOptions = field(default_factory=EnhancedSearchOptions)
+    session_id: Optional[str] = None
+
+    @classmethod
+    def from_params(
+        cls,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+        category: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        tags_match_any: bool = False,
+        mode: str = "hybrid",
+        enable_reranking: bool = False,
+        min_score: float = 0.0,
+        enable_query_expansion: bool = False,
+        enable_relevance_scoring: bool = False,
+        enable_clustering: bool = False,
+        track_analytics: bool = True,
+        created_after: Optional[str] = None,
+        created_before: Optional[str] = None,
+        exclude_terms: Optional[List[str]] = None,
+        require_terms: Optional[List[str]] = None,
+        exclude_sources: Optional[List[str]] = None,
+        verified_only: bool = False,
+        session_id: Optional[str] = None,
+    ) -> "EnhancedSearchContext":
+        """
+        Create an EnhancedSearchContext from individual parameters.
+
+        This factory method maintains backward compatibility by accepting
+        the original 20 parameters and grouping them into the context object.
+        """
+        return cls(
+            query_params=EnhancedSearchQuery(
+                query=query,
+                limit=limit,
+                offset=offset,
+                tags=tags,
+                tags_match_any=tags_match_any,
+                exclude_terms=exclude_terms,
+                require_terms=require_terms,
+            ),
+            filters=EnhancedSearchFilters(
+                category=category,
+                created_after=created_after,
+                created_before=created_before,
+                exclude_sources=exclude_sources,
+                verified_only=verified_only,
+            ),
+            options=EnhancedSearchOptions(
+                mode=mode,
+                enable_reranking=enable_reranking,
+                min_score=min_score,
+                enable_query_expansion=enable_query_expansion,
+                enable_relevance_scoring=enable_relevance_scoring,
+                enable_clustering=enable_clustering,
+                track_analytics=track_analytics,
+            ),
+            session_id=session_id,
+        )
+
+
+@dataclass
+class SearchResponseContext:
+    """
+    Context object for building enhanced search responses.
+
+    Issue #375: Replaces 15-parameter signature in _build_enhanced_search_response.
+    Groups response-building parameters into logical categories.
+
+    Attributes:
+        results: All search results
+        unclustered: Unclustered results
+        clusters: Clustered results (if enabled)
+        query_processed: Processed query string
+        mode: Search mode used
+        tags: Applied tags filter
+        min_score: Minimum score threshold applied
+        enable_reranking: Whether reranking was applied
+        enable_query_expansion: Whether query expansion was applied
+        enable_relevance_scoring: Whether relevance scoring was applied
+        enable_clustering: Whether clustering was applied
+        queries_count: Number of query variations searched
+        duration_ms: Search duration in milliseconds
+        offset: Pagination offset
+        limit: Pagination limit
+    """
+
+    results: List[Dict[str, Any]]
+    unclustered: List[Dict[str, Any]]
+    clusters: Optional[List[Dict[str, Any]]]
+    query_processed: str
+    mode: str
+    tags: Optional[List[str]]
+    min_score: float
+    enable_reranking: bool
+    enable_query_expansion: bool
+    enable_relevance_scoring: bool
+    enable_clustering: bool
+    queries_count: int
+    duration_ms: int
+    offset: int
+    limit: int
+
+
+@dataclass
+class SearchAnalyticsContext:
+    """
+    Context object for search analytics tracking.
+
+    Issue #375: Replaces 10-parameter signature in _track_search_analytics.
+
+    Attributes:
+        query: Original query string
+        result_count: Number of results found
+        duration_ms: Search duration in milliseconds
+        session_id: Session ID for tracking
+        mode: Search mode used
+        tags: Tags applied
+        category: Category filter applied
+        query_expansion: Whether query expansion was enabled
+        relevance_scoring: Whether relevance scoring was enabled
+        track_analytics: Whether to track analytics
+    """
+
+    query: str
+    result_count: int
+    duration_ms: int
+    session_id: Optional[str]
+    mode: str
+    tags: Optional[List[str]]
+    category: Optional[str]
+    query_expansion: bool
+    relevance_scoring: bool
+    track_analytics: bool = True
