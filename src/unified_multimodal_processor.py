@@ -1071,9 +1071,9 @@ class UnifiedMultiModalProcessor:
             return None
 
         # Try different embedding field names
-        for field in _EMBEDDING_FIELDS:  # Issue #380: use module constant
-            if field in result.result_data:
-                return result.result_data.get(field)
+        for field_name in _EMBEDDING_FIELDS:  # Issue #380: use module constant
+            if field_name in result.result_data:
+                return result.result_data.get(field_name)
 
         return None
 
