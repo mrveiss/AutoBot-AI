@@ -12,9 +12,144 @@ from src.automated_fix_generator import AutomatedFixGenerator
 from src.code_quality_dashboard import CodeQualityDashboard
 
 
-async def generate_comprehensive_fixes():
-    """Generate automated fixes based on comprehensive analysis"""
+def _print_fix_summary_stats(fix_results: dict) -> None:
+    """
+    Print fix generation summary statistics.
 
+    Issue #281: Extracted from generate_comprehensive_fixes to reduce
+    function length and improve readability.
+    """
+    print(f"📊 **Fix Generation Summary:**")
+    print(f"   • Total fixes generated: {fix_results['total_fixes_generated']}")
+    print(f"   • High confidence fixes: {fix_results['high_confidence_fixes']}")
+    print(f"   • Low risk fixes: {fix_results['low_risk_fixes']}")
+    print(f"   • Patches generated: {len(fix_results['patches'])}")
+    print(f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds")
+    print()
+
+
+def _print_fix_categories(stats: dict) -> None:
+    """
+    Print fix category breakdown and confidence distribution.
+
+    Issue #281: Extracted from generate_comprehensive_fixes to reduce
+    function length and improve readability.
+    """
+    print("🏷️ **Fix Categories:**")
+    for fix_type, count in stats['by_type'].items():
+        fix_name = fix_type.replace('_', ' ').title()
+        print(f"   • {fix_name}: {count} fixes")
+    print()
+
+    print("🎯 **Fix Confidence Distribution:**")
+    conf_stats = stats['by_confidence']
+    print(f"   • High confidence (>80%): {conf_stats['high']} fixes")
+    print(f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes")
+    print(f"   • Low confidence (<60%): {conf_stats['low']} fixes")
+    print()
+
+    print("⚠️ **Risk Assessment:**")
+    risk_stats = stats['by_risk']
+    print(f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)")
+    print(f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)")
+    print(f"   • High risk: {risk_stats['high']} fixes (manual review required)")
+    print()
+
+    print(f"🤖 **Automation Readiness:**")
+    print(f"   • Can be applied automatically: {stats['automated_fixes']} fixes")
+    print(f"   • Require manual review: {stats['manual_review_required']} fixes")
+    print()
+
+
+def _print_high_priority_fixes(fix_results: dict) -> None:
+    """
+    Print top priority fixes requiring immediate action.
+
+    Issue #281: Extracted from generate_comprehensive_fixes to reduce
+    function length and improve readability.
+    """
+    print("🚨 **Top Priority Fixes (Immediate Action):**")
+
+    high_priority_fixes = [
+        fix for fix in fix_results['fixes'][:20]
+        if fix['severity'] in ['critical', 'high']
+    ]
+
+    for i, fix in enumerate(high_priority_fixes[:10], 1):
+        severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+        emoji = severity_emoji.get(fix['severity'], "⚪")
+        confidence_icon = "🎯" if fix['confidence'] > 0.8 else "🤔"
+        risk_icon = {"low": "✅", "medium": "⚠️", "high": "🚨"}[fix['risk_level']]
+
+        print(f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})")
+        print(f"   🏷️ Type: {fix['fix_type'].replace('_', ' ').title()}")
+        if fix['file_path'] != 'Multiple files':
+            print(f"   📄 Location: {fix['file_path']}:{fix['line_number']}")
+        print(f"   {confidence_icon} Confidence: {fix['confidence']:.0%}")
+        print(f"   {risk_icon} Risk Level: {fix['risk_level'].title()}")
+        print(f"   📝 Explanation: {fix['explanation']}")
+
+        if fix['original_code'] and fix['fixed_code']:
+            print(f"   \n   🔧 **Fix Preview:**")
+            print(f"   ```python")
+            print(f"   # Before:")
+            print(f"   {fix['original_code']}")
+            print(f"   # After:")
+            print(f"   {fix['fixed_code']}")
+            print(f"   ```")
+
+
+def _print_patches_and_security(fix_results: dict) -> None:
+    """
+    Print generated patches and security/performance fix sections.
+
+    Issue #281: Extracted from generate_comprehensive_fixes to reduce
+    function length and improve readability.
+    """
+    # Show automated patches
+    if fix_results['patches']:
+        print(f"\n📋 **Generated Patches (Ready to Apply):**")
+        print(f"Found {len(fix_results['patches'])} high-confidence patches that can be applied automatically.\n")
+
+        for i, patch in enumerate(fix_results['patches'][:5], 1):
+            print(f"{i}. **{patch['description']}**")
+            print(f"   File: {patch['file_path']}:{patch['line_number']}")
+            print(f"   Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}")
+            print("   ```diff")
+            print(patch['patch_content'])
+            print("   ```")
+
+    # Security-specific fixes
+    security_fixes = [f for f in fix_results['fixes'] if 'security' in f['fix_type'] or 'injection' in f['fix_type']]
+    if security_fixes:
+        print(f"🛡️ **Critical Security Fixes:**")
+        print(f"Found {len(security_fixes)} security-related fixes that should be applied immediately:")
+
+        for fix in security_fixes[:3]:
+            print(f"   • {fix['description']}")
+            print(f"     Location: {fix['file_path']}:{fix['line_number']}")
+            print(f"     Fix: {fix['explanation']}")
+        print()
+
+    # Performance-specific fixes
+    performance_fixes = [f for f in fix_results['fixes'] if 'performance' in f['fix_type'] or 'memory' in f['fix_type']]
+    if performance_fixes:
+        print(f"⚡ **Performance Optimization Fixes:**")
+        print(f"Found {len(performance_fixes)} performance-related fixes:")
+
+        for fix in performance_fixes[:3]:
+            print(f"   • {fix['description']}")
+            print(f"     Impact: {fix['explanation']}")
+        print()
+
+
+async def generate_comprehensive_fixes():
+    """
+    Generate automated fixes based on comprehensive analysis.
+
+    Issue #281: Print sections extracted to helper functions to reduce
+    function length from 187 to ~60 lines.
+    """
     print("🔧 Starting automated fix generation...")
     print("This will analyze the codebase and generate specific code fixes for:")
     print("  • Security vulnerabilities")
@@ -51,108 +186,11 @@ async def generate_comprehensive_fixes():
 
     print("=== Automated Fix Generation Results ===\n")
 
-    # Summary statistics
-    print(f"📊 **Fix Generation Summary:**")
-    print(f"   • Total fixes generated: {fix_results['total_fixes_generated']}")
-    print(f"   • High confidence fixes: {fix_results['high_confidence_fixes']}")
-    print(f"   • Low risk fixes: {fix_results['low_risk_fixes']}")
-    print(f"   • Patches generated: {len(fix_results['patches'])}")
-    print(f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds")
-    print()
-
-    # Fix statistics breakdown
-    stats = fix_results['statistics']
-    print("🏷️ **Fix Categories:**")
-    for fix_type, count in stats['by_type'].items():
-        fix_name = fix_type.replace('_', ' ').title()
-        print(f"   • {fix_name}: {count} fixes")
-    print()
-
-    print("🎯 **Fix Confidence Distribution:**")
-    conf_stats = stats['by_confidence']
-    print(f"   • High confidence (>80%): {conf_stats['high']} fixes")
-    print(f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes")
-    print(f"   • Low confidence (<60%): {conf_stats['low']} fixes")
-    print()
-
-    print("⚠️ **Risk Assessment:**")
-    risk_stats = stats['by_risk']
-    print(f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)")
-    print(f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)")
-    print(f"   • High risk: {risk_stats['high']} fixes (manual review required)")
-    print()
-
-    print(f"🤖 **Automation Readiness:**")
-    print(f"   • Can be applied automatically: {stats['automated_fixes']} fixes")
-    print(f"   • Require manual review: {stats['manual_review_required']} fixes")
-    print()
-
-    # Show top priority fixes
-    print("🚨 **Top Priority Fixes (Immediate Action):**")
-
-    high_priority_fixes = [
-        fix for fix in fix_results['fixes'][:20]
-        if fix['severity'] in ['critical', 'high']
-    ]
-
-    for i, fix in enumerate(high_priority_fixes[:10], 1):
-        severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-        emoji = severity_emoji.get(fix['severity'], "⚪")
-        confidence_icon = "🎯" if fix['confidence'] > 0.8 else "🤔"
-        risk_icon = {"low": "✅", "medium": "⚠️", "high": "🚨"}[fix['risk_level']]
-
-        print(f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})")
-        print(f"   🏷️ Type: {fix['fix_type'].replace('_', ' ').title()}")
-        if fix['file_path'] != 'Multiple files':
-            print(f"   📄 Location: {fix['file_path']}:{fix['line_number']}")
-        print(f"   {confidence_icon} Confidence: {fix['confidence']:.0%}")
-        print(f"   {risk_icon} Risk Level: {fix['risk_level'].title()}")
-        print(f"   📝 Explanation: {fix['explanation']}")
-
-        if fix['original_code'] and fix['fixed_code']:
-            print(f"   \n   🔧 **Fix Preview:**")
-            print(f"   ```python")
-            print(f"   # Before:")
-            print(f"   {fix['original_code']}")
-            print(f"   # After:")
-            print(f"   {fix['fixed_code']}")
-            print(f"   ```")
-
-    # Show automated patches
-    if fix_results['patches']:
-        print(f"\n📋 **Generated Patches (Ready to Apply):**")
-        print(f"Found {len(fix_results['patches'])} high-confidence patches that can be applied automatically.\n")
-
-        for i, patch in enumerate(fix_results['patches'][:5], 1):  # Show first 5 patches
-            print(f"{i}. **{patch['description']}**")
-            print(f"   File: {patch['file_path']}:{patch['line_number']}")
-            print(f"   Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}")
-            print("   ```diff")
-            print(patch['patch_content'])
-            print("   ```")
-
-    # Security-specific fixes
-    security_fixes = [f for f in fix_results['fixes'] if 'security' in f['fix_type'] or 'injection' in f['fix_type']]
-    if security_fixes:
-        print(f"🛡️ **Critical Security Fixes:**")
-        print(f"Found {len(security_fixes)} security-related fixes that should be applied immediately:")
-
-        for fix in security_fixes[:3]:  # Top 3 security fixes
-            print(f"   • {fix['description']}")
-            print(f"     Location: {fix['file_path']}:{fix['line_number']}")
-            print(f"     Fix: {fix['explanation']}")
-        print()
-
-    # Performance-specific fixes
-    performance_fixes = [f for f in fix_results['fixes'] if 'performance' in f['fix_type'] or 'memory' in f['fix_type']]
-    if performance_fixes:
-        print(f"⚡ **Performance Optimization Fixes:**")
-        print(f"Found {len(performance_fixes)} performance-related fixes:")
-
-        for fix in performance_fixes[:3]:  # Top 3 performance fixes
-            print(f"   • {fix['description']}")
-            print(f"     Impact: {fix['explanation']}")
-        print()
+    # Issue #281: Use extracted helpers for output sections
+    _print_fix_summary_stats(fix_results)
+    _print_fix_categories(fix_results['statistics'])
+    _print_high_priority_fixes(fix_results)
+    _print_patches_and_security(fix_results)
 
     # Show fix recommendations
     print("📋 **Fix Application Recommendations:**")
