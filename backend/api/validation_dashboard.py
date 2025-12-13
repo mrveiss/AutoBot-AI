@@ -60,61 +60,79 @@ _dashboard_generator_lock = threading.Lock()
 _validation_judges = None
 _validation_judges_lock = threading.Lock()
 
+# Issue #281: Fallback report phase details extracted from generate_fallback_report
+FALLBACK_PHASE_DETAILS = (
+    {
+        "name": "Phase 1 - Core Infrastructure",
+        "status": "completed",
+        "progress": 100,
+        "capabilities": ["Redis", "FastAPI", "Docker"],
+    },
+    {
+        "name": "Phase 2 - Frontend Framework",
+        "status": "completed",
+        "progress": 100,
+        "capabilities": ["Vue.js", "Component System", "Routing"],
+    },
+    {
+        "name": "Phase 3 - Knowledge Management",
+        "status": "completed",
+        "progress": 95,
+        "capabilities": ["LlamaIndex", "Vector Search", "Document Processing"],
+    },
+    {
+        "name": "Phase 4 - Chat System",
+        "status": "in_progress",
+        "progress": 80,
+        "capabilities": ["Chat Interface", "LLM Integration", "Session Management"],
+    },
+    {
+        "name": "Phase 5 - Monitoring",
+        "status": "in_progress",
+        "progress": 70,
+        "capabilities": ["System Metrics", "Log Analysis", "Health Checks"],
+    },
+)
+
+# Issue #281: Fallback report recommendations extracted from generate_fallback_report
+FALLBACK_RECOMMENDATIONS = (
+    {
+        "title": "Optimize Redis Memory Usage",
+        "description": "Consider implementing data expiration policies for Redis keys",
+        "urgency": "medium",
+        "action": "Review Redis configuration and implement key expiration",
+    },
+    {
+        "title": "Add More Unit Tests",
+        "description": "Current test coverage could be improved",
+        "urgency": "low",
+        "action": "Increase test coverage to above 80%",
+    },
+)
+
+# Issue #281: Fallback system overview extracted from generate_fallback_report
+FALLBACK_SYSTEM_OVERVIEW = {
+    "overall_maturity": 85.2,
+    "completed_phases": 8,
+    "total_phases": 12,
+    "active_capabilities": 15,
+    "system_health": "healthy",
+}
+
 
 def generate_fallback_report():
-    """Generate fallback mock data when the dashboard generator is not available"""
+    """Generate fallback mock data when the dashboard generator is not available.
+
+    Issue #281: Refactored to use module-level constants.
+    Reduced from 89 to ~25 lines (72% reduction).
+    """
     current_time = datetime.now()
 
     return {
         "status": "success",
         "report": {
-            "system_overview": {
-                "overall_maturity": 85.2,
-                "completed_phases": 8,
-                "total_phases": 12,
-                "active_capabilities": 15,
-                "system_health": "healthy",
-            },
-            "phase_details": [
-                {
-                    "name": "Phase 1 - Core Infrastructure",
-                    "status": "completed",
-                    "progress": 100,
-                    "capabilities": ["Redis", "FastAPI", "Docker"],
-                },
-                {
-                    "name": "Phase 2 - Frontend Framework",
-                    "status": "completed",
-                    "progress": 100,
-                    "capabilities": ["Vue.js", "Component System", "Routing"],
-                },
-                {
-                    "name": "Phase 3 - Knowledge Management",
-                    "status": "completed",
-                    "progress": 95,
-                    "capabilities": [
-                        "LlamaIndex",
-                        "Vector Search",
-                        "Document Processing",
-                    ],
-                },
-                {
-                    "name": "Phase 4 - Chat System",
-                    "status": "in_progress",
-                    "progress": 80,
-                    "capabilities": [
-                        "Chat Interface",
-                        "LLM Integration",
-                        "Session Management",
-                    ],
-                },
-                {
-                    "name": "Phase 5 - Monitoring",
-                    "status": "in_progress",
-                    "progress": 70,
-                    "capabilities": ["System Metrics", "Log Analysis", "Health Checks"],
-                },
-            ],
+            "system_overview": FALLBACK_SYSTEM_OVERVIEW,
+            "phase_details": list(FALLBACK_PHASE_DETAILS),
             "alerts": [
                 {
                     "type": "warning",
@@ -124,22 +142,7 @@ def generate_fallback_report():
                     "severity": "medium",
                 }
             ],
-            "recommendations": [
-                {
-                    "title": "Optimize Redis Memory Usage",
-                    "description": (
-                        "Consider implementing data expiration policies for Redis keys"
-                    ),
-                    "urgency": "medium",
-                    "action": "Review Redis configuration and implement key expiration",
-                },
-                {
-                    "title": "Add More Unit Tests",
-                    "description": "Current test coverage could be improved",
-                    "urgency": "low",
-                    "action": "Increase test coverage to above 80%",
-                },
-            ],
+            "recommendations": list(FALLBACK_RECOMMENDATIONS),
             "progression_status": {
                 "can_progress": True,
                 "current_phase": "Phase 4",
