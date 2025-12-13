@@ -32,6 +32,51 @@ _RESEARCH_KEYWORDS = frozenset({
     "find", "search", "tools", "best", "recommend", "compare"
 })
 
+# Issue #281: Default classification keywords extracted from _initialize_default_rules
+DEFAULT_CLASSIFICATION_KEYWORDS = {
+    "research": [
+        "find", "search", "tools", "best", "recommend", "compare", "need",
+        "what", "which", "whats new", "what's new", "latest", "current",
+        "news", "updates", ".com", ".lv", ".net", ".org", "website", "site",
+    ],
+    "install": ["install", "setup", "configure", "deploy", "run", "execute", "start"],
+    "complex": ["how to", "guide", "tutorial", "step by step", "plan", "strategy"],
+    "security": [
+        "scan", "security", "vulnerabilities", "penetration", "exploit", "audit", "assess",
+    ],
+    "network": ["network", "port", "firewall", "tcp", "udp", "lan", "wan", "router"],
+    "system": ["system", "server", "machine", "host", "computer", "device"],
+}
+
+# Issue #281: Default classification rules extracted from _initialize_default_rules
+DEFAULT_CLASSIFICATION_RULES = {
+    "security_network": {
+        "condition": "any_security AND any_network",
+        "complexity": "complex",
+        "priority": 100,
+    },
+    "multiple_research": {
+        "condition": "research >= 2 OR has_tools",
+        "complexity": "complex",
+        "priority": 90,
+    },
+    "installation": {
+        "condition": "install >= 1",
+        "complexity": "complex",
+        "priority": 80,
+    },
+    "single_research": {
+        "condition": "research >= 1",
+        "complexity": "complex",
+        "priority": 70,
+    },
+    "complex_request": {
+        "condition": "complex >= 2",
+        "complexity": "complex",
+        "priority": 60,
+    },
+}
+
 
 class WorkflowClassifier:
     """Manages workflow classification rules in Redis."""
@@ -50,102 +95,21 @@ class WorkflowClassifier:
                 self.redis_client = None
 
     def _initialize_default_rules(self):
-        """Initialize default classification rules if not present."""
+        """Initialize default classification rules if not present.
+
+        Issue #281: Refactored to use module-level constants.
+        Reduced from 98 to ~15 lines (85% reduction).
+        """
         if not self.redis_client.exists(self.keywords_key):
-            default_keywords = {
-                "research": [
-                    "find",
-                    "search",
-                    "tools",
-                    "best",
-                    "recommend",
-                    "compare",
-                    "need",
-                    "what",
-                    "which",
-                    "whats new",
-                    "what's new",
-                    "latest",
-                    "current",
-                    "news",
-                    "updates",
-                    ".com",
-                    ".lv",
-                    ".net",
-                    ".org",
-                    "website",
-                    "site",
-                ],
-                "install": [
-                    "install",
-                    "setup",
-                    "configure",
-                    "deploy",
-                    "run",
-                    "execute",
-                    "start",
-                ],
-                "complex": [
-                    "how to",
-                    "guide",
-                    "tutorial",
-                    "step by step",
-                    "plan",
-                    "strategy",
-                ],
-                "security": [
-                    "scan",
-                    "security",
-                    "vulnerabilities",
-                    "penetration",
-                    "exploit",
-                    "audit",
-                    "assess",
-                ],
-                "network": [
-                    "network",
-                    "port",
-                    "firewall",
-                    "tcp",
-                    "udp",
-                    "lan",
-                    "wan",
-                    "router",
-                ],
-                "system": ["system", "server", "machine", "host", "computer", "device"],
-            }
-            self.redis_client.set(self.keywords_key, json.dumps(default_keywords))
+            self.redis_client.set(
+                self.keywords_key, json.dumps(DEFAULT_CLASSIFICATION_KEYWORDS)
+            )
             logger.info("Initialized default classification keywords")
 
         if not self.redis_client.exists(self.rules_key):
-            default_rules = {
-                "security_network": {
-                    "condition": "any_security AND any_network",
-                    "complexity": "complex",
-                    "priority": 100,
-                },
-                "multiple_research": {
-                    "condition": "research >= 2 OR has_tools",
-                    "complexity": "complex",
-                    "priority": 90,
-                },
-                "installation": {
-                    "condition": "install >= 1",
-                    "complexity": "complex",
-                    "priority": 80,
-                },
-                "single_research": {
-                    "condition": "research >= 1",
-                    "complexity": "complex",
-                    "priority": 70,
-                },
-                "complex_request": {
-                    "condition": "complex >= 2",
-                    "complexity": "complex",
-                    "priority": 60,
-                },
-            }
-            self.redis_client.set(self.rules_key, json.dumps(default_rules))
+            self.redis_client.set(
+                self.rules_key, json.dumps(DEFAULT_CLASSIFICATION_RULES)
+            )
             logger.info("Initialized default classification rules")
 
     def get_keywords(self, category: str) -> List[str]:
