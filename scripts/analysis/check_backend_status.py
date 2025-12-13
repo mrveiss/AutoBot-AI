@@ -13,6 +13,8 @@ from urllib.parse import urljoin
 
 import requests
 
+from src.constants import ServiceURLs
+
 
 class BackendStatusChecker:
     def __init__(self, base_url=ServiceURLs.BACKEND_LOCAL):

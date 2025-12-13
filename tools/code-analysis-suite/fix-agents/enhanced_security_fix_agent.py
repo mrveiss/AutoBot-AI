@@ -580,30 +580,36 @@ class EnhancedSecurityFixAgent:
 
         return html_files
 
-    def generate_report(self, results: List[Dict[str, Any]]) -> str:
-        """Generate comprehensive security enhancement report."""
-
-        # Update report summary
-        total_files = len(results)
-        files_enhanced = len([r for r in results if r["status"] == "enhanced"])
-        files_clean = len([r for r in results if r["status"] == "clean"])
-        files_error = len([r for r in results if r["status"] == "error"])
-
-        total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
-        total_fixes = sum(r.get("fixes_applied", 0) for r in results)
-        total_enhancements = sum(r.get("security_enhancements", 0) for r in results)
-
-        self.report["scan_summary"] = {
-            "total_files_scanned": total_files,
-            "files_enhanced": files_enhanced,
-            "files_clean": files_clean,
-            "files_with_errors": files_error,
-            "total_vulnerabilities_found": total_vulnerabilities,
-            "total_direct_fixes_applied": total_fixes,
-            "total_security_enhancements": total_enhancements,
+    def _compute_report_stats(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
+        """
+        Compute statistics from processing results.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
+        return {
+            "total_files": len(results),
+            "files_enhanced": len([r for r in results if r["status"] == "enhanced"]),
+            "files_clean": len([r for r in results if r["status"] == "clean"]),
+            "files_error": len([r for r in results if r["status"] == "error"]),
+            "total_vulnerabilities": sum(r.get("vulnerabilities_found", 0) for r in results),
+            "total_fixes": sum(r.get("fixes_applied", 0) for r in results),
+            "total_enhancements": sum(r.get("security_enhancements", 0) for r in results),
         }
 
-        # Add detailed results
+    def _populate_report_data(self, results: List[Dict[str, Any]], stats: Dict[str, int]) -> None:
+        """
+        Populate self.report with summary, results, and recommendations.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
+        self.report["scan_summary"] = {
+            "total_files_scanned": stats["total_files"],
+            "files_enhanced": stats["files_enhanced"],
+            "files_clean": stats["files_clean"],
+            "files_with_errors": stats["files_error"],
+            "total_vulnerabilities_found": stats["total_vulnerabilities"],
+            "total_direct_fixes_applied": stats["total_fixes"],
+            "total_security_enhancements": stats["total_enhancements"],
+        }
+
         for result in results:
             if result["status"] == "enhanced":
                 self.report["vulnerabilities"].extend(result["vulnerabilities"])
@@ -612,7 +618,6 @@ class EnhancedSecurityFixAgent:
                     result.get("enhancements", [])
                 )
 
-        # Enhanced recommendations
         self.report["recommendations"] = [
             "🛡️ Content Security Policy (CSP) has been implemented to prevent XSS attacks",
             "🔒 Security meta tags added for additional browser protection",
@@ -626,133 +631,112 @@ class EnhancedSecurityFixAgent:
             "🚀 Consider implementing Trusted Types API for additional DOM protection",
         ]
 
-        # Generate comprehensive report
-        report_content = f"""
-# AutoBot Enhanced Security Fix Agent Report
-
-**Generated:** {self.report['timestamp']}
-**Agent Version:** {self.report['agent_version']}
-
-## Executive Summary
-
-🎯 **Security Enhancement Results:**
-- **Files Scanned:** {total_files}
-- **Files Enhanced:** {files_enhanced}
-- **Clean Files:** {files_clean}
-- **Files with Errors:** {files_error}
-- **Total Vulnerabilities Found:** {total_vulnerabilities}
-- **Direct Fixes Applied:** {total_fixes}
-- **Security Enhancements Added:** {total_enhancements}
-
-## Vulnerability Analysis
-
-"""
-
-        # Vulnerability breakdown by severity and type
+    def _build_vulnerability_breakdown(self) -> str:
+        """
+        Build vulnerability breakdown section of the report.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
         severity_counts = {}
-        type_counts = {}
         library_vulns = 0
 
         for vuln in self.report["vulnerabilities"]:
             severity = vuln["severity"]
-            vuln_type = vuln["type"]
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
-            type_counts[vuln_type] = type_counts.get(vuln_type, 0) + 1
             if vuln.get("is_library_code", False):
                 library_vulns += 1
 
+        content = ""
         if severity_counts:
-            report_content += "### Vulnerabilities by Severity:\n\n"
+            content += "### Vulnerabilities by Severity:\n\n"
+            severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
             for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
                 if severity in severity_counts:
-                    icon = {
-                        "CRITICAL": "🔴",
-                        "HIGH": "🟠",
-                        "MEDIUM": "🟡",
-                        "LOW": "🟢",
-                    }[severity]
-                    report_content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
-            report_content += f"- 📚 **Library/Framework Code:** {library_vulns} vulnerabilities (mitigated with CSP)\n\n"
+                    icon = severity_icons[severity]
+                    content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
+            content += f"- 📚 **Library/Framework Code:** {library_vulns} vulnerabilities (mitigated with CSP)\n\n"
 
-        # Security enhancements applied
+        return content
+
+    def _build_enhancements_and_fixes_section(self) -> str:
+        """
+        Build security enhancements and fixes section of the report.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
+        content = ""
+
         if self.report["security_enhancements"]:
-            report_content += "## Security Enhancements Applied\n\n"
+            content += "## Security Enhancements Applied\n\n"
             unique_enhancements = list(set(self.report["security_enhancements"]))
             for i, enhancement in enumerate(unique_enhancements, 1):
-                report_content += f"{i}. ✅ {enhancement}\n"
-            report_content += "\n"
+                content += f"{i}. ✅ {enhancement}\n"
+            content += "\n"
 
-        # Detailed vulnerability list (non-library only)
         direct_vulns = [
-            v
-            for v in self.report["vulnerabilities"]
+            v for v in self.report["vulnerabilities"]
             if not v.get("is_library_code", False)
         ]
         if direct_vulns:
-            report_content += "### Critical Vulnerabilities Fixed:\n\n"
+            content += "### Critical Vulnerabilities Fixed:\n\n"
+            severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
             for i, vuln in enumerate(direct_vulns, 1):
-                severity_icon = {
-                    "CRITICAL": "🔴",
-                    "HIGH": "🟠",
-                    "MEDIUM": "🟡",
-                    "LOW": "🟢",
-                }
                 icon = severity_icon.get(vuln["severity"], "⚪")
+                content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
+                content += f"- **File:** `{vuln['file']}`\n"
+                content += f"- **Line:** {vuln['line']}\n"
+                content += f"- **Severity:** {vuln['severity']}\n"
+                match_preview = vuln['match'][:100] + ('...' if len(vuln['match']) > 100 else '')
+                content += f"- **Pattern:** `{match_preview}`\n\n"
 
-                report_content += (
-                    f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
-                )
-                report_content += f"- **File:** `{vuln['file']}`\n"
-                report_content += f"- **Line:** {vuln['line']}\n"
-                report_content += f"- **Severity:** {vuln['severity']}\n"
-                report_content += f"- **Pattern:** `{vuln['match'][:100]}{'...' if len(vuln['match']) > 100 else ''}`\n\n"
-
-        # Applied fixes
         if self.report["fixes_applied"]:
-            report_content += "## Direct Security Fixes Applied\n\n"
+            content += "## Direct Security Fixes Applied\n\n"
             for i, fix in enumerate(self.report["fixes_applied"], 1):
-                report_content += (
-                    f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
-                )
-                report_content += f"- **Line:** {fix['line']}\n"
-                report_content += f"- **Severity:** {fix['severity']}\n"
-                report_content += f"- **Original:** `{fix['original'][:80]}{'...' if len(fix['original']) > 80 else ''}`\n"
-                report_content += f"- **Fixed:** `{fix['fixed'][:80]}{'...' if len(fix['fixed']) > 80 else ''}`\n\n"
+                content += f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
+                content += f"- **Line:** {fix['line']}\n"
+                content += f"- **Severity:** {fix['severity']}\n"
+                orig_preview = fix['original'][:80] + ('...' if len(fix['original']) > 80 else '')
+                fixed_preview = fix['fixed'][:80] + ('...' if len(fix['fixed']) > 80 else '')
+                content += f"- **Original:** `{orig_preview}`\n"
+                content += f"- **Fixed:** `{fixed_preview}`\n\n"
 
-        # Recommendations
-        report_content += "## Security Recommendations & Status\n\n"
+        return content
+
+    def _build_file_details_section(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Build file processing details section of the report.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
+        content = "## Security Recommendations & Status\n\n"
         for i, rec in enumerate(self.report["recommendations"], 1):
-            report_content += f"{i}. {rec}\n"
+            content += f"{i}. {rec}\n"
 
-        report_content += f"\n## File Processing Details\n\n"
+        content += "\n## File Processing Details\n\n"
+        status_icon = {"enhanced": "🔧", "clean": "✅", "error": "❌"}
+
         for result in results:
-            status_icon = {"enhanced": "🔧", "clean": "✅", "error": "❌"}
             icon = status_icon.get(result["status"], "⚪")
-
-            report_content += f"**{icon} {result['file']}**\n"
-            report_content += f"- Status: {result['status'].upper()}\n"
+            content += f"**{icon} {result['file']}**\n"
+            content += f"- Status: {result['status'].upper()}\n"
 
             if result["status"] == "enhanced":
-                report_content += (
-                    f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
-                )
-                report_content += (
-                    f"  - Library Code: {result.get('library_vulnerabilities', 0)}\n"
-                )
-                report_content += (
-                    f"  - Direct Code: {result.get('direct_vulnerabilities', 0)}\n"
-                )
-                report_content += f"- Direct Fixes Applied: {result['fixes_applied']}\n"
-                report_content += (
-                    f"- Security Enhancements: {result['security_enhancements']}\n"
-                )
-                report_content += f"- Backup Created: `{result['backup_path']}`\n"
+                content += f"- Vulnerabilities Found: {result['vulnerabilities_found']}\n"
+                content += f"  - Library Code: {result.get('library_vulnerabilities', 0)}\n"
+                content += f"  - Direct Code: {result.get('direct_vulnerabilities', 0)}\n"
+                content += f"- Direct Fixes Applied: {result['fixes_applied']}\n"
+                content += f"- Security Enhancements: {result['security_enhancements']}\n"
+                content += f"- Backup Created: `{result['backup_path']}`\n"
             elif result["status"] == "error":
-                report_content += f"- Error: {result['error']}\n"
+                content += f"- Error: {result['error']}\n"
 
-            report_content += "\n"
+            content += "\n"
 
-        report_content += """
+        return content
+
+    def _get_architecture_overview(self) -> str:
+        """
+        Return the static security architecture overview section.
+        Issue #281: Extracted from generate_report to reduce function length.
+        """
+        return """
 ## Security Architecture Overview
 
 The Enhanced Security Fix Agent implements a multi-layered defense strategy:
@@ -783,6 +767,42 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
 **Enhanced Security Fix Agent v2.0.0**
 *Advanced XSS Protection Suite - AutoBot Security Framework*
 """
+
+    def generate_report(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Generate comprehensive security enhancement report.
+        Issue #281: Extracted helpers _compute_report_stats(), _populate_report_data(),
+        _build_vulnerability_breakdown(), _build_enhancements_and_fixes_section(),
+        _build_file_details_section(), and _get_architecture_overview()
+        to reduce function length from 205 to ~30 lines.
+        """
+        stats = self._compute_report_stats(results)
+        self._populate_report_data(results, stats)
+
+        report_content = f"""
+# AutoBot Enhanced Security Fix Agent Report
+
+**Generated:** {self.report['timestamp']}
+**Agent Version:** {self.report['agent_version']}
+
+## Executive Summary
+
+🎯 **Security Enhancement Results:**
+- **Files Scanned:** {stats['total_files']}
+- **Files Enhanced:** {stats['files_enhanced']}
+- **Clean Files:** {stats['files_clean']}
+- **Files with Errors:** {stats['files_error']}
+- **Total Vulnerabilities Found:** {stats['total_vulnerabilities']}
+- **Direct Fixes Applied:** {stats['total_fixes']}
+- **Security Enhancements Added:** {stats['total_enhancements']}
+
+## Vulnerability Analysis
+
+"""
+        report_content += self._build_vulnerability_breakdown()
+        report_content += self._build_enhancements_and_fixes_section()
+        report_content += self._build_file_details_section(results)
+        report_content += self._get_architecture_overview()
 
         return report_content
 
