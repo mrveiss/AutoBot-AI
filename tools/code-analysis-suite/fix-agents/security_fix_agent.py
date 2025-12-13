@@ -17,6 +17,15 @@ Author: AutoBot Security Fix Agent
 Version: 1.0.0
 """
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level constant for HTML extensions (performance optimization)
+_HTML_EXTENSIONS = _HTML_EXTENSIONS
+
 import os
 import re
 import sys
@@ -99,11 +108,11 @@ class SecurityFixAgent:
             backup_path = self.backup_dir / backup_name
             shutil.copy2(file_path, backup_path)
 
-            print(f"✅ Backup created: {backup_path}")
+            logger.info("Backup created: %sbackup_path ")
             return str(backup_path)
 
         except Exception as e:
-            print(f"❌ Failed to create backup: {e}")
+            logger.error("Failed to create backup: %se ")
             return ""
 
     def scan_for_vulnerabilities(
@@ -272,7 +281,7 @@ class SecurityFixAgent:
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a single file."""
         try:
-            print(f"\n🔍 Analyzing file: {file_path}")
+            logger.info("\n🔍 Analyzing file: {file_path}")
 
             # Read file content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -285,7 +294,7 @@ class SecurityFixAgent:
             vulnerabilities = self.scan_for_vulnerabilities(original_content, file_path)
 
             if not vulnerabilities:
-                print("✅ No XSS vulnerabilities found")
+                logger.info("✅ No XSS vulnerabilities found")
                 return {
                     "file": file_path,
                     "status": "clean",
@@ -293,7 +302,7 @@ class SecurityFixAgent:
                     "fixes_applied": 0,
                 }
 
-            print(f"⚠️  Found {len(vulnerabilities)} potential XSS vulnerabilities:")
+            logger.warning("Found %slen(vulnerabilities)  potential XSS vulnerabilities:")
 
             # Display vulnerabilities
             for vuln in vulnerabilities:
@@ -304,10 +313,9 @@ class SecurityFixAgent:
                     "LOW": "🟢",
                 }
                 icon = severity_icon.get(vuln["severity"], "⚪")
-                print(
-                    f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
+                logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
                 )
-                print(f"     Match: {vuln['match'][:100]}")
+                logger.info("     Match: {vuln['match'][:100]}")
 
             # Create backup
             backup_path = self.create_backup(file_path)
@@ -319,14 +327,14 @@ class SecurityFixAgent:
                 }
 
             # Apply fixes
-            print(f"\n🔧 Applying security fixes...")
+            logger.info("\n🔧 Applying security fixes...")
             fixed_content, fixes_applied = self.apply_security_fixes(
                 original_content, vulnerabilities
             )
 
             # Validate the fixed content
             if not self.validate_html_structure(fixed_content):
-                print("❌ Fixed content failed HTML structure validation")
+                logger.info("❌ Fixed content failed HTML structure validation")
                 return {
                     "file": file_path,
                     "status": "error",
@@ -340,7 +348,7 @@ class SecurityFixAgent:
             # Calculate fixed file hash
             fixed_hash = hashlib.sha256(fixed_content.encode()).hexdigest()
 
-            print(f"✅ Applied {len(fixes_applied)} security fixes")
+            logger.info("Applied %slen(fixes_applied)  security fixes")
 
             result = {
                 "file": file_path,
@@ -357,7 +365,7 @@ class SecurityFixAgent:
             return result
 
         except Exception as e:
-            print(f"❌ Error processing file {file_path}: {e}")
+            logger.error("Error processing file %sfile_path : %se ")
             return {"file": file_path, "status": "error", "error": str(e)}
 
     def scan_directory(self, directory: str) -> List[str]:
@@ -367,12 +375,12 @@ class SecurityFixAgent:
         try:
             for root, dirs, files in os.walk(directory):
                 for file in files:
-                    if file.lower().endswith((".html", ".htm")):
+                    if file.lower().endswith(_HTML_EXTENSIONS):
                         file_path = os.path.join(root, file)
                         html_files.append(file_path)
 
         except Exception as e:
-            print(f"❌ Error scanning directory {directory}: {e}")
+            logger.error("Error scanning directory %sdirectory : %se ")
 
         return html_files
 
@@ -539,30 +547,30 @@ class SecurityFixAgent:
             return report_path
 
         except Exception as e:
-            print(f"❌ Error saving report: {e}")
+            logger.error("Error saving report: %se ")
             return ""
 
     def run(self, target_path: str) -> None:
         """Main execution method."""
-        print("🛡️  AutoBot Security Fix Agent v1.0.0")
-        print("   XSS Vulnerability Remediation Tool")
-        print("=" * 50)
+        logger.info("🛡️  AutoBot Security Fix Agent v1.0.0")
+        logger.info("   XSS Vulnerability Remediation Tool")
+        logger.info("=" * 50)
 
         # Determine if target is file or directory
         if os.path.isfile(target_path):
             files_to_process = [target_path]
         elif os.path.isdir(target_path):
-            print(f"📂 Scanning directory: {target_path}")
+            logger.info("📂 Scanning directory: {target_path}")
             files_to_process = self.scan_directory(target_path)
         else:
-            print(f"❌ Target path not found: {target_path}")
+            logger.error("Target path not found: %starget_path ")
             return
 
         if not files_to_process:
-            print("❌ No HTML files found to process")
+            logger.info("❌ No HTML files found to process")
             return
 
-        print(f"📋 Found {len(files_to_process)} HTML files to analyze")
+        logger.info("📋 Found {len(files_to_process)} HTML files to analyze")
 
         # Process each file
         results = []
@@ -571,42 +579,42 @@ class SecurityFixAgent:
             results.append(result)
 
         # Generate and save report
-        print(f"\n📊 Generating security report...")
+        logger.info("\n📊 Generating security report...")
         report_content = self.generate_report(results)
         report_path = self.save_report(report_content, os.path.dirname(target_path))
 
         if report_path:
-            print(f"✅ Security report saved: {report_path}")
+            logger.info("Security report saved: %sreport_path ")
 
         # Print summary
         total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
         total_fixes = sum(r.get("fixes_applied", 0) for r in results)
 
-        print("\n" + "=" * 50)
-        print("🎯 SUMMARY")
-        print("=" * 50)
-        print(f"Files processed: {len(results)}")
-        print(f"Vulnerabilities found: {total_vulnerabilities}")
-        print(f"Fixes applied: {total_fixes}")
+        logger.info("=" * 50)
+        logger.info("🎯 SUMMARY")
+        logger.info("=" * 50)
+        logger.info("Files processed: {len(results)}")
+        logger.info("Vulnerabilities found: {total_vulnerabilities}")
+        logger.info("Fixes applied: {total_fixes}")
 
         if total_fixes > 0:
-            print(f"✅ Security fixes successfully applied!")
-            print(f"📁 Backups created in: {self.backup_dir}")
+            logger.info("Security fixes successfully applied!")
+            logger.info("📁 Backups created in: {self.backup_dir}")
         else:
-            print("✅ No vulnerabilities required fixing")
+            logger.info("✅ No vulnerabilities required fixing")
 
 
 def main():
     """Main entry point."""
     if len(sys.argv) != 2:
-        print("Usage: python security_fix_agent.py <file_or_directory_path>")
-        print("Example: python security_fix_agent.py /path/to/playwright-report/")
+        logger.info("Usage: python security_fix_agent.py <file_or_directory_path>")
+        logger.info("Example: python security_fix_agent.py /path/to/playwright-report/")
         sys.exit(1)
 
     target_path = sys.argv[1]
 
     if not os.path.exists(target_path):
-        print(f"❌ Error: Path '{target_path}' does not exist")
+        logger.error("Error: Path '%starget_path ' does not exist")
         sys.exit(1)
 
     # Create and run the security fix agent
