@@ -14,7 +14,6 @@ import sys
 import glob
 import logging
 from pathlib import Path
-from typing import Optional
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
