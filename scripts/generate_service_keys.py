@@ -16,8 +16,10 @@ import sys
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.security.service_auth import ServiceAuthManager
 import structlog
+
+from backend.security.service_auth import ServiceAuthManager
+from src.utils.redis_client import get_redis_client
 
 logger = structlog.get_logger()
 

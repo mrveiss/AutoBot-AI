@@ -212,7 +212,7 @@ def generate_content_hash(content: str) -> str:
 
 
 async def index_document(
-    kb: KnowledgeBaseV2,
+    kb: KnowledgeBase,
     file_path: Path,
     category: str,
     reindex: bool = False

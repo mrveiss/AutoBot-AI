@@ -12,6 +12,8 @@ import logging
 import sys
 import time
 
+from src.constants import ServiceURLs
+
 # Add the project root to the Python path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
 

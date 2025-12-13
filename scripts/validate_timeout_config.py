@@ -20,6 +20,8 @@ _NUMERIC_TYPES = (int, float)
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.unified_config_manager import UnifiedConfigManager
+
 
 def print_section(title: str):
     """Print a section header."""

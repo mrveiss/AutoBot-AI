@@ -127,7 +127,7 @@ class KnowledgeConsistencyVerifier:
 
         try:
             # 1. Check knowledge base embedding model
-            kb_config = config_manager.get_llm_config()
+            kb_config = config.get_llm_config()
             kb_embedding_model = kb_config.get("unified", {}).get(
                 "embedding", {}
             ).get("providers", {}).get("ollama", {}).get("selected_model")

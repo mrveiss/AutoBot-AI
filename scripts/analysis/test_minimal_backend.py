@@ -6,9 +6,12 @@
 Minimal backend to test basic FastAPI functionality
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
+
+from src.constants import ServiceURLs
 
 # Set up minimal logging
 logging.basicConfig(level=logging.INFO)
@@ -65,6 +68,5 @@ async def execute_workflow(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    from src.constants import ServiceURLs  # noqa: F401 - used for reference
     logger.info("Starting minimal backend...")
     uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

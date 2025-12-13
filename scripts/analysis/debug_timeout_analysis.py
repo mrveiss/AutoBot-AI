@@ -10,7 +10,9 @@ import time
 import logging
 import traceback
 import aiohttp
-from typing import Dict, Any
+from typing import Any, Dict
+
+from src.constants import ServiceURLs
 
 # Configure logging to see what's happening
 logging.basicConfig(

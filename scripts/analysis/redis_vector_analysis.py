@@ -13,6 +13,8 @@ import logging
 import sys
 from typing import Any, Dict, List, Tuple
 
+from src.constants import ServiceURLs
+
 # Add project root to path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
 
