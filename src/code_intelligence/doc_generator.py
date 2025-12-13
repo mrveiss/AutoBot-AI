@@ -1633,7 +1633,7 @@ class DocGenerator:
                 lines.append(f"  - [Class: `{class_doc.name}`](#{class_anchor})")
 
             if module.functions:
-                lines.append(f"  - [Functions](#functions)")
+                lines.append("  - [Functions](#functions)")
 
         return lines
 
@@ -1717,7 +1717,7 @@ class DocGenerator:
         lines.append("")
 
         # Signature
-        lines.append(f"```python")
+        lines.append("```python")
         lines.append(f"def {func_doc.name}{func_doc.signature}")
         lines.append("```")
         lines.append("")

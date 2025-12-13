@@ -157,13 +157,6 @@ class AsyncSQLiteConnectionPool:
             logger.error(f"Error returning connection to pool: {e}")
             await self._close_connection_safely(conn)
 
-    async def _close_connection_safely(self, conn: aiosqlite.Connection) -> None:
-        """Close connection with error handling (Issue #315: extracted)."""
-        try:
-            await conn.close()
-        except Exception:
-            pass  # Best-effort cleanup
-
     @asynccontextmanager
     async def get_connection(self):
         """

@@ -423,7 +423,6 @@ and requirements of the request.
 # CLI tool for testing the classification agent
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test the Classification Agent")
     parser.add_argument("message", nargs="?", help="Message to classify")

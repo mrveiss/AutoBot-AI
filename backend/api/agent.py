@@ -300,23 +300,6 @@ def _process_tool_result(result_dict: dict) -> tuple:
     return str(result_dict), str(result_dict), None
 
 
-async def _publish_event_safe(event_manager, event_name: str, data: dict) -> None:
-    """
-    Publish event with error handling (non-critical operation).
-
-    Issue #281: Extracted helper for safe event publishing.
-
-    Args:
-        event_manager: Event manager instance
-        event_name: Name of event to publish
-        data: Event data dictionary
-    """
-    try:
-        await event_manager.publish(event_name, data)
-    except Exception as e:
-        logger.warning(f"Failed to publish {event_name} event: {e}")
-
-
 def _record_goal_metrics(task_start_time: float, status: str) -> None:
     """
     Record Prometheus metrics for goal execution.
