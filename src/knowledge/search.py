@@ -14,6 +14,11 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+from backend.models.task_context import (
+    EnhancedSearchContext,
+    SearchAnalyticsContext,
+    SearchResponseContext,
+)
 from src.utils.error_boundaries import error_boundary
 
 if TYPE_CHECKING:
@@ -617,6 +622,10 @@ class SearchMixin:
         """
         Enhanced search v2 with full Issue #78 improvements.
 
+        Issue #375: This method now delegates to enhanced_search_v2_ctx using
+        EnhancedSearchContext dataclass. The original signature is preserved
+        for backward compatibility.
+
         Issue #78: Search quality improvements including:
         - Query expansion with synonyms and related terms
         - Relevance scoring with recency, popularity, authority
@@ -649,10 +658,78 @@ class SearchMixin:
         Returns:
             Enhanced search response with optional clustering
         """
+        # Issue #375: Create context from parameters and delegate
+        ctx = EnhancedSearchContext.from_params(
+            query=query,
+            limit=limit,
+            offset=offset,
+            category=category,
+            tags=tags,
+            tags_match_any=tags_match_any,
+            mode=mode,
+            enable_reranking=enable_reranking,
+            min_score=min_score,
+            enable_query_expansion=enable_query_expansion,
+            enable_relevance_scoring=enable_relevance_scoring,
+            enable_clustering=enable_clustering,
+            track_analytics=track_analytics,
+            created_after=created_after,
+            created_before=created_before,
+            exclude_terms=exclude_terms,
+            require_terms=require_terms,
+            exclude_sources=exclude_sources,
+            verified_only=verified_only,
+            session_id=session_id,
+        )
+        return await self.enhanced_search_v2_ctx(ctx)
+
+    @error_boundary(component="knowledge_base", function="enhanced_search_v2_ctx")
+    async def enhanced_search_v2_ctx(
+        self,
+        ctx: EnhancedSearchContext,
+    ) -> Dict[str, Any]:
+        """
+        Enhanced search v2 using EnhancedSearchContext.
+
+        Issue #375: Refactored from 20-parameter signature to accept a single
+        context object. This is the primary implementation; enhanced_search_v2
+        now delegates to this method for backward compatibility.
+
+        Args:
+            ctx: EnhancedSearchContext containing all search parameters grouped
+                 into query_params, filters, and options dataclasses.
+
+        Returns:
+            Enhanced search response with optional clustering
+        """
         import time
-        from datetime import datetime as dt
 
         self.ensure_initialized()
+
+        # Extract commonly used values for readability
+        query = ctx.query_params.query
+        limit = ctx.query_params.limit
+        offset = ctx.query_params.offset
+        tags = ctx.query_params.tags
+        tags_match_any = ctx.query_params.tags_match_any
+        exclude_terms = ctx.query_params.exclude_terms
+        require_terms = ctx.query_params.require_terms
+
+        category = ctx.filters.category
+        created_after = ctx.filters.created_after
+        created_before = ctx.filters.created_before
+        exclude_sources = ctx.filters.exclude_sources
+        verified_only = ctx.filters.verified_only
+
+        mode = ctx.options.mode
+        enable_reranking = ctx.options.enable_reranking
+        min_score = ctx.options.min_score
+        enable_query_expansion = ctx.options.enable_query_expansion
+        enable_relevance_scoring = ctx.options.enable_relevance_scoring
+        enable_clustering = ctx.options.enable_clustering
+        track_analytics = ctx.options.track_analytics
+
+        session_id = ctx.session_id
 
         if not query.strip():
             return self._build_empty_query_response()
@@ -865,6 +942,8 @@ class SearchMixin:
         Track search analytics.
 
         Issue #281: Extracted from enhanced_search_v2 for clarity.
+        Issue #375: Delegates to _track_search_analytics_ctx using
+        SearchAnalyticsContext for backward compatibility.
 
         Args:
             query: Original query
@@ -878,23 +957,51 @@ class SearchMixin:
             relevance_scoring: Whether relevance scoring was enabled
             track_analytics: Whether to track analytics
         """
-        if not track_analytics:
+        # Issue #375: Create context and delegate
+        ctx = SearchAnalyticsContext(
+            query=query,
+            result_count=result_count,
+            duration_ms=duration_ms,
+            session_id=session_id,
+            mode=mode,
+            tags=tags,
+            category=category,
+            query_expansion=query_expansion,
+            relevance_scoring=relevance_scoring,
+            track_analytics=track_analytics,
+        )
+        self._track_search_analytics_ctx(ctx)
+
+    def _track_search_analytics_ctx(
+        self,
+        ctx: SearchAnalyticsContext,
+    ) -> None:
+        """
+        Track search analytics using context.
+
+        Issue #375: Refactored from 10-parameter signature to accept a single
+        SearchAnalyticsContext object.
+
+        Args:
+            ctx: SearchAnalyticsContext containing all analytics parameters.
+        """
+        if not ctx.track_analytics:
             return
 
         from src.knowledge.search_quality import get_search_analytics
 
         analytics = get_search_analytics()
         analytics.record_search(
-            query=query,
-            result_count=result_count,
-            duration_ms=duration_ms,
-            session_id=session_id,
+            query=ctx.query,
+            result_count=ctx.result_count,
+            duration_ms=ctx.duration_ms,
+            session_id=ctx.session_id,
             filters={
-                "mode": mode,
-                "tags": tags,
-                "category": category,
-                "query_expansion": query_expansion,
-                "relevance_scoring": relevance_scoring,
+                "mode": ctx.mode,
+                "tags": ctx.tags,
+                "category": ctx.category,
+                "query_expansion": ctx.query_expansion,
+                "relevance_scoring": ctx.relevance_scoring,
             },
         )
 
@@ -960,6 +1067,8 @@ class SearchMixin:
         Build the enhanced search response.
 
         Issue #281: Extracted from enhanced_search_v2 for clarity.
+        Issue #375: Delegates to _build_enhanced_search_response_ctx using
+        SearchResponseContext for backward compatibility.
 
         Args:
             results: All search results
@@ -981,31 +1090,67 @@ class SearchMixin:
         Returns:
             Enhanced search response dictionary
         """
-        total_count = len(results)
+        # Issue #375: Create context and delegate
+        ctx = SearchResponseContext(
+            results=results,
+            unclustered=unclustered,
+            clusters=clusters,
+            query_processed=query,
+            mode=mode,
+            tags=tags,
+            min_score=min_score,
+            enable_reranking=enable_reranking,
+            enable_query_expansion=enable_query_expansion,
+            enable_relevance_scoring=enable_relevance_scoring,
+            enable_clustering=enable_clustering,
+            queries_count=queries_count,
+            duration_ms=duration_ms,
+            offset=offset,
+            limit=limit,
+        )
+        return self._build_enhanced_search_response_ctx(ctx)
+
+    def _build_enhanced_search_response_ctx(
+        self,
+        ctx: SearchResponseContext,
+    ) -> Dict[str, Any]:
+        """
+        Build the enhanced search response using context.
+
+        Issue #375: Refactored from 15-parameter signature to accept a single
+        SearchResponseContext object.
+
+        Args:
+            ctx: SearchResponseContext containing all response parameters.
+
+        Returns:
+            Enhanced search response dictionary
+        """
+        total_count = len(ctx.results)
         paginated_results = (
-            unclustered[offset:offset + limit]
-            if not enable_clustering
-            else unclustered
+            ctx.unclustered[ctx.offset:ctx.offset + ctx.limit]
+            if not ctx.enable_clustering
+            else ctx.unclustered
         )
 
         response = {
             "success": True,
             "results": paginated_results,
             "total_count": total_count,
-            "query_processed": query,
-            "mode": mode,
-            "tags_applied": tags if tags else [],
-            "min_score_applied": min_score,
-            "reranking_applied": enable_reranking,
-            "search_duration_ms": duration_ms,
-            "query_expansion_applied": enable_query_expansion,
-            "queries_searched": queries_count if enable_query_expansion else 1,
-            "relevance_scoring_applied": enable_relevance_scoring,
+            "query_processed": ctx.query_processed,
+            "mode": ctx.mode,
+            "tags_applied": ctx.tags if ctx.tags else [],
+            "min_score_applied": ctx.min_score,
+            "reranking_applied": ctx.enable_reranking,
+            "search_duration_ms": ctx.duration_ms,
+            "query_expansion_applied": ctx.enable_query_expansion,
+            "queries_searched": ctx.queries_count if ctx.enable_query_expansion else 1,
+            "relevance_scoring_applied": ctx.enable_relevance_scoring,
         }
 
-        if enable_clustering and clusters:
-            response["clusters"] = clusters
-            response["unclustered_count"] = len(unclustered)
+        if ctx.enable_clustering and ctx.clusters:
+            response["clusters"] = ctx.clusters
+            response["unclustered_count"] = len(ctx.unclustered)
 
         return response
 
