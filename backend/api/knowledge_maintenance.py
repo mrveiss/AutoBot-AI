@@ -111,7 +111,6 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     while True:
         # Issue #361 - run Redis ops in thread pool to avoid blocking
         def _scan_and_fetch():
-            nonlocal cursor
             cur, scanned_keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
             if not scanned_keys:
                 return cur, [], []

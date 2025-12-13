@@ -1408,4 +1408,3 @@ def analyze_documentation_file(file_path: str) -> Metadata:
             "blank_lines": 0,
             "is_documentation": True,
         }
-

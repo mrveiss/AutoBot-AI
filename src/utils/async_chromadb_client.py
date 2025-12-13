@@ -392,8 +392,6 @@ async def get_async_chromadb_client(
     Returns:
         AsyncChromaClient wrapper for async operations
     """
-    global _async_client_cache
-
     # Return cached client if exists
     if db_path in _async_client_cache:
         return _async_client_cache[db_path]

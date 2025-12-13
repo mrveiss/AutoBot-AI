@@ -843,7 +843,7 @@ class ToolInfoData:
         self.verified = "unverified"
         self.limitations = None
         self.performance = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         result = {"name": self.name, "type": self.type, "category": self.category, "platform": self.platform}
@@ -862,7 +862,7 @@ class ToolInfoData:
         if self.best_practices:
             result["best_practices"] = self.best_practices
         return result
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ToolInfoData':
         """Create from dictionary"""
@@ -880,19 +880,19 @@ class ResearchResultsProcessor:
         """Initialize processor with tool name and raw research results."""
         self.tool_name = tool_name
         self.results = results
-    
+
     def build_tool_info(self, tool_type: str, category: str) -> ToolInfoData:
         """Build comprehensive tool info from research results"""
         tool = ToolInfoData(self.tool_name, tool_type)
         tool.category = category
-        
+
         # Process installation results
         if "installation" in self.results:
             summary = self.results["installation"].get("summary", "")
             tool.installation = TextExtractor.extract_installation_commands(summary)
             tool.requirements = TextExtractor.extract_requirements(summary)
             tool.package_name = self._determine_package_name(summary)
-        
+
         # Process usage results
         if "usage" in self.results:
             summary = self.results["usage"].get("summary", "")
@@ -900,40 +900,40 @@ class ResearchResultsProcessor:
             tool.syntax = TextExtractor.extract_command_syntax(summary)
             tool.command_examples = TextExtractor.extract_detailed_examples(summary)
             tool.output_formats = TextExtractor.extract_output_formats(summary)
-        
+
         # Process advanced results
         if "advanced" in self.results:
             summary = self.results["advanced"].get("summary", "")
             tool.advanced_usage = summary
             tool.features = TextExtractor.extract_advanced_features(summary)
-        
+
         # Process troubleshooting results
         if "troubleshooting" in self.results:
             summary = self.results["troubleshooting"].get("summary", "")
             tool.troubleshooting = summary
             tool.error_codes = TextExtractor.extract_error_codes(summary)
             tool.common_issues = TextExtractor.extract_common_issues(summary)
-        
+
         # Process integration results
         if "integration" in self.results:
             summary = self.results["integration"].get("summary", "")
             tool.integrations = summary
             tool.related_tools = TextExtractor.extract_related_tools(summary)
-        
+
         # Process security results
         if "security" in self.results:
             summary = self.results["security"].get("summary", "")
             tool.security_notes = summary
             tool.best_practices = TextExtractor.extract_security_practices(summary)
-        
+
         # Add metadata
         tool.documentation_url = ResultProcessor.find_official_docs(self.results)
         tool.verified = "web_research"
         tool.limitations = ResultProcessor.extract_limitations(self.results)
         tool.performance = ResultProcessor.extract_performance_notes(self.results)
-        
+
         return tool
-    
+
     def _determine_package_name(self, installation_text: str) -> str:
         """Determine package name from tool name and installation text"""
         package_mappings = {
@@ -943,16 +943,16 @@ class ResearchResultsProcessor:
             "docker": "docker.io", "python": "python3",
             "pip": "python3-pip", "node": "nodejs", "npm": "npm",
         }
-        
+
         if self.tool_name.lower() in package_mappings:
             return package_mappings[self.tool_name.lower()]
-        
+
         # Try to extract from installation commands
         install_pattern = r"(?:apt|apt-get|yum|dnf|pacman|brew|pip|npm)\s+install\s+(?:-[yS]\s+)?(\S+)"
         match = re.search(install_pattern, installation_text)
         if match:
             return match.group(1)
-        
+
         return self.tool_name.lower()
 
 
@@ -962,7 +962,7 @@ class EnhancedKBLibrarian:
     """
     Librarian that can search KB and coordinate with other agents for tool
     discovery
-    
+
     Refactored to use ToolInfoData and ResearchResultsProcessor to fix Feature Envy.
     """
 
