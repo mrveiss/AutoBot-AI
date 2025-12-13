@@ -157,6 +157,91 @@ PATTERN_TYPE_DEFINITIONS = {
     },
 }
 
+# Issue #281: Redis optimization type definitions extracted from get_redis_optimization_types
+# This enables reuse and reduces function length
+REDIS_OPTIMIZATION_TYPES = {
+    # Pipeline opportunities
+    "sequential_gets": {
+        "name": "Sequential GETs",
+        "category": "pipeline",
+        "description": "Multiple GET operations that can be batched with MGET or pipeline",
+        "recommendation": "Use redis.mget(keys) or pipeline() for batching",
+    },
+    "sequential_sets": {
+        "name": "Sequential SETs",
+        "category": "pipeline",
+        "description": "Multiple SET operations that can be batched with MSET or pipeline",
+        "recommendation": "Use redis.mset(mapping) or pipeline() for batching",
+    },
+    "loop_operations": {
+        "name": "Loop Operations",
+        "category": "pipeline",
+        "description": "Redis operations inside loops causing O(N) network round-trips",
+        "recommendation": "Collect keys first, then batch with pipeline()",
+    },
+    # Lua script candidates
+    "read_modify_write": {
+        "name": "Read-Modify-Write",
+        "category": "lua_script",
+        "description": "GET followed by SET - race condition risk",
+        "recommendation": "Use Lua script or WATCH/MULTI/EXEC for atomicity",
+    },
+    "conditional_set": {
+        "name": "Conditional SET",
+        "category": "lua_script",
+        "description": "SET based on condition - potential race",
+        "recommendation": "Use SETNX, SET NX, or Lua script",
+    },
+    # Data structure optimizations
+    "string_to_hash": {
+        "name": "String to Hash",
+        "category": "data_structure",
+        "description": "Multiple related string keys could be a Hash",
+        "recommendation": "Use HSET/HGET with single key for related data",
+    },
+    "inefficient_scan": {
+        "name": "Inefficient Scan",
+        "category": "data_structure",
+        "description": "KEYS command blocks Redis - use SCAN instead",
+        "recommendation": "Replace KEYS with SCAN for non-blocking iteration",
+    },
+    "missing_expiry": {
+        "name": "Missing Expiry",
+        "category": "data_structure",
+        "description": "SET without TTL - potential memory leak",
+        "recommendation": "Add ex=<seconds> parameter to SET operations",
+    },
+    # Connection patterns
+    "connection_per_request": {
+        "name": "Connection Per Request",
+        "category": "connection",
+        "description": "Direct redis.Redis() instantiation - should use pool",
+        "recommendation": "Use get_redis_client() from src.utils.redis_client",
+    },
+    "blocking_in_async": {
+        "name": "Blocking in Async",
+        "category": "connection",
+        "description": "Sync Redis calls in async function - blocks event loop",
+        "recommendation": "Use async Redis client with await",
+    },
+    # Cache patterns
+    "cache_stampede_risk": {
+        "name": "Cache Stampede Risk",
+        "category": "cache",
+        "description": "Cache miss pattern without lock protection",
+        "recommendation": "Use distributed lock or probabilistic early expiration",
+    },
+}
+
+# Issue #281: Redis optimization categories
+REDIS_OPTIMIZATION_CATEGORIES = (
+    "pipeline",
+    "lua_script",
+    "data_structure",
+    "connection",
+    "cache",
+)
+
 
 # =============================================================================
 # Helper Functions for Score Grading (Issue #315 - extracted/refactored)
@@ -699,96 +784,19 @@ async def get_redis_optimization_types():
     """
     Get list of supported Redis optimization types.
 
+    Issue #281: Refactored to use module-level REDIS_OPTIMIZATION_TYPES and
+    REDIS_OPTIMIZATION_CATEGORIES constants. Reduced from 96 lines to ~15 lines.
+
     Returns all optimization types that the analyzer can identify,
     along with their descriptions and recommendations.
     """
-    optimization_info = {
-        # Pipeline opportunities
-        "sequential_gets": {
-            "name": "Sequential GETs",
-            "category": "pipeline",
-            "description": "Multiple GET operations that can be batched with MGET or pipeline",
-            "recommendation": "Use redis.mget(keys) or pipeline() for batching",
-        },
-        "sequential_sets": {
-            "name": "Sequential SETs",
-            "category": "pipeline",
-            "description": "Multiple SET operations that can be batched with MSET or pipeline",
-            "recommendation": "Use redis.mset(mapping) or pipeline() for batching",
-        },
-        "loop_operations": {
-            "name": "Loop Operations",
-            "category": "pipeline",
-            "description": "Redis operations inside loops causing O(N) network round-trips",
-            "recommendation": "Collect keys first, then batch with pipeline()",
-        },
-        # Lua script candidates
-        "read_modify_write": {
-            "name": "Read-Modify-Write",
-            "category": "lua_script",
-            "description": "GET followed by SET - race condition risk",
-            "recommendation": "Use Lua script or WATCH/MULTI/EXEC for atomicity",
-        },
-        "conditional_set": {
-            "name": "Conditional SET",
-            "category": "lua_script",
-            "description": "SET based on condition - potential race",
-            "recommendation": "Use SETNX, SET NX, or Lua script",
-        },
-        # Data structure optimizations
-        "string_to_hash": {
-            "name": "String to Hash",
-            "category": "data_structure",
-            "description": "Multiple related string keys could be a Hash",
-            "recommendation": "Use HSET/HGET with single key for related data",
-        },
-        "inefficient_scan": {
-            "name": "Inefficient Scan",
-            "category": "data_structure",
-            "description": "KEYS command blocks Redis - use SCAN instead",
-            "recommendation": "Replace KEYS with SCAN for non-blocking iteration",
-        },
-        "missing_expiry": {
-            "name": "Missing Expiry",
-            "category": "data_structure",
-            "description": "SET without TTL - potential memory leak",
-            "recommendation": "Add ex=<seconds> parameter to SET operations",
-        },
-        # Connection patterns
-        "connection_per_request": {
-            "name": "Connection Per Request",
-            "category": "connection",
-            "description": "Direct redis.Redis() instantiation - should use pool",
-            "recommendation": "Use get_redis_client() from src.utils.redis_client",
-        },
-        "blocking_in_async": {
-            "name": "Blocking in Async",
-            "category": "connection",
-            "description": "Sync Redis calls in async function - blocks event loop",
-            "recommendation": "Use async Redis client with await",
-        },
-        # Cache patterns
-        "cache_stampede_risk": {
-            "name": "Cache Stampede Risk",
-            "category": "cache",
-            "description": "Cache miss pattern without lock protection",
-            "recommendation": "Use distributed lock or probabilistic early expiration",
-        },
-    }
-
     return JSONResponse(
         status_code=200,
         content={
             "status": "success",
-            "optimization_types": optimization_info,
-            "total_types": len(optimization_info),
-            "categories": [
-                "pipeline",
-                "lua_script",
-                "data_structure",
-                "connection",
-                "cache",
-            ],
+            "optimization_types": REDIS_OPTIMIZATION_TYPES,
+            "total_types": len(REDIS_OPTIMIZATION_TYPES),
+            "categories": list(REDIS_OPTIMIZATION_CATEGORIES),
         },
     )
 
