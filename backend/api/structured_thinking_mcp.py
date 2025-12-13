@@ -141,6 +141,56 @@ class ClearHistoryRequest(BaseModel):
     session_id: Optional[str] = Field("default", description="Session to clear")
 
 
+# Issue #281: MCP tool definitions extracted from get_structured_thinking_mcp_tools
+STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
+    (
+        "process_thought",
+        "Record and analyze a thought within a structured cognitive framework. "
+        "Organizes thinking through five stages: Problem Definition, Research, Analysis, "
+        "Synthesis, and Conclusion. Tracks metadata including tags, axioms used, and "
+        "assumptions challenged for comprehensive thought analysis.",
+        {
+            "type": "object",
+            "properties": {
+                "thought": {"type": "string", "description": "The content of the thought to record"},
+                "thought_number": {"type": "integer", "description": "Position in the thinking sequence", "minimum": 1},
+                "total_thoughts": {"type": "integer", "description": "Expected total number of thoughts", "minimum": 1},
+                "next_thought_needed": {"type": "boolean", "description": "Whether more thoughts will follow this one"},
+                "stage": {
+                    "type": "string",
+                    "enum": ["Problem Definition", "Research", "Analysis", "Synthesis", "Conclusion"],
+                    "description": "Cognitive stage for this thought",
+                },
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Keywords or categories for this thought"},
+                "axioms_used": {"type": "array", "items": {"type": "string"}, "description": "Fundamental principles or axioms applied"},
+                "assumptions_challenged": {"type": "array", "items": {"type": "string"}, "description": "Assumptions being questioned or challenged"},
+                "session_id": {"type": "string", "description": "Thinking session identifier", "default": "default"},
+            },
+            "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed", "stage"],
+        },
+    ),
+    (
+        "generate_summary",
+        "Generate a structured summary of the entire thinking progression. "
+        "Provides overview of thoughts across all cognitive stages, stage distribution, "
+        "timeline, tags used, axioms applied, and key insights identified.",
+        {
+            "type": "object",
+            "properties": {"session_id": {"type": "string", "description": "Session to summarize", "default": "default"}},
+        },
+    ),
+    (
+        "clear_history",
+        "Clear the thinking history for a session, resetting all recorded thoughts. "
+        "Useful for starting a new thinking process while preserving other sessions.",
+        {
+            "type": "object",
+            "properties": {"session_id": {"type": "string", "description": "Session to clear", "default": "default"}},
+        },
+    ),
+)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_structured_thinking_mcp_tools",
@@ -148,115 +198,17 @@ class ClearHistoryRequest(BaseModel):
 )
 @router.get("/mcp/tools")
 async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for structured thinking"""
-    tools = [
-        MCPTool(
-            name="process_thought",
-            description=(
-                "Record and analyze a thought within a structured cognitive framework. "
-                "Organizes thinking through five stages: Problem Definition, Research, Analysis, "
-                "Synthesis, and Conclusion. Tracks metadata including tags, axioms used, and "
-                "assumptions challenged for comprehensive thought analysis."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "thought": {
-                        "type": "string",
-                        "description": "The content of the thought to record",
-                    },
-                    "thought_number": {
-                        "type": "integer",
-                        "description": "Position in the thinking sequence",
-                        "minimum": 1,
-                    },
-                    "total_thoughts": {
-                        "type": "integer",
-                        "description": "Expected total number of thoughts",
-                        "minimum": 1,
-                    },
-                    "next_thought_needed": {
-                        "type": "boolean",
-                        "description": "Whether more thoughts will follow this one",
-                    },
-                    "stage": {
-                        "type": "string",
-                        "enum": [
-                            "Problem Definition",
-                            "Research",
-                            "Analysis",
-                            "Synthesis",
-                            "Conclusion",
-                        ],
-                        "description": "Cognitive stage for this thought",
-                    },
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Keywords or categories for this thought",
-                    },
-                    "axioms_used": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Fundamental principles or axioms applied",
-                    },
-                    "assumptions_challenged": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Assumptions being questioned or challenged",
-                    },
-                    "session_id": {
-                        "type": "string",
-                        "description": "Thinking session identifier",
-                        "default": "default",
-                    },
-                },
-                "required": [
-                    "thought",
-                    "thought_number",
-                    "total_thoughts",
-                    "next_thought_needed",
-                    "stage",
-                ],
-            },
-        ),
-        MCPTool(
-            name="generate_summary",
-            description=(
-                "Generate a structured summary of the entire thinking progression. "
-                "Provides overview of thoughts across all cognitive stages, stage distribution, "
-                "timeline, tags used, axioms applied, and key insights identified."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "Session to summarize",
-                        "default": "default",
-                    }
-                },
-            },
-        ),
-        MCPTool(
-            name="clear_history",
-            description=(
-                "Clear the thinking history for a session, resetting all recorded thoughts. "
-                "Useful for starting a new thinking process while preserving other sessions."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "Session to clear",
-                        "default": "default",
-                    }
-                },
-            },
-        ),
+    """
+    Get available MCP tools for structured thinking.
+
+    Issue #281: Refactored to use module-level STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS.
+    Reduced from 110 lines to ~10 lines.
+    """
+    # Issue #281: Build MCPTool instances from module-level definitions
+    return [
+        MCPTool(name=name, description=desc, input_schema=schema)
+        for name, desc, schema in STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS
     ]
-    return tools
 
 
 @with_error_handling(
