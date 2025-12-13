@@ -458,7 +458,7 @@ class MultiLanguageAnalyzer:
         return [
             {
                 "name": a.analyzer_name,
-                "languages": [l.value for l in a.supported_languages],
+                "languages": [lang.value for lang in a.supported_languages],
             }
             for a in self.analyzers
         ]
