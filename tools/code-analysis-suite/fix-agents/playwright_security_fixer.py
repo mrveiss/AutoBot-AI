@@ -11,6 +11,7 @@ Author: AutoBot Playwright Security Specialist
 Version: 1.0.0
 """
 
+import logging
 import os
 import re
 import sys
@@ -20,6 +21,10 @@ import hashlib
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 from pathlib import Path
+
+# Configure logging for security fixer
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 
 class PlaywrightSecurityFixer:
@@ -54,7 +59,7 @@ class PlaywrightSecurityFixer:
             backup_path = self.backup_dir / backup_name
             shutil.copy2(file_path, backup_path)
 
-            print(f"✅ Backup created: {backup_path}")
+            logger.info("Backup created: %s", backup_path)
             return str(backup_path)
 
         except Exception as e:
