@@ -32,6 +32,110 @@ CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "wh
 # Issue #380: Module-level tuple for function definition prefixes
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
 
+# Issue #281: Demo prediction data extracted from generate_demo_predictions
+# Static demo data for testing the bug prediction system
+DEMO_PREDICTION_FILES = (
+    {
+        "file_path": "src/services/agent_service.py",
+        "risk_score": 78.5,
+        "factors": {
+            "complexity": 85,
+            "change_frequency": 72,
+            "bug_history": 80,
+            "test_coverage": 65,
+            "file_size": 70,
+        },
+        "bug_count_history": 12,
+        "last_bug_date": "2025-01-15",
+    },
+    {
+        "file_path": "src/core/workflow_engine.py",
+        "risk_score": 72.3,
+        "factors": {
+            "complexity": 78,
+            "change_frequency": 65,
+            "bug_history": 75,
+            "test_coverage": 70,
+            "file_size": 60,
+        },
+        "bug_count_history": 8,
+        "last_bug_date": "2025-01-10",
+    },
+    {
+        "file_path": "src/api/endpoints.py",
+        "risk_score": 68.1,
+        "factors": {
+            "complexity": 60,
+            "change_frequency": 85,
+            "bug_history": 55,
+            "test_coverage": 75,
+            "file_size": 80,
+        },
+        "bug_count_history": 6,
+        "last_bug_date": "2025-01-08",
+    },
+    {
+        "file_path": "src/utils/redis_client.py",
+        "risk_score": 55.2,
+        "factors": {
+            "complexity": 45,
+            "change_frequency": 55,
+            "bug_history": 60,
+            "test_coverage": 50,
+            "file_size": 40,
+        },
+        "bug_count_history": 4,
+        "last_bug_date": "2024-12-20",
+    },
+    {
+        "file_path": "backend/api/analytics.py",
+        "risk_score": 48.7,
+        "factors": {
+            "complexity": 55,
+            "change_frequency": 40,
+            "bug_history": 45,
+            "test_coverage": 55,
+            "file_size": 45,
+        },
+        "bug_count_history": 3,
+        "last_bug_date": "2024-12-15",
+    },
+    {
+        "file_path": "src/models/user.py",
+        "risk_score": 35.4,
+        "factors": {
+            "complexity": 30,
+            "change_frequency": 35,
+            "bug_history": 40,
+            "test_coverage": 30,
+            "file_size": 25,
+        },
+        "bug_count_history": 2,
+        "last_bug_date": "2024-11-10",
+    },
+    {
+        "file_path": "src/config/settings.py",
+        "risk_score": 22.1,
+        "factors": {
+            "complexity": 20,
+            "change_frequency": 25,
+            "bug_history": 20,
+            "test_coverage": 25,
+            "file_size": 15,
+        },
+        "bug_count_history": 1,
+        "last_bug_date": "2024-10-05",
+    },
+)
+
+# Issue #281: Demo summary data
+DEMO_PREDICTION_SUMMARY = {
+    "total_files": 247,
+    "high_risk_count": 3,
+    "predicted_bugs": 8,
+    "accuracy_score": 72.5,
+}
+
 
 def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
     """Parse git log output to count bug fixes per file. (Issue #315 - extracted)"""
@@ -402,107 +506,15 @@ async def analyze_file_complexity(file_path: str) -> float:
 
 
 def generate_demo_predictions() -> dict[str, Any]:
-    """Generate demo prediction data for testing."""
-    demo_files = [
-        {
-            "file_path": "src/services/agent_service.py",
-            "risk_score": 78.5,
-            "factors": {
-                "complexity": 85,
-                "change_frequency": 72,
-                "bug_history": 80,
-                "test_coverage": 65,
-                "file_size": 70,
-            },
-            "bug_count_history": 12,
-            "last_bug_date": "2025-01-15",
-        },
-        {
-            "file_path": "src/core/workflow_engine.py",
-            "risk_score": 72.3,
-            "factors": {
-                "complexity": 78,
-                "change_frequency": 65,
-                "bug_history": 75,
-                "test_coverage": 70,
-                "file_size": 60,
-            },
-            "bug_count_history": 8,
-            "last_bug_date": "2025-01-10",
-        },
-        {
-            "file_path": "src/api/endpoints.py",
-            "risk_score": 68.1,
-            "factors": {
-                "complexity": 60,
-                "change_frequency": 85,
-                "bug_history": 55,
-                "test_coverage": 75,
-                "file_size": 80,
-            },
-            "bug_count_history": 6,
-            "last_bug_date": "2025-01-08",
-        },
-        {
-            "file_path": "src/utils/redis_client.py",
-            "risk_score": 55.2,
-            "factors": {
-                "complexity": 45,
-                "change_frequency": 55,
-                "bug_history": 60,
-                "test_coverage": 50,
-                "file_size": 40,
-            },
-            "bug_count_history": 4,
-            "last_bug_date": "2024-12-20",
-        },
-        {
-            "file_path": "backend/api/analytics.py",
-            "risk_score": 48.7,
-            "factors": {
-                "complexity": 55,
-                "change_frequency": 40,
-                "bug_history": 45,
-                "test_coverage": 55,
-                "file_size": 45,
-            },
-            "bug_count_history": 3,
-            "last_bug_date": "2024-12-15",
-        },
-        {
-            "file_path": "src/models/user.py",
-            "risk_score": 35.4,
-            "factors": {
-                "complexity": 30,
-                "change_frequency": 35,
-                "bug_history": 40,
-                "test_coverage": 30,
-                "file_size": 25,
-            },
-            "bug_count_history": 2,
-            "last_bug_date": "2024-11-10",
-        },
-        {
-            "file_path": "src/config/settings.py",
-            "risk_score": 22.1,
-            "factors": {
-                "complexity": 20,
-                "change_frequency": 25,
-                "bug_history": 20,
-                "test_coverage": 25,
-                "file_size": 15,
-            },
-            "bug_count_history": 1,
-            "last_bug_date": "2024-10-05",
-        },
-    ]
+    """
+    Generate demo prediction data for testing.
 
+    Issue #281: Refactored to use module-level constants DEMO_PREDICTION_FILES
+    and DEMO_PREDICTION_SUMMARY. Reduced from 103 lines to ~10 lines.
+    """
     return {
-        "files": demo_files,
-        "total_files": 247,
-        "high_risk_count": 3,
-        "predicted_bugs": 8,
-        "accuracy_score": 72.5,
+        "files": list(DEMO_PREDICTION_FILES),
+        **DEMO_PREDICTION_SUMMARY,
     }
 
 
