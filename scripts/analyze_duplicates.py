@@ -2,6 +2,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# Converted to logger.info() for pre-commit compliance
 """
 Codebase Duplicate Detection Script
 
@@ -14,11 +15,15 @@ Analyzes the AutoBot codebase to detect:
 Uses the same patterns as the Codebase Analytics System.
 """
 
+import json
+import logging
 import os
 import re
-import json
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 class DuplicateDetector:
@@ -67,7 +72,7 @@ class DuplicateDetector:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            logger.error("Error reading %s: %s", file_path, e)
             return []
 
         declarations = []
@@ -101,10 +106,10 @@ class DuplicateDetector:
 
     def analyze_duplicates(self):
         """Analyze codebase for duplicate declarations"""
-        print("🔍 Analyzing AutoBot codebase for duplicates...")
+        logger.info("Analyzing AutoBot codebase for duplicates...")
 
         files = self.get_code_files()
-        print(f"📁 Found {len(files)} code files to analyze")
+        logger.info("Found %d code files to analyze", len(files))
 
         all_declarations = []
         declaration_names = defaultdict(list)
@@ -130,18 +135,21 @@ class DuplicateDetector:
 
     def generate_report(self, analysis):
         """Generate a comprehensive duplicate detection report"""
-        print("\n" + "="*80)
-        print("📊 AUTOBOT DUPLICATE DECLARATION ANALYSIS REPORT")
-        print("="*80)
+        logger.info("=" * 80)
+        logger.info("AUTOBOT DUPLICATE DECLARATION ANALYSIS REPORT")
+        logger.info("=" * 80)
 
-        print(f"\n📈 SUMMARY STATISTICS:")
-        print(f"  • Total Declarations Found: {analysis['total_declarations']}")
-        print(f"  • Unique Declaration Names: {analysis['unique_names']}")
-        print(f"  • Duplicate Declaration Names: {analysis['duplicate_names']}")
-        print(f"  • Duplication Rate: {(analysis['duplicate_names']/analysis['unique_names']*100):.1f}%")
+        logger.info("SUMMARY STATISTICS:")
+        logger.info("  Total Declarations Found: %d", analysis['total_declarations'])
+        logger.info("  Unique Declaration Names: %d", analysis['unique_names'])
+        logger.info("  Duplicate Declaration Names: %d", analysis['duplicate_names'])
+        logger.info(
+            "  Duplication Rate: %.1f%%",
+            analysis['duplicate_names'] / analysis['unique_names'] * 100
+        )
 
         # Top duplicate declarations
-        print(f"\n🔥 TOP DUPLICATE DECLARATIONS:")
+        logger.info("TOP DUPLICATE DECLARATIONS:")
         duplicates_by_count = sorted(
             analysis['duplicates'].items(),
             key=lambda x: len(x[1]),
@@ -149,7 +157,7 @@ class DuplicateDetector:
         )
 
         for i, (name, decls) in enumerate(duplicates_by_count[:10]):
-            print(f"\n{i+1:2d}. '{name}' - {len(decls)} occurrences")
+            logger.info("%2d. '%s' - %d occurrences", i + 1, name, len(decls))
 
             # Group by type and language
             by_type = defaultdict(list)
@@ -157,32 +165,32 @@ class DuplicateDetector:
                 by_type[f"{decl['language']}_{decl['type']}"].append(decl)
 
             for type_lang, items in by_type.items():
-                print(f"    📁 {type_lang}: {len(items)} files")
+                logger.info("    %s: %d files", type_lang, len(items))
                 for item in items[:3]:  # Show first 3
-                    print(f"      • {item['file']}:{item['line']}")
+                    logger.info("      - %s:%d", item['file'], item['line'])
                 if len(items) > 3:
-                    print(f"      • ... and {len(items)-3} more")
+                    logger.info("      ... and %d more", len(items) - 3)
 
         # Potential refactoring opportunities
-        print(f"\n🛠️  REFACTORING OPPORTUNITIES:")
+        logger.info("REFACTORING OPPORTUNITIES:")
 
         high_priority = [(name, decls) for name, decls in duplicates_by_count if len(decls) >= 5]
         medium_priority = [(name, decls) for name, decls in duplicates_by_count if 3 <= len(decls) < 5]
 
-        print(f"\n🔴 HIGH PRIORITY (5+ duplicates): {len(high_priority)} items")
+        logger.info("HIGH PRIORITY (5+ duplicates): %d items", len(high_priority))
         for name, decls in high_priority[:5]:
             python_count = len([d for d in decls if d['language'] == 'python'])
             js_count = len([d for d in decls if d['language'] == 'js'])
-            print(f"  • '{name}': {len(decls)} total (Python: {python_count}, JS: {js_count})")
+            logger.info("  '%s': %d total (Python: %d, JS: %d)", name, len(decls), python_count, js_count)
 
-        print(f"\n🟡 MEDIUM PRIORITY (3-4 duplicates): {len(medium_priority)} items")
+        logger.info("MEDIUM PRIORITY (3-4 duplicates): %d items", len(medium_priority))
         for name, decls in medium_priority[:5]:
             types = Counter(d['type'] for d in decls)
             type_summary = ', '.join(f"{t}:{c}" for t, c in types.items())
-            print(f"  • '{name}': {len(decls)} total ({type_summary})")
+            logger.info("  '%s': %d total (%s)", name, len(decls), type_summary)
 
         # Language breakdown
-        print(f"\n🌐 LANGUAGE BREAKDOWN:")
+        logger.info("LANGUAGE BREAKDOWN:")
         lang_stats = defaultdict(int)
         type_stats = defaultdict(int)
 
@@ -191,30 +199,34 @@ class DuplicateDetector:
             type_stats[decl['type']] += 1
 
         for lang, count in lang_stats.items():
-            print(f"  • {lang.upper()}: {count} declarations")
+            logger.info("  %s: %d declarations", lang.upper(), count)
 
-        print(f"\n📊 TYPE BREAKDOWN:")
+        logger.info("TYPE BREAKDOWN:")
         for type_name, count in type_stats.items():
-            print(f"  • {type_name.upper()}S: {count} declarations")
+            logger.info("  %sS: %d declarations", type_name.upper(), count)
 
         # Specific recommendations
-        print(f"\n💡 SPECIFIC RECOMMENDATIONS:")
+        logger.info("SPECIFIC RECOMMENDATIONS:")
 
         if high_priority:
-            print(f"  🔥 CRITICAL: Review '{high_priority[0][0]}' - {len(high_priority[0][1])} duplicates")
-            print(f"     Consider creating a base class or utility function")
+            logger.info("  CRITICAL: Review '%s' - %d duplicates", high_priority[0][0], len(high_priority[0][1]))
+            logger.info("     Consider creating a base class or utility function")
 
-        common_names = [name for name, decls in duplicates_by_count[:20]
-                       if any(word in name.lower() for word in ['init', 'setup', 'config', 'handler', 'process'])]
+        common_names = [
+            name for name, decls in duplicates_by_count[:20]
+            if any(word in name.lower() for word in ['init', 'setup', 'config', 'handler', 'process'])
+        ]
         if common_names:
-            print(f"  🔧 PATTERN: Common initialization patterns found:")
+            logger.info("  PATTERN: Common initialization patterns found:")
             for name in common_names[:3]:
-                print(f"     • '{name}' - Consider standardization")
+                logger.info("     '%s' - Consider standardization", name)
 
-        test_duplicates = [name for name, decls in duplicates_by_count
-                          if 'test' in name.lower() and len(decls) > 2]
+        test_duplicates = [
+            name for name, decls in duplicates_by_count
+            if 'test' in name.lower() and len(decls) > 2
+        ]
         if test_duplicates:
-            print(f"  🧪 TESTING: {len(test_duplicates)} test function patterns could be unified")
+            logger.info("  TESTING: %d test function patterns could be unified", len(test_duplicates))
 
         return analysis
 
@@ -224,7 +236,7 @@ def main():
     root_path = "/home/kali/Desktop/AutoBot"
 
     if not os.path.exists(root_path):
-        print(f"❌ Error: AutoBot directory not found at {root_path}")
+        logger.error("AutoBot directory not found at %s", root_path)
         return
 
     detector = DuplicateDetector(root_path)
@@ -242,16 +254,18 @@ def main():
         'duplicate_names': analysis['duplicate_names'],
         'duplicates': {name: decls for name, decls in analysis['duplicates'].items()},
         'summary_stats': {
-            'duplication_rate': analysis['duplicate_names']/analysis['unique_names']*100,
-            'top_duplicates': sorted(analysis['duplicates'].items(), key=lambda x: len(x[1]), reverse=True)[:20]
+            'duplication_rate': analysis['duplicate_names'] / analysis['unique_names'] * 100,
+            'top_duplicates': sorted(
+                analysis['duplicates'].items(), key=lambda x: len(x[1]), reverse=True
+            )[:20]
         }
     }
 
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(serializable_analysis, f, indent=2)
 
-    print(f"\n💾 Detailed analysis saved to: {output_file}")
-    print(f"\n✅ Duplicate detection analysis complete!")
+    logger.info("Detailed analysis saved to: %s", output_file)
+    logger.info("Duplicate detection analysis complete!")
 
 
 if __name__ == "__main__":
