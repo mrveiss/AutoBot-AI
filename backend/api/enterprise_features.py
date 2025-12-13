@@ -409,7 +409,7 @@ async def get_enterprise_health():
                 "status": "success",
                 "health": health_status,
                 "summary": (
-                    f"Health: {health_status['overall_health']}, Issues: {critical_issues}, Warnings: {warnings}"
+                    f"Health: {health_status['overall_health']}, Issues: {counters['critical']}, Warnings: {counters['warnings']}"
                 ),
             },
         )

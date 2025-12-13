@@ -60,8 +60,6 @@ _CONTEXT_DEPENDENT_INTENTS = frozenset({
     "navigate_to",
 })
 
-_HIGH_RISK_COMMAND_TYPES = frozenset({VoiceCommand.SYSTEM, VoiceCommand.TAKEOVER})
-
 # Issue #380: Intents requiring current screen state
 _SCREEN_STATE_INTENTS = frozenset({"click_element", "type_text"})
 
@@ -100,6 +98,10 @@ class VoiceCommand(Enum):
     SYSTEM = "system"
     TAKEOVER = "takeover"
     UNKNOWN = "unknown"
+
+
+# Issue #380: High-risk command types (must be after VoiceCommand definition)
+_HIGH_RISK_COMMAND_TYPES = frozenset({VoiceCommand.SYSTEM, VoiceCommand.TAKEOVER})
 
 
 class SpeechQuality(Enum):

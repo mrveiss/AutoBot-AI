@@ -6,6 +6,7 @@ Conversation Flow Analyzer API (Issue #227)
 Analyzes AutoBot conversation patterns, intent flows, and interaction metrics
 """
 
+import asyncio
 import logging
 import re
 from collections import Counter, defaultdict
