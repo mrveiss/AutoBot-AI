@@ -373,119 +373,114 @@ class PlaywrightSecurityFixer:
             logger.error("Error processing %s: %s", file_path, e)
             return {"file": file_path, "status": "error", "error": str(e)}
 
-    def generate_security_report(self, results: List[Dict[str, Any]]) -> str:
-        """Generate a comprehensive security report."""
+    def _compute_report_stats(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
+        """
+        Compute statistics from processing results.
+        Issue #281: Extracted from generate_security_report to reduce function length.
+        """
+        return {
+            "total_files": len(results),
+            "enhanced_files": len([r for r in results if r["status"] == "enhanced"]),
+            "error_files": len([r for r in results if r["status"] == "error"]),
+            "total_vulnerabilities": sum(r.get("vulnerabilities_found", 0) for r in results),
+            "total_enhancements": sum(r.get("enhancements_applied", 0) for r in results),
+        }
 
-        total_files = len(results)
-        enhanced_files = len([r for r in results if r["status"] == "enhanced"])
-        error_files = len([r for r in results if r["status"] == "error"])
-
-        total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
-        total_enhancements = sum(r.get("enhancements_applied", 0) for r in results)
-
-        # Update internal report
+    def _populate_report_data(self, results: List[Dict[str, Any]], stats: Dict[str, int]) -> None:
+        """
+        Populate self.report with summary and detailed results.
+        Issue #281: Extracted from generate_security_report to reduce function length.
+        """
         self.report["summary"] = {
-            "files_processed": total_files,
-            "files_enhanced": enhanced_files,
-            "files_with_errors": error_files,
-            "vulnerabilities_found": total_vulnerabilities,
-            "security_enhancements_applied": total_enhancements,
+            "files_processed": stats["total_files"],
+            "files_enhanced": stats["enhanced_files"],
+            "files_with_errors": stats["error_files"],
+            "vulnerabilities_found": stats["total_vulnerabilities"],
+            "security_enhancements_applied": stats["total_enhancements"],
         }
 
         for result in results:
             if result["status"] == "enhanced":
                 self.report["vulnerabilities"].extend(result.get("vulnerabilities", []))
-                self.report["security_enhancements"].extend(
-                    result.get("enhancements", [])
-                )
+                self.report["security_enhancements"].extend(result.get("enhancements", []))
 
-        # Generate markdown report
-        report = f"""# Playwright Security Enhancement Report
+    def _build_vulnerability_analysis(self) -> str:
+        """
+        Build vulnerability analysis section with severity grouping.
+        Issue #281: Extracted from generate_security_report to reduce function length.
+        """
+        if not self.report["vulnerabilities"]:
+            return "✅ No vulnerability patterns detected in scanned files.\n\n"
 
-**Generated:** {self.report['timestamp']}
-**Tool:** {self.report['tool']} v{self.report['version']}
+        severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+        severity_groups = {}
+        for vuln in self.report["vulnerabilities"]:
+            severity = vuln["severity"]
+            if severity not in severity_groups:
+                severity_groups[severity] = []
+            severity_groups[severity].append(vuln)
 
-## 🎯 Executive Summary
+        content = "### Vulnerability Patterns by Severity:\n\n"
+        for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+            if severity in severity_groups:
+                vulns = severity_groups[severity]
+                icon = severity_icons[severity]
+                content += f"#### {icon} {severity} ({len(vulns)} patterns)\n\n"
 
-- **Files Processed:** {total_files}
-- **Files Enhanced:** {enhanced_files}
-- **Files with Errors:** {error_files}
-- **Vulnerability Patterns Found:** {total_vulnerabilities}
-- **Security Enhancements Applied:** {total_enhancements}
+                for vuln in vulns:
+                    content += f"- **{vuln['description']}**\n"
+                    content += f"  - File: `{vuln['file']}`\n"
+                    content += f"  - Line: {vuln['line']}\n"
+                    content += f"  - Pattern: `{vuln['match']}`\n\n"
 
-## 🔍 Vulnerability Analysis
+        return content
 
-"""
+    def _build_enhancements_and_details(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Build enhancements and file details sections.
+        Issue #281: Extracted from generate_security_report to reduce function length.
+        """
+        content = ""
 
-        if self.report["vulnerabilities"]:
-            # Group vulnerabilities by severity
-            severity_groups = {}
-            for vuln in self.report["vulnerabilities"]:
-                severity = vuln["severity"]
-                if severity not in severity_groups:
-                    severity_groups[severity] = []
-                severity_groups[severity].append(vuln)
-
-            report += "### Vulnerability Patterns by Severity:\n\n"
-            for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-                if severity in severity_groups:
-                    vulns = severity_groups[severity]
-                    severity_icons = {
-                        "CRITICAL": "🔴",
-                        "HIGH": "🟠",
-                        "MEDIUM": "🟡",
-                        "LOW": "🟢",
-                    }
-                    icon = severity_icons[severity]
-                    report += f"#### {icon} {severity} ({len(vulns)} patterns)\n\n"
-
-                    for vuln in vulns:
-                        report += f"- **{vuln['description']}**\n"
-                        report += f"  - File: `{vuln['file']}`\n"
-                        report += f"  - Line: {vuln['line']}\n"
-                        report += f"  - Pattern: `{vuln['match']}`\n\n"
-        else:
-            report += "✅ No vulnerability patterns detected in scanned files.\n\n"
-
-        # Security enhancements
         if self.report["security_enhancements"]:
             unique_enhancements = list(set(self.report["security_enhancements"]))
-            report += "## 🛡️ Security Enhancements Applied\n\n"
+            content += "## 🛡️ Security Enhancements Applied\n\n"
             for i, enhancement in enumerate(unique_enhancements, 1):
-                report += f"{i}. ✅ {enhancement}\n"
-            report += "\n"
+                content += f"{i}. ✅ {enhancement}\n"
+            content += "\n"
 
-        # File details
-        report += "## 📋 File Processing Details\n\n"
+        content += "## 📋 File Processing Details\n\n"
+        status_icons = {"enhanced": "🔧", "error": "❌"}
+
         for result in results:
-            status_icons = {"enhanced": "🔧", "error": "❌"}
             icon = status_icons.get(result["status"], "⚪")
-
-            report += f"### {icon} {result['file']}\n\n"
-            report += f"- **Status:** {result['status'].upper()}\n"
+            content += f"### {icon} {result['file']}\n\n"
+            content += f"- **Status:** {result['status'].upper()}\n"
 
             if result["status"] == "enhanced":
-                report += (
-                    f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
-                )
-                report += (
-                    f"- **Security Enhancements:** {result['enhancements_applied']}\n"
-                )
-                report += f"- **Backup Location:** `{result['backup_path']}`\n"
-                report += f"- **File Size:** {result['original_size']:,} → {result['enhanced_size']:,} bytes\n"
+                content += f"- **Vulnerabilities Found:** {result['vulnerabilities_found']}\n"
+                content += f"- **Security Enhancements:** {result['enhancements_applied']}\n"
+                content += f"- **Backup Location:** `{result['backup_path']}`\n"
+                content += f"- **File Size:** {result['original_size']:,} → {result['enhanced_size']:,} bytes\n"
 
                 if result.get("enhancements"):
-                    report += "- **Applied Enhancements:**\n"
+                    content += "- **Applied Enhancements:**\n"
                     for enhancement in result["enhancements"]:
-                        report += f"  - {enhancement}\n"
+                        content += f"  - {enhancement}\n"
 
             elif result["status"] == "error":
-                report += f"- **Error:** {result['error']}\n"
+                content += f"- **Error:** {result['error']}\n"
 
-            report += "\n"
+            content += "\n"
 
-        # Recommendations
-        report += """## 🚀 Security Recommendations
+        return content
+
+    def _get_recommendations_section(self) -> str:
+        """
+        Return the static recommendations section.
+        Issue #281: Extracted from generate_security_report to reduce function length.
+        """
+        return """## 🚀 Security Recommendations
 
 ### ✅ Implemented Protections:
 1. **Content Security Policy (CSP)** - Prevents unauthorized script execution
@@ -509,6 +504,36 @@ class PlaywrightSecurityFixer:
 **Playwright Security Enhancement Complete**
 *AutoBot Security Suite - Specialized XSS Protection*
 """
+
+    def generate_security_report(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Generate a comprehensive security report.
+        Issue #281: Extracted helpers _compute_report_stats(), _populate_report_data(),
+        _build_vulnerability_analysis(), _build_enhancements_and_details(), and
+        _get_recommendations_section() to reduce function length from 138 to ~25 lines.
+        """
+        stats = self._compute_report_stats(results)
+        self._populate_report_data(results, stats)
+
+        report = f"""# Playwright Security Enhancement Report
+
+**Generated:** {self.report['timestamp']}
+**Tool:** {self.report['tool']} v{self.report['version']}
+
+## 🎯 Executive Summary
+
+- **Files Processed:** {stats['total_files']}
+- **Files Enhanced:** {stats['enhanced_files']}
+- **Files with Errors:** {stats['error_files']}
+- **Vulnerability Patterns Found:** {stats['total_vulnerabilities']}
+- **Security Enhancements Applied:** {stats['total_enhancements']}
+
+## 🔍 Vulnerability Analysis
+
+"""
+        report += self._build_vulnerability_analysis()
+        report += self._build_enhancements_and_details(results)
+        report += self._get_recommendations_section()
 
         return report
 
