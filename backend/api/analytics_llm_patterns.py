@@ -44,8 +44,6 @@ logger = logging.getLogger(__name__)
 EXPENSIVE_MODELS = {"opus", "gpt-4"}
 
 
-
-
 class PromptCategory(str, Enum):
     """Categories of LLM prompts"""
     CODE_GENERATION = "code_generation"

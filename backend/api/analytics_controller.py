@@ -70,6 +70,7 @@ analytics_state = {
     "last_analysis_time": None,
 }
 
+
 class AnalyticsController:
     """Core analytics controller with comprehensive monitoring capabilities"""
 
@@ -526,8 +527,6 @@ class AnalyticsController:
             return "increasing"
         else:
             return "decreasing"
-
-
 
 
 # Global analytics controller instance

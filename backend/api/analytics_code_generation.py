@@ -46,8 +46,7 @@ _MULTI_LANG_BLOCK_RE = re.compile(
 )
 
 # Issue #380: Module-level tuple for import AST nodes
-_IMPORT_TYPES = (ast.Import, ast.ImportFrom
-)
+_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
 
 # Performance optimization: O(1) lookup for excluded language keys (Issue #326)
 EXCLUDED_LANGUAGE_KEYS = {"total", "success", "tokens"}
