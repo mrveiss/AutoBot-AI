@@ -601,7 +601,7 @@ class NPUSemanticSearch:
         }
 
         cache_string = json.dumps(cache_data, sort_keys=True)
-        return hashlib.md5(cache_string.encode()).hexdigest()
+        return hashlib.md5(cache_string.encode(), usedforsecurity=False).hexdigest()
 
     def _get_cached_result(
         self, cache_key: str

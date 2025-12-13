@@ -345,7 +345,7 @@ class StatsCollector:
 
     async def collect_remote_stats(self, host: str) -> MachineStats:
         """Generate realistic stats for remote machines based on machine type"""
-        host_hash = int(hashlib.md5(host.encode()).hexdigest()[:8], 16)
+        host_hash = int(hashlib.md5(host.encode(), usedforsecurity=False).hexdigest()[:8], 16)
 
         # Determine machine-specific stats based on role
         machine_profile = self._get_machine_profile(host, host_hash)

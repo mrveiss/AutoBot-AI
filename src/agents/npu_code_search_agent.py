@@ -305,7 +305,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.info(f"Starting codebase indexing: {root_path}")
 
             index_key = (
-                f"{self.index_prefix}meta:{hashlib.md5(root_path.encode()).hexdigest()}"
+                f"{self.index_prefix}meta:{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
             )
             # Issue #361 - avoid blocking
             already_indexed = await asyncio.to_thread(self.redis_client.exists, index_key)
@@ -536,7 +536,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             # Check cache first
-            cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode()).hexdigest()}"
+            cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode(), usedforsecurity=False).hexdigest()}"
 
             # Issue #361 - avoid blocking
             cached_result = await asyncio.to_thread(self.redis_client.get, cache_key)

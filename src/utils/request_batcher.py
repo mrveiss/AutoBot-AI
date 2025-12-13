@@ -57,7 +57,7 @@ class BatchableRequest:
         """Generate unique request ID if not provided."""
         if not self.id:
             # Generate unique ID based on content and timestamp
-            content_hash = hashlib.md5(self.content.encode()).hexdigest()[:8]
+            content_hash = hashlib.md5(self.content.encode(), usedforsecurity=False).hexdigest()[:8]
             self.id = f"req_{content_hash}_{int(self.timestamp * 1000)}"
 
 

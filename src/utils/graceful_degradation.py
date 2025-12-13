@@ -233,7 +233,7 @@ class CachedResponseStrategy(FallbackStrategy):
 
     def _generate_cache_key(self, request: str) -> str:
         """Generate a cache key for the request"""
-        return hashlib.md5(request.encode()).hexdigest()
+        return hashlib.md5(request.encode(), usedforsecurity=False).hexdigest()
 
 
 class TemplateResponseStrategy(FallbackStrategy):

@@ -380,7 +380,7 @@ class PromptManager:
                 try:
                     # Get file content hash
                     content = file_path.read_text(encoding="utf-8")
-                    file_hash = hashlib.md5(content.encode()).hexdigest()
+                    file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                     # Use relative path as key
                     relative_path = str(file_path.relative_to(self.prompts_dir))
@@ -466,7 +466,7 @@ class PromptManager:
 
             # Create hash of file info
             content = "\n".join(sorted(files_info))
-            cache_hash = hashlib.md5(content.encode()).hexdigest()[:12]
+            cache_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:12]
             return f"autobot:prompts:cache:{cache_hash}"
         except Exception as e:
             logger.warning(f"Failed to generate cache key: {e}")

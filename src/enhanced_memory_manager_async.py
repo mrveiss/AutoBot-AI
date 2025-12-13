@@ -114,7 +114,7 @@ class TaskEntry:
             Generated task ID string.
         """
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        desc_hash = hashlib.md5(self.description.encode()).hexdigest()[:8]
+        desc_hash = hashlib.md5(self.description.encode(), usedforsecurity=False).hexdigest()[:8]
         return f"task_{timestamp}_{desc_hash}"
 
 
@@ -377,7 +377,7 @@ class AsyncEnhancedMemoryManager:
         if not record.record_id:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             hash_input = f'{record.task_id}_{record.action}'.encode()
-            record_hash = hashlib.md5(hash_input).hexdigest()[:8]
+            record_hash = hashlib.md5(hash_input, usedforsecurity=False).hexdigest()[:8]
             record.record_id = f"exec_{timestamp}_{record_hash}"
 
         try:

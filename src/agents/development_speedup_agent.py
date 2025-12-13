@@ -180,7 +180,7 @@ class DevelopmentSpeedupAgent:
 
         # Cache the results
         cache_key = (
-            f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode()).hexdigest()}"
+            f"{self.analysis_cache_prefix}{hashlib.md5(root_path.encode(), usedforsecurity=False).hexdigest()}"
         )
         # Issue #361 - avoid blocking
         await asyncio.to_thread(

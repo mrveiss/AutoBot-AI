@@ -814,7 +814,7 @@ class LLMCodeGenerator:
     def _get_cache_key(self, request: RefactoringRequest) -> str:
         """Generate a cache key for a request."""
         content = f"{request.refactoring_type.value}:{request.context.code_snippet}"
-        return hashlib.md5(content.encode()).hexdigest()
+        return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
     def _get_cached_result(
         self,

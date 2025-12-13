@@ -562,7 +562,7 @@ class UnifiedKnowledgeManager:
             ValueError: If content_id is empty or content_hash invalid
 
         Example:
-            >>> content_hash = hashlib.md5(content.encode()).hexdigest()
+            >>> content_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
             >>> meta = manager.register_content(
             ...     "tool:steghide",
             ...     {"category": "tools", "relative_path": "tools/steghide.yaml"},
@@ -859,7 +859,7 @@ class UnifiedKnowledgeManager:
                         content = await asyncio.to_thread(
                             file_full_path.read_text, encoding="utf-8"
                         )
-                        content_hash = hashlib.md5(content.encode()).hexdigest()
+                        content_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                         # Register with temporal tracking
                         meta = metadata or {}

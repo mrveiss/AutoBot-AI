@@ -130,7 +130,7 @@ class SystemKnowledgeManager:
                 # Get file content hash
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
-                file_hash = hashlib.md5(content.encode()).hexdigest()
+                file_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
                 # Use relative path as key
                 relative_path = str(file_path.relative_to(self.system_knowledge_dir))

@@ -42,7 +42,7 @@ def _generate_cache_key(fact_ids: List[str]) -> str:
     """
     sorted_ids = sorted(fact_ids)
     ids_str = ",".join(sorted_ids)
-    return hashlib.md5(ids_str.encode()).hexdigest()
+    return hashlib.md5(ids_str.encode(), usedforsecurity=False).hexdigest()
 
 
 async def _check_vectorization_batch_internal(

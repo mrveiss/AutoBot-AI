@@ -138,7 +138,7 @@ class PromptKnowledgeSync:
         Extract metadata from prompt content and file information.
         """
         # Generate content hash for change detection
-        content_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+        content_hash = hashlib.md5(content.encode("utf-8"), usedforsecurity=False).hexdigest()
 
         # Extract tags from filename and content
         tags = self._generate_tags(prompt_key, content, category)
