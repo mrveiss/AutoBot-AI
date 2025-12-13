@@ -8,9 +8,8 @@ Handles workflow approvals, progress tracking, and coordination
 
 import asyncio
 import time
-import uuid
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict, Optional
 
 from backend.models.task_context import WorkflowStepContext
 from backend.type_defs.common import Metadata
