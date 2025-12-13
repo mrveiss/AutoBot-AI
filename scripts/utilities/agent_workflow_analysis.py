@@ -40,13 +40,14 @@ class WorkflowAnalyzer:
         self.current_workflow_gaps = []
         self.ideal_workflows = {}
 
-    def analyze_network_scan_scenario(self) -> Dict[str, Any]:
-        """Analyze the network scanning tool request scenario."""
+    def _get_current_network_scan_behavior(self) -> dict:
+        """
+        Get current network scan behavior analysis.
 
-        user_request = "find tools that would require to do network scan"
-
-        # What ACTUALLY happened
-        current_behavior = {
+        Issue #281: Extracted from analyze_network_scan_scenario to reduce
+        function length.
+        """
+        return {
             "steps_taken": [
                 {
                     "agent": "chat/orchestrator",
@@ -69,8 +70,14 @@ class WorkflowAnalyzer:
             ],
         }
 
-        # What SHOULD happen
-        ideal_workflow = [
+    def _get_ideal_network_scan_workflow(self) -> List[WorkflowStep]:
+        """
+        Get ideal workflow steps for network scanning scenario.
+
+        Issue #281: Extracted from analyze_network_scan_scenario to reduce
+        function length.
+        """
+        return [
             WorkflowStep(
                 step_id=1,
                 agent=AgentType.ORCHESTRATOR,
@@ -168,6 +175,18 @@ class WorkflowAnalyzer:
                 user_confirmation_required=True,
             ),
         ]
+
+    def analyze_network_scan_scenario(self) -> Dict[str, Any]:
+        """
+        Analyze the network scanning tool request scenario.
+
+        Issue #281: Extracted behavior and workflow data to
+        _get_current_network_scan_behavior() and _get_ideal_network_scan_workflow()
+        to reduce function length from 136 to ~15 lines.
+        """
+        # Issue #281: Use extracted helpers
+        current_behavior = self._get_current_network_scan_behavior()
+        ideal_workflow = self._get_ideal_network_scan_workflow()
 
         return {
             "scenario": "Network Scanning Tool Request",
