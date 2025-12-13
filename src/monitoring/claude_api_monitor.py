@@ -257,6 +257,7 @@ class AlertManager:
             alerts.append(error_alert)
 
         # Process and store alerts
+        current_time = time.time()
         filtered_alerts = []
         for alert in alerts:
             if self._should_send_alert(alert, current_time):
