@@ -10,12 +10,9 @@ Issue #322: Updated to use TaskExecutionContext to eliminate data clump pattern.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict
 
 from backend.models.task_context import TaskExecutionContext
-
-if TYPE_CHECKING:
-    from src.worker_node import WorkerNode
 
 
 class TaskHandler(ABC):

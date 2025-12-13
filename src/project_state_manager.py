@@ -17,7 +17,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
@@ -730,8 +729,10 @@ class ProjectStateManager:
     def _check_status_cache(self) -> Optional[Dict[str, Any]]:
         """Check if cached status data is available and valid."""
         current_time = time.time()
-        if (_project_status_cache["data"] and
-                current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]):
+        if (
+            _project_status_cache["data"]
+            and current_time - _project_status_cache["timestamp"] < _project_status_cache["ttl"]
+        ):
             return _project_status_cache["data"]
         return None
 

@@ -22,7 +22,6 @@ import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from backend.services.rag_service import RAGService

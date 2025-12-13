@@ -145,8 +145,10 @@ NEVER teach commands - ALWAYS execute them."""
     ) -> str:
         """Build full prompt with optional knowledge context."""
         if knowledge_context:
-            return (system_prompt + "\n\n" + knowledge_context + "\n" +
-                    conversation_context + f"\n**Current user message:** {message}\n\nAssistant:")
+            return (
+                system_prompt + "\n\n" + knowledge_context + "\n"
+                + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+            )
         return system_prompt + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
     def _get_selected_model(self) -> str:

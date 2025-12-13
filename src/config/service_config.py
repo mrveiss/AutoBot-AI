@@ -8,7 +8,6 @@ Service, host, port, and URL configuration management.
 
 import logging
 import os
-from functools import cached_property
 from typing import Any, Dict
 
 from src.constants.network_constants import NetworkConstants
