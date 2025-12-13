@@ -566,7 +566,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                             line_start=line_num,
                             line_end=line_num,
                             title=f"Unquoted variable ${var_name} in {cmd}",
-                            description=f"Unquoted variable expansion can cause issues with spaces or special characters",
+                            description="Unquoted variable expansion can cause issues with spaces or special characters",
                             recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
                             current_code=line.strip(),
                             confidence=0.85,

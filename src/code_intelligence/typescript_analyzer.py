@@ -447,7 +447,7 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                                 column_start=match.start(),
                                 column_end=match.end(),
                                 title=f"Blocking I/O: {match.group().strip()}",
-                                description=f"Synchronous operation detected that blocks the event loop",
+                                description="Synchronous operation detected that blocks the event loop",
                                 recommendation=recommendation,
                                 current_code=line.strip(),
                                 confidence=confidence,

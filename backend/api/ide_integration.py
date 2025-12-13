@@ -679,7 +679,7 @@ class IDEIntegrationEngine:
         suppress_comment = f"{' ' * indent}# noqa: {rule['id']}"
         actions.append(
             CodeAction(
-                title=f"Suppress with comment",
+                title="Suppress with comment",
                 kind=CodeActionKind.QUICKFIX,
                 is_preferred=False,
                 edit={

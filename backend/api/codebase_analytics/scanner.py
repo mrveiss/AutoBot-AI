@@ -316,8 +316,6 @@ def _create_initial_task_state() -> Dict:
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
     """Initialize and clear ChromaDB collection (Issue #281: extracted)."""
-    from .storage import get_code_collection_async
-
     update_phase("init", "running")
     await update_progress(
         operation="Preparing ChromaDB",

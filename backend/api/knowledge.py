@@ -1110,7 +1110,7 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
         await asyncio.to_thread(
             kb.redis_client.setex, cache_key, 60, json.dumps(result)
         )
-        logger.debug(f"Cached facts_by_category result")
+        logger.debug("Cached facts_by_category result")
     except Exception as cache_error:
         logger.warning(f"Failed to cache facts_by_category: {cache_error}")
 
