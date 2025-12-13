@@ -660,24 +660,12 @@ class SearchMixin:
         start_time = time.time()
 
         try:
-            # Import search quality components
-            from src.knowledge.search_quality import (
-                get_query_expander,
-                get_relevance_scorer,
-                get_result_clusterer,
-                get_search_analytics,
-                SearchFilters,
-                AdvancedFilter,
-            )
-
             processed_query = self._preprocess_query(query)
-            queries_to_search = [processed_query]
 
-            # Issue #78: Query expansion
-            if enable_query_expansion:
-                expander = get_query_expander()
-                queries_to_search = expander.expand_query(processed_query)
-                logger.debug(f"Query expansion: {len(queries_to_search)} variations")
+            # Issue #281: Use extracted helper for query expansion
+            queries_to_search = self._expand_query_terms(
+                processed_query, enable_query_expansion
+            )
 
             # Get tag-filtered IDs if needed
             tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
@@ -708,33 +696,16 @@ class SearchMixin:
             # Apply tag and score filters
             results = self._apply_post_search_filters(all_results, tag_filtered_ids, min_score)
 
-            # Issue #78: Advanced filtering
-            if any([created_after, created_before, exclude_terms, require_terms,
-                    exclude_sources, verified_only]):
-                filters = SearchFilters(
-                    created_after=dt.fromisoformat(created_after) if created_after else None,
-                    created_before=dt.fromisoformat(created_before) if created_before else None,
-                    exclude_terms=exclude_terms,
-                    require_terms=require_terms,
-                    exclude_sources=exclude_sources,
-                    verified_only=verified_only,
-                    min_score=min_score,
-                    max_results=fetch_limit,
-                )
-                advanced_filter = AdvancedFilter(filters)
-                results = advanced_filter.apply_filters(results)
+            # Issue #281: Use extracted helper for advanced filtering
+            results = self._apply_advanced_search_filters(
+                results, created_after, created_before, exclude_terms,
+                require_terms, exclude_sources, verified_only, min_score, fetch_limit
+            )
 
-            # Issue #78: Relevance scoring
-            if enable_relevance_scoring and results:
-                scorer = get_relevance_scorer()
-                for result in results:
-                    original_score = result.get("score", 0)
-                    result["original_score"] = original_score
-                    result["score"] = scorer.calculate_relevance_score(
-                        original_score, processed_query, result
-                    )
-                # Re-sort by new scores
-                results.sort(key=lambda x: x.get("score", 0), reverse=True)
+            # Issue #281: Use extracted helper for relevance scoring
+            results = self._apply_relevance_scoring(
+                results, processed_query, enable_relevance_scoring
+            )
 
             # Reranking with cross-encoder
             if enable_reranking and results:
@@ -743,71 +714,300 @@ class SearchMixin:
             # Calculate search duration
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # Issue #78: Search analytics
-            if track_analytics:
-                analytics = get_search_analytics()
-                analytics.record_search(
-                    query=query,
-                    result_count=len(results),
-                    duration_ms=duration_ms,
-                    session_id=session_id,
-                    filters={
-                        "mode": mode,
-                        "tags": tags,
-                        "category": category,
-                        "query_expansion": enable_query_expansion,
-                        "relevance_scoring": enable_relevance_scoring,
-                    },
-                )
+            # Issue #281: Use extracted helper for analytics tracking
+            self._track_search_analytics(
+                query, len(results), duration_ms, session_id, mode,
+                tags, category, enable_query_expansion, enable_relevance_scoring,
+                track_analytics
+            )
 
-            # Issue #78: Result clustering
-            clusters = None
-            unclustered = results
-            if enable_clustering and results:
-                clusterer = get_result_clusterer()
-                cluster_objects, unclustered = clusterer.cluster_results(results)
-                clusters = [
-                    {
-                        "topic": c.topic,
-                        "keywords": c.keywords,
-                        "avg_score": c.avg_score,
-                        "result_count": len(c.results),
-                        "results": c.results[offset:offset + limit],
-                    }
-                    for c in cluster_objects
-                ]
+            # Issue #281: Use extracted helpers for clustering and response
+            clusters, unclustered = self._cluster_search_results(
+                results, enable_clustering, offset, limit
+            )
 
-            # Build response
-            total_count = len(results)
-            paginated_results = unclustered[offset:offset + limit] if not enable_clustering else unclustered
-
-            response = {
-                "success": True,
-                "results": paginated_results,
-                "total_count": total_count,
-                "query_processed": processed_query,
-                "mode": mode,
-                "tags_applied": tags if tags else [],
-                "min_score_applied": min_score,
-                "reranking_applied": enable_reranking,
-                "search_duration_ms": duration_ms,
-                # Issue #78 additions
-                "query_expansion_applied": enable_query_expansion,
-                "queries_searched": len(queries_to_search) if enable_query_expansion else 1,
-                "relevance_scoring_applied": enable_relevance_scoring,
-            }
-
-            if enable_clustering and clusters:
-                response["clusters"] = clusters
-                response["unclustered_count"] = len(unclustered)
-
-            return response
+            return self._build_enhanced_search_response(
+                results, unclustered, clusters, processed_query, mode,
+                tags, min_score, enable_reranking, enable_query_expansion,
+                enable_relevance_scoring, enable_clustering,
+                len(queries_to_search), duration_ms, offset, limit
+            )
 
         except Exception as e:
             logger.error(f"Enhanced search v2 failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return {"success": False, "results": [], "total_count": 0, "error": str(e)}
+
+    def _expand_query_terms(self, query: str, enable_expansion: bool) -> List[str]:
+        """
+        Expand query with synonyms and related terms.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            query: Processed query string
+            enable_expansion: Whether to enable query expansion
+
+        Returns:
+            List of query variations to search
+        """
+        if not enable_expansion:
+            return [query]
+
+        from src.knowledge.search_quality import get_query_expander
+
+        expander = get_query_expander()
+        queries = expander.expand_query(query)
+        logger.debug(f"Query expansion: {len(queries)} variations")
+        return queries
+
+    def _apply_advanced_search_filters(
+        self,
+        results: List[Dict[str, Any]],
+        created_after: Optional[str],
+        created_before: Optional[str],
+        exclude_terms: Optional[List[str]],
+        require_terms: Optional[List[str]],
+        exclude_sources: Optional[List[str]],
+        verified_only: bool,
+        min_score: float,
+        fetch_limit: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Apply advanced filters to search results.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            results: Initial search results
+            created_after: Filter by creation date (ISO format)
+            created_before: Filter by creation date (ISO format)
+            exclude_terms: Terms to exclude
+            require_terms: Required terms
+            exclude_sources: Sources to exclude
+            verified_only: Only verified results
+            min_score: Minimum score threshold
+            fetch_limit: Maximum results limit
+
+        Returns:
+            Filtered results list
+        """
+        if not any([created_after, created_before, exclude_terms,
+                    require_terms, exclude_sources, verified_only]):
+            return results
+
+        from datetime import datetime as dt
+        from src.knowledge.search_quality import SearchFilters, AdvancedFilter
+
+        filters = SearchFilters(
+            created_after=dt.fromisoformat(created_after) if created_after else None,
+            created_before=dt.fromisoformat(created_before) if created_before else None,
+            exclude_terms=exclude_terms,
+            require_terms=require_terms,
+            exclude_sources=exclude_sources,
+            verified_only=verified_only,
+            min_score=min_score,
+            max_results=fetch_limit,
+        )
+        advanced_filter = AdvancedFilter(filters)
+        return advanced_filter.apply_filters(results)
+
+    def _apply_relevance_scoring(
+        self,
+        results: List[Dict[str, Any]],
+        query: str,
+        enable_scoring: bool,
+    ) -> List[Dict[str, Any]]:
+        """
+        Apply relevance scoring to search results.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            results: Search results to score
+            query: Processed query for scoring
+            enable_scoring: Whether to enable relevance scoring
+
+        Returns:
+            Scored and re-sorted results
+        """
+        if not enable_scoring or not results:
+            return results
+
+        from src.knowledge.search_quality import get_relevance_scorer
+
+        scorer = get_relevance_scorer()
+        for result in results:
+            original_score = result.get("score", 0)
+            result["original_score"] = original_score
+            result["score"] = scorer.calculate_relevance_score(
+                original_score, query, result
+            )
+        # Re-sort by new scores
+        results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        return results
+
+    def _track_search_analytics(
+        self,
+        query: str,
+        result_count: int,
+        duration_ms: int,
+        session_id: Optional[str],
+        mode: str,
+        tags: Optional[List[str]],
+        category: Optional[str],
+        query_expansion: bool,
+        relevance_scoring: bool,
+        track_analytics: bool,
+    ) -> None:
+        """
+        Track search analytics.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            query: Original query
+            result_count: Number of results found
+            duration_ms: Search duration in milliseconds
+            session_id: Session ID for tracking
+            mode: Search mode used
+            tags: Tags applied
+            category: Category filter applied
+            query_expansion: Whether query expansion was enabled
+            relevance_scoring: Whether relevance scoring was enabled
+            track_analytics: Whether to track analytics
+        """
+        if not track_analytics:
+            return
+
+        from src.knowledge.search_quality import get_search_analytics
+
+        analytics = get_search_analytics()
+        analytics.record_search(
+            query=query,
+            result_count=result_count,
+            duration_ms=duration_ms,
+            session_id=session_id,
+            filters={
+                "mode": mode,
+                "tags": tags,
+                "category": category,
+                "query_expansion": query_expansion,
+                "relevance_scoring": relevance_scoring,
+            },
+        )
+
+    def _cluster_search_results(
+        self,
+        results: List[Dict[str, Any]],
+        enable_clustering: bool,
+        offset: int,
+        limit: int,
+    ) -> tuple:
+        """
+        Cluster search results by topic.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            results: Search results to cluster
+            enable_clustering: Whether to enable clustering
+            offset: Pagination offset
+            limit: Pagination limit
+
+        Returns:
+            Tuple of (clusters, unclustered_results)
+        """
+        if not enable_clustering or not results:
+            return None, results
+
+        from src.knowledge.search_quality import get_result_clusterer
+
+        clusterer = get_result_clusterer()
+        cluster_objects, unclustered = clusterer.cluster_results(results)
+        clusters = [
+            {
+                "topic": c.topic,
+                "keywords": c.keywords,
+                "avg_score": c.avg_score,
+                "result_count": len(c.results),
+                "results": c.results[offset:offset + limit],
+            }
+            for c in cluster_objects
+        ]
+        return clusters, unclustered
+
+    def _build_enhanced_search_response(
+        self,
+        results: List[Dict[str, Any]],
+        unclustered: List[Dict[str, Any]],
+        clusters: Optional[List[Dict[str, Any]]],
+        query: str,
+        mode: str,
+        tags: Optional[List[str]],
+        min_score: float,
+        enable_reranking: bool,
+        enable_query_expansion: bool,
+        enable_relevance_scoring: bool,
+        enable_clustering: bool,
+        queries_count: int,
+        duration_ms: int,
+        offset: int,
+        limit: int,
+    ) -> Dict[str, Any]:
+        """
+        Build the enhanced search response.
+
+        Issue #281: Extracted from enhanced_search_v2 for clarity.
+
+        Args:
+            results: All search results
+            unclustered: Unclustered results
+            clusters: Clustered results (if enabled)
+            query: Processed query
+            mode: Search mode
+            tags: Applied tags
+            min_score: Minimum score threshold
+            enable_reranking: Whether reranking was applied
+            enable_query_expansion: Whether query expansion was applied
+            enable_relevance_scoring: Whether relevance scoring was applied
+            enable_clustering: Whether clustering was applied
+            queries_count: Number of query variations searched
+            duration_ms: Search duration in milliseconds
+            offset: Pagination offset
+            limit: Pagination limit
+
+        Returns:
+            Enhanced search response dictionary
+        """
+        total_count = len(results)
+        paginated_results = (
+            unclustered[offset:offset + limit]
+            if not enable_clustering
+            else unclustered
+        )
+
+        response = {
+            "success": True,
+            "results": paginated_results,
+            "total_count": total_count,
+            "query_processed": query,
+            "mode": mode,
+            "tags_applied": tags if tags else [],
+            "min_score_applied": min_score,
+            "reranking_applied": enable_reranking,
+            "search_duration_ms": duration_ms,
+            "query_expansion_applied": enable_query_expansion,
+            "queries_searched": queries_count if enable_query_expansion else 1,
+            "relevance_scoring_applied": enable_relevance_scoring,
+        }
+
+        if enable_clustering and clusters:
+            response["clusters"] = clusters
+            response["unclustered_count"] = len(unclustered)
+
+        return response
 
     def ensure_initialized(self):
         """
