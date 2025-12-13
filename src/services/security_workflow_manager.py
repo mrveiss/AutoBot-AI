@@ -13,6 +13,7 @@ Provides structured, resumable security assessments with:
 Issue: #260
 """
 
+import ast
 import json
 import logging
 import uuid
@@ -455,8 +456,8 @@ class SecurityWorkflowManager:
                 status=decoded["status"],
                 created_at=decoded["created_at"],
                 updated_at=decoded["updated_at"],
-                findings=eval(decoded.get("findings", "[]")),
-                metadata=eval(decoded.get("metadata", "{}")),
+                findings=ast.literal_eval(decoded.get("findings", "[]")),
+                metadata=ast.literal_eval(decoded.get("metadata", "{}")),
             )
         except Exception as e:
             logger.error(f"Error parsing assessment {aid}: {e}")
