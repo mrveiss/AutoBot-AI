@@ -277,7 +277,7 @@ class PlaywrightSecurityFixer:
     def fix_playwright_report(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a Playwright report file."""
         try:
-            logger.info("\n🎯 Processing Playwright report: {file_path}")
+            logger.info("Processing Playwright report: %s", file_path)
 
             # Read original content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -288,8 +288,8 @@ class PlaywrightSecurityFixer:
 
             # Scan for vulnerabilities
             vulnerabilities = self.scan_for_xss_patterns(original_content, file_path)
-            print(
-                f"🔍 Found {len(vulnerabilities)} potential XSS vulnerability patterns"
+            logger.info(
+                "Found %d potential XSS vulnerability patterns", len(vulnerabilities)
             )
 
             # Display vulnerability summary
@@ -307,7 +307,7 @@ class PlaywrightSecurityFixer:
                     "LOW": "🟢",
                 }
                 icon = severity_icons.get(severity, "⚪")
-                logger.info("   {icon} {severity}: {count} patterns")
+                logger.info("   %s %s: %d patterns", icon, severity, count)
 
             # Create backup
             backup_path = self.create_backup(file_path)
@@ -350,7 +350,7 @@ class PlaywrightSecurityFixer:
 
             logger.info("Applied %s security enhancements", len(all_enhancements))
             for enhancement in all_enhancements:
-                logger.info("   • {enhancement}")
+                logger.info("   • %s", enhancement)
 
             return {
                 "file": file_path,
@@ -367,7 +367,7 @@ class PlaywrightSecurityFixer:
             }
 
         except Exception as e:
-            logger.error("Error processing {file_path}: %s", e)
+            logger.error("Error processing %s: %s", file_path, e)
             return {"file": file_path, "status": "error", "error": str(e)}
 
     def generate_security_report(self, results: List[Dict[str, Any]]) -> str:
@@ -586,10 +586,10 @@ class PlaywrightSecurityFixer:
         logger.info("=" * 50)
         logger.info("🎯 SECURITY ENHANCEMENT SUMMARY")
         logger.info("=" * 50)
-        logger.info("Files processed: {len(results)}")
-        logger.info("Files enhanced: {enhanced_count}")
-        logger.info("Vulnerability patterns found: {total_vulnerabilities}")
-        logger.info("Security enhancements applied: {total_enhancements}")
+        logger.info("Files processed: %d", len(results))
+        logger.info("Files enhanced: %d", enhanced_count)
+        logger.info("Vulnerability patterns found: %d", total_vulnerabilities)
+        logger.info("Security enhancements applied: %d", total_enhancements)
 
         if enhanced_count > 0:
             logger.info("🛡️  XSS protection successfully applied!")
@@ -604,7 +604,7 @@ def main():
         logger.info("Usage: python playwright_security_fixer.py <file_or_directory_path>")
         logger.info("\nExamples:")
         logger.info("  python playwright_security_fixer.py tests/playwright-report/")
-        print(
+        logger.info(
             "  python playwright_security_fixer.py tests/playwright-report/index.html"
         )
         sys.exit(1)
