@@ -568,22 +568,18 @@ async def _store_batches_to_chromadb(
     return items_stored
 
 
-# =============================================================================
-# End of Helper Functions
-# =============================================================================
+def _create_empty_analysis_results() -> Dict:
+    """
+    Create empty analysis results dictionary structure.
 
+    Issue #281: Extracted from scan_codebase to reduce function length
+    and improve testability.
 
-async def scan_codebase(
-    root_path: Optional[str] = None,
-    progress_callback: Optional[callable] = None,
-    immediate_store_collection=None,
-) -> Metadata:
-    """Scan the entire codebase using MCP-like file operations (Issue #315 - reduced nesting)."""
-    # Use centralized PathConstants (Issue #380)
-    if root_path is None:
-        root_path = str(PATH.PROJECT_ROOT)
-
-    analysis_results = {
+    Returns:
+        Dict with initialized structure for files, stats, functions,
+        classes, hardcodes, and problems.
+    """
+    return {
         "files": {},
         "stats": {
             "total_files": 0,
@@ -607,6 +603,70 @@ async def scan_codebase(
         "all_hardcodes": [],
         "all_problems": [],
     }
+
+
+def _calculate_analysis_statistics(analysis_results: Dict) -> None:
+    """
+    Calculate derived statistics for analysis results.
+
+    Issue #281: Extracted from scan_codebase to reduce function length.
+    Modifies analysis_results in place.
+
+    Calculates:
+        - average_file_size: Average lines per file
+        - comment_ratio: Percentage of comment lines
+        - docstring_ratio: Percentage of docstring lines
+        - documentation_ratio: Combined comment + docstring percentage
+        - last_indexed: Timestamp of indexing
+    """
+    stats = analysis_results["stats"]
+
+    # Calculate average file size
+    if stats["total_files"] > 0:
+        stats["average_file_size"] = stats["total_lines"] / stats["total_files"]
+    else:
+        stats["average_file_size"] = 0
+
+    # Calculate documentation ratios (Issue #368)
+    total_lines = stats["total_lines"]
+    if total_lines > 0:
+        comment_lines = stats["comment_lines"]
+        docstring_lines = stats["docstring_lines"]
+        stats["comment_ratio"] = f"{(comment_lines / total_lines * 100):.1f}%"
+        stats["docstring_ratio"] = f"{(docstring_lines / total_lines * 100):.1f}%"
+        # Combined documentation ratio (comments + docstrings)
+        doc_total = comment_lines + docstring_lines
+        stats["documentation_ratio"] = f"{(doc_total / total_lines * 100):.1f}%"
+    else:
+        stats["comment_ratio"] = "0.0%"
+        stats["docstring_ratio"] = "0.0%"
+        stats["documentation_ratio"] = "0.0%"
+
+    stats["last_indexed"] = datetime.now().isoformat()
+
+
+# =============================================================================
+# End of Helper Functions
+# =============================================================================
+
+
+async def scan_codebase(
+    root_path: Optional[str] = None,
+    progress_callback: Optional[callable] = None,
+    immediate_store_collection=None,
+) -> Metadata:
+    """
+    Scan the entire codebase using MCP-like file operations.
+
+    Issue #315: Reduced nesting with helper functions.
+    Issue #281: Uses extracted helpers for initialization and statistics.
+    """
+    # Use centralized PathConstants (Issue #380)
+    if root_path is None:
+        root_path = str(PATH.PROJECT_ROOT)
+
+    # Issue #281: Use extracted helper for initialization
+    analysis_results = _create_empty_analysis_results()
 
     try:
         root_path_obj = Path(root_path)
@@ -668,31 +728,8 @@ async def scan_codebase(
                 file_analysis, relative_path, analysis_results, immediate_store_collection
             )
 
-        # Calculate average file size
-        if analysis_results["stats"]["total_files"] > 0:
-            analysis_results["stats"]["average_file_size"] = (
-                analysis_results["stats"]["total_lines"]
-                / analysis_results["stats"]["total_files"]
-            )
-        else:
-            analysis_results["stats"]["average_file_size"] = 0
-
-        # Calculate comment ratio (Issue #368)
-        total_lines = analysis_results["stats"]["total_lines"]
-        if total_lines > 0:
-            comment_lines = analysis_results["stats"]["comment_lines"]
-            docstring_lines = analysis_results["stats"]["docstring_lines"]
-            analysis_results["stats"]["comment_ratio"] = f"{(comment_lines / total_lines * 100):.1f}%"
-            analysis_results["stats"]["docstring_ratio"] = f"{(docstring_lines / total_lines * 100):.1f}%"
-            # Combined documentation ratio (comments + docstrings)
-            doc_total = comment_lines + docstring_lines
-            analysis_results["stats"]["documentation_ratio"] = f"{(doc_total / total_lines * 100):.1f}%"
-        else:
-            analysis_results["stats"]["comment_ratio"] = "0.0%"
-            analysis_results["stats"]["docstring_ratio"] = "0.0%"
-            analysis_results["stats"]["documentation_ratio"] = "0.0%"
-
-        analysis_results["stats"]["last_indexed"] = datetime.now().isoformat()
+        # Issue #281: Use extracted helper for statistics calculation
+        _calculate_analysis_statistics(analysis_results)
 
         return analysis_results
 
