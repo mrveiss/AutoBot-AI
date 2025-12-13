@@ -7,6 +7,7 @@ Debug script to test the chat flow and identify where responses are getting lost
 """
 
 import asyncio
+import json
 import logging
 import sys
 from pathlib import Path

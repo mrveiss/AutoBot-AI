@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import psutil
+import requests
 
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent))

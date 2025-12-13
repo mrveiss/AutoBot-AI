@@ -23,6 +23,8 @@ from typing import Any, Dict
 
 import psutil
 
+from src.constants import ServiceURLs
+
 from src.constants.threshold_constants import TimingConstants
 from src.unified_config import API_BASE_URL
 

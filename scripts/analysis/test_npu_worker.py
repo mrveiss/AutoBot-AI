@@ -10,6 +10,7 @@ Tests basic NPU Worker functionality without external dependencies.
 Used during AutoBot startup to verify NPU Worker health.
 """
 
+import json
 import sys
 
 try:

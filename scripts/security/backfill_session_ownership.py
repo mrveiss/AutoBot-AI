@@ -39,6 +39,7 @@ from typing import List, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from backend.security.session_ownership import SessionOwnershipValidator
+from src.utils.redis_client import get_redis_client
 
 logging.basicConfig(
     level=logging.INFO,

@@ -33,7 +33,7 @@ from src.utils.service_registry import ServiceStatus, get_service_registry
 
 # Optional web dependencies
 try:
-    from flask import Flask, jsonify, render_template_string
+    from flask import Flask, jsonify, render_template_string, request
     from flask_cors import CORS
 
     FLASK_AVAILABLE = True
