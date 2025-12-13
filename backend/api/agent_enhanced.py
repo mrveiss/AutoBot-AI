@@ -46,6 +46,47 @@ _FALLBACK_AGENTS = ("chat", "rag", "research")
 # Issue #380: Module-level tuple for development analysis agents
 _DEV_AGENTS = ("development_speedup", "npu_code_search")
 
+# Issue #281: Agent capability definitions extracted from list_available_agents
+# This enables reuse and reduces function length
+AGENT_CAPABILITIES = {
+    "rag": {
+        "description": "Retrieval-Augmented Generation for document synthesis",
+        "capabilities": ["document_query", "reformulate_query", "analyze_documents"],
+    },
+    "chat": {
+        "description": "Conversational interactions with context awareness",
+        "capabilities": ["natural_conversation", "context_retention"],
+    },
+    "research": {
+        "description": "Comprehensive research and analysis",
+        "capabilities": ["research_queries", "source_analysis", "report_generation"],
+    },
+    "web_research_assistant": {
+        "description": "Web-based research and content analysis",
+        "capabilities": ["web_search", "content_extraction", "source_validation"],
+    },
+    "knowledge_extraction": {
+        "description": "Structured knowledge extraction from content",
+        "capabilities": ["entity_extraction", "fact_identification", "content_structuring"],
+    },
+    "classification": {
+        "description": "Content and data classification",
+        "capabilities": ["content_categorization", "sentiment_analysis", "topic_classification"],
+    },
+    "npu_code_search": {
+        "description": "NPU-accelerated code search and analysis",
+        "capabilities": ["code_search", "function_analysis", "pattern_detection"],
+    },
+    "development_speedup": {
+        "description": "Development optimization and speedup analysis",
+        "capabilities": ["performance_analysis", "optimization_suggestions", "code_quality_assessment"],
+    },
+    "system_knowledge_manager": {
+        "description": "System-wide knowledge management",
+        "capabilities": ["knowledge_coordination", "system_insights", "knowledge_synthesis"],
+    },
+}
+
 # ====================================================================
 # Request/Response Models
 # ====================================================================
@@ -449,95 +490,30 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
 )
 @router.get("/agents/available")
 async def list_available_agents():
-    """List all available AI Stack agents with their capabilities."""
+    """
+    List all available AI Stack agents with their capabilities.
+
+    Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
+    Reduced from 105 lines to ~35 lines.
+    """
     try:
         ai_client = await get_ai_stack_client()
         agents_info = await ai_client.list_available_agents()
 
-        # Enhance with capability descriptions
-        enhanced_agents = {
-            "rag": {
-                "description": "Retrieval-Augmented Generation for document synthesis",
-                "capabilities": [
-                    "document_query",
-                    "reformulate_query",
-                    "analyze_documents",
-                ],
-            },
-            "chat": {
-                "description": "Conversational interactions with context awareness",
-                "capabilities": ["natural_conversation", "context_retention"],
-            },
-            "research": {
-                "description": "Comprehensive research and analysis",
-                "capabilities": [
-                    "research_queries",
-                    "source_analysis",
-                    "report_generation",
-                ],
-            },
-            "web_research_assistant": {
-                "description": "Web-based research and content analysis",
-                "capabilities": [
-                    "web_search",
-                    "content_extraction",
-                    "source_validation",
-                ],
-            },
-            "knowledge_extraction": {
-                "description": "Structured knowledge extraction from content",
-                "capabilities": [
-                    "entity_extraction",
-                    "fact_identification",
-                    "content_structuring",
-                ],
-            },
-            "classification": {
-                "description": "Content and data classification",
-                "capabilities": [
-                    "content_categorization",
-                    "sentiment_analysis",
-                    "topic_classification",
-                ],
-            },
-            "npu_code_search": {
-                "description": "NPU-accelerated code search and analysis",
-                "capabilities": [
-                    "code_search",
-                    "function_analysis",
-                    "pattern_detection",
-                ],
-            },
-            "development_speedup": {
-                "description": "Development optimization and speedup analysis",
-                "capabilities": [
-                    "performance_analysis",
-                    "optimization_suggestions",
-                    "code_quality_assessment",
-                ],
-            },
-            "system_knowledge_manager": {
-                "description": "System-wide knowledge management",
-                "capabilities": [
-                    "knowledge_coordination",
-                    "system_insights",
-                    "knowledge_synthesis",
-                ],
-            },
-        }
-
+        # Issue #281: Use module-level constant for agent capabilities
         # Combine available agents with capability info
         available_list = agents_info.get("agents", [])
         enhanced_list = []
 
         for agent in available_list:
-            agent_info = enhanced_agents.get(
+            # Get capabilities from module constant, with fallback for unknown agents
+            agent_info = AGENT_CAPABILITIES.get(
                 agent,
                 {
                     "description": f"AI agent: {agent}",
                     "capabilities": ["general_processing"],
                 },
-            )
+            ).copy()  # Copy to avoid modifying the constant
             agent_info["name"] = agent
             agent_info["status"] = "available"
             enhanced_list.append(agent_info)
