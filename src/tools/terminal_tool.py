@@ -40,12 +40,6 @@ class TerminalTool:
         self.active_sessions: Dict[str, str] = {}  # conversation_id -> session_id
 
     # Issue #321: Delegation methods to reduce message chains (Law of Demeter)
-    async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get session info from agent terminal service, reducing message chain."""
-        if self.agent_terminal_service:
-            return await self.agent_terminal_service.get_session_info(session_id)
-        return None
-
     def get_session(self, session_id: str) -> Optional[Any]:
         """Get session from agent terminal service sessions dict."""
         if self.agent_terminal_service:
