@@ -37,9 +37,6 @@ TROUBLESHOOTING_KEYWORDS = {"error", "bug", "issue", "problem"}
 DOCUMENTATION_KEYWORDS = {"config", "setup", "install", "guide"}
 
 
-
-
-
 async def get_chat_knowledge_manager_instance(request: Request = None):
     """PERFORMANCE OPTIMIZATION: Get chat knowledge manager instance, preferring pre-initialized app.state"""
     # Try to use pre-initialized manager from app state first

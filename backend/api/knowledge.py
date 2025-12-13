@@ -430,9 +430,9 @@ async def add_text_to_knowledge(request: dict, req: Request):
     }
 
 
-
 # NOTE: Search endpoints moved to knowledge_search.py (Issue #209)
 # Includes: /search, /enhanced_search, /rag_search, /similarity_search
+
 
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,

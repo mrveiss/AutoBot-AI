@@ -137,7 +137,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["terminal"])
 
 
-
 # Import handler classes (extracted from this file - Issue #210)
 from backend.api.terminal_handlers import (
     ConsolidatedTerminalWebSocket,

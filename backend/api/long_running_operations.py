@@ -56,6 +56,7 @@ router = APIRouter(tags=["long-running-operations"])
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
 FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT} if operation_integration_manager else set()
 
+
 # Additional models specific to AutoBot integration
 class CodebaseIndexingRequest(BaseModel):
     """Request model for codebase indexing operations"""

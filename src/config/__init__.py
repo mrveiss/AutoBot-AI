@@ -61,6 +61,7 @@ cfg = unified_config_manager  # Short alias for ai_hardware_accelerator.py
 # Legacy class wrapper instance
 legacy_config = Config(unified_config_manager)
 
+
 # Convenience functions bound to singleton
 def get_config(key: str, default=None):
     """Get configuration value"""
