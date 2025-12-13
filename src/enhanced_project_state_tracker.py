@@ -109,6 +109,80 @@ class ProjectMilestone:
 SIGNIFICANT_CHANGES = {StateChangeType.PHASE_PROGRESSION, StateChangeType.CAPABILITY_UNLOCK}
 SIGNIFICANT_INTERACTIONS = {"login", "logout", "settings_change", "agent_switch"}
 
+# Issue #281: SQL schema definitions extracted from _init_database
+# Table creation SQL statements for enhanced project state tracking
+DATABASE_SCHEMA_TABLES = (
+    # State snapshots table
+    """
+    CREATE TABLE IF NOT EXISTS state_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TIMESTAMP NOT NULL,
+        phase_states TEXT NOT NULL,
+        active_capabilities TEXT NOT NULL,
+        system_metrics TEXT NOT NULL,
+        configuration TEXT NOT NULL,
+        validation_results TEXT NOT NULL,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # State changes table
+    """
+    CREATE TABLE IF NOT EXISTS state_changes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TIMESTAMP NOT NULL,
+        change_type TEXT NOT NULL,
+        before_state TEXT,
+        after_state TEXT NOT NULL,
+        description TEXT NOT NULL,
+        user_id TEXT,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # Metrics history table
+    """
+    CREATE TABLE IF NOT EXISTS metrics_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_name TEXT NOT NULL,
+        timestamp TIMESTAMP NOT NULL,
+        value REAL NOT NULL,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # Milestones table
+    """
+    CREATE TABLE IF NOT EXISTS milestones (
+        name TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        criteria TEXT NOT NULL,
+        achieved BOOLEAN DEFAULT FALSE,
+        achieved_at TIMESTAMP,
+        evidence TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    # Events table for detailed tracking
+    """
+    CREATE TABLE IF NOT EXISTS system_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        event_data TEXT NOT NULL,
+        source TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+)
+
+# Issue #281: Index creation SQL statements
+DATABASE_SCHEMA_INDICES = (
+    "CREATE INDEX IF NOT EXISTS idx_metric_timestamp ON metrics_history (metric_name, timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_event_type ON system_events (event_type)",
+    "CREATE INDEX IF NOT EXISTS idx_timestamp ON system_events (timestamp)",
+)
+
 
 # ============================================================================
 # Sync SQLite helper functions for asyncio.to_thread() (Issue #357)
@@ -286,110 +360,24 @@ class EnhancedProjectStateTracker:
         logger.info("Enhanced Project State Tracker initialized")
 
     def _init_database(self):
-        """Initialize SQLite database for enhanced state tracking"""
+        """
+        Initialize SQLite database for enhanced state tracking.
+
+        Issue #281: Refactored to use module-level constants DATABASE_SCHEMA_TABLES
+        and DATABASE_SCHEMA_INDICES. Reduced from 107 lines to ~15 lines.
+        """
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # State snapshots table
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS state_snapshots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP NOT NULL,
-                    phase_states TEXT NOT NULL,
-                    active_capabilities TEXT NOT NULL,
-                    system_metrics TEXT NOT NULL,
-                    configuration TEXT NOT NULL,
-                    validation_results TEXT NOT NULL,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
+            # Issue #281: Create tables from module-level schema definitions
+            for table_sql in DATABASE_SCHEMA_TABLES:
+                cursor.execute(table_sql)
 
-            # State changes table
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS state_changes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP NOT NULL,
-                    change_type TEXT NOT NULL,
-                    before_state TEXT,
-                    after_state TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    user_id TEXT,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Metrics history table
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS metrics_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    metric_name TEXT NOT NULL,
-                    timestamp TIMESTAMP NOT NULL,
-                    value REAL NOT NULL,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Create indices separately
-            cursor.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_metric_timestamp
-                ON metrics_history (metric_name, timestamp)
-            """
-            )
-
-            # Milestones table
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS milestones (
-                    name TEXT PRIMARY KEY,
-                    description TEXT NOT NULL,
-                    criteria TEXT NOT NULL,
-                    achieved BOOLEAN DEFAULT FALSE,
-                    achieved_at TIMESTAMP,
-                    evidence TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Events table for detailed tracking
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS system_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_type TEXT NOT NULL,
-                    event_data TEXT NOT NULL,
-                    source TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-
-            # Create indices separately
-            cursor.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_event_type
-                ON system_events (event_type)
-            """
-            )
-            cursor.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_timestamp
-                ON system_events (timestamp)
-            """
-            )
+            # Issue #281: Create indices from module-level definitions
+            for index_sql in DATABASE_SCHEMA_INDICES:
+                cursor.execute(index_sql)
 
             conn.commit()
 
