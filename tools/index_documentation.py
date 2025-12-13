@@ -749,8 +749,8 @@ def search_documentation(query: str, n_results: int = 5) -> None:
         query: Search query
         n_results: Number of results to return
     """
-    print(f"\nSearching documentation for: '{query}'")
-    print("=" * 60)
+    logger.info(f"Searching documentation for: '{query}'")
+    logger.info("=" * 60)
 
     indexer = ChromaDBIndexer()
     indexer.initialize()
@@ -766,26 +766,26 @@ def search_documentation(query: str, n_results: int = 5) -> None:
             )
         ):
             score = 1 - dist
-            print(f"\n[{i+1}] Score: {score:.3f}")
-            print(f"    File: {meta.get('file_path', 'N/A')}")
-            print(f"    Section: {meta.get('section', 'N/A')}")
+            logger.info(f"[{i+1}] Score: {score:.3f}")
+            logger.info(f"    File: {meta.get('file_path', 'N/A')}")
+            logger.info(f"    Section: {meta.get('section', 'N/A')}")
             if meta.get("subsection"):
-                print(f"    Subsection: {meta.get('subsection')}")
-            print(f"    Preview: {doc[:200]}...")
+                logger.info(f"    Subsection: {meta.get('subsection')}")
+            logger.info(f"    Preview: {doc[:200]}...")
     else:
-        print("No results found")
+        logger.info("No results found")
 
 
 def get_collection_stats() -> None:
     """Display collection statistics."""
-    print("\nDocumentation Collection Statistics")
-    print("=" * 60)
+    logger.info("Documentation Collection Statistics")
+    logger.info("=" * 60)
 
     indexer = ChromaDBIndexer()
     indexer.initialize()
 
     count = indexer.collection.count()
-    print(f"Total indexed chunks: {count}")
+    logger.info(f"Total indexed chunks: {count}")
 
     # Get unique files
     if count > 0:
@@ -799,10 +799,10 @@ def get_collection_stats() -> None:
                 cat = meta.get("category", "unknown")
                 categories[cat] = categories.get(cat, 0) + 1
 
-            print(f"Indexed files: {len(files)}")
-            print("\nChunks by category:")
+            logger.info(f"Indexed files: {len(files)}")
+            logger.info("Chunks by category:")
             for cat, cnt in sorted(categories.items(), key=lambda x: -x[1]):
-                print(f"  - {cat}: {cnt} chunks")
+                logger.info(f"  - {cat}: {cnt} chunks")
 
 
 def main():
