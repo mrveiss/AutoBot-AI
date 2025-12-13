@@ -14,24 +14,12 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.frontend_analyzer import FrontendAnalyzer
 
 
-async def analyze_frontend_code():
-    """Run comprehensive frontend code analysis"""
+def _print_analysis_summary(results: dict) -> None:
+    """
+    Print analysis summary statistics.
 
-    print("🎨 Starting frontend code analysis...")
-    print("Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files...")
-    print()
-
-    analyzer = FrontendAnalyzer()
-
-    # Analyze frontend code
-    results = await analyzer.analyze_frontend_code(
-        root_path=".",
-        patterns=["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.html"]
-    )
-
-    print("=== Frontend Code Analysis Results ===\n")
-
-    # Summary
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
     print(f"📊 **Analysis Summary:**")
     print(f"   • Total components analyzed: {results['total_components']}")
     print(f"   • Total issues found: {results['total_issues']}")
@@ -40,42 +28,64 @@ async def analyze_frontend_code():
     print(f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds")
     print()
 
-    # Framework breakdown
-    if results['framework_usage']:
-        print("🏗️ **Framework Usage:**")
-        for framework, usage in results['framework_usage'].items():
-            framework_name = framework.title()
-            print(f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)")
 
-            if usage.get('lifecycle_hooks'):
-                hooks = ', '.join(usage['lifecycle_hooks'][:5])
-                if len(usage['lifecycle_hooks']) > 5:
-                    hooks += f" +{len(usage['lifecycle_hooks']) - 5} more"
-                print(f"     Common hooks/patterns: {hooks}")
-        print()
+def _print_framework_usage(results: dict) -> None:
+    """
+    Print framework usage breakdown.
 
-    # Component analysis
-    if results['components']:
-        print("🧩 **Component Analysis:**")
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
+    if not results['framework_usage']:
+        return
 
-        components_with_tests = len([c for c in results['components'] if c['has_tests']])
-        test_coverage = (components_with_tests / len(results['components']) * 100) if results['components'] else 0
+    print("🏗️ **Framework Usage:**")
+    for framework, usage in results['framework_usage'].items():
+        framework_name = framework.title()
+        print(f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)")
 
-        print(f"   • Components with tests: {components_with_tests}/{len(results['components'])} ({test_coverage:.1f}%)")
+        if usage.get('lifecycle_hooks'):
+            hooks = ', '.join(usage['lifecycle_hooks'][:5])
+            if len(usage['lifecycle_hooks']) > 5:
+                hooks += f" +{len(usage['lifecycle_hooks']) - 5} more"
+            print(f"     Common hooks/patterns: {hooks}")
+    print()
 
-        # Show most complex components
-        complex_components = sorted(results['components'],
-                                  key=lambda c: len(c['methods']) + len(c['props']),
-                                  reverse=True)[:3]
 
-        if complex_components:
-            print("   • Most complex components:")
-            for comp in complex_components:
-                complexity = len(comp['methods']) + len(comp['props'])
-                print(f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props")
-        print()
+def _print_component_analysis(results: dict) -> None:
+    """
+    Print component analysis details.
 
-    # Security analysis
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
+    if not results['components']:
+        return
+
+    print("🧩 **Component Analysis:**")
+
+    components_with_tests = len([c for c in results['components'] if c['has_tests']])
+    test_coverage = (components_with_tests / len(results['components']) * 100) if results['components'] else 0
+
+    print(f"   • Components with tests: {components_with_tests}/{len(results['components'])} ({test_coverage:.1f}%)")
+
+    # Show most complex components
+    complex_components = sorted(results['components'],
+                              key=lambda c: len(c['methods']) + len(c['props']),
+                              reverse=True)[:3]
+
+    if complex_components:
+        print("   • Most complex components:")
+        for comp in complex_components:
+            complexity = len(comp['methods']) + len(comp['props'])
+            print(f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props")
+    print()
+
+
+def _print_security_analysis(results: dict) -> None:
+    """
+    Print security analysis details.
+
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
     security_analysis = results['security_analysis']
     print(f"🛡️ **Security Analysis:**")
     print(f"   • Total security issues: {security_analysis['total_security_issues']}")
@@ -86,12 +96,19 @@ async def analyze_frontend_code():
     if security_analysis['total_security_issues'] > 0:
         security_issues = [i for i in results['issues'] if i['issue_type'] == 'security']
         print("   • Top security issues:")
-        for issue in security_issues[:3]:  # Show top 3
+        for issue in security_issues[:3]:
             severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
             emoji = severity_emoji.get(issue['severity'], "⚪")
             print(f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})")
     print()
 
+
+def _print_performance_accessibility(results: dict) -> None:
+    """
+    Print performance and accessibility analysis.
+
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
     # Performance analysis
     performance_analysis = results['performance_analysis']
     print(f"⚡ **Performance Analysis:**")
@@ -116,46 +133,59 @@ async def analyze_frontend_code():
             print(f"     - {severity.title()}: {count}")
     print()
 
-    # Detailed issue analysis
-    if results['issues']:
-        print("🔍 **Detailed Issue Analysis:**")
 
-        # Group issues by type
-        issues_by_type = {}
-        for issue in results['issues']:
-            issue_type = issue['issue_type']
-            if issue_type not in issues_by_type:
-                issues_by_type[issue_type] = []
-            issues_by_type[issue_type].append(issue)
+def _print_detailed_issues(results: dict) -> None:
+    """
+    Print detailed issue analysis grouped by type.
 
-        for issue_type, type_issues in issues_by_type.items():
-            if issue_type.endswith('_specific'):
-                framework = issue_type.split('_')[0].title()
-                category_name = f"{framework}-Specific Issues"
-            else:
-                category_name = issue_type.replace('_', ' ').title()
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
+    if not results['issues']:
+        return
 
-            print(f"\n📋 **{category_name} ({len(type_issues)} issues):**")
+    print("🔍 **Detailed Issue Analysis:**")
 
-            # Show top issues by severity
-            sorted_issues = sorted(type_issues,
-                                 key=lambda x: {'critical': 4, 'high': 3, 'medium': 2, 'low': 1}.get(x['severity'], 0),
-                                 reverse=True)
+    # Group issues by type
+    issues_by_type = {}
+    for issue in results['issues']:
+        issue_type = issue['issue_type']
+        if issue_type not in issues_by_type:
+            issues_by_type[issue_type] = []
+        issues_by_type[issue_type].append(issue)
 
-            for issue in sorted_issues[:5]:  # Top 5 issues per category
-                severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-                emoji = severity_emoji.get(issue['severity'], "⚪")
+    for issue_type, type_issues in issues_by_type.items():
+        if issue_type.endswith('_specific'):
+            framework = issue_type.split('_')[0].title()
+            category_name = f"{framework}-Specific Issues"
+        else:
+            category_name = issue_type.replace('_', ' ').title()
 
-                print(f"   {emoji} {issue['description']}")
-                print(f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})")
-                print(f"      💡 Suggestion: {issue['suggestion']}")
+        print(f"\n📋 **{category_name} ({len(type_issues)} issues):**")
 
-    # Framework-specific recommendations
+        # Show top issues by severity
+        sorted_issues = sorted(type_issues,
+                             key=lambda x: {'critical': 4, 'high': 3, 'medium': 2, 'low': 1}.get(x['severity'], 0),
+                             reverse=True)
+
+        for issue in sorted_issues[:5]:
+            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            emoji = severity_emoji.get(issue['severity'], "⚪")
+
+            print(f"   {emoji} {issue['description']}")
+            print(f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})")
+            print(f"      💡 Suggestion: {issue['suggestion']}")
+
+
+def _print_framework_recommendations(results: dict) -> None:
+    """
+    Print framework-specific best practice recommendations.
+
+    Issue #281: Extracted from analyze_frontend_code to reduce function length.
+    """
     print(f"\n💡 **Improvement Recommendations:**")
     for i, recommendation in enumerate(results['recommendations'], 1):
         print(f"{i}. {recommendation}")
 
-    # Best practices by framework
     if 'vue' in results['frameworks_detected']:
         print(f"\n🔧 **Vue.js Best Practices:**")
         print("   • Use Composition API for better code organization")
@@ -176,6 +206,37 @@ async def analyze_frontend_code():
         print("   • Use strict equality (===) instead of ==")
         print("   • Handle async operations properly")
         print("   • Remove console.log statements from production")
+
+
+async def analyze_frontend_code():
+    """
+    Run comprehensive frontend code analysis.
+
+    Issue #281: Print sections extracted to helper functions to reduce
+    function length from 186 to ~50 lines.
+    """
+    print("🎨 Starting frontend code analysis...")
+    print("Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files...")
+    print()
+
+    analyzer = FrontendAnalyzer()
+
+    # Analyze frontend code
+    results = await analyzer.analyze_frontend_code(
+        root_path=".",
+        patterns=["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "**/*.vue", "**/*.svelte", "**/*.html"]
+    )
+
+    print("=== Frontend Code Analysis Results ===\n")
+
+    # Issue #281: Use extracted helpers for output sections
+    _print_analysis_summary(results)
+    _print_framework_usage(results)
+    _print_component_analysis(results)
+    _print_security_analysis(results)
+    _print_performance_accessibility(results)
+    _print_detailed_issues(results)
+    _print_framework_recommendations(results)
 
     # Save detailed report
     report_path = Path("frontend_analysis_report.json")
