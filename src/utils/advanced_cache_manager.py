@@ -642,7 +642,8 @@ def smart_cache(
             else:
                 # Default key generation from function name and args
                 args_hash = hashlib.md5(
-                    str(args + tuple(kwargs.items())).encode()
+                    str(args + tuple(kwargs.items())).encode(),
+                    usedforsecurity=False
                 ).hexdigest()[:8]
                 cache_key = f"{func.__name__}:{args_hash}"
 

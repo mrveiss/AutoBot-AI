@@ -939,7 +939,7 @@ class CodePatternScanner:
     ) -> str:
         """Generate a unique pattern ID."""
         content = f"{file_path}:{line_num}"
-        hash_val = hashlib.md5(content.encode()).hexdigest()[:8]
+        hash_val = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:8]
         return f"{prefix}_{hash_val}"
 
     @classmethod

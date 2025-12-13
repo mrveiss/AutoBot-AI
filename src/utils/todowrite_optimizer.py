@@ -68,7 +68,7 @@ class OptimizedTodoItem:
     def __post_init__(self):
         """Calculate similarity hash for deduplication"""
         content_normalized = self.content.lower().strip()
-        self.similarity_hash = hashlib.md5(content_normalized.encode()).hexdigest()[:8]
+        self.similarity_hash = hashlib.md5(content_normalized.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 @dataclass
@@ -839,12 +839,12 @@ async def example_usage():
     # Force optimization if needed
     batch = await optimizer.force_optimization()
     if batch:
-        print(f"Optimized batch with score: {batch.optimization_score}")
+        logger.info("Optimized batch with score: %s", batch.optimization_score)
 
     # Get recommendations
     recommendations = optimizer.get_optimization_recommendations()
-    print(
-        "Optimization recommendations:",
+    logger.info(
+        "Optimization recommendations: %s",
         json.dumps(recommendations, indent=2, default=str),
     )
 
@@ -855,7 +855,7 @@ async def example_usage():
 
     # Get statistics
     stats = optimizer.get_optimization_stats()
-    print("Optimization statistics:", json.dumps(stats, indent=2, default=str))
+    logger.info("Optimization statistics: %s", json.dumps(stats, indent=2, default=str))
 
 
 if __name__ == "__main__":

@@ -175,7 +175,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Create hash of components
         machine_string = "|".join(components)
-        machine_hash = hashlib.md5(machine_string.encode()).hexdigest()[:12]
+        machine_hash = hashlib.md5(machine_string.encode(), usedforsecurity=False).hexdigest()[:12]
 
         return f"{os_info.os_type.value}_{machine_hash}"
 
