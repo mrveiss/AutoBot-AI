@@ -568,8 +568,139 @@ class SystemMonitor:
         except Exception as e:
             logger.error(f"Failed to store health check results: {e}")
 
+    def _query_system_overview(self, conn) -> dict:
+        """
+        Query system overview metrics for last 24 hours.
+
+        Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
+        """
+        cursor = conn.execute(
+            """
+            SELECT
+                AVG(cpu_percent) as avg_cpu,
+                AVG(memory_percent) as avg_memory,
+                AVG(disk_percent) as avg_disk,
+                MAX(cpu_percent) as max_cpu,
+                MAX(memory_percent) as max_memory,
+                COUNT(*) as data_points
+            FROM system_metrics
+            WHERE timestamp > datetime('now', '-24 hours')
+        """
+        )
+        row = cursor.fetchone()
+        if row:
+            return {
+                "avg_cpu_percent": round(row[0] or 0, 2),
+                "avg_memory_percent": round(row[1] or 0, 2),
+                "avg_disk_percent": round(row[2] or 0, 2),
+                "max_cpu_percent": round(row[3] or 0, 2),
+                "max_memory_percent": round(row[4] or 0, 2),
+                "data_points": row[5] or 0,
+            }
+        return {}
+
+    def _query_service_status(self, conn) -> dict:
+        """
+        Query service status metrics for last hour.
+
+        Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
+        """
+        cursor = conn.execute(
+            """
+            SELECT
+                service_name,
+                AVG(response_time_ms) as avg_response_time,
+                SUM(error_count) as total_errors,
+                SUM(success_count) as total_successes,
+                AVG(memory_usage_mb) as avg_memory
+            FROM application_metrics
+            WHERE timestamp > datetime('now', '-1 hour')
+            GROUP BY service_name
+        """
+        )
+        status = {}
+        for row in cursor.fetchall():
+            service_name = row[0]
+            status[service_name] = {
+                "avg_response_time_ms": round(row[1] or 0, 2),
+                "total_errors": row[2] or 0,
+                "total_successes": row[3] or 0,
+                "avg_memory_mb": round(row[4] or 0, 2),
+                "error_rate": round(
+                    (row[2] or 0) / max((row[2] or 0) + (row[3] or 0), 1) * 100, 2
+                ),
+            }
+        return status
+
+    def _query_recent_alerts(self, conn) -> list:
+        """
+        Query recent alerts from last 24 hours.
+
+        Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
+        """
+        cursor = conn.execute(
+            """
+            SELECT alert_type, severity, message, timestamp
+            FROM alerts
+            WHERE timestamp > datetime('now', '-24 hours')
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """
+        )
+        return [
+            {
+                "type": row[0],
+                "severity": row[1],
+                "message": row[2],
+                "timestamp": row[3],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    def _query_performance_trends(self, conn) -> list:
+        """
+        Query performance trends for last 7 days.
+
+        Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
+        """
+        cursor = conn.execute(
+            """
+            SELECT
+                strftime('%Y-%m-%d %H:00:00', sm.timestamp) as hour,
+                AVG(sm.cpu_percent) as avg_cpu,
+                AVG(sm.memory_percent) as avg_memory,
+                AVG(am.response_time_ms) as avg_response_time
+            FROM system_metrics sm
+            LEFT JOIN (
+                SELECT strftime('%Y-%m-%d %H:00:00', timestamp) as hour_group,
+                       AVG(response_time_ms) as response_time_ms
+                FROM application_metrics
+                WHERE timestamp > datetime('now', '-7 days')
+                GROUP BY strftime('%Y-%m-%d %H:00:00', timestamp)
+            ) am ON strftime('%Y-%m-%d %H:00:00', sm.timestamp) = am.hour_group
+            WHERE sm.timestamp > datetime('now', '-7 days')
+            GROUP BY strftime('%Y-%m-%d %H:00:00', sm.timestamp)
+            ORDER BY hour
+        """
+        )
+        trends = []
+        for row in cursor.fetchall():
+            trends.append({
+                "hour": row[0],
+                "cpu_percent": round(row[1] or 0, 2),
+                "memory_percent": round(row[2] or 0, 2),
+                "response_time_ms": round(row[3] or 0, 2),
+            })
+        return trends[-24:]  # Last 24 hours
+
     def generate_monitoring_dashboard(self) -> Dict[str, Any]:
-        """Generate monitoring dashboard data"""
+        """
+        Generate monitoring dashboard data.
+
+        Issue #281: Extracted queries to _query_system_overview(), _query_service_status(),
+        _query_recent_alerts(), and _query_performance_trends() to reduce function length
+        from 129 to ~25 lines.
+        """
         logger.info("📊 Generating monitoring dashboard...")
 
         dashboard = {
@@ -583,115 +714,11 @@ class SystemMonitor:
 
         try:
             with sqlite3.connect(self.metrics_db) as conn:
-                # System overview (last 24 hours)
-                cursor = conn.execute(
-                    """
-                    SELECT
-                        AVG(cpu_percent) as avg_cpu,
-                        AVG(memory_percent) as avg_memory,
-                        AVG(disk_percent) as avg_disk,
-                        MAX(cpu_percent) as max_cpu,
-                        MAX(memory_percent) as max_memory,
-                        COUNT(*) as data_points
-                    FROM system_metrics
-                    WHERE timestamp > datetime('now', '-24 hours')
-                """
-                )
-
-                row = cursor.fetchone()
-                if row:
-                    dashboard["system_overview"] = {
-                        "avg_cpu_percent": round(row[0] or 0, 2),
-                        "avg_memory_percent": round(row[1] or 0, 2),
-                        "avg_disk_percent": round(row[2] or 0, 2),
-                        "max_cpu_percent": round(row[3] or 0, 2),
-                        "max_memory_percent": round(row[4] or 0, 2),
-                        "data_points": row[5] or 0,
-                    }
-
-                # Service status (last hour)
-                cursor = conn.execute(
-                    """
-                    SELECT
-                        service_name,
-                        AVG(response_time_ms) as avg_response_time,
-                        SUM(error_count) as total_errors,
-                        SUM(success_count) as total_successes,
-                        AVG(memory_usage_mb) as avg_memory
-                    FROM application_metrics
-                    WHERE timestamp > datetime('now', '-1 hour')
-                    GROUP BY service_name
-                """
-                )
-
-                for row in cursor.fetchall():
-                    service_name = row[0]
-                    dashboard["service_status"][service_name] = {
-                        "avg_response_time_ms": round(row[1] or 0, 2),
-                        "total_errors": row[2] or 0,
-                        "total_successes": row[3] or 0,
-                        "avg_memory_mb": round(row[4] or 0, 2),
-                        "error_rate": round(
-                            (row[2] or 0) / max((row[2] or 0) + (row[3] or 0), 1) * 100,
-                            2,
-                        ),
-                    }
-
-                # Recent alerts (last 24 hours)
-                cursor = conn.execute(
-                    """
-                    SELECT alert_type, severity, message, timestamp
-                    FROM alerts
-                    WHERE timestamp > datetime('now', '-24 hours')
-                    ORDER BY timestamp DESC
-                    LIMIT 10
-                """
-                )
-
-                dashboard["recent_alerts"] = [
-                    {
-                        "type": row[0],
-                        "severity": row[1],
-                        "message": row[2],
-                        "timestamp": row[3],
-                    }
-                    for row in cursor.fetchall()
-                ]
-
-                # Performance trends (last 7 days, hourly averages)
-                cursor = conn.execute(
-                    """
-                    SELECT
-                        strftime('%Y-%m-%d %H:00:00', sm.timestamp) as hour,
-                        AVG(sm.cpu_percent) as avg_cpu,
-                        AVG(sm.memory_percent) as avg_memory,
-                        AVG(am.response_time_ms) as avg_response_time
-                    FROM system_metrics sm
-                    LEFT JOIN (
-                        SELECT strftime('%Y-%m-%d %H:00:00', timestamp) as hour_group,
-                               AVG(response_time_ms) as response_time_ms
-                        FROM application_metrics
-                        WHERE timestamp > datetime('now', '-7 days')
-                        GROUP BY strftime('%Y-%m-%d %H:00:00', timestamp)
-                    ) am ON strftime('%Y-%m-%d %H:00:00', sm.timestamp) = am.hour_group
-                    WHERE sm.timestamp > datetime('now', '-7 days')
-                    GROUP BY strftime('%Y-%m-%d %H:00:00', sm.timestamp)
-                    ORDER BY hour
-                """
-                )
-
-                trends = []
-                for row in cursor.fetchall():
-                    trends.append(
-                        {
-                            "hour": row[0],
-                            "cpu_percent": round(row[1] or 0, 2),
-                            "memory_percent": round(row[2] or 0, 2),
-                            "response_time_ms": round(row[3] or 0, 2),
-                        }
-                    )
-
-                dashboard["performance_trends"] = trends[-24:]  # Last 24 hours
+                # Issue #281: Use extracted query helpers
+                dashboard["system_overview"] = self._query_system_overview(conn)
+                dashboard["service_status"] = self._query_service_status(conn)
+                dashboard["recent_alerts"] = self._query_recent_alerts(conn)
+                dashboard["performance_trends"] = self._query_performance_trends(conn)
 
         except Exception as e:
             logger.error(f"Failed to generate dashboard data: {e}")

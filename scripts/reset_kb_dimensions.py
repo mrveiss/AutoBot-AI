@@ -2,6 +2,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# NOTE: CLI tool uses print() for user-facing output per LOGGING_STANDARDS.md
 """
 Complete fix for AutoBot knowledge base embedding dimension issues.
 This script:
@@ -22,25 +23,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils.redis_client import get_redis_client
 
 
-async def reset_knowledge_base():
-    """Complete reset of the knowledge base to fix dimension and async issues."""
+def _cleanup_redis_databases(r) -> int:
+    """
+    Clean up Redis databases by removing llama_index, doc, and vector keys.
 
-    print("🔧 AutoBot Knowledge Base Reset Tool")
-    print("=" * 50)
+    Issue #281: Extracted from reset_knowledge_base to reduce function length.
 
-    # Connect to Redis using centralized client
-    try:
-        r = get_redis_client(database="main")
-        if r is None:
-            raise Exception("Redis client is None")
-        r.ping()
-        print("✅ Connected to Redis")
-    except Exception as e:
-        print(f"❌ Failed to connect to Redis: {e}")
-        return False
+    Args:
+        r: Redis client for dropping index.
 
-    print("\n1. Cleaning up Redis vector store data...")
-
+    Returns:
+        Total count of keys removed.
+    """
     # Drop the index if it exists
     try:
         r.execute_command("FT.DROPINDEX", "llama_index", "DD")
@@ -50,7 +44,10 @@ async def reset_knowledge_base():
 
     # Clean specific databases using centralized client
     cleanup_count = 0
-    database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
+    database_names = [
+        "main", "knowledge", "prompts", "agents", "metrics",
+        "logs", "sessions", "workflows", "vectors", "models"
+    ]
 
     for db_name in database_names:
         try:
@@ -85,6 +82,88 @@ async def reset_knowledge_base():
         except Exception as e:
             print(f"⚠️  Database {db_name}: {e}")
 
+    return cleanup_count
+
+
+async def _test_knowledge_base_operations(kb) -> bool:
+    """
+    Test knowledge base document and search operations.
+
+    Issue #281: Extracted from reset_knowledge_base to reduce function length.
+
+    Args:
+        kb: Initialized KnowledgeBase instance.
+
+    Returns:
+        True if all tests pass, False otherwise.
+    """
+    from llama_index.core import Document
+
+    test_content = "AutoBot is an autonomous AI agent platform with advanced knowledge management capabilities."
+
+    try:
+        doc = Document(
+            text=test_content, metadata={"source": "test", "category": "system"}
+        )
+        kb.index.insert(doc)
+        print("✅ Successfully added test document to vector store!")
+
+        # Test search functionality
+        results = await kb.search("AutoBot", n_results=1)
+        print(f"✅ Search test: Found {len(results)} results")
+
+        if results:
+            print(f"   📄 Result content preview: {results[0]['content'][:100]}...")
+
+        # Test fact storage (sync operations)
+        fact_result = await kb.store_fact(
+            content="AutoBot knowledge base is now working correctly.",
+            metadata={"source": "reset_script", "category": "system"},
+        )
+        if fact_result["status"] == "success":
+            print("✅ Fact storage test successful")
+        else:
+            print(f"⚠️  Fact storage test failed: {fact_result['message']}")
+
+        # Test fact retrieval
+        facts = await kb.get_fact()  # Get all facts
+        print(f"✅ Fact retrieval test: Found {len(facts)} facts")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error during document operations: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def reset_knowledge_base():
+    """
+    Complete reset of the knowledge base to fix dimension and async issues.
+
+    Issue #281: Extracted database cleanup to _cleanup_redis_databases() and
+    KB testing to _test_knowledge_base_operations() to reduce function length
+    from 133 to ~45 lines.
+    """
+    print("🔧 AutoBot Knowledge Base Reset Tool")
+    print("=" * 50)
+
+    # Connect to Redis using centralized client
+    try:
+        r = get_redis_client(database="main")
+        if r is None:
+            raise Exception("Redis client is None")
+        r.ping()
+        print("✅ Connected to Redis")
+    except Exception as e:
+        print(f"❌ Failed to connect to Redis: {e}")
+        return False
+
+    print("\n1. Cleaning up Redis vector store data...")
+
+    # Issue #281: Use extracted helper for database cleanup
+    cleanup_count = _cleanup_redis_databases(r)
     print(f"\n2. Total cleanup: {cleanup_count} keys removed")
 
     print("\n3. Testing knowledge base initialization...")
@@ -103,56 +182,15 @@ async def reset_knowledge_base():
         # Check embedding model and dimensions
         if hasattr(kb, "embed_model"):
             print(f"✅ Embedding model: {kb.embedding_model_name}")
-
-            # Test embedding dimensions
             test_embedding = kb.embed_model.get_text_embedding("test")
             print(f"✅ Detected embedding dimension: {len(test_embedding)}")
 
-        # Test adding a simple document
-        test_content = "AutoBot is an autonomous AI agent platform with advanced knowledge management capabilities."
-        from llama_index.core import Document
-
-        try:
-            doc = Document(
-                text=test_content, metadata={"source": "test", "category": "system"}
-            )
-            kb.index.insert(doc)
-            print("✅ Successfully added test document to vector store!")
-
-            # Test search functionality
-            results = await kb.search("AutoBot", n_results=1)
-            print(f"✅ Search test: Found {len(results)} results")
-
-            if results:
-                print(f"   📄 Result content preview: {results[0]['content'][:100]}...")
-
-            # Test fact storage (sync operations)
-            fact_result = await kb.store_fact(
-                content="AutoBot knowledge base is now working correctly.",
-                metadata={"source": "reset_script", "category": "system"},
-            )
-            if fact_result["status"] == "success":
-                print("✅ Fact storage test successful")
-            else:
-                print(f"⚠️  Fact storage test failed: {fact_result['message']}")
-
-            # Test fact retrieval
-            facts = await kb.get_fact()  # Get all facts
-            print(f"✅ Fact retrieval test: Found {len(facts)} facts")
-
-            return True
-
-        except Exception as e:
-            print(f"❌ Error during document operations: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return False
+        # Issue #281: Use extracted helper for KB operations testing
+        return await _test_knowledge_base_operations(kb)
 
     except Exception as e:
         print(f"❌ Error initializing knowledge base: {e}")
         import traceback
-
         traceback.print_exc()
         return False
 
