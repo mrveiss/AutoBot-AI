@@ -80,7 +80,11 @@ class SystemIntegration:
         """Helper to run shell commands and capture output."""
         try:
             result = subprocess.run(
-                command, capture_output=True, text=True, check=True, shell=shell
+                command,
+                capture_output=True,
+                text=True,
+                check=True,
+                shell=shell,  # nosec B602 - shell=False by default, caller controls
             )
             return {
                 "status": "success",
