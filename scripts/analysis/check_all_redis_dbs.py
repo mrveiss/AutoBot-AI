@@ -9,7 +9,7 @@ Check all Redis databases to understand data distribution
 import redis
 import logging
 from collections import defaultdict
-from typing import Dict, Tuple, Any
+from typing import Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
