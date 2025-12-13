@@ -62,6 +62,72 @@ class ListMetricsRequest(BaseModel):
     filter: str = Field("", description="Optional filter pattern (e.g., 'autobot_', 'node_')")
 
 
+# Issue #281: MCP tool definitions extracted from get_prometheus_mcp_tools
+# Tuple of (name, description, input_schema) for each tool
+PROMETHEUS_MCP_TOOL_DEFINITIONS = (
+    (
+        "query_metric",
+        "Query current value of a Prometheus metric using PromQL. "
+        "Use this to get instant metric values like CPU usage, memory usage, load average.",
+        {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "PromQL query expression (e.g., 'autobot_cpu_usage_percent', 'node_load1')",
+                }
+            },
+            "required": ["query"],
+        },
+    ),
+    (
+        "query_range",
+        "Query metric values over a time range. Returns time-series data showing "
+        "how metrics changed over the specified duration.",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "PromQL query expression"},
+                "duration": {"type": "string", "description": "Time duration (e.g., '1h', '6h', '1d')", "default": "1h"},
+                "step": {"type": "string", "description": "Query resolution step (e.g., '15s', '1m')", "default": "15s"},
+            },
+            "required": ["query"],
+        },
+    ),
+    (
+        "get_system_metrics",
+        "Get current system metrics for all machines (CPU, memory, load). "
+        "Provides a summary of resource usage across all VMs.",
+        {"type": "object", "properties": {}},
+    ),
+    (
+        "get_service_health",
+        "Get health status of all AutoBot services and node exporters. "
+        "Shows which services are UP or DOWN.",
+        {"type": "object", "properties": {}},
+    ),
+    (
+        "get_vm_metrics",
+        "Get detailed metrics for a specific VM including CPU, memory, disk, and load. "
+        "Use this when you need comprehensive information about one machine.",
+        {
+            "type": "object",
+            "properties": {"vm_ip": {"type": "string", "description": "VM IP address (e.g., '172.16.168.21')"}},
+            "required": ["vm_ip"],
+        },
+    ),
+    (
+        "list_available_metrics",
+        "List all available Prometheus metrics with optional filtering. "
+        "Use this to discover what metrics are available to query.",
+        {
+            "type": "object",
+            "properties": {"filter": {"type": "string", "description": "Optional filter pattern (e.g., 'autobot_', 'node_')", "default": ""}},
+        },
+    ),
+)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prometheus_mcp_tools",
@@ -70,7 +136,10 @@ class ListMetricsRequest(BaseModel):
 @router.get("/mcp/tools")
 async def get_prometheus_mcp_tools() -> List[MCPTool]:
     """
-    Get available MCP tools for Prometheus metrics
+    Get available MCP tools for Prometheus metrics.
+
+    Issue #281: Refactored to use module-level PROMETHEUS_MCP_TOOL_DEFINITIONS constant.
+    Reduced from 116 lines to ~20 lines.
 
     These tools allow AutoBot's LLM agents to:
     - Query current metrics values
@@ -80,110 +149,11 @@ async def get_prometheus_mcp_tools() -> List[MCPTool]:
     - Get detailed metrics for specific VMs
     - List available metrics
     """
-    tools = [
-        MCPTool(
-            name="query_metric",
-            description=(
-                "Query current value of a Prometheus metric using PromQL. "
-                "Use this to get instant metric values like CPU usage, memory usage, load average."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "PromQL query expression (e.g., 'autobot_cpu_usage_percent', 'node_load1')",
-                    }
-                },
-                "required": ["query"],
-            },
-        ),
-        MCPTool(
-            name="query_range",
-            description=(
-                "Query metric values over a time range. Returns time-series data showing "
-                "how metrics changed over the specified duration."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "PromQL query expression",
-                    },
-                    "duration": {
-                        "type": "string",
-                        "description": "Time duration (e.g., '1h', '6h', '1d')",
-                        "default": "1h",
-                    },
-                    "step": {
-                        "type": "string",
-                        "description": "Query resolution step (e.g., '15s', '1m')",
-                        "default": "15s",
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        MCPTool(
-            name="get_system_metrics",
-            description=(
-                "Get current system metrics for all machines (CPU, memory, load). "
-                "Provides a summary of resource usage across all VMs."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-        MCPTool(
-            name="get_service_health",
-            description=(
-                "Get health status of all AutoBot services and node exporters. "
-                "Shows which services are UP or DOWN."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-        MCPTool(
-            name="get_vm_metrics",
-            description=(
-                "Get detailed metrics for a specific VM including CPU, memory, disk, and load. "
-                "Use this when you need comprehensive information about one machine."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "vm_ip": {
-                        "type": "string",
-                        "description": "VM IP address (e.g., '172.16.168.21')",
-                    }
-                },
-                "required": ["vm_ip"],
-            },
-        ),
-        MCPTool(
-            name="list_available_metrics",
-            description=(
-                "List all available Prometheus metrics with optional filtering. "
-                "Use this to discover what metrics are available to query."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "filter": {
-                        "type": "string",
-                        "description": "Optional filter pattern (e.g., 'autobot_', 'node_')",
-                        "default": "",
-                    }
-                },
-            },
-        ),
+    # Issue #281: Build MCPTool instances from module-level definitions
+    return [
+        MCPTool(name=name, description=desc, input_schema=schema)
+        for name, desc, schema in PROMETHEUS_MCP_TOOL_DEFINITIONS
     ]
-
-    return tools
 
 
 async def prometheus_query(query: str) -> Metadata:
