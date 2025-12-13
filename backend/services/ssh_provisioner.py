@@ -97,7 +97,8 @@ class SSHKeyProvisioner:
         """
         logger.info(f"Connecting to {host_ip}:{port} with password authentication")
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # Internal VM infrastructure (172.16.168.x), keys change on reprovision
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
 
         ssh.connect(
             hostname=host_ip,
@@ -163,7 +164,8 @@ class SSHKeyProvisioner:
         # Verify key authentication works
         logger.info("Verifying key authentication with in-memory key")
         ssh_test = paramiko.SSHClient()
-        ssh_test.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # Internal VM infrastructure (172.16.168.x), keys change on reprovision
+        ssh_test.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
 
         ssh_test.connect(
             hostname=host_ip,
@@ -349,7 +351,8 @@ class SSHKeyProvisioner:
             pkey = paramiko.RSAKey.from_private_key(private_key_file)
 
             ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            # Internal VM infrastructure (172.16.168.x), keys change on reprovision
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
 
             ssh.connect(
                 hostname=host_ip,

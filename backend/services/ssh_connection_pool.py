@@ -346,8 +346,8 @@ class SSHConnectionPool:
 
                 # Load host keys for security
                 client.load_system_host_keys()
-                # Auto-add new hosts (consider security implications)
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                # Auto-add new hosts for internal VMs (keys change on reprovision)
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507
 
                 # Load private key
                 # Issue #358 - avoid blocking

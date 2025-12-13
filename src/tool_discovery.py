@@ -63,7 +63,8 @@ def discover_tools():
             try:
                 # Attempt to get version, but handle cases where --version
                 # might not work
-                version_output = subprocess.getoutput(f"{tool} --version")
+                # Tool from ESSENTIAL_TOOLS constant, not user input
+                version_output = subprocess.getoutput(f"{tool} --version")  # nosec B605
                 version = (
                     version_output.splitlines()[0] if version_output else "available"
                 )
