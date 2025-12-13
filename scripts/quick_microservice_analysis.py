@@ -432,8 +432,85 @@ def _print_summary(analysis):
     print("=" * 70)
 
 
+def _generate_service_recommendations_md(recommendations: list) -> str:
+    """
+    Generate service recommendations section for markdown report.
+
+    Issue #281: Extracted from _generate_markdown_report to reduce function
+    length and improve maintainability.
+
+    Args:
+        recommendations: List of service recommendation dictionaries.
+
+    Returns:
+        Markdown formatted service recommendations section.
+    """
+    report = """
+## 🎯 Recommended Service Architecture
+
+### Proposed Services
+"""
+    service_types = {"api_service": [], "agent_service": [], "shared_service": []}
+    for rec in recommendations:
+        service_types[rec["type"]].append(rec)
+
+    for service_type, services in service_types.items():
+        if services:
+            type_name = service_type.replace("_", " ").title()
+            report += f"\n#### {type_name}s\n"
+            for service in services:
+                report += f"- **{service['name']}**\n"
+                report += f"  - *Priority:* {service['priority'].title()}\n"
+                report += f"  - *Complexity:* {service['complexity'].title()}\n"
+                report += f"  - *Rationale:* {service['rationale']}\n\n"
+
+    return report
+
+
+def _generate_migration_phases_md(migration: dict) -> str:
+    """
+    Generate migration phases section for markdown report.
+
+    Issue #281: Extracted from _generate_markdown_report to reduce function
+    length and improve maintainability.
+
+    Args:
+        migration: Migration assessment dictionary with phases.
+
+    Returns:
+        Markdown formatted migration phases section.
+    """
+    report = """
+## 🗺️ Migration Strategy
+
+### Recommended Phases
+"""
+    for phase in migration["migration_phases"]:
+        report += f"""
+#### Phase {phase["phase"]}: {phase["name"]}
+- **Duration:** {phase["duration_weeks"]} weeks
+- **Services:** {len(phase["services"])}
+  - {', '.join(phase["services"])}
+- **Rationale:** {phase["rationale"]}
+"""
+
+    report += f"""
+### Migration Timeline
+- **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks (~{migration["estimated_total_duration_weeks"]//4} months)
+- **Parallel Development:** Possible for some phases
+- **Rollback Strategy:** Maintain monolith during transition
+"""
+    return report
+
+
 def _generate_markdown_report(analysis):
-    """Generate markdown report"""
+    """
+    Generate markdown report.
+
+    Issue #281: Extracted service recommendations and migration phases
+    to _generate_service_recommendations_md() and _generate_migration_phases_md()
+    to reduce function length from 174 to ~110 lines.
+    """
     metrics = analysis["codebase_metrics"]
     api = analysis["api_analysis"]
     agents = analysis["agent_analysis"]
@@ -493,47 +570,11 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
     for agent_type, agent_names in agent_types.items():
         report += f"- **{agent_type.title()} ({len(agent_names)}):** {', '.join(agent_names)}\n"
 
-    report += """
-## 🎯 Recommended Service Architecture
-
-### Proposed Services
-"""
-
-    service_types = {"api_service": [], "agent_service": [], "shared_service": []}
-    for rec in recommendations:
-        service_types[rec["type"]].append(rec)
-
-    for service_type, services in service_types.items():
-        if services:
-            type_name = service_type.replace("_", " ").title()
-            report += f"\n#### {type_name}s\n"
-            for service in services:
-                report += f"- **{service['name']}**\n"
-                report += f"  - *Priority:* {service['priority'].title()}\n"
-                report += f"  - *Complexity:* {service['complexity'].title()}\n"
-                report += f"  - *Rationale:* {service['rationale']}\n\n"
+    # Issue #281: Use extracted helpers for service recommendations and migration
+    report += _generate_service_recommendations_md(recommendations)
+    report += _generate_migration_phases_md(migration)
 
     report += """
-## 🗺️ Migration Strategy
-
-### Recommended Phases
-"""
-
-    for phase in migration["migration_phases"]:
-        report += f"""
-#### Phase {phase["phase"]}: {phase["name"]}
-- **Duration:** {phase["duration_weeks"]} weeks
-- **Services:** {len(phase["services"])}
-  - {', '.join(phase["services"])}
-- **Rationale:** {phase["rationale"]}
-"""
-
-    report += f"""
-### Migration Timeline
-- **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks (~{migration["estimated_total_duration_weeks"]//4} months)
-- **Parallel Development:** Possible for some phases
-- **Rollback Strategy:** Maintain monolith during transition
-
 ## 📋 Key Recommendations
 
 ### Immediate Actions (Next 2-4 weeks)

@@ -269,11 +269,18 @@ class AutoBotMonitor:
 
         return "General Purpose"
 
-    def get_service_status(self) -> Dict[str, Any]:
-        """Get status of all AutoBot services."""
+    def _check_python_library_statuses(self) -> Dict[str, Any]:
+        """
+        Check status of Python libraries.
+
+        Issue #281: Extracted from get_service_status to reduce function length.
+
+        Returns:
+            Dictionary of library status information.
+        """
         services = {}
 
-        # Test LlamaIndex
+        # LlamaIndex
         try:
             import llama_index
 
@@ -289,7 +296,7 @@ class AutoBotMonitor:
                 "error": "pip install llama-index",
             }
 
-        # Test LangChain
+        # LangChain
         try:
             import langchain
 
@@ -305,7 +312,7 @@ class AutoBotMonitor:
                 "error": "pip install langchain",
             }
 
-        # Test Playwright
+        # Playwright
         try:
             import playwright
 
@@ -314,7 +321,6 @@ class AutoBotMonitor:
                 "version": getattr(playwright, "__version__", "unknown"),
                 "status": "available",
             }
-            # Test if browsers are installed
             try:
                 result = subprocess.run(
                     ["playwright", "install-deps"],
@@ -332,7 +338,7 @@ class AutoBotMonitor:
                 "error": "pip install playwright",
             }
 
-        # Test ChromaDB
+        # ChromaDB
         try:
             import chromadb
 
@@ -348,7 +354,7 @@ class AutoBotMonitor:
                 "error": "pip install chromadb",
             }
 
-        # Test OpenVINO
+        # OpenVINO
         try:
             import openvino
             from openvino.runtime import Core
@@ -367,7 +373,20 @@ class AutoBotMonitor:
                 "error": "pip install openvino",
             }
 
-        # Test Redis connection
+        return services
+
+    def _check_network_service_statuses(self) -> Dict[str, Any]:
+        """
+        Check status of network services.
+
+        Issue #281: Extracted from get_service_status to reduce function length.
+
+        Returns:
+            Dictionary of service status information.
+        """
+        services = {}
+
+        # Redis connection
         try:
             response = requests.get(f"{self.api_base}/api/system/health", timeout=5)
             if response.status_code == 200:
@@ -390,7 +409,7 @@ class AutoBotMonitor:
         except Exception as e:
             services["redis"] = {"status": "unreachable", "error": str(e)}
 
-        # Test FastAPI backend
+        # FastAPI backend
         try:
             response = requests.get(f"{self.api_base}/docs", timeout=5)
             services["fastapi_backend"] = {
@@ -401,7 +420,7 @@ class AutoBotMonitor:
         except Exception as e:
             services["fastapi_backend"] = {"status": "not_running", "error": str(e)}
 
-        # Test Vue Frontend
+        # Vue Frontend
         try:
             response = requests.get(self.frontend_url, timeout=5)
             services["vue_frontend"] = {
@@ -412,6 +431,19 @@ class AutoBotMonitor:
         except Exception as e:
             services["vue_frontend"] = {"status": "not_running", "error": str(e)}
 
+        return services
+
+    def get_service_status(self) -> Dict[str, Any]:
+        """
+        Get status of all AutoBot services.
+
+        Issue #281: Extracted library and network service checks to
+        _check_python_library_statuses() and _check_network_service_statuses()
+        to reduce function length from 144 to ~20 lines.
+        """
+        # Issue #281: Use extracted helpers
+        services = self._check_python_library_statuses()
+        services.update(self._check_network_service_statuses())
         return services
 
     def test_inference_performance(self) -> Dict[str, Any]:
