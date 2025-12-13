@@ -11,6 +11,139 @@ from pathlib import Path
 from src.code_quality_dashboard import CodeQualityDashboard
 
 
+def _print_executive_metrics(metrics: dict, issues: dict, report: dict) -> None:
+    """
+    Print executive-level quality metrics summary.
+
+    Issue #281: Extracted from run_comprehensive_quality_analysis to reduce
+    function length and improve readability of dashboard output sections.
+    """
+    print(f"📊 **Overall Quality Assessment:**")
+    print(f"   🎯 Overall Quality Score: {metrics['overall_score']}/100")
+    print(f"   📋 Total Issues Found: {issues['total_issues']}")
+    print(f"   🚨 Critical Issues: {issues['critical_issues']}")
+    print(f"   ⚠️  High Priority Issues: {issues['high_priority_issues']}")
+    print(f"   📁 Files Analyzed: {report['files_analyzed']}")
+    print(f"   ⏱️  Analysis Time: {report['analysis_time_seconds']:.2f} seconds")
+    print()
+
+    # Category breakdown
+    print("🏷️  **Issues by Category:**")
+    for category, count in issues['by_category'].items():
+        category_name = category.replace('_', ' ').title()
+        print(f"   • {category_name}: {count} issues")
+    print()
+
+
+def _print_analyzer_scores(metrics: dict) -> None:
+    """
+    Print individual analyzer scores with visual indicators.
+
+    Issue #281: Extracted from run_comprehensive_quality_analysis to reduce
+    function length and improve readability of dashboard output sections.
+    """
+    print("🔍 **Individual Analysis Scores:**")
+    score_categories = [
+        ('Security', metrics['security_score'], '🛡️'),
+        ('Performance', metrics['performance_score'], '⚡'),
+        ('Architecture', metrics['architecture_score'], '🏗️'),
+        ('Test Coverage', metrics['test_coverage_score'], '🧪'),
+        ('API Consistency', metrics['api_consistency_score'], '🔗'),
+        ('Code Duplication', metrics['code_duplication_score'], '♻️'),
+        ('Environment Config', metrics['environment_config_score'], '⚙️'),
+    ]
+
+    for name, score, emoji in score_categories:
+        status = get_score_status(score)
+        status_color = get_status_emoji(score)
+        print(f"   {emoji} {name}: {score}/100 {status_color} {status}")
+    print()
+
+
+def _print_technical_debt(debt: dict) -> None:
+    """
+    Print technical debt analysis and effort breakdown.
+
+    Issue #281: Extracted from run_comprehensive_quality_analysis to reduce
+    function length and improve readability of dashboard output sections.
+    """
+    print("💸 **Technical Debt Analysis:**")
+    print(f"   📊 Total Estimated Effort: {debt['estimated_total_effort_days']} days ({debt['estimated_total_effort_hours']} hours)")
+    print(f"   🚨 Critical Issues Effort: {debt['estimated_critical_effort_hours']} hours")
+    print(f"   📈 Debt Ratio: {debt['debt_ratio']}% of total project")
+    print()
+
+    print("💰 **Effort by Category:**")
+    for category, data in debt['effort_by_category'].items():
+        category_name = category.replace('_', ' ').title()
+        print(f"   • {category_name}: {data['count']} issues, {data['effort_hours']} hours")
+    print()
+
+
+def _print_priority_issues(report: dict) -> None:
+    """
+    Print top priority issues requiring immediate action.
+
+    Issue #281: Extracted from run_comprehensive_quality_analysis to reduce
+    function length and improve readability of dashboard output sections.
+    """
+    print("🚨 **Top Priority Issues (Immediate Action Required):**")
+    critical_issues = [issue for issue in report['prioritized_issues'] if issue['severity'] == 'critical']
+    high_issues = [issue for issue in report['prioritized_issues'] if issue['severity'] == 'high']
+    top_issues = critical_issues[:5] + high_issues[:5]
+
+    for i, issue in enumerate(top_issues[:10], 1):
+        severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+        emoji = severity_emoji.get(issue['severity'], "⚪")
+
+        print(f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})")
+        print(f"   📂 Category: {issue['category'].replace('_', ' ').title()}")
+        if issue['file_path'] != 'Multiple files':
+            print(f"   📄 File: {issue['file_path']}:{issue['line_number']}")
+        print(f"   📝 Description: {issue['description']}")
+        print(f"   💡 Fix: {issue['fix_suggestion']}")
+        print(f"   🔧 Effort: {issue['estimated_effort'].title()}")
+        print(f"   🎯 Priority Score: {issue['priority_score']}/100")
+    print()
+
+
+def _print_analysis_alerts(report: dict) -> None:
+    """
+    Print critical alerts for security, performance, and testing.
+
+    Issue #281: Extracted from run_comprehensive_quality_analysis to reduce
+    function length and improve readability of dashboard output sections.
+    """
+    # Security-specific analysis
+    if report['detailed_analyses'].get('security'):
+        security_data = report['detailed_analyses']['security']
+        if security_data.get('critical_vulnerabilities', 0) > 0:
+            print("🛡️ **CRITICAL SECURITY ALERT:**")
+            print(f"   Found {security_data['critical_vulnerabilities']} critical security vulnerabilities!")
+            print("   These must be addressed immediately before deployment.")
+            print()
+
+    # Performance-specific analysis
+    if report['detailed_analyses'].get('performance'):
+        perf_data = report['detailed_analyses']['performance']
+        if perf_data.get('critical_issues', 0) > 0:
+            print("⚡ **CRITICAL PERFORMANCE ALERT:**")
+            print(f"   Found {perf_data['critical_issues']} critical performance issues!")
+            print("   These may cause memory leaks or system instability.")
+            print()
+
+    # Testing coverage analysis
+    if report['detailed_analyses'].get('testing_coverage'):
+        test_data = report['detailed_analyses']['testing_coverage']
+        coverage = test_data.get('test_coverage_percentage', 0)
+        print(f"🧪 **Testing Coverage Analysis:**")
+        print(f"   Current test coverage: {coverage}%")
+        if coverage < 70:
+            print("   ⚠️  Coverage is below recommended 70% threshold")
+            print("   Consider adding more unit and integration tests")
+        print()
+
+
 async def run_comprehensive_quality_analysis():
     """Run comprehensive code quality analysis"""
 
@@ -42,108 +175,16 @@ async def run_comprehensive_quality_analysis():
 
     print("\n=== Detailed Quality Analysis Results ===\n")
 
-    # Overall metrics
+    # Issue #281: Use extracted helpers for dashboard sections
     metrics = report['quality_metrics']
     issues = report['issue_summary']
-
-    print(f"📊 **Overall Quality Assessment:**")
-    print(f"   🎯 Overall Quality Score: {metrics['overall_score']}/100")
-    print(f"   📋 Total Issues Found: {issues['total_issues']}")
-    print(f"   🚨 Critical Issues: {issues['critical_issues']}")
-    print(f"   ⚠️  High Priority Issues: {issues['high_priority_issues']}")
-    print(f"   📁 Files Analyzed: {report['files_analyzed']}")
-    print(f"   ⏱️  Analysis Time: {report['analysis_time_seconds']:.2f} seconds")
-    print()
-
-    # Category breakdown
-    print("🏷️  **Issues by Category:**")
-    for category, count in issues['by_category'].items():
-        category_name = category.replace('_', ' ').title()
-        print(f"   • {category_name}: {count} issues")
-    print()
-
-    # Individual analyzer scores
-    print("🔍 **Individual Analysis Scores:**")
-    score_categories = [
-        ('Security', metrics['security_score'], '🛡️'),
-        ('Performance', metrics['performance_score'], '⚡'),
-        ('Architecture', metrics['architecture_score'], '🏗️'),
-        ('Test Coverage', metrics['test_coverage_score'], '🧪'),
-        ('API Consistency', metrics['api_consistency_score'], '🔗'),
-        ('Code Duplication', metrics['code_duplication_score'], '♻️'),
-        ('Environment Config', metrics['environment_config_score'], '⚙️'),
-    ]
-
-    for name, score, emoji in score_categories:
-        status = get_score_status(score)
-        status_color = get_status_emoji(score)
-        print(f"   {emoji} {name}: {score}/100 {status_color} {status}")
-    print()
-
-    # Technical debt analysis
     debt = report['technical_debt']
-    print("💸 **Technical Debt Analysis:**")
-    print(f"   📊 Total Estimated Effort: {debt['estimated_total_effort_days']} days ({debt['estimated_total_effort_hours']} hours)")
-    print(f"   🚨 Critical Issues Effort: {debt['estimated_critical_effort_hours']} hours")
-    print(f"   📈 Debt Ratio: {debt['debt_ratio']}% of total project")
-    print()
 
-    print("💰 **Effort by Category:**")
-    for category, data in debt['effort_by_category'].items():
-        category_name = category.replace('_', ' ').title()
-        print(f"   • {category_name}: {data['count']} issues, {data['effort_hours']} hours")
-    print()
-
-    # Top priority issues
-    print("🚨 **Top Priority Issues (Immediate Action Required):**")
-    critical_issues = [issue for issue in report['prioritized_issues'] if issue['severity'] == 'critical']
-    high_issues = [issue for issue in report['prioritized_issues'] if issue['severity'] == 'high']
-
-    top_issues = critical_issues[:5] + high_issues[:5]
-
-    for i, issue in enumerate(top_issues[:10], 1):
-        severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-        emoji = severity_emoji.get(issue['severity'], "⚪")
-
-        print(f"\n{i}. {emoji} **{issue['title']}** ({issue['severity'].upper()})")
-        print(f"   📂 Category: {issue['category'].replace('_', ' ').title()}")
-        if issue['file_path'] != 'Multiple files':
-            print(f"   📄 File: {issue['file_path']}:{issue['line_number']}")
-        print(f"   📝 Description: {issue['description']}")
-        print(f"   💡 Fix: {issue['fix_suggestion']}")
-        print(f"   🔧 Effort: {issue['estimated_effort'].title()}")
-        print(f"   🎯 Priority Score: {issue['priority_score']}/100")
-
-    print()
-
-    # Security-specific analysis
-    if report['detailed_analyses'].get('security'):
-        security_data = report['detailed_analyses']['security']
-        if security_data.get('critical_vulnerabilities', 0) > 0:
-            print("🛡️ **CRITICAL SECURITY ALERT:**")
-            print(f"   Found {security_data['critical_vulnerabilities']} critical security vulnerabilities!")
-            print("   These must be addressed immediately before deployment.")
-            print()
-
-    # Performance-specific analysis
-    if report['detailed_analyses'].get('performance'):
-        perf_data = report['detailed_analyses']['performance']
-        if perf_data.get('critical_issues', 0) > 0:
-            print("⚡ **CRITICAL PERFORMANCE ALERT:**")
-            print(f"   Found {perf_data['critical_issues']} critical performance issues!")
-            print("   These may cause memory leaks or system instability.")
-            print()
-
-    # Testing coverage analysis
-    if report['detailed_analyses'].get('testing_coverage'):
-        test_data = report['detailed_analyses']['testing_coverage']
-        coverage = test_data.get('test_coverage_percentage', 0)
-        print(f"🧪 **Testing Coverage Analysis:**")
-        print(f"   Current test coverage: {coverage}%")
-        if coverage < 70:
-            print("   ⚠️  Coverage is below recommended 70% threshold")
-            print("   Consider adding more unit and integration tests")
-        print()
+    _print_executive_metrics(metrics, issues, report)
+    _print_analyzer_scores(metrics)
+    _print_technical_debt(debt)
+    _print_priority_issues(report)
+    _print_analysis_alerts(report)
 
     # Improvement recommendations
     print("📋 **Improvement Recommendations (Priority Order):**")
