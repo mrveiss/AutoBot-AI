@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import requests
+import aiohttp
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,6 +39,7 @@ class AutomatedTestingSuite:
     """Comprehensive automated testing framework"""
 
     def __init__(self, project_root: str = None):
+        """Initialize testing suite with project root and results containers."""
         self.project_root = Path(
             project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
@@ -317,31 +318,33 @@ class AutomatedTestingSuite:
         return api_results
 
     async def _test_api_endpoint(self, endpoint: str, description: str) -> TestResult:
-        """Test a single API endpoint"""
+        """Test a single API endpoint (Issue #359: use async HTTP)"""
         start_time = time.time()
 
         try:
             url = f"{self.backend_url}{endpoint}"
-            response = requests.get(url, timeout=10)
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    await response.text()  # Consume response
+                    duration = time.time() - start_time
 
-            duration = time.time() - start_time
+                    if response.status == 200:
+                        return TestResult(
+                            name=f"API: {description}",
+                            status="PASS",
+                            duration=duration,
+                            message=f"HTTP 200 ({duration*1000:.0f}ms)",
+                        )
+                    else:
+                        return TestResult(
+                            name=f"API: {description}",
+                            status="FAIL",
+                            duration=duration,
+                            message=f"HTTP {response.status}",
+                        )
 
-            if response.status_code == 200:
-                return TestResult(
-                    name=f"API: {description}",
-                    status="PASS",
-                    duration=duration,
-                    message=f"HTTP 200 ({duration*1000:.0f}ms)",
-                )
-            else:
-                return TestResult(
-                    name=f"API: {description}",
-                    status="FAIL",
-                    duration=duration,
-                    message=f"HTTP {response.status_code}",
-                )
-
-        except requests.exceptions.ConnectionError:
+        except aiohttp.ClientConnectorError:
             return TestResult(
                 name=f"API: {description}",
                 status="SKIP",

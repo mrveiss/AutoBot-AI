@@ -12,6 +12,7 @@ import requests
 
 
 def upload_docs():
+    """Upload documentation files to knowledge base via file upload API."""
     project_root = "/home/kali/Desktop/AutoBot"
 
     # Find documentation files

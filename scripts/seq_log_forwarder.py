@@ -25,11 +25,14 @@ import aiohttp
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.constants.threshold_constants import TimingConstants
+
 
 class SeqLogForwarder:
     """Forwards logs to Seq centralized logging system."""
 
     def __init__(self, seq_url: str = "http://localhost:5341", api_key: str = None):
+        """Initialize log forwarder with Seq server URL and optional API key."""
         self.seq_url = seq_url.rstrip("/")
         self.api_key = api_key
         self.logs_dir = Path(__file__).parent.parent / "logs"
@@ -120,10 +123,36 @@ class SeqLogForwarder:
             else:
                 print(f"❌ Failed: {log['message']}")
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
+
+    async def _process_log_file(
+        self, filepath: Path, source: str, file_positions: dict
+    ) -> None:
+        """Process a single log file for new content (Issue #315: extracted helper)."""
+        filename = filepath.name
+        if not filepath.exists():
+            filepath.touch()
+            file_positions[filename] = 0
+            return
+
+        current_size = filepath.stat().st_size
+        last_position = file_positions.get(filename, 0)
+
+        if current_size <= last_position:
+            return
+
+        with open(filepath, "r") as f:
+            f.seek(last_position)
+            new_content = f.read()
+
+        for line in new_content.strip().split("\n"):
+            if line.strip():
+                await self.parse_and_send_log_line(line, source)
+
+        file_positions[filename] = current_size
 
     async def tail_and_forward_logs(self):
-        """Tail log files and forward to Seq."""
+        """Tail log files and forward to Seq (Issue #315: refactored)."""
         print("📡 Starting log forwarding to Seq...")
         print(f"   Seq URL: {self.seq_url}")
         print(f"   Logs Directory: {self.logs_dir}")
@@ -132,8 +161,6 @@ class SeqLogForwarder:
         if not self.logs_dir.exists():
             print("⚠️  Logs directory doesn't exist. Creating test logs...")
             self.logs_dir.mkdir(exist_ok=True)
-
-            # Create some sample log entries
             await self.create_sample_logs()
 
         # Log files to monitor
@@ -143,45 +170,24 @@ class SeqLogForwarder:
             "system.log": "System",
         }
 
-        # Track file positions
         file_positions = {}
 
         while True:
             try:
                 for filename, source in log_files.items():
                     filepath = self.logs_dir / filename
+                    await self._process_log_file(filepath, source, file_positions)
 
-                    if not filepath.exists():
-                        # Create the file if it doesn't exist
-                        filepath.touch()
-                        file_positions[filename] = 0
-                        continue
-
-                    # Get current file size
-                    current_size = filepath.stat().st_size
-                    last_position = file_positions.get(filename, 0)
-
-                    if current_size > last_position:
-                        # Read new content
-                        with open(filepath, "r") as f:
-                            f.seek(last_position)
-                            new_content = f.read()
-
-                            # Send each line as a log entry
-                            for line in new_content.strip().split("\n"):
-                                if line.strip():
-                                    await self.parse_and_send_log_line(line, source)
-
-                        file_positions[filename] = current_size
-
-                await asyncio.sleep(1)  # Check every second
+                # Check for new log entries periodically
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             except KeyboardInterrupt:
                 print("\n👋 Stopping log forwarder...")
                 break
             except Exception as e:
                 print(f"❌ Error in log forwarding: {e}")
-                await asyncio.sleep(5)
+                # Error recovery delay before retry
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     async def parse_and_send_log_line(self, line: str, source: str):
         """Parse log line and send to Seq."""
@@ -278,7 +284,8 @@ class SeqLogForwarder:
             return False
 
 
-async def main():
+async def main() -> int:
+    """Main entry point for CLI Seq log forwarder operations."""
     parser = argparse.ArgumentParser(description="AutoBot Seq Log Forwarder")
 
     parser.add_argument(

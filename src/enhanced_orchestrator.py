@@ -255,6 +255,81 @@ class EnhancedOrchestrator:
             required_capabilities=required_capabilities,
         )
 
+    def _initialize_workflow_execution(
+        self,
+        workflow_id: str,
+        user_request: str,
+        context: Dict[str, Any],
+        start_time: float,
+        auto_document: bool,
+    ) -> Optional[WorkflowDocumentation]:
+        """
+        Initialize workflow execution including documentation setup.
+
+        Issue #281: Extracted from execute_enhanced_workflow to reduce function length
+        and isolate workflow initialization logic.
+
+        Args:
+            workflow_id: Unique identifier for this workflow
+            user_request: The user's request to process
+            context: Additional context for the workflow
+            start_time: Workflow start timestamp
+            auto_document: Whether to auto-generate documentation
+
+        Returns:
+            WorkflowDocumentation if auto_document is True, else None
+        """
+        if not auto_document:
+            return None
+
+        workflow_doc = WorkflowDocumentation(
+            workflow_id=workflow_id,
+            title=f"Workflow: {user_request[:50]}...",
+            description=user_request,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            documentation_type=DocumentationType.WORKFLOW_SUMMARY,
+            content={
+                "request": user_request,
+                "context": context,
+                "start_time": start_time,
+            },
+        )
+        self.workflow_documentation[workflow_id] = workflow_doc
+        return workflow_doc
+
+    def _build_workflow_success_result(
+        self,
+        workflow_id: str,
+        execution_result: Dict[str, Any],
+        start_time: float,
+        auto_document: bool,
+    ) -> Dict[str, Any]:
+        """
+        Build the success result dictionary for a completed workflow.
+
+        Issue #281: Extracted from execute_enhanced_workflow to reduce function length
+        and isolate result construction logic.
+
+        Args:
+            workflow_id: Unique identifier for this workflow
+            execution_result: The result from workflow execution
+            start_time: Workflow start timestamp
+            auto_document: Whether documentation was generated
+
+        Returns:
+            Success result dictionary with workflow details
+        """
+        return {
+            "workflow_id": workflow_id,
+            "status": execution_result["status"],
+            "result": execution_result,
+            "execution_time": time.time() - start_time,
+            "agents_involved": execution_result.get("agents_involved", []),
+            "documentation_generated": auto_document,
+            "knowledge_extracted": self.knowledge_extraction_enabled,
+        }
+
     @circuit_breaker_async(
         "workflow_execution",
         failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
@@ -290,22 +365,10 @@ class EnhancedOrchestrator:
         logger.info(f"Starting enhanced workflow {workflow_id}: {user_request}")
 
         try:
-            # Initialize workflow documentation
-            if auto_document:
-                workflow_doc = WorkflowDocumentation(
-                    workflow_id=workflow_id,
-                    title=f"Workflow: {user_request[:50]}...",
-                    description=user_request,
-                    created_at=datetime.now(),
-                    updated_at=datetime.now(),
-                    documentation_type=DocumentationType.WORKFLOW_SUMMARY,
-                    content={
-                        "request": user_request,
-                        "context": context,
-                        "start_time": start_time,
-                    },
-                )
-                self.workflow_documentation[workflow_id] = workflow_doc
+            # Issue #281: Use extracted helper for workflow initialization
+            self._initialize_workflow_execution(
+                workflow_id, user_request, context, start_time, auto_document
+            )
 
             # Classify request complexity using base orchestrator
             complexity = self.base_orchestrator.classify_request_complexity(
@@ -363,15 +426,10 @@ class EnhancedOrchestrator:
                     workflow_id, user_request, execution_result
                 )
 
-            return {
-                "workflow_id": workflow_id,
-                "status": execution_result["status"],
-                "result": execution_result,
-                "execution_time": time.time() - start_time,
-                "agents_involved": execution_result.get("agents_involved", []),
-                "documentation_generated": auto_document,
-                "knowledge_extracted": self.knowledge_extraction_enabled,
-            }
+            # Issue #281: Use extracted helper for result construction
+            return self._build_workflow_success_result(
+                workflow_id, execution_result, start_time, auto_document
+            )
 
         except Exception as e:
             logger.error(f"Enhanced workflow {workflow_id} failed: {e}")

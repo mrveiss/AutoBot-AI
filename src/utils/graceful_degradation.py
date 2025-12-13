@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from src.constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -577,7 +579,7 @@ class GracefulDegradationManager:
                 await asyncio.sleep(self.health_check_interval)
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY * 2)
 
     async def _perform_health_check(self):
         """Perform periodic health check (thread-safe)"""

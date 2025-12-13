@@ -147,7 +147,7 @@ def validate_ip_consistency(env_vars: Dict[str, str], env_type: str) -> List[str
     if not pattern:
         return errors  # No IP validation for this environment type
 
-    ip_vars = [var for var in env_vars.keys() if var.endswith('_HOST')]
+    ip_vars = [var for var in env_vars if var.endswith('_HOST')]
 
     for var in ip_vars:
         value = env_vars[var]

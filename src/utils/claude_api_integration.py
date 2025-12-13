@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from src.constants.threshold_constants import RetryConfig, TimingConstants
+
 # Import our components
 
 from .conversation_rate_limiter import ConversationRateLimiter
@@ -36,7 +38,7 @@ class ClaudeAPIConfig:
     enable_rate_limiting: bool = True
     enable_payload_optimization: bool = True
     fallback_to_individual: bool = True
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
     base_delay: float = 1.0
 
 
@@ -487,7 +489,7 @@ class AutoBotClaudeAPIAdapter:
             content=message,
             priority=RequestPriority.NORMAL,
             context_type=context,
-            timeout=30.0,
+            timeout=TimingConstants.SHORT_TIMEOUT,
         )
 
     async def process_code_analysis(
@@ -514,7 +516,7 @@ class AutoBotClaudeAPIAdapter:
             content=content,
             priority=RequestPriority.NORMAL,
             context_type="file_operations",
-            timeout=60.0,
+            timeout=TimingConstants.STANDARD_TIMEOUT,
         )
 
     async def shutdown(self):

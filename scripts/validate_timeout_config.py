@@ -13,6 +13,9 @@ import sys
 from pathlib import Path
 from typing import Dict, Any
 
+# Issue #380: Module-level tuple for numeric type checks
+_NUMERIC_TYPES = (int, float)
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -156,16 +159,17 @@ def display_summary(config: UnifiedConfigManager):
     all_timeouts = config.get('timeouts', {})
 
     print("📊 Configured Timeout Categories:")
-    for category in all_timeouts.keys():
+    for category in all_timeouts:
         print(f"   - {category}")
 
     # Count total timeout values
     def count_timeouts(cfg: Dict[str, Any]) -> int:
+        """Recursively count numeric timeout values in configuration."""
         count = 0
         for value in cfg.values():
             if isinstance(value, dict):
                 count += count_timeouts(value)
-            elif isinstance(value, (int, float)):
+            elif isinstance(value, _NUMERIC_TYPES):  # Issue #380
                 count += 1
         return count
 

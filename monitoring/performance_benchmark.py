@@ -63,6 +63,20 @@ class BenchmarkResult:
     timestamp: str
     metadata: Dict[str, Any] = None
 
+    def get_summary_line(self) -> str:
+        """Get formatted summary line for logging (Issue #372 - reduces feature envy)."""
+        return (
+            f"{self.test_name}: {self.operations_per_second:.1f} ops/sec, "
+            f"{self.average_latency_ms:.1f}ms avg, {self.success_rate:.1f}% success"
+        )
+
+    def get_latency_only_line(self) -> str:
+        """Get latency-focused summary for network tests (Issue #372 - reduces feature envy)."""
+        return (
+            f"{self.test_name}: {self.average_latency_ms:.1f}ms avg, "
+            f"{self.success_rate:.1f}% success"
+        )
+
 @dataclass
 class SystemBenchmark:
     """System-level benchmark results."""
@@ -72,6 +86,33 @@ class SystemBenchmark:
     network_throughput_mbps: float
     gpu_compute_score: Optional[float] = None
     npu_inference_score: Optional[float] = None
+
+    def get_summary_lines(self) -> List[str]:
+        """Get formatted summary lines for logging (Issue #372 - reduces feature envy)."""
+        lines = [
+            f"  CPU Score: {self.cpu_benchmark_score:.1f}",
+            f"  Memory Bandwidth: {self.memory_bandwidth_mbps:.1f} MB/s",
+            f"  Disk I/O: {self.disk_io_mbps:.1f} MB/s",
+            f"  Network Throughput: {self.network_throughput_mbps:.1f} MB/s",
+        ]
+        if self.gpu_compute_score:
+            lines.append(f"  GPU Score: {self.gpu_compute_score:.1f}")
+        if self.npu_inference_score:
+            lines.append(f"  NPU Score: {self.npu_inference_score:.1f}")
+        return lines
+
+    def to_hardware_summary_dict(self) -> Dict[str, Any]:
+        """Convert to hardware summary dictionary (Issue #372 - reduces feature envy)."""
+        return {
+            "cpu_score": self.cpu_benchmark_score,
+            "memory_bandwidth_mbps": self.memory_bandwidth_mbps,
+            "disk_io_mbps": self.disk_io_mbps,
+            "network_throughput_mbps": self.network_throughput_mbps,
+            "gpu_available": self.gpu_compute_score is not None,
+            "npu_available": self.npu_inference_score is not None,
+            "gpu_score": self.gpu_compute_score,
+            "npu_score": self.npu_inference_score,
+        }
 
 class PerformanceBenchmark:
     """Comprehensive performance benchmarking suite for AutoBot."""
@@ -391,8 +432,7 @@ class PerformanceBenchmark:
         start_time = time.time()
 
         while time.time() - start_time < duration_seconds:
-            ping_start = time.time()
-
+            # Issue #382: Removed unused ping_start variable
             try:
                 # Use asyncio subprocess for non-blocking ping
                 process = await asyncio.create_subprocess_exec(
@@ -520,8 +560,8 @@ class PerformanceBenchmark:
             for i in range(0, data_size, 1024):
                 test_data[i:i+1024] = b'A' * 1024
 
-            # Read test
-            checksum = sum(test_data[::1024])
+            # Read test - sum for memory read timing, result intentionally unused
+            _ = sum(test_data[::1024])
 
             duration = time.time() - start_time
 
@@ -549,9 +589,9 @@ class PerformanceBenchmark:
                 f.flush()
                 os.fsync(f.fileno())  # Ensure data is written to disk
 
-            # Read test
+            # Read test - read for timing, result intentionally unused
             with open(test_file, 'rb') as f:
-                read_data = f.read()
+                _ = f.read()
 
             duration = time.time() - start_time
 
@@ -927,35 +967,30 @@ async def main():
     elif args.test == 'api':
         results = await benchmark.run_api_benchmark(duration_seconds=args.duration)
         logger.info(f"\n📡 API Benchmark Results ({len(results)} tests):")
+        # Issue #372: Use model method to reduce feature envy
         for result in results:
-            logger.info(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
-                        f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
+            logger.info(f"  {result.get_summary_line()}")
 
     elif args.test == 'database':
         results = await benchmark.run_database_benchmark(duration_seconds=args.duration)
         logger.info(f"\n🗄️ Database Benchmark Results ({len(results)} tests):")
+        # Issue #372: Use model method to reduce feature envy
         for result in results:
-            logger.info(f"  {result.test_name}: {result.operations_per_second:.1f} ops/sec, "
-                        f"{result.average_latency_ms:.1f}ms avg, {result.success_rate:.1f}% success")
+            logger.info(f"  {result.get_summary_line()}")
 
     elif args.test == 'network':
         results = await benchmark.run_network_benchmark(duration_seconds=args.duration)
         logger.info(f"\n🔗 Network Benchmark Results ({len(results)} tests):")
+        # Issue #372: Use model method for latency-focused output
         for result in results:
-            logger.info(f"  {result.test_name}: {result.average_latency_ms:.1f}ms avg, "
-                        f"{result.success_rate:.1f}% success")
+            logger.info(f"  {result.get_latency_only_line()}")
 
     elif args.test == 'system':
         result = await benchmark.run_system_benchmark()
         logger.info("\n🖥️ System Benchmark Results:")
-        logger.info(f"  CPU Score: {result.cpu_benchmark_score:.1f}")
-        logger.info(f"  Memory Bandwidth: {result.memory_bandwidth_mbps:.1f} MB/s")
-        logger.info(f"  Disk I/O: {result.disk_io_mbps:.1f} MB/s")
-        logger.info(f"  Network Throughput: {result.network_throughput_mbps:.1f} MB/s")
-        if result.gpu_compute_score:
-            logger.info(f"  GPU Score: {result.gpu_compute_score:.1f}")
-        if result.npu_inference_score:
-            logger.info(f"  NPU Score: {result.npu_inference_score:.1f}")
+        # Issue #372: Use model method to reduce feature envy
+        for line in result.get_summary_lines():
+            logger.info(line)
 
 if __name__ == "__main__":
     asyncio.run(main())

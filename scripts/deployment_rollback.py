@@ -39,6 +39,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
+from src.constants.threshold_constants import TimingConstants
 from src.utils.service_registry import ServiceStatus, get_service_registry
 from src.utils.script_utils import ScriptFormatter
 
@@ -55,6 +56,7 @@ class RollbackManager:
     """Manages safe deployment rollbacks with health verification."""
 
     def __init__(self, backup_dir: str = "backups", rollback_dir: str = "rollbacks"):
+        """Initialize rollback manager with backup manager and service registry."""
         self.project_root = Path(__file__).parent.parent
         self.backup_dir = self.project_root / backup_dir
         self.rollback_dir = self.project_root / rollback_dir
@@ -380,6 +382,75 @@ class RollbackManager:
         }
         return estimates.get(strategy, "unknown")
 
+    async def _execute_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> tuple[bool, bool]:
+        """Execute a single rollback step (Issue #315: extracted helper).
+
+        Returns: (success, should_continue) tuple
+        """
+        step_name = step["step"]
+        is_critical = step.get("critical", False)
+
+        step_handlers = {
+            "create_pre_rollback_backup": self._handle_backup_step,
+            "verify_health": self._handle_health_step,
+            "restore_target_version": self._handle_restore_step,
+            "stop_all_services": self._handle_stop_step,
+            "start_all_services": self._handle_start_step,
+            "update_deployment_info": self._handle_update_step,
+        }
+
+        handler = step_handlers.get(step_name)
+        if handler:
+            success = await handler(step, target_version, rollback_id)
+            if not success and is_critical:
+                self.print_step(f"Critical step failed: {step_name}", "error")
+                return False, False
+            if not success:
+                self.print_step(f"Non-critical step failed: {step_name}", "warning")
+        return True, True
+
+    async def _handle_backup_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle backup creation step (Issue #315: extracted helper)."""
+        backup_id = self.backup_manager.create_full_backup()
+        return backup_id is not None
+
+    async def _handle_health_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle health verification step (Issue #315: extracted helper)."""
+        return await self.verify_services_health(
+            self.rollback_config["health_check_timeout"]
+        )
+
+    async def _handle_restore_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle version restore step (Issue #315: extracted helper)."""
+        return await self._restore_version(target_version)
+
+    async def _handle_stop_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle stop services step (Issue #315: extracted helper)."""
+        return self._stop_services()
+
+    async def _handle_start_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle start services step (Issue #315: extracted helper)."""
+        return self._start_services()
+
+    async def _handle_update_step(
+        self, step: dict, target_version: str, rollback_id: str
+    ) -> bool:
+        """Handle deployment info update step (Issue #315: extracted helper)."""
+        self._update_deployment_info(target_version, rollback_id)
+        return True
+
     async def execute_rollback(
         self,
         target_version: str,
@@ -413,7 +484,7 @@ class RollbackManager:
             return True
 
         try:
-            # Execute rollback steps
+            # Execute rollback steps using dispatch helper (Issue #315: reduced nesting)
             start_time = time.time()
 
             for i, step in enumerate(plan["steps"], 1):
@@ -421,47 +492,11 @@ class RollbackManager:
                     f"Step {i}/{len(plan['steps'])}: {step['description']}", "running"
                 )
 
-                if step["step"] == "create_pre_rollback_backup":
-                    backup_id = self.backup_manager.create_full_backup()
-                    if not backup_id:
-                        if step["critical"]:
-                            self.print_step(
-                                "Critical step failed: backup creation", "error"
-                            )
-                            return False
-                        else:
-                            self.print_step(
-                                "Non-critical step failed: backup creation", "warning"
-                            )
-
-                elif step["step"] == "verify_health":
-                    health_ok = await self.verify_services_health(
-                        self.rollback_config["health_check_timeout"]
-                    )
-                    if not health_ok:
-                        self.print_step("Health verification failed", "error")
-                        return False
-
-                elif step["step"] == "restore_target_version":
-                    success = await self._restore_version(target_version)
-                    if not success:
-                        self.print_step("Version restore failed", "error")
-                        return False
-
-                elif step["step"] == "stop_all_services":
-                    success = self._stop_services()
-                    if not success and step["critical"]:
-                        self.print_step("Critical step failed: stop services", "error")
-                        return False
-
-                elif step["step"] == "start_all_services":
-                    success = self._start_services()
-                    if not success and step["critical"]:
-                        self.print_step("Critical step failed: start services", "error")
-                        return False
-
-                elif step["step"] == "update_deployment_info":
-                    self._update_deployment_info(target_version, rollback_id)
+                success, should_continue = await self._execute_step(
+                    step, target_version, rollback_id
+                )
+                if not should_continue:
+                    return False
 
                 self.print_step(f"Step {i} completed", "success")
 
@@ -593,7 +628,7 @@ class RollbackManager:
                     )
 
                 # Wait a bit between services
-                time.sleep(5)
+                time.sleep(TimingConstants.MEDIUM_DELAY)
 
             return True
 
@@ -682,6 +717,7 @@ class RollbackManager:
 
 
 async def main():
+    """Entry point for deployment rollback CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Deployment Rollback System",
         formatter_class=argparse.RawDescriptionHelpFormatter,

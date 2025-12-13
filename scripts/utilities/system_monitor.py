@@ -74,6 +74,7 @@ def _get_model_purpose_map() -> dict:
 
 class AutoBotMonitor:
     def __init__(self):
+        """Initialize system monitor with backend and frontend URLs."""
         self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", NetworkConstants.BACKEND_PORT)
         self.api_base = f"http://{NetworkConstants.LOCALHOST_NAME}:{self.backend_port}"
         self.frontend_url = ServiceURLs.FRONTEND_VM  # FIXED: Frontend on VM1 (172.16.168.21), not localhost

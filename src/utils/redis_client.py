@@ -84,6 +84,7 @@ from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import RetryConfig, TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.unified_config_manager import config as config_manager
 
@@ -135,7 +136,7 @@ class RedisConfig:
     socket_keepalive_options: Optional[Dict[int, int]] = None
     health_check_interval: int = 30
     retry_on_timeout: bool = True
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
     description: str = ""
 
     def __post_init__(self):
@@ -201,7 +202,7 @@ class RedisConfigLoader:
                     socket_keepalive=db_config.get("socket_keepalive", True),
                     health_check_interval=db_config.get("health_check_interval", 30),
                     retry_on_timeout=db_config.get("retry_on_timeout", True),
-                    max_retries=db_config.get("max_retries", 3),
+                    max_retries=db_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
                     description=db_config.get("description", ""),
                 )
 
@@ -256,7 +257,7 @@ class RedisConfigLoader:
                 "socket_timeout": 5.0,
                 "socket_connect_timeout": 5.0,
                 "retry_on_timeout": True,
-                "max_retries": 3,
+                "max_retries": RetryConfig.DEFAULT_RETRIES,
             }
 
 
@@ -373,8 +374,8 @@ class PoolConfig:
     socket_timeout: float = 5.0
     socket_connect_timeout: float = 5.0
     retry_on_timeout: bool = True
-    max_retries: int = 3
-    backoff_factor: float = 2.0
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
+    backoff_factor: float = RetryConfig.BACKOFF_BASE
     health_check_interval: float = 30.0
     circuit_breaker_threshold: int = 5
     circuit_breaker_timeout: int = 60  # seconds
@@ -495,7 +496,7 @@ class RedisConnectionManager:
             socket_timeout=redis_config.get("socket_timeout", 5.0),
             socket_connect_timeout=redis_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=redis_config.get("retry_on_timeout", True),
-            max_retries=redis_config.get("max_retries", 3),
+            max_retries=redis_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
             health_check_interval=redis_config.get("health_check_interval", 30.0),
             circuit_breaker_threshold=redis_config.get("circuit_breaker_threshold", 5),
             circuit_breaker_timeout=redis_config.get("circuit_breaker_timeout", 60),
@@ -528,7 +529,7 @@ class RedisConnectionManager:
             socket_timeout=timeout_config.get("socket_timeout", 5.0),
             socket_connect_timeout=timeout_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=timeout_config.get("retry_on_timeout", True),
-            max_retries=timeout_config.get("max_retries", 3),
+            max_retries=timeout_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
             socket_keepalive_options=(
                 self._tcp_keepalive_options
                 if hasattr(self, "_tcp_keepalive_options")
@@ -574,7 +575,7 @@ class RedisConnectionManager:
                         f"Redis '{database_name}' loading dataset, waiting... "
                         f"({int((datetime.now() - start_time).total_seconds())}s elapsed)"
                     )
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(TimingConstants.STANDARD_DELAY)
                 else:
                     raise
             except Exception as e:
@@ -763,7 +764,7 @@ class RedisConnectionManager:
         if database_name not in db_mapping:
             logger.warning(
                 f"Unknown database name '{database_name}', defaulting to DB 0. "
-                f"Available: {sorted(db_mapping.keys())}"
+                f"Available: {sorted(db_mapping)}"
             )
         return db_mapping.get(database_name, 0)
 

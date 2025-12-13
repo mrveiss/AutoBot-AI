@@ -19,6 +19,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level tuple for numeric type checks
+_NUMERIC_TYPES = (int, float)
+
 
 class TimeoutAnalyzer:
     """Analyze and test various components for blocking operations"""
@@ -315,7 +318,7 @@ class TimeoutAnalyzer:
 
             # Print detailed timing information
             for key, value in result.items():
-                if key.endswith("_time") and isinstance(value, (int, float)):
+                if key.endswith("_time") and isinstance(value, _NUMERIC_TYPES):  # Issue #380
                     print(f"   {key.replace('_', ' ').title()}: {value:.3f}s")
                 elif key.endswith("_success") and isinstance(value, bool):
                     status = "✅" if value else "❌"

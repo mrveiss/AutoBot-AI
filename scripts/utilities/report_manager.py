@@ -18,6 +18,7 @@ class ReportManager:
     """Manages reports with retention and organization policies"""
 
     def __init__(self, base_reports_dir: str = "reports"):
+        """Initialize report manager with base directory and retention limits."""
         self.base_dir = Path(base_reports_dir)
         self.max_reports_per_type = 2
 

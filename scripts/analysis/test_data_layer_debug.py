@@ -125,35 +125,45 @@ def test_sqlite_databases():
             print(f"❌ Error reading {db_file}: {e}")
 
 
+def _inspect_sqlite_file(file: Path) -> None:
+    """Inspect a SQLite file and print tables (Issue #315: extracted helper)."""
+    try:
+        conn = sqlite3.connect(str(file))
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        print(f"    SQLite tables: {[t[0] for t in tables]}")
+        conn.close()
+    except Exception as e:
+        print(f"    SQLite error: {e}")
+
+
+def _process_chromadb_file(file: Path, chroma_path: Path) -> None:
+    """Process a single ChromaDB file (Issue #315: extracted helper)."""
+    size_mb = file.stat().st_size / 1024 / 1024
+    print(f"  {file.relative_to(chroma_path)}: {size_mb:.1f} MB")
+
+    if file.name.endswith('.sqlite3'):
+        _inspect_sqlite_file(file)
+
+
 def test_chromadb():
-    """Test ChromaDB files"""
+    """Test ChromaDB files (Issue #315: refactored)."""
     print("\n=== CHROMADB TEST ===")
 
     chromadb_dirs = ["data/chromadb", "data/chromadb_kb"]
 
     for chroma_dir in chromadb_dirs:
         path = Path(chroma_dir)
-        if path.exists():
-            print(f"\n--- {chroma_dir} ---")
-            files = list(path.rglob("*"))
-            for file in files:
-                if file.is_file():
-                    size_mb = file.stat().st_size / 1024 / 1024
-                    print(f"  {file.relative_to(path)}: {size_mb:.1f} MB")
-
-                    # If it's a SQLite file, check it
-                    if file.name.endswith('.sqlite3'):
-                        try:
-                            conn = sqlite3.connect(str(file))
-                            cursor = conn.cursor()
-                            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                            tables = cursor.fetchall()
-                            print(f"    SQLite tables: {[t[0] for t in tables]}")
-                            conn.close()
-                        except Exception as e:
-                            print(f"    SQLite error: {e}")
-        else:
+        if not path.exists():
             print(f"⚪ {chroma_dir} doesn't exist")
+            continue
+
+        print(f"\n--- {chroma_dir} ---")
+        files = list(path.rglob("*"))
+        for file in files:
+            if file.is_file():
+                _process_chromadb_file(file, path)
 
 
 def test_backend_errors():

@@ -28,6 +28,7 @@ def time_import(module_name):
 
 
 def main():
+    """Entry point for backend startup timing analysis."""
     print("🔍 Backend Startup Timing Analysis")
     print("=" * 50)
 

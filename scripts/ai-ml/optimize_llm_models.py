@@ -27,6 +27,7 @@ class LLMModelOptimizer:
     """Optimize LLM model configuration for AutoBot"""
 
     def __init__(self):
+        """Initialize LLM optimizer with default paths and state containers."""
         self.autobot_root = Path("/home/kali/Desktop/AutoBot")
         self.installed_models = {}
         self.missing_models = []

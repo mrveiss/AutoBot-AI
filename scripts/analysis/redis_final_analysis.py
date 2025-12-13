@@ -26,8 +26,38 @@ class AutoBotVectorStoreAnalysis:
         self.compatibility_issues = []
         self.recommendations = {}
 
+    def _analyze_field_value(self, field: str, value: str, field_analysis: Dict) -> None:
+        """Analyze a single field value (Issue #315: extracted helper)."""
+        if field == 'vector':
+            field_analysis[field]['data_type'] = 'binary_vector'
+            field_analysis[field]['size_bytes'] = len(value)
+        elif field in ['_node_content', 'source_metadata']:
+            field_analysis[field]['data_type'] = 'json'
+            try:
+                parsed = json.loads(value)
+                if field == '_node_content' and len(field_analysis[field]['sample_values']) == 0:
+                    field_analysis[field]['sample_values'].append(list(parsed.keys())[:5])
+            except:
+                field_analysis[field]['data_type'] = 'string'
+        else:
+            field_analysis[field]['data_type'] = 'string'
+            if len(field_analysis[field]['sample_values']) < 3:
+                field_analysis[field]['sample_values'].append(str(value)[:50])
+
+    def _process_document_fields(self, doc: Dict, field_analysis: Dict) -> None:
+        """Process all fields in a document (Issue #315: extracted helper)."""
+        for field in doc.keys():
+            if field not in field_analysis:
+                field_analysis[field] = {
+                    'count': 0,
+                    'sample_values': [],
+                    'data_type': 'unknown'
+                }
+            field_analysis[field]['count'] += 1
+            self._analyze_field_value(field, doc[field], field_analysis)
+
     async def deep_analyze_existing_data(self) -> Dict[str, Any]:
-        """Deep analysis of existing Redis vector data"""
+        """Deep analysis of existing Redis vector data (Issue #315: refactored)."""
         logger.info("🔍 Deep analysis of existing Redis vector data...")
 
         try:
@@ -45,38 +75,10 @@ class AutoBotVectorStoreAnalysis:
             sample_keys = list(client.scan_iter(match="llama_index/vector*", count=10))
 
             field_analysis = {}
-            metadata_analysis = {}
 
             for key in sample_keys[:5]:
                 doc = client.hgetall(key)
-
-                # Analyze field presence
-                for field in doc.keys():
-                    if field not in field_analysis:
-                        field_analysis[field] = {
-                            'count': 0,
-                            'sample_values': [],
-                            'data_type': 'unknown'
-                        }
-                    field_analysis[field]['count'] += 1
-
-                    # Determine data type
-                    value = doc[field]
-                    if field == 'vector':
-                        field_analysis[field]['data_type'] = 'binary_vector'
-                        field_analysis[field]['size_bytes'] = len(value)
-                    elif field in ['_node_content', 'source_metadata']:
-                        field_analysis[field]['data_type'] = 'json'
-                        try:
-                            parsed = json.loads(value)
-                            if field == '_node_content' and len(field_analysis[field]['sample_values']) == 0:
-                                field_analysis[field]['sample_values'].append(list(parsed.keys())[:5])
-                        except:
-                            field_analysis[field]['data_type'] = 'string'
-                    else:
-                        field_analysis[field]['data_type'] = 'string'
-                        if len(field_analysis[field]['sample_values']) < 3:
-                            field_analysis[field]['sample_values'].append(str(value)[:50])
+                self._process_document_fields(doc, field_analysis)
 
             # Analyze vector configuration
             vector_config = self._extract_vector_config(index_info)

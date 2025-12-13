@@ -41,6 +41,7 @@ class MemoryProfiler:
     """Comprehensive memory usage profiler for AutoBot codebase"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize memory profiler with project paths and result containers."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.reports_dir = self.project_root / "reports" / "memory"
         self.reports_dir.mkdir(parents=True, exist_ok=True)

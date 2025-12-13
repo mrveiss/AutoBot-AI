@@ -18,6 +18,7 @@ class WorkflowDemo:
     """Demonstrates AutoBot workflow orchestration capabilities."""
 
     def __init__(self):
+        """Initialize workflow demo with backend URL and demo scenarios."""
         self.base_url = ServiceURLs.BACKEND_LOCAL
         self.demo_scenarios = [
             {

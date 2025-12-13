@@ -134,6 +134,56 @@ def edit_knowledge(category: str, filename: str):
         return False
 
 
+def _validate_tools_category(yaml_file: Path, data: dict, errors: list) -> None:
+    """Validate tools category YAML (Issue #315: extracted helper)."""
+    if "tools" not in data:
+        errors.append(f"{yaml_file}: Missing 'tools' key")
+        return
+    if not isinstance(data["tools"], list):
+        errors.append(f"{yaml_file}: 'tools' must be a list")
+        return
+    for i, tool in enumerate(data["tools"]):
+        if not isinstance(tool, dict):
+            errors.append(f"{yaml_file}: Tool {i} must be a dictionary")
+        elif "name" not in tool:
+            errors.append(f"{yaml_file}: Tool {i} missing 'name'")
+
+
+def _validate_yaml_file(
+    yaml_file: Path, category_name: str, runtime_dir: Path, errors: list, warnings: list
+) -> bool:
+    """Validate single YAML file (Issue #315: extracted helper)."""
+    try:
+        with open(yaml_file, "r") as f:
+            data = yaml.safe_load(f)
+
+        if not data:
+            errors.append(f"{yaml_file}: Empty file")
+            return False
+
+        # Validate based on category
+        if category_name == "tools":
+            _validate_tools_category(yaml_file, data, errors)
+        elif category_name == "workflows":
+            if "metadata" not in data:
+                warnings.append(f"{yaml_file}: Missing 'metadata' section")
+            if "workflow_steps" not in data:
+                errors.append(f"{yaml_file}: Missing 'workflow_steps'")
+        elif category_name == "procedures":
+            if "title" not in data:
+                errors.append(f"{yaml_file}: Missing 'title'")
+
+        print(f"✅ {yaml_file.relative_to(runtime_dir)}")
+        return True
+
+    except yaml.YAMLError as e:
+        errors.append(f"{yaml_file}: YAML syntax error - {e}")
+        return False
+    except Exception as e:
+        errors.append(f"{yaml_file}: Validation error - {e}")
+        return False
+
+
 def validate_knowledge():
     """Validate system knowledge YAML files"""
     print("🔍 Validating system knowledge files...")
@@ -146,51 +196,12 @@ def validate_knowledge():
         print("❌ Runtime knowledge directory not found")
         return False
 
+    # Validate each category directory (Issue #315: reduced nesting)
     for category_dir in runtime_dir.iterdir():
-        if category_dir.is_dir() and category_dir.name != "__pycache__":
-            for yaml_file in category_dir.glob("*.yaml"):
-                try:
-                    with open(yaml_file, "r") as f:
-                        data = yaml.safe_load(f)
-
-                    # Basic validation
-                    if not data:
-                        errors.append(f"{yaml_file}: Empty file")
-                        continue
-
-                    # Validate based on category
-                    if category_dir.name == "tools":
-                        if "tools" not in data:
-                            errors.append(f"{yaml_file}: Missing 'tools' key")
-                        elif not isinstance(data["tools"], list):
-                            errors.append(f"{yaml_file}: 'tools' must be a list")
-                        else:
-                            for i, tool in enumerate(data["tools"]):
-                                if not isinstance(tool, dict):
-                                    errors.append(
-                                        f"{yaml_file}: Tool {i} must be a dictionary"
-                                    )
-                                elif "name" not in tool:
-                                    errors.append(
-                                        f"{yaml_file}: Tool {i} missing 'name'"
-                                    )
-
-                    elif category_dir.name == "workflows":
-                        if "metadata" not in data:
-                            warnings.append(f"{yaml_file}: Missing 'metadata' section")
-                        if "workflow_steps" not in data:
-                            errors.append(f"{yaml_file}: Missing 'workflow_steps'")
-
-                    elif category_dir.name == "procedures":
-                        if "title" not in data:
-                            errors.append(f"{yaml_file}: Missing 'title'")
-
-                    print(f"✅ {yaml_file.relative_to(runtime_dir)}")
-
-                except yaml.YAMLError as e:
-                    errors.append(f"{yaml_file}: YAML syntax error - {e}")
-                except Exception as e:
-                    errors.append(f"{yaml_file}: Validation error - {e}")
+        if not category_dir.is_dir() or category_dir.name == "__pycache__":
+            continue
+        for yaml_file in category_dir.glob("*.yaml"):
+            _validate_yaml_file(yaml_file, category_dir.name, runtime_dir, errors, warnings)
 
     # Report results
     if errors:

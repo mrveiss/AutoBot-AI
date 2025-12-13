@@ -34,10 +34,10 @@ class CircuitState(Enum):
 class CircuitBreakerConfig:
     """Configuration for circuit breaker"""
 
-    # Issue #318: Use centralized constants instead of magic numbers
+    # Issue #318/#376: Use centralized constants instead of magic numbers
     failure_threshold: int = CircuitBreakerDefaults.DEFAULT_FAILURE_THRESHOLD
     recovery_timeout: float = CircuitBreakerDefaults.DEFAULT_RECOVERY_TIMEOUT
-    success_threshold: int = 3  # Successes needed to close circuit from half-open
+    success_threshold: int = CircuitBreakerDefaults.DEFAULT_SUCCESS_THRESHOLD
     timeout: float = CircuitBreakerDefaults.DEFAULT_TIMEOUT
 
     # Exceptions that should trigger circuit breaker
@@ -57,10 +57,10 @@ class CircuitBreakerConfig:
         AttributeError,
     )
 
-    # Performance thresholds
-    slow_call_threshold: float = 10.0  # Seconds - what constitutes a slow call
-    slow_call_rate_threshold: float = 0.5  # 50% of calls being slow opens circuit
-    min_calls_for_evaluation: int = 10  # Minimum calls before evaluating performance
+    # Performance thresholds (Issue #376 - use centralized constants)
+    slow_call_threshold: float = CircuitBreakerDefaults.SLOW_CALL_THRESHOLD
+    slow_call_rate_threshold: float = CircuitBreakerDefaults.SLOW_CALL_RATE_THRESHOLD
+    min_calls_for_evaluation: int = CircuitBreakerDefaults.MIN_CALLS_FOR_EVALUATION
 
 
 class CircuitBreakerOpenError(Exception):
@@ -102,7 +102,7 @@ class CircuitBreaker:
 
         # Call history for performance monitoring
         self.call_history: List[CallRecord] = []
-        self.max_history_size = 100
+        self.max_history_size = CircuitBreakerDefaults.MAX_HISTORY_SIZE  # Issue #376
 
         # Thread safety
         self._lock = Lock()
@@ -162,7 +162,7 @@ class CircuitBreaker:
             recent_calls = [
                 record
                 for record in self.call_history
-                if current_time - record.timestamp < 60.0  # Last 60 seconds
+                if current_time - record.timestamp < CircuitBreakerDefaults.RECENT_CALLS_WINDOW
             ]
 
             if len(recent_calls) < self.config.min_calls_for_evaluation:
@@ -388,7 +388,7 @@ class CircuitBreaker:
         recent_calls = [
             record
             for record in self.call_history
-            if time.time() - record.timestamp < 300.0  # Last 5 minutes
+            if time.time() - record.timestamp < CircuitBreakerDefaults.PERFORMANCE_WINDOW
         ]
 
         if not recent_calls:
@@ -404,12 +404,13 @@ class CircuitBreaker:
         durations = [call.duration for call in recent_calls if call.success]
         avg_duration = statistics.mean(durations) if durations else 0.0
 
-        # Calculate p95 duration safely
+        # Calculate p95 duration safely (Issue #376 - use named constant)
         p95_duration = avg_duration
-        if len(durations) >= 20:
+        if len(durations) >= CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE:
             try:
-                quantiles = statistics.quantiles(durations, n=20)
-                p95_duration = quantiles[18] if len(quantiles) > 18 else avg_duration
+                quantiles = statistics.quantiles(durations, n=CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE)
+                p95_idx = CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE - 2  # 18 for n=20 (95th percentile)
+                p95_duration = quantiles[p95_idx] if len(quantiles) > p95_idx else avg_duration
             except Exception:
                 p95_duration = avg_duration
 
@@ -484,10 +485,10 @@ circuit_breaker_manager = CircuitBreakerManager()
 
 def circuit_breaker_async(
     service_name: str,
-    failure_threshold: int = 5,
-    recovery_timeout: float = 60.0,
-    success_threshold: int = 3,
-    timeout: float = 30.0,
+    failure_threshold: int = CircuitBreakerDefaults.DEFAULT_FAILURE_THRESHOLD,
+    recovery_timeout: float = CircuitBreakerDefaults.DEFAULT_RECOVERY_TIMEOUT,
+    success_threshold: int = CircuitBreakerDefaults.DEFAULT_SUCCESS_THRESHOLD,
+    timeout: float = CircuitBreakerDefaults.DEFAULT_TIMEOUT,
     monitored_exceptions: tuple = None,
 ):
     """
@@ -531,10 +532,10 @@ def circuit_breaker_async(
 
 def circuit_breaker_sync(
     service_name: str,
-    failure_threshold: int = 5,
-    recovery_timeout: float = 60.0,
-    success_threshold: int = 3,
-    timeout: float = 30.0,
+    failure_threshold: int = CircuitBreakerDefaults.DEFAULT_FAILURE_THRESHOLD,
+    recovery_timeout: float = CircuitBreakerDefaults.DEFAULT_RECOVERY_TIMEOUT,
+    success_threshold: int = CircuitBreakerDefaults.DEFAULT_SUCCESS_THRESHOLD,
+    timeout: float = CircuitBreakerDefaults.DEFAULT_TIMEOUT,
     monitored_exceptions: tuple = None,
 ):
     """
@@ -593,11 +594,12 @@ async def protected_llm_call(func: Callable, *args, **kwargs) -> Any:
 
 async def protected_database_call(func: Callable, *args, **kwargs) -> Any:
     """Make a database call protected by circuit breaker"""
+    # Issue #376: Use centralized constants instead of magic numbers
     config = CircuitBreakerConfig(
-        failure_threshold=5,
-        recovery_timeout=15.0,
-        timeout=10.0,
-        slow_call_threshold=2.0,  # Database calls should be fast
+        failure_threshold=CircuitBreakerDefaults.DATABASE_FAILURE_THRESHOLD,
+        recovery_timeout=CircuitBreakerDefaults.DATABASE_RECOVERY_TIMEOUT,
+        timeout=CircuitBreakerDefaults.DATABASE_TIMEOUT,
+        slow_call_threshold=CircuitBreakerDefaults.DATABASE_SLOW_CALL_THRESHOLD,
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 
@@ -609,10 +611,11 @@ async def protected_database_call(func: Callable, *args, **kwargs) -> Any:
 
 async def protected_network_call(func: Callable, *args, **kwargs) -> Any:
     """Make a network call protected by circuit breaker"""
+    # Issue #376: Use centralized constants instead of magic numbers
     config = CircuitBreakerConfig(
-        failure_threshold=3,
-        recovery_timeout=20.0,
-        timeout=15.0,
+        failure_threshold=CircuitBreakerDefaults.NETWORK_FAILURE_THRESHOLD,
+        recovery_timeout=CircuitBreakerDefaults.NETWORK_RECOVERY_TIMEOUT,
+        timeout=CircuitBreakerDefaults.NETWORK_TIMEOUT,
         monitored_exceptions=(ConnectionError, TimeoutError, OSError),
     )
 

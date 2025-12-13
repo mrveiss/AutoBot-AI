@@ -79,12 +79,9 @@ class ComprehensiveUITester:
             self.results.errors.append(f"Testing framework error: {str(e)}")
             return self.results
 
-    async def _test_page(self, url):
-        """Test a specific page comprehensively"""
-        page_name = url.split("/")[-1] or "home"
-        print(f"\n🧪 Testing page: {page_name} ({url})")
-
-        page_result = {
+    def _create_page_result(self, page_name: str, url: str) -> dict:
+        """Create initial page result structure (Issue #315: extracted helper)."""
+        return {
             "page": page_name,
             "url": url,
             "timestamp": datetime.now().isoformat(),
@@ -96,42 +93,47 @@ class ComprehensiveUITester:
             "status": "unknown"
         }
 
+    async def _test_page_elements_by_type(self, page_name: str, page_result: dict) -> None:
+        """Test UI elements based on page type (Issue #315: extracted helper)."""
+        page_testers = {
+            "": self._test_dashboard_elements,
+            "home": self._test_dashboard_elements,
+            "dashboard": self._test_dashboard_elements,
+            "chat": self._test_chat_elements,
+            "knowledge": self._test_knowledge_elements,
+            "tools": self._test_tools_elements,
+            "monitoring": self._test_monitoring_elements,
+            "settings": self._test_settings_elements,
+        }
+        tester = page_testers.get(page_name)
+        if tester:
+            await tester(page_result)
+
+    async def _navigate_and_measure(self, url: str, page_result: dict, page_name: str) -> None:
+        """Navigate to page and measure load time (Issue #315: extracted helper)."""
+        start_time = time.time()
+        print(f"  📍 Navigating to {url}")
+        await asyncio.sleep(0.5)  # Simulate navigation time
+
+        load_time = time.time() - start_time
+        page_result["load_time"] = round(load_time, 3)
+        print(f"  ⏱️ Page loaded in {load_time:.3f}s")
+
+        screenshot_path = f"test_screenshots/{page_name}_initial.png"
+        page_result["screenshots"].append(screenshot_path)
+        print(f"  📸 Screenshot saved: {screenshot_path}")
+
+    async def _test_page(self, url):
+        """Test a specific page comprehensively (Issue #315: refactored)."""
+        page_name = url.split("/")[-1] or "home"
+        print(f"\n🧪 Testing page: {page_name} ({url})")
+
+        page_result = self._create_page_result(page_name, url)
+
         try:
-            # Navigate to page and measure load time
-            start_time = time.time()
-
-            # Use MCP Puppeteer tools to navigate
-            # Simulate navigation (would use actual Puppeteer MCP in real implementation)
-            print(f"  📍 Navigating to {url}")
-            await asyncio.sleep(0.5)  # Simulate navigation time
-
-            load_time = time.time() - start_time
-            page_result["load_time"] = round(load_time, 3)
-            print(f"  ⏱️ Page loaded in {load_time:.3f}s")
-
-            # Capture initial screenshot
-            screenshot_path = f"test_screenshots/{page_name}_initial.png"
-            page_result["screenshots"].append(screenshot_path)
-            print(f"  📸 Screenshot saved: {screenshot_path}")
-
-            # Test UI elements based on page type
-            if page_name in ["", "home", "dashboard"]:
-                await self._test_dashboard_elements(page_result)
-            elif page_name == "chat":
-                await self._test_chat_elements(page_result)
-            elif page_name == "knowledge":
-                await self._test_knowledge_elements(page_result)
-            elif page_name == "tools":
-                await self._test_tools_elements(page_result)
-            elif page_name == "monitoring":
-                await self._test_monitoring_elements(page_result)
-            elif page_name == "settings":
-                await self._test_settings_elements(page_result)
-
-            # Check for console errors specific to this page
+            await self._navigate_and_measure(url, page_result, page_name)
+            await self._test_page_elements_by_type(page_name, page_result)
             await self._collect_console_messages(page_result)
-
-            # Measure performance metrics
             await self._measure_page_performance(page_result)
 
             page_result["status"] = "passed" if len(page_result["console_errors"]) == 0 else "warnings"

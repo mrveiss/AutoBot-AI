@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import psutil
-import requests
 
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent))
@@ -315,6 +314,7 @@ class PhaseValidator:
     """Comprehensive phase validation system"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize phase validator with project root and backend/frontend URLs."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.validation_results = {}
         self.overall_score = 0
@@ -580,64 +580,72 @@ class PhaseValidator:
 
         return results
 
-    def _check_service_status(self, service: str) -> bool:
-        """Check if a specific service is running"""
+    def _check_backend_service(self) -> bool:
+        """Check if uvicorn/backend is running (Issue #315: extracted helper)."""
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            cmdline = (
+                " ".join(proc.info["cmdline"]) if proc.info["cmdline"] else ""
+            )
+            if "uvicorn" in cmdline or "main:app" in cmdline:
+                return True
+        return False
+
+    def _check_redis_service(self) -> bool:
+        """Check if Redis is accessible (Issue #315: extracted helper)."""
         try:
-            if service == "backend":
-                # Check if uvicorn/backend is running
-                for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                    cmdline = (
-                        " ".join(proc.info["cmdline"]) if proc.info["cmdline"] else ""
-                    )
-                    if "uvicorn" in cmdline or "main:app" in cmdline:
-                        return True
+            async def check_redis():
+                """Check Redis connectivity using centralized client."""
+                redis_client = await get_redis_client('main')
+                if redis_client:
+                    await redis_client.ping()
+                    return True
                 return False
 
-            elif service == "redis":
-                # Check if Redis is accessible using centralized client
-                try:
-                    # Use asyncio to get the Redis client
-                    async def check_redis():
-                        redis_client = await get_redis_client('main')
-                        if redis_client:
-                            await redis_client.ping()
-                            return True
-                        return False
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(check_redis())
+            loop.close()
+            return result
+        except Exception:
+            return False
 
-                    # Run the async check
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(check_redis())
-                    loop.close()
-                    return result
-                except Exception:
-                    return False
+    def _check_ollama_service(self) -> bool:
+        """Check if Ollama is accessible (Issue #315: extracted helper)."""
+        try:
+            response = requests.get(
+                "ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=3
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
 
-            elif service == "ollama":
-                # Check if Ollama is accessible
-                try:
-                    response = requests.get(
-                        "ServiceURLs.OLLAMA_LOCAL/api/tags", timeout=3
-                    )
-                    return response.status_code == 200
-                except Exception:
-                    return False
+    def _check_frontend_service(self) -> bool:
+        """Check if frontend dev server is running (Issue #315: extracted helper)."""
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            cmdline = (
+                " ".join(proc.info["cmdline"]) if proc.info["cmdline"] else ""
+            )
+            if "vite" in cmdline or "npm run dev" in cmdline:
+                return True
+        return False
 
-            elif service == "frontend":
-                # Check if frontend dev server is running
-                for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-                    cmdline = (
-                        " ".join(proc.info["cmdline"]) if proc.info["cmdline"] else ""
-                    )
-                    if "vite" in cmdline or "npm run dev" in cmdline:
-                        return True
-                return False
+    def _check_service_status(self, service: str) -> bool:
+        """Check if a specific service is running (Issue #315: refactored)."""
+        service_checkers = {
+            "backend": self._check_backend_service,
+            "redis": self._check_redis_service,
+            "ollama": self._check_ollama_service,
+            "frontend": self._check_frontend_service,
+        }
 
+        try:
+            checker = service_checkers.get(service)
+            if checker:
+                return checker()
+            return False
         except Exception as e:
             logger.debug(f"Error checking service {service}: {e}")
             return False
-
-        return False
 
     async def _validate_features(self, feature_type: str, features) -> Dict[str, Any]:
         """Validate specific feature implementations"""
@@ -676,10 +684,13 @@ class PhaseValidator:
             cpu_usage = psutil.cpu_percent(interval=1)
             memory_usage = psutil.virtual_memory().percent
 
-            # Test API response time
+            # Test API response time (Issue #359: use async HTTP)
             start_time = time.time()
             try:
-                requests.get(f"{self.backend_url}/api/system/health", timeout=5)
+                timeout = aiohttp.ClientTimeout(total=5)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(f"{self.backend_url}/api/system/health") as response:
+                        await response.text()  # Consume response
                 api_response_time = (time.time() - start_time) * 1000  # ms
             except Exception:
                 api_response_time = 5000  # Timeout
@@ -889,8 +900,8 @@ class PhaseValidator:
         return output_path
 
 
-def main():
-    """Main function for CLI usage"""
+def main() -> None:
+    """Main entry point for CLI phase validation system."""
     parser = argparse.ArgumentParser(description="AutoBot Phase Validation System")
     parser.add_argument(
         "--output-format",

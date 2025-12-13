@@ -33,6 +33,7 @@ import aiofiles
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.constants.threshold_constants import TimingConstants
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
 from src.utils.semantic_chunker_gpu import (
@@ -150,6 +151,31 @@ class SyncMetrics:
             self.avg_chunks_per_second = (
                 self.total_chunks_processed / self.total_processing_time
             )
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def record_file_analysis(
+        self,
+        total_scanned: int,
+        changed_count: int,
+        new_count: int,
+        removed_count: int,
+    ) -> None:
+        """Record file analysis results (Issue #372 - reduces feature envy)."""
+        self.total_files_scanned = total_scanned
+        self.files_changed = changed_count - new_count
+        self.files_added = new_count
+        self.files_removed = removed_count
+
+    def get_change_analysis_log(self) -> str:
+        """Get change analysis log string (Issue #372 - reduces feature envy)."""
+        return (
+            f"Change analysis:\n"
+            f"  - Files scanned: {self.total_files_scanned}\n"
+            f"  - Changed files: {self.files_changed}\n"
+            f"  - New files: {self.files_added}\n"
+            f"  - Removed files: {self.files_removed}"
+        )
 
 
 class IncrementalKnowledgeSync:
@@ -563,7 +589,6 @@ class IncrementalKnowledgeSync:
             # Step 1: Scan files
             logger.info("Scanning files for changes...")
             all_files = await self._scan_files()
-            metrics.total_files_scanned = len(all_files)
 
             # Step 2: Analyze changes with content hashing
             logger.info("Analyzing file changes with content hashing...")
@@ -571,15 +596,14 @@ class IncrementalKnowledgeSync:
                 all_files
             )
 
-            metrics.files_changed = len(changed_files) - len(new_files)
-            metrics.files_added = len(new_files)
-            metrics.files_removed = len(removed_files)
-
-            logger.info("Change analysis:")
-            logger.info(f"  - Files scanned: {metrics.total_files_scanned}")
-            logger.info(f"  - Changed files: {metrics.files_changed}")
-            logger.info(f"  - New files: {metrics.files_added}")
-            logger.info(f"  - Removed files: {metrics.files_removed}")
+            # Issue #372: Use model method to record file analysis
+            metrics.record_file_analysis(
+                total_scanned=len(all_files),
+                changed_count=len(changed_files),
+                new_count=len(new_files),
+                removed_count=len(removed_files),
+            )
+            logger.info(metrics.get_change_analysis_log())
 
             # Step 3: Remove obsolete knowledge (fast operation)
             if removed_files:
@@ -681,7 +705,7 @@ class IncrementalKnowledgeSync:
 
             except Exception as e:
                 logger.error(f"Background sync error: {e}")
-                await asyncio.sleep(60)  # Wait 1 minute before retry
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
 
     def get_sync_status(self) -> Dict[str, Any]:
         """Get current sync status and statistics."""

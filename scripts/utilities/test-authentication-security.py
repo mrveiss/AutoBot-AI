@@ -22,6 +22,7 @@ from unittest.mock import Mock
 
 class SecurityTester:
     def __init__(self):
+        """Initialize security tester with auth middleware and test counters."""
         self.auth_middleware = AuthenticationMiddleware()
         self.passed = 0
         self.failed = 0

@@ -116,6 +116,7 @@ class KnowledgeConsistencyVerifier:
     """Critical system component to prevent knowledge retrieval inconsistencies"""
 
     def __init__(self):
+        """Initialize verifier with Redis client and error tracking lists."""
         self.redis_client = get_redis_client()
         self.critical_errors = []
         self.warnings = []

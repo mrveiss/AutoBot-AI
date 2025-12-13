@@ -310,6 +310,7 @@ def _generate_system_overview_html(data: Dict[str, Any]) -> str:
     disk_percent = system.get("avg_disk_percent", 0)
 
     def get_progress_class(value):
+        """Return CSS class based on resource usage threshold."""
         if value >= 90:
             return "progress-critical"
         elif value >= 75:
@@ -318,6 +319,7 @@ def _generate_system_overview_html(data: Dict[str, Any]) -> str:
             return "progress-normal"
 
     def get_status_class(value):
+        """Return CSS status class based on resource usage threshold."""
         if value >= 90:
             return "status-critical"
         elif value >= 75:

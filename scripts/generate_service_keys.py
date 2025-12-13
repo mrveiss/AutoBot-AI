@@ -89,7 +89,7 @@ async def generate_keys():
 
     # Verify keys are in Redis
     print("🔍 Verifying keys in Redis...")
-    for service_id in generated_keys.keys():
+    for service_id in generated_keys:
         stored_key = await auth_manager.get_service_key(service_id)
         if stored_key:
             print(f"  ✅ {service_id}: Key verified in Redis")

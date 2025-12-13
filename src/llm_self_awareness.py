@@ -52,39 +52,124 @@ class LLMSelfAwareness:
 
         logger.info("LLM Self-Awareness module initialized")
 
+    def _is_cache_valid(self) -> bool:
+        """
+        Check if context cache is still valid.
+
+        Issue #281: Extracted helper for cache validation.
+        """
+        if not self._context_cache or not self._cache_timestamp:
+            return False
+        return (datetime.now() - self._cache_timestamp).seconds < self._cache_ttl
+
+    def _build_system_identity(
+        self, project_status: Dict[str, Any], capabilities: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build system identity section of context.
+
+        Issue #281: Extracted helper for identity building.
+        """
+        return {
+            "name": "AutoBot",
+            "version": "1.0.0",
+            "description": (
+                "Advanced AI-powered automation and development assistant"
+            ),
+            "current_phase": project_status["current_phase"],
+            "system_maturity": capabilities["system_maturity"],
+        }
+
+    def _build_phase_and_metrics(
+        self, project_status: Dict[str, Any], state_summary: Dict[str, Any]
+    ) -> tuple:
+        """
+        Build phase information and system metrics sections.
+
+        Issue #281: Extracted helper for phase/metrics building.
+
+        Returns:
+            Tuple of (phase_information, system_metrics) dicts
+        """
+        system_metrics_data = state_summary["current_state"]["system_metrics"]
+
+        phase_information = {
+            "current_phase": project_status["current_phase"],
+            "completion_status": state_summary["current_state"]["phase_states"],
+            "completed_phases": system_metrics_data.get("phase_completion", 0),
+            "total_phases": 10,
+        }
+
+        system_metrics = {
+            "maturity_score": system_metrics_data.get("system_maturity", 0),
+            "validation_score": system_metrics_data.get("validation_score", 0),
+            "capability_count": system_metrics_data.get("capability_count", 0),
+        }
+
+        return phase_information, system_metrics
+
+    def _build_operational_status(
+        self, capabilities: Dict[str, Any], state_summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build operational status section of context.
+
+        Issue #281: Extracted helper for operational status.
+        """
+        return {
+            "auto_progression_enabled": capabilities["auto_progression_enabled"],
+            "last_validation": capabilities["last_progression_check"],
+            "recent_changes": len(state_summary.get("recent_changes", [])),
+            "milestones_achieved": sum(
+                1
+                for m in state_summary.get("milestones", {}).values()
+                if m["achieved"]
+            ),
+        }
+
+    def _get_error_context(self, error: Exception) -> Dict[str, Any]:
+        """
+        Build minimal fallback context on error.
+
+        Issue #281: Extracted helper for error fallback.
+        """
+        return {
+            "system_identity": {
+                "name": "AutoBot",
+                "version": "1.0.0",
+                "error": "Failed to load complete context",
+            },
+            "current_capabilities": {"active": [], "error": str(error)},
+        }
+
     async def get_system_context(
         self, include_detailed: bool = False
     ) -> Dict[str, Any]:
-        """Get comprehensive system context for LLM awareness"""
-        # Check cache
-        if (
-            self._context_cache
-            and self._cache_timestamp
-            and (datetime.now() - self._cache_timestamp).seconds < self._cache_ttl
-        ):
+        """
+        Get comprehensive system context for LLM awareness.
+
+        Issue #281: Refactored from 116 lines to use extracted helper methods.
+        """
+        # Check cache (Issue #281: uses helper)
+        if self._is_cache_valid():
             return self._context_cache
 
         try:
-            # Get current capabilities
+            # Get current state data
             capabilities = self.progression_manager.get_current_system_capabilities()
-
-            # Get state summary
             state_summary = await self.state_tracker.get_state_summary()
-
-            # Get project status
             project_status = self.project_state_manager.get_fast_project_status()
 
-            # Build context
+            # Build phase and metrics (Issue #281: uses helper)
+            phase_info, system_metrics = self._build_phase_and_metrics(
+                project_status, state_summary
+            )
+
+            # Build context using helpers (Issue #281)
             context = {
-                "system_identity": {
-                    "name": "AutoBot",
-                    "version": "1.0.0",
-                    "description": (
-                        "Advanced AI-powered automation and development assistant"
-                    ),
-                    "current_phase": project_status["current_phase"],
-                    "system_maturity": capabilities["system_maturity"],
-                },
+                "system_identity": self._build_system_identity(
+                    project_status, capabilities
+                ),
                 "current_capabilities": {
                     "active": capabilities["active_capabilities"],
                     "count": len(capabilities["active_capabilities"]),
@@ -92,45 +177,11 @@ class LLMSelfAwareness:
                         capabilities["active_capabilities"]
                     ),
                 },
-                "phase_information": {
-                    "current_phase": project_status["current_phase"],
-                    "completion_status": state_summary["current_state"]["phase_states"],
-                    "completed_phases": (
-                        state_summary["current_state"]["system_metrics"].get(
-                            "phase_completion", 0
-                        )
-                    ),
-                    "total_phases": 10,
-                },
-                "system_metrics": {
-                    "maturity_score": (
-                        state_summary["current_state"]["system_metrics"].get(
-                            "system_maturity", 0
-                        )
-                    ),
-                    "validation_score": (
-                        state_summary["current_state"]["system_metrics"].get(
-                            "validation_score", 0
-                        )
-                    ),
-                    "capability_count": (
-                        state_summary["current_state"]["system_metrics"].get(
-                            "capability_count", 0
-                        )
-                    ),
-                },
-                "operational_status": {
-                    "auto_progression_enabled": capabilities[
-                        "auto_progression_enabled"
-                    ],
-                    "last_validation": capabilities["last_progression_check"],
-                    "recent_changes": len(state_summary.get("recent_changes", [])),
-                    "milestones_achieved": sum(
-                        1
-                        for m in state_summary.get("milestones", {}).values()
-                        if m["achieved"]
-                    ),
-                },
+                "phase_information": phase_info,
+                "system_metrics": system_metrics,
+                "operational_status": self._build_operational_status(
+                    capabilities, state_summary
+                ),
                 "contextual_information": {
                     "timestamp": datetime.now().isoformat(),
                     "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
@@ -159,15 +210,7 @@ class LLMSelfAwareness:
 
         except Exception as e:
             logger.error(f"Error building system context: {e}")
-            # Return minimal context on error
-            return {
-                "system_identity": {
-                    "name": "AutoBot",
-                    "version": "1.0.0",
-                    "error": "Failed to load complete context",
-                },
-                "current_capabilities": {"active": [], "error": str(e)},
-            }
+            return self._get_error_context(e)
 
     def _get_categorization_rules(self) -> Dict[str, List[str]]:
         """Get explicit capability-to-category mapping (Issue #315)."""

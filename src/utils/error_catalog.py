@@ -15,9 +15,50 @@ from typing import Dict, Optional
 
 import yaml
 
+from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level frozenset for metadata field filtering
+_METADATA_FIELDS = frozenset({"version", "last_updated"})
+
+
+def _parse_error_category(category_str: str, error_code: str) -> ErrorCategory:
+    """Parse error category string to enum. (Issue #315 - extracted)"""
+    try:
+        return ErrorCategory(category_str)
+    except ValueError:
+        logger.warning(
+            f"Invalid category '{category_str}' for {error_code}, "
+            f"defaulting to SERVER_ERROR"
+        )
+        return ErrorCategory.SERVER_ERROR
+
+
+def _parse_single_error(
+    error_code: str, error_data: dict
+) -> Optional["ErrorDefinition"]:
+    """Parse single error definition from catalog data. (Issue #315 - extracted)"""
+    required_keys = ("category", "message", "status_code", "retry")
+    if not all(key in error_data for key in required_keys):
+        logger.warning(f"Skipping incomplete error definition: {error_code}")
+        return None
+
+    try:
+        category = _parse_error_category(error_data["category"], error_code)
+        return ErrorDefinition(
+            code=error_code,
+            category=category,
+            message=error_data["message"],
+            status_code=error_data["status_code"],
+            retry=error_data["retry"],
+            retry_after=error_data.get("retry_after"),
+            details=error_data.get("details"),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to parse error {error_code}: {e}", exc_info=True)
+        return None
 
 
 @dataclass
@@ -86,11 +127,9 @@ class ErrorCatalog:
             # Already loaded from default path
             return True
 
-        # Auto-detect catalog path
+        # Auto-detect catalog path using centralized PathConstants (Issue #380)
         if catalog_path is None:
-            # Try relative to this file
-            base_path = Path(__file__).parent.parent.parent
-            catalog_path = base_path / "config" / "error_messages.yaml"
+            catalog_path = PATH.CONFIG_DIR / "error_messages.yaml"
 
         if not catalog_path.exists():
             logger.error(f"Error catalog not found: {catalog_path}")
@@ -115,7 +154,7 @@ class ErrorCatalog:
             return False
 
     def _parse_catalog(self):
-        """Parse raw YAML data into ErrorDefinition objects"""
+        """Parse raw YAML data into ErrorDefinition objects (Issue #315 - uses helpers)"""
         if not self._raw_data:
             return
 
@@ -124,53 +163,15 @@ class ErrorCatalog:
         # Iterate through component sections (knowledge_base, authentication, etc.)
         for component_name, errors in self._raw_data.items():
             # Skip metadata fields
-            if component_name in ("version", "last_updated"):
+            if component_name in _METADATA_FIELDS:
                 continue
-
             if not isinstance(errors, dict):
                 continue
-
-            # Parse each error code
+            # Parse each error code using helper
             for error_code, error_data in errors.items():
-                try:
-                    # Validate required fields
-                    if not all(
-                        key in error_data
-                        for key in ("category", "message", "status_code", "retry")
-                    ):
-                        logger.warning(
-                            f"Skipping incomplete error definition: {error_code}"
-                        )
-                        continue
-
-                    # Map category string to ErrorCategory enum
-                    category_str = error_data["category"]
-                    try:
-                        category = ErrorCategory(category_str)
-                    except ValueError:
-                        logger.warning(
-                            f"Invalid category '{category_str}' for {error_code}, "
-                            f"defaulting to SERVER_ERROR"
-                        ),
-                        category = ErrorCategory.SERVER_ERROR
-
-                    # Create ErrorDefinition
-                    error_def = ErrorDefinition(
-                        code=error_code,
-                        category=category,
-                        message=error_data["message"],
-                        status_code=error_data["status_code"],
-                        retry=error_data["retry"],
-                        retry_after=error_data.get("retry_after"),
-                        details=error_data.get("details"),
-                    )
-
+                error_def = _parse_single_error(error_code, error_data)
+                if error_def:
                     self._catalog[error_code] = error_def
-
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to parse error {error_code}: {e}", exc_info=True
-                    )
 
     def get_error(self, error_code: str) -> Optional[ErrorDefinition]:
         """
@@ -232,7 +233,7 @@ class ErrorCatalog:
 
         return [
             code
-            for code in self._catalog.keys()
+            for code in self._catalog
             if code.startswith(component_prefix + "_")
         ]
 
@@ -254,7 +255,7 @@ class ErrorCatalog:
 
         # Count errors by component
         component_counts: Dict[str, int] = {}
-        for code in self._catalog.keys():
+        for code in self._catalog:
             component = code.split("_")[0]
             component_counts[component] = component_counts.get(component, 0) + 1
 

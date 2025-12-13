@@ -8,9 +8,14 @@ Validates that all environment variables are properly configured
 and that the configuration system is working correctly.
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
+
+# Configure logging for validation script
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
@@ -19,7 +24,7 @@ sys.path.insert(0, str(project_root))
 
 def test_default_configuration():
     """Test configuration with default values"""
-    print("🔧 Testing Default Configuration...")
+    logger.info("Testing Default Configuration...")
 
     try:
         from src.unified_config import (
@@ -49,17 +54,17 @@ def test_default_configuration():
         assert WS_PROTOCOL in ["ws", "wss"]
         assert REDIS_PROTOCOL == "redis"
 
-        print("✅ Default configuration validation passed")
+        logger.info("Default configuration validation passed")
         return True
 
     except Exception as e:
-        print(f"❌ Default configuration validation failed: {e}")
+        logger.error("Default configuration validation failed: %s", e)
         return False
 
 
 def test_custom_configuration():
     """Test configuration with custom environment variables"""
-    print("🔧 Testing Custom Configuration...")
+    logger.info("Testing Custom Configuration...")
 
     # Set custom environment variables
     test_env = {
@@ -102,11 +107,11 @@ def test_custom_configuration():
         assert API_BASE_URL.startswith("https://")
         assert f":{BACKEND_PORT}" in API_BASE_URL
 
-        print("✅ Custom configuration validation passed")
+        logger.info("Custom configuration validation passed")
         return True
 
     except Exception as e:
-        print(f"❌ Custom configuration validation failed: {e}")
+        logger.error("Custom configuration validation failed: %s", e)
         return False
 
     finally:
@@ -120,7 +125,7 @@ def test_custom_configuration():
 
 def test_backend_configuration():
     """Test backend configuration service"""
-    print("🔧 Testing Backend Configuration Service...")
+    logger.info("Testing Backend Configuration Service...")
 
     try:
         from backend.services.config_service import ConfigService
@@ -140,17 +145,17 @@ def test_backend_configuration():
         memory_config = config["memory"]
         assert "redis" in memory_config
 
-        print("✅ Backend configuration service validation passed")
+        logger.info("Backend configuration service validation passed")
         return True
 
     except Exception as e:
-        print(f"❌ Backend configuration service validation failed: {e}")
+        logger.error("Backend configuration service validation failed: %s", e)
         return False
 
 
 def test_docker_configuration():
     """Test Docker compose configuration"""
-    print("🔧 Testing Docker Configuration...")
+    logger.info("Testing Docker Configuration...")
 
     try:
         import subprocess
@@ -174,27 +179,27 @@ def test_docker_configuration():
                 # Check that custom ports are in the output
                 config_output = result.stdout
                 if '"6380"' in config_output:  # Custom Redis port
-                    print("✅ Docker configuration validation passed")
+                    logger.info("Docker configuration validation passed")
                     return True
                 else:
-                    print("⚠️  Docker configuration: Custom ports not detected")
+                    logger.warning("Docker configuration: Custom ports not detected")
                     return False
             else:
-                print(f"⚠️  Docker compose config failed: {result.stderr}")
+                logger.warning("Docker compose config failed: %s", result.stderr)
                 return False
         else:
-            print("⚠️  Docker compose file not found, skipping Docker test")
+            logger.warning("Docker compose file not found, skipping Docker test")
             return True
 
     except Exception as e:
-        print(f"❌ Docker configuration validation failed: {e}")
+        logger.error("Docker configuration validation failed: %s", e)
         return False
 
 
 def main():
     """Main validation function"""
-    print("🚀 AutoBot Configuration Validation")
-    print("=" * 50)
+    logger.info("AutoBot Configuration Validation")
+    logger.info("=" * 50)
 
     tests = [
         test_default_configuration,
@@ -209,16 +214,16 @@ def main():
     for test in tests:
         if test():
             passed += 1
-        print()
+        logger.info("")
 
-    print("=" * 50)
-    print(f"📊 Results: {passed}/{total} tests passed")
+    logger.info("=" * 50)
+    logger.info("Results: %d/%d tests passed", passed, total)
 
     if passed == total:
-        print("🎉 All configuration tests passed! System is ready.")
+        logger.info("All configuration tests passed! System is ready.")
         return 0
     else:
-        print("⚠️  Some configuration tests failed. Please review.")
+        logger.warning("Some configuration tests failed. Please review.")
         return 1
 
 

@@ -35,6 +35,8 @@ import docker
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.constants.threshold_constants import TimingConstants
+
 
 # Issue #315 - extracted helper functions to reduce deep nesting
 
@@ -161,6 +163,7 @@ class ComprehensiveLogAggregator:
     """Comprehensive log aggregation system for AutoBot."""
 
     def __init__(self, seq_url: str = "http://localhost:5341"):
+        """Initialize log aggregator with Seq URL and Docker client."""
         self.seq_url = seq_url.rstrip("/")
         self.docker_client = None
         self.log_processes = {}
@@ -275,6 +278,7 @@ class ComprehensiveLogAggregator:
                     ):
                         # Use extracted helper function to process log line
                         def send_callback(*args, **kwargs):
+                            """Forward log arguments to Seq sender in event loop."""
                             asyncio.run_coroutine_threadsafe(
                                 self.send_to_seq(*args, **kwargs),
                                 asyncio.get_event_loop(),
@@ -302,6 +306,7 @@ class ComprehensiveLogAggregator:
 
         # Monitor backend process logs
         def monitor_backend():
+            """Monitor backend process logs via journalctl or log files."""
             try:
                 # Find the backend process
                 result = subprocess.run(
@@ -337,6 +342,7 @@ class ComprehensiveLogAggregator:
         )
 
         def send_callback(*args, **kwargs):
+            """Send log message to Seq asynchronously via event loop."""
             asyncio.run_coroutine_threadsafe(
                 self.send_to_seq(*args, **kwargs),
                 asyncio.get_event_loop(),
@@ -360,6 +366,7 @@ class ComprehensiveLogAggregator:
             )
 
             def send_callback(*args, **kwargs):
+                """Send log message to Seq asynchronously via event loop."""
                 asyncio.run_coroutine_threadsafe(
                     self.send_to_seq(*args, **kwargs),
                     asyncio.get_event_loop(),
@@ -381,6 +388,7 @@ class ComprehensiveLogAggregator:
         print("🔄 Starting system log monitoring...")
 
         def monitor_system():
+            """Monitor system journal logs for AutoBot-related entries."""
             try:
                 # Monitor system logs for AutoBot-related entries
                 proc = subprocess.Popen(
@@ -485,7 +493,7 @@ class ComprehensiveLogAggregator:
         try:
             # Keep running until interrupted
             while self.running:
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         except KeyboardInterrupt:
             print("\n🛑 Stopping log aggregation...")

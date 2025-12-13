@@ -34,6 +34,7 @@ class ValidationDashboardGenerator:
     """Generates real-time validation reports and HTML dashboards"""
 
     def __init__(self, output_dir: str = "data/reports/validation_dashboard"):
+        """Initialize dashboard generator with validator and state tracker."""
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -900,6 +901,7 @@ def main():
     args = parser.parse_args()
 
     async def run_command():
+        """Execute dashboard generation command based on arguments."""
         generator = ValidationDashboardGenerator()
 
         try:

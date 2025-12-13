@@ -113,6 +113,7 @@ def fix_decorator_order_in_file(file_path: Path) -> tuple[int, list[str]]:
 
 
 def main():
+    """Entry point for fixing decorator order in backend API files."""
     backend_api = Path("backend/api")
     total_fixes = 0
     all_fixes = []

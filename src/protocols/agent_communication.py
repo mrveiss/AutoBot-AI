@@ -27,6 +27,7 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
+from src.constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
 from src.utils.error_boundaries import error_boundary  # noqa: E402
 
 
@@ -122,7 +123,7 @@ class MessageHeader:
     timestamp: float = field(default_factory=time.time)
     expires_at: Optional[float] = None
     retry_count: int = 0
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES
 
 
 @dataclass
@@ -233,7 +234,7 @@ class RedisCommunicationChannel(CommunicationChannel):
                 break
             except Exception as e:
                 logger.error(f"Error listening for messages: {e}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def send(self, message: StandardMessage) -> bool:
         """Send a message through Redis"""
@@ -453,7 +454,7 @@ class AgentCommunicationProtocol:
     async def send_request(
         self,
         request: StandardMessage,
-        timeout: float = 30.0,
+        timeout: float = TimingConstants.SHORT_TIMEOUT,
         channel_id: Optional[str] = None,
     ) -> Optional[StandardMessage]:
         """Send a request and wait for response"""
@@ -528,10 +529,10 @@ class AgentCommunicationProtocol:
         """Background task to process incoming messages from all channels"""
         while self.is_active:
             try:
-                # Check all channels for incoming messages
+                # Check all channels for incoming messages (Issue #376 - use constants)
                 for channel_id, channel in list(self.channels.items()):
                     try:
-                        message = await channel.receive(timeout=0.1)
+                        message = await channel.receive(timeout=TimingConstants.MICRO_DELAY)
                         if message:
                             await self._handle_message(message, channel_id)
                     except Exception as e:
@@ -540,13 +541,13 @@ class AgentCommunicationProtocol:
                         )
 
                 # Small delay to prevent busy waiting
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # 10ms - intentionally short for responsive message processing
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in message processor: {e}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def _handle_message(self, message: StandardMessage, channel_id: str):
         """Handle an incoming message"""
@@ -622,14 +623,14 @@ class AgentCommunicationProtocol:
                 # Broadcast heartbeat
                 await self.broadcast(heartbeat)
 
-                # Wait before next heartbeat
-                await asyncio.sleep(30)  # 30 second intervals
+                # Wait before next heartbeat (Issue #376 - use named constants)
+                await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
 
 class AgentCommunicationManager:
@@ -724,7 +725,10 @@ def get_communication_manager() -> AgentCommunicationManager:
 
 
 async def send_agent_request(
-    sender_id: str, recipient_id: str, request_data: Any, timeout: float = 30.0
+    sender_id: str,
+    recipient_id: str,
+    request_data: Any,
+    timeout: float = TimingConstants.SHORT_TIMEOUT,
 ) -> Optional[Any]:
     """Send a request from one agent to another"""
 

@@ -41,6 +41,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
+from src.constants.threshold_constants import TimingConstants
 from src.utils.service_registry import get_service_registry
 from src.utils.script_utils import ScriptFormatter
 
@@ -70,6 +71,7 @@ class ZeroDowntimeDeployer:
     """Zero-downtime deployment orchestrator."""
 
     def __init__(self, deployment_dir: str = "deployments"):
+        """Initialize zero-downtime deployer with service registry and backup manager."""
         self.project_root = Path(__file__).parent.parent
         self.deployment_dir = self.project_root / deployment_dir
         self.deployment_dir.mkdir(exist_ok=True)
@@ -319,8 +321,8 @@ class ZeroDowntimeDeployer:
             f"Monitoring green environment for {monitoring_duration}s", "info"
         )
 
-        for i in range(monitoring_duration // 10):
-            await asyncio.sleep(10)
+        for i in range(monitoring_duration // int(TimingConstants.LONG_DELAY)):
+            await asyncio.sleep(TimingConstants.LONG_DELAY)
 
             # Check health of all green services
             all_healthy = True
@@ -406,7 +408,7 @@ class ZeroDowntimeDeployer:
 
             # Wait between batches
             if i + batch_size < len(services):
-                await asyncio.sleep(30)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
         return True
 
@@ -728,6 +730,7 @@ server {{
 
 
 async def main():
+    """Entry point for zero-downtime deployment CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Zero-Downtime Deployment System",
         formatter_class=argparse.RawDescriptionHelpFormatter,

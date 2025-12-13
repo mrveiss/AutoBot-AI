@@ -34,6 +34,7 @@ import yaml
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.constants.threshold_constants import TimingConstants
 from src.utils.service_registry import (
     DeploymentMode,
     get_service_registry,
@@ -47,6 +48,7 @@ class AutoBotDeployer:
     def __init__(
         self, mode: str, config_file: Optional[str] = None, namespace: str = "autobot"
     ):
+        """Initialize deployer with mode, config, and service registry."""
         self.mode = DeploymentMode(mode)
         self.config_file = config_file
         self.namespace = namespace
@@ -363,11 +365,11 @@ spec:
                     self.print_step("All services are healthy!", "success")
                     return True
 
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
             except Exception as e:
                 self.print_step(f"Health check error: {e}", "warning")
-                await asyncio.sleep(10)
+                await asyncio.sleep(TimingConstants.LONG_DELAY)
 
         self.print_step(
             f"Timeout waiting for services. {len(healthy_services)}/{len(all_services)} healthy",
@@ -479,6 +481,7 @@ spec:
 
 
 def main():
+    """Entry point for AutoBot deployment automation CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Deployment Automation Script",
         formatter_class=argparse.RawDescriptionHelpFormatter,
