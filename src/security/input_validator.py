@@ -317,7 +317,8 @@ class WebResearchInputValidator:
             if error := self._check_encoding(query):
                 result.update(error)
                 return result
-            if (_, error := self._check_dangerous_patterns(query))[1]:
+            _, error = self._check_dangerous_patterns(query)
+            if error:
                 result.update(error)
                 return result
             if error := self._check_suspicious_keywords(query, result):

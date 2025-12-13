@@ -16,7 +16,7 @@ import threading
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.constants.threshold_constants import TimingConstants
 

@@ -14,6 +14,7 @@ Provides CFG construction, visualization exports, and comprehensive analysis.
 """
 
 import ast
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field

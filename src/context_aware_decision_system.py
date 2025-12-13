@@ -6,6 +6,7 @@ Context-Aware Decision Making System for AutoBot
 Intelligent decision making that considers multi-modal context, history, and environmental factors
 """
 
+import asyncio
 import logging
 import time
 from dataclasses import asdict, dataclass
