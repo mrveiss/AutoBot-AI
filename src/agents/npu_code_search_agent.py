@@ -997,6 +997,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Clear search cache"""
         try:
             pattern = f"{self.search_cache_prefix}*"
+
             # Issue #361 - avoid blocking
             def _clear_cache():
                 keys = self.redis_client.keys(pattern)
