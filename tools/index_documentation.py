@@ -68,15 +68,22 @@ TIER_1_FILES = [
     "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
     "docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md",
+    "docs/architecture/README.md",
+    "docs/architecture/data-flows.md",
+    "docs/architecture/redis-schema.md",
     "docs/developer/PHASE_5_DEVELOPER_SETUP.md",
     "docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md",
     "docs/features/MULTIMODAL_AI_INTEGRATION.md",
+    "docs/GLOSSARY.md",
+    "docs/operations/disaster-recovery.md",
 ]
 
 TIER_2_DIRS = [
+    "docs/adr",
     "docs/features",
     "docs/implementation",
     "docs/workflow",
+    "docs/operations",
 ]
 
 TIER_3_DIRS = [
