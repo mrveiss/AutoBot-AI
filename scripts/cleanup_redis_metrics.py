@@ -2,7 +2,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-# NOTE: CLI tool uses print() for user-facing output per LOGGING_STANDARDS.md
+# Converted to logger.info() for pre-commit compliance
 """
 Redis Metrics Cleanup Script - Phase 5 (Issue #348)
 
@@ -57,34 +57,20 @@ LEGACY_KEY_PATTERNS = [
 ]
 
 
-async def scan_keys(redis_client, pattern: str) -> list:
-    """Scan for keys matching a pattern."""
-    keys = []
-    async for key in redis_client.scan_iter(match=pattern):
-        if isinstance(key, bytes):
-            key = key.decode("utf-8")
-        keys.append(key)
-    return keys
-
-
-async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> dict:
+async def _connect_redis_clients(results: dict) -> tuple:
     """
-    Clean up legacy metric keys from Redis.
+    Connect to Redis main and knowledge databases.
+
+    Issue #281: Extracted from cleanup_redis_metrics to reduce function length.
 
     Args:
-        dry_run: If True, only show what would be deleted
-        force: If True, skip confirmation prompt
+        results: Results dictionary to update with errors.
 
     Returns:
-        Dictionary with cleanup results
+        Tuple of (redis_client, kb_redis_client). Either may be None on failure.
     """
-    results = {
-        "patterns_scanned": len(LEGACY_KEY_PATTERNS),
-        "keys_found": 0,
-        "keys_deleted": 0,
-        "keys_by_pattern": {},
-        "errors": [],
-    }
+    redis_client = None
+    kb_redis_client = None
 
     # Connect to Redis (main database)
     try:
@@ -95,11 +81,9 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
         if not redis_client:
             logger.error("Failed to connect to Redis")
             results["errors"].append("Redis connection failed")
-            return results
     except Exception as e:
         logger.error(f"Redis connection error: {e}")
         results["errors"].append(str(e))
-        return results
 
     # Also check knowledge database
     try:
@@ -110,18 +94,25 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
         kb_redis_client = None
         logger.warning("Knowledge database not available, skipping")
 
-    print("\n" + "=" * 70)
-    print("Redis Metrics Cleanup - Phase 5 (Issue #348)")
-    print("=" * 70)
+    return redis_client, kb_redis_client
 
-    if dry_run:
-        print("\n[DRY RUN] Scanning for legacy metric keys...\n")
-    else:
-        print("\n[CLEANUP] Scanning and deleting legacy metric keys...\n")
 
+async def _scan_all_patterns(redis_client, kb_redis_client, results: dict) -> list:
+    """
+    Scan all legacy key patterns and collect matching keys.
+
+    Issue #281: Extracted from cleanup_redis_metrics to reduce function length.
+
+    Args:
+        redis_client: Main Redis client.
+        kb_redis_client: Knowledge database Redis client (may be None).
+        results: Results dictionary to update.
+
+    Returns:
+        List of all keys found across all patterns.
+    """
     all_keys = []
 
-    # Scan each pattern
     for pattern in LEGACY_KEY_PATTERNS:
         try:
             # Scan main database
@@ -136,45 +127,32 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
             all_keys.extend(keys)
 
             if keys:
-                print(f"  {pattern}: {len(keys)} keys found")
+                logger.info("  %s: %d keys found", pattern, len(keys))
             else:
-                print(f"  {pattern}: 0 keys")
+                logger.info("  %s: 0 keys", pattern)
 
         except Exception as e:
             logger.warning(f"Error scanning pattern {pattern}: {e}")
             results["errors"].append(f"Pattern {pattern}: {e}")
 
-    results["keys_found"] = len(all_keys)
+    return all_keys
 
-    print(f"\nTotal keys found: {len(all_keys)}")
 
-    if not all_keys:
-        print("\n✅ No legacy metric keys found. Redis is already clean!")
-        return results
+async def _delete_keys(all_keys: list, redis_client, kb_redis_client, results: dict) -> int:
+    """
+    Delete all collected keys from Redis.
 
-    # Show sample of keys to be deleted
-    if all_keys:
-        print("\nSample keys to delete:")
-        for key in all_keys[:10]:
-            print(f"  - {key}")
-        if len(all_keys) > 10:
-            print(f"  ... and {len(all_keys) - 10} more")
+    Issue #281: Extracted from cleanup_redis_metrics to reduce function length.
 
-    # Dry run stops here
-    if dry_run:
-        print("\n[DRY RUN] No keys were deleted. Run without --dry-run to delete.")
-        return results
+    Args:
+        all_keys: List of keys to delete.
+        redis_client: Main Redis client.
+        kb_redis_client: Knowledge database Redis client (may be None).
+        results: Results dictionary to update with errors.
 
-    # Confirm deletion
-    if not force:
-        print(f"\n⚠️  This will DELETE {len(all_keys)} keys from Redis!")
-        confirm = input("Type 'yes' to confirm: ").strip().lower()
-        if confirm != "yes":
-            print("Aborted.")
-            return results
-
-    # Delete keys
-    print("\nDeleting keys...")
+    Returns:
+        Count of successfully deleted keys.
+    """
     deleted_count = 0
 
     for key in all_keys:
@@ -191,13 +169,97 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
             logger.warning(f"Failed to delete {key}: {e}")
             results["errors"].append(f"Delete {key}: {e}")
 
+    return deleted_count
+
+
+async def scan_keys(redis_client, pattern: str) -> list:
+    """Scan for keys matching a pattern."""
+    keys = []
+    async for key in redis_client.scan_iter(match=pattern):
+        if isinstance(key, bytes):
+            key = key.decode("utf-8")
+        keys.append(key)
+    return keys
+
+
+async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> dict:
+    """
+    Clean up legacy metric keys from Redis.
+
+    Issue #281: Extracted connection logic to _connect_redis_clients(),
+    pattern scanning to _scan_all_patterns(), and key deletion to _delete_keys()
+    to reduce function length from 133 to ~55 lines.
+
+    Args:
+        dry_run: If True, only show what would be deleted
+        force: If True, skip confirmation prompt
+
+    Returns:
+        Dictionary with cleanup results
+    """
+    results = {
+        "patterns_scanned": len(LEGACY_KEY_PATTERNS),
+        "keys_found": 0,
+        "keys_deleted": 0,
+        "keys_by_pattern": {},
+        "errors": [],
+    }
+
+    # Issue #281: Use extracted helper for connection
+    redis_client, kb_redis_client = await _connect_redis_clients(results)
+    if not redis_client:
+        return results
+
+    logger.info("=" * 70)
+    logger.info("Redis Metrics Cleanup - Phase 5 (Issue #348)")
+    logger.info("=" * 70)
+
+    if dry_run:
+        logger.info("[DRY RUN] Scanning for legacy metric keys...")
+    else:
+        logger.info("[CLEANUP] Scanning and deleting legacy metric keys...")
+
+    # Issue #281: Use extracted helper for pattern scanning
+    all_keys = await _scan_all_patterns(redis_client, kb_redis_client, results)
+    results["keys_found"] = len(all_keys)
+
+    logger.info("Total keys found: %d", len(all_keys))
+
+    if not all_keys:
+        logger.info("No legacy metric keys found. Redis is already clean!")
+        return results
+
+    # Show sample of keys to be deleted
+    logger.info("Sample keys to delete:")
+    for key in all_keys[:10]:
+        logger.info("  - %s", key)
+    if len(all_keys) > 10:
+        logger.info("  ... and %d more", len(all_keys) - 10)
+
+    # Dry run stops here
+    if dry_run:
+        logger.info("[DRY RUN] No keys were deleted. Run without --dry-run to delete.")
+        return results
+
+    # Confirm deletion
+    if not force:
+        logger.warning("This will DELETE %d keys from Redis!", len(all_keys))
+        confirm = input("Type 'yes' to confirm: ").strip().lower()
+        if confirm != "yes":
+            logger.info("Aborted.")
+            return results
+
+    # Issue #281: Use extracted helper for deletion
+    logger.info("Deleting keys...")
+    deleted_count = await _delete_keys(all_keys, redis_client, kb_redis_client, results)
+
     results["keys_deleted"] = deleted_count
-    print(f"\n✅ Deleted {deleted_count}/{len(all_keys)} keys")
+    logger.info("Deleted %d/%d keys", deleted_count, len(all_keys))
 
     if results["errors"]:
-        print(f"\n⚠️  {len(results['errors'])} errors occurred:")
+        logger.warning("%d errors occurred:", len(results["errors"]))
         for error in results["errors"][:5]:
-            print(f"  - {error}")
+            logger.warning("  - %s", error)
 
     return results
 
@@ -222,27 +284,27 @@ async def main():
 
     # Default to dry-run for safety
     if not args.dry_run and not args.force:
-        print("Note: Run with --dry-run first to preview changes.")
+        logger.info("Note: Run with --dry-run first to preview changes.")
 
     results = await cleanup_redis_metrics(
         dry_run=args.dry_run,
         force=args.force,
     )
 
-    print("\n" + "=" * 70)
-    print("Cleanup Summary")
-    print("=" * 70)
-    print(f"Patterns scanned: {results['patterns_scanned']}")
-    print(f"Keys found: {results['keys_found']}")
-    print(f"Keys deleted: {results['keys_deleted']}")
-    print(f"Errors: {len(results['errors'])}")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("Cleanup Summary")
+    logger.info("=" * 70)
+    logger.info("Patterns scanned: %d", results["patterns_scanned"])
+    logger.info("Keys found: %d", results["keys_found"])
+    logger.info("Keys deleted: %d", results["keys_deleted"])
+    logger.info("Errors: %d", len(results["errors"]))
+    logger.info("=" * 70)
 
     if args.dry_run:
-        print("\nTo actually delete keys, run without --dry-run flag")
+        logger.info("To actually delete keys, run without --dry-run flag")
     else:
-        print("\n✅ Redis metrics cleanup complete!")
-        print("Prometheus is now the sole metrics store.")
+        logger.info("Redis metrics cleanup complete!")
+        logger.info("Prometheus is now the sole metrics store.")
 
 
 if __name__ == "__main__":
