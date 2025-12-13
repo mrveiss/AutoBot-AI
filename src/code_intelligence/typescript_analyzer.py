@@ -371,10 +371,12 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
 
     @property
     def supported_languages(self) -> Set[Language]:
+        """Return languages this analyzer supports."""
         return {Language.TYPESCRIPT, Language.JAVASCRIPT}
 
     @property
     def analyzer_name(self) -> str:
+        """Return the display name of this analyzer."""
         return "TypeScript/JavaScript Analyzer"
 
     def analyze_file(self, file_path: Path) -> List[AnalysisIssue]:
