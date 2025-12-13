@@ -34,6 +34,85 @@ _HUNK_HEADER_RE = re.compile(r"@@ -(\d+),?\d* \+(\d+),?\d* @@")
 _FUNC_DEFINITION_RE = re.compile(r'^(async\s+)?def\s+(\w+)\s*\(', re.MULTILINE)
 _NEXT_TOPLEVEL_RE = re.compile(r'\n(?=\S)')
 
+# Issue #281: Demo review comments extracted from generate_demo_review
+DEMO_REVIEW_COMMENTS = (
+    {
+        "id": "SEC001-15",
+        "file_path": "src/config.py",
+        "line_number": 15,
+        "severity": "critical",
+        "category": "security",
+        "message": "Potential hardcoded secret detected. Use environment variables.",
+        "suggestion": "Move this value to an environment variable.",
+        "code_snippet": 'API_KEY = "sk-abc123..."',
+        "pattern_id": "SEC001",
+    },
+    {
+        "id": "BUG002-42",
+        "file_path": "src/utils.py",
+        "line_number": 42,
+        "severity": "warning",
+        "category": "bug_risk",
+        "message": "Mutable default argument can cause unexpected behavior.",
+        "suggestion": "Use None as default and initialize inside the function.",
+        "code_snippet": "def process_items(items=[]):",
+        "pattern_id": "BUG002",
+    },
+    {
+        "id": "PERF001-78",
+        "file_path": "src/services/data.py",
+        "line_number": 78,
+        "severity": "warning",
+        "category": "performance",
+        "message": "Potential N+1 query pattern. Consider using bulk operations.",
+        "suggestion": "Use prefetch_related to optimize.",
+        "code_snippet": "for user in users: user.profile.load()",
+        "pattern_id": "PERF001",
+    },
+    {
+        "id": "DOC001-120",
+        "file_path": "src/api/handlers.py",
+        "line_number": 120,
+        "severity": "info",
+        "category": "documentation",
+        "message": "Public function missing docstring.",
+        "suggestion": "Add a docstring describing the function.",
+        "code_snippet": "def handle_request(request):",
+        "pattern_id": "DOC001",
+    },
+    {
+        "id": "BP001-55",
+        "file_path": "src/debug.py",
+        "line_number": 55,
+        "severity": "suggestion",
+        "category": "best_practice",
+        "message": "Print statement found. Use logging for production code.",
+        "suggestion": "Replace with logger.info().",
+        "code_snippet": 'print("Debug output")',
+        "pattern_id": "BP001",
+    },
+)
+
+# Issue #281: Demo review summary extracted from generate_demo_review
+DEMO_REVIEW_SUMMARY = {
+    "by_severity": {"critical": 1, "warning": 2, "info": 1, "suggestion": 1},
+    "by_category": {
+        "security": 1,
+        "bug_risk": 1,
+        "performance": 1,
+        "documentation": 1,
+        "best_practice": 1,
+    },
+    "critical_count": 1,
+    "warning_count": 2,
+    "info_count": 2,
+    "top_issues": [
+        {"category": "security", "count": 1},
+        {"category": "performance", "count": 1},
+        {"category": "bug_risk", "count": 1},
+    ],
+}
+
 
 # ============================================================================
 # Models
@@ -409,88 +488,19 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
 
 
 def generate_demo_review() -> dict[str, Any]:
-    """Generate demo review data."""
+    """Generate demo review data.
+
+    Issue #281: Refactored to use module-level constants.
+    Reduced from 84 to ~15 lines (82% reduction).
+    """
     return {
         "id": "review-demo-001",
         "timestamp": datetime.now().isoformat(),
         "files_reviewed": 5,
-        "total_comments": 8,
+        "total_comments": len(DEMO_REVIEW_COMMENTS),
         "score": 72.5,
-        "comments": [
-            {
-                "id": "SEC001-15",
-                "file_path": "src/config.py",
-                "line_number": 15,
-                "severity": "critical",
-                "category": "security",
-                "message": "Potential hardcoded secret detected. Use environment variables.",
-                "suggestion": "Move this value to an environment variable.",
-                "code_snippet": 'API_KEY = "sk-abc123..."',
-                "pattern_id": "SEC001",
-            },
-            {
-                "id": "BUG002-42",
-                "file_path": "src/utils.py",
-                "line_number": 42,
-                "severity": "warning",
-                "category": "bug_risk",
-                "message": "Mutable default argument can cause unexpected behavior.",
-                "suggestion": "Use None as default and initialize inside the function.",
-                "code_snippet": "def process_items(items=[]):",
-                "pattern_id": "BUG002",
-            },
-            {
-                "id": "PERF001-78",
-                "file_path": "src/services/data.py",
-                "line_number": 78,
-                "severity": "warning",
-                "category": "performance",
-                "message": "Potential N+1 query pattern. Consider using bulk operations.",
-                "suggestion": "Use prefetch_related to optimize.",
-                "code_snippet": "for user in users: user.profile.load()",
-                "pattern_id": "PERF001",
-            },
-            {
-                "id": "DOC001-120",
-                "file_path": "src/api/handlers.py",
-                "line_number": 120,
-                "severity": "info",
-                "category": "documentation",
-                "message": "Public function missing docstring.",
-                "suggestion": "Add a docstring describing the function.",
-                "code_snippet": "def handle_request(request):",
-                "pattern_id": "DOC001",
-            },
-            {
-                "id": "BP001-55",
-                "file_path": "src/debug.py",
-                "line_number": 55,
-                "severity": "suggestion",
-                "category": "best_practice",
-                "message": "Print statement found. Use logging for production code.",
-                "suggestion": "Replace with logger.info().",
-                "code_snippet": 'print("Debug output")',
-                "pattern_id": "BP001",
-            },
-        ],
-        "summary": {
-            "by_severity": {"critical": 1, "warning": 2, "info": 1, "suggestion": 1},
-            "by_category": {
-                "security": 1,
-                "bug_risk": 1,
-                "performance": 1,
-                "documentation": 1,
-                "best_practice": 1,
-            },
-            "critical_count": 1,
-            "warning_count": 2,
-            "info_count": 2,
-            "top_issues": [
-                {"category": "security", "count": 1},
-                {"category": "performance", "count": 1},
-                {"category": "bug_risk", "count": 1},
-            ],
-        },
+        "comments": list(DEMO_REVIEW_COMMENTS),
+        "summary": DEMO_REVIEW_SUMMARY,
     }
 
 
