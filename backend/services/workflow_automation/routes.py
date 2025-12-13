@@ -21,7 +21,6 @@ from .models import (
     AutomationMode,
     PlanApprovalMode,
     PlanApprovalResponse,
-    PlanApprovalStatus,
     PlanPresentationRequest,
     WorkflowControlRequest,
     WorkflowStep,

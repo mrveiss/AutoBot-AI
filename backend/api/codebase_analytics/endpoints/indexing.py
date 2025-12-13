@@ -9,7 +9,6 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse

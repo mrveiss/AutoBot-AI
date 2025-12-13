@@ -30,7 +30,6 @@ import logging
 import sys
 import traceback
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.constants.path_constants import PATH

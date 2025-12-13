@@ -377,10 +377,10 @@ class RelevanceScorer:
 
         # Normalize to 0-1 range (approximate)
         max_possible = (
-            1.0 * self.factors.title_match_boost +
-            self.factors.recency_weight +
-            self.factors.popularity_weight +
-            self.factors.authority_weight
+            1.0 * self.factors.title_match_boost
+            + self.factors.recency_weight
+            + self.factors.popularity_weight
+            + self.factors.authority_weight
         )
         normalized_score = min(boosted_score / max_possible, 1.0)
 
