@@ -98,10 +98,10 @@ async def main():
                 logger.error(f"   ✗ Missing fields: {missing}")
                 return 1
             else:
-                logger.info(f"   ✓ All OS context fields present")
+                logger.info("   ✓ All OS context fields present")
 
         else:
-            logger.error(f"   ✗ Could not retrieve fact")
+            logger.error("   ✗ Could not retrieve fact")
             return 1
 
     else:

@@ -90,7 +90,7 @@ class SecretsManager:
         # Load secrets index
         self.secrets_index = self._load_secrets_index()
 
-        print(f"🔐 AutoBot Secrets Manager initialized")
+        print("🔐 AutoBot Secrets Manager initialized")
         print(f"   Secrets Directory: {self.secrets_dir}")
         print(f"   Indexed Secrets: {len(self.secrets_index)}")
 
@@ -381,7 +381,7 @@ class SecretsManager:
         # Check permissions
         if secret_metadata["scope"] == SecretScope.CHAT:
             if not chat_id or secret_metadata["chat_id"] != chat_id:
-                self.print_step(f"Access denied to chat-scoped secret", "error")
+                self.print_step("Access denied to chat-scoped secret", "error")
                 return False
 
         try:
@@ -783,7 +783,7 @@ def _handle_cleanup_command(secrets_manager: SecretsManager, args) -> int:
     if args.json:
         print(json.dumps(result))
     else:
-        print(f"✅ Chat cleanup completed:")
+        print("✅ Chat cleanup completed:")
         print(f"   Transferred: {result['transferred']}")
         print(f"   Deleted: {result['deleted']}")
     return 0
@@ -807,7 +807,7 @@ def _handle_security_report_command(secrets_manager: SecretsManager, args) -> in
     print(f"Audit logging: {report['audit_logging']}")
 
     if report["secret_types"]:
-        print(f"\nSecret types:")
+        print("\nSecret types:")
         for secret_type, count in report["secret_types"].items():
             print(f"  {secret_type}: {count}")
     return 0

@@ -310,7 +310,7 @@ class ComprehensiveLogAggregator:
             try:
                 # Find the backend process
                 result = subprocess.run(
-                    ["pgrep", "-f", "python.*main.py"], capture_output=True, text=True
+                    ["pgrep", "-", "python.*main.py"], capture_output=True, text=True
                 )
 
                 if result.returncode != 0:
@@ -335,7 +335,7 @@ class ComprehensiveLogAggregator:
     def _monitor_journalctl(self, pid: str):
         """Monitor journalctl for backend process (Issue #315 - extracted)."""
         proc = subprocess.Popen(
-            ["journalctl", "-f", "--no-pager", f"_PID={pid}"],
+            ["journalctl", "-", "--no-pager", f"_PID={pid}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

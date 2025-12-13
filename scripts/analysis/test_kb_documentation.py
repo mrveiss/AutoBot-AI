@@ -65,7 +65,7 @@ async def test_documentation_search():
         # Get overall stats
         try:
             stats = await kb.get_stats()
-            logger.info(f"\n=== Knowledge Base Stats ===")
+            logger.info("\n=== Knowledge Base Stats ===")
             logger.info(f"Total documents: {stats.get('total_documents', 0)}")
             logger.info(f"Total chunks: {stats.get('total_chunks', 0)}")
             logger.info(f"Total facts: {stats.get('total_facts', 0)}")
@@ -73,7 +73,7 @@ async def test_documentation_search():
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
 
-        logger.info(f"\n=== SUMMARY ===")
+        logger.info("\n=== SUMMARY ===")
         logger.info(f"Total results found across all queries: {results_found}")
 
         if results_found > 0:
@@ -122,7 +122,7 @@ async def test_specific_autobot_docs():
                         logger.info(f"Score: {result.get('score', 'N/A')}")
                         break
                 else:
-                    logger.warning(f"Results found but no AutoBot-specific content")
+                    logger.warning("Results found but no AutoBot-specific content")
             else:
                 logger.warning(f"No results for '{query}'")
 

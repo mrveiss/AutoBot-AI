@@ -30,7 +30,7 @@ async def test_llm_failsafe_direct():
             get_robust_llm_response(prompt, context={"test": "direct"}), timeout=15.0
         )
 
-        print(f"✅ LLM Failsafe response received:")
+        print("✅ LLM Failsafe response received:")
         print(f"   Tier: {response.tier_used.value}")
         print(f"   Content: {response.content[:100]}...")
         print(f"   Success: {response.success}")
@@ -38,7 +38,7 @@ async def test_llm_failsafe_direct():
         return True
 
     except asyncio.TimeoutError:
-        print(f"❌ LLM Failsafe timed out after 15 seconds")
+        print("❌ LLM Failsafe timed out after 15 seconds")
         return False
 
     except Exception as e:
@@ -78,13 +78,13 @@ async def test_classification_without_communication():
             llm.chat_completion(messages, llm_type="task"), timeout=15.0
         )
 
-        print(f"✅ Direct LLM interface response:")
+        print("✅ Direct LLM interface response:")
         print(f"   Response: {response.get('response', 'No response')[:100]}...")
 
         return True
 
     except asyncio.TimeoutError:
-        print(f"❌ Direct LLM interface timed out")
+        print("❌ Direct LLM interface timed out")
         return False
 
     except Exception as e:

@@ -483,7 +483,7 @@ class AutoBotMonitor:
         """
         # GPU Status
         gpu = self.get_gpu_status()
-        print(f"\n🎮 GPU Status:")
+        print("\n🎮 GPU Status:")
         if gpu.get("available"):
             print(f"   Device: {gpu['name']}")
             print(
@@ -498,24 +498,24 @@ class AutoBotMonitor:
 
         # NPU Status
         npu = self.get_npu_status()
-        print(f"\n🧠 Intel AI Boost (NPU) Status:")
+        print("\n🧠 Intel AI Boost (NPU) Status:")
         if npu.get("hardware_detected"):
-            print(f"   Hardware: ✅ Intel Core Ultra NPU detected")
+            print("   Hardware: ✅ Intel Core Ultra NPU detected")
             if npu.get("wsl_limitation"):
-                print(f"   Status: ⚠️ WSL Environment - NPU drivers not accessible")
-                print(f"   Note: NPU requires native Linux/Windows for driver access")
+                print("   Status: ⚠️ WSL Environment - NPU drivers not accessible")
+                print("   Note: NPU requires native Linux/Windows for driver access")
             elif npu.get("driver_available"):
-                print(f"   Drivers: ✅ Available")
+                print("   Drivers: ✅ Available")
                 print(
                     f"   OpenVINO: {'✅' if npu.get('openvino_support') else '❌'} {'Supported' if npu.get('openvino_support') else 'Not detected'}"
                 )
                 print(f"   Utilization: {npu.get('utilization_percent', 0)}%")
             else:
-                print(f"   Drivers: ❌ Not installed or not accessible")
-                print(f"   Recommendation: Install Intel NPU drivers on native system")
+                print("   Drivers: ❌ Not installed or not accessible")
+                print("   Recommendation: Install Intel NPU drivers on native system")
         else:
-            print(f"   Hardware: ❌ No Intel NPU detected")
-            print(f"   Current CPU: Check if NPU-capable processor")
+            print("   Hardware: ❌ No Intel NPU detected")
+            print("   Current CPU: Check if NPU-capable processor")
 
     def _print_service_details(self, services: dict) -> None:
         """
@@ -523,7 +523,7 @@ class AutoBotMonitor:
 
         Issue #281: Extracted from print_status_dashboard to reduce function length.
         """
-        print(f"\n🔧 Service Status:")
+        print("\n🔧 Service Status:")
         for service_name, service_info in services.items():
             service_display = service_name.replace("_", " ").title()
             status = service_info.get("status", "unknown")
@@ -573,7 +573,7 @@ class AutoBotMonitor:
         Issue #281: Extracted from print_status_dashboard to reduce function length.
         """
         models = self.get_ollama_models()
-        print(f"\n🤖 LLM Models (Ollama):")
+        print("\n🤖 LLM Models (Ollama):")
         if models.get("available"):
             print(f"   Total Models: {models.get('count', 0)}")
             for model in models.get("models", []):
@@ -582,7 +582,7 @@ class AutoBotMonitor:
                 print(f"   {accessible_icon} {model['name']}")
                 print(f"      Size: {model['size_gb']} GB | Purpose: {purpose}")
                 if not model.get("accessible"):
-                    print(f"      Status: Not responding to test prompts")
+                    print("      Status: Not responding to test prompts")
         else:
             print(f"   Error: {models.get('error', 'Unknown')}")
 
@@ -619,7 +619,7 @@ class AutoBotMonitor:
         # System Resources
         resources = self.get_system_resources()
         if "error" not in resources:
-            print(f"\n💾 System Resources:")
+            print("\n💾 System Resources:")
             print(
                 f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
             )

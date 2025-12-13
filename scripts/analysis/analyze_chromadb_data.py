@@ -25,7 +25,7 @@ def analyze_chromadb(db_path):
         # Check collections
         cursor.execute("SELECT id, name, topic FROM collections")
         collections = cursor.fetchall()
-        print(f"Collections:")
+        print("Collections:")
         for coll_id, name, topic in collections:
             print(f"  {coll_id}: {name} (topic: {topic})")
 
@@ -43,7 +43,7 @@ def analyze_chromadb(db_path):
                 LIMIT 5
             """, (coll_id,))
             samples = cursor.fetchall()
-            print(f"    Sample metadata:")
+            print("    Sample metadata:")
             for embedding_id, key, value in samples:
                 print(f"      {embedding_id}: {key} = {value}")
 

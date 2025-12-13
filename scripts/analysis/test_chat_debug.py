@@ -35,7 +35,7 @@ async def test_classification_agent():
         agent = ClassificationAgent()
         result = await agent.classify_request("hello")
 
-        print(f"✅ Classification successful:")
+        print("✅ Classification successful:")
         print(f"   Complexity: {result.complexity.value}")
         print(f"   Confidence: {result.confidence}")
         print(f"   Reasoning: {result.reasoning}")
@@ -61,7 +61,7 @@ async def test_conversation_flow():
         # Process the message
         result = await conversation.process_user_message("hello")
 
-        print(f"✅ Conversation processing successful:")
+        print("✅ Conversation processing successful:")
         print(f"   Response: {result['response'][:100]}...")
         print(
             f"   Classification: {result.get('classification', {}).get('complexity', 'None')}"
@@ -103,7 +103,7 @@ def test_backend_api():
         if response.status_code == 200:
             try:
                 data = response.json()
-                print(f"✅ API call successful:")
+                print("✅ API call successful:")
                 print(f"   Response type: {data.get('messageType', 'unknown')}")
                 print(f"   Content length: {len(data.get('content', ''))}")
                 print(f"   Content preview: {data.get('content', '')[:100]}...")

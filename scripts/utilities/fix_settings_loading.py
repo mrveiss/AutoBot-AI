@@ -153,7 +153,7 @@ class SettingsLoadingFixer:
             logger.info("🔄 Attempting to restart backend server...")
 
             # First, kill existing backend processes
-            subprocess.run(["pkill", "-f", "uvicorn.*main:app"], check=False)
+            subprocess.run(["pkill", "-", "uvicorn.*main:app"], check=False)
             time.sleep(2)
 
             # Start backend in background

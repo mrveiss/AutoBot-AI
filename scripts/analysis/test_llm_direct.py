@@ -28,7 +28,7 @@ async def test_llm_direct():
         prompt = "Say hello back to the user."
 
         print(f"   Sending prompt: {prompt}")
-        print(f"   Waiting for response...")
+        print("   Waiting for response...")
 
         # Get response with 15 second timeout to see if it's faster than 30s
         response = await asyncio.wait_for(

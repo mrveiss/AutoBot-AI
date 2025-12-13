@@ -117,7 +117,7 @@ class WorkflowDemo:
         """Demonstrate a specific scenario."""
 
         print(f"{index}. {scenario['name']}")
-        print(f"   Query: \"{scenario['request']}\"")
+        print("   Query: \"{scenario['request']}\"")
         print(f"   Expected: {scenario['expected']}")
         print("   " + "-" * 60)
 
@@ -243,7 +243,7 @@ class WorkflowDemo:
             print(f"   📄 {cap['description']}")
             print(f"   💡 Benefit: {cap['benefit']}")
 
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         print("🎉 TRANSFORMATION COMPLETE!")
         print("   From: Generic AI responses")
         print("   To:   Intelligent workflow orchestration")
@@ -252,7 +252,7 @@ class WorkflowDemo:
     async def test_specific_workflow(self, request_text):
         """Test a specific workflow request in detail."""
 
-        print(f"\n🔬 Detailed Workflow Analysis")
+        print("\n🔬 Detailed Workflow Analysis")
         print(f'Request: "{request_text}"')
         print("-" * 50)
 
@@ -346,17 +346,17 @@ async def main():
             "find tools that would require to do network scan"
         )
 
-        print(f"\n🎯 Demo Complete - Key Takeaways:")
+        print("\n🎯 Demo Complete - Key Takeaways:")
         print("   • AutoBot now intelligently classifies requests")
         print("   • Complex requests trigger multi-agent workflows")
         print("   • Users get specific, actionable solutions")
         print("   • No more generic, unhelpful responses")
         print("   • Full transparency with progress tracking")
         print("   • Human oversight maintained through approvals")
-        print(f"\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!")
+        print("\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!")
 
     else:
-        print(f"\n❌ Demo failed - check backend status")
+        print("\n❌ Demo failed - check backend status")
         print("   Restart backend: source venv/bin/activate && python main.py")
 
 

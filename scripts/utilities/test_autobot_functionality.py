@@ -68,7 +68,7 @@ class AutoBotFunctionalityTest:
 
             if response.status_code == 200:
                 data = response.json()
-                logger.info(f"✅ Backend: API responding with health status")
+                logger.info("✅ Backend: API responding with health status")
                 logger.info(f"📋 Backend status: {data.get('status', 'unknown')}")
                 return True
             else:
@@ -344,7 +344,7 @@ class AutoBotFunctionalityTest:
             f"🎯 Critical Systems: {critical_passed}/{critical_total} operational"
         )
 
-        logger.info(f"\n🔍 Detailed Results:")
+        logger.info("\n🔍 Detailed Results:")
         for test_name, result in results.items():
             status = "✅ PASS" if result else "❌ FAIL"
             criticality = (
@@ -357,7 +357,7 @@ class AutoBotFunctionalityTest:
             logger.info(f"  {status} - {test_name} ({criticality})")
 
         # System status assessment
-        logger.info(f"\n🎯 SYSTEM STATUS ASSESSMENT:")
+        logger.info("\n🎯 SYSTEM STATUS ASSESSMENT:")
         if critical_passed == critical_total and passed >= total * 0.75:
             logger.info("🎉 EXCELLENT: AutoBot system fully operational")
             logger.info("🚀 All critical components healthy and ready for use")

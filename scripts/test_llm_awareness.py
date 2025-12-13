@@ -33,7 +33,7 @@ async def test_awareness_system():
         print(f"System Maturity: {context['system_identity']['system_maturity']}%")
         print(f"Active Capabilities: {context['current_capabilities']['count']}")
 
-        print(f"\nCapability Categories:")
+        print("\nCapability Categories:")
         for category, caps in context["current_capabilities"]["categories"].items():
             print(f"  - {category.title()}: {len(caps)} capabilities")
 

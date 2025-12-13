@@ -395,7 +395,7 @@ class MemoryProfiler:
         with open(md_report_path, "w") as f:
             f.write(self.generate_markdown_report())
 
-        logger.info(f"📄 Memory profiling reports saved:")
+        logger.info("📄 Memory profiling reports saved:")
         logger.info(f"  JSON: {json_report_path}")
         logger.info(f"  Markdown: {md_report_path}")
 
@@ -407,7 +407,7 @@ class MemoryProfiler:
         file_analysis = self.profile_results.get("file_analysis", {})
         recommendations = self.profile_results.get("recommendations", [])
 
-        report = f"""# 💾 AutoBot Memory Usage Report
+        report = """# 💾 AutoBot Memory Usage Report
 
 **Profile Date:** {self.profile_results["timestamp"]}
 
@@ -443,7 +443,7 @@ class MemoryProfiler:
         for obj_type, count in list(top_objects.items())[:10]:
             report += f"- **{obj_type}:** {count:,} instances\n"
 
-        report += f"""
+        report += """
 ### Garbage Collector Stats
 - **Generation 0:** {object_analysis.get('garbage_collector_stats', {}).get('generation_0', 0)} objects
 - **Generation 1:** {object_analysis.get('garbage_collector_stats', {}).get('generation_1', 0)} objects

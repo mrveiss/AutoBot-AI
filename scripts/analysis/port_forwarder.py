@@ -22,7 +22,7 @@ def forward_connection(client_socket, target_host, target_port):
                     if not data:
                         break
                     destination.send(data)
-                except:
+                except Exception:
                     break
 
         # Start forwarding in both directions

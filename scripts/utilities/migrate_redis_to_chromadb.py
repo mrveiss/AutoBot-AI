@@ -128,7 +128,7 @@ class RedisToChromaDBMigration:
                 collection_name = f"{self.collection_name}_migration_test"
                 try:
                     self.chroma_client.delete_collection(collection_name)
-                except:
+                except Exception:
                     pass
 
             self.chroma_collection = self.chroma_client.get_or_create_collection(

@@ -516,7 +516,7 @@ class AutomatedTestingSuite:
             from backend.api.files import is_safe_file
 
             # Test safe files
-            safe_files = ["document.pdf", "image.jpg", "text.txt"]
+            safe_files = ["document.pd", "image.jpg", "text.txt"]
 
             # Test dangerous files
             dangerous_files = ["script.exe", "virus.bat", "../../../etc/passwd"]

@@ -446,7 +446,7 @@ class SeqAnalyticsSetup:
         # Send test logs
         test_logs_sent = self.send_test_logs_for_analysis()
 
-        print(f"\n🎉 AutoBot Seq Analytics Setup Complete!")
+        print("\n🎉 AutoBot Seq Analytics Setup Complete!")
         print(f"   📊 Signals created: {len(signals)}")
         print(f"   📈 Dashboards created: {len(dashboards)}")
         print(f"   🚨 Alerts created: {len(alerts)}")

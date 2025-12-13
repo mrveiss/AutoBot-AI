@@ -106,7 +106,7 @@ def main():
         print(f"❌ create_app()                : {app_duration:6.3f}s (ERROR: {e})")
 
     total_time = time.time() - total_start
-    print(f"\n🎯 SUMMARY:")
+    print("\n🎯 SUMMARY:")
     print(f"Basic imports     : {basic_total:6.3f}s ({basic_total/total_time*100:4.1f}%)")
     print(f"AutoBot imports   : {autobot_total:6.3f}s ({autobot_total/total_time*100:4.1f}%)")
     print(f"Backend imports   : {backend_total:6.3f}s ({backend_total/total_time*100:4.1f}%)")

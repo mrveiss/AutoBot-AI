@@ -106,7 +106,7 @@ async def sync_docs():
             else:
                 print(f"❌ Failed to sync {rel_path}: {result['message']}")
 
-        except Exception as _e:
+        except Exception as e:
             print(f"❌ Error syncing {file_path}: {str(e)}")
 
     print("\\n=== Sync Results ===")
@@ -137,7 +137,7 @@ async def sync_docs():
             try:
                 results = await kb.get_fact(query=query)
                 print(f"Search '{query}': {len(results)} results found")
-            except Exception as _e:
+            except Exception as e:
                 print(f"Search '{query}': error - {str(e)}")
 
         print("\\n🎉 Knowledge base documentation sync completed successfully!")
@@ -192,13 +192,13 @@ async def incremental_sync():
                 try:
                     results = await kb.get_fact(query=query)
                     print(f"Search '{query}': {len(results)} results found")
-                except Exception as _e:
+                except Exception as e:
                     print(f"Search '{query}': error - {str(e)}")
 
         print("\\n✅ Incremental sync completed successfully!")
         return True
 
-    except Exception as _e:
+    except Exception as e:
         print(f"❌ Incremental sync failed: {e}")
         print("Falling back to legacy full sync...")
         return await sync_docs()

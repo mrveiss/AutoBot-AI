@@ -127,7 +127,7 @@ class RedisMigrator:
             else:
                 analysis['other_keys'].append(key)
 
-        logger.info(f"Data analysis complete:")
+        logger.info("Data analysis complete:")
         logger.info(f"  Total keys: {analysis['total_keys']}")
         logger.info(f"  Vector embeddings: {len(analysis['vector_keys'])}")
         logger.info(f"  Knowledge/Facts: {len(analysis['knowledge_keys'])}")

@@ -417,7 +417,7 @@ class SecurityScanner:
         with open(md_report_path, "w") as f:
             f.write(self.generate_markdown_report())
 
-        logger.info(f"📄 Reports saved to:")
+        logger.info("📄 Reports saved to:")
         logger.info(f"  JSON: {json_report_path}")
         logger.info(f"  Markdown: {md_report_path}")
 
@@ -425,7 +425,7 @@ class SecurityScanner:
         """Generate markdown security report"""
         summary = self.scan_results["summary"]
 
-        report = f"""# 🛡️ AutoBot Security Scan Report
+        report = """# 🛡️ AutoBot Security Scan Report
 
 **Scan Date:** {self.scan_results["timestamp"]}
 **Overall Status:** {summary["overall_status"].upper()}

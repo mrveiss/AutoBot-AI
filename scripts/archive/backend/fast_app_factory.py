@@ -66,7 +66,7 @@ async def initialize_components_background(app: FastAPI):
                     "✅ CRITICAL: Knowledge consistency VERIFIED - ZERO inconsistencies guaranteed"
                 )
             else:
-                logger.error(f"🚨 CRITICAL: Knowledge consistency verification FAILED")
+                logger.error("🚨 CRITICAL: Knowledge consistency verification FAILED")
                 background_init_status["errors"].append(
                     "CRITICAL: Knowledge consistency verification failed"
                 )

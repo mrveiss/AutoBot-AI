@@ -789,7 +789,7 @@ def main():
     print("   - Quick approval actions")
     print("   - Cancel workflow capability")
 
-    print(f"\n📋 Usage Instructions:")
+    print("\n📋 Usage Instructions:")
     print("1. Import components in your main App.vue:")
     print(
         "   import WorkflowNotifications from './components/WorkflowNotifications.vue'"
@@ -807,7 +807,7 @@ def main():
     print("   - Compact progress widget in bottom-right corner")
     print("   - Real-time updates and user interaction")
 
-    print(f"\n🎉 Enhanced UI Components Created Successfully!")
+    print("\n🎉 Enhanced UI Components Created Successfully!")
     print("   AutoBot now has professional workflow orchestration UI!")
 
 

@@ -303,7 +303,7 @@ def main():
     except KeyboardInterrupt:
         logger.warning("Migration interrupted by user")
         return 1
-    except Exception as _e:
+    except Exception as e:
         logger.error(f"Migration failed: {e}", exc_info=True)
         return 1
 

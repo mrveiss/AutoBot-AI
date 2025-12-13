@@ -126,7 +126,7 @@ class MetricsCollector:
         self._alerts_file_lock = threading.Lock()
         self._metrics_file_lock = threading.Lock()
 
-        print(f"📊 AutoBot Metrics Collector initialized")
+        print("📊 AutoBot Metrics Collector initialized")
         print(f"   Storage Directory: {self.storage_dir}")
         print(f"   Retention: {retention_days} days")
 

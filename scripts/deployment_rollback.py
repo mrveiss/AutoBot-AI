@@ -71,7 +71,7 @@ class RollbackManager:
         # Version tracking
         self.deployment_info_file = self.project_root / "deployment_info.json"
 
-        print(f"🔄 AutoBot Rollback Manager initialized")
+        print("🔄 AutoBot Rollback Manager initialized")
         print(f"   Backup Directory: {self.backup_dir}")
         print(f"   Rollback Directory: {self.rollback_dir}")
 

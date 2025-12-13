@@ -89,7 +89,7 @@ class SimpleNPUTester:
             else:
                 results["models_endpoint"] = False
                 print("⚠️  Cannot test models endpoint - no HTTP library available")
-        except:
+        except Exception:
             results["models_endpoint"] = False
 
         # Check if device is available

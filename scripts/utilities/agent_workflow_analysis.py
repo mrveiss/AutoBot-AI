@@ -300,7 +300,7 @@ def main():
         agent = step["agent"].split(".")[-1]  # Get enum value
         print(f"   {step['step_id']}. {agent.title()}: {step['action']}")
         if step.get("user_confirmation_required"):
-            print(f"      👤 User confirmation required")
+            print("      👤 User confirmation required")
     print("   ... (5 more steps)")
 
     print("\n🚀 Key Improvements Needed:")
@@ -308,7 +308,7 @@ def main():
     for improvement in improvements:
         print(f"   🔧 {improvement}")
 
-    print(f"\n📊 Implementation Priority:")
+    print("\n📊 Implementation Priority:")
     priorities = [
         "1. Enhanced Orchestrator with workflow engine",
         "2. Research Agent with Playwright (Docker)",
@@ -322,7 +322,7 @@ def main():
 
     # Design workflow engine
     workflow_engine = analyzer.design_workflow_engine()
-    print(f"\n🏗️  Workflow Engine Components:")
+    print("\n🏗️  Workflow Engine Components:")
     for component in workflow_engine["workflow_engine"]["components"]:
         print(f"   📦 {component}")
 

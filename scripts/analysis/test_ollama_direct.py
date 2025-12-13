@@ -34,7 +34,7 @@ async def test_ollama_direct():
 
                 # Test just reading JSON directly
                 response_json = await response.json()
-                print(f"   Response received!")
+                print("   Response received!")
                 print(
                     f"   Content: {response_json.get('message', {}).get('content', 'No content')}"
                 )
@@ -82,7 +82,7 @@ async def test_complex_request():
 
                 # Test reading response
                 response_json = await response.json()
-                print(f"   Complex response received!")
+                print("   Complex response received!")
                 print(f"   Content length: {len(str(response_json))}")
 
                 return response_json

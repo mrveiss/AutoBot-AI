@@ -807,7 +807,7 @@ class ValidationDashboardGenerator:
 
         for phase in phase_details:
             html_parts.append(
-                f"""
+                """
                 <div class="phase-item" style="border-color: {phase['status_color']}">
                     <div>
                         <strong>{phase['display_name']}</strong>
@@ -837,7 +837,7 @@ class ValidationDashboardGenerator:
         html_parts = []
         for alert in alerts:
             html_parts.append(
-                f"""
+                """
                 <div class="alert alert-{alert['level']}">
                     <div style="font-weight: bold;">{alert['title']}</div>
                     <div>{alert['message']}</div>
@@ -855,7 +855,7 @@ class ValidationDashboardGenerator:
         html_parts = []
         for rec in recommendations[:5]:  # Show top 5 recommendations
             html_parts.append(
-                f"""
+                """
                 <div class="recommendation">
                     <div class="recommendation-title">
                         {rec['title']}

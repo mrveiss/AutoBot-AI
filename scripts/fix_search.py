@@ -74,7 +74,7 @@ def upload_docs_as_searchable_facts():
     print(f"\n✓ Added {added_count} documents as searchable facts")
 
     # Test fact-based search
-    print(f"\n=== Testing Fact Search ===")
+    print("\n=== Testing Fact Search ===")
 
     # The facts should now be searchable via simple text matching
     # Let's check if we can find documents by searching facts

@@ -1178,7 +1178,7 @@ class MicroserviceArchitectureEvaluator:
         with open(md_report_path, 'w') as f:
             f.write(self._generate_markdown_report())
 
-        logger.info(f"📄 Microservice analysis reports saved:")
+        logger.info("📄 Microservice analysis reports saved:")
         logger.info(f"  JSON: {json_report_path}")
         logger.info(f"  Markdown: {md_report_path}")
 
@@ -1209,7 +1209,7 @@ class MicroserviceArchitectureEvaluator:
 
         # AI Agents
         agents = structure["key_components"]["agents"]
-        report += f"""
+        report += """
 #### AI Agents
 - **Total Agents:** {agents['total_agents']}
 - **Agent Types:** {len(agents['agent_types'])}
@@ -1220,7 +1220,7 @@ class MicroserviceArchitectureEvaluator:
 
         # Data Models
         models = structure["key_components"]["data_models"]
-        report += f"""
+        report += """
 #### Data Models
 - **Database Files:** {len(models['database_files'])}
 - **Database Types:** {', '.join(models['database_types']) if models['database_types'] else 'None'}
@@ -1230,7 +1230,7 @@ class MicroserviceArchitectureEvaluator:
 
         # Utilities
         utilities = structure["key_components"]["utilities"]
-        report += f"""#### Utilities
+        report += """#### Utilities
 - **Utility Files:** {len(utilities['util_files'])}
 - **Shared Utilities:** {len(utilities['shared_utilities'])}
 - **Utility Types:** {', '.join(utilities['utility_types'].keys())}
@@ -1257,7 +1257,7 @@ class MicroserviceArchitectureEvaluator:
 ### Core Services
 """
         for service in boundaries["proposed_services"]:
-            report += f"""
+            report += """
 #### {service['name']}
 - **Type:** {service['type'].replace('_', ' ').title()}
 - **Complexity:** {service['estimated_complexity']}/10
@@ -1273,7 +1273,7 @@ class MicroserviceArchitectureEvaluator:
 ### Shared Services
 """
             for service in boundaries["shared_services"]:
-                report += f"""
+                report += """
 #### {service['name']}
 - **Utilities:** {', '.join(service.get('utilities', []))}
 - **Purpose:** Provide common {service['name'].replace('Service', '').lower()} functionality
@@ -1284,7 +1284,7 @@ class MicroserviceArchitectureEvaluator:
 ### Data Services
 """
             for service in boundaries["data_services"]:
-                report += f"""
+                report += """
 #### {service['name']}
 - **Database Type:** {service['database_type']}
 - **Purpose:** Manage {service['database_type']} operations
@@ -1304,7 +1304,7 @@ class MicroserviceArchitectureEvaluator:
         migration = self.analysis_results["migration_strategy"]
         recommendations = self.analysis_results["recommendations"]
 
-        report = f"""# 🏗️ AutoBot Microservice Architecture Evaluation
+        report = """# 🏗️ AutoBot Microservice Architecture Evaluation
 
 **Analysis Date:** {self.analysis_results["timestamp"]}
 
@@ -1350,14 +1350,14 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         for module in coupling["high_coupling_modules"][:5]:  # Top 5 highly coupled
             report += f"- `{module['module']}`: Fan-out({module['fan_out']}) + Fan-in({module['fan_in']}) = {module['coupling_score']}\n"
 
-        report += f"""
+        report += """
 ### Shared Dependencies
 """
         for shared in dependencies["shared_modules"][:5]:  # Top 5 shared modules
             report += f"- `{shared['module']}`: Used by {shared['import_count']} modules\n"
 
         if dependencies["circular_dependencies"]:
-            report += f"""
+            report += """
 ### ⚠️ Circular Dependencies
 """
             for cycle in dependencies["circular_dependencies"]:
@@ -1371,7 +1371,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 """
 
         for phase in migration["migration_phases"]:
-            report += f"""
+            report += """
 ### Phase {phase['phase']}: {phase['name']}
 - **Duration:** {phase['estimated_duration_weeks']} weeks
 - **Complexity:** {phase['complexity']}
@@ -1380,7 +1380,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 - **Risks:** {', '.join(phase['risks'])}
 """
 
-        report += f"""
+        report += """
 ## 🛠️ Implementation Requirements
 
 ### Prerequisites
@@ -1388,7 +1388,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         for prereq in migration["implementation_plan"]["prerequisites"]:
             report += f"- {prereq}\n"
 
-        report += f"""
+        report += """
 ### Technology Stack
 """
         for tech, tool in migration["implementation_plan"]["tools_and_technologies"].items():
@@ -1415,7 +1415,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         for i, rec in enumerate(recommendations, 1):
             report += f"{i}. {rec}\n"
 
-        report += f"""
+        report += """
 ## 🎯 Next Steps
 
 ### Immediate Actions (1-2 weeks)
@@ -1481,22 +1481,22 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         logger.info("🏗️ MICROSERVICE ARCHITECTURE EVALUATION SUMMARY")
         logger.info("=" * 70)
 
-        logger.info(f"📊 CODEBASE ANALYSIS:")
+        logger.info("📊 CODEBASE ANALYSIS:")
         logger.info(f"  • Total Lines of Code: {structure['file_statistics']['total_loc']:,}")
         logger.info(f"  • Python Files: {structure['file_statistics']['python_files']:,}")
         logger.info(f"  • API Endpoints: {structure['key_components']['api_endpoints']['total_endpoints']}")
         logger.info(f"  • AI Agents: {structure['key_components']['agents']['total_agents']}")
 
-        logger.info(f"\n🎯 SERVICE BOUNDARIES:")
+        logger.info("\n🎯 SERVICE BOUNDARIES:")
         logger.info(f"  • Proposed Services: {len(boundaries['proposed_services'])}")
         logger.info(f"  • Shared Services: {len(boundaries['shared_services'])}")
         logger.info(f"  • Data Services: {len(boundaries['data_services'])}")
 
-        logger.info(f"\n📋 MIGRATION STRATEGY:")
+        logger.info("\n📋 MIGRATION STRATEGY:")
         logger.info(f"  • Migration Phases: {len(migration['migration_phases'])}")
         logger.info(f"  • Estimated Duration: {sum(phase['estimated_duration_weeks'] for phase in migration['migration_phases'])} weeks")
 
-        logger.info(f"\n⚡ READINESS ASSESSMENT:")
+        logger.info("\n⚡ READINESS ASSESSMENT:")
         readiness = structure["architecture_patterns"]["microservice_readiness"]
         logger.info(f"  • Microservice Readiness: {readiness}/10")
 

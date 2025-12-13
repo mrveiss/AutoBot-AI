@@ -172,7 +172,7 @@ def test_docker_configuration():
         if compose_file.exists():
             # Test docker-compose config command
             result = subprocess.run(
-                ["docker-compose", "-f", str(compose_file), "config"],
+                ["docker-compose", "-", str(compose_file), "config"],
                 env={**os.environ, **test_env},
                 capture_output=True,
                 text=True,

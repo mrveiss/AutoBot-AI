@@ -187,7 +187,7 @@ def setup_basic_seq_queries(seq_url=None, api_key=None):
         },
     ]
 
-    print(f"📋 Queries available for manual creation in Seq:")
+    print("📋 Queries available for manual creation in Seq:")
     for i, query in enumerate(basic_queries, 1):
         print(f"\n{i}. {query['name']}")
         print(f"   Description: {query['description']}")
@@ -279,21 +279,21 @@ def main():
     # Verify logs are present
     has_logs = verify_seq_logs(seq_url)
 
-    print(f"\n🎉 Seq configuration complete!")
+    print("\n🎉 Seq configuration complete!")
     print(f"   🔐 API Key created: {'Yes' if api_key else 'No'}")
     print(f"   📊 Logs present: {'Yes' if has_logs else 'No'}")
-    print(f"\n🌐 Next steps:")
+    print("\n🌐 Next steps:")
     print(f"   1. Access Seq at: {seq_url}")
-    print(f"   2. Login with admin and the password you set")
-    print(f"   3. Manually create the queries shown above")
-    print(f"   4. Create dashboards using those queries")
-    print(f"   5. Set up alerts for critical errors")
+    print("   2. Login with admin and the password you set")
+    print("   3. Manually create the queries shown above")
+    print("   4. Create dashboards using those queries")
+    print("   5. Set up alerts for critical errors")
 
     # Save current password to environment if successful
     if api_key and os.getenv("SEQ_PASSWORD"):
-        print(f"\n💡 To avoid prompts in the future, set:")
+        print("\n💡 To avoid prompts in the future, set:")
         print(f"   export SEQ_PASSWORD='{os.getenv('SEQ_PASSWORD')}'")
-        print(f"   or add it to your .env file")
+        print("   or add it to your .env file")
 
 
 if __name__ == "__main__":

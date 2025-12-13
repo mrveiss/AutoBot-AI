@@ -399,10 +399,19 @@ class RedisVectorStoreAnalyzer:
 
         return recommendation
 
-    def generate_recommendation(self, data_analysis, direct_success, direct_count,
-                              llamaindex_success, llamaindex_count, llamaindex_assessment,
-                              langchain_success, langchain_count, langchain_assessment,
-                              migration_analysis) -> Dict[str, Any]:
+    def generate_recommendation(
+        self,
+        data_analysis,
+        direct_success,
+        direct_count,
+        llamaindex_success,
+        llamaindex_count,
+        llamaindex_assessment,
+        langchain_success,
+        langchain_count,
+        langchain_assessment,
+        migration_analysis,
+    ) -> Dict[str, Any]:
         """Generate final recommendation based on all test results"""
 
         existing_data_valuable = data_analysis.get('total_documents', 0) > 10000
@@ -413,7 +422,7 @@ class RedisVectorStoreAnalyzer:
                     "approach": "FIX_LLAMAINDEX",
                     "confidence": "HIGH",
                     "reasoning": [
-                        f"13,383 high-quality vectors already indexed with LlamaIndex",
+                        "13,383 high-quality vectors already indexed with LlamaIndex",
                         "Data is accessible and properly structured",
                         "LlamaIndex integration can be fixed with minimal effort",
                         "No data migration required - preserves investment"
@@ -455,40 +464,47 @@ class RedisVectorStoreAnalyzer:
                 "implementation": migration_analysis["langchain_migration"]
             }
 
-    def print_analysis_report(self, data_analysis, direct_results, llamaindex_results,
-                            langchain_results, migration_analysis, recommendation):
+    def print_analysis_report(
+        self,
+        data_analysis,
+        direct_results,
+        llamaindex_results,
+        langchain_results,
+        migration_analysis,
+        recommendation,
+    ):
         """Print comprehensive analysis report"""
 
         print("\n" + "="*80)
         print("📊 AUTOBOT REDIS VECTOR STORE ANALYSIS REPORT")
         print("="*80)
 
-        print(f"\n📈 EXISTING DATA ANALYSIS:")
+        print("\n📈 EXISTING DATA ANALYSIS:")
         print(f"  • Total Documents: {data_analysis.get('total_documents', 0):,}")
         print(f"  • Vector Dimensions: {data_analysis.get('vector_dimension', 'unknown')}")
         print(f"  • Index Size: {data_analysis.get('index_size_mb', 0)} MB")
         print(f"  • Algorithm: {data_analysis.get('vector_algorithm', 'unknown')}")
 
-        print(f"\n🧪 INTEGRATION TEST RESULTS:")
+        print("\n🧪 INTEGRATION TEST RESULTS:")
         print(f"  • Direct Redis Access: {'✅' if direct_results[0] else '❌'} ({direct_results[1]} results) - {direct_results[2]}")
         print(f"  • LlamaIndex Integration: {'✅' if llamaindex_results[0] else '❌'} ({llamaindex_results[1]} results) - {llamaindex_results[2]}")
         print(f"  • LangChain Integration: {'✅' if langchain_results[0] else '❌'} ({langchain_results[1]} results) - {langchain_results[2]}")
 
         print(f"\n🎯 FINAL RECOMMENDATION: {recommendation['approach']}")
         print(f"  • Confidence: {recommendation['confidence']}")
-        print(f"  • Reasoning:")
+        print("  • Reasoning:")
         for reason in recommendation['reasoning']:
             print(f"    - {reason}")
 
         impl = recommendation['implementation']
-        print(f"\n📋 IMPLEMENTATION PLAN:")
+        print("\n📋 IMPLEMENTATION PLAN:")
         print(f"  • Complexity: {impl.get('complexity', 'unknown')}")
         print(f"  • Time Estimate: {impl.get('time_estimate', 'unknown')}")
         print(f"  • Risk Level: {impl.get('risk', 'unknown')}")
         print(f"  • Data Migration: {impl.get('data_migration', 'unknown')}")
 
         if 'changes_required' in impl:
-            print(f"  • Required Changes:")
+            print("  • Required Changes:")
             for change in impl['changes_required']:
                 print(f"    - {change}")
 

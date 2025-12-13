@@ -364,7 +364,7 @@ class MemoryOptimizationApplier:
         with open(md_file, "w") as f:
             f.write(self._generate_markdown_report(report))
 
-        logger.info(f"📄 Optimization reports saved:")
+        logger.info("📄 Optimization reports saved:")
         logger.info(f"  JSON: {json_file}")
         logger.info(f"  Markdown: {md_file}")
 
@@ -374,7 +374,7 @@ class MemoryOptimizationApplier:
         """Generate markdown optimization report"""
         optimizations = report["optimizations_applied"]
 
-        markdown = f"""# 🔧 AutoBot Memory Optimizations Applied
+        markdown = """# 🔧 AutoBot Memory Optimizations Applied
 
 **Date:** {report["timestamp"]}
 **Total Optimizations:** {report["summary"]["total_optimizations"]}
@@ -384,7 +384,7 @@ class MemoryOptimizationApplier:
 """
 
         for opt in optimizations:
-            markdown += f"""### {opt["type"].replace("_", " ").title()}
+            markdown += """### {opt["type"].replace("_", " ").title()}
 
 **Description:** {opt["description"]}
 
@@ -418,7 +418,7 @@ class MemoryOptimizationApplier:
         for i, rec in enumerate(report["recommendations"], 1):
             markdown += f"{i}. {rec}\n"
 
-        markdown += f"""
+        markdown += """
 ## 🎯 Next Steps
 
 1. **Monitor Performance**: Use `python scripts/memory_profiler.py` to track memory usage

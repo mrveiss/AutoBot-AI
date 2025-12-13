@@ -297,7 +297,7 @@ def main():
                 print(f"    • {error}")
             total_errors += len(results['errors'])
         else:
-            print(f"  ✓ No errors found")
+            print("  ✓ No errors found")
 
         if results['warnings']:
             print(f"  ⚠ {len(results['warnings'])} warnings:")
@@ -308,8 +308,8 @@ def main():
         validated_files += 1
 
     # Summary
-    print(f"\n" + "=" * 40)
-    print(f"Validation Summary:")
+    print("\n" + "=" * 40)
+    print("Validation Summary:")
     print(f"Files validated: {validated_files}/{len(env_files)}")
     print(f"Total errors: {total_errors}")
     print(f"Total warnings: {total_warnings}")

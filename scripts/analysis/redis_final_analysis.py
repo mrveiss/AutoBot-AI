@@ -37,7 +37,7 @@ class AutoBotVectorStoreAnalysis:
                 parsed = json.loads(value)
                 if field == '_node_content' and len(field_analysis[field]['sample_values']) == 0:
                     field_analysis[field]['sample_values'].append(list(parsed.keys())[:5])
-            except:
+            except Exception:
                 field_analysis[field]['data_type'] = 'string'
         else:
             field_analysis[field]['data_type'] = 'string'
@@ -263,10 +263,12 @@ class AutoBotVectorStoreAnalysis:
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 
-    def generate_final_recommendation(self,
-                                    data_analysis: Dict[str, Any],
-                                    llamaindex_result: Tuple[bool, int, List[str]],
-                                    langchain_result: Tuple[bool, int, List[str]]) -> Dict[str, Any]:
+    def generate_final_recommendation(
+        self,
+        data_analysis: Dict[str, Any],
+        llamaindex_result: Tuple[bool, int, List[str]],
+        langchain_result: Tuple[bool, int, List[str]],
+    ) -> Dict[str, Any]:
         """Generate final technical recommendation"""
 
         llamaindex_works, llamaindex_count, llamaindex_fixes = llamaindex_result
@@ -329,7 +331,7 @@ class AutoBotVectorStoreAnalysis:
                 "recommendation": "CUSTOM_REDIS_INTEGRATION",
                 "confidence": "MEDIUM",
                 "rationale": [
-                    f"13,383 vectors represent significant investment",
+                    "13,383 vectors represent significant investment",
                     "Direct Redis FT.SEARCH works perfectly",
                     "Both LlamaIndex and LangChain have compatibility issues",
                     "Custom integration can leverage existing data structure"
@@ -421,7 +423,7 @@ class AutoBotVectorStoreAnalysis:
         print("🎯 AUTOBOT REDIS VECTOR STORE - FINAL TECHNICAL ANALYSIS")
         print("="*90)
 
-        print(f"\n📊 EXISTING DATA QUALITY ASSESSMENT:")
+        print("\n📊 EXISTING DATA QUALITY ASSESSMENT:")
         print(f"  • Documents: {data_analysis.get('total_documents', 0):,} (HIGH QUALITY)")
         print(f"  • Index Size: {data_analysis.get('index_size_mb', 0):.1f} MB")
         print(f"  • Vector Dimensions: {data_analysis.get('vector_config', {}).get('dimensions', 'unknown')}")
@@ -429,11 +431,11 @@ class AutoBotVectorStoreAnalysis:
 
         issues = data_analysis.get('compatibility_issues', [])
         if issues:
-            print(f"\n⚠️  COMPATIBILITY ISSUES IDENTIFIED:")
+            print("\n⚠️  COMPATIBILITY ISSUES IDENTIFIED:")
             for issue in issues:
                 print(f"    - {issue}")
 
-        print(f"\n🧪 INTEGRATION TEST RESULTS:")
+        print("\n🧪 INTEGRATION TEST RESULTS:")
         print(f"  • LlamaIndex: {'✅ WORKING' if llamaindex_result[0] else '❌ FAILED'} ({llamaindex_result[1]} results)")
         if llamaindex_result[2]:
             print(f"    Fixes: {', '.join(llamaindex_result[2][-2:])}")
@@ -448,11 +450,11 @@ class AutoBotVectorStoreAnalysis:
         print(f"  • Risk Level: {recommendation['risk_level']}")
         print(f"  • Data Migration: {recommendation['data_migration']}")
 
-        print(f"\n💡 REASONING:")
+        print("\n💡 REASONING:")
         for reason in recommendation['rationale']:
             print(f"    • {reason}")
 
-        print(f"\n📋 IMPLEMENTATION STEPS:")
+        print("\n📋 IMPLEMENTATION STEPS:")
         for i, step in enumerate(recommendation['implementation_steps'], 1):
             print(f"    {i}. {step}")
 
@@ -612,7 +614,7 @@ async def main():
     analyzer = AutoBotVectorStoreAnalysis()
     recommendation = await analyzer.run_final_analysis()
 
-    logger.info(f"\n💾 Complete analysis saved to: /home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json")
+    logger.info("\n💾 Complete analysis saved to: /home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json")
 
 if __name__ == "__main__":
     asyncio.run(main())

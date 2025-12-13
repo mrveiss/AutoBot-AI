@@ -114,7 +114,7 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
                         break
 
             # Build content with enhanced context
-            content = f"""# {command}({section}) - {description}
+            content = """# {command}({section}) - {description}
 
 **Machine:** {system_ctx['machine_id']} ({system_ctx['machine_ip']})
 **OS:** {system_ctx['os_name']} {system_ctx['os_version']} ({system_ctx['os_type']})

@@ -436,7 +436,7 @@ async def _handle_source_approval(
                 existing_history,
                 "success",
                 f"✅ Successfully added {stored_count} sources to the knowledge "
-                f"base. This information will be available for future queries!",
+                "base. This information will be available for future queries!",
                 chat_history_manager,
                 chat_id,
             )
@@ -789,7 +789,7 @@ async def get_chat(chat_id: str, request: Request):
         logger.error(f"Error in get_chat for {chat_id}: {e}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"An unexpected error occurred", "request_id": request_id}
+            content={"error": "An unexpected error occurred", "request_id": request_id}
         )
 
 
@@ -1032,7 +1032,7 @@ async def conversation_chat_message(chat_message: dict, request: Request):
         }
 
         logger.info(
-            f"Conversation response completed in "
+            "Conversation response completed in "
             f"{result.get('processing_time', 0):.2f}s"
         )
         return JSONResponse(status_code=200, content=response_data)
@@ -1109,7 +1109,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 response_data = {
                     "role": "assistant",
                     "content": (
-                        f"I'm having trouble initializing the AI system right now. "
+                        "I'm having trouble initializing the AI system right now. "
                         f"Your message '{message}' was received but I can't process it."
                     ),
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1237,7 +1237,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                 response_data = {
                                     "role": "assistant",
                                     "content": (
-                                        f"✅ Command executed successfully!\n\n"
+                                        "✅ Command executed successfully!\n\n"
                                         f"**Command**: `{command_to_run}`\n"
                                         f"**Output**: ```\n{output}\n```\n\n"
                                         f"**Interpretation**: {interpretation}"
@@ -1318,7 +1318,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             response_data = {
                 "role": "assistant",
                 "content": (
-                    f"Thank you for the feedback on the command "
+                    "Thank you for the feedback on the command "
                     f"`{original_command}`!\n\n"
                     f"**Your feedback**: {feedback_text}\n\n"
                     "I'll take this into consideration. Would you like me to:\n"
@@ -1614,7 +1614,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
             fallback_response = {
                 "role": "assistant",
                 "content": (
-                    f"I'm having trouble processing your request right now. "
+                    "I'm having trouble processing your request right now. "
                     f"Your message '{message}' was received but I encountered an error."
                 ),
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
