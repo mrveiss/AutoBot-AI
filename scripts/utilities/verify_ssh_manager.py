@@ -19,23 +19,31 @@ sys.path.insert(0, str(project_root))
 from src.constants.network_constants import NetworkConstants
 
 
-async def verify_installation():
-    """Verify SSH Manager installation"""
-    print("=" * 60)
-    print("SSH Manager Verification Script")
-    print("=" * 60)
-    print()
+def _check_imports() -> bool:
+    """
+    Check that all required modules can be imported.
 
-    # 1. Check imports
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
     print("1. Checking imports...")
     try:
-        from backend.services.ssh_manager import SSHManager
+        from backend.services.ssh_manager import SSHManager  # noqa: F401
         print("   ✅ All modules import successfully")
+        return True
     except ImportError as e:
         print(f"   ❌ Import failed: {e}")
         return False
 
-    # 2. Check SSH key
+
+def _check_ssh_key() -> str:
+    """
+    Check SSH key exists and has correct permissions.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+
+    Returns:
+        SSH key path if found, empty string otherwise
+    """
     print("\n2. Checking SSH key...")
     ssh_key_path = os.path.expanduser('~/.ssh/autobot_key')
     if os.path.exists(ssh_key_path):
@@ -49,11 +57,22 @@ async def verify_installation():
         else:
             print(f"   ⚠️  SSH key permissions should be 600, found: {perms}")
             print(f"   Fix with: chmod 600 {ssh_key_path}")
+        return ssh_key_path
     else:
         print(f"   ❌ SSH key not found: {ssh_key_path}")
         print(f"   Generate with: ssh-keygen -t rsa -b 4096 -f {ssh_key_path} -N \"\"")
+        return ""
 
-    # 3. Check configuration
+
+def _check_configuration(project_root: Path) -> Path:
+    """
+    Check configuration file and SSH settings.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+
+    Returns:
+        Config path if found, None otherwise
+    """
     print("\n3. Checking configuration...")
     config_path = project_root / 'config' / 'config.yaml'
     if config_path.exists():
@@ -83,39 +102,55 @@ async def verify_installation():
                 print("   ❌ SSH configuration section not found")
         except Exception as e:
             print(f"   ❌ Error reading configuration: {e}")
+        return config_path
     else:
         print(f"   ❌ Configuration file not found: {config_path}")
+        return None
 
-    # 4. Test SSH Manager initialization
+
+async def _test_ssh_manager_init(ssh_key_path: str, config_path: Path) -> bool:
+    """
+    Test SSH Manager initialization and connection pool.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
+    from backend.services.ssh_manager import SSHManager
+
     print("\n4. Testing SSH Manager initialization...")
     try:
         ssh_manager = SSHManager(
             ssh_key_path=ssh_key_path,
             config_path=str(config_path),
-            enable_audit_logging=False  # Disable for test
+            enable_audit_logging=False
         )
         print("   ✅ SSH Manager initialized successfully")
 
         hosts = ssh_manager.list_hosts()
         print(f"   ✅ Found {len(hosts)} hosts")
 
-        # Start manager
         await ssh_manager.start()
         print("   ✅ SSH Manager started successfully")
 
-        # Test connection pool
         stats = await ssh_manager.get_pool_stats()
         print(f"   ✅ Connection pool operational (pools: {len(stats)})")
 
-        # Cleanup
         await ssh_manager.stop()
         print("   ✅ SSH Manager stopped successfully")
+        return True
 
     except Exception as e:
         print(f"   ❌ SSH Manager initialization failed: {e}")
         return False
 
-    # 5. Test simple command execution (if SSH available)
+
+async def _test_command_execution(ssh_key_path: str) -> None:
+    """
+    Test simple command execution via SSH.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
+    from backend.services.ssh_manager import SSHManager
+
     print("\n5. Testing command execution...")
     try:
         ssh_manager = SSHManager(
@@ -124,7 +159,6 @@ async def verify_installation():
         )
         await ssh_manager.start()
 
-        # Try to execute on main host (localhost)
         result = await ssh_manager.execute_command(
             host='main',
             command='echo "SSH Manager Test"',
@@ -145,7 +179,13 @@ async def verify_installation():
         print(f"   ⚠️  Command execution test failed: {e}")
         print(f"   This is expected if SSH is not configured for localhost")
 
-    # 6. Check test files
+
+def _check_test_files(project_root: Path) -> None:
+    """
+    Check that test files exist.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
     print("\n6. Checking test files...")
     test_files = [
         'tests/test_ssh_connection_pool.py',
@@ -159,7 +199,13 @@ async def verify_installation():
         else:
             print(f"   ❌ {test_file} not found")
 
-    # 7. Check documentation
+
+def _check_documentation(project_root: Path) -> None:
+    """
+    Check that documentation files exist.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
     print("\n7. Checking documentation...")
     doc_files = [
         'docs/features/SSH_CONNECTION_MANAGER.md',
@@ -173,7 +219,13 @@ async def verify_installation():
         else:
             print(f"   ❌ {doc_file} not found")
 
-    # Summary
+
+def _print_summary() -> None:
+    """
+    Print verification summary and next steps.
+
+    Issue #281: Extracted from verify_installation to reduce function length.
+    """
     print("\n" + "=" * 60)
     print("Verification Summary")
     print("=" * 60)
@@ -197,6 +249,34 @@ async def verify_installation():
     print("5. Test API endpoint:")
     print(f"   curl http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/remote-terminal/")
     print()
+
+
+async def verify_installation():
+    """
+    Verify SSH Manager installation.
+
+    Issue #281: Verification steps extracted to helper functions to reduce
+    function length from 182 to ~30 lines.
+    """
+    print("=" * 60)
+    print("SSH Manager Verification Script")
+    print("=" * 60)
+    print()
+
+    # Issue #281: Use extracted helpers for each verification step
+    if not _check_imports():
+        return False
+
+    ssh_key_path = _check_ssh_key()
+    config_path = _check_configuration(project_root)
+
+    if not await _test_ssh_manager_init(ssh_key_path, config_path):
+        return False
+
+    await _test_command_execution(ssh_key_path)
+    _check_test_files(project_root)
+    _check_documentation(project_root)
+    _print_summary()
 
     return True
 

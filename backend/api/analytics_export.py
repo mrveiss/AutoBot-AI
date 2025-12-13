@@ -341,6 +341,149 @@ async def export_prometheus():
 # ============================================================================
 
 
+def _get_grafana_panels() -> list:
+    """
+    Return Grafana dashboard panel configurations.
+
+    Issue #281: Extracted from export_grafana_dashboard to reduce function
+    length and separate panel configuration from endpoint logic.
+
+    Returns:
+        List of panel configuration dictionaries for Grafana dashboard.
+    """
+    return [
+        # Cost Overview Panel
+        {
+            "id": 1,
+            "title": "LLM Cost Overview",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+            "targets": [
+                {
+                    "expr": "autobot_llm_cost_total_usd",
+                    "legendFormat": "Total Cost (USD)",
+                }
+            ],
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+            },
+        },
+        # Daily Cost Panel
+        {
+            "id": 2,
+            "title": "Daily Cost Average",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+            "targets": [
+                {
+                    "expr": "autobot_llm_daily_cost_usd",
+                    "legendFormat": "Avg Daily Cost (USD)",
+                }
+            ],
+        },
+        # Cost by Model
+        {
+            "id": 3,
+            "title": "Cost by Model",
+            "type": "piechart",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "targets": [
+                {
+                    "expr": "autobot_llm_model_cost_usd",
+                    "legendFormat": "{{model}}",
+                }
+            ],
+        },
+        # Agent Success Rate
+        {
+            "id": 4,
+            "title": "Agent Success Rates",
+            "type": "bargauge",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+            "targets": [
+                {
+                    "expr": "autobot_agent_success_rate",
+                    "legendFormat": "{{agent_id}}",
+                }
+            ],
+            "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "max": 100,
+                    "min": 0,
+                    "unit": "percent",
+                }
+            },
+        },
+        # Token Usage Timeline
+        {
+            "id": 5,
+            "title": "Token Usage Over Time",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+            "targets": [
+                {
+                    "expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])',
+                    "legendFormat": "{{model}} - Input",
+                },
+                {
+                    "expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])',
+                    "legendFormat": "{{model}} - Output",
+                },
+            ],
+        },
+        # Agent Performance
+        {
+            "id": 6,
+            "title": "Agent Task Duration",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+            "targets": [
+                {
+                    "expr": "autobot_agent_avg_duration_ms",
+                    "legendFormat": "{{agent_id}}",
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ms",
+                }
+            },
+        },
+        # Error Rates
+        {
+            "id": 7,
+            "title": "Agent Error Rates",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+            "targets": [
+                {
+                    "expr": "autobot_agent_error_rate",
+                    "legendFormat": "{{agent_id}}",
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {"color": "green", "value": None},
+                            {"color": "yellow", "value": 5},
+                            {"color": "red", "value": 15},
+                        ],
+                    },
+                }
+            },
+        },
+    ]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_grafana_dashboard",
@@ -352,7 +495,11 @@ async def export_grafana_dashboard():
     Export a Grafana dashboard JSON.
 
     Returns a pre-configured dashboard for AutoBot analytics.
+
+    Issue #281: Panel configurations extracted to _get_grafana_panels()
+    to reduce function length from 166 to ~30 lines.
     """
+    # Issue #281: Use extracted helper for panel configurations
     dashboard = {
         "annotations": {"list": []},
         "editable": True,
@@ -361,137 +508,7 @@ async def export_grafana_dashboard():
         "id": None,
         "links": [],
         "liveNow": False,
-        "panels": [
-            # Cost Overview Panel
-            {
-                "id": 1,
-                "title": "LLM Cost Overview",
-                "type": "stat",
-                "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-                "targets": [
-                    {
-                        "expr": "autobot_llm_cost_total_usd",
-                        "legendFormat": "Total Cost (USD)",
-                    }
-                ],
-                "options": {
-                    "colorMode": "value",
-                    "graphMode": "area",
-                    "justifyMode": "auto",
-                },
-            },
-            # Daily Cost Panel
-            {
-                "id": 2,
-                "title": "Daily Cost Average",
-                "type": "stat",
-                "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-                "targets": [
-                    {
-                        "expr": "autobot_llm_daily_cost_usd",
-                        "legendFormat": "Avg Daily Cost (USD)",
-                    }
-                ],
-            },
-            # Cost by Model
-            {
-                "id": 3,
-                "title": "Cost by Model",
-                "type": "piechart",
-                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-                "targets": [
-                    {
-                        "expr": "autobot_llm_model_cost_usd",
-                        "legendFormat": "{{model}}",
-                    }
-                ],
-            },
-            # Agent Success Rate
-            {
-                "id": 4,
-                "title": "Agent Success Rates",
-                "type": "bargauge",
-                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-                "targets": [
-                    {
-                        "expr": "autobot_agent_success_rate",
-                        "legendFormat": "{{agent_id}}",
-                    }
-                ],
-                "options": {
-                    "orientation": "horizontal",
-                    "displayMode": "gradient",
-                },
-                "fieldConfig": {
-                    "defaults": {
-                        "max": 100,
-                        "min": 0,
-                        "unit": "percent",
-                    }
-                },
-            },
-            # Token Usage Timeline
-            {
-                "id": 5,
-                "title": "Token Usage Over Time",
-                "type": "timeseries",
-                "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
-                "targets": [
-                    {
-                        "expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])',
-                        "legendFormat": "{{model}} - Input",
-                    },
-                    {
-                        "expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])',
-                        "legendFormat": "{{model}} - Output",
-                    },
-                ],
-            },
-            # Agent Performance
-            {
-                "id": 6,
-                "title": "Agent Task Duration",
-                "type": "timeseries",
-                "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
-                "targets": [
-                    {
-                        "expr": "autobot_agent_avg_duration_ms",
-                        "legendFormat": "{{agent_id}}",
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "ms",
-                    }
-                },
-            },
-            # Error Rates
-            {
-                "id": 7,
-                "title": "Agent Error Rates",
-                "type": "timeseries",
-                "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-                "targets": [
-                    {
-                        "expr": "autobot_agent_error_rate",
-                        "legendFormat": "{{agent_id}}",
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "unit": "percent",
-                        "thresholds": {
-                            "mode": "absolute",
-                            "steps": [
-                                {"color": "green", "value": None},
-                                {"color": "yellow", "value": 5},
-                                {"color": "red", "value": 15},
-                            ],
-                        },
-                    }
-                },
-            },
-        ],
+        "panels": _get_grafana_panels(),
         "refresh": "30s",
         "schemaVersion": 38,
         "style": "dark",
