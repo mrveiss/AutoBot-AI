@@ -108,6 +108,7 @@ class ExampleService:
     """Example service class using error boundaries"""
 
     def __init__(self):
+        """Initialize example service with error boundary manager."""
         self.error_manager = get_error_boundary_manager()
 
     async def complex_operation(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -160,6 +161,7 @@ class CustomRecoveryHandler:
     """Example custom recovery handler for specific error scenarios"""
 
     def __init__(self):
+        """Initialize custom recovery handler with fallback values for error scenarios."""
         self.error_manager = get_error_boundary_manager()
 
         # Add custom fallback handler for this service

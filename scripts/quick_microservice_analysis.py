@@ -17,128 +17,83 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def quick_microservice_analysis():
-    """Run quick microservice architecture analysis"""
-    project_root = Path(__file__).parent.parent
+def _analyze_single_api_file(api_file: Path) -> dict | None:
+    """Analyze a single API file for endpoints (Issue #315: extracted helper)."""
+    try:
+        with open(api_file, 'r', encoding='utf-8') as f:
+            content = f.read()
 
-    logger.info("🚀 Starting quick microservice analysis...")
+        route_pattern = r'@router\.(get|post|put|delete|patch)'
+        routes = re.findall(route_pattern, content, re.IGNORECASE)
+        endpoint_count = len(routes)
 
-    analysis = {
-        "timestamp": datetime.now().isoformat(),
-        "codebase_metrics": {},
-        "api_analysis": {},
-        "agent_analysis": {},
-        "service_recommendations": [],
-        "migration_assessment": {}
+        if endpoint_count > 0:
+            return {"name": api_file.stem, "endpoints": endpoint_count}
+    except Exception:
+        pass
+    return None
+
+
+def _analyze_single_agent_file(agent_file: Path) -> dict | None:
+    """Analyze a single agent file for type classification (Issue #315: extracted helper)."""
+    try:
+        with open(agent_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        class_pattern = r'class\s+(\w+)'
+        classes = re.findall(class_pattern, content)
+
+        name_lower = agent_file.stem.lower()
+        agent_type = _classify_agent_type(name_lower)
+
+        return {
+            "name": agent_file.stem,
+            "classes": len(classes),
+            "type": agent_type
+        }
+    except Exception:
+        return None
+
+
+def _classify_agent_type(name_lower: str) -> str:
+    """Classify agent type from filename (Issue #315: extracted helper)."""
+    type_keywords = {
+        "research": ["research", "web", "search"],
+        "chat": ["chat", "conversation"],
+        "knowledge": ["knowledge", "kb", "memory"],
+        "execution": ["terminal", "command"],
+        "file_management": ["file", "project"],
     }
+    for agent_type, keywords in type_keywords.items():
+        if any(kw in name_lower for kw in keywords):
+            return agent_type
+    return "general"
 
-    # 1. Quick codebase metrics
-    logger.info("📊 Analyzing codebase metrics...")
 
-    python_files = list(project_root.rglob("*.py"))
-    python_files = [f for f in python_files if not any(exclude in str(f) for exclude in ['__pycache__', '.pyc', 'node_modules', '.git'])]
+def _count_loc_in_file(py_file: Path) -> int:
+    """Count lines of code in a single Python file (Issue #315: extracted helper)."""
+    try:
+        with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = [line.strip() for line in f.readlines()]
+            return len([line for line in lines if line and not line.startswith('#')])
+    except Exception:
+        return 0
 
-    total_loc = 0
-    for py_file in python_files[:200]:  # Limit to first 200 files for speed
-        try:
-            with open(py_file, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = [line.strip() for line in f.readlines()]
-                total_loc += len([line for line in lines if line and not line.startswith('#')])
-        except Exception:
-            continue
 
-    analysis["codebase_metrics"] = {
-        "python_files_analyzed": min(200, len(python_files)),
-        "total_python_files": len(python_files),
-        "estimated_total_loc": int(total_loc * (len(python_files) / min(200, len(python_files)))),
-        "microservice_readiness_score": 0
-    }
+def _generate_service_recommendations(api_files: list, agent_files: list) -> list:
+    """
+    Generate microservice recommendations based on API and agent analysis.
 
-    # 2. API Analysis
-    logger.info("🌐 Analyzing API structure...")
+    Issue #281: Extracted from quick_microservice_analysis to reduce function length
+    and improve maintainability by separating recommendation logic.
 
-    api_dir = project_root / "backend" / "api"
-    api_files = []
-    total_endpoints = 0
+    Args:
+        api_files: List of analyzed API file data
+        agent_files: List of analyzed agent file data
 
-    if api_dir.exists():
-        for api_file in api_dir.glob("*.py"):
-            if api_file.name == "__init__.py":
-                continue
-
-            try:
-                with open(api_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # Count route decorators
-                route_pattern = r'@router\.(get|post|put|delete|patch)'
-                routes = re.findall(route_pattern, content, re.IGNORECASE)
-                endpoint_count = len(routes)
-                total_endpoints += endpoint_count
-
-                if endpoint_count > 0:
-                    api_files.append({
-                        "name": api_file.stem,
-                        "endpoints": endpoint_count
-                    })
-            except Exception:
-                continue
-
-    analysis["api_analysis"] = {
-        "api_modules": len(api_files),
-        "total_endpoints": total_endpoints,
-        "modules": api_files
-    }
-
-    # 3. Agent Analysis
-    logger.info("🤖 Analyzing AI agents...")
-
-    agents_dir = project_root / "src" / "agents"
-    agent_files = []
-
-    if agents_dir.exists():
-        for agent_file in agents_dir.glob("*.py"):
-            if agent_file.name == "__init__.py":
-                continue
-
-            try:
-                with open(agent_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # Count classes
-                class_pattern = r'class\s+(\w+)'
-                classes = re.findall(class_pattern, content)
-
-                # Determine agent type
-                name_lower = agent_file.stem.lower()
-                agent_type = "general"
-                if any(keyword in name_lower for keyword in ["research", "web", "search"]):
-                    agent_type = "research"
-                elif any(keyword in name_lower for keyword in ["chat", "conversation"]):
-                    agent_type = "chat"
-                elif any(keyword in name_lower for keyword in ["knowledge", "kb", "memory"]):
-                    agent_type = "knowledge"
-                elif any(keyword in name_lower for keyword in ["terminal", "command"]):
-                    agent_type = "execution"
-                elif any(keyword in name_lower for keyword in ["file", "project"]):
-                    agent_type = "file_management"
-
-                agent_files.append({
-                    "name": agent_file.stem,
-                    "classes": len(classes),
-                    "type": agent_type
-                })
-            except Exception:
-                continue
-
-    analysis["agent_analysis"] = {
-        "agent_modules": len(agent_files),
-        "agents": agent_files
-    }
-
-    # 4. Service Recommendations
-    logger.info("🎯 Generating service recommendations...")
-
+    Returns:
+        List of service recommendations with name, type, rationale, complexity, priority
+    """
     recommendations = []
 
     # API-based services
@@ -187,12 +142,32 @@ def quick_microservice_analysis():
             "priority": "high"
         })
 
-    analysis["service_recommendations"] = recommendations
+    return recommendations
 
-    # 5. Migration Assessment
-    logger.info("🗺️ Assessing migration feasibility...")
 
-    # Calculate readiness score
+def _calculate_readiness_score(
+    total_endpoints: int,
+    agent_files: list,
+    estimated_loc: int,
+    api_files: list,
+    project_root: Path
+) -> int:
+    """
+    Calculate microservice readiness score based on codebase metrics.
+
+    Issue #281: Extracted from quick_microservice_analysis to reduce function length
+    and improve maintainability by separating scoring logic.
+
+    Args:
+        total_endpoints: Total number of API endpoints
+        agent_files: List of analyzed agent files
+        estimated_loc: Estimated lines of code
+        api_files: List of analyzed API files
+        project_root: Project root path
+
+    Returns:
+        Readiness score from 0-10
+    """
     readiness_score = 0
 
     # +2 for sufficient API endpoints
@@ -208,7 +183,6 @@ def quick_microservice_analysis():
         readiness_score += 1
 
     # +2 for large codebase
-    estimated_loc = analysis["codebase_metrics"]["estimated_total_loc"]
     if estimated_loc >= 50000:
         readiness_score += 2
     elif estimated_loc >= 20000:
@@ -222,9 +196,22 @@ def quick_microservice_analysis():
     if (project_root / "docker").exists():
         readiness_score += 2
 
-    analysis["codebase_metrics"]["microservice_readiness_score"] = min(10, readiness_score)
+    return min(10, readiness_score)
 
-    # Migration phases
+
+def _generate_migration_phases(recommendations: list) -> list:
+    """
+    Generate phased migration plan based on service recommendations.
+
+    Issue #281: Extracted from quick_microservice_analysis to reduce function length
+    and improve maintainability by separating phase planning logic.
+
+    Args:
+        recommendations: List of service recommendations
+
+    Returns:
+        List of migration phases with name, services, duration, and rationale
+    """
     phases = []
 
     # Phase 1: Shared Services (4-6 weeks)
@@ -259,6 +246,99 @@ def quick_microservice_analysis():
             "duration_weeks": 10,
             "rationale": "Split business logic by domain"
         })
+
+    return phases
+
+
+def quick_microservice_analysis():
+    """Run quick microservice architecture analysis"""
+    project_root = Path(__file__).parent.parent
+
+    logger.info("🚀 Starting quick microservice analysis...")
+
+    analysis = {
+        "timestamp": datetime.now().isoformat(),
+        "codebase_metrics": {},
+        "api_analysis": {},
+        "agent_analysis": {},
+        "service_recommendations": [],
+        "migration_assessment": {}
+    }
+
+    # 1. Quick codebase metrics
+    logger.info("📊 Analyzing codebase metrics...")
+
+    python_files = list(project_root.rglob("*.py"))
+    python_files = [f for f in python_files if not any(exclude in str(f) for exclude in ['__pycache__', '.pyc', 'node_modules', '.git'])]
+
+    # Count LOC using helper (Issue #315: reduced nesting)
+    total_loc = sum(_count_loc_in_file(f) for f in python_files[:200])
+
+    analysis["codebase_metrics"] = {
+        "python_files_analyzed": min(200, len(python_files)),
+        "total_python_files": len(python_files),
+        "estimated_total_loc": int(total_loc * (len(python_files) / min(200, len(python_files)))),
+        "microservice_readiness_score": 0
+    }
+
+    # 2. API Analysis
+    logger.info("🌐 Analyzing API structure...")
+
+    api_dir = project_root / "backend" / "api"
+    api_files = []
+    total_endpoints = 0
+
+    # Analyze API files using helper (Issue #315: reduced nesting)
+    if api_dir.exists():
+        for api_file in api_dir.glob("*.py"):
+            if api_file.name == "__init__.py":
+                continue
+            result = _analyze_single_api_file(api_file)
+            if result:
+                api_files.append(result)
+                total_endpoints += result["endpoints"]
+
+    analysis["api_analysis"] = {
+        "api_modules": len(api_files),
+        "total_endpoints": total_endpoints,
+        "modules": api_files
+    }
+
+    # 3. Agent Analysis
+    logger.info("🤖 Analyzing AI agents...")
+
+    agents_dir = project_root / "src" / "agents"
+    agent_files = []
+
+    # Analyze agent files using helper (Issue #315: reduced nesting)
+    if agents_dir.exists():
+        for agent_file in agents_dir.glob("*.py"):
+            if agent_file.name == "__init__.py":
+                continue
+            result = _analyze_single_agent_file(agent_file)
+            if result:
+                agent_files.append(result)
+
+    analysis["agent_analysis"] = {
+        "agent_modules": len(agent_files),
+        "agents": agent_files
+    }
+
+    # 4. Service Recommendations (Issue #281: use extracted helper)
+    logger.info("🎯 Generating service recommendations...")
+    recommendations = _generate_service_recommendations(api_files, agent_files)
+    analysis["service_recommendations"] = recommendations
+
+    # 5. Migration Assessment (Issue #281: use extracted helpers)
+    logger.info("🗺️ Assessing migration feasibility...")
+
+    estimated_loc = analysis["codebase_metrics"]["estimated_total_loc"]
+    readiness_score = _calculate_readiness_score(
+        total_endpoints, agent_files, estimated_loc, api_files, project_root
+    )
+    analysis["codebase_metrics"]["microservice_readiness_score"] = readiness_score
+
+    phases = _generate_migration_phases(recommendations)
 
     analysis["migration_assessment"] = {
         "readiness_score": readiness_score,

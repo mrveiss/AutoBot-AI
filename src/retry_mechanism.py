@@ -17,6 +17,10 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
+from src.constants.threshold_constants import (
+    RetryConfig as ThresholdRetryConfig,
+    TimingConstants,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +36,12 @@ class RetryStrategy(Enum):
 
 @dataclass
 class RetryConfig:
-    """Configuration for retry mechanism"""
+    """Configuration for retry mechanism (Issue #376 - use named constants)"""
 
-    max_attempts: int = 3
-    base_delay: float = 1.0  # seconds
-    max_delay: float = 60.0  # seconds
-    backoff_multiplier: float = 2.0
+    max_attempts: int = ThresholdRetryConfig.DEFAULT_RETRIES
+    base_delay: float = TimingConstants.STANDARD_DELAY  # seconds
+    max_delay: float = ThresholdRetryConfig.BACKOFF_MAX_DELAY  # seconds
+    backoff_multiplier: float = ThresholdRetryConfig.BACKOFF_BASE
     jitter: bool = True
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF
 
@@ -311,10 +315,10 @@ default_retry_mechanism = RetryMechanism()
 
 
 def retry_async(
-    max_attempts: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    backoff_multiplier: float = 2.0,
+    max_attempts: int = ThresholdRetryConfig.DEFAULT_RETRIES,
+    base_delay: float = TimingConstants.STANDARD_DELAY,
+    max_delay: float = ThresholdRetryConfig.BACKOFF_MAX_DELAY,
+    backoff_multiplier: float = ThresholdRetryConfig.BACKOFF_BASE,
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF,
     retryable_exceptions: tuple = None,
     operation_name: str = None,
@@ -361,10 +365,10 @@ def retry_async(
 
 
 def retry_sync(
-    max_attempts: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    backoff_multiplier: float = 2.0,
+    max_attempts: int = ThresholdRetryConfig.DEFAULT_RETRIES,
+    base_delay: float = TimingConstants.STANDARD_DELAY,
+    max_delay: float = ThresholdRetryConfig.BACKOFF_MAX_DELAY,
+    backoff_multiplier: float = ThresholdRetryConfig.BACKOFF_BASE,
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF,
     retryable_exceptions: tuple = None,
     operation_name: str = None,
@@ -415,10 +419,11 @@ async def retry_database_operation(func: Callable, *args, **kwargs) -> Any:
     """Retry database operations with database-specific configuration"""
     import sqlite3
 
+    # Database operations use faster retries with shorter delays
     config = RetryConfig(
-        max_attempts=3,
-        base_delay=0.5,
-        max_delay=5.0,
+        max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
+        base_delay=TimingConstants.SHORT_DELAY,
+        max_delay=TimingConstants.MEDIUM_DELAY,
         strategy=RetryStrategy.JITTERED_BACKOFF,
         retryable_exceptions=(
             sqlite3.OperationalError,
@@ -436,10 +441,11 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
     """Retry network operations with network-specific configuration"""
     import aiohttp
 
+    # Network operations use moderate delays, capped to prevent long waits
     config = RetryConfig(
-        max_attempts=3,  # Reduced from 5 to 3 attempts
-        base_delay=0.5,  # Reduced from 1.0 to 0.5 seconds
-        max_delay=8.0,  # Reduced from 30.0 to 8.0 seconds
+        max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
+        base_delay=TimingConstants.SHORT_DELAY,
+        max_delay=TimingConstants.LONG_DELAY,  # 10s max - reduced from 30s for responsiveness
         strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
         retryable_exceptions=(
             aiohttp.ClientError,
@@ -456,10 +462,11 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
 
 async def retry_file_operation(func: Callable, *args, **kwargs) -> Any:
     """Retry file operations with file-specific configuration"""
+    # File operations use very short delays - usually file locks are brief
     config = RetryConfig(
-        max_attempts=3,
-        base_delay=0.1,
-        max_delay=2.0,
+        max_attempts=ThresholdRetryConfig.DEFAULT_RETRIES,
+        base_delay=TimingConstants.MICRO_DELAY,
+        max_delay=TimingConstants.STANDARD_DELAY * 2,  # 2s max for file ops
         strategy=RetryStrategy.LINEAR_BACKOFF,
         retryable_exceptions=(
             OSError,

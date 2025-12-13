@@ -21,6 +21,11 @@ import psutil
 
 
 try:
+    from src.constants.threshold_constants import (
+        TimingConstants,
+        RetryConfig,
+        ResourceThresholds,
+    )
     from src.event_manager import event_manager
     from src.utils.redis_client import get_redis_client
 except ImportError as e:
@@ -35,10 +40,11 @@ class PerformanceOptimizedDiagnostics:
     """
 
     def __init__(self):
-        # Performance monitoring settings
-        self.max_user_permission_timeout = 30.0  # Reduced from 600s to 30s
-        self.permission_retry_attempts = 2
-        self.memory_warning_threshold = 0.8  # 80% memory usage warning
+        """Initialize performance diagnostics with monitoring settings and Redis."""
+        # Performance monitoring settings (Issue #376 - use named constants)
+        self.max_user_permission_timeout = float(TimingConstants.SHORT_TIMEOUT)
+        self.permission_retry_attempts = RetryConfig.MIN_RETRIES
+        self.memory_warning_threshold = ResourceThresholds.MEMORY_WARNING_THRESHOLD
 
         self.system_info = self._get_system_info()
         self.redis_client = None
@@ -105,7 +111,7 @@ class PerformanceOptimizedDiagnostics:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=5.0,  # Short timeout for GPU query
+                timeout=TimingConstants.MEDIUM_DELAY,  # Short timeout for GPU query
             )
 
             if result.returncode == 0:
@@ -124,100 +130,87 @@ class PerformanceOptimizedDiagnostics:
         except Exception as e:
             return {"status": f"GPU detection error: {str(e)}"}
 
+    async def _publish_permission_request(
+        self, task_id: str, report: Dict[str, Any], attempt: int
+    ) -> asyncio.Future:
+        """Publish permission request and return future (Issue #315 - extracted helper)."""
+        permission_future = asyncio.Future()
+        await event_manager.publish(
+            "user_permission_request",
+            {
+                "task_id": task_id,
+                "report": report,
+                "question": (
+                    "A task failed. Do you approve applying the suggested fixes? "
+                    f"(Auto-timeout in {self.max_user_permission_timeout}s)"
+                ),
+                "attempt": attempt + 1,
+                "max_attempts": self.permission_retry_attempts,
+                "timeout_seconds": self.max_user_permission_timeout,
+            },
+        )
+        print(
+            f"Permission request sent for task {task_id} "
+            f"(attempt {attempt + 1}/{self.permission_retry_attempts})"
+        )
+        print(f"Waiting up to {self.max_user_permission_timeout}s for response...")
+        return permission_future
+
+    async def _handle_permission_timeout(
+        self, task_id: str, attempt: int, start_time: float
+    ) -> bool:
+        """Handle permission timeout with retry logic (Issue #315 - extracted helper)."""
+        elapsed_time = time.time() - start_time
+        logger.warning(f"User permission timeout after {elapsed_time:.2f}s (attempt {attempt + 1})")
+
+        if attempt < self.permission_retry_attempts - 1:
+            await event_manager.publish(
+                "log_message",
+                {
+                    "level": "WARNING",
+                    "message": (
+                        f"Permission request timeout (attempt {attempt + 1}). Retrying... "
+                        f"({self.permission_retry_attempts - attempt - 1} attempts remaining)"
+                    ),
+                },
+            )
+            await asyncio.sleep(RetryConfig.BACKOFF_BASE)
+            return True  # Should retry
+
+        await self._handle_permission_timeout_fallback(task_id, elapsed_time)
+        return False  # No more retries
+
     async def request_user_permission_optimized(
         self, task_id: str, report: Dict[str, Any]
     ) -> bool:
         """
-        PERFORMANCE OPTIMIZED: Request user permission with intelligent timeout handling
-
-        CHANGES FROM ORIGINAL:
-        - Reduced timeout from 600s (10 minutes) to 30s
-        - Added retry mechanism for better user experience
-        - Implemented automatic fallback with user notification
-        - Added performance logging
+        PERFORMANCE OPTIMIZED: Request user permission (Issue #315 - refactored depth 5 to 3).
         """
         start_time = time.time()
 
         for attempt in range(self.permission_retry_attempts):
             try:
-                logger.info(
-                    f"Requesting user permission for task {task_id} (attempt {attempt + 1})"
-                )
-
-                # Create permission future
-                permission_future = asyncio.Future()
-
-                # Publish permission request
-                await event_manager.publish(
-                    "user_permission_request",
-                    {
-                        "task_id": task_id,
-                        "report": report,
-                        "question": (
-                            "A task failed. Do you approve applying the suggested fixes? "
-                            f"(Auto-timeout in {self.max_user_permission_timeout}s)"
-                        ),
-                        "attempt": attempt + 1,
-                        "max_attempts": self.permission_retry_attempts,
-                        "timeout_seconds": self.max_user_permission_timeout,
-                    },
-                )
-
-                print(
-                    f"Permission request sent for task {task_id} "
-                    f"(attempt {attempt + 1}/{self.permission_retry_attempts})"
-                )
-                print(
-                    f"Waiting up to {self.max_user_permission_timeout}s for response..."
-                )
+                logger.info(f"Requesting user permission for task {task_id} (attempt {attempt + 1})")
+                permission_future = await self._publish_permission_request(task_id, report, attempt)
 
                 try:
-                    # PERFORMANCE FIX: Reduced from 600s to 30s
                     permission_granted = await asyncio.wait_for(
                         permission_future, timeout=self.max_user_permission_timeout
                     )
-
                     elapsed_time = time.time() - start_time
-                    logger.info(
-                        f"User permission received in {elapsed_time:.2f}s: {permission_granted}"
-                    )
+                    logger.info(f"User permission received in {elapsed_time:.2f}s: {permission_granted}")
                     return permission_granted
 
                 except asyncio.TimeoutError:
-                    elapsed_time = time.time() - start_time
-                    logger.warning(
-                        f"User permission timeout after {elapsed_time:.2f}s (attempt {attempt + 1})"
-                    )
-
-                    if attempt < self.permission_retry_attempts - 1:
-                        # Retry with notification
-                        await event_manager.publish(
-                            "log_message",
-                            {
-                                "level": "WARNING",
-                                "message": (
-                                    f"Permission request timeout "
-                                    f"(attempt {attempt + 1}). Retrying... "
-                                    f"({self.permission_retry_attempts - attempt - 1} "
-                                    f"attempts remaining)"
-                                ),
-                            },
-                        )
-                        await asyncio.sleep(2)  # Short delay before retry
-                    else:
-                        # Final timeout - use safe fallback
-                        await self._handle_permission_timeout_fallback(
-                            task_id, elapsed_time
-                        )
+                    should_retry = await self._handle_permission_timeout(task_id, attempt, start_time)
+                    if not should_retry:
                         return False
 
             except Exception as e:
-                logger.error(
-                    f"Error in permission request (attempt {attempt + 1}): {e}"
-                )
+                logger.error(f"Error in permission request (attempt {attempt + 1}): {e}")
                 if attempt == self.permission_retry_attempts - 1:
                     return False
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         return False
 
@@ -268,9 +261,11 @@ class PerformanceOptimizedDiagnostics:
         analysis = {"bottlenecks": [], "optimal_areas": [], "warnings": []}
 
         try:
-            # CPU Analysis
+            # CPU Analysis (Issue #376 - use named constants)
             cpu_usage = self.system_info.get("cpu", {}).get("usage_percent", 0)
-            if cpu_usage > 90:
+            cpu_high_pct = ResourceThresholds.CPU_HIGH_THRESHOLD * 100
+            cpu_optimal_pct = ResourceThresholds.CPU_OPTIMAL_MAX * 100
+            if cpu_usage > cpu_high_pct:
                 analysis["bottlenecks"].append(
                     {
                         "type": "cpu",
@@ -278,7 +273,7 @@ class PerformanceOptimizedDiagnostics:
                         "message": f"CPU usage at {cpu_usage}% - potential bottleneck",
                     }
                 )
-            elif cpu_usage < 20:
+            elif cpu_usage < cpu_optimal_pct:
                 analysis["optimal_areas"].append(
                     {
                         "type": "cpu",
@@ -302,11 +297,13 @@ class PerformanceOptimizedDiagnostics:
                     }
                 )
 
-            # GPU Analysis
+            # GPU Analysis (Issue #376 - use named constants)
             gpu_info = self.system_info.get("gpu", {})
             gpu_util = gpu_info.get("utilization_percent")
+            gpu_low_pct = ResourceThresholds.GPU_LOW_UTILIZATION * 100
+            gpu_saturated_pct = ResourceThresholds.GPU_SATURATED * 100
             if gpu_util is not None:
-                if gpu_util < 20:
+                if gpu_util < gpu_low_pct:
                     analysis["warnings"].append(
                         {
                             "type": "gpu",
@@ -317,7 +314,7 @@ class PerformanceOptimizedDiagnostics:
                             ),
                         }
                     )
-                elif gpu_util > 95:
+                elif gpu_util > gpu_saturated_pct:
                     analysis["bottlenecks"].append(
                         {
                             "type": "gpu",
@@ -348,9 +345,10 @@ class PerformanceOptimizedDiagnostics:
         recommendations = []
 
         try:
-            # Memory recommendations
+            # Memory recommendations (Issue #376 - use named constants)
             memory_info = self.system_info.get("memory", {})
-            if memory_info.get("used_percent", 0) > 80:
+            memory_warning_pct = ResourceThresholds.MEMORY_WARNING_THRESHOLD * 100
+            if memory_info.get("used_percent", 0) > memory_warning_pct:
                 recommendations.append(
                     {
                         "category": "memory",
@@ -363,10 +361,11 @@ class PerformanceOptimizedDiagnostics:
                     }
                 )
 
-            # GPU recommendations
+            # GPU recommendations (Issue #376 - use named constants)
             gpu_info = self.system_info.get("gpu", {})
             gpu_util = gpu_info.get("utilization_percent")
-            if gpu_util is not None and gpu_util < 30:
+            gpu_rec_pct = ResourceThresholds.GPU_RECOMMENDATION_THRESHOLD * 100
+            if gpu_util is not None and gpu_util < gpu_rec_pct:
                 recommendations.append(
                     {
                         "category": "gpu",
@@ -381,9 +380,9 @@ class PerformanceOptimizedDiagnostics:
                     }
                 )
 
-            # CPU recommendations
+            # CPU recommendations (Issue #376 - use named constants)
             cpu_cores = self.system_info.get("cpu", {}).get("logical_cores", 0)
-            if cpu_cores > 16:
+            if cpu_cores > ResourceThresholds.HIGH_CORE_COUNT:
                 recommendations.append(
                     {
                         "category": "cpu",

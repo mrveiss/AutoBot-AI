@@ -60,6 +60,7 @@ class LongRunningOperationsDemo:
     """Demonstration of the long-running operations framework"""
 
     def __init__(self):
+        """Initialize demo with empty manager and migrator references."""
         self.manager = None
         self.migrator = None
 
@@ -329,6 +330,7 @@ class LongRunningOperationsDemo:
 
         # Simple analysis operation
         async def analysis_operation(context):
+            """Run iterative analysis steps with progress tracking."""
             for i in range(50):
                 await asyncio.sleep(0.05)
                 await context.update_progress(f"Analyzing step {i}", i + 1, 50)

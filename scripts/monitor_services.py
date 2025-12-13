@@ -46,6 +46,7 @@ class ServiceMonitor:
     """Monitors AutoBot services health and performance."""
 
     def __init__(self, config_file: Optional[str] = None):
+        """Initialize service monitor with registry and monitoring data structures."""
         self.service_registry = get_service_registry(config_file)
         self.monitoring_data: Dict[str, List[Dict[str, Any]]] = {}
         self.is_monitoring = False
@@ -193,6 +194,7 @@ class CLIMonitor:
     """Command-line interface for monitoring."""
 
     def __init__(self, monitor: ServiceMonitor):
+        """Initialize CLI monitor with service monitor instance."""
         self.monitor = monitor
 
     def print_status_table(self, status: Dict[str, Any]):
@@ -243,6 +245,7 @@ class WebDashboard:
     """Web-based monitoring dashboard."""
 
     def __init__(self, monitor: ServiceMonitor, port: int = 8080):
+        """Initialize web dashboard with Flask application and routes."""
         if not FLASK_AVAILABLE:
             raise ImportError(
                 "Flask required for web dashboard. Install with: pip install flask flask-cors"
@@ -256,30 +259,34 @@ class WebDashboard:
         self.setup_routes()
 
     def setup_routes(self):
-        """Set up Flask routes."""
+        """Set up Flask routes for dashboard, API status, history, and reports."""
 
         @self.app.route("/")
         def dashboard():
+            """Render the main dashboard HTML template."""
             return render_template_string(HTML_TEMPLATE)
 
         @self.app.route("/api/status")
         async def api_status():
+            """Return current status of all monitored services as JSON."""
             status = await self.monitor.check_all_services()
             return jsonify(status)
 
         @self.app.route("/api/history/<service>")
         def api_service_history(service):
+            """Return historical data for a specific service as JSON."""
             hours = int(request.args.get("hours", 24))
             history = self.monitor.get_service_history(service, hours)
             return jsonify(history)
 
         @self.app.route("/api/report")
         def api_report():
+            """Return comprehensive monitoring report as JSON."""
             report = self.monitor.generate_report()
             return jsonify(report)
 
     def run(self):
-        """Start the web dashboard."""
+        """Start the web dashboard server and open browser automatically."""
         print(f"🌐 Starting web dashboard on http://localhost:{self.port}")
         print(f"🔄 Dashboard will auto-refresh every 30 seconds")
 
@@ -509,6 +516,7 @@ HTML_TEMPLATE = """
 
 
 async def main():
+    """Main entry point for service monitoring with CLI argument parsing."""
     parser = argparse.ArgumentParser(
         description="AutoBot Service Health Monitor",
         formatter_class=argparse.RawDescriptionHelpFormatter,

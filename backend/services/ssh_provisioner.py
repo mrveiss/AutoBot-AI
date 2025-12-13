@@ -41,11 +41,165 @@ class SSHKeyProvisioner:
         self.connection_timeout = connection_timeout
         logger.info("SSH Key Provisioner initialized")
 
+    def _generate_rsa_keypair(self, host_ip: str) -> Tuple[bytes, str, "rsa.RSAPublicKey"]:
+        """
+        Generate 4096-bit RSA key pair with public key comment.
+
+        Issue #281: Extracted helper for key generation.
+
+        Args:
+            host_ip: Host IP for key comment
+
+        Returns:
+            Tuple of (private_pem_bytes, public_key_with_comment, public_key_object)
+        """
+        logger.debug("Generating 4096-bit RSA key pair")
+        private_key = rsa.generate_private_key(
+            public_exponent=65537, key_size=4096, backend=default_backend()
+        )
+
+        # Serialize private key (unencrypted - will be encrypted by InfrastructureDB)
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.OpenSSH,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+
+        # Serialize public key
+        public_key = private_key.public_key()
+        public_openssh = public_key.public_bytes(
+            encoding=serialization.Encoding.OpenSSH,
+            format=serialization.PublicFormat.OpenSSH,
+        )
+        pub_key_str = public_openssh.decode("utf-8")
+
+        # Add comment to public key
+        pub_key_with_comment = f"{pub_key_str} autobot-provisioned-key@{host_ip}"
+
+        return private_pem, pub_key_with_comment, public_key
+
+    def _connect_with_password(
+        self, host_ip: str, port: int, username: str, password: str
+    ) -> paramiko.SSHClient:
+        """
+        Establish SSH connection using password authentication.
+
+        Issue #281: Extracted helper for password authentication.
+
+        Args:
+            host_ip: IP address of remote host
+            port: SSH port
+            username: SSH username
+            password: Password for authentication
+
+        Returns:
+            Connected SSHClient instance
+        """
+        logger.info(f"Connecting to {host_ip}:{port} with password authentication")
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        ssh.connect(
+            hostname=host_ip,
+            port=port,
+            username=username,
+            password=password,
+            timeout=self.connection_timeout,
+            banner_timeout=self.connection_timeout,
+        )
+
+        logger.info("Password authentication successful")
+        return ssh
+
+    def _setup_authorized_keys(
+        self, ssh: paramiko.SSHClient, pub_key_with_comment: str
+    ) -> None:
+        """
+        Setup .ssh directory and add public key to authorized_keys.
+
+        Issue #281: Extracted helper for authorized_keys setup.
+
+        Args:
+            ssh: Active SSH client connection
+            pub_key_with_comment: Public key string with comment
+        """
+        # Create .ssh directory with proper permissions
+        logger.debug("Creating .ssh directory on remote host")
+        self._exec_command(ssh, "mkdir -p ~/.ssh && chmod 700 ~/.ssh")
+
+        # Add public key to authorized_keys
+        logger.debug("Adding public key to authorized_keys")
+        self._exec_command(
+            ssh, f"echo '{pub_key_with_comment}' >> ~/.ssh/authorized_keys"
+        )
+
+        # Set proper permissions on authorized_keys
+        self._exec_command(ssh, "chmod 600 ~/.ssh/authorized_keys")
+
+        logger.info("Public key added to remote host")
+
+    def _verify_key_authentication(
+        self, host_ip: str, port: int, username: str, private_key_str: str
+    ) -> None:
+        """
+        Verify key authentication works by connecting with the new key.
+
+        Issue #281: Extracted helper for key verification.
+
+        Args:
+            host_ip: IP address of remote host
+            port: SSH port
+            username: SSH username
+            private_key_str: Private key as string
+
+        Raises:
+            Exception: If key authentication fails
+        """
+        # Create paramiko RSAKey from in-memory string (SECURITY: No disk storage)
+        logger.debug("Loading private key into paramiko RSAKey (in-memory only)")
+        private_key_file = StringIO(private_key_str)
+        pkey = paramiko.RSAKey.from_private_key(private_key_file)
+
+        # Verify key authentication works
+        logger.info("Verifying key authentication with in-memory key")
+        ssh_test = paramiko.SSHClient()
+        ssh_test.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        ssh_test.connect(
+            hostname=host_ip,
+            port=port,
+            username=username,
+            pkey=pkey,
+            timeout=self.connection_timeout,
+            banner_timeout=self.connection_timeout,
+        )
+
+        # Test command execution
+        self._exec_command(ssh_test, "echo 'Key authentication verified'")
+        ssh_test.close()
+
+    def _close_ssh_safe(self, ssh: paramiko.SSHClient) -> None:
+        """
+        Safely close SSH connection with error handling.
+
+        Issue #281: Extracted helper for safe connection cleanup.
+
+        Args:
+            ssh: SSH client to close (may be None)
+        """
+        if ssh:
+            try:
+                ssh.close()
+            except Exception as e:
+                logger.warning(f"Error closing SSH connection: {e}")
+
     def provision_key(
         self, host_ip: str, port: int, username: str, password: str
     ) -> Tuple[str, str]:
         """
-        Provision SSH key on remote host
+        Provision SSH key on remote host.
+
+        Issue #281: Refactored from 145 lines to use extracted helper methods.
 
         Steps:
         1. Generate 4096-bit RSA key pair
@@ -71,94 +225,25 @@ class SSHKeyProvisioner:
         """
         logger.info(f"Starting SSH key provisioning for {username}@{host_ip}:{port}")
 
-        # Generate 4096-bit RSA key pair
-        logger.debug("Generating 4096-bit RSA key pair")
-        private_key = rsa.generate_private_key(
-            public_exponent=65537, key_size=4096, backend=default_backend()
-        )
-
-        # Serialize private key (unencrypted - will be encrypted by InfrastructureDB)
-        private_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.OpenSSH,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-
-        # Serialize public key
-        public_key = private_key.public_key()
-        public_openssh = public_key.public_bytes(
-            encoding=serialization.Encoding.OpenSSH,
-            format=serialization.PublicFormat.OpenSSH,
-        )
-        pub_key_str = public_openssh.decode("utf-8")
-
-        # Add comment to public key
-        pub_key_with_comment = f"{pub_key_str} autobot-provisioned-key@{host_ip}"
+        # Generate key pair (Issue #281: uses helper)
+        private_pem, pub_key_with_comment, public_key = self._generate_rsa_keypair(host_ip)
+        private_key_str = private_pem.decode("utf-8")
 
         ssh = None
 
         try:
-            # Connect with password authentication
-            logger.info(f"Connecting to {host_ip}:{port} with password authentication")
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            # Connect with password (Issue #281: uses helper)
+            ssh = self._connect_with_password(host_ip, port, username, password)
 
-            ssh.connect(
-                hostname=host_ip,
-                port=port,
-                username=username,
-                password=password,
-                timeout=self.connection_timeout,
-                banner_timeout=self.connection_timeout,
-            )
-
-            logger.info("Password authentication successful")
-
-            # Create .ssh directory with proper permissions
-            logger.debug("Creating .ssh directory on remote host")
-            self._exec_command(ssh, "mkdir -p ~/.ssh && chmod 700 ~/.ssh")
-
-            # Add public key to authorized_keys
-            logger.debug("Adding public key to authorized_keys")
-            self._exec_command(
-                ssh, f"echo '{pub_key_with_comment}' >> ~/.ssh/authorized_keys"
-            )
-
-            # Set proper permissions on authorized_keys
-            self._exec_command(ssh, "chmod 600 ~/.ssh/authorized_keys")
-
-            logger.info("Public key added to remote host")
+            # Setup authorized_keys (Issue #281: uses helper)
+            self._setup_authorized_keys(ssh, pub_key_with_comment)
 
             # Close password-authenticated connection
             ssh.close()
             ssh = None
 
-            # Convert private key to string for in-memory handling
-            private_key_str = private_pem.decode("utf-8")
-
-            # Create paramiko RSAKey from in-memory string (SECURITY: No disk storage)
-            logger.debug("Loading private key into paramiko RSAKey (in-memory only)")
-            private_key_file = StringIO(private_key_str)
-            pkey = paramiko.RSAKey.from_private_key(private_key_file)
-
-            # Verify key authentication works
-            logger.info("Verifying key authentication with in-memory key")
-            ssh_test = paramiko.SSHClient()
-            ssh_test.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-            ssh_test.connect(
-                hostname=host_ip,
-                port=port,
-                username=username,
-                pkey=pkey,
-                timeout=self.connection_timeout,
-                banner_timeout=self.connection_timeout,
-            )
-
-            # Test command execution
-            self._exec_command(ssh_test, "echo 'Key authentication verified'")
-
-            ssh_test.close()
+            # Verify key authentication (Issue #281: uses helper)
+            self._verify_key_authentication(host_ip, port, username, private_key_str)
 
             logger.info(f"SSH key provisioning successful for {username}@{host_ip}")
 
@@ -181,11 +266,7 @@ class SSHKeyProvisioner:
             raise
 
         finally:
-            if ssh:
-                try:
-                    ssh.close()
-                except Exception as e:
-                    logger.warning(f"Error closing SSH connection: {e}")
+            self._close_ssh_safe(ssh)
 
     def _exec_command(
         self, ssh: paramiko.SSHClient, command: str, timeout: int = 10

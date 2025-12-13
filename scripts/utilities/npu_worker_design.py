@@ -36,6 +36,7 @@ class NPUTask:
     timeout_seconds: int = 30
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert NPU task to dictionary representation."""
         return {
             "task_id": self.task_id,
             "task_type": self.task_type.value,
@@ -50,6 +51,7 @@ class NPUWorkerArchitecture:
     """Design for Native NPU Worker architecture."""
 
     def __init__(self):
+        """Initialize NPU worker architecture design specification."""
         self.architecture = {
             "overview": {
                 "concept": "Hybrid AutoBot with dedicated NPU worker on Windows host",

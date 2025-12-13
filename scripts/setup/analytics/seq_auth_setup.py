@@ -243,6 +243,7 @@ def verify_seq_logs(seq_url=None):
 
 
 def main():
+    """Entry point for Seq authentication and API key configuration."""
     seq_url = os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
     print("🚀 AutoBot Seq Analytics Configuration")

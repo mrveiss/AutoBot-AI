@@ -23,6 +23,7 @@ from typing import Any, Dict
 
 import psutil
 
+from src.constants.threshold_constants import TimingConstants
 from src.unified_config import API_BASE_URL
 
 try:
@@ -47,6 +48,7 @@ class SystemMonitor:
     """Comprehensive system monitoring with metrics collection"""
 
     def __init__(self, project_root: Path = None):
+        """Initialize system monitor with project root and metrics database."""
         self.project_root = project_root or Path(__file__).parent.parent
         self.reports_dir = self.project_root / "reports" / "monitoring"
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -829,7 +831,7 @@ class SystemMonitor:
                     break
                 except Exception as e:
                     logger.error(f"Monitoring error: {e}")
-                    await asyncio.sleep(30)  # Wait before retrying
+                    await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
         else:
             # Single monitoring cycle
             results = await self.run_monitoring_cycle()

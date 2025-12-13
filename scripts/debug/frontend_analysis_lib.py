@@ -137,6 +137,7 @@ class FrontendDebugger:
         """Set up page event handlers for data collection."""
 
         def handle_console(msg):
+            """Handle console log events and capture to log entries."""
             entry = ConsoleLogEntry(
                 type=msg.type,
                 text=msg.text,
@@ -148,11 +149,13 @@ class FrontendDebugger:
                 self._log(f"  Location: {entry.location}")
 
         def handle_page_error(error):
+            """Handle page error events and capture error messages."""
             error_str = str(error)
             self.errors.append(error_str)
             self._log(f"PAGE ERROR: {error_str}")
 
         def handle_request(request):
+            """Handle network request events and capture request details."""
             request_info = NetworkRequestInfo(
                 url=request.url,
                 method=request.method,
@@ -165,6 +168,7 @@ class FrontendDebugger:
             )
 
         def handle_response(response):
+            """Handle network response events and capture response status."""
             response_info = NetworkResponseInfo(
                 url=response.url,
                 status=response.status,

@@ -37,6 +37,7 @@ class ConfigMigrator:
     """Migrates codebase to use consolidated configuration"""
 
     def __init__(self, project_root: Path):
+        """Initialize config migrator with project paths and import mappings."""
         self.project_root = project_root
         self.src_dir = project_root / "src"
         self.backend_dir = project_root / "backend"

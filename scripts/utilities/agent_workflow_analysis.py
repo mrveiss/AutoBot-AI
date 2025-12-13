@@ -36,6 +36,7 @@ class WorkflowAnalyzer:
     """Analyze and design multi-agent workflows for complex tasks."""
 
     def __init__(self):
+        """Initialize workflow analyzer with empty gap and workflow containers."""
         self.current_workflow_gaps = []
         self.ideal_workflows = {}
 

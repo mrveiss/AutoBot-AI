@@ -56,6 +56,7 @@ class SessionOwnershipBackfill:
         dry_run: bool = False,
         verbose: bool = False
     ):
+        """Initialize backfill tool with owner defaults and operational flags."""
         self.default_owner = default_owner
         self.dry_run = dry_run
         self.verbose = verbose

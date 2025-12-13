@@ -20,13 +20,14 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set
-import requests
+import aiohttp
 import psutil
 
 # Import centralized Redis client and network constants
 sys.path.append(str(Path(__file__).parent.parent))
 from src.utils.redis_client import get_redis_client
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.threshold_constants import TimingConstants
 
 # Configure logging
 logging.basicConfig(
@@ -110,6 +111,7 @@ class ComponentInfo:
     error_message: Optional[str] = None
 
     def __post_init__(self):
+        """Initialize default dependencies list if not provided."""
         if self.dependencies is None:
             self.dependencies = []
 
@@ -118,6 +120,7 @@ class StartupCoordinator:
     """Coordinates the startup of AutoBot components with proper dependency management"""
 
     def __init__(self):
+        """Initialize startup coordinator with component definitions and state management."""
         self.components: Dict[str, ComponentInfo] = {}
         self.processes: Dict[str, subprocess.Popen] = {}
         self.startup_state_file = Path("data/startup_state.json")
@@ -217,20 +220,17 @@ class StartupCoordinator:
             return False
 
     async def _perform_health_check(self, component: "ComponentInfo") -> bool:
-        """Perform the actual health check based on URL type (Issue #315 - extracted)."""
+        """Perform the actual health check based on URL type (Issue #315 - extracted, #359 - async)."""
         if component.health_url.startswith('http'):
-            response = requests.get(
-                component.health_url,
-                timeout=self.health_check_timeout
-            )
-            return response.status_code == 200
+            # Issue #359: Use async HTTP client instead of blocking requests
+            timeout = aiohttp.ClientTimeout(total=self.health_check_timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(component.health_url) as response:
+                    return response.status == 200
 
         if component.health_url.startswith('redis'):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            healthy = loop.run_until_complete(_check_redis_health())
-            loop.close()
-            return healthy
+            # Issue #359: Direct async call instead of creating new event loop
+            return await _check_redis_health()
 
         return False
 
@@ -383,7 +383,7 @@ class StartupCoordinator:
 
                 # Wait a bit and try again
                 logger.info("⏳ Waiting for dependencies...")
-                await asyncio.sleep(2)
+                await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
                 continue
 
             # Start components in parallel if they don't depend on each other
@@ -434,11 +434,12 @@ class StartupCoordinator:
 
 
 async def main():
-    """Main startup coordinator entry point"""
+    """Main startup coordinator entry point with argument parsing and signal handling."""
     coordinator = StartupCoordinator()
 
     # Set up signal handling
     def signal_handler(signum, frame):
+        """Handle shutdown signals by stopping all components gracefully."""
         logger.info(f"Received signal {signum}, shutting down...")
         coordinator.stop_all()
         sys.exit(0)
@@ -500,7 +501,7 @@ async def main():
     # Keep running until interrupted
     try:
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(TimingConstants.LONG_DELAY)
 
             # Periodic health checks
             for name, component in coordinator.components.items():

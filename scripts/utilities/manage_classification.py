@@ -22,6 +22,7 @@ from src.workflow_classifier import WorkflowClassifier
 
 
 def main():
+    """Entry point for workflow classification management utility."""
     classifier = WorkflowClassifier()
 
     print("🤖 AutoBot Classification Management")

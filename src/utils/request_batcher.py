@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -320,14 +321,16 @@ class IntelligentRequestBatcher:
         logger.debug(f"Added request {request.id} with priority {request.priority}")
         return request.id
 
-    async def get_result(self, request_id: str, timeout: float = 30.0) -> Optional[str]:
+    async def get_result(
+        self, request_id: str, timeout: float = TimingConstants.SHORT_TIMEOUT
+    ) -> Optional[str]:
         """Get the result for a specific request"""
         start_time = time.time()
 
         while time.time() - start_time < timeout:
             # Check if request is still pending
             if request_id in self.pending_requests:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
                 continue
 
             # Look for result in completed batches
@@ -335,7 +338,7 @@ class IntelligentRequestBatcher:
                 if request_id in batch_result.individual_responses:
                     return batch_result.individual_responses[request_id]
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         logger.warning(f"Timeout waiting for result of request {request_id}")
         return None
@@ -345,10 +348,10 @@ class IntelligentRequestBatcher:
         while not self._shutdown:
             try:
                 await self._process_pending_requests()
-                await asyncio.sleep(0.1)  # Small delay to prevent CPU spinning
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Small delay to prevent CPU spinning
             except Exception as e:
                 logger.error(f"Error in batch processing loop: {e}")
-                await asyncio.sleep(1)  # Longer delay on error
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Longer delay on error
 
     async def _process_pending_requests(self):
         """Process pending requests using intelligent batching"""
@@ -485,10 +488,10 @@ class IntelligentRequestBatcher:
             request_id = queue[0]
             request = self.pending_requests.get(request_id)
 
-            if request and request.priority in [
+            if request and request.priority in (
                 RequestPriority.CRITICAL,
                 RequestPriority.HIGH,
-            ]:
+            ):
                 # Use smaller batch for high priority
                 max_size = min(2, self.max_batch_size)
             else:
@@ -602,7 +605,7 @@ class IntelligentRequestBatcher:
         """Execute the combined request (placeholder for actual API call)"""
         # This is where you would integrate with your actual Claude API client
         # For now, returning a placeholder response
-        await asyncio.sleep(0.1)  # Simulate API call delay
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate API call delay
         return f"Response to combined request: {content[:100]}..."
 
     def _parse_batch_response(

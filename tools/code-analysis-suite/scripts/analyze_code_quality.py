@@ -172,62 +172,66 @@ async def run_comprehensive_quality_analysis():
     # Detailed analysis summaries
     print("📊 **Detailed Analysis Summaries:**")
 
-    analysis_summaries = {
-        'duplication': ('Code Duplication', '♻️'),
-        'environment': ('Environment Variables', '⚙️'),
-        'performance': ('Performance', '⚡'),
-        'security': ('Security', '🛡️'),
-        'api_consistency': ('API Consistency', '🔗'),
-        'testing_coverage': ('Testing Coverage', '🧪'),
-        'architecture': ('Architecture', '🏗️'),
+    # Issue #315: Refactored with data-driven formatting instead of elif chain
+    analysis_formats = {
+        'duplication': {
+            'name': 'Code Duplication', 'emoji': '♻️',
+            'fields': [
+                ('total_duplicate_groups', 'Found {} duplicate code groups'),
+                ('total_lines_saved', 'Potential lines saved: {}'),
+            ]
+        },
+        'environment': {
+            'name': 'Environment Variables', 'emoji': '⚙️',
+            'fields': [
+                ('total_hardcoded_values', 'Found {} hardcoded values'),
+                ('critical_hardcoded_values', 'Critical values: {}'),
+            ]
+        },
+        'security': {
+            'name': 'Security', 'emoji': '🛡️',
+            'fields': [
+                ('total_vulnerabilities', 'Found {} potential vulnerabilities'),
+                ('critical_vulnerabilities', 'Critical vulnerabilities: {}'),
+            ]
+        },
+        'performance': {
+            'name': 'Performance', 'emoji': '⚡',
+            'fields': [
+                ('total_performance_issues', 'Found {} performance issues'),
+                ('critical_issues', 'Critical issues: {}'),
+            ]
+        },
+        'api_consistency': {
+            'name': 'API Consistency', 'emoji': '🔗',
+            'fields': [
+                ('total_endpoints', 'Analyzed {} API endpoints'),
+                ('inconsistencies_found', 'Found {} consistency issues'),
+            ]
+        },
+        'testing_coverage': {
+            'name': 'Testing Coverage', 'emoji': '🧪',
+            'fields': [
+                ('total_functions', 'Analyzed {} functions'),
+                ('test_coverage_percentage', 'Test coverage: {}%'),
+            ]
+        },
+        'architecture': {
+            'name': 'Architecture', 'emoji': '🏗️',
+            'fields': [
+                ('total_components', 'Analyzed {} architectural components'),
+                ('architectural_issues', 'Found {} architectural issues'),
+            ]
+        },
     }
 
-    for analysis_type, (name, emoji) in analysis_summaries.items():
+    for analysis_type, fmt in analysis_formats.items():
         data = report['detailed_analyses'].get(analysis_type)
         if data:
-            print(f"\n{emoji} **{name} Analysis:**")
-
-            if analysis_type == 'duplication':
-                groups = data.get('total_duplicate_groups', 0)
-                lines_saved = data.get('total_lines_saved', 0)
-                print(f"   • Found {groups} duplicate code groups")
-                print(f"   • Potential lines saved: {lines_saved}")
-
-            elif analysis_type == 'environment':
-                critical = data.get('critical_hardcoded_values', 0)
-                total = data.get('total_hardcoded_values', 0)
-                print(f"   • Found {total} hardcoded values")
-                print(f"   • Critical values: {critical}")
-
-            elif analysis_type == 'security':
-                vulns = data.get('total_vulnerabilities', 0)
-                critical_vulns = data.get('critical_vulnerabilities', 0)
-                print(f"   • Found {vulns} potential vulnerabilities")
-                print(f"   • Critical vulnerabilities: {critical_vulns}")
-
-            elif analysis_type == 'performance':
-                total_issues = data.get('total_performance_issues', 0)
-                critical_issues = data.get('critical_issues', 0)
-                print(f"   • Found {total_issues} performance issues")
-                print(f"   • Critical issues: {critical_issues}")
-
-            elif analysis_type == 'api_consistency':
-                endpoints = data.get('total_endpoints', 0)
-                inconsistencies = data.get('inconsistencies_found', 0)
-                print(f"   • Analyzed {endpoints} API endpoints")
-                print(f"   • Found {inconsistencies} consistency issues")
-
-            elif analysis_type == 'testing_coverage':
-                total_funcs = data.get('total_functions', 0)
-                coverage = data.get('test_coverage_percentage', 0)
-                print(f"   • Analyzed {total_funcs} functions")
-                print(f"   • Test coverage: {coverage}%")
-
-            elif analysis_type == 'architecture':
-                components = data.get('total_components', 0)
-                arch_issues = data.get('architectural_issues', 0)
-                print(f"   • Analyzed {components} architectural components")
-                print(f"   • Found {arch_issues} architectural issues")
+            print(f"\n{fmt['emoji']} **{fmt['name']} Analysis:**")
+            for field_key, field_fmt in fmt['fields']:
+                value = data.get(field_key, 0)
+                print(f"   • {field_fmt.format(value)}")
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")

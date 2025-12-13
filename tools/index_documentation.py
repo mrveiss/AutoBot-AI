@@ -123,33 +123,29 @@ def extract_title_from_content(content: str) -> str:
 
 
 def infer_doc_type(file_path: str) -> str:
-    """Infer document type from file path."""
+    """Infer document type from file path (Issue #315: refactored with lookup table)."""
     path_lower = file_path.lower()
 
-    if "api" in path_lower:
-        return "api"
-    elif "architecture" in path_lower:
-        return "architecture"
-    elif "developer" in path_lower or "setup" in path_lower:
-        return "developer"
-    elif "security" in path_lower:
-        return "security"
-    elif "troubleshoot" in path_lower:
-        return "troubleshooting"
-    elif "deploy" in path_lower or "docker" in path_lower:
-        return "deployment"
-    elif "test" in path_lower:
-        return "testing"
-    elif "feature" in path_lower:
-        return "feature"
-    elif "workflow" in path_lower:
-        return "workflow"
-    elif "agent" in path_lower:
-        return "agent_system"
-    elif "claude.md" in path_lower:
-        return "project_rules"
-    else:
-        return "documentation"
+    # Keyword-to-type mapping for O(1) lookup
+    type_keywords = [
+        (["api"], "api"),
+        (["architecture"], "architecture"),
+        (["developer", "setup"], "developer"),
+        (["security"], "security"),
+        (["troubleshoot"], "troubleshooting"),
+        (["deploy", "docker"], "deployment"),
+        (["test"], "testing"),
+        (["feature"], "feature"),
+        (["workflow"], "workflow"),
+        (["agent"], "agent_system"),
+        (["claude.md"], "project_rules"),
+    ]
+
+    for keywords, doc_type in type_keywords:
+        if any(kw in path_lower for kw in keywords):
+            return doc_type
+
+    return "documentation"
 
 
 def infer_category(file_path: str) -> str:
@@ -221,6 +217,76 @@ def estimate_tokens(text: str) -> int:
     """Estimate token count (rough approximation)."""
     # Rough estimate: 1 token ≈ 4 characters
     return len(text) // 4
+
+
+def _create_chunk_dict(
+    content: str,
+    section: str,
+    subsection: str | None,
+    file_path: str,
+    doc_type: str,
+    category: str,
+    title: str,
+) -> Dict[str, Any]:
+    """Create a chunk dictionary with metadata (Issue #315: extracted helper)."""
+    return {
+        "content": content,
+        "section": section,
+        "subsection": subsection,
+        "file_path": file_path,
+        "doc_type": doc_type,
+        "category": category,
+        "title": title,
+    }
+
+
+def _chunk_large_content(
+    full_content: str,
+    section_name: str,
+    subsection_name: str | None,
+    file_path: str,
+    doc_type: str,
+    category: str,
+    doc_title: str,
+    chunks: List[Dict[str, Any]],
+) -> None:
+    """Split large content into paragraph-based chunks (Issue #315: extracted helper)."""
+    paragraphs = full_content.split("\n\n")
+    current_chunk = []
+    current_size = 0
+
+    for para in paragraphs:
+        para_tokens = estimate_tokens(para)
+        if current_size + para_tokens > 800 and current_chunk:
+            chunks.append(
+                _create_chunk_dict(
+                    "\n\n".join(current_chunk),
+                    section_name,
+                    subsection_name,
+                    file_path,
+                    doc_type,
+                    category,
+                    doc_title,
+                )
+            )
+            current_chunk = [para]
+            current_size = para_tokens
+        else:
+            current_chunk.append(para)
+            current_size += para_tokens
+
+    if current_chunk:
+        chunks.append(
+            _create_chunk_dict(
+                "\n\n".join(current_chunk),
+                section_name,
+                subsection_name,
+                file_path,
+                doc_type,
+                category,
+                doc_title,
+            )
+        )
 
 
 def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
@@ -306,99 +372,27 @@ def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
             full_content = f"## {section_name}\n\n### {subsection_name}\n\n{h3_content}"
             token_count = estimate_tokens(full_content)
 
-            if token_count > 30:  # Only add substantial chunks
-                # Split large chunks
+            # Only add substantial chunks (Issue #315: use helper for large content)
+            if token_count > 30:
                 if token_count > 1000:
-                    # Split by paragraphs
-                    paragraphs = full_content.split("\n\n")
-                    current_chunk = []
-                    current_size = 0
-
-                    for para in paragraphs:
-                        para_tokens = estimate_tokens(para)
-                        if current_size + para_tokens > 800 and current_chunk:
-                            # Save current chunk
-                            chunks.append(
-                                {
-                                    "content": "\n\n".join(current_chunk),
-                                    "section": section_name,
-                                    "subsection": subsection_name,
-                                    "file_path": file_path,
-                                    "doc_type": doc_type,
-                                    "category": category,
-                                    "title": doc_title,
-                                }
-                            )
-                            current_chunk = [para]
-                            current_size = para_tokens
-                        else:
-                            current_chunk.append(para)
-                            current_size += para_tokens
-
-                    # Add remaining content
-                    if current_chunk:
-                        chunks.append(
-                            {
-                                "content": "\n\n".join(current_chunk),
-                                "section": section_name,
-                                "subsection": subsection_name,
-                                "file_path": file_path,
-                                "doc_type": doc_type,
-                                "category": category,
-                                "title": doc_title,
-                            }
-                        )
+                    _chunk_large_content(
+                        full_content, section_name, subsection_name,
+                        file_path, doc_type, category, doc_title, chunks
+                    )
                 else:
                     chunks.append(
-                        {
-                            "content": full_content,
-                            "section": section_name,
-                            "subsection": subsection_name,
-                            "file_path": file_path,
-                            "doc_type": doc_type,
-                            "category": category,
-                            "title": doc_title,
-                        }
+                        _create_chunk_dict(
+                            full_content, section_name, subsection_name,
+                            file_path, doc_type, category, doc_title
+                        )
                     )
 
-    # If no chunks created (no headers), chunk by paragraphs
+    # If no chunks created (no headers), chunk by paragraphs (Issue #315: use helper)
     if not chunks and content.strip():
-        paragraphs = content.split("\n\n")
-        current_chunk = []
-        current_size = 0
-
-        for para in paragraphs:
-            para_tokens = estimate_tokens(para)
-            if current_size + para_tokens > 800 and current_chunk:
-                chunks.append(
-                    {
-                        "content": "\n\n".join(current_chunk),
-                        "section": "Content",
-                        "subsection": None,
-                        "file_path": file_path,
-                        "doc_type": doc_type,
-                        "category": category,
-                        "title": doc_title,
-                    }
-                )
-                current_chunk = [para]
-                current_size = para_tokens
-            else:
-                current_chunk.append(para)
-                current_size += para_tokens
-
-        if current_chunk:
-            chunks.append(
-                {
-                    "content": "\n\n".join(current_chunk),
-                    "section": "Content",
-                    "subsection": None,
-                    "file_path": file_path,
-                    "doc_type": doc_type,
-                    "category": category,
-                    "title": doc_title,
-                }
-            )
+        _chunk_large_content(
+            content, "Content", None,
+            file_path, doc_type, category, doc_title, chunks
+        )
 
     return chunks
 

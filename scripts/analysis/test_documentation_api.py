@@ -33,73 +33,82 @@ async def test_documentation_browser_logic():
         total_size = 0
         total_docs = 0
 
+        def _extract_title_and_preview(content: str, filename: str) -> tuple:
+            """Extract title and preview from content (Issue #315: extracted helper)."""
+            title = filename
+            preview = ""
+            if not content:
+                return title, preview
+            lines = content.split('\n')
+            for line in lines:
+                if line.strip():
+                    if line.startswith('# '):
+                        title = line[2:].strip()
+                    preview = line.strip()
+                    break
+            return title, preview
+
+        def _determine_category(rel_path: str, category_prefix: str) -> str:
+            """Determine document category from path (Issue #315: extracted helper)."""
+            if '/docs/' not in rel_path:
+                return category_prefix
+            parts = rel_path.split('/')
+            if len(parts) > 2:  # docs/subfolder/file.md
+                return f"docs/{parts[1]}"
+            return "docs/root"
+
+        def _build_file_info(item: Path, content: str, project_root: Path, category_prefix: str) -> dict:
+            """Build file info dict for a single file (Issue #315: extracted helper)."""
+            stat = item.stat()
+            content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
+            title, preview = _extract_title_and_preview(content, item.name)
+            rel_path = str(item.relative_to(project_root))
+            category = _determine_category(rel_path, category_prefix)
+
+            return {
+                "id": f"doc_{content_hash}_{stat.st_ino}",
+                "path": rel_path,
+                "filename": item.name,
+                "title": title,
+                "category": category,
+                "type": item.suffix.lower()[1:],  # Remove the dot
+                "size_bytes": stat.st_size,
+                "size_chars": len(content),
+                "modified": stat.st_mtime,
+                "created": stat.st_ctime,
+                "mime_type": mimetypes.guess_type(str(item))[0] or 'text/plain',
+                "preview": preview[:200] + "..." if len(preview) > 200 else preview,
+                "content_hash": content_hash,
+                "exists": True,
+                "readable": True,
+                "line_count": len(content.split('\n')) if content else 0,
+                "word_count": len(content.split()) if content else 0
+            }
+
+        def _process_doc_file(item: Path, project_root: Path, category_prefix: str) -> dict:
+            """Process a single documentation file (Issue #315: extracted helper)."""
+            with open(item, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            return _build_file_info(item, content, project_root, category_prefix)
+
         def scan_directory(dir_path: Path, category_prefix: str = ""):
-            """Recursively scan directory for documentation files"""
+            """Recursively scan directory for documentation files (Issue #315: refactored)."""
             nonlocal total_size, total_docs
             files = []
 
             if not dir_path.exists() or not dir_path.is_dir():
                 return files
 
+            doc_extensions = ['.md', '.txt', '.yaml', '.yml', '.json']
+
             try:
                 for item in dir_path.iterdir():
-                    if item.is_file() and item.suffix.lower() in ['.md', '.txt', '.yaml', '.yml', '.json']:
+                    if item.is_file() and item.suffix.lower() in doc_extensions:
                         try:
-                            stat = item.stat()
-                            with open(item, 'r', encoding='utf-8', errors='ignore') as f:
-                                content = f.read()
-
-                            # Calculate content hash for unique identification
-                            content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
-
-                            # Extract first line as title if it's a markdown header
-                            title = item.name
-                            preview = ""
-                            if content:
-                                lines = content.split('\n')
-                                for line in lines:
-                                    if line.strip():
-                                        if line.startswith('# '):
-                                            title = line[2:].strip()
-                                        preview = line.strip()
-                                        break
-
-                            # Get relative path from project root
-                            rel_path = str(item.relative_to(project_root))
-
-                            # Determine category
-                            category = category_prefix
-                            if '/docs/' in rel_path:
-                                parts = rel_path.split('/')
-                                if len(parts) > 2:  # docs/subfolder/file.md
-                                    category = f"docs/{parts[1]}"
-                                else:
-                                    category = "docs/root"
-
-                            file_info = {
-                                "id": f"doc_{content_hash}_{stat.st_ino}",
-                                "path": rel_path,
-                                "filename": item.name,
-                                "title": title,
-                                "category": category,
-                                "type": item.suffix.lower()[1:],  # Remove the dot
-                                "size_bytes": stat.st_size,
-                                "size_chars": len(content),
-                                "modified": stat.st_mtime,
-                                "created": stat.st_ctime,
-                                "mime_type": mimetypes.guess_type(str(item))[0] or 'text/plain',
-                                "preview": preview[:200] + "..." if len(preview) > 200 else preview,
-                                "content_hash": content_hash,
-                                "exists": True,
-                                "readable": True,
-                                "line_count": len(content.split('\n')) if content else 0,
-                                "word_count": len(content.split()) if content else 0
-                            }
-
+                            file_info = _process_doc_file(item, project_root, category_prefix)
                             files.append(file_info)
-                            total_size += stat.st_size
+                            total_size += file_info["size_bytes"]
                             total_docs += 1
-
                         except Exception as e:
                             logger.warning(f"Error processing file {item}: {e}")
 

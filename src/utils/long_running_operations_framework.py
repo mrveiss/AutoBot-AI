@@ -42,6 +42,7 @@ import redis.asyncio as redis
 
 # Import existing timeout framework
 from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,78 @@ class LongRunningOperation:
                 total_items=0,
                 estimated_completion=None,
             )
+
+    def to_response_dict(self) -> Dict[str, Any]:
+        """Convert to API response dictionary format (Issue #372 - reduces feature envy).
+
+        Returns:
+            Dictionary with all fields formatted for API response.
+        """
+        return {
+            "operation_id": self.operation_id,
+            "operation_type": self.operation_type.value,
+            "name": self.name,
+            "description": self.description,
+            "status": self.status.value,
+            "priority": self.priority.name.lower(),
+            "created_at": self.created_at.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "progress_percentage": self.progress.progress_percentage,
+            "processed_items": self.progress.processed_items,
+            "total_items": self.progress.total_items,
+            "current_step": self.progress.current_step,
+            "estimated_completion": (
+                self.progress.estimated_completion.isoformat()
+                if self.progress.estimated_completion
+                else None
+            ),
+            "error_info": self.error_info,
+        }
+
+    def start_execution(self):
+        """Mark operation as running and set start time (Issue #372 - reduces feature envy)."""
+        self.status = OperationStatus.RUNNING
+        self.started_at = datetime.now()
+
+    def mark_completed(self, result: Any = None):
+        """Mark operation as completed with result (Issue #372 - reduces feature envy)."""
+        self.status = OperationStatus.COMPLETED
+        self.completed_at = datetime.now()
+        self.result = result
+
+    def mark_timeout(self, timeout_seconds: float):
+        """Mark operation as timed out (Issue #372 - reduces feature envy)."""
+        self.status = OperationStatus.TIMEOUT
+        self.error_info = f"Operation timed out after {timeout_seconds} seconds"
+
+    def mark_failed(self, error_message: str):
+        """Mark operation as failed with error (Issue #372 - reduces feature envy)."""
+        self.status = OperationStatus.FAILED
+        self.completed_at = datetime.now()
+        self.error_info = error_message
+
+    def mark_cancelled(self, reason: str = "User cancelled"):
+        """Mark operation as cancelled (Issue #372 - reduces feature envy)."""
+        self.status = OperationStatus.CANCELLED
+        self.completed_at = datetime.now()
+        self.error_info = reason
+
+    def get_timeout_seconds(self) -> float:
+        """Get calculated timeout from config (Issue #372 - reduces feature envy)."""
+        return self.timeout_config.get("calculated_timeout", 3600)
+
+    def get_checkpoint_interval(self) -> float:
+        """Get checkpoint interval from config (Issue #372 - reduces feature envy)."""
+        return self.timeout_config.get("checkpoint_interval", 300)
+
+    def get_progress_interval(self) -> float:
+        """Get progress report interval from config (Issue #372 - reduces feature envy)."""
+        return self.timeout_config.get("progress_report_interval", 30)
+
+    def get_operation_function(self) -> Optional[Callable]:
+        """Get operation function from context (Issue #372 - reduces feature envy)."""
+        return self.context.get("operation_function")
 
 
 class LongRunningTimeoutConfig:
@@ -518,7 +591,7 @@ class LongRunningOperationManager:
                     async with self._lock:
                         if self.active_operations < self.max_concurrent_operations:
                             break
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
                 # Get next operation from queue
                 operation_id = await self.background_queue.get()
@@ -558,7 +631,7 @@ class LongRunningOperationManager:
                 break
             except Exception as e:
                 logger.error(f"Background processor error: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
     async def create_operation(
         self,
@@ -618,14 +691,15 @@ class LongRunningOperationManager:
     async def _execute_operation_with_monitoring(
         self, operation: LongRunningOperation
     ) -> Any:
-        """Execute operation with full monitoring and checkpoint support"""
+        """Execute operation with full monitoring and checkpoint support (Issue #372 - uses model methods)."""
 
-        operation.status = OperationStatus.RUNNING
-        operation.started_at = datetime.now()
+        # Start operation using model method
+        operation.start_execution()
 
-        timeout_seconds = operation.timeout_config["calculated_timeout"]
-        checkpoint_interval = operation.timeout_config["checkpoint_interval"]
-        progress_interval = operation.timeout_config["progress_report_interval"]
+        # Get timeout config using model methods
+        timeout_seconds = operation.get_timeout_seconds()
+        checkpoint_interval = operation.get_checkpoint_interval()
+        progress_interval = operation.get_progress_interval()
 
         logger.info(
             f"Starting operation {operation.operation_id} with {timeout_seconds}s timeout"
@@ -640,8 +714,8 @@ class LongRunningOperationManager:
                 self._periodic_progress_report(operation, progress_interval)
             )
 
-            # Execute the actual operation
-            operation_function = operation.context["operation_function"]
+            # Execute the actual operation using model method
+            operation_function = operation.get_operation_function()
 
             # Create enhanced operation context
             enhanced_context = OperationExecutionContext(
@@ -661,10 +735,8 @@ class LongRunningOperationManager:
             checkpoint_task.cancel()
             progress_task.cancel()
 
-            # Mark as completed
-            operation.status = OperationStatus.COMPLETED
-            operation.completed_at = datetime.now()
-            operation.result = result
+            # Mark as completed using model method
+            operation.mark_completed(result)
 
             await self.progress_tracker.update_progress(
                 operation,
@@ -678,10 +750,8 @@ class LongRunningOperationManager:
             return result
 
         except asyncio.TimeoutError:
-            operation.status = OperationStatus.TIMEOUT
-            operation.error_info = (
-                f"Operation timed out after {timeout_seconds} seconds"
-            )
+            # Mark timeout using model method
+            operation.mark_timeout(timeout_seconds)
 
             # Save final checkpoint before timeout
             await self.checkpoint_manager.save_checkpoint(
@@ -695,8 +765,8 @@ class LongRunningOperationManager:
             raise
 
         except Exception as e:
-            operation.status = OperationStatus.FAILED
-            operation.error_info = str(e)
+            # Mark failed using model method
+            operation.mark_failed(str(e))
 
             # Save checkpoint for potential recovery
             await self.checkpoint_manager.save_checkpoint(
@@ -1110,13 +1180,13 @@ if __name__ == "__main__":
                     f"Testing: {test_op.status.value} - {test_op.progress.progress_percentage:.1f}%"
                 )
 
-                if indexing_op.status in [
+                if indexing_op.status in (
                     OperationStatus.COMPLETED,
                     OperationStatus.FAILED,
-                ] and test_op.status in [
+                ) and test_op.status in (
                     OperationStatus.COMPLETED,
                     OperationStatus.FAILED,
-                ]:
+                ):
                     break
 
                 await asyncio.sleep(5)

@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def main():
+    """Populate knowledge base with test documents."""
     try:
         kb = KnowledgeBase()
 

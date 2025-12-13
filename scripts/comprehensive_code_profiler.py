@@ -25,11 +25,15 @@ import json
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Issue #380: Module-level tuple for AST complexity checking
+_COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.AsyncFor)
+
 
 class CodebaseProfiler:
     """Comprehensive codebase analysis and profiling"""
 
     def __init__(self, project_root: str = None):
+        """Initialize profiler with project root and results containers."""
         self.project_root = Path(project_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.results = {
             "static_analysis": {},
@@ -40,8 +44,59 @@ class CodebaseProfiler:
             "recommendations": []
         }
 
+    def _should_skip_path(self, py_file: Path) -> bool:
+        """Check if path should be skipped (Issue #315: extracted helper)."""
+        skip_patterns = ["node_modules", ".git", "__pycache__", ".pytest_cache", "venv", ".env"]
+        return any(skip in str(py_file) for skip in skip_patterns)
+
+    def _process_function_node(
+        self, node: ast.FunctionDef, py_file: Path, patterns: Dict[str, Any]
+    ) -> None:
+        """Process a function definition node (Issue #315: extracted helper)."""
+        patterns["function_definitions"][node.name] += 1
+        patterns["duplicate_functions"][node.name].append(str(py_file))
+
+        complexity = self._calculate_complexity(node)
+        if complexity > 10:
+            patterns["complexity_hotspots"].append({
+                "function": node.name,
+                "file": str(py_file.relative_to(self.project_root)),
+                "complexity": complexity,
+                "line": node.lineno
+            })
+
+    def _process_ast_node(
+        self, node: ast.AST, py_file: Path, patterns: Dict[str, Any]
+    ) -> None:
+        """Process a single AST node (Issue #315: extracted helper)."""
+        if isinstance(node, ast.FunctionDef):
+            self._process_function_node(node, py_file, patterns)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                patterns["import_statements"][alias.name] += 1
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                patterns["import_statements"][node.module] += 1
+        elif isinstance(node, ast.ClassDef):
+            patterns["class_definitions"][node.name] += 1
+
+    def _analyze_single_file(self, py_file: Path, patterns: Dict[str, Any]) -> bool:
+        """Analyze a single Python file (Issue #315: extracted helper)."""
+        try:
+            with open(py_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            tree = ast.parse(content, filename=str(py_file))
+
+            for node in ast.walk(tree):
+                self._process_ast_node(node, py_file, patterns)
+            return True
+        except Exception as e:
+            print(f"Warning: Could not parse {py_file}: {e}")
+            return False
+
     def analyze_static_patterns(self) -> Dict[str, Any]:
-        """Analyze code patterns using AST"""
+        """Analyze code patterns using AST (Issue #315: refactored)."""
         print("🔍 Analyzing code patterns with AST...")
 
         patterns = {
@@ -53,12 +108,10 @@ class CodebaseProfiler:
             "duplicate_functions": defaultdict(list)
         }
 
-        python_files = []
-        for py_file in self.project_root.rglob("*.py"):
-            # Skip node_modules, .git, and other irrelevant directories
-            if any(skip in str(py_file) for skip in ["node_modules", ".git", "__pycache__", ".pytest_cache", "venv", ".env"]):
-                continue
-            python_files.append(py_file)
+        python_files = [
+            py_file for py_file in self.project_root.rglob("*.py")
+            if not self._should_skip_path(py_file)
+        ]
 
         print(f"Found {len(python_files)} Python files to analyze")
 
@@ -68,46 +121,7 @@ class CodebaseProfiler:
             print(f"Limited analysis to first 100 files for performance")
 
         for py_file in python_files:
-            if "node_modules" in str(py_file) or ".git" in str(py_file):
-                continue
-
-            try:
-                with open(py_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                tree = ast.parse(content, filename=str(py_file))
-
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.FunctionDef):
-                        patterns["function_definitions"][node.name] += 1
-
-                        # Track duplicate function names
-                        patterns["duplicate_functions"][node.name].append(str(py_file))
-
-                        # Analyze function complexity
-                        complexity = self._calculate_complexity(node)
-                        if complexity > 10:
-                            patterns["complexity_hotspots"].append({
-                                "function": node.name,
-                                "file": str(py_file.relative_to(self.project_root)),
-                                "complexity": complexity,
-                                "line": node.lineno
-                            })
-
-                    elif isinstance(node, ast.Import):
-                        for alias in node.names:
-                            patterns["import_statements"][alias.name] += 1
-
-                    elif isinstance(node, ast.ImportFrom):
-                        if node.module:
-                            patterns["import_statements"][node.module] += 1
-
-                    elif isinstance(node, ast.ClassDef):
-                        patterns["class_definitions"][node.name] += 1
-
-            except Exception as e:
-                print(f"Warning: Could not parse {py_file}: {e}")
-                continue
+            self._analyze_single_file(py_file, patterns)
 
         # Find truly duplicate functions (same name in multiple files)
         actual_duplicates = {
@@ -124,7 +138,8 @@ class CodebaseProfiler:
         complexity = 1  # Base complexity
 
         for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+            # Issue #380: Use module-level constant
+            if isinstance(child, _COMPLEXITY_BRANCH_TYPES):
                 complexity += 1
             elif isinstance(child, ast.ExceptHandler):
                 complexity += 1

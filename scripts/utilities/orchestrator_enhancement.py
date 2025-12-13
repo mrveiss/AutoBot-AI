@@ -43,6 +43,7 @@ class WorkflowEngine:
     """Enhanced orchestrator with multi-agent workflow coordination."""
 
     def __init__(self):
+        """Initialize workflow engine with agent registry and active workflows."""
         self.active_workflows = {}
         self.agent_registry = {
             "research": "Web research with Playwright",

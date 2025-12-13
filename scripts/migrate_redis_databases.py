@@ -48,6 +48,54 @@ class RedisMigrator:
 
         self.source_db = self.connections.get('MAIN')  # Database 0
 
+    def _migrate_string_key(self, key: bytes, target_db) -> bool:
+        """Migrate a string-type key (Issue #315: extracted helper)."""
+        value = self.source_db.get(key)
+        ttl = self.source_db.ttl(key)
+        target_db.set(key, value)
+        if ttl > 0:
+            target_db.expire(key, ttl)
+        return True
+
+    def _migrate_list_key(self, key: bytes, target_db) -> bool:
+        """Migrate a list-type key (Issue #315: extracted helper)."""
+        values = self.source_db.lrange(key, 0, -1)
+        for value in values:
+            target_db.lpush(key, value)
+        ttl = self.source_db.ttl(key)
+        if ttl > 0:
+            target_db.expire(key, ttl)
+        return True
+
+    def _migrate_hash_key(self, key: bytes, target_db) -> bool:
+        """Migrate a hash-type key (Issue #315: extracted helper)."""
+        values = self.source_db.hgetall(key)
+        target_db.hset(key, mapping=values)
+        ttl = self.source_db.ttl(key)
+        if ttl > 0:
+            target_db.expire(key, ttl)
+        return True
+
+    def _migrate_set_key(self, key: bytes, target_db) -> bool:
+        """Migrate a set-type key (Issue #315: extracted helper)."""
+        values = self.source_db.smembers(key)
+        for value in values:
+            target_db.sadd(key, value)
+        ttl = self.source_db.ttl(key)
+        if ttl > 0:
+            target_db.expire(key, ttl)
+        return True
+
+    def _migrate_zset_key(self, key: bytes, target_db) -> bool:
+        """Migrate a sorted set key (Issue #315: extracted helper)."""
+        values = self.source_db.zrange(key, 0, -1, withscores=True)
+        for value, score in values:
+            target_db.zadd(key, {value: score})
+        ttl = self.source_db.ttl(key)
+        if ttl > 0:
+            target_db.expire(key, ttl)
+        return True
+
     def analyze_current_data(self) -> dict:
         """Analyze data currently in database 0"""
         if not self.source_db:
@@ -102,49 +150,21 @@ class RedisMigrator:
 
         logger.info(f"Migrating {len(keys)} {description} keys to database {target_db_name}")
 
+        # Type dispatch table (Issue #315: reduces nesting)
+        type_handlers = {
+            b'string': self._migrate_string_key,
+            b'list': self._migrate_list_key,
+            b'hash': self._migrate_hash_key,
+            b'set': self._migrate_set_key,
+            b'zset': self._migrate_zset_key,
+        }
+
         for key in keys:
             try:
-                # Get data type and value
                 key_type = self.source_db.type(key)
-
-                if key_type == b'string':
-                    value = self.source_db.get(key)
-                    ttl = self.source_db.ttl(key)
-                    target_db.set(key, value)
-                    if ttl > 0:
-                        target_db.expire(key, ttl)
-
-                elif key_type == b'list':
-                    values = self.source_db.lrange(key, 0, -1)
-                    for value in values:
-                        target_db.lpush(key, value)
-                    ttl = self.source_db.ttl(key)
-                    if ttl > 0:
-                        target_db.expire(key, ttl)
-
-                elif key_type == b'hash':
-                    values = self.source_db.hgetall(key)
-                    target_db.hset(key, mapping=values)
-                    ttl = self.source_db.ttl(key)
-                    if ttl > 0:
-                        target_db.expire(key, ttl)
-
-                elif key_type == b'set':
-                    values = self.source_db.smembers(key)
-                    for value in values:
-                        target_db.sadd(key, value)
-                    ttl = self.source_db.ttl(key)
-                    if ttl > 0:
-                        target_db.expire(key, ttl)
-
-                elif key_type == b'zset':
-                    values = self.source_db.zrange(key, 0, -1, withscores=True)
-                    for value, score in values:
-                        target_db.zadd(key, {value: score})
-                    ttl = self.source_db.ttl(key)
-                    if ttl > 0:
-                        target_db.expire(key, ttl)
-
+                handler = type_handlers.get(key_type)
+                if handler:
+                    handler(key, target_db)
                 logger.debug(f"Migrated {key} ({key_type}) to {target_db_name}")
 
             except Exception as e:

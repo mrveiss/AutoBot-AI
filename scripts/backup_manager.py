@@ -40,6 +40,7 @@ class BackupManager:
     """Manages automated backups for AutoBot deployments."""
 
     def __init__(self, backup_dir: str = "backups"):
+        """Initialize backup manager with backup directory and critical paths."""
         self.project_root = Path(__file__).parent.parent
         self.backup_dir = self.project_root / backup_dir
         self.backup_dir.mkdir(exist_ok=True)
@@ -678,7 +679,73 @@ class BackupManager:
             return False
 
 
+def _handle_backup_command(backup_manager, args) -> int:
+    """Handle --backup command (Issue #315: extracted helper)."""
+    if args.type == "full":
+        backup_id = backup_manager.create_full_backup()
+    else:
+        backup_id = backup_manager.create_incremental_backup()
+
+    if backup_id:
+        print(f"\n✅ Backup completed successfully: {backup_id}")
+        return 0
+    print("\n❌ Backup failed")
+    return 1
+
+
+def _handle_restore_command(backup_manager, args) -> int:
+    """Handle --restore command (Issue #315: extracted helper)."""
+    if not args.backup_id:
+        print("❌ --backup-id required for restore")
+        return 1
+
+    success = backup_manager.restore_backup(
+        args.backup_id, args.target_dir, args.dry_run
+    )
+    return 0 if success else 1
+
+
+def _handle_list_command(backup_manager, args) -> int:
+    """Handle --list command (Issue #315: extracted helper)."""
+    backups = backup_manager.list_backups()
+
+    if not backups:
+        print("No backups found")
+        return 0
+
+    print("\n📋 Available Backups:")
+    print("=" * 80)
+    print(f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}")
+    print("-" * 80)
+
+    for backup_id, info in sorted(backups.items(), reverse=True):
+        created = datetime.fromisoformat(info["created_at"])
+        size_mb = info["size"] / (1024 * 1024)
+        print(
+            f"{backup_id:<20} {info['backup_type']:<12} "
+            f"{created.strftime('%Y-%m-%d %H:%M'):<20} {size_mb:<10.1f} {info['deployment_mode']:<15}"
+        )
+    return 0
+
+
+def _handle_cleanup_command(backup_manager, args) -> int:
+    """Handle --cleanup command (Issue #315: extracted helper)."""
+    backup_manager.cleanup_old_backups(args.days)
+    return 0
+
+
+def _handle_verify_command(backup_manager, args) -> int:
+    """Handle --verify command (Issue #315: extracted helper)."""
+    if not args.backup_id:
+        print("❌ --backup-id required for verify")
+        return 1
+
+    success = backup_manager.verify_backup(args.backup_id)
+    return 0 if success else 1
+
+
 def main():
+    """Entry point for AutoBot backup manager CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Backup Manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -716,63 +783,20 @@ Examples:
 
     backup_manager = BackupManager(args.backup_dir)
 
+    # Command dispatch table (Issue #315: reduces nesting)
+    command_handlers = {
+        "backup": (_handle_backup_command, args.backup),
+        "restore": (_handle_restore_command, args.restore),
+        "list": (_handle_list_command, args.list),
+        "cleanup": (_handle_cleanup_command, args.cleanup),
+        "verify": (_handle_verify_command, args.verify),
+    }
+
     try:
-        if args.backup:
-            if args.type == "full":
-                backup_id = backup_manager.create_full_backup()
-            else:
-                backup_id = backup_manager.create_incremental_backup()
-
-            if backup_id:
-                print(f"\n✅ Backup completed successfully: {backup_id}")
-                return 0
-            else:
-                print(f"\n❌ Backup failed")
-                return 1
-
-        elif args.restore:
-            if not args.backup_id:
-                print("❌ --backup-id required for restore")
-                return 1
-
-            success = backup_manager.restore_backup(
-                args.backup_id, args.target_dir, args.dry_run
-            )
-            return 0 if success else 1
-
-        elif args.list:
-            backups = backup_manager.list_backups()
-
-            if not backups:
-                print("No backups found")
-                return 0
-
-            print("\n📋 Available Backups:")
-            print("=" * 80)
-            print(
-                f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}"
-            )
-            print("-" * 80)
-
-            for backup_id, info in sorted(backups.items(), reverse=True):
-                created = datetime.fromisoformat(info["created_at"])
-                size_mb = info["size"] / (1024 * 1024)
-
-                print(
-                    f"{backup_id:<20} {info['backup_type']:<12} {created.strftime('%Y-%m-%d %H:%M'):<20} {size_mb:<10.1f} {info['deployment_mode']:<15}"
-                )
-
-        elif args.cleanup:
-            removed = backup_manager.cleanup_old_backups(args.days)
-            return 0
-
-        elif args.verify:
-            if not args.backup_id:
-                print("❌ --backup-id required for verify")
-                return 1
-
-            success = backup_manager.verify_backup(args.backup_id)
-            return 0 if success else 1
+        for cmd_name, (handler, is_active) in command_handlers.items():
+            if is_active:
+                return handler(backup_manager, args)
+        return 0
 
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")

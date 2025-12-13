@@ -19,6 +19,19 @@ from src.utils.logging_manager import get_logger
 logger = get_logger(__name__, "backend")
 
 
+def _parse_os_release_field(field_prefix: str) -> Optional[str]:
+    """Parse a field from /etc/os-release. (Issue #315 - extracted)"""
+    os_release_path = Path("/etc/os-release")
+    if not os_release_path.exists():
+        return None
+    with open(os_release_path, "r") as f:
+        for line in f:
+            if line.startswith(field_prefix):
+                value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                return value
+    return None
+
+
 def get_system_context(machine_id: Optional[str] = None) -> Dict[str, any]:
     """
     Collect comprehensive system information for man page tagging and context awareness
@@ -114,21 +127,13 @@ def get_os_name() -> str:
         OS distribution name or system name
     """
     try:
-        # Try reading /etc/os-release (Linux)
-        os_release_path = Path("/etc/os-release")
-        if os_release_path.exists():
-            with open(os_release_path, "r") as f:
-                for line in f:
-                    if line.startswith("NAME="):
-                        # Extract value between quotes
-                        name = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        # Clean up common suffixes
-                        name = name.replace(" GNU/Linux", "").replace(" Linux", "")
-                        return name
-
+        # Try reading /etc/os-release using helper (Issue #315)
+        name = _parse_os_release_field("NAME=")
+        if name:
+            # Clean up common suffixes
+            return name.replace(" GNU/Linux", "").replace(" Linux", "")
         # Fallback to platform system
         return platform.system()
-
     except Exception as e:
         logger.warning(f"Failed to get OS name: {e}")
         return platform.system()
@@ -142,19 +147,12 @@ def get_os_version() -> str:
         OS version string
     """
     try:
-        # Try reading /etc/os-release (Linux)
-        os_release_path = Path("/etc/os-release")
-        if os_release_path.exists():
-            with open(os_release_path, "r") as f:
-                for line in f:
-                    if line.startswith("VERSION_ID="):
-                        # Extract value between quotes
-                        version = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        return version
-
+        # Try reading /etc/os-release using helper (Issue #315)
+        version = _parse_os_release_field("VERSION_ID=")
+        if version:
+            return version
         # Fallback to platform release
         return platform.release()
-
     except Exception as e:
         logger.warning(f"Failed to get OS version: {e}")
         return platform.release()

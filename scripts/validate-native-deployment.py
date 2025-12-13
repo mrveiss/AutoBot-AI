@@ -42,6 +42,7 @@ class ServiceCheck:
 
 class DeploymentValidator:
     def __init__(self):
+        """Initialize deployment validator with service definitions."""
         self.services = [
             ServiceCheck("WSL Backend", "172.16.168.20", 8001, "http", "/api/health", None, 10),
             ServiceCheck("WSL Terminal", "172.16.168.20", 7681, "http", "/", None, 10),
@@ -262,6 +263,7 @@ class DeploymentValidator:
 
 
 async def main():
+    """Entry point for native VM deployment validation."""
     validator = DeploymentValidator()
 
     # Run validation

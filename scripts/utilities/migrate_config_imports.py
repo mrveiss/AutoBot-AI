@@ -52,6 +52,7 @@ class ConfigMigrator:
     ]
 
     def __init__(self, dry_run: bool = False):
+        """Initialize config migrator with dry run mode and file tracking lists."""
         self.dry_run = dry_run
         self.migrated_files = []
         self.failed_files = []
@@ -286,6 +287,7 @@ class ConfigMigrator:
 
 
 def main():
+    """Entry point for config import migration CLI."""
     parser = argparse.ArgumentParser(
         description='Migrate config imports to unified_config.py'
     )

@@ -22,6 +22,7 @@ class AutoBotMonitor:
     """Monitoring dashboard for AutoBot system health"""
 
     def __init__(self):
+        """Initialize monitoring dashboard with project root path."""
         self.project_root = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     def get_system_overview(self):

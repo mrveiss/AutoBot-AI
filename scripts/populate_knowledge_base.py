@@ -51,22 +51,55 @@ async def add_documentation_to_kb():
         files = glob.glob(str(project_root / pattern), recursive=True)
         all_files.extend(files)
 
-    # Remove duplicates and filter out excluded patterns
-    unique_files = set(all_files)
-    filtered_files = []
-
-    for file_path in unique_files:
-        # Check if file should be excluded
-        should_exclude = False
+    # Remove duplicates and filter out excluded patterns (Issue #315: extracted logic)
+    def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
+        """Check if file matches any exclude pattern (Issue #315: extracted helper)."""
         for exclude in exclude_patterns:
             if glob.fnmatch.fnmatch(file_path, exclude):
-                should_exclude = True
-                break
+                return True
+        return False
 
-        if not should_exclude and os.path.isfile(file_path):
-            filtered_files.append(file_path)
+    unique_files = set(all_files)
+    filtered_files = [
+        fp for fp in unique_files
+        if os.path.isfile(fp) and not should_exclude_file(fp, exclude_patterns)
+    ]
 
     print(f"Found {len(filtered_files)} documentation files to add to knowledge base")
+
+    # Category mapping for path prefixes (Issue #315: use lookup instead of elif chain)
+    def determine_category(rel_path: str) -> str:
+        """Determine doc category from relative path (Issue #315: extracted helper)."""
+        category_map = [
+            ("docs/developer", "developer-docs"),
+            ("docs/user_guide", "user-guide"),
+            ("docs/reports", "reports"),
+            ("prompts", "prompts"),
+        ]
+        # Check exact matches first
+        if rel_path == "README.md":
+            return "main-readme"
+        if rel_path == "CLAUDE.md":
+            return "claude-instructions"
+        # Check prefix matches
+        for prefix, cat in category_map:
+            if rel_path.startswith(prefix):
+                return cat
+        return "documentation"
+
+    async def add_single_file(fp: str, project_root: Path, kb) -> tuple:
+        """Add a single file to KB (Issue #315: extracted helper)."""
+        rel_path = os.path.relpath(fp, project_root)
+        category = determine_category(rel_path)
+        metadata = {
+            "source": "project-docs",
+            "category": category,
+            "relative_path": rel_path,
+            "doc_type": "markdown",
+        }
+        print(f"Adding: {rel_path} [{category}]")
+        result = await kb.add_file(file_path=fp, file_type="txt", metadata=metadata)
+        return result["status"] == "success", result
 
     # Add each file to the knowledge base
     success_count = 0
@@ -74,46 +107,12 @@ async def add_documentation_to_kb():
 
     for file_path in sorted(filtered_files):
         try:
-            # Get relative path for better organization
-            rel_path = os.path.relpath(file_path, project_root)
-
-            # Determine category based on path
-            if rel_path.startswith("docs/developer"):
-                category = "developer-docs"
-            elif rel_path.startswith("docs/user_guide"):
-                category = "user-guide"
-            elif rel_path.startswith("docs/reports"):
-                category = "reports"
-            elif rel_path.startswith("prompts"):
-                category = "prompts"
-            elif rel_path == "README.md":
-                category = "main-readme"
-            elif rel_path == "CLAUDE.md":
-                category = "claude-instructions"
-            else:
-                category = "documentation"
-
-            metadata = {
-                "source": "project-docs",
-                "category": category,
-                "relative_path": rel_path,
-                "doc_type": "markdown",
-            }
-
-            print(f"Adding: {rel_path} [{category}]")
-
-            result = await kb.add_file(
-                file_path=file_path,
-                file_type="txt",  # Markdown files are treated as text
-                metadata=metadata,
-            )
-
-            if result["status"] == "success":
+            success, result = await add_single_file(file_path, project_root, kb)
+            if success:
                 success_count += 1
             else:
                 error_count += 1
                 print(f"  Error: {result.get('message', 'Unknown error')}")
-
         except Exception as e:
             error_count += 1
             print(f"  Exception adding {file_path}: {str(e)}")

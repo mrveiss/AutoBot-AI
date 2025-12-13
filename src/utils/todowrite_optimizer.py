@@ -468,10 +468,12 @@ class TodoWriteOptimizer:
 
         while remaining_todos:
             # Find todos with no unmet dependencies
+            # Use set for O(1) lookup instead of list comprehension
+            completed_contents = {t.content for t in optimized_order}
             ready_todos = []
             for todo in remaining_todos:
                 if not todo.dependencies or all(
-                    dep in [t.content for t in optimized_order]
+                    dep in completed_contents
                     for dep in todo.dependencies
                 ):
                     ready_todos.append(todo)

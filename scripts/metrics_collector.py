@@ -96,6 +96,7 @@ class MetricsCollector:
     """Collects and manages performance metrics."""
 
     def __init__(self, storage_dir: str = "data/metrics", retention_days: int = 30):
+        """Initialize metrics collector with storage path and retention settings."""
         self.project_root = Path(__file__).parent.parent
         self.storage_dir = self.project_root / storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -731,7 +732,108 @@ class MetricsCollector:
         return dashboard
 
 
+async def _handle_collect_command(collector, args) -> int:
+    """Handle --collect command (Issue #315: extracted helper)."""
+    await collector.start_collection(args.interval)
+    return 0
+
+
+async def _handle_export_command(collector, args) -> int:
+    """Handle --export command (Issue #315: extracted helper)."""
+    output = collector.export_metrics(args.format, args.last_hours)
+
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(output)
+        print(f"✅ Metrics exported to: {args.output}")
+    else:
+        print(output)
+    return 0
+
+
+async def _handle_analyze_command(collector, args) -> int:
+    """Handle --analyze command (Issue #315: extracted helper)."""
+    analysis = collector.analyze_metrics(args.metric, args.last_hours)
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(analysis, f, indent=2)
+        print(f"✅ Analysis saved to: {args.output}")
+        return 0
+
+    print("\n📊 Metrics Analysis:")
+    print(f"   Period: {analysis['period']['hours']} hours")
+    print(f"   Total data points: {analysis['total_data_points']}")
+
+    for metric_name, stats in analysis["metrics"].items():
+        print(f"\n   {metric_name}:")
+        print(f"     Mean: {stats['mean']:.2f}")
+        print(f"     Min/Max: {stats['min']:.2f} / {stats['max']:.2f}")
+        print(f"     P95: {stats['percentiles']['p95']:.2f}")
+    return 0
+
+
+async def _handle_setup_alerts_command(collector, args) -> int:
+    """Handle --setup-alerts command (Issue #315: extracted helper)."""
+    if args.config:
+        collector.load_alerts(args.config)
+        return 0
+
+    # Create sample alert config
+    sample_config = {
+        "alerts": [
+            {
+                "name": "high_cpu_usage",
+                "metric": "system_cpu_usage",
+                "condition": "above",
+                "threshold": 80.0,
+                "duration": 300,
+                "severity": "warning",
+            },
+            {
+                "name": "low_memory",
+                "metric": "system_memory_available",
+                "condition": "below",
+                "threshold": 1.0,
+                "duration": 180,
+                "severity": "critical",
+            },
+            {
+                "name": "service_down",
+                "metric": "service_availability",
+                "condition": "below",
+                "threshold": 1.0,
+                "duration": 60,
+                "severity": "critical",
+            },
+        ]
+    }
+
+    config_file = "config/alerts.yml"
+    Path(config_file).parent.mkdir(exist_ok=True)
+
+    with open(config_file, "w") as f:
+        yaml.dump(sample_config, f)
+
+    print(f"✅ Sample alert configuration created: {config_file}")
+    return 0
+
+
+async def _handle_dashboard_command(collector, args) -> int:
+    """Handle --dashboard command (Issue #315: extracted helper)."""
+    dashboard = collector.create_grafana_dashboard()
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(dashboard, f, indent=2)
+        print(f"✅ Grafana dashboard saved to: {args.output}")
+    else:
+        print(json.dumps(dashboard, indent=2))
+    return 0
+
+
 async def main():
+    """Entry point for metrics collection and analysis CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Performance Metrics Collection and Alerting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -784,89 +886,20 @@ Examples:
 
     collector = MetricsCollector(args.storage_dir)
 
+    # Command dispatch table (Issue #315: reduces nesting)
+    command_handlers = {
+        "collect": (_handle_collect_command, args.collect),
+        "export": (_handle_export_command, args.export),
+        "analyze": (_handle_analyze_command, args.analyze),
+        "setup_alerts": (_handle_setup_alerts_command, args.setup_alerts),
+        "dashboard": (_handle_dashboard_command, args.dashboard),
+    }
+
     try:
-        if args.collect:
-            await collector.start_collection(args.interval)
-
-        elif args.export:
-            output = collector.export_metrics(args.format, args.last_hours)
-
-            if args.output:
-                with open(args.output, "w") as f:
-                    f.write(output)
-                print(f"✅ Metrics exported to: {args.output}")
-            else:
-                print(output)
-
-        elif args.analyze:
-            analysis = collector.analyze_metrics(args.metric, args.last_hours)
-
-            if args.output:
-                with open(args.output, "w") as f:
-                    json.dump(analysis, f, indent=2)
-                print(f"✅ Analysis saved to: {args.output}")
-            else:
-                print("\n📊 Metrics Analysis:")
-                print(f"   Period: {analysis['period']['hours']} hours")
-                print(f"   Total data points: {analysis['total_data_points']}")
-
-                for metric_name, stats in analysis["metrics"].items():
-                    print(f"\n   {metric_name}:")
-                    print(f"     Mean: {stats['mean']:.2f}")
-                    print(f"     Min/Max: {stats['min']:.2f} / {stats['max']:.2f}")
-                    print(f"     P95: {stats['percentiles']['p95']:.2f}")
-
-        elif args.setup_alerts:
-            if not args.config:
-                # Create sample alert config
-                sample_config = {
-                    "alerts": [
-                        {
-                            "name": "high_cpu_usage",
-                            "metric": "system_cpu_usage",
-                            "condition": "above",
-                            "threshold": 80.0,
-                            "duration": 300,
-                            "severity": "warning",
-                        },
-                        {
-                            "name": "low_memory",
-                            "metric": "system_memory_available",
-                            "condition": "below",
-                            "threshold": 1.0,
-                            "duration": 180,
-                            "severity": "critical",
-                        },
-                        {
-                            "name": "service_down",
-                            "metric": "service_availability",
-                            "condition": "below",
-                            "threshold": 1.0,
-                            "duration": 60,
-                            "severity": "critical",
-                        },
-                    ]
-                }
-
-                config_file = "config/alerts.yml"
-                Path(config_file).parent.mkdir(exist_ok=True)
-
-                with open(config_file, "w") as f:
-                    yaml.dump(sample_config, f)
-
-                print(f"✅ Sample alert configuration created: {config_file}")
-            else:
-                collector.load_alerts(args.config)
-
-        elif args.dashboard:
-            dashboard = collector.create_grafana_dashboard()
-
-            if args.output:
-                with open(args.output, "w") as f:
-                    json.dump(dashboard, f, indent=2)
-                print(f"✅ Grafana dashboard saved to: {args.output}")
-            else:
-                print(json.dumps(dashboard, indent=2))
+        for cmd_name, (handler, is_active) in command_handlers.items():
+            if is_active:
+                return await handler(collector, args)
+        return 0
 
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")

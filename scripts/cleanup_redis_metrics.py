@@ -203,6 +203,7 @@ async def cleanup_redis_metrics(dry_run: bool = True, force: bool = False) -> di
 
 
 async def main():
+    """Entry point for Redis legacy metrics cleanup CLI."""
     parser = argparse.ArgumentParser(
         description="Clean up legacy metric keys from Redis (Phase 5)"
     )

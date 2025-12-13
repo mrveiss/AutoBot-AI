@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class FunctionTracer:
     def __init__(self, output_file=None):
+        """Initialize tracer with output file path and call tracking state."""
         # Use proper output directory
         if output_file is None:
             project_root = Path(__file__).parent.parent

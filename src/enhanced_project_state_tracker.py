@@ -5,6 +5,8 @@
 """
 Enhanced Project State Tracking System
 Provides comprehensive tracking of project state, phase progression, capabilities, and system evolution
+
+Issue #357: Wrapped blocking SQLite operations with asyncio.to_thread() for non-blocking I/O.
 """
 
 import asyncio
@@ -21,6 +23,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import aiofiles
 
 from scripts.phase_validation_system import PhaseValidator
+from src.constants.path_constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.phase_progression_manager import get_progression_manager
 from src.project_state_manager import ProjectStateManager
 from src.utils.redis_client import get_redis_client
@@ -106,12 +110,134 @@ SIGNIFICANT_CHANGES = {StateChangeType.PHASE_PROGRESSION, StateChangeType.CAPABI
 SIGNIFICANT_INTERACTIONS = {"login", "logout", "settings_change", "agent_switch"}
 
 
+# ============================================================================
+# Sync SQLite helper functions for asyncio.to_thread() (Issue #357)
+# ============================================================================
+
+
+def _save_snapshot_sync(
+    db_path: str,
+    timestamp_iso: str,
+    phase_states_json: str,
+    capabilities_json: str,
+    metrics_json: str,
+    config_json: str,
+    validation_json: str,
+    metadata_json: str,
+    metrics_list: list[tuple[str, str, float]],
+) -> None:
+    """Save snapshot to database synchronously (Issue #357: for use with asyncio.to_thread)."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO state_snapshots
+            (timestamp, phase_states, active_capabilities, system_metrics,
+             configuration, validation_results, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                timestamp_iso,
+                phase_states_json,
+                capabilities_json,
+                metrics_json,
+                config_json,
+                validation_json,
+                metadata_json,
+            ),
+        )
+
+        # Also save metrics to history
+        for metric_name, metric_timestamp, value in metrics_list:
+            cursor.execute(
+                """
+                INSERT INTO metrics_history (metric_name, timestamp, value)
+                VALUES (?, ?, ?)
+            """,
+                (metric_name, metric_timestamp, value),
+            )
+
+        conn.commit()
+
+
+def _record_state_change_sync(
+    db_path: str,
+    timestamp_iso: str,
+    change_type: str,
+    before_state_json: str | None,
+    after_state_json: str,
+    description: str,
+    user_id: str | None,
+    metadata_json: str,
+) -> None:
+    """Record state change to database synchronously (Issue #357: for use with asyncio.to_thread)."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO state_changes
+            (timestamp, change_type, before_state, after_state,
+             description, user_id, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                timestamp_iso,
+                change_type,
+                before_state_json,
+                after_state_json,
+                description,
+                user_id,
+                metadata_json,
+            ),
+        )
+
+        conn.commit()
+
+
+def _save_milestone_sync(
+    db_path: str,
+    name: str,
+    description: str,
+    criteria_json: str,
+    achieved: bool,
+    achieved_at_iso: str | None,
+    evidence_json: str,
+    updated_at_iso: str,
+) -> None:
+    """Save milestone to database synchronously (Issue #357: for use with asyncio.to_thread)."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO milestones
+            (name, description, criteria, achieved, achieved_at, evidence, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                name,
+                description,
+                criteria_json,
+                achieved,
+                achieved_at_iso,
+                evidence_json,
+                updated_at_iso,
+            ),
+        )
+
+        conn.commit()
+
+
 class EnhancedProjectStateTracker:
     """Enhanced tracking system for comprehensive project state management"""
 
     def __init__(self, db_path: str = "data/project_state_tracking.db"):
+        """Initialize enhanced project state tracker with database and validators."""
         self.db_path = db_path
-        self.project_root = Path(__file__).parent.parent
+        # Use centralized PathConstants (Issue #380)
+        self.project_root = PATH.PROJECT_ROOT
 
         # Core components
         self.progression_manager = get_progression_manager()
@@ -437,11 +563,13 @@ class EnhancedProjectStateTracker:
             if len(self.state_history) > 1000:  # Keep last 1000 snapshots
                 self.state_history = self.state_history[-1000:]
 
-            # Save to database
-            await self._save_snapshot(snapshot)
-
-            # Check milestones
-            await self._check_milestones(snapshot)
+            # Issue #379: Parallelize independent snapshot operations
+            # _save_snapshot persists to DB, _check_milestones evaluates criteria
+            # Both operate on the snapshot independently
+            await asyncio.gather(
+                self._save_snapshot(snapshot),
+                self._check_milestones(snapshot),
+            )
 
             return snapshot
 
@@ -450,42 +578,41 @@ class EnhancedProjectStateTracker:
             raise
 
     async def _save_snapshot(self, snapshot: StateSnapshot):
-        """Save snapshot to database"""
+        """Save snapshot to database.
+
+        Issue #357: Uses asyncio.to_thread() for non-blocking database operations.
+        """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
+            # Prepare data for sync helper
+            timestamp_iso = snapshot.timestamp.isoformat()
+            phase_states_json = json.dumps(snapshot.phase_states)
+            capabilities_json = json.dumps(list(snapshot.active_capabilities))
+            metrics_json = json.dumps(
+                {k.value: v for k, v in snapshot.system_metrics.items()}
+            )
+            config_json = json.dumps(snapshot.configuration)
+            validation_json = json.dumps(snapshot.validation_results)
+            metadata_json = json.dumps(snapshot.metadata)
 
-                cursor.execute(
-                    """
-                    INSERT INTO state_snapshots
-                    (timestamp, phase_states, active_capabilities, system_metrics,
-                     configuration, validation_results, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        snapshot.timestamp.isoformat(),
-                        json.dumps(snapshot.phase_states),
-                        json.dumps(list(snapshot.active_capabilities)),
-                        json.dumps(
-                            {k.value: v for k, v in snapshot.system_metrics.items()}
-                        ),
-                        json.dumps(snapshot.configuration),
-                        json.dumps(snapshot.validation_results),
-                        json.dumps(snapshot.metadata),
-                    ),
-                )
+            # Prepare metrics list
+            metrics_list = [
+                (metric.value, timestamp_iso, value)
+                for metric, value in snapshot.system_metrics.items()
+            ]
 
-                # Also save metrics to history
-                for metric, value in snapshot.system_metrics.items():
-                    cursor.execute(
-                        """
-                        INSERT INTO metrics_history (metric_name, timestamp, value)
-                        VALUES (?, ?, ?)
-                    """,
-                        (metric.value, snapshot.timestamp.isoformat(), value),
-                    )
-
-                conn.commit()
+            # Execute in thread pool (Issue #357: non-blocking)
+            await asyncio.to_thread(
+                _save_snapshot_sync,
+                self.db_path,
+                timestamp_iso,
+                phase_states_json,
+                capabilities_json,
+                metrics_json,
+                config_json,
+                validation_json,
+                metadata_json,
+                metrics_list,
+            )
 
         except Exception as e:
             logger.error(f"Error saving snapshot: {e}")
@@ -499,7 +626,10 @@ class EnhancedProjectStateTracker:
         user_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
-        """Record a state change event"""
+        """Record a state change event.
+
+        Issue #357: Uses asyncio.to_thread() for non-blocking database operations.
+        """
         change = StateChange(
             timestamp=datetime.now(),
             change_type=change_type,
@@ -514,32 +644,23 @@ class EnhancedProjectStateTracker:
 
         # Save to database
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
+            # Prepare data for sync helper
+            before_state_json = (
+                json.dumps(change.before_state) if change.before_state else None
+            )
 
-                cursor.execute(
-                    """
-                    INSERT INTO state_changes
-                    (timestamp, change_type, before_state, after_state,
-                     description, user_id, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        change.timestamp.isoformat(),
-                        change.change_type.value,
-                        (
-                            json.dumps(change.before_state)
-                            if change.before_state
-                            else None
-                        ),
-                        json.dumps(change.after_state),
-                        change.description,
-                        change.user_id,
-                        json.dumps(change.metadata),
-                    ),
-                )
-
-                conn.commit()
+            # Execute in thread pool (Issue #357: non-blocking)
+            await asyncio.to_thread(
+                _record_state_change_sync,
+                self.db_path,
+                change.timestamp.isoformat(),
+                change.change_type.value,
+                before_state_json,
+                json.dumps(change.after_state),
+                change.description,
+                change.user_id,
+                json.dumps(change.metadata),
+            )
 
         except Exception as e:
             logger.error(f"Error recording state change: {e}")
@@ -614,47 +735,38 @@ class EnhancedProjectStateTracker:
         milestone.achieved_at = datetime.now()
         milestone.evidence = evidence
 
-        # Record milestone achievement
-        await self.record_state_change(
-            StateChangeType.MILESTONE_REACHED,
-            f"Milestone achieved: {milestone.name}",
-            {"milestone": milestone_name, "evidence": evidence},
-            metadata={"milestone_description": milestone.description},
+        # Issue #379: Parallelize independent milestone operations
+        # record_state_change adds to change_log, _save_milestone persists to DB
+        await asyncio.gather(
+            self.record_state_change(
+                StateChangeType.MILESTONE_REACHED,
+                f"Milestone achieved: {milestone.name}",
+                {"milestone": milestone_name, "evidence": evidence},
+                metadata={"milestone_description": milestone.description},
+            ),
+            self._save_milestone(milestone_name, milestone),
         )
-
-        # Save to database
-        self._save_milestone(milestone_name, milestone)
 
         logger.info(f"🎉 Milestone achieved: {milestone.name}")
 
-    def _save_milestone(self, name: str, milestone: ProjectMilestone):
-        """Save milestone to database"""
+    async def _save_milestone(self, name: str, milestone: ProjectMilestone):
+        """Save milestone to database.
+
+        Issue #357: Uses asyncio.to_thread() for non-blocking database operations.
+        """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO milestones
-                    (name, description, criteria, achieved, achieved_at, evidence, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        name,
-                        milestone.description,
-                        json.dumps(milestone.criteria),
-                        milestone.achieved,
-                        (
-                            milestone.achieved_at.isoformat()
-                            if milestone.achieved_at
-                            else None
-                        ),
-                        json.dumps(milestone.evidence),
-                        datetime.now().isoformat(),
-                    ),
-                )
-
-                conn.commit()
+            # Execute in thread pool (Issue #357: non-blocking)
+            await asyncio.to_thread(
+                _save_milestone_sync,
+                self.db_path,
+                name,
+                milestone.description,
+                json.dumps(milestone.criteria),
+                milestone.achieved,
+                milestone.achieved_at.isoformat() if milestone.achieved_at else None,
+                json.dumps(milestone.evidence),
+                datetime.now().isoformat(),
+            )
 
         except Exception as e:
             logger.error(f"Error saving milestone: {e}")
@@ -788,11 +900,11 @@ class EnhancedProjectStateTracker:
                     f"{self.REDIS_KEYS['error_count']}:{current_hour.timestamp()}"
                 )
 
-                # Increment error count for this hour
-                await self.redis_client.incr(error_key)
-                await self.redis_client.expire(
-                    error_key, 86400
-                )  # Expire after 24 hours
+                # Issue #379: Batch Redis operations using pipeline
+                async with self.redis_client.pipeline() as pipe:
+                    await pipe.incr(error_key)
+                    await pipe.expire(error_key, 86400)  # Expire after 24 hours
+                    await pipe.execute()
 
             # Record state change
             await self.record_state_change(
@@ -827,15 +939,17 @@ class EnhancedProjectStateTracker:
             if self.redis_client:
                 current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
                 api_key = f"{self.REDIS_KEYS['api_calls']}:{current_hour.timestamp()}"
-
-                # Increment API call count for this hour
-                await self.redis_client.incr(api_key)
-                await self.redis_client.expire(api_key, 86400)  # Expire after 24 hours
-
-                # Track specific endpoint stats
                 endpoint_key = f"autobot:metrics:endpoints:{endpoint}:calls"
-                await self.redis_client.incr(endpoint_key)
-                await self.redis_client.expire(endpoint_key, 86400)
+
+                # Issue #379: Batch all Redis operations using pipeline
+                async with self.redis_client.pipeline() as pipe:
+                    # Increment API call count for this hour
+                    await pipe.incr(api_key)
+                    await pipe.expire(api_key, 86400)  # Expire after 24 hours
+                    # Track specific endpoint stats
+                    await pipe.incr(endpoint_key)
+                    await pipe.expire(endpoint_key, 86400)
+                    await pipe.execute()
 
             logger.debug(f"API call tracked: {method} {endpoint} -> {response_status}")
 
@@ -859,17 +973,17 @@ class EnhancedProjectStateTracker:
                 interaction_key = (
                     f"{self.REDIS_KEYS['user_interactions']}:{current_hour.timestamp()}"
                 )
-
-                # Increment user interaction count for this hour
-                await self.redis_client.incr(interaction_key)
-                await self.redis_client.expire(
-                    interaction_key, 86400
-                )  # Expire after 24 hours
-
-                # Track interaction types
                 type_key = f"autobot:metrics:interaction_types:{interaction_type}:count"
-                await self.redis_client.incr(type_key)
-                await self.redis_client.expire(type_key, 86400)
+
+                # Issue #379: Batch all Redis operations using pipeline
+                async with self.redis_client.pipeline() as pipe:
+                    # Increment user interaction count for this hour
+                    await pipe.incr(interaction_key)
+                    await pipe.expire(interaction_key, 86400)  # Expire after 24 hours
+                    # Track interaction types
+                    await pipe.incr(type_key)
+                    await pipe.expire(type_key, 86400)
+                    await pipe.execute()
 
             # Record state change for significant interactions
             if interaction_type in SIGNIFICANT_INTERACTIONS:  # O(1) lookup (Issue #326)
@@ -928,7 +1042,7 @@ class EnhancedProjectStateTracker:
             while True:
                 try:
                     # Capture snapshot every hour
-                    await asyncio.sleep(3600)
+                    await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)
                     await self.capture_state_snapshot()
                 except Exception as e:
                     logger.error(f"Error in background tracking: {e}")
@@ -1008,6 +1122,63 @@ class EnhancedProjectStateTracker:
             "tracking_metrics": await self.get_metrics_summary(),
         }
 
+    def _build_tracking_metrics_section(
+        self, tracking_metrics: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Build the tracking metrics section of the state report.
+
+        Issue #281: Extracted from generate_state_report to reduce function
+        length and improve readability.
+
+        Args:
+            tracking_metrics: Dictionary of tracking metrics from summary
+
+        Returns:
+            List of formatted report lines for tracking metrics
+        """
+        lines = []
+        lines.append("## System Tracking Metrics")
+
+        if "error_tracking" in tracking_metrics:
+            error_data = tracking_metrics["error_tracking"]
+            lines.append(
+                f"- **Error Rate**: {error_data.get('current_error_rate', 0)}%"
+            )
+            lines.append(
+                f"- **Total Errors**: {error_data.get('total_errors_tracked', 0)}"
+            )
+
+        if "api_tracking" in tracking_metrics:
+            api_data = tracking_metrics["api_tracking"]
+            lines.append(
+                f"- **API Calls (24h)**: {api_data.get('total_api_calls_24h', 0)}"
+            )
+            lines.append(
+                f"- **Session API Calls**: {api_data.get('current_session_calls', 0)}"
+            )
+
+        if "user_interactions" in tracking_metrics:
+            interaction_data = tracking_metrics["user_interactions"]
+            lines.append(
+                f"- **User Interactions (24h)**: {interaction_data.get('total_interactions_24h', 0)}"
+            )
+            lines.append(
+                f"- **Session Interactions**: {interaction_data.get('current_session_interactions', 0)}"
+            )
+
+        if "system_health" in tracking_metrics:
+            health_data = tracking_metrics["system_health"]
+            redis_status = (
+                "✅ Connected"
+                if health_data.get("redis_connected")
+                else "❌ Disconnected"
+            )
+            lines.append(f"- **Redis Status**: {redis_status}")
+
+        lines.append("")
+        return lines
+
     async def generate_state_report(self) -> str:
         """Generate comprehensive state tracking report"""
         summary = await self.get_state_summary()
@@ -1062,47 +1233,9 @@ class EnhancedProjectStateTracker:
             )
         report.append("")
 
-        # Tracking Metrics
-        report.append("## System Tracking Metrics")
+        # Issue #281: Use extracted helper for tracking metrics section
         tracking_metrics = summary.get("tracking_metrics", {})
-
-        if "error_tracking" in tracking_metrics:
-            error_data = tracking_metrics["error_tracking"]
-            report.append(
-                f"- **Error Rate**: {error_data.get('current_error_rate', 0)}%"
-            )
-            report.append(
-                f"- **Total Errors**: {error_data.get('total_errors_tracked', 0)}"
-            )
-
-        if "api_tracking" in tracking_metrics:
-            api_data = tracking_metrics["api_tracking"]
-            report.append(
-                f"- **API Calls (24h)**: {api_data.get('total_api_calls_24h', 0)}"
-            )
-            report.append(
-                f"- **Session API Calls**: {api_data.get('current_session_calls', 0)}"
-            )
-
-        if "user_interactions" in tracking_metrics:
-            interaction_data = tracking_metrics["user_interactions"]
-            report.append(
-                f"- **User Interactions (24h)**: {interaction_data.get('total_interactions_24h', 0)}"
-            )
-            report.append(
-                f"- **Session Interactions**: {interaction_data.get('current_session_interactions', 0)}"
-            )
-
-        if "system_health" in tracking_metrics:
-            health_data = tracking_metrics["system_health"]
-            redis_status = (
-                "✅ Connected"
-                if health_data.get("redis_connected")
-                else "❌ Disconnected"
-            )
-            report.append(f"- **Redis Status**: {redis_status}")
-
-        report.append("")
+        report.extend(self._build_tracking_metrics_section(tracking_metrics))
 
         # Phase Details
         report.append("## Phase Status")
@@ -1127,7 +1260,8 @@ class EnhancedProjectStateTracker:
             output_path = f"data/reports/state_tracking/{Path(output_path).name}"
 
         output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(output_file.parent.mkdir, parents=True, exist_ok=True)
 
         try:
             if format == "json":

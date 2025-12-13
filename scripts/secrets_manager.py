@@ -70,6 +70,7 @@ class SecretsManager:
     """Secure secrets management with encryption and access controls."""
 
     def __init__(self, secrets_dir: str = "data/secrets"):
+        """Initialize secrets manager with encryption and secrets index."""
         self.project_root = Path(__file__).parent.parent
         self.secrets_dir = self.project_root / secrets_dir
         self.secrets_dir.mkdir(parents=True, exist_ok=True)
@@ -700,7 +701,120 @@ class SecretsManager:
         }
 
 
+def _handle_add_command(secrets_manager: SecretsManager, args) -> int:
+    """Handle --add command (Issue #315: extracted helper)."""
+    if not args.name:
+        print("❌ --name required for add")
+        return 1
+
+    value = args.value
+    if not value:
+        value = getpass.getpass(f"Enter value for secret '{args.name}': ")
+
+    secret_id = secrets_manager.add_secret(
+        name=args.name,
+        value=value,
+        secret_type=args.type,
+        scope=args.scope,
+        chat_id=args.chat_id,
+        description=args.description or "",
+        tags=args.tags or [],
+    )
+
+    if args.json:
+        print(json.dumps({"secret_id": secret_id, "status": "created"}))
+    else:
+        print(f"✅ Secret created with ID: {secret_id}")
+    return 0
+
+
+def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
+    """Handle --list command (Issue #315: extracted helper)."""
+    secrets = secrets_manager.list_secrets(
+        scope=args.scope, chat_id=args.chat_id, secret_type=args.type
+    )
+
+    if args.json:
+        print(json.dumps({"secrets": secrets}))
+        return 0
+
+    if not secrets:
+        print("No secrets found")
+        return 0
+
+    print(f"\n🔐 Found {len(secrets)} secrets:")
+    print("=" * 80)
+    print(f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}")
+    print("-" * 80)
+
+    for secret in secrets:
+        created = datetime.fromisoformat(secret["created_at"]).strftime("%Y-%m-%d %H:%M")
+        chat_display = secret.get("chat_id", "")[:12] if secret.get("chat_id") else ""
+        print(
+            f"{secret['name']:<25} {secret['type']:<15} {secret['scope']:<10} "
+            f"{chat_display:<15} {created:<20}"
+        )
+    return 0
+
+
+def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
+    """Handle --get command (Issue #315: extracted helper)."""
+    if not args.secret_id:
+        print("❌ --secret-id required")
+        return 1
+
+    value = secrets_manager.get_secret(args.secret_id, args.chat_id)
+
+    if value:
+        if args.json:
+            print(json.dumps({"value": value}))
+        else:
+            print(f"🔐 Secret value: {value}")
+        return 0
+    else:
+        print("❌ Secret not found or access denied")
+        return 1
+
+
+def _handle_cleanup_command(secrets_manager: SecretsManager, args) -> int:
+    """Handle --cleanup-chat command (Issue #315: extracted helper)."""
+    result = secrets_manager.cleanup_chat_secrets(args.cleanup_chat, args.transfer_to_general)
+
+    if args.json:
+        print(json.dumps(result))
+    else:
+        print(f"✅ Chat cleanup completed:")
+        print(f"   Transferred: {result['transferred']}")
+        print(f"   Deleted: {result['deleted']}")
+    return 0
+
+
+def _handle_security_report_command(secrets_manager: SecretsManager, args) -> int:
+    """Handle --security-report command (Issue #315: extracted helper)."""
+    report = secrets_manager.get_security_report()
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0
+
+    print("\n🔐 Security Report:")
+    print("=" * 50)
+    print(f"Total secrets: {report['total_secrets']}")
+    print(f"General secrets: {report['general_secrets']}")
+    print(f"Chat secrets: {report['chat_secrets']}")
+    print(f"Active chats: {report['active_chats']}")
+    print(f"Encryption: {report['encryption_status']}")
+    print(f"Audit logging: {report['audit_logging']}")
+
+    if report["secret_types"]:
+        print(f"\nSecret types:")
+        for secret_type, count in report["secret_types"].items():
+            print(f"  {secret_type}: {count}")
+    return 0
+
+
 def main():
+    """Entry point for AutoBot secrets management CLI."""
     parser = argparse.ArgumentParser(
         description="AutoBot Secrets Management System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -780,110 +894,20 @@ Examples:
 
     secrets_manager = SecretsManager(args.secrets_dir)
 
+    # Command dispatch table (Issue #315: reduces nesting)
+    command_handlers = {
+        "add": (_handle_add_command, args.add),
+        "list": (_handle_list_command, args.list),
+        "get": (_handle_get_command, args.get),
+        "cleanup_chat": (_handle_cleanup_command, args.cleanup_chat),
+        "security_report": (_handle_security_report_command, args.security_report),
+    }
+
     try:
-        if args.add:
-            if not args.name:
-                print("❌ --name required for add")
-                return 1
-
-            value = args.value
-            if not value:
-                value = getpass.getpass(f"Enter value for secret '{args.name}': ")
-
-            secret_id = secrets_manager.add_secret(
-                name=args.name,
-                value=value,
-                secret_type=args.type,
-                scope=args.scope,
-                chat_id=args.chat_id,
-                description=args.description or "",
-                tags=args.tags or [],
-            )
-
-            if args.json:
-                print(json.dumps({"secret_id": secret_id, "status": "created"}))
-            else:
-                print(f"✅ Secret created with ID: {secret_id}")
-
-        elif args.list:
-            secrets = secrets_manager.list_secrets(
-                scope=args.scope, chat_id=args.chat_id, secret_type=args.type
-            )
-
-            if args.json:
-                print(json.dumps({"secrets": secrets}))
-            else:
-                if not secrets:
-                    print("No secrets found")
-                else:
-                    print(f"\n🔐 Found {len(secrets)} secrets:")
-                    print("=" * 80)
-                    print(
-                        f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}"
-                    )
-                    print("-" * 80)
-
-                    for secret in secrets:
-                        created = datetime.fromisoformat(secret["created_at"]).strftime(
-                            "%Y-%m-%d %H:%M"
-                        )
-                        chat_display = (
-                            secret.get("chat_id", "")[:12]
-                            if secret.get("chat_id")
-                            else ""
-                        )
-
-                        print(
-                            f"{secret['name']:<25} {secret['type']:<15} {secret['scope']:<10} {chat_display:<15} {created:<20}"
-                        )
-
-        elif args.get:
-            if not args.secret_id:
-                print("❌ --secret-id required")
-                return 1
-
-            value = secrets_manager.get_secret(args.secret_id, args.chat_id)
-
-            if value:
-                if args.json:
-                    print(json.dumps({"value": value}))
-                else:
-                    print(f"🔐 Secret value: {value}")
-            else:
-                print("❌ Secret not found or access denied")
-                return 1
-
-        elif args.cleanup_chat:
-            result = secrets_manager.cleanup_chat_secrets(
-                args.cleanup_chat, args.transfer_to_general
-            )
-
-            if args.json:
-                print(json.dumps(result))
-            else:
-                print(f"✅ Chat cleanup completed:")
-                print(f"   Transferred: {result['transferred']}")
-                print(f"   Deleted: {result['deleted']}")
-
-        elif args.security_report:
-            report = secrets_manager.get_security_report()
-
-            if args.json:
-                print(json.dumps(report, indent=2))
-            else:
-                print("\n🔐 Security Report:")
-                print("=" * 50)
-                print(f"Total secrets: {report['total_secrets']}")
-                print(f"General secrets: {report['general_secrets']}")
-                print(f"Chat secrets: {report['chat_secrets']}")
-                print(f"Active chats: {report['active_chats']}")
-                print(f"Encryption: {report['encryption_status']}")
-                print(f"Audit logging: {report['audit_logging']}")
-
-                if report["secret_types"]:
-                    print(f"\nSecret types:")
-                    for secret_type, count in report["secret_types"].items():
-                        print(f"  {secret_type}: {count}")
+        for cmd_name, (handler, is_active) in command_handlers.items():
+            if is_active:
+                return handler(secrets_manager, args)
+        return 0
 
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")
@@ -891,8 +915,6 @@ Examples:
     except Exception as e:
         print(f"\n❌ Error: {e}")
         return 1
-
-    return 0
 
 
 if __name__ == "__main__":

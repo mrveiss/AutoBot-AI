@@ -8,6 +8,7 @@ Issue #223: Implements git hooks that check for patterns before allowing commits
 Features fast pattern checking, clear error messages, and bypass mechanism.
 """
 
+import asyncio
 import logging
 import re
 import subprocess
@@ -25,6 +26,9 @@ from src.constants.network_constants import NetworkConstants
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/precommit", tags=["precommit", "analytics"])
+
+# Issue #380: Module-level frozenset for expensive checks to skip in fast mode
+_EXPENSIVE_CHECKS = frozenset({"QUA002", "DOC001"})
 
 
 # ============================================================================
@@ -344,7 +348,7 @@ def run_check(check: CheckDefinition, filepath: str, content: str) -> list[Check
 
         for i, line in enumerate(lines, 1):
             matches = pattern.finditer(line)
-            for match in matches:
+            for _ in matches:  # Issue #382: match object unused
                 # Get snippet context
                 start = max(0, i - 2)
                 end = min(len(lines), i + 1)
@@ -408,11 +412,10 @@ async def check_staged_files(
             k: v for k, v in enabled_checks.items() if k in _hook_config.enabled_checks
         }
 
-    # Skip expensive checks in fast mode
+    # Skip expensive checks in fast mode (Issue #380: use module-level constant)
     if fast_mode:
-        expensive_checks = {"QUA002", "DOC001"}
         enabled_checks = {
-            k: v for k, v in enabled_checks.items() if k not in expensive_checks
+            k: v for k, v in enabled_checks.items() if k not in _EXPENSIVE_CHECKS
         }
 
     for filepath in staged_files:
@@ -523,12 +526,14 @@ async def update_config(config: HookConfig) -> dict:
 async def get_status() -> HookStatus:
     """Get status of installed pre-commit hooks."""
     hook_path = Path(".git/hooks/pre-commit")
-    installed = hook_path.exists()
+    # Issue #358 - avoid blocking
+    installed = await asyncio.to_thread(hook_path.exists)
 
     version = None
     if installed:
         try:
-            content = hook_path.read_text()
+            # Issue #358 - avoid blocking
+            content = await asyncio.to_thread(hook_path.read_text)
             if "AutoBot" in content:
                 version = "1.0.0"
         except Exception as e:
@@ -554,11 +559,13 @@ async def install_hooks() -> dict:
     hook_path = Path(".git/hooks/pre-commit")
 
     # Check if .git exists
-    if not Path(".git").exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(Path(".git").exists):
         raise HTTPException(status_code=400, detail="Not a git repository")
 
     # Create hooks directory if needed
-    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    # Issue #358 - avoid blocking
+    await asyncio.to_thread(hook_path.parent.mkdir, parents=True, exist_ok=True)
 
     # Create pre-commit hook script with dynamic port from NetworkConstants
     backend_port = NetworkConstants.BACKEND_PORT
@@ -611,8 +618,9 @@ exit 0
 '''
 
     try:
-        hook_path.write_text(hook_content)
-        hook_path.chmod(0o755)
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(hook_path.write_text, hook_content)
+        await asyncio.to_thread(hook_path.chmod, 0o755)
 
         return {
             "success": True,
@@ -630,19 +638,22 @@ async def uninstall_hooks() -> dict:
     """Uninstall pre-commit hooks."""
     hook_path = Path(".git/hooks/pre-commit")
 
-    if not hook_path.exists():
+    # Issue #358 - avoid blocking
+    if not await asyncio.to_thread(hook_path.exists):
         return {"success": True, "message": "No hooks to uninstall"}
 
     try:
         # Check if it's our hook
-        content = hook_path.read_text()
+        # Issue #358 - avoid blocking
+        content = await asyncio.to_thread(hook_path.read_text)
         if "AutoBot" not in content:
             raise HTTPException(
                 status_code=400,
                 detail="Pre-commit hook is not from AutoBot - will not remove",
             )
 
-        hook_path.unlink()
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(hook_path.unlink)
         return {"success": True, "message": "Pre-commit hooks uninstalled"}
     except HTTPException:
         raise

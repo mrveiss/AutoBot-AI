@@ -178,6 +178,7 @@ class AgentOptimizer:
         blocks_removed = 0
 
         def replace_code_block(match):
+            """Replace code block with token-optimized placeholder."""
             nonlocal blocks_removed
             blocks_removed += 1
             # Extract language hint if present

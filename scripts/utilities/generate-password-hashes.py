@@ -19,6 +19,7 @@ def hash_password(password: str) -> str:
 
 
 def main():
+    """Entry point for interactive password hash generation."""
     print("AutoBot Password Hash Generator")
     print("=" * 40)
 

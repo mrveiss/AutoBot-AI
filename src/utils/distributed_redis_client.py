@@ -18,6 +18,7 @@ from typing import Optional
 import redis
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.threshold_constants import RetryConfig
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class DistributedRedisClient:
         self._client = None
         self._connection_attempts = 0
         self._last_connection_time = 0
-        self._max_retries = 3
+        self._max_retries = RetryConfig.DEFAULT_RETRIES
         self._retry_delay = 2
 
         # Lock for thread-safe state access

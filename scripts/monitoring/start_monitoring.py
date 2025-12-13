@@ -30,6 +30,7 @@ from src.utils.performance_monitor import (
     collect_phase9_metrics,
     add_phase9_alert_callback
 )
+from src.constants.threshold_constants import TimingConstants
 from src.utils.gpu_acceleration_optimizer import (
     gpu_optimizer,
     optimize_gpu_for_multimodal,
@@ -60,6 +61,7 @@ class Phase9MonitoringManager:
     """
 
     def __init__(self):
+        """Initialize Phase 9 monitoring manager with default configuration."""
         self.monitoring_active = False
         self.optimization_active = False
         self.alerts_enabled = True
@@ -205,7 +207,7 @@ class Phase9MonitoringManager:
 
             except Exception as e:
                 logger.error(f"Error in periodic optimization loop: {e}")
-                await asyncio.sleep(60)  # Wait before retrying
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
 
     async def _dashboard_update_loop(self):
         """Dashboard update loop for real-time monitoring"""
@@ -213,7 +215,7 @@ class Phase9MonitoringManager:
 
         while self.monitoring_active:
             try:
-                await asyncio.sleep(10)  # Update every 10 seconds
+                await asyncio.sleep(TimingConstants.LONG_DELAY)  # Update every 10 seconds
 
                 if not self.monitoring_active:
                     break
@@ -230,7 +232,7 @@ class Phase9MonitoringManager:
 
             except Exception as e:
                 logger.error(f"Error in dashboard update loop: {e}")
-                await asyncio.sleep(30)  # Wait before retrying
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait before retrying
 
     def _log_dashboard_summary(self, dashboard_data):
         """Log dashboard summary information"""
@@ -368,8 +370,58 @@ class Phase9MonitoringManager:
         }
 
 
+async def _run_daemon_loop(manager: Phase9MonitoringManager) -> None:
+    """Run monitoring daemon loop (Issue #315: extracted helper)."""
+    logger.info("Running in daemon mode...")
+    try:
+        while True:
+            await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
+            status = manager.get_status_report()
+            if not status["monitoring_active"]:
+                break
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal")
+    finally:
+        await manager.stop_monitoring()
+
+
+async def _handle_start_command(manager: Phase9MonitoringManager, daemon: bool) -> None:
+    """Handle start command (Issue #315: extracted helper)."""
+    if not await manager.initialize():
+        logger.error("Failed to initialize monitoring")
+        sys.exit(1)
+
+    if not await manager.start_monitoring():
+        logger.error("Failed to start monitoring")
+        sys.exit(1)
+
+    logger.info("Phase 9 monitoring started successfully")
+
+    if daemon:
+        await _run_daemon_loop(manager)
+    else:
+        logger.info("Monitoring started. Use 'stop' command to stop monitoring.")
+
+
+async def _handle_test_command(manager: Phase9MonitoringManager) -> None:
+    """Handle test command (Issue #315: extracted helper)."""
+    logger.info("Running quick test of monitoring components...")
+    await manager.initialize()
+
+    metrics = await collect_phase9_metrics()
+    logger.info(f"Metrics collection test: {'✓' if metrics.get('collection_successful') else '✗'}")
+
+    capabilities = get_gpu_capabilities()
+    logger.info(f"GPU capabilities test: {'✓' if capabilities['gpu_available'] else '✗'}")
+
+    efficiency = await monitor_gpu_efficiency()
+    logger.info(f"Efficiency monitoring test: {'✓' if 'overall_efficiency' in efficiency else '✗'}")
+
+    logger.info("Component tests completed")
+
+
 async def main():
-    """Main function for Phase 9 monitoring management"""
+    """Main function for Phase 9 monitoring management (Issue #315: refactored)."""
     parser = argparse.ArgumentParser(description="AutoBot Phase 9 Performance Monitoring")
     parser.add_argument("command", choices=["start", "stop", "status", "benchmark", "test"],
                        help="Command to execute")
@@ -382,82 +434,36 @@ async def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Initialize monitoring manager
     manager = Phase9MonitoringManager()
 
     # Load configuration if provided
     if args.config and os.path.exists(args.config):
         try:
             with open(args.config, 'r') as f:
-                config_updates = json.load(f)
-                manager.config.update(config_updates)
+                manager.config.update(json.load(f))
                 logger.info(f"Configuration loaded from {args.config}")
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
 
     try:
         if args.command == "start":
-            # Initialize and start monitoring
-            if await manager.initialize():
-                if await manager.start_monitoring():
-                    logger.info("Phase 9 monitoring started successfully")
-
-                    if args.daemon:
-                        logger.info("Running in daemon mode...")
-                        try:
-                            while True:
-                                await asyncio.sleep(60)
-                                status = manager.get_status_report()
-                                if not status["monitoring_active"]:
-                                    break
-                        except KeyboardInterrupt:
-                            logger.info("Received interrupt signal")
-                        finally:
-                            await manager.stop_monitoring()
-                    else:
-                        logger.info("Monitoring started. Use 'stop' command to stop monitoring.")
-                else:
-                    logger.error("Failed to start monitoring")
-                    sys.exit(1)
-            else:
-                logger.error("Failed to initialize monitoring")
-                sys.exit(1)
+            await _handle_start_command(manager, args.daemon)
 
         elif args.command == "stop":
-            if await manager.stop_monitoring():
-                logger.info("Monitoring stopped successfully")
-            else:
+            if not await manager.stop_monitoring():
                 logger.error("Failed to stop monitoring")
                 sys.exit(1)
+            logger.info("Monitoring stopped successfully")
 
         elif args.command == "status":
-            status = manager.get_status_report()
-            print(json.dumps(status, indent=2))
+            print(json.dumps(manager.get_status_report(), indent=2))
 
         elif args.command == "benchmark":
             await manager.initialize()
-            results = await manager.run_benchmark_suite()
-            print(json.dumps(results, indent=2, default=str))
+            print(json.dumps(await manager.run_benchmark_suite(), indent=2, default=str))
 
         elif args.command == "test":
-            # Quick test of monitoring components
-            logger.info("Running quick test of monitoring components...")
-
-            await manager.initialize()
-
-            # Test metrics collection
-            metrics = await collect_phase9_metrics()
-            logger.info(f"Metrics collection test: {'✓' if metrics.get('collection_successful') else '✗'}")
-
-            # Test GPU capabilities
-            capabilities = get_gpu_capabilities()
-            logger.info(f"GPU capabilities test: {'✓' if capabilities['gpu_available'] else '✗'}")
-
-            # Test efficiency monitoring
-            efficiency = await monitor_gpu_efficiency()
-            logger.info(f"Efficiency monitoring test: {'✓' if 'overall_efficiency' in efficiency else '✗'}")
-
-            logger.info("Component tests completed")
+            await _handle_test_command(manager)
 
     except KeyboardInterrupt:
         logger.info("Received interrupt signal")

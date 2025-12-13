@@ -23,6 +23,7 @@ from pathlib import Path
 
 class DuplicateDetector:
     def __init__(self, root_path):
+        """Initialize detector with project root and language patterns."""
         self.root_path = Path(root_path)
         self.supported_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx'}
 

@@ -1400,10 +1400,10 @@ class LLMInterface:
 
 
 # Safe query function (preserved for backward compatibility)
-async def safe_query(prompt, retries=2, initial_delay=1):
+async def safe_query(prompt: str, retries: int = 2, initial_delay: int = 1) -> str:
     """Safe LLM query with retries (preserved for backward compatibility)"""
     interface = LLMInterface()
-    messages = [{"role": "user", "content": prompt}]
+    messages: List[Dict[str, str]] = [{"role": "user", "content": prompt}]
 
     for attempt in range(retries + 1):
         try:

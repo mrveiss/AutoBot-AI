@@ -16,11 +16,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def test_ollama_streaming():
-    """Test the exact same request that hangs in the backend"""
-    url = "http://127.0.0.1:11434/api/chat"
-    headers = {"Content-Type": "application/json"}
-    data = {
+def _build_test_request_data() -> dict:
+    """Build test request data for Ollama (Issue #315: extracted helper)."""
+    return {
         "model": "llama3.2:1b-instruct-q4_K_M",
         "messages": [
             {
@@ -48,6 +46,76 @@ async def test_ollama_streaming():
         }
     }
 
+
+def _parse_chunk_content(line_text: str, full_content: str) -> tuple:
+    """Parse chunk content from line text (Issue #315: extracted helper).
+
+    Returns tuple: (updated_full_content, chunk_or_none, is_done)
+    """
+    if not line_text:
+        return full_content, None, False
+
+    try:
+        chunk = json.loads(line_text)
+        if "message" in chunk and "content" in chunk["message"]:
+            content = chunk["message"]["content"]
+            full_content += content
+            print(f"Chunk content: '{content}'")
+
+        if chunk.get("done", False):
+            return full_content, chunk, True
+        return full_content, chunk, False
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
+        return full_content, None, False
+
+
+async def _process_streaming_response(response, stream_timeout: float = 10.0, max_chunks: int = 100) -> dict:
+    """Process streaming response from Ollama (Issue #315: extracted helper)."""
+    full_content = ""
+    chunk_count = 0
+    stream_start = time.time()
+
+    print("Starting to process streaming chunks...")
+    async for line in response.content:
+        elapsed = time.time() - stream_start
+        print(f"Processing chunk {chunk_count}, elapsed: {elapsed:.2f}s")
+
+        if elapsed > stream_timeout:
+            logger.warning(f"Stream timeout exceeded ({stream_timeout}s), breaking stream")
+            break
+
+        chunk_count += 1
+        if chunk_count > max_chunks:
+            logger.warning(f"Max chunks exceeded ({max_chunks}), breaking stream")
+            break
+
+        line_text = line.decode("utf-8").strip()
+        full_content, chunk, is_done = _parse_chunk_content(line_text, full_content)
+
+        if is_done:
+            print("Done chunk received!")
+            print(f"Final response: {full_content}")
+            return {
+                "model": chunk.get("model"),
+                "message": {"role": "assistant", "content": full_content},
+                "done": True
+            }
+
+    # Fallback if no done chunk
+    print(f"No done chunk received, returning content: {full_content}")
+    return {
+        "message": {"role": "assistant", "content": full_content},
+        "done": True
+    }
+
+
+async def test_ollama_streaming():
+    """Test the exact same request that hangs in the backend (Issue #315: refactored)."""
+    url = "http://127.0.0.1:11434/api/chat"
+    headers = {"Content-Type": "application/json"}
+    data = _build_test_request_data()
+
     print("Starting Ollama test...")
     print(f"Request URL: {url}")
     print(f"Request Headers: {headers}")
@@ -56,7 +124,6 @@ async def test_ollama_streaming():
     start_time = time.time()
 
     try:
-        # Test with 15-second timeout like SimpleChatWorkflow
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             print("Session created, making POST request...")
@@ -64,57 +131,7 @@ async def test_ollama_streaming():
             async with session.post(url, headers=headers, json=data) as response:
                 print(f"Response received, status: {response.status}")
                 response.raise_for_status()
-
-                # Handle streaming response
-                full_content = ""
-                chunk_count = 0
-                max_chunks = 100
-                stream_start = time.time()
-                stream_timeout = 10.0
-
-                print("Starting to process streaming chunks...")
-                async for line in response.content:
-                    current_time = time.time()
-                    elapsed = current_time - stream_start
-
-                    print(f"Processing chunk {chunk_count}, elapsed: {elapsed:.2f}s")
-
-                    if elapsed > stream_timeout:
-                        logger.warning(f"Stream timeout exceeded ({stream_timeout}s), breaking stream")
-                        break
-
-                    chunk_count += 1
-                    if chunk_count > max_chunks:
-                        logger.warning(f"Max chunks exceeded ({max_chunks}), breaking stream")
-                        break
-
-                    line_text = line.decode("utf-8").strip()
-                    if line_text:
-                        try:
-                            chunk = json.loads(line_text)
-                            if "message" in chunk and "content" in chunk["message"]:
-                                content = chunk["message"]["content"]
-                                full_content += content
-                                print(f"Chunk content: '{content}'")
-
-                            if chunk.get("done", False):
-                                print(f"Done chunk received!")
-                                print(f"Final response: {full_content}")
-                                return {
-                                    "model": chunk.get("model"),
-                                    "message": {"role": "assistant", "content": full_content},
-                                    "done": True
-                                }
-                        except json.JSONDecodeError as e:
-                            print(f"JSON decode error: {e}")
-                            continue
-
-                # Fallback if no done chunk
-                print(f"No done chunk received, returning content: {full_content}")
-                return {
-                    "message": {"role": "assistant", "content": full_content},
-                    "done": True
-                }
+                return await _process_streaming_response(response)
 
     except asyncio.TimeoutError as e:
         print(f"TIMEOUT ERROR: {e}")

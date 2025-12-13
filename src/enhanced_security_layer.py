@@ -286,6 +286,81 @@ class EnhancedSecurityLayer:
         )
         return False
 
+    def _create_permission_denied_result(
+        self, command: str, user: str, user_role: str
+    ) -> Dict[str, Any]:
+        """
+        Create a permission denied result for command execution.
+
+        Issue #281: Extracted from execute_command to reduce function length
+        and improve reusability.
+
+        Args:
+            command: The command that was attempted
+            user: Username who attempted execution
+            user_role: Role of the user
+
+        Returns:
+            Dict with error status and permission denied details
+        """
+        self.audit_log(
+            action="command_execution_denied",
+            user=user,
+            outcome="denied",
+            details={
+                "command": command,
+                "reason": "no_permission",
+                "role": user_role,
+            },
+        )
+        return {
+            "stdout": "",
+            "stderr": (
+                "Permission denied: You do not have shell execution privileges"
+            ),
+            "return_code": 1,
+            "status": "error",
+            "security": {"blocked": True, "reason": "no_permission"},
+        }
+
+    def _should_force_approval(
+        self, command: str, user_role: str
+    ) -> bool:
+        """
+        Determine if command requires forced approval based on role and risk.
+
+        Issue #281: Extracted from execute_command to reduce function length
+        and improve readability of approval logic.
+
+        Args:
+            command: Command to check
+            user_role: Role of user executing
+
+        Returns:
+            True if approval should be forced, False otherwise
+        """
+        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+        if not role_permissions:
+            # Fall back to default permissions if no configured role
+            role_permissions = self._get_default_role_permissions(user_role)
+
+        if "allow_all" in role_permissions:
+            return False
+
+        # Check if user has limited shell execution permissions
+        risk, _ = self.command_executor.assess_command_risk(command)
+        if (
+            "allow_shell_execute_safe" in role_permissions
+            and risk != CommandRisk.SAFE
+        ):
+            # User can only execute safe commands without approval
+            return True
+        elif "allow_shell_execute" in role_permissions and risk in HIGH_RISK_COMMAND_RISKS:
+            # User has shell execute permission but high-risk commands need approval
+            return True
+
+        return False
+
     def _get_default_role_permissions(self, user_role: str) -> List[str]:
         """
         Get default permissions for common user roles
@@ -344,47 +419,12 @@ class EnhancedSecurityLayer:
         Returns:
             Execution result with security information
         """
-        # Check if user has permission to execute commands
+        # Issue #281: Use extracted helper for permission check
         if not self.check_permission(user_role, "allow_shell_execute"):
-            self.audit_log(
-                action="command_execution_denied",
-                user=user,
-                outcome="denied",
-                details={
-                    "command": command,
-                    "reason": "no_permission",
-                    "role": user_role,
-                },
-            )
-            return {
-                "stdout": "",
-                "stderr": (
-                    "Permission denied: You do not have shell execution privileges"
-                ),
-                "return_code": 1,
-                "status": "error",
-                "security": {"blocked": True, "reason": "no_permission"},
-            }
+            return self._create_permission_denied_result(command, user, user_role)
 
-        # Check if only safe commands are allowed for this role
-        force_approval = False
-        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
-        if not role_permissions:
-            # Fall back to default permissions if no configured role
-            role_permissions = self._get_default_role_permissions(user_role)
-
-        if "allow_all" not in role_permissions:
-            # Check if user has limited shell execution permissions
-            risk, _ = self.command_executor.assess_command_risk(command)
-            if (
-                "allow_shell_execute_safe" in role_permissions
-                and risk != CommandRisk.SAFE
-            ):
-                # User can only execute safe commands without approval
-                force_approval = True
-            elif "allow_shell_execute" in role_permissions and risk in HIGH_RISK_COMMAND_RISKS:
-                # User has shell execute permission but high-risk commands need approval
-                force_approval = True
+        # Issue #281: Use extracted helper for approval logic
+        force_approval = self._should_force_approval(command, user_role)
 
         # Log command attempt
         self.audit_log(

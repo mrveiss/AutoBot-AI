@@ -16,6 +16,7 @@ from typing import List, Dict
 
 class SecurityValidator:
     def __init__(self):
+        """Initialize security validator with project root and finding lists."""
         self.project_root = Path(__file__).parent.parent.parent
         self.vulnerabilities_found = []
         self.fixes_verified = []

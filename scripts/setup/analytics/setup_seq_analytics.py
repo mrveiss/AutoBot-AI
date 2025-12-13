@@ -37,6 +37,7 @@ class SeqAnalyticsSetup:
         username: str = "admin",
         password: str = "Autobot123!",
     ):
+        """Initialize Seq analytics setup with connection credentials."""
         self.seq_url = seq_url.rstrip("/")
         self.username = username
         self.password = password
@@ -498,6 +499,7 @@ class SeqAnalyticsSetup:
 
 
 def main():
+    """Entry point for Seq analytics setup CLI."""
     parser = argparse.ArgumentParser(description="AutoBot Seq Analytics Setup")
 
     parser.add_argument(

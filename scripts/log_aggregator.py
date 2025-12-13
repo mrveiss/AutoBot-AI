@@ -70,6 +70,7 @@ class LogAggregator:
     """Centralized log aggregation and management system."""
 
     def __init__(self, logs_dir: str = "logs", archive_dir: str = "logs/archive"):
+        """Initialize log aggregator with log sources and alert patterns."""
         self.project_root = Path(__file__).parent.parent
         self.logs_dir = self.project_root / logs_dir
         self.archive_dir = self.project_root / archive_dir
@@ -947,6 +948,7 @@ def _handle_setup_command(log_aggregator: LogAggregator) -> None:
 
 
 async def main():
+    """Entry point for log aggregator CLI."""
     parser = _create_argument_parser()
     args = parser.parse_args()
 
