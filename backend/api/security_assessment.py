@@ -666,6 +666,72 @@ async def get_findings(
     )
 
 
+async def _store_parsed_hosts(manager, assessment_id: str, parsed) -> tuple[int, int]:
+    """
+    Store parsed hosts and their ports in the assessment.
+
+    Issue #281: Extracted from parse_and_store_tool_output to reduce function length.
+
+    Returns:
+        Tuple of (hosts_added, ports_added) counts.
+    """
+    hosts_added = 0
+    ports_added = 0
+
+    for host in parsed.hosts:
+        await manager.add_host(
+            assessment_id=assessment_id,
+            ip=host.ip,
+            hostname=host.hostname,
+            status=host.status,
+            metadata={
+                "mac_address": host.mac_address,
+                "vendor": host.vendor,
+                "os_guess": host.os_guess,
+            },
+        )
+        hosts_added += 1
+
+        for port in host.ports:
+            await manager.add_port(
+                assessment_id=assessment_id,
+                host_ip=host.ip,
+                port=port.get("port", 0),
+                protocol=port.get("protocol", "tcp"),
+                state=port.get("state", "open"),
+                service=port.get("service"),
+                version=port.get("version"),
+            )
+            ports_added += 1
+
+    return hosts_added, ports_added
+
+
+async def _store_parsed_vulnerabilities(manager, assessment_id: str, parsed) -> int:
+    """
+    Store parsed vulnerabilities in the assessment.
+
+    Issue #281: Extracted from parse_and_store_tool_output to reduce function length.
+
+    Returns:
+        Number of vulnerabilities added.
+    """
+    vulns_added = 0
+    for vuln in parsed.vulnerabilities:
+        await manager.add_vulnerability(
+            assessment_id=assessment_id,
+            host_ip=vuln.host,
+            cve_id=vuln.cve_id,
+            title=vuln.title,
+            severity=vuln.severity,
+            description=vuln.description,
+            affected_port=vuln.port,
+            metadata=vuln.metadata,
+        )
+        vulns_added += 1
+    return vulns_added
+
+
 @router.post("/assessments/{assessment_id}/parse")
 @with_error_handling(
     category=ErrorCategory.VALIDATION,
@@ -702,49 +768,9 @@ async def parse_and_store_tool_output(
             status_code=400, detail="Could not parse tool output"
         )
 
-    # Store parsed data
-    hosts_added = 0
-    ports_added = 0
-    vulns_added = 0
-
-    for host in parsed.hosts:
-        await manager.add_host(
-            assessment_id=assessment_id,
-            ip=host.ip,
-            hostname=host.hostname,
-            status=host.status,
-            metadata={
-                "mac_address": host.mac_address,
-                "vendor": host.vendor,
-                "os_guess": host.os_guess,
-            },
-        )
-        hosts_added += 1
-
-        for port in host.ports:
-            await manager.add_port(
-                assessment_id=assessment_id,
-                host_ip=host.ip,
-                port=port.get("port", 0),
-                protocol=port.get("protocol", "tcp"),
-                state=port.get("state", "open"),
-                service=port.get("service"),
-                version=port.get("version"),
-            )
-            ports_added += 1
-
-    for vuln in parsed.vulnerabilities:
-        await manager.add_vulnerability(
-            assessment_id=assessment_id,
-            host_ip=vuln.host,
-            cve_id=vuln.cve_id,
-            title=vuln.title,
-            severity=vuln.severity,
-            description=vuln.description,
-            affected_port=vuln.port,
-            metadata=vuln.metadata,
-        )
-        vulns_added += 1
+    # Store parsed data using extracted helpers
+    hosts_added, ports_added = await _store_parsed_hosts(manager, assessment_id, parsed)
+    vulns_added = await _store_parsed_vulnerabilities(manager, assessment_id, parsed)
 
     # Record the action
     await manager.record_action(

@@ -19,31 +19,29 @@ from src.knowledge_base import KnowledgeBase
 from src.knowledge_sync_incremental import run_incremental_sync
 
 
-async def sync_docs():
-    """Re-sync all documentation to ensure KB is current"""
+def _determine_doc_category(rel_path: str) -> str:
+    """
+    Determine document category from relative path.
 
-    print("=== Knowledge Base Documentation Sync ===")
+    Issue #281: Extracted from sync_docs to reduce function length.
+    """
+    if "user_guide" in rel_path:
+        return "user-guide"
+    elif "developer" in rel_path:
+        return "developer-docs"
+    elif "reports" in rel_path:
+        return "reports"
+    elif rel_path in ["README.md", "CLAUDE.md"]:
+        return "project-overview"
+    return "documentation"
 
-    # Clear existing project docs
-    kb = KnowledgeBase()
-    await kb.ainit()
 
-    # Get all current facts
-    all_facts = await kb.get_all_facts()
-    removed_count = 0
+def _collect_documentation_files(project_root: str) -> list:
+    """
+    Find all documentation files to sync.
 
-    # Remove old project documentation facts
-    print("Removing outdated documentation entries...")
-    for fact in all_facts:
-        metadata = fact.get("metadata", {})
-        if metadata.get("source") in ["project-docs", "project-documentation"]:
-            await kb.delete_fact(fact["id"])
-            removed_count += 1
-
-    print(f"✓ Removed {removed_count} outdated documentation entries")
-
-    # Find all current documentation files
-    project_root = "/home/kali/Desktop/AutoBot"
+    Issue #281: Extracted from sync_docs to reduce function length.
+    """
     doc_patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
 
     all_files = []
@@ -53,93 +51,139 @@ async def sync_docs():
 
     # Remove duplicates and filter
     unique_files = list(set(all_files))
-    filtered_files = [
+    return [
         f for f in unique_files if os.path.isfile(f) and "node_modules" not in f
     ]
 
+
+async def _remove_outdated_entries(kb, all_facts: list) -> int:
+    """
+    Remove outdated documentation entries from KB.
+
+    Issue #281: Extracted from sync_docs to reduce function length.
+    """
+    print("Removing outdated documentation entries...")
+    removed_count = 0
+    for fact in all_facts:
+        metadata = fact.get("metadata", {})
+        if metadata.get("source") in ["project-docs", "project-documentation"]:
+            await kb.delete_fact(fact["id"])
+            removed_count += 1
+    print(f"✓ Removed {removed_count} outdated documentation entries")
+    return removed_count
+
+
+async def _sync_single_file(kb, file_path: str, project_root: str) -> bool:
+    """
+    Sync a single documentation file to the KB.
+
+    Issue #281: Extracted from sync_docs to reduce function length.
+    Returns True on success, False on failure.
+    """
+    rel_path = os.path.relpath(file_path, project_root)
+
+    # Read file content
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if not content.strip():
+        return False
+
+    # Create enhanced searchable content
+    searchable_text = f"FILE: {rel_path}\\nTITLE: {os.path.basename(file_path)}\\nCONTENT:\\n{content}"
+
+    category = _determine_doc_category(rel_path)
+    metadata = {
+        "source": "project-documentation",
+        "category": category,
+        "relative_path": rel_path,
+        "filename": os.path.basename(file_path),
+        "sync_time": datetime.now().isoformat(),
+        "file_size": len(content),
+    }
+
+    # Store as searchable fact
+    result = await kb.store_fact(searchable_text, metadata)
+
+    if result["status"] == "success":
+        print(f"✓ Synced: {rel_path} [{category}]")
+        return True
+    else:
+        print(f"❌ Failed to sync {rel_path}: {result['message']}")
+        return False
+
+
+def _save_sync_state(success_count: int, removed_count: int, total_files: int) -> None:
+    """
+    Save sync state to JSON file.
+
+    Issue #281: Extracted from sync_docs to reduce function length.
+    """
+    sync_data = {
+        "last_sync": datetime.now().isoformat(),
+        "documents_synced": success_count,
+        "method": "full-resync",
+        "removed_outdated": removed_count,
+        "total_files_found": total_files,
+    }
+
+    os.makedirs("data", exist_ok=True)
+    with open("data/kb_sync_state.json", "w") as f:
+        json.dump(sync_data, f, indent=2)
+
+    print("✅ Sync state saved to data/kb_sync_state.json")
+
+
+async def _test_search_functionality(kb) -> None:
+    """
+    Test KB search functionality after sync.
+
+    Issue #281: Extracted from sync_docs to reduce function length.
+    """
+    print("\\n=== Testing Search Functionality ===")
+    test_queries = ["debian", "installation", "autobot", "configuration"]
+
+    for query in test_queries:
+        try:
+            results = await kb.get_fact(query=query)
+            print(f"Search '{query}': {len(results)} results found")
+        except Exception as e:
+            print(f"Search '{query}': error - {str(e)}")
+
+
+async def sync_docs():
+    """Re-sync all documentation to ensure KB is current."""
+    print("=== Knowledge Base Documentation Sync ===")
+
+    # Initialize KB
+    kb = KnowledgeBase()
+    await kb.ainit()
+
+    # Remove outdated entries
+    all_facts = await kb.get_all_facts()
+    removed_count = await _remove_outdated_entries(kb, all_facts)
+
+    # Collect documentation files
+    project_root = "/home/kali/Desktop/AutoBot"
+    filtered_files = _collect_documentation_files(project_root)
     print(f"Found {len(filtered_files)} documentation files to sync")
 
-    # Add all current documentation via facts (more reliable than vector store)
+    # Sync each file
     success_count = 0
-
     for file_path in sorted(filtered_files):
         try:
-            rel_path = os.path.relpath(file_path, project_root)
-
-            # Read file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            if not content.strip():
-                continue
-
-            # Create enhanced searchable content
-            searchable_text = f"FILE: {rel_path}\\nTITLE: {os.path.basename(file_path)}\\nCONTENT:\\n{content}"
-
-            # Determine category
-            if "user_guide" in rel_path:
-                category = "user-guide"
-            elif "developer" in rel_path:
-                category = "developer-docs"
-            elif "reports" in rel_path:
-                category = "reports"
-            elif rel_path in ["README.md", "CLAUDE.md"]:
-                category = "project-overview"
-            else:
-                category = "documentation"
-
-            metadata = {
-                "source": "project-documentation",
-                "category": category,
-                "relative_path": rel_path,
-                "filename": os.path.basename(file_path),
-                "sync_time": datetime.now().isoformat(),
-                "file_size": len(content),
-            }
-
-            # Store as searchable fact
-            result = await kb.store_fact(searchable_text, metadata)
-
-            if result["status"] == "success":
+            if await _sync_single_file(kb, file_path, project_root):
                 success_count += 1
-                print(f"✓ Synced: {rel_path} [{category}]")
-            else:
-                print(f"❌ Failed to sync {rel_path}: {result['message']}")
-
         except Exception as e:
             print(f"❌ Error syncing {file_path}: {str(e)}")
 
+    # Report results
     print("\\n=== Sync Results ===")
     print(f"✓ Successfully synced: {success_count} documents")
-    print(f"📁 Categories: {len(set(metadata.get('category') for metadata in []))}")
 
     if success_count > 0:
-        # Save sync timestamp
-        sync_data = {
-            "last_sync": datetime.now().isoformat(),
-            "documents_synced": success_count,
-            "method": "full-resync",
-            "removed_outdated": removed_count,
-            "total_files_found": len(filtered_files),
-        }
-
-        os.makedirs("data", exist_ok=True)
-        with open("data/kb_sync_state.json", "w") as f:
-            json.dump(sync_data, f, indent=2)
-
-        print("✅ Sync state saved to data/kb_sync_state.json")
-
-        # Test search functionality
-        print("\\n=== Testing Search Functionality ===")
-        test_queries = ["debian", "installation", "autobot", "configuration"]
-
-        for query in test_queries:
-            try:
-                results = await kb.get_fact(query=query)
-                print(f"Search '{query}': {len(results)} results found")
-            except Exception as e:
-                print(f"Search '{query}': error - {str(e)}")
-
+        _save_sync_state(success_count, removed_count, len(filtered_files))
+        await _test_search_functionality(kb)
         print("\\n🎉 Knowledge base documentation sync completed successfully!")
         print("Users can now search for updated documentation content.")
         return True
