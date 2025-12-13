@@ -211,6 +211,90 @@ def generate_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()
 
 
+def _check_already_indexed(kb, content_hash: str, file_path: Path, title: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if document is already indexed in Redis.
+
+    Issue #281: Extracted from index_document to reduce function length.
+
+    Returns:
+        Skip result dict if already indexed, None otherwise.
+    """
+    existing_hash_key = f"doc_hash:{content_hash}"
+    if kb.redis_client.exists(existing_hash_key):
+        logger.info(f"Document already indexed (unchanged): {file_path.name}")
+        return {
+            "status": "skipped",
+            "reason": "already_indexed",
+            "file": str(file_path),
+            "title": title
+        }
+    return None
+
+
+async def _index_document_chunks(
+    kb, chunks: list, title: str, category: str,
+    file_path: Path, content_hash: str
+) -> list:
+    """
+    Index each document chunk into the knowledge base.
+
+    Issue #281: Extracted from index_document to reduce function length.
+
+    Returns:
+        List of indexed fact IDs.
+    """
+    indexed_chunks = []
+    for section_title, chunk_content in chunks:
+        if not chunk_content.strip():
+            continue
+
+        # Prepare metadata
+        metadata = {
+            "title": title,
+            "section": section_title,
+            "category": category,
+            "file_path": str(file_path.relative_to(PROJECT_ROOT)),
+            "content_hash": content_hash,
+            "indexed_at": datetime.now().isoformat(),
+            "content_type": "documentation",
+            "doc_type": "markdown",
+            "total_chunks": len(chunks),
+            "chunk_index": len(indexed_chunks)
+        }
+
+        # Store chunk as fact with vectorization
+        result = await kb.store_fact(
+            content=chunk_content,
+            metadata=metadata
+        )
+
+        if result["status"] == "success":
+            indexed_chunks.append(result["fact_id"])
+        else:
+            logger.error(f"Failed to index chunk: {result.get('message', 'Unknown error')}")
+
+    return indexed_chunks
+
+
+def _store_document_hash(kb, content_hash: str, file_path: Path, title: str, chunks_count: int) -> None:
+    """
+    Store document hash in Redis to prevent duplicate indexing.
+
+    Issue #281: Extracted from index_document to reduce function length.
+    """
+    kb.redis_client.setex(
+        f"doc_hash:{content_hash}",
+        86400 * 30,  # 30 days TTL
+        json.dumps({
+            "file_path": str(file_path),
+            "title": title,
+            "chunks": chunks_count,
+            "indexed_at": datetime.now().isoformat()
+        })
+    )
+
+
 async def index_document(
     kb: KnowledgeBase,
     file_path: Path,
@@ -248,63 +332,20 @@ async def index_document(
 
         # Check if already indexed (unless reindex flag set)
         if not reindex:
-            # Check Redis for existing hash
-            existing_hash_key = f"doc_hash:{content_hash}"
-            if kb.redis_client.exists(existing_hash_key):
-                logger.info(f"Document already indexed (unchanged): {file_path.name}")
-                return {
-                    "status": "skipped",
-                    "reason": "already_indexed",
-                    "file": str(file_path),
-                    "title": title
-                }
+            skip_result = _check_already_indexed(kb, content_hash, file_path, title)
+            if skip_result:
+                return skip_result
 
-        # Chunk document by sections
+        # Chunk document and index
         chunks = chunk_markdown_by_sections(content)
         logger.info(f"Processing {file_path.name}: {len(chunks)} chunks")
 
-        # Index each chunk
-        indexed_chunks = []
-        for section_title, chunk_content in chunks:
-            if not chunk_content.strip():
-                continue
-
-            # Prepare metadata
-            metadata = {
-                "title": title,
-                "section": section_title,
-                "category": category,
-                "file_path": str(file_path.relative_to(PROJECT_ROOT)),
-                "content_hash": content_hash,
-                "indexed_at": datetime.now().isoformat(),
-                "content_type": "documentation",
-                "doc_type": "markdown",
-                "total_chunks": len(chunks),
-                "chunk_index": len(indexed_chunks)
-            }
-
-            # Store chunk as fact with vectorization
-            result = await kb.store_fact(
-                content=chunk_content,
-                metadata=metadata
-            )
-
-            if result["status"] == "success":
-                indexed_chunks.append(result["fact_id"])
-            else:
-                logger.error(f"Failed to index chunk: {result.get('message', 'Unknown error')}")
+        indexed_chunks = await _index_document_chunks(
+            kb, chunks, title, category, file_path, content_hash
+        )
 
         # Store document hash to prevent duplicate indexing
-        kb.redis_client.setex(
-            f"doc_hash:{content_hash}",
-            86400 * 30,  # 30 days TTL
-            json.dumps({
-                "file_path": str(file_path),
-                "title": title,
-                "chunks": len(indexed_chunks),
-                "indexed_at": datetime.now().isoformat()
-            })
-        )
+        _store_document_hash(kb, content_hash, file_path, title, len(indexed_chunks))
 
         return {
             "status": "success",

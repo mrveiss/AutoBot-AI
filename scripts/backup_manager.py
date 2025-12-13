@@ -304,6 +304,137 @@ class BackupManager:
                 shutil.rmtree(backup_path)
             return None
 
+    def _find_base_backup_id(self, base_backup_id: Optional[str]) -> Optional[str]:
+        """
+        Find base backup ID for incremental comparison.
+
+        Issue #281: Extracted from create_incremental_backup to reduce function length.
+
+        Returns:
+            Base backup ID or None if no backups exist.
+        """
+        if base_backup_id:
+            return base_backup_id
+
+        backups = self.list_backups()
+        if not backups:
+            return None
+
+        # Use most recent backup as base
+        return max(backups.keys())
+
+    def _detect_changed_paths(
+        self, base_metadata: Dict[str, Any]
+    ) -> Dict[str, Path]:
+        """
+        Detect paths that changed since base backup.
+
+        Issue #281: Extracted from create_incremental_backup to reduce function length.
+
+        Returns:
+            Dictionary of changed category -> path mappings.
+        """
+        changed_paths = {}
+
+        for category, source_path in self.backup_paths.items():
+            if not source_path.exists():
+                continue
+
+            # Compare with base backup
+            if category in base_metadata.get("file_info", {}):
+                base_info = base_metadata["file_info"][category]
+
+                if source_path.is_file():
+                    current_checksum = self.calculate_checksum(source_path)
+                    if current_checksum != base_info.get("checksum"):
+                        changed_paths[category] = source_path
+                        self.print_step(f"File changed: {category}", "info")
+                else:
+                    # For directories, check modification time
+                    current_mtime = source_path.stat().st_mtime
+                    base_time = datetime.fromisoformat(
+                        base_metadata["timestamp"]
+                    ).timestamp()
+
+                    if current_mtime > base_time:
+                        changed_paths[category] = source_path
+                        self.print_step(f"Directory changed: {category}", "info")
+            else:
+                # New path not in base backup
+                changed_paths[category] = source_path
+                self.print_step(f"New path: {category}", "info")
+
+        return changed_paths
+
+    def _backup_changed_paths(
+        self, changed_paths: Dict[str, Path], backup_path: Path
+    ) -> None:
+        """
+        Copy changed paths to backup directory.
+
+        Issue #281: Extracted from create_incremental_backup to reduce function length.
+        """
+        for category, source_path in changed_paths.items():
+            dest_path = backup_path / category
+            self.print_step(f"Backing up changed: {category}", "running")
+
+            if source_path.is_dir():
+                shutil.copytree(
+                    source_path, dest_path, ignore_dangling_symlinks=True
+                )
+            else:
+                shutil.copy2(source_path, dest_path)
+
+    def _create_incremental_archive(
+        self,
+        backup_id: str,
+        backup_path: Path,
+        base_backup_id: str,
+        changed_paths: Dict[str, Path],
+    ) -> Optional[str]:
+        """
+        Create archive and register incremental backup.
+
+        Issue #281: Extracted from create_incremental_backup to reduce function length.
+
+        Returns:
+            Backup ID on success, None on failure.
+        """
+        # Create metadata
+        metadata = self.create_backup_metadata(
+            backup_id, "incremental", changed_paths
+        )
+        metadata["base_backup_id"] = base_backup_id
+
+        metadata_file = backup_path / "backup_metadata.json"
+        with open(metadata_file, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        # Create archive
+        archive_path = (
+            self.backup_dir / f"autobot_incremental_backup_{backup_id}.tar.gz"
+        )
+
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(backup_path, arcname=f"autobot_incremental_{backup_id}")
+
+        # Cleanup
+        shutil.rmtree(backup_path)
+
+        if archive_path.exists():
+            size_mb = archive_path.stat().st_size / (1024 * 1024)
+            self.print_step(
+                f"Incremental backup created: {archive_path.name} ({size_mb:.1f} MB)",
+                "success",
+            )
+
+            self.register_backup(
+                backup_id, "incremental", str(archive_path), metadata
+            )
+            return backup_id
+
+        return None
+
     def create_incremental_backup(self, base_backup_id: Optional[str] = None) -> str:
         """Create incremental backup (only changed files since last backup)."""
         backup_id = self.generate_backup_id()
@@ -313,16 +444,12 @@ class BackupManager:
         self.print_header(f"Creating Incremental Backup: {backup_id}")
 
         # Find base backup for comparison
+        base_backup_id = self._find_base_backup_id(base_backup_id)
         if not base_backup_id:
-            backups = self.list_backups()
-            if not backups:
-                self.print_step(
-                    "No base backup found, creating full backup instead", "warning"
-                )
-                return self.create_full_backup()
-
-            # Use most recent backup as base
-            base_backup_id = max(backups.keys())
+            self.print_step(
+                "No base backup found, creating full backup instead", "warning"
+            )
+            return self.create_full_backup()
 
         self.print_step(f"Using base backup: {base_backup_id}", "info")
 
@@ -334,86 +461,19 @@ class BackupManager:
                 )
                 return self.create_full_backup()
 
-            # Check for changed files
-            changed_paths = {}
-
-            for category, source_path in self.backup_paths.items():
-                if not source_path.exists():
-                    continue
-
-                # Compare with base backup
-                if category in base_metadata.get("file_info", {}):
-                    base_info = base_metadata["file_info"][category]
-
-                    if source_path.is_file():
-                        current_checksum = self.calculate_checksum(source_path)
-                        if current_checksum != base_info.get("checksum"):
-                            changed_paths[category] = source_path
-                            self.print_step(f"File changed: {category}", "info")
-                    else:
-                        # For directories, check modification time
-                        current_mtime = source_path.stat().st_mtime
-                        base_time = datetime.fromisoformat(
-                            base_metadata["timestamp"]
-                        ).timestamp()
-
-                        if current_mtime > base_time:
-                            changed_paths[category] = source_path
-                            self.print_step(f"Directory changed: {category}", "info")
-                else:
-                    # New path not in base backup
-                    changed_paths[category] = source_path
-                    self.print_step(f"New path: {category}", "info")
+            # Detect changed paths
+            changed_paths = self._detect_changed_paths(base_metadata)
 
             if not changed_paths:
                 self.print_step("No changes detected since last backup", "success")
                 shutil.rmtree(backup_path)
                 return base_backup_id
 
-            # Backup only changed paths
-            for category, source_path in changed_paths.items():
-                dest_path = backup_path / category
-                self.print_step(f"Backing up changed: {category}", "running")
-
-                if source_path.is_dir():
-                    shutil.copytree(
-                        source_path, dest_path, ignore_dangling_symlinks=True
-                    )
-                else:
-                    shutil.copy2(source_path, dest_path)
-
-            # Create metadata
-            metadata = self.create_backup_metadata(
-                backup_id, "incremental", changed_paths
+            # Backup changed paths and create archive
+            self._backup_changed_paths(changed_paths, backup_path)
+            return self._create_incremental_archive(
+                backup_id, backup_path, base_backup_id, changed_paths
             )
-            metadata["base_backup_id"] = base_backup_id
-
-            metadata_file = backup_path / "backup_metadata.json"
-            with open(metadata_file, "w") as f:
-                json.dump(metadata, f, indent=2)
-
-            # Create archive
-            archive_path = (
-                self.backup_dir / f"autobot_incremental_backup_{backup_id}.tar.gz"
-            )
-
-            with tarfile.open(archive_path, "w:gz") as tar:
-                tar.add(backup_path, arcname=f"autobot_incremental_{backup_id}")
-
-            # Cleanup
-            shutil.rmtree(backup_path)
-
-            if archive_path.exists():
-                size_mb = archive_path.stat().st_size / (1024 * 1024)
-                self.print_step(
-                    f"Incremental backup created: {archive_path.name} ({size_mb:.1f} MB)",
-                    "success",
-                )
-
-                self.register_backup(
-                    backup_id, "incremental", str(archive_path), metadata
-                )
-                return backup_id
 
         except Exception as e:
             self.print_step(f"Incremental backup failed: {e}", "error")
