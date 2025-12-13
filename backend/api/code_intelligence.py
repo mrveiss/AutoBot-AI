@@ -50,6 +50,113 @@ router = APIRouter()
 # Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
 _SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
 
+# Issue #281: Pattern type definitions extracted from get_supported_pattern_types
+# This enables reuse and reduces function length
+PATTERN_TYPE_DEFINITIONS = {
+    # Bloaters
+    "god_class": {
+        "name": "God Class",
+        "category": "bloater",
+        "description": "Class with too many methods or responsibilities",
+        "threshold": f">{AntiPatternDetector.GOD_CLASS_METHOD_THRESHOLD} methods "
+        f"or >{AntiPatternDetector.GOD_CLASS_LINE_THRESHOLD} lines",
+    },
+    "long_method": {
+        "name": "Long Method",
+        "category": "bloater",
+        "description": "Function with too many lines",
+        "threshold": f">{AntiPatternDetector.LONG_METHOD_THRESHOLD} lines",
+    },
+    "long_parameter_list": {
+        "name": "Long Parameter List",
+        "category": "bloater",
+        "description": "Function with too many parameters",
+        "threshold": f">{AntiPatternDetector.LONG_PARAMETER_THRESHOLD} parameters",
+    },
+    "large_file": {
+        "name": "Large File",
+        "category": "bloater",
+        "description": "File with excessive lines of code",
+        "threshold": f">{AntiPatternDetector.LARGE_FILE_THRESHOLD} lines",
+    },
+    "deep_nesting": {
+        "name": "Deep Nesting",
+        "category": "bloater",
+        "description": "Code with excessive nesting levels",
+        "threshold": f">{AntiPatternDetector.DEEP_NESTING_THRESHOLD} levels",
+    },
+    "data_clumps": {
+        "name": "Data Clumps",
+        "category": "bloater",
+        "description": "Groups of parameters that always appear together",
+        "threshold": "3+ common parameters across functions",
+    },
+    # Couplers
+    "circular_dependency": {
+        "name": "Circular Dependency",
+        "category": "coupler",
+        "description": "Modules that import each other in a cycle",
+        "threshold": "Any cycle detected",
+    },
+    "feature_envy": {
+        "name": "Feature Envy",
+        "category": "coupler",
+        "description": "Method uses another object's data more than its own",
+        "threshold": "More external accesses than self accesses",
+    },
+    "message_chains": {
+        "name": "Message Chains",
+        "category": "coupler",
+        "description": "Long chains of method calls (a.b().c().d())",
+        "threshold": f">{AntiPatternDetector.MESSAGE_CHAIN_THRESHOLD} chained calls",
+    },
+    # Dispensables
+    "dead_code": {
+        "name": "Dead Code",
+        "category": "dispensable",
+        "description": "Unreachable or unused code",
+        "threshold": "Code after return/raise, empty except blocks",
+    },
+    "lazy_class": {
+        "name": "Lazy Class",
+        "category": "dispensable",
+        "description": "Class that does too little",
+        "threshold": f"<={AntiPatternDetector.LAZY_CLASS_METHOD_THRESHOLD} methods",
+    },
+    # Naming Issues
+    "inconsistent_naming": {
+        "name": "Inconsistent Naming",
+        "category": "naming",
+        "description": "Mixed naming conventions (snake_case vs camelCase)",
+        "threshold": ">20% mixing of styles",
+    },
+    "single_letter_variable": {
+        "name": "Single Letter Variable",
+        "category": "naming",
+        "description": "Non-descriptive single-letter variable names",
+        "threshold": "Single letter (except i,j,k,n,x,y,z in loops)",
+    },
+    "magic_number": {
+        "name": "Magic Number",
+        "category": "naming",
+        "description": "Unexplained numeric literals repeated in code",
+        "threshold": f"Same number appears >{AntiPatternDetector.MAGIC_NUMBER_THRESHOLD} times",
+    },
+    # Other
+    "complex_conditional": {
+        "name": "Complex Conditional",
+        "category": "other",
+        "description": "Overly complex boolean expressions",
+        "threshold": f">{AntiPatternDetector.COMPLEX_CONDITIONAL_THRESHOLD} conditions",
+    },
+    "missing_docstring": {
+        "name": "Missing Docstring",
+        "category": "other",
+        "description": "Public function or class without documentation",
+        "threshold": "No docstring on public entity",
+    },
+}
+
 
 # =============================================================================
 # Helper Functions for Score Grading (Issue #315 - extracted/refactored)
@@ -410,120 +517,19 @@ async def get_supported_pattern_types():
     """
     Get list of supported anti-pattern types.
 
+    Issue #281: Refactored to use module-level PATTERN_TYPE_DEFINITIONS constant.
+    Reduced from 120 lines to ~15 lines.
+
     Returns all pattern types that the detector can identify,
     along with their descriptions and thresholds.
     """
-    pattern_info = {
-        # Bloaters
-        "god_class": {
-            "name": "God Class",
-            "category": "bloater",
-            "description": "Class with too many methods or responsibilities",
-            "threshold": f">{AntiPatternDetector.GOD_CLASS_METHOD_THRESHOLD} methods "
-            f"or >{AntiPatternDetector.GOD_CLASS_LINE_THRESHOLD} lines",
-        },
-        "long_method": {
-            "name": "Long Method",
-            "category": "bloater",
-            "description": "Function with too many lines",
-            "threshold": f">{AntiPatternDetector.LONG_METHOD_THRESHOLD} lines",
-        },
-        "long_parameter_list": {
-            "name": "Long Parameter List",
-            "category": "bloater",
-            "description": "Function with too many parameters",
-            "threshold": f">{AntiPatternDetector.LONG_PARAMETER_THRESHOLD} parameters",
-        },
-        "large_file": {
-            "name": "Large File",
-            "category": "bloater",
-            "description": "File with excessive lines of code",
-            "threshold": f">{AntiPatternDetector.LARGE_FILE_THRESHOLD} lines",
-        },
-        "deep_nesting": {
-            "name": "Deep Nesting",
-            "category": "bloater",
-            "description": "Code with excessive nesting levels",
-            "threshold": f">{AntiPatternDetector.DEEP_NESTING_THRESHOLD} levels",
-        },
-        "data_clumps": {
-            "name": "Data Clumps",
-            "category": "bloater",
-            "description": "Groups of parameters that always appear together",
-            "threshold": "3+ common parameters across functions",
-        },
-        # Couplers
-        "circular_dependency": {
-            "name": "Circular Dependency",
-            "category": "coupler",
-            "description": "Modules that import each other in a cycle",
-            "threshold": "Any cycle detected",
-        },
-        "feature_envy": {
-            "name": "Feature Envy",
-            "category": "coupler",
-            "description": "Method uses another object's data more than its own",
-            "threshold": "More external accesses than self accesses",
-        },
-        "message_chains": {
-            "name": "Message Chains",
-            "category": "coupler",
-            "description": "Long chains of method calls (a.b().c().d())",
-            "threshold": f">{AntiPatternDetector.MESSAGE_CHAIN_THRESHOLD} chained calls",
-        },
-        # Dispensables
-        "dead_code": {
-            "name": "Dead Code",
-            "category": "dispensable",
-            "description": "Unreachable or unused code",
-            "threshold": "Code after return/raise, empty except blocks",
-        },
-        "lazy_class": {
-            "name": "Lazy Class",
-            "category": "dispensable",
-            "description": "Class that does too little",
-            "threshold": f"<={AntiPatternDetector.LAZY_CLASS_METHOD_THRESHOLD} methods",
-        },
-        # Naming Issues
-        "inconsistent_naming": {
-            "name": "Inconsistent Naming",
-            "category": "naming",
-            "description": "Mixed naming conventions (snake_case vs camelCase)",
-            "threshold": ">20% mixing of styles",
-        },
-        "single_letter_variable": {
-            "name": "Single Letter Variable",
-            "category": "naming",
-            "description": "Non-descriptive single-letter variable names",
-            "threshold": "Single letter (except i,j,k,n,x,y,z in loops)",
-        },
-        "magic_number": {
-            "name": "Magic Number",
-            "category": "naming",
-            "description": "Unexplained numeric literals repeated in code",
-            "threshold": f"Same number appears >{AntiPatternDetector.MAGIC_NUMBER_THRESHOLD} times",
-        },
-        # Other
-        "complex_conditional": {
-            "name": "Complex Conditional",
-            "category": "other",
-            "description": "Overly complex boolean expressions",
-            "threshold": f">{AntiPatternDetector.COMPLEX_CONDITIONAL_THRESHOLD} conditions",
-        },
-        "missing_docstring": {
-            "name": "Missing Docstring",
-            "category": "other",
-            "description": "Public function or class without documentation",
-            "threshold": "No docstring on public entity",
-        },
-    }
-
+    # Issue #281: Use module-level constant for pattern definitions
     return JSONResponse(
         status_code=200,
         content={
             "status": "success",
-            "pattern_types": pattern_info,
-            "total_types": len(pattern_info),
+            "pattern_types": PATTERN_TYPE_DEFINITIONS,
+            "total_types": len(PATTERN_TYPE_DEFINITIONS),
         },
     )
 
