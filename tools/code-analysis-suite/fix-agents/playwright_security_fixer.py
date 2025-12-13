@@ -63,7 +63,7 @@ class PlaywrightSecurityFixer:
             return str(backup_path)
 
         except Exception as e:
-            print(f"❌ Failed to create backup: {e}")
+            logger.error("Failed to create backup: %s", e)
             return ""
 
     def scan_for_xss_patterns(
@@ -133,7 +133,7 @@ class PlaywrightSecurityFixer:
         head_match = re.search(head_pattern, content, re.DOTALL | re.IGNORECASE)
 
         if not head_match:
-            print("⚠️  No <head> section found, skipping header injection")
+            logger.info("⚠️  No <head> section found, skipping header injection")
             return content, enhancements
 
         head_start, head_content, head_end = head_match.groups()
@@ -277,7 +277,7 @@ class PlaywrightSecurityFixer:
     def fix_playwright_report(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a Playwright report file."""
         try:
-            print(f"\n🎯 Processing Playwright report: {file_path}")
+            logger.info("\n🎯 Processing Playwright report: {file_path}")
 
             # Read original content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -307,7 +307,7 @@ class PlaywrightSecurityFixer:
                     "LOW": "🟢",
                 }
                 icon = severity_icons.get(severity, "⚪")
-                print(f"   {icon} {severity}: {count} patterns")
+                logger.info("   {icon} {severity}: {count} patterns")
 
             # Create backup
             backup_path = self.create_backup(file_path)
@@ -315,7 +315,7 @@ class PlaywrightSecurityFixer:
                 return {"file": file_path, "status": "error", "error": "Backup failed"}
 
             # Apply security enhancements
-            print("🛡️  Applying security enhancements...")
+            logger.info("🛡️  Applying security enhancements...")
             enhanced_content = original_content
             all_enhancements = []
 
@@ -335,7 +335,7 @@ class PlaywrightSecurityFixer:
             if (
                 len(enhanced_content) < original_size * 0.9
             ):  # Content shouldn't shrink significantly
-                print("❌ Enhanced content appears corrupted")
+                logger.info("❌ Enhanced content appears corrupted")
                 return {
                     "file": file_path,
                     "status": "error",
@@ -348,9 +348,9 @@ class PlaywrightSecurityFixer:
 
             enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
 
-            print(f"✅ Applied {len(all_enhancements)} security enhancements")
+            logger.info("Applied %s security enhancements", len(all_enhancements))
             for enhancement in all_enhancements:
-                print(f"   • {enhancement}")
+                logger.info("   • {enhancement}")
 
             return {
                 "file": file_path,
@@ -367,7 +367,7 @@ class PlaywrightSecurityFixer:
             }
 
         except Exception as e:
-            print(f"❌ Error processing {file_path}: {e}")
+            logger.error("Error processing {file_path}: %s", e)
             return {"file": file_path, "status": "error", "error": str(e)}
 
     def generate_security_report(self, results: List[Dict[str, Any]]) -> str:
@@ -531,14 +531,14 @@ class PlaywrightSecurityFixer:
             return md_path
 
         except Exception as e:
-            print(f"❌ Error saving report: {e}")
+            logger.error("Error saving report: %s", e)
             return ""
 
     def run(self, target_path: str) -> None:
         """Main execution method."""
-        print("🎭 Playwright Security Fixer v1.0.0")
-        print("   Specialized XSS Protection for Test Reports")
-        print("=" * 50)
+        logger.info("🎭 Playwright Security Fixer v1.0.0")
+        logger.info("   Specialized XSS Protection for Test Reports")
+        logger.info("=" * 50)
 
         # Find HTML files to process
         html_files = []
@@ -548,17 +548,17 @@ class PlaywrightSecurityFixer:
         ):
             html_files = [target_path]
         elif os.path.isdir(target_path):
-            print(f"📂 Scanning directory: {target_path}")
+            logger.info("Scanning directory: %s", target_path)
             for root, dirs, files in os.walk(target_path):
                 for file in files:
                     if file.lower().endswith((".html", ".htm")):
                         html_files.append(os.path.join(root, file))
 
         if not html_files:
-            print("❌ No HTML files found to process")
+            logger.info("❌ No HTML files found to process")
             return
 
-        print(f"📋 Found {len(html_files)} HTML files")
+        logger.info("Found %s HTML files", len(html_files))
 
         # Process each file
         results = []
@@ -567,7 +567,7 @@ class PlaywrightSecurityFixer:
             results.append(result)
 
         # Generate report
-        print(f"\n📊 Generating security report...")
+        logger.info("\n📊 Generating security report...")
         report_content = self.generate_security_report(results)
 
         output_dir = (
@@ -576,34 +576,34 @@ class PlaywrightSecurityFixer:
         report_path = self.save_report(report_content, output_dir)
 
         if report_path:
-            print(f"✅ Security report saved: {report_path}")
+            logger.info("Security report saved: %s", report_path)
 
         # Summary
         enhanced_count = len([r for r in results if r["status"] == "enhanced"])
         total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
         total_enhancements = sum(r.get("enhancements_applied", 0) for r in results)
 
-        print("\n" + "=" * 50)
-        print("🎯 SECURITY ENHANCEMENT SUMMARY")
-        print("=" * 50)
-        print(f"Files processed: {len(results)}")
-        print(f"Files enhanced: {enhanced_count}")
-        print(f"Vulnerability patterns found: {total_vulnerabilities}")
-        print(f"Security enhancements applied: {total_enhancements}")
+        logger.info("=" * 50)
+        logger.info("🎯 SECURITY ENHANCEMENT SUMMARY")
+        logger.info("=" * 50)
+        logger.info("Files processed: {len(results)}")
+        logger.info("Files enhanced: {enhanced_count}")
+        logger.info("Vulnerability patterns found: {total_vulnerabilities}")
+        logger.info("Security enhancements applied: {total_enhancements}")
 
         if enhanced_count > 0:
-            print("🛡️  XSS protection successfully applied!")
-            print(f"📁 Backups available in: {self.backup_dir}")
+            logger.info("🛡️  XSS protection successfully applied!")
+            logger.info("Backups available in: %s", self.backup_dir)
         else:
-            print("✅ No files required enhancement")
+            logger.info("✅ No files required enhancement")
 
 
 def main():
     """Main entry point."""
     if len(sys.argv) != 2:
-        print("Usage: python playwright_security_fixer.py <file_or_directory_path>")
-        print("\nExamples:")
-        print("  python playwright_security_fixer.py tests/playwright-report/")
+        logger.info("Usage: python playwright_security_fixer.py <file_or_directory_path>")
+        logger.info("\nExamples:")
+        logger.info("  python playwright_security_fixer.py tests/playwright-report/")
         print(
             "  python playwright_security_fixer.py tests/playwright-report/index.html"
         )
@@ -612,7 +612,7 @@ def main():
     target_path = sys.argv[1]
 
     if not os.path.exists(target_path):
-        print(f"❌ Error: Path '{target_path}' does not exist")
+        logger.error("Error: Path '%s' does not exist", target_path)
         sys.exit(1)
 
     # Run the fixer
