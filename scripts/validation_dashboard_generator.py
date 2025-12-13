@@ -500,24 +500,17 @@ class ValidationDashboardGenerator:
         logger.info(f"Dashboard generated: {dashboard_path}")
         return str(dashboard_path)
 
-    def _create_dashboard_html(self, report_data: Dict) -> str:
-        """Create HTML dashboard content"""
-        system_overview = report_data["system_overview"]
-        phase_details = report_data["phase_details"]
-        metrics = report_data["metrics"]
-        alerts = report_data["alerts"]
-        recommendations = report_data["recommendations"]
+    def _get_dashboard_css(self) -> str:
+        """
+        Return CSS styles for the validation dashboard.
 
-        # Generate dashboard components using utility functions
-        light_theme_css = get_light_theme_css()
-        header_html = create_dashboard_header(
-            title="🤖 AutoBot Validation Dashboard",
-            subtitle=f"Real-time system validation and progress monitoring<br>Generated: {report_data['generated_at'][:19].replace('T', ' ')}",
-            theme="light"
-        )
+        Issue #281: Extracted from _create_dashboard_html to reduce function
+        length and separate styling from HTML structure.
 
-        # Additional CSS for dashboard-specific elements
-        additional_css = """
+        Returns:
+            CSS string for dashboard styling.
+        """
+        return """
         body {
             margin: 0;
             padding: 20px;
@@ -661,6 +654,29 @@ class ValidationDashboardGenerator:
             }
         }
     """
+
+    def _create_dashboard_html(self, report_data: Dict) -> str:
+        """
+        Create HTML dashboard content.
+
+        Issue #281: CSS extracted to _get_dashboard_css() to reduce function
+        length from 284 to ~140 lines.
+        """
+        system_overview = report_data["system_overview"]
+        phase_details = report_data["phase_details"]
+        alerts = report_data["alerts"]
+        recommendations = report_data["recommendations"]
+
+        # Generate dashboard components using utility functions
+        light_theme_css = get_light_theme_css()
+        header_html = create_dashboard_header(
+            title="🤖 AutoBot Validation Dashboard",
+            subtitle=f"Real-time system validation and progress monitoring<br>Generated: {report_data['generated_at'][:19].replace('T', ' ')}",
+            theme="light"
+        )
+
+        # Issue #281: Use extracted helper for CSS
+        additional_css = self._get_dashboard_css()
 
         html = '''
 <!DOCTYPE html>

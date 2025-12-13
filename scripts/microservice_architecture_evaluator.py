@@ -1184,8 +1184,120 @@ class MicroserviceArchitectureEvaluator:
 
         return {"json": json_report_path, "markdown": md_report_path}
 
+    def _generate_component_analysis_md(self, structure: Dict) -> str:
+        """
+        Generate component analysis section of markdown report.
+
+        Issue #281: Extracted from _generate_markdown_report to reduce function
+        length and improve maintainability.
+
+        Args:
+            structure: Project structure analysis results.
+
+        Returns:
+            Markdown string for component analysis section.
+        """
+        report = ""
+
+        # API Endpoints
+        api_endpoints = structure["key_components"]["api_endpoints"]
+        report += f"- **Total Endpoints:** {api_endpoints['total_endpoints']}\n"
+        report += f"- **Router Files:** {len(api_endpoints['routers'])}\n"
+
+        for router in api_endpoints["routers"][:5]:  # Top 5 routers
+            report += f"  - `{router['name']}`: {len(router['endpoints'])} endpoints\n"
+
+        # AI Agents
+        agents = structure["key_components"]["agents"]
+        report += f"""
+#### AI Agents
+- **Total Agents:** {agents['total_agents']}
+- **Agent Types:** {len(agents['agent_types'])}
+
+"""
+        for agent_type, agent_names in agents["agent_types"].items():
+            report += f"- **{agent_type.title()}:** {', '.join(agent_names)}\n"
+
+        # Data Models
+        models = structure["key_components"]["data_models"]
+        report += f"""
+#### Data Models
+- **Database Files:** {len(models['database_files'])}
+- **Database Types:** {', '.join(models['database_types']) if models['database_types'] else 'None'}
+- **Model Classes:** {len(models['model_classes'])}
+
+"""
+
+        # Utilities
+        utilities = structure["key_components"]["utilities"]
+        report += f"""#### Utilities
+- **Utility Files:** {len(utilities['util_files'])}
+- **Shared Utilities:** {len(utilities['shared_utilities'])}
+- **Utility Types:** {', '.join(utilities['utility_types'].keys())}
+
+"""
+        return report
+
+    def _generate_service_boundaries_md(self, boundaries: Dict) -> str:
+        """
+        Generate service boundaries section of markdown report.
+
+        Issue #281: Extracted from _generate_markdown_report to reduce function
+        length and improve maintainability.
+
+        Args:
+            boundaries: Service boundaries analysis results.
+
+        Returns:
+            Markdown string for service boundaries section.
+        """
+        report = """
+## 🎯 Proposed Service Boundaries
+
+### Core Services
+"""
+        for service in boundaries["proposed_services"]:
+            report += f"""
+#### {service['name']}
+- **Type:** {service['type'].replace('_', ' ').title()}
+- **Complexity:** {service['estimated_complexity']}/10
+- **Responsibilities:**
+"""
+            for resp in service["responsibilities"]:
+                report += f"  - {resp}\n"
+
+            report += f"- **Rationale:** {boundaries['boundary_rationale'][service['name']]}\n"
+
+        if boundaries["shared_services"]:
+            report += """
+### Shared Services
+"""
+            for service in boundaries["shared_services"]:
+                report += f"""
+#### {service['name']}
+- **Utilities:** {', '.join(service.get('utilities', []))}
+- **Purpose:** Provide common {service['name'].replace('Service', '').lower()} functionality
+"""
+
+        if boundaries["data_services"]:
+            report += """
+### Data Services
+"""
+            for service in boundaries["data_services"]:
+                report += f"""
+#### {service['name']}
+- **Database Type:** {service['database_type']}
+- **Purpose:** Manage {service['database_type']} operations
+"""
+        return report
+
     def _generate_markdown_report(self) -> str:
-        """Generate comprehensive markdown analysis report"""
+        """
+        Generate comprehensive markdown analysis report.
+
+        Issue #281: Extracted component analysis and service boundaries sections
+        to helper methods to reduce function length from 208 to ~120 lines.
+        """
         structure = self.analysis_results["project_structure"]
         dependencies = self.analysis_results["dependency_analysis"]
         boundaries = self.analysis_results["service_boundaries"]
@@ -1224,39 +1336,10 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 #### API Endpoints
 """
 
-        api_endpoints = structure["key_components"]["api_endpoints"]
-        report += f"- **Total Endpoints:** {api_endpoints['total_endpoints']}\n"
-        report += f"- **Router Files:** {len(api_endpoints['routers'])}\n"
+        # Issue #281: Use extracted helper for component analysis
+        report += self._generate_component_analysis_md(structure)
 
-        for router in api_endpoints["routers"][:5]:  # Top 5 routers
-            report += f"  - `{router['name']}`: {len(router['endpoints'])} endpoints\n"
-
-        agents = structure["key_components"]["agents"]
-        report += f"""
-#### AI Agents
-- **Total Agents:** {agents['total_agents']}
-- **Agent Types:** {len(agents['agent_types'])}
-
-"""
-        for agent_type, agent_names in agents["agent_types"].items():
-            report += f"- **{agent_type.title()}:** {', '.join(agent_names)}\n"
-
-        models = structure["key_components"]["data_models"]
-        report += f"""
-#### Data Models
-- **Database Files:** {len(models['database_files'])}
-- **Database Types:** {', '.join(models['database_types']) if models['database_types'] else 'None'}
-- **Model Classes:** {len(models['model_classes'])}
-
-"""
-
-        utilities = structure["key_components"]["utilities"]
-        report += f"""#### Utilities
-- **Utility Files:** {len(utilities['util_files'])}
-- **Shared Utilities:** {len(utilities['shared_utilities'])}
-- **Utility Types:** {', '.join(utilities['utility_types'].keys())}
-
-## 🔗 Dependency Analysis
+        report += """## 🔗 Dependency Analysis
 
 ### Coupling Analysis
 """
@@ -1280,45 +1363,8 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
             for cycle in dependencies["circular_dependencies"]:
                 report += f"- {' → '.join(cycle)}\n"
 
-        report += """
-## 🎯 Proposed Service Boundaries
-
-### Core Services
-"""
-
-        for service in boundaries["proposed_services"]:
-            report += f"""
-#### {service['name']}
-- **Type:** {service['type'].replace('_', ' ').title()}
-- **Complexity:** {service['estimated_complexity']}/10
-- **Responsibilities:**
-"""
-            for resp in service["responsibilities"]:
-                report += f"  - {resp}\n"
-
-            report += f"- **Rationale:** {boundaries['boundary_rationale'][service['name']]}\n"
-
-        if boundaries["shared_services"]:
-            report += """
-### Shared Services
-"""
-            for service in boundaries["shared_services"]:
-                report += f"""
-#### {service['name']}
-- **Utilities:** {', '.join(service.get('utilities', []))}
-- **Purpose:** Provide common {service['name'].replace('Service', '').lower()} functionality
-"""
-
-        if boundaries["data_services"]:
-            report += """
-### Data Services
-"""
-            for service in boundaries["data_services"]:
-                report += f"""
-#### {service['name']}
-- **Database Type:** {service['database_type']}
-- **Purpose:** Manage {service['database_type']} operations
-"""
+        # Issue #281: Use extracted helper for service boundaries
+        report += self._generate_service_boundaries_md(boundaries)
 
         report += """
 ## 🗺️ Migration Strategy
