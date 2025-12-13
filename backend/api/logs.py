@@ -171,6 +171,7 @@ async def _collect_file_logs(
 
     # Issue #370: Read all files in parallel
     async def read_file_logs(file_path, file_name):
+        """Read and parse log entries from a single file."""
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
@@ -252,6 +253,7 @@ async def _collect_container_logs(
 
     # Issue #370: Fetch all container logs in parallel
     async def get_and_parse_container_logs(service, container_name):
+        """Fetch and parse logs from a single container."""
         stdout = await _get_container_output(container_name, service)
         if stdout:
             return _parse_container_log_lines(stdout, service, level)
@@ -286,6 +288,7 @@ async def _get_file_log_sources() -> List[Metadata]:
 
     # Issue #370: Stat all files in parallel
     async def get_file_info(file_path):
+        """Get metadata for a single log file."""
         stat = await asyncio.to_thread(file_path.stat)
         return {
             "name": file_path.name,

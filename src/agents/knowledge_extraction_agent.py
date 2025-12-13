@@ -484,6 +484,7 @@ Respond only with valid JSON.
         semaphore = asyncio.Semaphore(3)
 
         async def process_chunk(chunk: Dict[str, Any]) -> FactExtractionResult:
+            """Process a single chunk and extract facts with concurrency limiting."""
             async with semaphore:
                 return await self.extract_facts_from_text(
                     content=chunk.get("text", ""),
