@@ -890,5 +890,3 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         indexing_tasks[task_id]["status"] = "failed"
         indexing_tasks[task_id]["error"] = str(e)
         indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
-
-
