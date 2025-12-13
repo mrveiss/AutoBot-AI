@@ -29,9 +29,6 @@ def main():
     """Main function to start the AutoBot backend server."""
     logger.info("Starting AutoBot backend server...")
 
-    # Use the module-level app
-    global app
-
     # Get server configuration from centralized config
     backend_config = global_config_manager.get_backend_config()
     host = backend_config.get("server_host", "0.0.0.0")

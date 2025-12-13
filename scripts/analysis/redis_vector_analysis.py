@@ -115,8 +115,8 @@ class RedisVectorStoreAnalyzer:
             logger.error(f"❌ Data analysis failed: {e}")
             return {}
 
-    async def test_llamaindex_with_existing_data(self) -> Tuple[bool, int, str]:
-        """Test LlamaIndex with existing data using correct configuration"""
+    async def test_llamaindex_with_existing_data_basic(self) -> Tuple[bool, int, str]:
+        """Test LlamaIndex with existing data (basic version)"""
         logger.info("\n🧪 Testing LlamaIndex with existing data...")
 
         try:

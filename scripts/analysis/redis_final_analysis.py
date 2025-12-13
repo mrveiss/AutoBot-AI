@@ -143,8 +143,8 @@ class AutoBotVectorStoreAnalysis:
 
         return issues
 
-    async def test_llamaindex_field_fix(self) -> Tuple[bool, int, List[str]]:
-        """Test if LlamaIndex can work with field mapping fix"""
+    async def test_llamaindex_field_fix_basic(self) -> Tuple[bool, int, List[str]]:
+        """Test if LlamaIndex can work with field mapping fix (basic version)"""
         logger.info("\n🔧 Testing LlamaIndex with field mapping fix...")
 
         fixes_attempted = []
@@ -210,8 +210,8 @@ class AutoBotVectorStoreAnalysis:
             fixes_attempted.append(f"FAILED: {str(e)}")
             return False, 0, fixes_attempted
 
-    async def test_langchain_db0_workaround(self) -> Tuple[bool, int, List[str]]:
-        """Test LangChain on Redis DB 0 (since it doesn't support other DBs)"""
+    async def test_langchain_db0_workaround_basic(self) -> Tuple[bool, int, List[str]]:
+        """Test LangChain on Redis DB 0 (basic version)"""
         logger.info("\n🔧 Testing LangChain on Redis DB 0...")
 
         fixes_attempted = []
