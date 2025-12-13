@@ -573,7 +573,7 @@ async def main():
         json.dump(report, f, indent=2)
 
     # Print summary
-    logger.info(f"\n=== TIMEOUT CONFIGURATION ANALYSIS SUMMARY ===")
+    logger.info("\n=== TIMEOUT CONFIGURATION ANALYSIS SUMMARY ===")
     logger.info(f"Total issues found: {report['total_issues']}")
     logger.info(f"Critical issues: {report['critical_issues']}")
     logger.info(f"High priority issues: {report['high_priority_issues']}")
@@ -582,7 +582,7 @@ async def main():
     logger.info(f"\nDetailed report saved to: {report_path}")
 
     if report['recommendations']:
-        logger.info(f"\nRecommendations:")
+        logger.info("\nRecommendations:")
         for i, rec in enumerate(report['recommendations'], 1):
             logger.info(f"{i}. {rec}")
 

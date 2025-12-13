@@ -257,7 +257,7 @@ class MemoryGraphInitializer:
                 definition=definition
             )
 
-            logger.info(f"Created entity index with vector search support (768 dimensions)")
+            logger.info("Created entity index with vector search support (768 dimensions)")
             return True
 
         except redis.ResponseError as e:
@@ -430,7 +430,7 @@ class MemoryGraphInitializer:
             try:
                 created_ts = int(datetime.fromisoformat(created_at).timestamp() * 1000)
                 updated_ts = int(datetime.fromisoformat(updated_at).timestamp() * 1000)
-            except:
+            except Exception:
                 created_ts = int(time.time() * 1000)
                 updated_ts = created_ts
 
@@ -734,7 +734,7 @@ class MemoryGraphInitializer:
             for _ in self.redis_client.scan_iter(match=f"{self.entity_prefix}*"):
                 count += 1
             return count
-        except:
+        except Exception:
             return 0
 
     def _get_sample_entity_id(self) -> Optional[str]:
@@ -749,7 +749,7 @@ class MemoryGraphInitializer:
                     key = key.decode()
                 return key.replace(self.entity_prefix, "")
             return None
-        except:
+        except Exception:
             return None
 
     def rollback(self) -> bool:

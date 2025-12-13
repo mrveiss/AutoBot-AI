@@ -69,7 +69,7 @@ class BackupManager:
             "deployment_info.json",
         ]
 
-        print(f"🗄️  AutoBot Backup Manager initialized")
+        print("🗄️  AutoBot Backup Manager initialized")
         print(f"   Backup Directory: {self.backup_dir}")
         print(f"   Project Root: {self.project_root}")
 
@@ -534,7 +534,7 @@ class BackupManager:
             temp_extract_path = self.backup_dir / f"restore_temp_{backup_id}"
 
             if not dry_run:
-                self.print_step(f"Extracting archive to temporary location", "running")
+                self.print_step("Extracting archive to temporary location", "running")
                 with tarfile.open(archive_path, "r:gz") as tar:
                     tar.extractall(temp_extract_path)
 

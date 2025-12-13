@@ -158,8 +158,10 @@ class DNSCacheService:
     def get_cache_status(self) -> Dict:
         """Get current cache status"""
         now = time.time()
-        fresh_entries = sum(1 for entry in self.cache.values()
-                          if now - entry.get('timestamp', 0) < self.refresh_interval * 2)
+        fresh_entries = sum(
+            1 for entry in self.cache.values()
+            if now - entry.get('timestamp', 0) < self.refresh_interval * 2
+        )
 
         return {
             'total_entries': len(self.cache),

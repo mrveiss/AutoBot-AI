@@ -77,13 +77,13 @@ def main():
                     print(f"      {finding['content']}")
                 total_issues += len(findings)
             else:
-                print(f"  ✅ No hardcoded secrets found")
+                print("  ✅ No hardcoded secrets found")
                 fixes_verified += 1
 
     # Check environment file
     env_file = project_root / '.env'
     if env_file.exists():
-        print(f"\n🔍 Checking .env file...")
+        print("\n🔍 Checking .env file...")
         content = env_file.read_text()
 
         # Look for secure password patterns
@@ -101,13 +101,13 @@ def main():
             total_issues += 1
 
     # Final report
-    print(f"\n📊 VALIDATION SUMMARY")
+    print("\n📊 VALIDATION SUMMARY")
     print("=" * 50)
     print(f"✅ Files verified secure: {fixes_verified}")
     print(f"❌ Security issues found: {total_issues}")
 
     if total_issues == 0:
-        print(f"\n🎉 SUCCESS: All critical security vulnerabilities have been fixed!")
+        print("\n🎉 SUCCESS: All critical security vulnerabilities have been fixed!")
         return True
     else:
         print(f"\n⚠️  WARNING: {total_issues} security issues still need attention")

@@ -227,7 +227,7 @@ class ConfigMigrator:
             for log_entry in self.migration_log[-50:]:  # Last 50 entries
                 f.write(f"- {log_entry}\n")
 
-            f.write(f"\n**Total configuration code reduced**: ~1,600 lines consolidated into unified system\n")
+            f.write("\n**Total configuration code reduced**: ~1,600 lines consolidated into unified system\n")
 
         logger.info(f"📄 Migration report saved to {report_path}")
 
@@ -247,7 +247,7 @@ def main():
 
     stats = migrator.run_migration(dry_run=args.dry_run)
 
-    print(f"\n🎊 CONSOLIDATION COMPLETE!")
+    print("\n🎊 CONSOLIDATION COMPLETE!")
     print(f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}")
     print(f"🔧 Changes made: {stats['changes_made']}")
     if stats['files_failed'] > 0:

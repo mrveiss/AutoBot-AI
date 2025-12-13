@@ -177,7 +177,7 @@ async def _test_command_execution(ssh_key_path: str) -> None:
 
     except Exception as e:
         print(f"   ⚠️  Command execution test failed: {e}")
-        print(f"   This is expected if SSH is not configured for localhost")
+        print("   This is expected if SSH is not configured for localhost")
 
 
 def _check_test_files(project_root: Path) -> None:

@@ -97,7 +97,7 @@ async def demo_indexing():
         print("\n6️⃣  Verifying indexing results...")
         try:
             stats_after = await kb.get_stats()
-            print(f"✅ Updated statistics:")
+            print("✅ Updated statistics:")
             print(f"   Total facts: {stats_after.get('total_facts', 0)}")
             print(f"   Total documents: {stats_after.get('total_documents', 0)}")
             print(f"   Categories: {stats_after.get('categories', [])}")

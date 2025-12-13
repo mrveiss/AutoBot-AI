@@ -103,7 +103,7 @@ def _print_test_summary(results: dict, test_files: list, total_tests: int,
     else:
         print("⚠️  No test results to analyze.")
 
-    print(f"\n💡 To run individual test files:")
+    print("\n💡 To run individual test files:")
     for test_file in test_files:
         print(f"   python -m pytest {test_file} -v")
 
@@ -157,7 +157,7 @@ def run_tests():
             total_failed += failed
 
             if "error" in parsed:
-                print(f"   ⚠️  Could not parse test results")
+                print("   ⚠️  Could not parse test results")
             else:
                 print(f"   {parsed['status']} {passed} passed, {failed} failed")
 
@@ -167,7 +167,7 @@ def run_tests():
                     print(f"   Error: {result.stderr[:200]}...")
 
         except subprocess.TimeoutExpired:
-            print(f"   ⏰ Test timed out")
+            print("   ⏰ Test timed out")
             results[test_file] = {"status": "⏰", "error": "Timeout"}
         except Exception as e:
             print(f"   ❌ Test execution failed: {e}")

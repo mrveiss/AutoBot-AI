@@ -368,7 +368,7 @@ def quick_microservice_analysis():
     # Print summary
     _print_summary(analysis)
 
-    logger.info(f"📄 Reports saved:")
+    logger.info("📄 Reports saved:")
     logger.info(f"  JSON: {json_file}")
     logger.info(f"  Markdown: {md_file}")
 
@@ -398,19 +398,19 @@ def _print_summary(analysis):
     print("🏗️ QUICK MICROSERVICE ANALYSIS SUMMARY")
     print("=" * 70)
 
-    print(f"📊 CODEBASE METRICS:")
+    print("📊 CODEBASE METRICS:")
     print(f"  • Estimated Total LOC: {metrics['estimated_total_loc']:,}")
     print(f"  • Python Files: {metrics['total_python_files']:,}")
     print(f"  • Readiness Score: {metrics['microservice_readiness_score']}/10")
 
-    print(f"\n🌐 API STRUCTURE:")
+    print("\n🌐 API STRUCTURE:")
     print(f"  • API Modules: {api['api_modules']}")
     print(f"  • Total Endpoints: {api['total_endpoints']}")
     if api['modules']:
         for module in api['modules'][:3]:
             print(f"    - {module['name']}: {module['endpoints']} endpoints")
 
-    print(f"\n🤖 AI AGENTS:")
+    print("\n🤖 AI AGENTS:")
     print(f"  • Agent Modules: {agents['agent_modules']}")
     agent_types = {}
     for agent in agents['agents']:
@@ -420,12 +420,12 @@ def _print_summary(analysis):
     for agent_type, count in agent_types.items():
         print(f"    - {agent_type.title()}: {count} agents")
 
-    print(f"\n🎯 SERVICE RECOMMENDATIONS:")
+    print("\n🎯 SERVICE RECOMMENDATIONS:")
     print(f"  • Total Recommended Services: {migration['total_services']}")
     print(f"  • Migration Phases: {len(migration['migration_phases'])}")
     print(f"  • Estimated Duration: {migration['estimated_total_duration_weeks']} weeks")
 
-    print(f"\n⚡ ASSESSMENT:")
+    print("\n⚡ ASSESSMENT:")
     print(f"  • Readiness Level: {migration['readiness_level'].upper()}")
     print(f"  • Recommendation: {migration['recommendation']}")
 
@@ -486,7 +486,7 @@ def _generate_migration_phases_md(migration: dict) -> str:
 ### Recommended Phases
 """
     for phase in migration["migration_phases"]:
-        report += f"""
+        report += """
 #### Phase {phase["phase"]}: {phase["name"]}
 - **Duration:** {phase["duration_weeks"]} weeks
 - **Services:** {len(phase["services"])}
@@ -494,7 +494,7 @@ def _generate_migration_phases_md(migration: dict) -> str:
 - **Rationale:** {phase["rationale"]}
 """
 
-    report += f"""
+    report += """
 ### Migration Timeline
 - **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks (~{migration["estimated_total_duration_weeks"]//4} months)
 - **Parallel Development:** Possible for some phases
@@ -517,7 +517,7 @@ def _generate_markdown_report(analysis):
     recommendations = analysis["service_recommendations"]
     migration = analysis["migration_assessment"]
 
-    report = f"""# 🏗️ AutoBot Microservice Architecture Analysis
+    report = """# 🏗️ AutoBot Microservice Architecture Analysis
 
 **Analysis Date:** {analysis["timestamp"]}
 
@@ -552,7 +552,7 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
     for module in sorted(api["modules"], key=lambda x: x["endpoints"], reverse=True):
         report += f"- **{module['name']}:** {module['endpoints']} endpoints\n"
 
-    report += f"""
+    report += """
 ## 🤖 AI Agent Analysis
 
 - **Agent Modules:** {agents["agent_modules"]}

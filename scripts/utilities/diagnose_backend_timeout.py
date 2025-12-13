@@ -214,7 +214,7 @@ class BackendDiagnostic:
             logger.info(f"   {endpoint}: {status}")
 
         # Diagnosis
-        logger.info(f"\n🔍 DIAGNOSIS:")
+        logger.info("\n🔍 DIAGNOSIS:")
         if socket_ok and not (async_ok or sync_ok):
             logger.info("🔧 Issue appears to be in HTTP/application layer")
             logger.info(

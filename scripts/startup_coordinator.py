@@ -450,12 +450,21 @@ async def main():
     # Parse command line arguments
     import argparse
     parser = argparse.ArgumentParser(description='AutoBot Startup Coordinator')
-    parser.add_argument('--components', nargs='*',
-                       help='Specific components to start (default: all)')
-    parser.add_argument('--status', action='store_true',
-                       help='Show current component status')
-    parser.add_argument('--stop', action='store_true',
-                       help='Stop all components')
+    parser.add_argument(
+        '--components',
+        nargs='*',
+        help='Specific components to start (default: all)',
+    )
+    parser.add_argument(
+        '--status',
+        action='store_true',
+        help='Show current component status',
+    )
+    parser.add_argument(
+        '--stop',
+        action='store_true',
+        help='Stop all components',
+    )
 
     args = parser.parse_args()
 

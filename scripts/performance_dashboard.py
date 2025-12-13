@@ -346,7 +346,7 @@ def _generate_system_overview_html(data: Dict[str, Any]) -> str:
         else:
             return "status-healthy"
 
-    return f"""
+    return """
         <div class="metric">
             <span class="metric-label">CPU Usage (Avg)</span>
             <span class="metric-value {get_status_class(cpu_percent)}">{cpu_percent:.1f}%</span>
@@ -398,7 +398,7 @@ def _generate_service_status_html(data: Dict[str, Any]) -> str:
         )
         status_text = "Healthy" if error_rate < 5 and response_time < 1000 else "Issues"
 
-        html += f"""
+        html += """
         <div class="service-card {status_class}">
             <div class="service-name">{service_name}</div>
             <div class="service-status">{status_text}</div>
@@ -417,7 +417,7 @@ def _generate_performance_metrics_html(data: Dict[str, Any]) -> str:
     """Generate performance metrics HTML"""
     system = data.get("system_overview", {})
 
-    return f"""
+    return """
         <div class="metric">
             <span class="metric-label">Peak CPU Usage</span>
             <span class="metric-value">{system.get('max_cpu_percent', 0):.1f}%</span>
@@ -458,7 +458,7 @@ def _generate_health_checks_html(data: Dict[str, Any]) -> str:
         </div>
         """
 
-    return f"""
+    return """
         <div class="metric">
             <span class="metric-label">Overall Status</span>
             <span class="metric-value status-healthy">{health.get('overall_status', 'Unknown').title()}</span>
@@ -489,7 +489,7 @@ def _generate_alerts_html(data: Dict[str, Any]) -> str:
         )
         severity_icon = "🔴" if alert.get("severity") == "critical" else "🟡"
 
-        html += f"""
+        html += """
         <div class="alert-item {alert_class}">
             <strong>{severity_icon} {alert.get('severity', 'Unknown').title()}</strong><br>
             {alert.get('message', 'No message')}
@@ -505,7 +505,7 @@ def _generate_alerts_html(data: Dict[str, Any]) -> str:
 
 def _generate_system_info_html(data: Dict[str, Any]) -> str:
     """Generate system information HTML"""
-    return f"""
+    return """
         <div class="metric">
             <span class="metric-label">Dashboard Version</span>
             <span class="metric-value">v1.0</span>
@@ -549,7 +549,7 @@ def _generate_chart_script(data: Dict[str, Any]) -> str:
     memory_data = [t.get("memory_percent", 0) for t in trends]
     response_data = [t.get("response_time_ms", 0) for t in trends]
 
-    return f"""
+    return """
         const ctx = document.getElementById('performanceChart').getContext('2d');
         const chart = new Chart(ctx, {{
             type: 'line',

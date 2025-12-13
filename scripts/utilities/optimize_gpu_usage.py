@@ -258,7 +258,7 @@ def test_gpu_inference():
             memory_allocated = torch.cuda.memory_allocated(0) / 1024**3
             memory_cached = torch.cuda.memory_reserved(0) / 1024**3
 
-            logger.info(f"✅ PyTorch CUDA available")
+            logger.info("✅ PyTorch CUDA available")
             logger.info(f"   Device: {device_name}")
             logger.info(f"   Memory Allocated: {memory_allocated:.2f} GB")
             logger.info(f"   Memory Cached: {memory_cached:.2f} GB")

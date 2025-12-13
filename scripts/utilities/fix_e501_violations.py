@@ -73,7 +73,7 @@ class E501Fixer:
         Returns:
             List of split lines, or original line if can't split
         """
-        # Match logger.xxx(f"...") pattern
+        # Match logger.xxx("...") pattern
         match = re.match(r'(\s*)(logger\.\w+\(\s*)(f?"[^"]+")(\s*\))', line)
         if not match:
             return [line]
@@ -99,7 +99,7 @@ class E501Fixer:
         part1 = content[:split_pos].rstrip()
         part2 = content[split_pos:].lstrip()
 
-        prefix = 'f"' if is_fstring else '"'
+        prefix = '"' if is_fstring else '"'
 
         return [
             f'{leading_space}{logger_call}\n',
@@ -119,7 +119,7 @@ class E501Fixer:
         Returns:
             List of split lines, or original line if can't split
         """
-        # Match string assignment: var = "..." or var = f"..."
+        # Match string assignment: var = "..." or var = "..."
         match = re.match(r'(\s*)(\w+\s*=\s*)(f?"[^"]+")(\s*)', line)
         if not match:
             return [line]
@@ -144,7 +144,7 @@ class E501Fixer:
         part1 = content[:split_pos].rstrip()
         part2 = content[split_pos:].lstrip()
 
-        prefix = 'f"' if is_fstring else '"'
+        prefix = '"' if is_fstring else '"'
 
         return [
             f'{leading_space}{assignment}(\n',
@@ -215,14 +215,14 @@ class E501Fixer:
                 indent_str = ' ' * indent
 
                 # Try different splitting strategies
-                if 'logger.' in line and ('f"' in line or '"' in line):
+                if 'logger.' in line and ('"' in line or '"' in line):
                     split_lines = self.split_long_logger(line, indent_str)
                     if len(split_lines) > 1:
                         new_lines.extend(split_lines)
                         lines_fixed += 1
                         continue
 
-                if '=' in line and ('f"' in line or '"' in line):
+                if '=' in line and ('"' in line or '"' in line):
                     split_lines = self.split_long_string(line, indent_str)
                     if len(split_lines) > 1:
                         new_lines.extend(split_lines)
@@ -273,7 +273,7 @@ def main():
         if remaining > 0:
             print(f"  ⚠️  {remaining} violations still remain (manual fix needed)")
         else:
-            print(f"  🎉 File is clean!")
+            print("  🎉 File is clean!")
 
     print(f"\n{'='*60}")
     print(f"Total lines fixed: {total_fixed}")

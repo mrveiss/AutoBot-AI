@@ -59,7 +59,7 @@ class CodebaseChromaDBMigration:
             )
             # Test connection
             self.redis_client.ping()
-            logger.info(f"✅ Connected to Redis DB 11")
+            logger.info("✅ Connected to Redis DB 11")
             return True
         except Exception as e:
             logger.error(f"❌ Redis connection failed: {e}")
@@ -112,7 +112,7 @@ class CodebaseChromaDBMigration:
                     function_name = key.replace("codebase:functions:", "")
 
                     # Create document text for vectorization
-                    doc_text = f"""
+                    doc_text = """
 Function: {function_name}
 File: {function_data.get('file_path', 'unknown')}
 Lines: {function_data.get('start_line', 'unknown')}-{function_data.get('end_line', 'unknown')}
@@ -172,7 +172,7 @@ Docstring: {function_data.get('docstring', 'No documentation')}
 
                     class_name = key.replace("codebase:classes:", "")
 
-                    doc_text = f"""
+                    doc_text = """
 Class: {class_name}
 File: {class_data.get('file_path', 'unknown')}
 Lines: {class_data.get('start_line', 'unknown')}-{class_data.get('end_line', 'unknown')}
@@ -232,7 +232,7 @@ Docstring: {class_data.get('docstring', 'No documentation')}
 
             for idx, problem in enumerate(problems):
                 try:
-                    doc_text = f"""
+                    doc_text = """
 Problem: {problem.get('type', 'unknown')}
 Severity: {problem.get('severity', 'unknown')}
 File: {problem.get('file_path', 'unknown')}
@@ -283,7 +283,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
 
             stats = json.loads(stats_data)
 
-            doc_text = f"""
+            doc_text = """
 Codebase Statistics:
 Total Files: {stats.get('total_files', 0)}
 Total Lines: {stats.get('total_lines', 0)}
@@ -305,7 +305,7 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
             )
 
             self.migration_stats['stats'] = 1
-            logger.info(f"✅ Migrated codebase statistics to ChromaDB")
+            logger.info("✅ Migrated codebase statistics to ChromaDB")
 
         except Exception as e:
             logger.error(f"❌ Stats migration failed: {e}")
@@ -350,7 +350,7 @@ Last Indexed: {stats.get('last_indexed', 'unknown')}
         logger.info(f"  Classes:    {self.migration_stats['classes']}")
         logger.info(f"  Problems:   {self.migration_stats['problems']}")
         logger.info(f"  Stats:      {self.migration_stats['stats']}")
-        logger.info(f"  ---")
+        logger.info("  ---")
         logger.info(f"  Total:      {self.migration_stats['total_migrated']}")
         logger.info(f"  Errors:     {self.migration_stats['errors']}")
         logger.info(f"  ChromaDB Collection Size: {self.code_collection.count()}")

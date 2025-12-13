@@ -314,8 +314,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Verify knowledge base consistency")
-    parser.add_argument("--enforce-locks", action="store_true",
-                       help="Enforce configuration locks to prevent inconsistencies")
+    parser.add_argument(
+        "--enforce-locks",
+        action="store_true",
+        help="Enforce configuration locks to prevent inconsistencies",
+    )
     args = parser.parse_args()
 
     verifier = KnowledgeConsistencyVerifier()

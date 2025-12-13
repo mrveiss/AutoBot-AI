@@ -62,7 +62,7 @@ async def capture_console_errors():
                 }
             """)
             print(f"Vue status: {vue_info}")
-        except:
+        except Exception:
             print("Could not check Vue status")
 
         # Print results

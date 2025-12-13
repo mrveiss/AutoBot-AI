@@ -326,4 +326,4 @@ if __name__ == "__main__":
     with open("/home/kali/Desktop/AutoBot/NPU_WORKER_ARCHITECTURE.json", "w") as f:
         f.write(architecture.generate_architecture_file())
 
-    print(f"\n📄 Full architecture saved to NPU_WORKER_ARCHITECTURE.json")
+    print("\n📄 Full architecture saved to NPU_WORKER_ARCHITECTURE.json")

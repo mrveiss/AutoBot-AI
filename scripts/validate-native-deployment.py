@@ -177,13 +177,13 @@ class DeploymentValidator:
 
         # Overall status
         if healthy_count == total_services:
-            print(f"\n🎉 SUCCESS: All services are healthy!")
+            print("\n🎉 SUCCESS: All services are healthy!")
             overall_status = "success"
         elif healthy_count >= total_services * 0.8:  # 80% healthy
-            print(f"\n⚠️  WARNING: Some services need attention")
+            print("\n⚠️  WARNING: Some services need attention")
             overall_status = "warning"
         else:
-            print(f"\n❌ FAILURE: Multiple services are down")
+            print("\n❌ FAILURE: Multiple services are down")
             overall_status = "failure"
 
         return {

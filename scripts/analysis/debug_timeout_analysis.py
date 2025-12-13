@@ -314,7 +314,7 @@ class TimeoutAnalyzer:
                 if result.get("error"):
                     print(f"   Error: {result['error']}")
                 if result.get("blocking_detected"):
-                    print(f"   ⚠️  BLOCKING OPERATION DETECTED")
+                    print("   ⚠️  BLOCKING OPERATION DETECTED")
 
             # Print detailed timing information
             for key, value in result.items():

@@ -171,7 +171,7 @@ async def test_documentation_browser_logic():
                     print(f"❌ Error processing {file_path}: {e}")
 
         # Scan docs directory
-        print(f"\n📁 Scanning docs directory...")
+        print("\n📁 Scanning docs directory...")
         docs_path = project_root / "docs"
         if docs_path.exists():
             docs_files = scan_directory(docs_path, "docs")
@@ -193,18 +193,18 @@ async def test_documentation_browser_logic():
             categories[category]["total_files"] += 1
             categories[category]["total_size"] += file_info.get('size_bytes', 0)
 
-        print(f"\n📊 Documentation Statistics:")
+        print("\n📊 Documentation Statistics:")
         print(f"   Total files: {total_docs}")
         print(f"   Total size: {round(total_size / (1024 * 1024), 2)} MB")
         print(f"   Categories: {len(categories)}")
 
-        print(f"\n📁 Categories found:")
+        print("\n📁 Categories found:")
         for category, info in categories.items():
             size_mb = round(info['total_size'] / (1024 * 1024), 2)
             print(f"   {category}: {info['total_files']} files ({size_mb} MB)")
 
         # Test reading a specific file
-        print(f"\n📖 Testing file reading:")
+        print("\n📖 Testing file reading:")
         test_file = "CLAUDE.md"
         full_path = project_root / test_file
         if full_path.exists():

@@ -83,7 +83,7 @@ def test_redis_connection():
         from src.utils.redis_database_manager import RedisDatabaseManager
 
         manager = RedisDatabaseManager()
-        print(f"✅ Redis Database Manager initialized")
+        print("✅ Redis Database Manager initialized")
         print(f"   Host: {manager.host}")
         print(f"   Port: {manager.port}")
 

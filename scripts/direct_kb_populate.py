@@ -99,13 +99,13 @@ async def populate_directly():
             error_count += 1
             print(f"  ❌ Error: {str(e)}")
 
-    print(f"\n=== Results ===")
+    print("\n=== Results ===")
     print(f"✓ Successfully added: {success_count} documents")
     print(f"❌ Errors: {error_count}")
 
     # Test search functionality directly
     if success_count > 0:
-        print(f"\n=== Testing Direct Search ===")
+        print("\n=== Testing Direct Search ===")
         test_queries = ["installation", "autobot", "debian", "configuration"]
 
         for query in test_queries:

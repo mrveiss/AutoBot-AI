@@ -108,7 +108,7 @@ def _handle_connection_error(e: Exception, db_num: int) -> bool:
         logger.warning(f"Database {db_num}: Authentication required")
         return False
     elif "Connection refused" in str(e):
-        logger.error(f"Cannot connect to Redis")
+        logger.error("Cannot connect to Redis")
         return True
     else:
         logger.debug(f"Database {db_num}: {e}")

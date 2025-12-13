@@ -33,7 +33,7 @@ for url, name in endpoints:
         if response.status_code == 200:
             print(f"   📄 Response: {response.text[:100]}...")
     except requests.exceptions.Timeout:
-        print(f"   ❌ TIMEOUT after 5 seconds")
+        print("   ❌ TIMEOUT after 5 seconds")
     except requests.exceptions.ConnectionError as e:
         print(f"   ❌ CONNECTION ERROR: {e}")
     except Exception as e:

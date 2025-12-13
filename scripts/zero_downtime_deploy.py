@@ -85,9 +85,9 @@ class ZeroDowntimeDeployer:
         # Track deployment state
         self.current_deployment = None
 
-        print(f"🚀 AutoBot Zero-Downtime Deployer initialized")
+        print("🚀 AutoBot Zero-Downtime Deployer initialized")
         print(f"   Deployment Directory: {self.deployment_dir}")
-        print(f"   Strategy Support: Blue-Green, Rolling, Canary")
+        print("   Strategy Support: Blue-Green, Rolling, Canary")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -602,7 +602,7 @@ class ZeroDowntimeDeployer:
 
     def _generate_nginx_config(self, services: Dict[str, Any], env: str) -> str:
         """Generate Nginx configuration for services."""
-        config = f"""
+        config = """
 # AutoBot {env.capitalize()} Environment Configuration
 # Generated at: {datetime.now().isoformat()}
 
@@ -729,8 +729,15 @@ server {{
         return deployments
 
 
-async def main():
-    """Entry point for zero-downtime deployment CLI."""
+def _parse_deployment_arguments() -> argparse.Namespace:
+    """
+    Parse command-line arguments for deployment CLI.
+
+    Issue #281: Extracted from main to reduce function length.
+
+    Returns:
+        Parsed argument namespace.
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot Zero-Downtime Deployment System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -744,13 +751,10 @@ Examples:
         """,
     )
 
-    # Actions
     parser.add_argument("--deploy", action="store_true", help="Execute deployment")
     parser.add_argument("--rollback", action="store_true", help="Rollback deployment")
     parser.add_argument("--list", action="store_true", help="List deployments")
     parser.add_argument("--status", action="store_true", help="Show deployment status")
-
-    # Deployment parameters
     parser.add_argument(
         "--strategy",
         choices=[
@@ -768,83 +772,137 @@ Examples:
         "--traffic-percent", type=int, default=10, help="Canary traffic percentage"
     )
     parser.add_argument("--deployment-id", help="Deployment ID for rollback")
-
-    # Options
     parser.add_argument(
         "--deployment-dir", default="deployments", help="Deployment directory"
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+async def _handle_deploy_action(deployer: ZeroDowntimeDeployer, args) -> int:
+    """
+    Handle deployment action.
+
+    Issue #281: Extracted from main to reduce function length.
+
+    Args:
+        deployer: ZeroDowntimeDeployer instance.
+        args: Parsed arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    if not args.strategy:
+        print("❌ --strategy required for deployment")
+        return 1
+
+    kwargs = {}
+    if args.batch_size and args.strategy == DeploymentStrategy.ROLLING:
+        kwargs["batch_size"] = args.batch_size
+    if args.traffic_percent and args.strategy == DeploymentStrategy.CANARY:
+        kwargs["traffic_percent"] = args.traffic_percent
+
+    success = await deployer.deploy(args.strategy, args.version, **kwargs)
+    return 0 if success else 1
+
+
+async def _handle_rollback_action(deployer: ZeroDowntimeDeployer, args) -> int:
+    """
+    Handle rollback action.
+
+    Issue #281: Extracted from main to reduce function length.
+
+    Args:
+        deployer: ZeroDowntimeDeployer instance.
+        args: Parsed arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    if not args.deployment_id:
+        print("❌ --deployment-id required for rollback")
+        return 1
+
+    deployment_file = (
+        deployer.deployment_dir / f"deployment_{args.deployment_id}.json"
+    )
+    if not deployment_file.exists():
+        print(f"❌ Deployment {args.deployment_id} not found")
+        return 1
+
+    with open(deployment_file, "r") as f:
+        deployment_record = json.load(f)
+
+    success = await deployer._rollback_deployment(deployment_record)
+    return 0 if success else 1
+
+
+def _handle_list_action(deployer: ZeroDowntimeDeployer) -> int:
+    """
+    Handle list deployments action.
+
+    Issue #281: Extracted from main to reduce function length.
+
+    Args:
+        deployer: ZeroDowntimeDeployer instance.
+
+    Returns:
+        Exit code (0 for success).
+    """
+    deployments = deployer.list_deployments()
+
+    if not deployments:
+        print("No deployments found")
+        return 0
+
+    print("\n🚀 Recent Deployments:")
+    print("=" * 80)
+    print(
+        f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}"
+    )
+    print("-" * 80)
+
+    for deployment in deployments:
+        started = datetime.fromisoformat(deployment["started_at"])
+        version = deployment.get("version", "unknown")[:14]
+
+        print(
+            f"{deployment['deployment_id']:<20} "
+            f"{deployment['strategy']:<12} "
+            f"{version:<15} "
+            f"{deployment['status']:<12} "
+            f"{started.strftime('%Y-%m-%d %H:%M'):<20}"
+        )
+
+    return 0
+
+
+async def main():
+    """
+    Entry point for zero-downtime deployment CLI.
+
+    Issue #281: Extracted helpers _parse_deployment_arguments(), _handle_deploy_action(),
+    _handle_rollback_action(), and _handle_list_action() to reduce function length
+    from 125 to ~25 lines.
+    """
+    # Issue #281: Use extracted helper for argument parsing
+    args = _parse_deployment_arguments()
 
     if not any([args.deploy, args.rollback, args.list, args.status]):
-        # Default action is to show help
         if args.strategy:
             args.deploy = True
         else:
-            parser.print_help()
             return 1
 
     deployer = ZeroDowntimeDeployer(args.deployment_dir)
 
     try:
         if args.deploy:
-            if not args.strategy:
-                print("❌ --strategy required for deployment")
-                return 1
-
-            kwargs = {}
-            if args.batch_size and args.strategy == DeploymentStrategy.ROLLING:
-                kwargs["batch_size"] = args.batch_size
-            if args.traffic_percent and args.strategy == DeploymentStrategy.CANARY:
-                kwargs["traffic_percent"] = args.traffic_percent
-
-            success = await deployer.deploy(args.strategy, args.version, **kwargs)
-            return 0 if success else 1
-
+            return await _handle_deploy_action(deployer, args)
         elif args.rollback:
-            if not args.deployment_id:
-                print("❌ --deployment-id required for rollback")
-                return 1
-
-            # Load deployment record and rollback
-            deployment_file = (
-                deployer.deployment_dir / f"deployment_{args.deployment_id}.json"
-            )
-            if not deployment_file.exists():
-                print(f"❌ Deployment {args.deployment_id} not found")
-                return 1
-
-            with open(deployment_file, "r") as f:
-                deployment_record = json.load(f)
-
-            success = await deployer._rollback_deployment(deployment_record)
-            return 0 if success else 1
-
+            return await _handle_rollback_action(deployer, args)
         elif args.list:
-            deployments = deployer.list_deployments()
-
-            if not deployments:
-                print("No deployments found")
-                return 0
-
-            print("\n🚀 Recent Deployments:")
-            print("=" * 80)
-            print(
-                f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}"
-            )
-            print("-" * 80)
-
-            for deployment in deployments:
-                started = datetime.fromisoformat(deployment["started_at"])
-                version = deployment.get("version", "unknown")[:14]
-
-                print(
-                    f"{deployment['deployment_id']:<20} "
-                    f"{deployment['strategy']:<12} "
-                    f"{version:<15} "
-                    f"{deployment['status']:<12} "
-                    f"{started.strftime('%Y-%m-%d %H:%M'):<20}"
-                )
+            return _handle_list_action(deployer)
 
     except KeyboardInterrupt:
         print("\n⚠️  Operation cancelled by user")

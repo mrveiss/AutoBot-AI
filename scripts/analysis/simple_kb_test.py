@@ -46,19 +46,19 @@ async def main():
 
     success, count = await test_autobot_kb()
 
-    print(f"\n📊 RESULT:")
+    print("\n📊 RESULT:")
     print(f"  Status: {'✅ WORKING' if success else '❌ BROKEN'}")
     print(f"  Results: {count}")
 
     if success and count > 0:
-        print(f"\n🎯 CONCLUSION: KEEP LLAMAINDEX")
-        print(f"  • Current implementation works with existing 13,383 vectors")
-        print(f"  • No migration needed")
-        print(f"  • Just fix any remaining LLM configuration issues")
+        print("\n🎯 CONCLUSION: KEEP LLAMAINDEX")
+        print("  • Current implementation works with existing 13,383 vectors")
+        print("  • No migration needed")
+        print("  • Just fix any remaining LLM configuration issues")
     else:
-        print(f"\n🎯 CONCLUSION: INVESTIGATE FURTHER")
-        print(f"  • Current implementation has issues")
-        print(f"  • May need to migrate to LangChain")
+        print("\n🎯 CONCLUSION: INVESTIGATE FURTHER")
+        print("  • Current implementation has issues")
+        print("  • May need to migrate to LangChain")
 
 if __name__ == "__main__":
     asyncio.run(main())

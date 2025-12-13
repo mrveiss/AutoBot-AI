@@ -288,7 +288,7 @@ class WebDashboard:
     def run(self):
         """Start the web dashboard server and open browser automatically."""
         print(f"🌐 Starting web dashboard on http://localhost:{self.port}")
-        print(f"🔄 Dashboard will auto-refresh every 30 seconds")
+        print("🔄 Dashboard will auto-refresh every 30 seconds")
 
         # Open browser automatically
         webbrowser.open(f"http://localhost:{self.port}")

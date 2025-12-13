@@ -58,7 +58,7 @@ class AutoBotDeployer:
         # Load deployment configuration
         self.service_registry = get_service_registry(config_file)
 
-        print(f"🚀 AutoBot Deployer initialized")
+        print("🚀 AutoBot Deployer initialized")
         print(f"   Mode: {self.mode.value}")
         print(f"   Config: {config_file or 'default'}")
         print(f"   Namespace: {namespace}")
@@ -86,7 +86,7 @@ class AutoBotDeployer:
                 cwd=cwd or self.project_root,
             )
             if result.returncode == 0:
-                self.print_step(f"Command succeeded", "success")
+                self.print_step("Command succeeded", "success")
             else:
                 self.print_step(f"Command failed: {result.stderr}", "error")
             return result
@@ -281,7 +281,7 @@ class AutoBotDeployer:
             k8s_dir.mkdir(exist_ok=True)
 
             # Create sample namespace manifest
-            namespace_manifest = f"""
+            namespace_manifest = """
 apiVersion: v1
 kind: Namespace
 metadata:

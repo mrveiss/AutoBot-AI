@@ -400,8 +400,10 @@ class LongRunningOperationsDemo:
 
                 last_progress = operation.progress.progress_percentage
 
-            if operation.status in [OperationStatus.COMPLETED, OperationStatus.FAILED,
-                                  OperationStatus.TIMEOUT, OperationStatus.CANCELLED]:
+            if operation.status in [
+                OperationStatus.COMPLETED, OperationStatus.FAILED,
+                OperationStatus.TIMEOUT, OperationStatus.CANCELLED
+            ]:
                 break
 
             await asyncio.sleep(0.5)
@@ -417,8 +419,10 @@ class LongRunningOperationsDemo:
                 result = operation.result
                 if isinstance(result, dict):
                     for key, value in result.items():
-                        if key in ['total_files_processed', 'total_tests', 'passed', 'failed',
-                                 'total_vulnerabilities', 'success_rate']:
+                        if key in [
+                            'total_files_processed', 'total_tests', 'passed', 'failed',
+                            'total_vulnerabilities', 'success_rate'
+                        ]:
                             print(f"   {key}: {value}")
         else:
             print(f"❌ {operation_name} failed: {operation.status.value}")

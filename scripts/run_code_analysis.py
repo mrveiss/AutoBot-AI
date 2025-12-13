@@ -202,15 +202,26 @@ def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Run code analysis suite")
-    parser.add_argument("--target", default="/home/kali/Desktop/AutoBot",
-                       help="Target path to analyze")
-    parser.add_argument("--analysis-type", default="full",
-                       choices=["full", "quality", "duplicates", "performance",
-                               "communication_chains", "architecture"],
-                       help="Type of analysis to run")
-    parser.add_argument("--output-format", default="json",
-                       choices=["json", "text"],
-                       help="Output format")
+    parser.add_argument(
+        "--target",
+        default="/home/kali/Desktop/AutoBot",
+        help="Target path to analyze",
+    )
+    parser.add_argument(
+        "--analysis-type",
+        default="full",
+        choices=[
+            "full", "quality", "duplicates", "performance",
+            "communication_chains", "architecture"
+        ],
+        help="Type of analysis to run",
+    )
+    parser.add_argument(
+        "--output-format",
+        default="json",
+        choices=["json", "text"],
+        help="Output format",
+    )
 
     args = parser.parse_args()
 

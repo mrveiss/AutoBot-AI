@@ -118,7 +118,7 @@ class CodebaseProfiler:
         # Limit analysis to prevent timeout
         if len(python_files) > 100:
             python_files = python_files[:100]
-            print(f"Limited analysis to first 100 files for performance")
+            print("Limited analysis to first 100 files for performance")
 
         for py_file in python_files:
             self._analyze_single_file(py_file, patterns)
@@ -371,7 +371,7 @@ class CodebaseProfiler:
 
         # Print summary
         static = self.results["static_analysis"]
-        print(f"📄 Files analyzed: Python files in codebase")
+        print("📄 Files analyzed: Python files in codebase")
         print(f"🔧 Functions found: {len(static.get('function_definitions', {}))}")
         print(f"📦 Classes found: {len(static.get('class_definitions', {}))}")
         print(f"📥 Import statements: {len(static.get('import_statements', {}))}")

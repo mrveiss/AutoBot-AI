@@ -30,29 +30,29 @@ ESSENTIAL_COMMANDS = (
     # Archives and Compression
     "tar", "gzip", "gunzip", "zip", "unzip", "bzip2", "bunzip2",
     # Text Processing
-    "grep", "awk", "sed", "tr", "cut", "sort", "uniq", "wc", "diff", "comm",
+    "grep", "awk", "sed", "tr", "cut", "sort", "uniq", "wc", "dif", "comm",
     "join", "paste", "fmt", "fold",
     # Network Commands
     "ping", "traceroute", "netstat", "ss", "ifconfig", "ip", "route", "arp",
     "wget", "curl", "ssh", "scp", "rsync", "nc", "nmap", "nslookup", "dig",
     # Process Management
     "ps", "top", "htop", "jobs", "bg", "fg", "nohup", "kill", "killall",
-    "pgrep", "pkill", "pidof", "nice", "renice", "screen", "tmux",
+    "pgrep", "pkill", "pido", "nice", "renice", "screen", "tmux",
     # System Information
-    "uname", "whoami", "id", "groups", "w", "who", "uptime", "free", "df", "du",
+    "uname", "whoami", "id", "groups", "w", "who", "uptime", "free", "d", "du",
     "lscpu", "lsmem", "lsblk", "lsusb", "lspci", "dmidecode", "lshw",
     # System Control
     "sudo", "su", "systemctl", "service", "mount", "umount", "halt", "shutdown",
     "reboot", "crontab", "at",
     # Package Management
-    "apt", "apt-get", "dpkg", "yum", "dnf", "rpm", "pip", "npm", "git",
+    "apt", "apt-get", "dpkg", "yum", "dn", "rpm", "pip", "npm", "git",
     # Development Tools
     "make", "gcc", "g++", "python", "python3", "node", "java", "javac", "docker",
     # Text Editors and Utilities
     "vi", "vim", "nano", "emacs", "man", "info", "help", "history", "alias",
     "which", "type",
     # Disk and Filesystem
-    "fdisk", "parted", "mkfs", "fsck", "lsof", "fuser",
+    "fdisk", "parted", "mkfs", "fsck", "lso", "fuser",
     # Security and Permissions
     "gpg", "openssl", "ssh-keygen", "passwd", "chage",
 )
@@ -64,7 +64,7 @@ ADVANCED_COMMANDS = (
     "tcpdump", "wireshark", "iptables", "ufw", "firewall-cmd", "ethtool",
     "iwconfig", "nmcli", "hostnamectl",
     # Advanced System Tools
-    "strace", "ltrace", "gdb", "valgrind", "perf", "sysctl", "dmesg",
+    "strace", "ltrace", "gdb", "valgrind", "per", "sysctl", "dmesg",
     "journalctl", "systemd-analyze",
     # Advanced File Operations
     "rsnapshot", "rdiff-backup", "duplicity", "borgbackup", "rclone", "syncthing",

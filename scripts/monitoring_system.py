@@ -883,7 +883,7 @@ async def main():
             print("\n" + "=" * 60)
             print("📊 AUTOBOT MONITORING SUMMARY")
             print("=" * 60)
-            print(f"⚡ System Status:")
+            print("⚡ System Status:")
             print(f"  • CPU Usage: {system.get('cpu_percent', 0):.1f}%")
             print(f"  • Memory Usage: {system.get('memory_percent', 0):.1f}%")
             print(f"  • Disk Usage: {system.get('disk_percent', 0):.1f}%")
@@ -898,7 +898,7 @@ async def main():
                 print(f"  • {service_name}: {status.upper()}")
 
             if health.get("issues"):
-                print(f"\n⚠️  Issues Detected:")
+                print("\n⚠️  Issues Detected:")
                 for issue in health["issues"]:
                     print(f"  • {issue}")
 

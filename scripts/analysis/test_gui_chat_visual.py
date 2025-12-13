@@ -120,7 +120,7 @@ def test_gui_chat():
             result = response.json()
             if result.get("screenshot"):
                 print("✅ Screenshot captured")
-                print(f"   Screenshot available in response")
+                print("   Screenshot available in response")
 
             # Check if messages appeared
             content = result.get("content", "")

@@ -74,9 +74,9 @@ vue_component = (
 )
 print("\n✓ Vue Component Created:")
 if vue_component.exists():
-    print(f"  ✅ GrafanaDashboard.vue")
+    print("  ✅ GrafanaDashboard.vue")
 else:
-    print(f"  ❌ GrafanaDashboard.vue - MISSING")
+    print("  ❌ GrafanaDashboard.vue - MISSING")
 
 # Check REST API compatibility layer
 compat_api = (
@@ -102,7 +102,7 @@ if compat_api.exists():
             else:
                 print(f"  ❌ {endpoint} - MISSING")
 else:
-    print(f"  ❌ monitoring_compat.py - MISSING")
+    print("  ❌ monitoring_compat.py - MISSING")
 
 print("\n" + "=" * 70)
 print("✅ Phase 4 Grafana Integration COMPLETE!")

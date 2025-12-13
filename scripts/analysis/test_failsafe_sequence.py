@@ -25,7 +25,7 @@ async def test_failsafe_sequence():
         # This is exactly what the failsafe agent does
         llm = LLMInterface()
 
-        print(f"   LLM interface created")
+        print("   LLM interface created")
         print(f"   Task LLM alias: {llm.task_llm_alias}")
 
         # Create the same message structure
@@ -33,7 +33,7 @@ async def test_failsafe_sequence():
         messages = [{"role": "user", "content": prompt}]
 
         print(f"   Messages: {messages}")
-        print(f"   Making chat_completion call with llm_type='task'...")
+        print("   Making chat_completion call with llm_type='task'...")
 
         # This is the exact call that hangs
         start_time = time.time()
@@ -81,7 +81,7 @@ async def test_direct_ollama_completion():
             {"role": "user", "content": "Say hello back to the user."},
         ]
 
-        print(f"   Calling _ollama_chat_completion directly...")
+        print("   Calling _ollama_chat_completion directly...")
 
         start_time = time.time()
         response_data = await asyncio.wait_for(

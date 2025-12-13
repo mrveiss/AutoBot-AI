@@ -68,7 +68,7 @@ class FeatureEnvyVisitor(ast.NodeVisitor):
                 obj_name = child.value.id
                 attr_name = child.attr
                 # Skip self/cls references
-                if obj_name not in ("self", "cls"):
+                if obj_name not in ("sel", "cls"):
                     self.attribute_accesses[obj_name][attr_name] += 1
                     self.unique_attrs[obj_name].add(attr_name)
 

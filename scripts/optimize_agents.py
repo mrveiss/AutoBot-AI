@@ -86,7 +86,7 @@ def main():
         total_lines_before += lines_before
         total_lines_after += lines_after
 
-    print(f"\n📊 Optimization Summary:")
+    print("\n📊 Optimization Summary:")
     print(f"  • Files processed: {len(agent_files)}")
     print(f"  • Files modified: {total_modified}")
     print(f"  • Files unchanged: {len(agent_files) - total_modified}")
@@ -98,7 +98,7 @@ def main():
         percentage = (total_saved / total_lines_before * 100)
         print(f"  • Total lines saved: {total_saved} ({percentage:.1f}%)")
 
-    print(f"\n✅ Agent optimization complete!")
+    print("\n✅ Agent optimization complete!")
     return 0
 
 

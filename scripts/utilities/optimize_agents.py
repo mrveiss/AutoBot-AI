@@ -417,7 +417,7 @@ def commit_optimization(stats: Dict[str, any]) -> None:
         reduction_pct = stats.get('total_savings_percent', 0)
         bytes_saved = stats.get('total_savings_bytes', 0)
 
-        message = f"""chore(agents): optimize Claude Code agents for token efficiency
+        message = """chore(agents): optimize Claude Code agents for token efficiency
 
 - Files optimized: {stats['files_updated']}
 - Code blocks removed: {stats['code_blocks_removed']}

@@ -117,7 +117,7 @@ async def add_documentation_to_kb():
             error_count += 1
             print(f"  Exception adding {file_path}: {str(e)}")
 
-    print(f"\nKnowledge base population complete!")
+    print("\nKnowledge base population complete!")
     print(f"Successfully added: {success_count} files")
     print(f"Errors: {error_count} files")
 

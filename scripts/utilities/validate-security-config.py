@@ -34,7 +34,7 @@ def test_security_config():
         print("✅ SecurityLayer initialized successfully")
 
         # Test 3: Check authentication enabled
-        print(f"\n3. Testing authentication status...")
+        print("\n3. Testing authentication status...")
         print(f"   enable_auth: {security.enable_auth}")
         if security.enable_auth:
             print("✅ Authentication is ENABLED")
@@ -43,7 +43,7 @@ def test_security_config():
             return False
 
         # Test 4: Check audit log configuration
-        print(f"\n4. Testing audit log configuration...")
+        print("\n4. Testing audit log configuration...")
         print(f"   audit_log_file: {security.audit_log_file}")
         audit_dir = os.path.dirname(security.audit_log_file)
         if os.path.exists(audit_dir):
@@ -53,7 +53,7 @@ def test_security_config():
             return False
 
         # Test 5: Check allowed users configuration
-        print(f"\n5. Testing allowed users configuration...")
+        print("\n5. Testing allowed users configuration...")
         print(f"   Number of allowed users: {len(security.allowed_users)}")
         expected_users = ['admin', 'developer', 'readonly']
         for user in expected_users:
@@ -70,7 +70,7 @@ def test_security_config():
                 return False
 
         # Test 6: Check roles configuration
-        print(f"\n6. Testing roles configuration...")
+        print("\n6. Testing roles configuration...")
         print(f"   Number of roles: {len(security.roles)}")
         expected_roles = ['admin', 'developer', 'editor', 'user', 'readonly', 'guest']
         for role in expected_roles:
@@ -88,7 +88,7 @@ def test_security_config():
                 return False
 
         # Test 7: Test permission checking
-        print(f"\n7. Testing permission checking...")
+        print("\n7. Testing permission checking...")
 
         # Admin should have all permissions
         has_all = security.check_permission('admin', 'allow_shell_execute')
@@ -107,7 +107,7 @@ def test_security_config():
             return False
 
         # Test 8: Test audit logging
-        print(f"\n8. Testing audit logging...")
+        print("\n8. Testing audit logging...")
         try:
             security.audit_log(
                 action="security_validation_test",
@@ -120,20 +120,20 @@ def test_security_config():
             print(f"   ❌ Audit logging failed: {e}")
             return False
 
-        print(f"\n🎉 ALL SECURITY CONFIGURATION TESTS PASSED!")
-        print(f"\n📋 SECURITY STATUS SUMMARY:")
-        print(f"   • Authentication: ENABLED")
+        print("\n🎉 ALL SECURITY CONFIGURATION TESTS PASSED!")
+        print("\n📋 SECURITY STATUS SUMMARY:")
+        print("   • Authentication: ENABLED")
         print(f"   • Users configured: {len(security.allowed_users)}")
         print(f"   • Roles configured: {len(security.roles)}")
-        print(f"   • Audit logging: WORKING")
-        print(f"   • Permission system: FUNCTIONAL")
+        print("   • Audit logging: WORKING")
+        print("   • Permission system: FUNCTIONAL")
 
         return True
 
     except Exception as e:
-        print(f"\n❌ SECURITY CONFIGURATION TEST FAILED!")
+        print("\n❌ SECURITY CONFIGURATION TEST FAILED!")
         print(f"Error: {e}")
-        print(f"\nTraceback:")
+        print("\nTraceback:")
         traceback.print_exc()
         return False
 
@@ -141,7 +141,7 @@ def test_security_config():
 def test_auth_middleware():
     """Test that AuthMiddleware can load the security configuration."""
     try:
-        print(f"\n" + "=" * 50)
+        print("\n" + "=" * 50)
         print("🔐 AUTHENTICATION MIDDLEWARE VALIDATION")
         print("=" * 50)
 
@@ -150,7 +150,7 @@ def test_auth_middleware():
         from src.auth_middleware import auth_middleware
         print("✅ AuthMiddleware imported successfully")
 
-        print(f"\n2. Testing AuthMiddleware configuration...")
+        print("\n2. Testing AuthMiddleware configuration...")
         print(f"   enable_auth: {auth_middleware.enable_auth}")
         if auth_middleware.enable_auth:
             print("✅ AuthMiddleware authentication ENABLED")
@@ -158,11 +158,11 @@ def test_auth_middleware():
             print("❌ AuthMiddleware authentication DISABLED")
             return False
 
-        print(f"\n🎉 AUTHENTICATION MIDDLEWARE TESTS PASSED!")
+        print("\n🎉 AUTHENTICATION MIDDLEWARE TESTS PASSED!")
         return True
 
     except Exception as e:
-        print(f"\n❌ AUTHENTICATION MIDDLEWARE TEST FAILED!")
+        print("\n❌ AUTHENTICATION MIDDLEWARE TEST FAILED!")
         print(f"Error: {e}")
         traceback.print_exc()
         return False
@@ -182,8 +182,8 @@ if __name__ == "__main__":
         success = False
 
     if success:
-        print(f"\n✅ ALL SECURITY TESTS PASSED - AUTHENTICATION BYPASS FIXED!")
+        print("\n✅ ALL SECURITY TESTS PASSED - AUTHENTICATION BYPASS FIXED!")
         sys.exit(0)
     else:
-        print(f"\n❌ SECURITY TESTS FAILED - AUTHENTICATION STILL VULNERABLE!")
+        print("\n❌ SECURITY TESTS FAILED - AUTHENTICATION STILL VULNERABLE!")
         sys.exit(1)

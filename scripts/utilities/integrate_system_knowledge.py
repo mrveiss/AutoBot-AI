@@ -208,7 +208,7 @@ async def main():
 
         # Get current stats
         stats = await kb_v2.get_stats()
-        logger.info(f"\nCurrent Knowledge Base Stats:")
+        logger.info("\nCurrent Knowledge Base Stats:")
         logger.info(f"  - Total facts: {stats.get('total_facts', 0)}")
         logger.info(f"  - Total vectors: {stats.get('total_vectors', 0)}")
 
@@ -222,7 +222,7 @@ async def main():
 
         # Get updated stats
         updated_stats = await kb_v2.get_stats()
-        logger.info(f"\nUpdated Knowledge Base Stats:")
+        logger.info("\nUpdated Knowledge Base Stats:")
         logger.info(f"  - Total facts: {updated_stats.get('total_facts', 0)}")
         logger.info(f"  - Total vectors: {updated_stats.get('total_vectors', 0)}")
 

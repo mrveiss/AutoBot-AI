@@ -38,8 +38,8 @@ async def export_service_configs():
     print("🔐 AutoBot Service Key Export")
     print("=" * 60)
     print(f"Timestamp: {datetime.now().isoformat()}")
-    print(f"Redis Host: 172.16.168.23:6379")
-    print(f"Export Directory: /tmp/service-keys/")
+    print("Redis Host: 172.16.168.23:6379")
+    print("Export Directory: /tmp/service-keys/")
     print()
 
     # Create export directory
@@ -65,7 +65,7 @@ async def export_service_configs():
         service_key = await auth_manager.get_service_key(service_id)
 
         if not service_key:
-            print(f"❌ FAILED - Key not found in Redis")
+            print("❌ FAILED - Key not found in Redis")
             failed_exports.append(service_id)
             continue
 
@@ -73,17 +73,17 @@ async def export_service_configs():
         env_file = export_dir / f"{service_id}.env"
 
         with open(env_file, 'w') as f:
-            f.write(f"# AutoBot Service Authentication Configuration\n")
+            f.write("# AutoBot Service Authentication Configuration\n")
             f.write(f"# Generated: {datetime.now().isoformat()}\n")
             f.write(f"# Service: {service_id}\n")
             f.write(f"# Host: {service['host']}\n")
             f.write(f"# Description: {service['description']}\n")
-            f.write(f"\n")
+            f.write("\n")
             f.write(f"SERVICE_ID={service_id}\n")
             f.write(f"SERVICE_KEY={service_key}\n")
-            f.write(f"REDIS_HOST=172.16.168.23\n")
-            f.write(f"REDIS_PORT=6379\n")
-            f.write(f"AUTH_TIMESTAMP_WINDOW=300\n")
+            f.write("REDIS_HOST=172.16.168.23\n")
+            f.write("REDIS_PORT=6379\n")
+            f.write("AUTH_TIMESTAMP_WINDOW=300\n")
 
         # Set restrictive permissions (owner read/write only)
         env_file.chmod(0o600)
@@ -109,7 +109,7 @@ async def export_service_configs():
 
     print()
     print("=" * 60)
-    print(f"✅ Service keys ready for Ansible deployment")
+    print("✅ Service keys ready for Ansible deployment")
     print(f"📁 Export location: {export_dir}")
     print()
 

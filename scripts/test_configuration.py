@@ -240,7 +240,7 @@ def test_frontend_config():
             print(f"   ❌ Frontend config missing exports: {missing_exports}")
             return False
 
-        print(f"   ✅ Frontend config file exists and has required exports")
+        print("   ✅ Frontend config file exists and has required exports")
         print(f"   ✅ Config file size: {len(content)} characters")
 
         return True

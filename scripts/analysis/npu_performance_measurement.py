@@ -854,7 +854,7 @@ class NPUPerformanceMeasurement:
 
         # Hardware baseline
         hardware = results.get("hardware_baseline", {})
-        print(f"\n🖥️  HARDWARE CONFIGURATION:")
+        print("\n🖥️  HARDWARE CONFIGURATION:")
         cpu_info = hardware.get("cpu_info", {})
         gpu_info = hardware.get("gpu_info", {})
 
@@ -867,7 +867,7 @@ class NPUPerformanceMeasurement:
 
         # NPU Worker status
         npu_worker = results.get("npu_worker_tests", {})
-        print(f"\n🔧 NPU WORKER STATUS:")
+        print("\n🔧 NPU WORKER STATUS:")
         connectivity = npu_worker.get("connectivity", {})
         print(f"   Connected: {connectivity.get('success', False)}")
         if connectivity.get("success"):
@@ -877,7 +877,7 @@ class NPUPerformanceMeasurement:
 
         # Performance comparison
         comparison = results.get("performance_comparison", {})
-        print(f"\n📊 PERFORMANCE COMPARISON:")
+        print("\n📊 PERFORMANCE COMPARISON:")
         device_perf = comparison.get("device_performance", {})
         if device_perf:
             print(f"   CPU Embedding: {device_perf.get('cpu_avg_ms', 0):.2f}ms")
@@ -886,14 +886,14 @@ class NPUPerformanceMeasurement:
 
         speedup = comparison.get("speedup_analysis", {})
         if speedup:
-            print(f"\n🚀 SPEEDUP FACTORS:")
+            print("\n🚀 SPEEDUP FACTORS:")
             print(f"   NPU vs CPU: {speedup.get('npu_vs_cpu_speedup', 0):.1f}x")
             print(f"   NPU vs GPU: {speedup.get('npu_vs_gpu_speedup', 0):.1f}x")
             print(f"   GPU vs CPU: {speedup.get('gpu_vs_cpu_speedup', 0):.1f}x")
 
         # Recommendations
         recommendations = results.get("recommendations", [])
-        print(f"\n💡 OPTIMIZATION RECOMMENDATIONS:")
+        print("\n💡 OPTIMIZATION RECOMMENDATIONS:")
         for i, rec in enumerate(recommendations[:5], 1):
             print(f"   {i}. {rec}")
 

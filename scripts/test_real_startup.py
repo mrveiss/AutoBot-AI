@@ -41,7 +41,7 @@ def test_backend_import():
     print(f"📋 Actual app type: {type(actual_app)}")
 
     total_time = time.time() - start_time
-    print(f"\n🎯 SUMMARY:")
+    print("\n🎯 SUMMARY:")
     print(f"Import time       : {import_duration:6.3f}s ({import_duration/total_time*100:4.1f}%)")
     print(f"App creation time : {app_duration:6.3f}s ({app_duration/total_time*100:4.1f}%)")
     print(f"Total time        : {total_time:6.3f}s")
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     import_dur, app_dur = test_backend_import()
     uvicorn_total = test_uvicorn_startup()
 
-    print(f"\n🏆 PERFORMANCE ANALYSIS:")
+    print("\n🏆 PERFORMANCE ANALYSIS:")
     print(f"Just importing backend: {import_dur:6.3f}s")
     print(f"Full app creation:      {app_dur:6.3f}s")
     print(f"Uvicorn simulation:     {uvicorn_total:6.3f}s")

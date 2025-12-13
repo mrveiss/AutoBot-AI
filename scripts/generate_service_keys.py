@@ -39,7 +39,7 @@ async def generate_keys():
     print("🔐 AutoBot Service Key Generation")
     print("=" * 60)
     print(f"Timestamp: {datetime.now().isoformat()}")
-    print(f"Redis Host: 172.16.168.23:6379")
+    print("Redis Host: 172.16.168.23:6379")
     print(f"Services: {len(SERVICES)}")
     print()
 

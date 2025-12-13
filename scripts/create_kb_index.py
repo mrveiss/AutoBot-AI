@@ -65,9 +65,9 @@ def create_index_with_correct_dimensions():
     # Create the schema
     schema = IndexSchema.from_dict(schema_dict)
 
-    print(f"Creating index with schema:")
+    print("Creating index with schema:")
     print(f"  Name: {schema.index.name}")
-    print(f"  Vector dimensions: 768")
+    print("  Vector dimensions: 768")
 
     # Create the index using raw Redis command
     try:

@@ -57,7 +57,7 @@ def test_app_factory():
 def test_route_registration():
     """Test that routes will be properly registered."""
 
-    print(f"\n📋 Testing Route Registration")
+    print("\n📋 Testing Route Registration")
     print("-" * 30)
 
     try:
@@ -103,14 +103,14 @@ if __name__ == "__main__":
     config_ok = test_app_factory()
     routes_ok = test_route_registration()
 
-    print(f"\n" + "=" * 50)
+    print("\n" + "=" * 50)
     if config_ok and routes_ok:
         print("🎉 Backend configuration is correct!")
         print("   All workflow endpoints should be available after restart")
     else:
         print("❌ Backend configuration needs fixes")
 
-    print(f"\n🔧 To restart backend:")
+    print("\n🔧 To restart backend:")
     print("   1. Stop current backend (Ctrl+C)")
     print("   2. Run: source venv/bin/activate && python main.py")
     print("   3. Test: curl -X POST ServiceURLs.BACKEND_LOCAL/api/workflow/execute")

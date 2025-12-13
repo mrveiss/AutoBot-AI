@@ -236,7 +236,7 @@ class SecurityValidator:
         # Overall assessment
         total_issues = len(self.vulnerabilities_found) + len(remaining_secrets)
         if total_issues == 0:
-            print(f"\n🎉 SUCCESS: All security vulnerabilities have been fixed!")
+            print("\n🎉 SUCCESS: All security vulnerabilities have been fixed!")
             print(f"✅ {len(self.fixes_verified)} security fixes verified")
         else:
             print(f"\n⚠️  WARNING: {total_issues} security issues still need attention")
