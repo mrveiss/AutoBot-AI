@@ -6,6 +6,15 @@ This script verifies that the security fixes have been properly applied
 to the HTML files and tests the protection mechanisms.
 """
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+# Issue #380: Module-level constant for HTML extensions (performance optimization)
+_HTML_EXTENSIONS = _HTML_EXTENSIONS
+
 import os
 import sys
 from pathlib import Path
@@ -29,20 +38,16 @@ def test_security_headers(file_path: str) -> bool:
         # Check for frame options
         frame_options = "X-Frame-Options" in content
 
-        print(f"🔍 Security Headers Check for {file_path}:")
-        print(
-            f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}"
-        )
-        print(f"   ✅ X-XSS-Protection: {'Present' if xss_protection else 'Missing'}")
-        print(
-            f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}"
-        )
-        print(f"   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}")
+        logger.info("🔍 Security Headers Check for {file_path}:")
+        logger.info(f"   ✅ Content Security Policy: {'Present' if csp_present else 'Missing'}")
+        logger.info("   ✅ X-XSS-Protection: {'Present' if xss_protection else 'Missing'}")
+        logger.info(f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}")
+        logger.info("   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}")
 
         return all([csp_present, xss_protection, content_type_options, frame_options])
 
     except Exception as e:
-        print(f"❌ Error checking security headers: {e}")
+        logger.error("Error checking security headers: %se ")
         return False
 
 
@@ -64,24 +69,18 @@ def test_runtime_protection(file_path: str) -> bool:
         # Check for safe API wrappers
         safe_api = "AutoBotSecurity" in content
 
-        print(f"🛡️  Runtime Protection Check for {file_path}:")
-        print(
-            f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}"
-        )
-        print(
-            f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}"
-        )
-        print(
-            f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}"
-        )
-        print(f"   ✅ Safe API Wrappers: {'Present' if safe_api else 'Missing'}")
+        logger.info("🛡️  Runtime Protection Check for {file_path}:")
+        logger.info(f"   ✅ AutoBot Protection Script: {'Present' if autobot_protection else 'Missing'}")
+        logger.info(f"   ✅ innerHTML Monitoring: {'Present' if innerhtml_monitoring else 'Missing'}")
+        logger.info(f"   ✅ Security Event Logging: {'Present' if security_logging else 'Missing'}")
+        logger.info("   ✅ Safe API Wrappers: {'Present' if safe_api else 'Missing'}")
 
         return all(
             [autobot_protection, innerhtml_monitoring, security_logging, safe_api]
         )
 
     except Exception as e:
-        print(f"❌ Error checking runtime protection: {e}")
+        logger.error("Error checking runtime protection: %se ")
         return False
 
 
@@ -90,17 +89,17 @@ def test_backup_exists(file_path: str) -> bool:
     backup_dir = Path(file_path).parent / "security_backups"
 
     if not backup_dir.exists():
-        print(f"❌ Backup directory not found: {backup_dir}")
+        logger.error("Backup directory not found: %sbackup_dir ")
         return False
 
     backup_files = list(backup_dir.glob("*.backup_*"))
 
-    print(f"📁 Backup Files Check:")
-    print(f"   📂 Backup Directory: {backup_dir}")
-    print(f"   📄 Backup Files Found: {len(backup_files)}")
+    logger.info("📁 Backup Files Check:")
+    logger.info("   📂 Backup Directory: {backup_dir}")
+    logger.info("   📄 Backup Files Found: {len(backup_files)}")
 
     for backup in backup_files:
-        print(f"     • {backup.name}")
+        logger.info("     • {backup.name}")
 
     return len(backup_files) > 0
 
@@ -121,13 +120,12 @@ def test_file_integrity(file_path: str) -> bool:
         script_opens = content.count("<script")
         script_closes = content.count("</script>")
 
-        print(f"🏗️  File Integrity Check for {file_path}:")
-        print(f"   ✅ DOCTYPE: {'Present' if has_doctype else 'Missing'}")
-        print(f"   ✅ HTML tag: {'Present' if has_html else 'Missing'}")
-        print(f"   ✅ HEAD section: {'Present' if has_head else 'Missing'}")
-        print(f"   ✅ BODY section: {'Present' if has_body else 'Missing'}")
-        print(
-            f"   ✅ Script tags balanced: {script_opens == script_closes} ({script_opens} open, {script_closes} close)"
+        logger.info("🏗️  File Integrity Check for {file_path}:")
+        logger.info("   ✅ DOCTYPE: {'Present' if has_doctype else 'Missing'}")
+        logger.info("   ✅ HTML tag: {'Present' if has_html else 'Missing'}")
+        logger.info("   ✅ HEAD section: {'Present' if has_head else 'Missing'}")
+        logger.info("   ✅ BODY section: {'Present' if has_body else 'Missing'}")
+        logger.info(f"   ✅ Script tags balanced: {script_opens == script_closes} ({script_opens} open, {script_closes} close)"
         )
 
         basic_structure = all([has_doctype, has_html, has_head, has_body])
@@ -136,30 +134,30 @@ def test_file_integrity(file_path: str) -> bool:
         return basic_structure and scripts_balanced
 
     except Exception as e:
-        print(f"❌ Error checking file integrity: {e}")
+        logger.error("Error checking file integrity: %se ")
         return False
 
 
 def main():
     """Run comprehensive security fix verification."""
     if len(sys.argv) != 2:
-        print("Usage: python test_security_fix.py <html_file_path>")
-        print("Example: python test_security_fix.py tests/playwright-report/index.html")
+        logger.info("Usage: python test_security_fix.py <html_file_path>")
+        logger.info("Example: python test_security_fix.py tests/playwright-report/index.html")
         sys.exit(1)
 
     file_path = sys.argv[1]
 
     if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
+        logger.error("File not found: %sfile_path ")
         sys.exit(1)
 
-    if not file_path.lower().endswith((".html", ".htm")):
-        print(f"❌ File is not an HTML file: {file_path}")
+    if not file_path.lower().endswith(_HTML_EXTENSIONS):
+        logger.error("File is not an HTML file: %sfile_path ")
         sys.exit(1)
 
-    print("🧪 AutoBot Security Fix Verification Test")
-    print("=" * 50)
-    print(f"Testing file: {file_path}\n")
+    logger.info("🧪 AutoBot Security Fix Verification Test")
+    logger.info("=" * 50)
+    logger.info("Testing file: {file_path}\n")
 
     # Run all tests
     tests = [
@@ -171,42 +169,41 @@ def main():
 
     results = []
     for test_name, test_func in tests:
-        print(f"\n{test_name}:")
-        print("-" * 30)
+        logger.info("\n{test_name}:")
+        logger.info("-" * 30)
         result = test_func(file_path)
         results.append((test_name, result))
-        print(f"Result: {'✅ PASS' if result else '❌ FAIL'}")
+        logger.info("Result: {'✅ PASS' if result else '❌ FAIL'}")
 
     # Summary
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
-    print("\n" + "=" * 50)
-    print("🎯 VERIFICATION SUMMARY")
-    print("=" * 50)
-    print(f"Tests Run: {total}")
-    print(f"Tests Passed: {passed}")
-    print(f"Tests Failed: {total - passed}")
-    print(f"Success Rate: {passed/total*100:.1f}%")
+    logger.info("=" * 50)
+    logger.info("🎯 VERIFICATION SUMMARY")
+    logger.info("=" * 50)
+    logger.info("Tests Run: {total}")
+    logger.info("Tests Passed: {passed}")
+    logger.info("Tests Failed: {total - passed}")
+    logger.info("Success Rate: {passed/total*100:.1f}%")
 
     if passed == total:
-        print("\n🎉 All security fixes verified successfully!")
-        print("🛡️  The file is now protected against XSS attacks")
+        logger.info("\n🎉 All security fixes verified successfully!")
+        logger.info("🛡️  The file is now protected against XSS attacks")
     else:
-        print(
-            f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
+        logger.info(f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
         )
-        print("Failed tests:")
+        logger.info("Failed tests:")
         for test_name, result in results:
             if not result:
-                print(f"   • {test_name}")
+                logger.info("   • {test_name}")
 
-    print(f"\n📄 Original report security enhancements:")
-    print("   • Content Security Policy (CSP)")
-    print("   • Security meta headers")
-    print("   • Runtime XSS monitoring")
-    print("   • Safe DOM manipulation APIs")
-    print("   • Automatic backup creation")
+    logger.info("\n📄 Original report security enhancements:")
+    logger.info("   • Content Security Policy (CSP)")
+    logger.info("   • Security meta headers")
+    logger.info("   • Runtime XSS monitoring")
+    logger.info("   • Safe DOM manipulation APIs")
+    logger.info("   • Automatic backup creation")
 
 
 if __name__ == "__main__":

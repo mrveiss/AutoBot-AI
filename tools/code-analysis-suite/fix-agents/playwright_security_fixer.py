@@ -26,6 +26,9 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level constant for HTML extensions (performance optimization)
+_HTML_EXTENSIONS = (".html", ".htm")
+
 
 class PlaywrightSecurityFixer:
     """
@@ -544,14 +547,14 @@ class PlaywrightSecurityFixer:
         html_files = []
 
         if os.path.isfile(target_path) and target_path.lower().endswith(
-            (".html", ".htm")
+            _HTML_EXTENSIONS
         ):
             html_files = [target_path]
         elif os.path.isdir(target_path):
             logger.info("Scanning directory: %s", target_path)
             for root, dirs, files in os.walk(target_path):
                 for file in files:
-                    if file.lower().endswith((".html", ".htm")):
+                    if file.lower().endswith(_HTML_EXTENSIONS):
                         html_files.append(os.path.join(root, file))
 
         if not html_files:

@@ -17,6 +17,10 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
+# Issue #380: Module-level constants for URL validation (performance optimization)
+_HTTP_PROTOCOLS = ("http://", "https://")
+_WS_PROTOCOLS = ("ws://", "wss://")
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -39,10 +43,10 @@ def test_default_configuration():
             WS_PROTOCOL,
         )
 
-        # Test URLs are properly formed
-        assert API_BASE_URL.startswith(("http://", "https://"))
+        # Test URLs are properly formed (Issue #380: use module-level constants)
+        assert API_BASE_URL.startswith(_HTTP_PROTOCOLS)
         assert REDIS_URL.startswith("redis://")
-        assert WS_BASE_URL.startswith(("ws://", "wss://"))
+        assert WS_BASE_URL.startswith(_WS_PROTOCOLS)
 
         # Test ports are integers
         assert isinstance(BACKEND_PORT, int)
