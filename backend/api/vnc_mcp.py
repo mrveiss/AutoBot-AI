@@ -33,6 +33,68 @@ vnc_observations = {
     "browser": {"recent_activity": [], "last_check": None},
 }
 
+# Issue #281: MCP tool definitions extracted from get_vnc_mcp_tools
+# Tuple of (name, description, input_schema) for each VNC tool
+VNC_MCP_TOOL_DEFINITIONS = (
+    (
+        "check_vnc_status",
+        (
+            "Check if VNC connection is active and accessible. Use this to verify browser or "
+            "desktop VNC is available before attempting observations."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "vnc_type": {
+                    "type": "string",
+                    "enum": ["desktop", "browser"],
+                    "description": "Which VNC to check: 'desktop' (main machine) or 'browser' (Playwright headed mode)",
+                    "default": "browser",
+                }
+            },
+            "required": [],
+        },
+    ),
+    (
+        "observe_vnc_activity",
+        (
+            "Observe recent VNC activity and traffic. Returns statistics about WebSocket "
+            "traffic, connection state, and recent interactions. Useful for understanding what the human is viewing/doing in the browser or desktop."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "vnc_type": {
+                    "type": "string",
+                    "enum": ["desktop", "browser"],
+                    "description": "Which VNC to observe: 'desktop' or 'browser'",
+                    "default": "browser",
+                },
+                "duration_seconds": {
+                    "type": "integer",
+                    "description": "How many seconds of recent activity to include",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 60,
+                },
+            },
+            "required": ["vnc_type"],
+        },
+    ),
+    (
+        "get_browser_vnc_context",
+        (
+            "Get current context from browser VNC: what page is visible, "
+            "what the human is doing. Combines VNC observations with Playwright state for full picture."
+        ),
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+)
+
 
 class MCPTool(BaseModel):
     """Standard MCP tool definition"""
@@ -65,76 +127,20 @@ class VNCObservationRequest(BaseModel):
 @router.get("/mcp/tools")
 async def get_vnc_mcp_tools() -> List[MCPTool]:
     """
-    Get available MCP tools for VNC observation
+    Get available MCP tools for VNC observation.
+
+    Issue #281: Refactored to use module-level VNC_MCP_TOOL_DEFINITIONS.
+    Reduced from 72 lines to ~10 lines (86% reduction).
 
     These tools allow AutoBot's LLM agents to:
     - Check if VNC connections are active
     - Observe browser/desktop activity via VNC proxy
     - Get real-time status of what humans are viewing
     """
-    tools = [
-        MCPTool(
-            name="check_vnc_status",
-            description=(
-                "Check if VNC connection is active and accessible. Use this to verify browser or"
-                "desktop VNC is available before attempting observations."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "vnc_type": {
-                        "type": "string",
-                        "enum": ["desktop", "browser"],
-                        "description": (
-                            "Which VNC to check: 'desktop' (main machine) or 'browser' (Playwright headed mode)"
-                        ),
-                        "default": "browser",
-                    }
-                },
-                "required": [],
-            },
-        ),
-        MCPTool(
-            name="observe_vnc_activity",
-            description=(
-                "Observe recent VNC activity and traffic. Returns statistics about WebSocket"
-                "traffic, connection state, and recent interactions. Useful for understanding what the human is viewing/doing in the browser or desktop."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "vnc_type": {
-                        "type": "string",
-                        "enum": ["desktop", "browser"],
-                        "description": "Which VNC to observe: 'desktop' or 'browser'",
-                        "default": "browser",
-                    },
-                    "duration_seconds": {
-                        "type": "integer",
-                        "description": "How many seconds of recent activity to include",
-                        "default": 5,
-                        "minimum": 1,
-                        "maximum": 60,
-                    },
-                },
-                "required": ["vnc_type"],
-            },
-        ),
-        MCPTool(
-            name="get_browser_vnc_context",
-            description=(
-                "Get current context from browser VNC: what page is visible,"
-                "what the human is doing. Combines VNC observations with Playwright state for full picture."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        ),
+    return [
+        MCPTool(name=name, description=desc, input_schema=schema)
+        for name, desc, schema in VNC_MCP_TOOL_DEFINITIONS
     ]
-
-    return tools
 
 
 @with_error_handling(
