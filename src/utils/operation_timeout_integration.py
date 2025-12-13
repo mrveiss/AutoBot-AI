@@ -271,10 +271,12 @@ class OperationIntegrationManager:
 
         @self.router.post("/create", response_model=Dict[str, str])
         async def create_operation(request: CreateOperationRequest):
+            """Create a new long-running operation."""
             return await self._handle_create_operation(request)
 
         @self.router.get("/{operation_id}", response_model=OperationResponse)
         async def get_operation(operation_id: str):
+            """Get operation details by ID."""
             operation = self.operation_manager.get_operation(operation_id)
             if not operation:
                 raise_not_found_error("API_0002", "Operation not found")
@@ -282,6 +284,7 @@ class OperationIntegrationManager:
 
         @self.router.get("/", response_model=OperationListResponse)
         async def list_operations(status: Optional[str] = None, operation_type: Optional[str] = None, limit: int = 50):
+            """List operations with optional status and type filters."""
             status_filter = OperationStatus(status) if status else None
             type_filter = OperationType(operation_type) if operation_type else None
             operations = self.operation_manager.list_operations(status_filter, type_filter)[:limit]
@@ -291,28 +294,34 @@ class OperationIntegrationManager:
 
         @self.router.post("/{operation_id}/cancel")
         async def cancel_operation(operation_id: str):
+            """Cancel a running operation."""
             if not await self.operation_manager.cancel_operation(operation_id):
                 raise_not_found_error("API_0002", "Operation not found")
             return {"status": "cancelled"}
 
         @self.router.post("/{operation_id}/resume")
         async def resume_operation_from_latest_checkpoint(operation_id: str):
+            """Resume a paused operation from its latest checkpoint."""
             return await self._handle_resume_operation(operation_id)
 
         @self.router.post("/{operation_id}/progress")
         async def update_operation_progress(operation_id: str, request: ProgressUpdateRequest):
+            """Update progress for a running operation."""
             return await self._handle_update_progress(operation_id, request)
 
         @self.router.websocket("/{operation_id}/progress")
         async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
+            """WebSocket endpoint for real-time progress updates."""
             await self._handle_websocket_connection(websocket, operation_id)
 
         @self.router.post("/codebase/index")
         async def start_codebase_indexing(codebase_path: str, file_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+            """Start a codebase indexing operation."""
             return await self._handle_start_indexing(codebase_path, file_patterns)
 
         @self.router.post("/testing/comprehensive")
         async def start_comprehensive_testing(test_suite_path: str, test_patterns: Optional[List[str]] = None, background_tasks: BackgroundTasks = None):
+            """Start a comprehensive testing operation."""
             return await self._handle_start_testing(test_suite_path, test_patterns)
 
     def _get_operation_function(
