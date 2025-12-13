@@ -17,7 +17,6 @@ Copyright (c) 2025 mrveiss
 """
 
 import ast
-import os
 import re
 import sys
 from pathlib import Path

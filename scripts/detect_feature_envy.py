@@ -13,11 +13,10 @@ Copyright (c) 2025 mrveiss
 
 import ast
 import os
-import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set
 
 
 @dataclass
