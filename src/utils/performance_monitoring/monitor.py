@@ -1,0 +1,539 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Performance Monitor Module
+
+Contains the main PerformanceMonitor class that coordinates metric collection,
+analysis, and storage using the extracted component modules.
+
+Extracted from performance_monitor.py as part of Issue #381 refactoring.
+"""
+
+import asyncio
+import json
+import logging
+import time
+from dataclasses import asdict
+from typing import Any, Callable, Dict, List, Optional
+
+from src.utils.performance_monitoring.types import (
+    DEFAULT_COLLECTION_INTERVAL,
+    DEFAULT_RETENTION_HOURS,
+    DEFAULT_PERFORMANCE_BASELINES,
+)
+from src.utils.performance_monitoring.hardware import HardwareDetector
+from src.utils.performance_monitoring.collectors import (
+    GPUCollector,
+    MultiModalCollector,
+    NPUCollector,
+    ServiceCollector,
+    SystemCollector,
+)
+from src.utils.performance_monitoring.analyzers import (
+    AlertAnalyzer,
+    RecommendationGenerator,
+)
+from src.utils.performance_monitoring.decorator import set_redis_client
+
+logger = logging.getLogger(__name__)
+
+
+class PerformanceMonitor:
+    """
+    Comprehensive performance monitoring system for AutoBot.
+    Focuses on GPU/NPU acceleration, multi-modal AI performance, and
+    distributed system optimization.
+
+    Note: Renamed from Phase9PerformanceMonitor - "Phase9" naming is deprecated.
+    """
+
+    def __init__(self):
+        """Initialize performance monitor with hardware detection and thresholds."""
+        self.logger = logging.getLogger(__name__)
+        self.monitoring_active = False
+        self.collection_interval = DEFAULT_COLLECTION_INTERVAL
+        self.retention_hours = DEFAULT_RETENTION_HOURS
+
+        # Lock for thread-safe access to shared mutable state
+        self._lock = asyncio.Lock()
+
+        # Performance baselines and thresholds
+        self.performance_baselines = dict(DEFAULT_PERFORMANCE_BASELINES)
+
+        # Real-time alerting
+        self.alert_callbacks: List[Callable] = []
+
+        # Hardware acceleration tracking
+        self.gpu_available = HardwareDetector.check_gpu_availability()
+        self.npu_available = HardwareDetector.check_npu_availability()
+
+        # Redis client for persistent storage
+        self.redis_client = None
+        self._initialize_redis()
+
+        # Initialize collectors
+        self._gpu_collector = GPUCollector(self.gpu_available)
+        self._npu_collector = NPUCollector(self.npu_available)
+        self._system_collector = SystemCollector()
+        self._service_collector = ServiceCollector(self.redis_client)
+        self._multimodal_collector = MultiModalCollector(self.redis_client)
+
+        # Initialize analyzers
+        self._alert_analyzer = AlertAnalyzer(self.performance_baselines)
+        self._recommendation_generator = RecommendationGenerator()
+
+        # Background monitoring task
+        self.monitoring_task = None
+
+        self.logger.info("Performance Monitor initialized")
+        self.logger.info(f"GPU Available: {self.gpu_available}")
+        self.logger.info(f"NPU Available: {self.npu_available}")
+
+    def _initialize_redis(self):
+        """Initialize Redis client for metrics storage."""
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                raise Exception("Redis client initialization returned None")
+
+            self.redis_client.ping()
+            self.logger.info("Redis client initialized for performance metrics")
+
+            # Set redis client for decorator module
+            set_redis_client(self.redis_client)
+        except Exception as e:
+            self.logger.warning(
+                f"Could not initialize Redis for performance metrics: {e}"
+            )
+            self.redis_client = None
+
+    async def collect_gpu_metrics(self):
+        """Collect GPU metrics (delegates to collector)."""
+        return await self._gpu_collector.collect()
+
+    async def collect_npu_metrics(self):
+        """Collect NPU metrics (delegates to collector)."""
+        return await self._npu_collector.collect()
+
+    async def collect_multimodal_metrics(self):
+        """Collect multimodal metrics (delegates to collector)."""
+        return await self._multimodal_collector.collect()
+
+    async def collect_system_performance_metrics(self):
+        """Collect system metrics (delegates to collector)."""
+        return await self._system_collector.collect()
+
+    async def collect_service_performance_metrics(self):
+        """Collect service metrics (delegates to collector)."""
+        return await self._service_collector.collect()
+
+    async def collect_all_metrics(self) -> Dict[str, Any]:
+        """Collect all performance metrics in parallel."""
+        try:
+            tasks = [
+                self.collect_gpu_metrics(),
+                self.collect_npu_metrics(),
+                self.collect_multimodal_metrics(),
+                self.collect_system_performance_metrics(),
+                self.collect_service_performance_metrics(),
+            ]
+
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            (
+                gpu_metrics,
+                npu_metrics,
+                multimodal_metrics,
+                system_metrics,
+                service_metrics,
+            ) = results
+
+            # Handle exceptions
+            if isinstance(gpu_metrics, Exception):
+                self.logger.error(f"GPU metrics collection failed: {gpu_metrics}")
+                gpu_metrics = None
+
+            if isinstance(npu_metrics, Exception):
+                self.logger.error(f"NPU metrics collection failed: {npu_metrics}")
+                npu_metrics = None
+
+            if isinstance(multimodal_metrics, Exception):
+                self.logger.error(
+                    f"Multimodal metrics collection failed: {multimodal_metrics}"
+                )
+                multimodal_metrics = None
+
+            if isinstance(system_metrics, Exception):
+                self.logger.error(f"System metrics collection failed: {system_metrics}")
+                system_metrics = None
+
+            if isinstance(service_metrics, Exception):
+                self.logger.error(
+                    f"Service metrics collection failed: {service_metrics}"
+                )
+                service_metrics = []
+
+            # Persist to Redis if available
+            if self.redis_client:
+                await self._persist_metrics_to_redis(
+                    {
+                        "gpu": gpu_metrics,
+                        "npu": npu_metrics,
+                        "multimodal": multimodal_metrics,
+                        "system": system_metrics,
+                        "services": service_metrics,
+                    }
+                )
+
+            return {
+                "timestamp": time.time(),
+                "gpu": asdict(gpu_metrics) if gpu_metrics else None,
+                "npu": asdict(npu_metrics) if npu_metrics else None,
+                "multimodal": (
+                    asdict(multimodal_metrics) if multimodal_metrics else None
+                ),
+                "system": asdict(system_metrics) if system_metrics else None,
+                "services": [asdict(s) for s in (service_metrics or [])],
+                "collection_successful": True,
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error collecting all metrics: {e}")
+            return {
+                "timestamp": time.time(),
+                "collection_successful": False,
+                "error": str(e),
+            }
+
+    async def _persist_metrics_to_redis(self, metrics: Dict[str, Any]):
+        """Persist metrics to Redis for historical analysis."""
+        try:
+            if not self.redis_client:
+                return
+
+            timestamp = time.time()
+            retention_seconds = self.retention_hours * 3600
+
+            def _persist_ops():
+                pipe = self.redis_client.pipeline()
+                for category, metric_data in metrics.items():
+                    if metric_data:
+                        key = f"performance_metrics:{category}"
+                        value = json.dumps(
+                            (
+                                asdict(metric_data)
+                                if hasattr(metric_data, "__dict__")
+                                else metric_data
+                            ),
+                            default=str,
+                        )
+                        pipe.zadd(key, {value: timestamp})
+                        pipe.expire(key, retention_seconds)
+                pipe.execute()
+
+            await asyncio.to_thread(_persist_ops)
+
+        except Exception as e:
+            self.logger.error(f"Error persisting metrics to Redis: {e}")
+
+    async def start_monitoring(self):
+        """Start continuous performance monitoring."""
+        if self.monitoring_active:
+            self.logger.warning("Performance monitoring already active")
+            return
+
+        self.monitoring_active = True
+        self.logger.info("Starting comprehensive performance monitoring...")
+
+        self.monitoring_task = asyncio.create_task(self._monitoring_loop())
+
+        return self.monitoring_task
+
+    async def _monitoring_loop(self):
+        """Main monitoring loop."""
+        while self.monitoring_active:
+            try:
+                metrics = await self.collect_all_metrics()
+                await self._analyze_performance_and_generate_alerts(metrics)
+                self._log_performance_summary(metrics)
+                await asyncio.sleep(self.collection_interval)
+
+            except Exception as e:
+                self.logger.error(f"Error in monitoring loop: {e}")
+                await asyncio.sleep(self.collection_interval)
+
+    async def _analyze_performance_and_generate_alerts(self, metrics: Dict[str, Any]):
+        """Analyze metrics and generate performance alerts."""
+        try:
+            alerts = self._alert_analyzer.analyze_all(metrics)
+
+            # Store alerts in Redis
+            if self.redis_client and alerts:
+                try:
+
+                    def _store_alerts():
+                        key = "performance_alerts"
+                        for alert in alerts:
+                            self.redis_client.zadd(key, {json.dumps(alert): time.time()})
+                        self.redis_client.expire(key, 3600)
+
+                    await asyncio.to_thread(_store_alerts)
+                except Exception as e:
+                    self.logger.debug(f"Could not store alerts in Redis: {e}")
+
+            # Get callbacks under lock
+            async with self._lock:
+                callbacks = list(self.alert_callbacks)
+
+            # Trigger alert callbacks outside lock
+            for callback in callbacks:
+                try:
+                    await callback(alerts)
+                except Exception as e:
+                    self.logger.error(f"Error in alert callback: {e}")
+
+        except Exception as e:
+            self.logger.error(f"Error analyzing performance: {e}")
+
+    def _log_performance_summary(self, metrics: Dict[str, Any]):
+        """Log comprehensive performance summary."""
+        try:
+            summary_parts = []
+
+            if metrics.get("gpu"):
+                gpu = metrics["gpu"]
+                summary_parts.append(
+                    f"GPU: {gpu['utilization_percent']:.0f}% util, {gpu['temperature_celsius']}°C"
+                )
+
+            if metrics.get("npu"):
+                npu = metrics["npu"]
+                summary_parts.append(f"NPU: {npu['acceleration_ratio']:.1f}x speedup")
+
+            if metrics.get("system"):
+                system = metrics["system"]
+                cpu_pct = system["cpu_usage_percent"]
+                mem_pct = system["memory_usage_percent"]
+                summary_parts.append(f"CPU: {cpu_pct:.0f}%, MEM: {mem_pct:.0f}%")
+                summary_parts.append(f"Load: {system['cpu_load_1m']:.1f}")
+
+            if metrics.get("services"):
+                healthy_services = sum(
+                    1 for s in metrics["services"] if s["status"] == "healthy"
+                )
+                total_services = len(metrics["services"])
+                summary_parts.append(
+                    f"Services: {healthy_services}/{total_services} healthy"
+                )
+
+            self.logger.info(f"PERFORMANCE: {' | '.join(summary_parts)}")
+
+        except Exception as e:
+            self.logger.error(f"Error logging performance summary: {e}")
+
+    async def stop_monitoring(self):
+        """Stop performance monitoring."""
+        if not self.monitoring_active:
+            return
+
+        self.monitoring_active = False
+
+        if self.monitoring_task:
+            self.monitoring_task.cancel()
+            try:
+                await self.monitoring_task
+            except asyncio.CancelledError:
+                self.logger.debug("Monitoring task cancelled during shutdown")
+
+        self.logger.info("Performance monitoring stopped")
+
+    async def get_current_performance_dashboard(self) -> Dict[str, Any]:
+        """Get comprehensive performance dashboard data."""
+        try:
+            dashboard = {
+                "timestamp": time.time(),
+                "monitoring_active": self.monitoring_active,
+                "hardware_acceleration": {
+                    "gpu_available": self.gpu_available,
+                    "npu_available": self.npu_available,
+                },
+                "performance_baselines": dict(self.performance_baselines),
+                "recent_alerts": [],
+                "note": "Use Prometheus PromQL for historical data.",
+            }
+
+            if self.redis_client:
+                try:
+
+                    def _fetch_dashboard_data():
+                        gpu_data = self.redis_client.zrange(
+                            "performance_metrics:gpu", -1, -1
+                        )
+                        npu_data = self.redis_client.zrange(
+                            "performance_metrics:npu", -1, -1
+                        )
+                        system_data = self.redis_client.zrange(
+                            "performance_metrics:system", -1, -1
+                        )
+                        alerts_data = self.redis_client.zrange(
+                            "performance_alerts", -10, -1
+                        )
+                        return gpu_data, npu_data, system_data, alerts_data
+
+                    gpu_data, npu_data, system_data, alerts_data = (
+                        await asyncio.to_thread(_fetch_dashboard_data)
+                    )
+
+                    if gpu_data:
+                        dashboard["gpu"] = json.loads(gpu_data[0])
+                    if npu_data:
+                        dashboard["npu"] = json.loads(npu_data[0])
+                    if system_data:
+                        dashboard["system"] = json.loads(system_data[0])
+                    dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
+
+                except Exception as e:
+                    self.logger.debug(
+                        f"Could not fetch dashboard data from Redis: {e}"
+                    )
+
+            dashboard["trends"] = await self._calculate_performance_trends()
+
+            return dashboard
+
+        except Exception as e:
+            self.logger.error(f"Error generating performance dashboard: {e}")
+            return {"error": str(e), "timestamp": time.time()}
+
+    async def _calculate_performance_trends(self) -> Dict[str, Any]:
+        """Calculate performance trends from recent metrics."""
+        try:
+            trends = {}
+
+            if not self.redis_client:
+                return {
+                    "note": "Trends require Redis. Use Prometheus PromQL for historical analysis."
+                }
+
+            try:
+
+                def _fetch_trend_data():
+                    gpu_data = self.redis_client.zrange(
+                        "performance_metrics:gpu", -5, -1
+                    )
+                    system_data = self.redis_client.zrange(
+                        "performance_metrics:system", -5, -1
+                    )
+                    return gpu_data, system_data
+
+                gpu_data, system_data = await asyncio.to_thread(_fetch_trend_data)
+
+                if gpu_data and len(gpu_data) >= 2:
+                    gpu_metrics = [json.loads(d) for d in gpu_data]
+                    utilizations = [
+                        g.get("utilization_percent", 0) for g in gpu_metrics
+                    ]
+                    trends["gpu_utilization"] = {
+                        "average": round(sum(utilizations) / len(utilizations), 1),
+                        "trend": (
+                            "increasing"
+                            if utilizations[-1] > utilizations[0]
+                            else (
+                                "decreasing"
+                                if utilizations[-1] < utilizations[0]
+                                else "stable"
+                            )
+                        ),
+                    }
+
+                if system_data and len(system_data) >= 2:
+                    system_metrics = [json.loads(d) for d in system_data]
+
+                    loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
+                    trends["cpu_load"] = {
+                        "average": round(sum(loads) / len(loads), 2),
+                        "trend": (
+                            "increasing"
+                            if loads[-1] > loads[0]
+                            else "decreasing" if loads[-1] < loads[0] else "stable"
+                        ),
+                    }
+
+                    memory_usage = [
+                        s.get("memory_usage_percent", 0) for s in system_metrics
+                    ]
+                    trends["memory_usage"] = {
+                        "average": round(sum(memory_usage) / len(memory_usage), 1),
+                        "trend": (
+                            "increasing"
+                            if memory_usage[-1] > memory_usage[0]
+                            else (
+                                "decreasing"
+                                if memory_usage[-1] < memory_usage[0]
+                                else "stable"
+                            )
+                        ),
+                    }
+
+            except Exception as e:
+                self.logger.debug(f"Could not calculate trends from Redis: {e}")
+
+            return trends
+
+        except Exception as e:
+            self.logger.error(f"Error calculating performance trends: {e}")
+            return {}
+
+    async def add_alert_callback(self, callback: Callable):
+        """Add callback function for performance alerts (thread-safe)."""
+        async with self._lock:
+            self.alert_callbacks.append(callback)
+
+    def _fetch_recommendation_data(self):
+        """Fetch metrics data from Redis for recommendations."""
+        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+        npu_data = (
+            self.redis_client.zrange("performance_metrics:npu", -1, -1)
+            if self.npu_available
+            else []
+        )
+        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+        return gpu_data, npu_data, system_data
+
+    async def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate performance optimization recommendations."""
+        try:
+            latest_gpu, latest_npu, latest_system = None, None, None
+
+            if self.redis_client:
+                try:
+                    gpu_data, npu_data, system_data = await asyncio.to_thread(
+                        self._fetch_recommendation_data
+                    )
+
+                    class MetricObj:
+                        def __init__(self, d):
+                            self.__dict__.update(d)
+
+                    if gpu_data:
+                        latest_gpu = MetricObj(json.loads(gpu_data[0]))
+                    if npu_data:
+                        latest_npu = MetricObj(json.loads(npu_data[0]))
+                    if system_data:
+                        latest_system = MetricObj(json.loads(system_data[0]))
+
+                except Exception as e:
+                    self.logger.debug(
+                        f"Could not fetch metrics for recommendations: {e}"
+                    )
+
+            return self._recommendation_generator.generate_all(
+                latest_gpu, latest_npu, latest_system
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error generating optimization recommendations: {e}")
+            return []
