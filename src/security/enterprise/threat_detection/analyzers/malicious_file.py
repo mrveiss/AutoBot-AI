@@ -1,0 +1,148 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Malicious File Analyzer
+
+Detects malicious file uploads and suspicious file operations.
+
+Part of Issue #381 - God Class Refactoring
+"""
+
+import time
+from typing import List, Optional
+
+from ..models import AnalysisContext, SecurityEvent, ThreatEvent
+from ..types import ThreatCategory, ThreatLevel
+from .base import ThreatAnalyzer
+
+
+class MaliciousFileAnalyzer(ThreatAnalyzer):
+    """Analyzes events for malicious file uploads"""
+
+    def _check_signature_patterns(
+        self,
+        signature: dict,
+        key: str,
+        target: str,
+        threat_prefix: str,
+        match_type: str = "contains",
+    ) -> List[str]:
+        """
+        Check signature patterns against a target string.
+
+        Issue #281: Extracted helper to reduce repetition in analyze.
+
+        Args:
+            signature: Signature dict containing pattern lists
+            key: Key in signature dict to check (e.g., "extension", "suspicious_names")
+            target: Target string to check against
+            threat_prefix: Prefix for threat identifiers
+            match_type: "contains", "endswith", or "exact"
+
+        Returns:
+            List of detected threat identifiers
+        """
+        threats = []
+        if key not in signature:
+            return threats
+
+        target_lower = target.lower()
+        for pattern in signature[key]:
+            pattern_lower = pattern.lower()
+            matched = False
+
+            if match_type == "endswith":
+                matched = target_lower.endswith(pattern_lower)
+            elif match_type == "contains":
+                matched = pattern_lower in target_lower
+            elif match_type == "exact":
+                matched = pattern in target
+
+            if matched:
+                threats.append(f"{threat_prefix}_{pattern}")
+
+        return threats
+
+    async def analyze(
+        self, event: SecurityEvent, context: AnalysisContext
+    ) -> Optional[ThreatEvent]:
+        """Detect malicious file uploads"""
+        if not event.is_file_operation():
+            return None
+
+        filename = event.get_filename()
+        file_content = event.get_file_content_preview()
+        file_size = event.get_file_size()
+
+        threats = []
+
+        # Check file signatures (Issue #281: Using extracted helper)
+        for signature in context.file_signatures:
+            # Check extensions
+            threats.extend(
+                self._check_signature_patterns(
+                    signature, "extension", filename,
+                    "suspicious_extension", match_type="endswith"
+                )
+            )
+
+            # Check content patterns
+            if file_content:
+                threats.extend(
+                    self._check_signature_patterns(
+                        signature, "content_patterns", file_content,
+                        "malicious_content", match_type="exact"
+                    )
+                )
+
+            # Check suspicious names
+            threats.extend(
+                self._check_signature_patterns(
+                    signature, "suspicious_names", filename,
+                    "suspicious_name", match_type="contains"
+                )
+            )
+
+        # Check file size anomalies
+        size_threshold = (
+            context.config.get("thresholds", {}).get("file_size_suspicious_mb", 100)
+            * 1024
+            * 1024
+        )
+        if file_size > size_threshold:
+            threats.append("unusually_large_file")
+
+        if threats:
+            confidence = min(1.0, len(threats) * 0.3 + 0.4)
+            threat_level = (
+                ThreatLevel.CRITICAL
+                if any("malicious_content" in t for t in threats)
+                else ThreatLevel.HIGH
+            )
+
+            return ThreatEvent(
+                event_id=f"malicious_file_{int(time.time())}_{hash(filename) % 10000}",
+                timestamp=event.timestamp,
+                threat_category=ThreatCategory.MALICIOUS_UPLOAD,
+                threat_level=threat_level,
+                confidence_score=confidence,
+                user_id=event.user_id,
+                source_ip=event.source_ip,
+                action=event.action,
+                resource=filename,
+                details={
+                    "detected_threats": threats,
+                    "filename": filename,
+                    "file_size": file_size,
+                    "content_preview": file_content[:100] if file_content else "",
+                },
+                raw_event=event.raw_event,
+                mitigation_actions=[
+                    "quarantine_file",
+                    "scan_with_antivirus",
+                    "alert_security_team",
+                ],
+            )
+
+        return None
