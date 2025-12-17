@@ -2,22 +2,43 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Context-Aware Decision Making System - Facade Module
+Context-Aware Decision Package
 
-Intelligent decision making that considers multi-modal context,
+Provides intelligent decision making that considers multi-modal context,
 history, and environmental factors.
 
+This package refactors the original monolithic context_aware_decision_system.py
+into focused, single-responsibility modules.
+
 Part of Issue #381 - God Class Refactoring
-This module now serves as a facade that re-exports from the
-context_aware_decision package for backward compatibility.
 
 Original module: 1,591 lines
-New facade: ~100 lines (94% reduction)
+New package: ~1,200 lines across multiple focused modules
+
+Usage:
+    from src.context_aware_decision import (
+        ContextAwareDecisionSystem,
+        DecisionType,
+        ConfidenceLevel,
+        context_aware_decision_system,
+    )
+
+    # Quick decision
+    decision = await context_aware_decision_system.make_contextual_decision(
+        DecisionType.AUTOMATION_ACTION,
+        "Click login button"
+    )
+
+    # Custom instance
+    system = ContextAwareDecisionSystem()
+    decision = await system.make_contextual_decision(
+        DecisionType.NAVIGATION_CHOICE,
+        "Navigate to settings page"
+    )
 """
 
-# Re-export all public API from the package for backward compatibility
-from src.context_aware_decision import (
-    # Types and enums
+# Types and enums
+from .types import (
     ConfidenceLevel,
     ContextType,
     DecisionType,
@@ -26,24 +47,34 @@ from src.context_aware_decision import (
     MITIGATION_REQUIRED_RISK_LEVELS,
     CONFIDENCE_THRESHOLDS,
     DEFAULT_USER_PREFERENCES,
-    # Time provider
-    TimeProvider,
-    # Data models
+)
+
+# Time provider utility
+from .time_provider import TimeProvider
+
+# Data models
+from .models import (
     ContextElement,
     Decision,
     DecisionContext,
-    # Collectors
+)
+
+# Collectors
+from .collectors import (
     AudioContextCollector,
     ContextCollector,
     SystemContextCollector,
     VisualContextCollector,
-    # Decision engine
-    DecisionEngine,
-    # Main system
-    ContextAwareDecisionSystem,
-    # Global instance
-    context_aware_decision_system,
 )
+
+# Decision engine
+from .decision_engine import DecisionEngine
+
+# Main system
+from .system import ContextAwareDecisionSystem
+
+# Global instance
+context_aware_decision_system = ContextAwareDecisionSystem()
 
 __all__ = [
     # Types and enums
