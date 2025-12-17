@@ -2,35 +2,37 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Unified Multi-Modal AI Processor for AutoBot - Facade Module
+Multimodal Processor Package
 
-This module re-exports from the multimodal_processor package for backward compatibility.
-All implementations have been moved to src/multimodal_processor/ as part of Issue #381.
+Unified multi-modal AI processing with vision, voice, and context modalities.
+Features GPU-accelerated models (CLIP, BLIP-2, Whisper, Wav2Vec2) and
+attention-based cross-modal fusion.
 
-Usage (unchanged):
-    from src.unified_multimodal_processor import (
-        UnifiedMultiModalProcessor,
-        ModalityType,
-        ProcessingIntent,
-        MultiModalInput,
-        ProcessingResult,
-        unified_processor,
-    )
+Part of Issue #381 - God Class Refactoring
 
-For new code, prefer importing from the package directly:
+Original module: 1,512 lines
+New package: ~1,100 lines across focused modules
+
+Usage:
     from src.multimodal_processor import (
         UnifiedMultiModalProcessor,
         ModalityType,
         ProcessingIntent,
         MultiModalInput,
         ProcessingResult,
-        unified_processor,
+        unified_processor,  # Singleton instance
     )
+
+    # Use singleton
+    result = await unified_processor.process(input_data)
+
+    # Or create custom instance
+    processor = UnifiedMultiModalProcessor()
+    result = await processor.process(input_data)
 """
 
-# Re-export everything from the package
-from src.multimodal_processor import (
-    AUDIO_MODELS_AVAILABLE,
+# Types and constants
+from .types import (
     CLOSE_COMMAND_WORDS,
     EMBEDDING_FIELDS,
     INTERACTION_COMMAND_WORDS,
@@ -40,23 +42,35 @@ from src.multimodal_processor import (
     QUERY_COMMAND_WORDS,
     SEARCH_COMMAND_WORDS,
     TEXT_INPUT_COMMAND_WORDS,
-    VISION_MODELS_AVAILABLE,
     VISUAL_MODALITY_TYPES,
-    BaseModalProcessor,
     ConfidenceLevel,
-    ContextProcessor,
     ModalityType,
-    MultiModalInput,
     ProcessingIntent,
-    ProcessingResult,
-    UnifiedMultiModalProcessor,
-    VisionProcessor,
-    VoiceProcessor,
-    unified_processor,
 )
 
-# Backward compatibility alias for internal constant (Issue #380)
+# Data models
+from .models import MultiModalInput, ProcessingResult
+
+# Base class
+from .base import BaseModalProcessor
+
+# Processors
+from .processors import (
+    AUDIO_MODELS_AVAILABLE,
+    VISION_MODELS_AVAILABLE,
+    ContextProcessor,
+    VisionProcessor,
+    VoiceProcessor,
+)
+
+# Main unified processor
+from .unified import UnifiedMultiModalProcessor
+
+# Backward compatibility: module-level constant alias (Issue #380)
 _EMBEDDING_FIELDS = EMBEDDING_FIELDS
+
+# Singleton instance for global access
+unified_processor = UnifiedMultiModalProcessor()
 
 __all__ = [
     # Types and enums
@@ -74,7 +88,7 @@ __all__ = [
     "QUERY_COMMAND_WORDS",
     "VISUAL_MODALITY_TYPES",
     "EMBEDDING_FIELDS",
-    "_EMBEDDING_FIELDS",
+    "_EMBEDDING_FIELDS",  # Backward compatibility
     # Models
     "MultiModalInput",
     "ProcessingResult",
