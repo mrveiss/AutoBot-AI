@@ -2,17 +2,28 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Enhanced KB Librarian Agent for AutoBot - Facade Module.
+KB Librarian Package - Focused modules for knowledge base tool management.
 
-This module re-exports from the kb_librarian package for backwards compatibility.
-The actual implementation is in src/agents/kb_librarian/.
+Refactored from enhanced_kb_librarian.py (1,465 lines) as part of Issue #381.
 
-Refactored as part of Issue #381: God Class Pattern Elimination.
-Original: 1,465 lines -> Package with 6 focused modules (~230 lines each).
+Package Structure:
+- types.py: Constants and keyword sets (70 lines)
+- text_extraction.py: TextExtractor class (270 lines)
+- formatters.py: ToolInfoFormatter class (260 lines)
+- processors.py: ResultProcessor, ToolInfoData, ResearchResultsProcessor (280 lines)
+- parsers.py: InstructionParser class (100 lines)
+- librarian.py: EnhancedKBLibrarian facade (400 lines)
+
+Total: ~1,380 lines across 6 focused modules
+Original: 1,465 lines in single god class
 """
 
-# Re-export everything from the package for backwards compatibility
-from src.agents.kb_librarian import (
+from .formatters import ToolInfoFormatter
+from .librarian import EnhancedKBLibrarian
+from .parsers import InstructionParser
+from .processors import ResearchResultsProcessor, ResultProcessor, ToolInfoData
+from .text_extraction import TextExtractor
+from .types import (
     ADVANCED_FEATURE_KEYWORDS,
     COMMAND_OPERATORS,
     COMMON_CLI_TOOLS,
@@ -31,18 +42,7 @@ from src.agents.kb_librarian import (
     TEXT_SECTIONS,
     TOOL_INFO_OPTIONAL_FIELDS,
     TOOL_NAME_CHARS,
-    EnhancedKBLibrarian,
-    InstructionParser,
-    ResearchResultsProcessor,
-    ResultProcessor,
-    TextExtractor,
-    ToolInfoData,
-    ToolInfoFormatter,
 )
-
-# Legacy aliases for internal module constants (prefix with underscore in original)
-_TEXT_SECTIONS = TEXT_SECTIONS
-_TOOL_INFO_OPTIONAL_FIELDS = TOOL_INFO_OPTIONAL_FIELDS
 
 __all__ = [
     # Main class
@@ -73,7 +73,4 @@ __all__ = [
     "COMMAND_OPERATORS",
     "FEATURE_INDICATORS",
     "TOOL_NAME_CHARS",
-    # Legacy aliases
-    "_TEXT_SECTIONS",
-    "_TOOL_INFO_OPTIONAL_FIELDS",
 ]
