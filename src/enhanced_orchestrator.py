@@ -4,7 +4,12 @@
 # Author: mrveiss
 """
 Enhanced Agent Orchestrator with Auto-Documentation
-Advanced multi-agent coordination with self-documenting workflows and knowledge management
+
+Issue #381: Refactored to thin facade - delegates to orchestration package.
+Advanced multi-agent coordination with self-documenting workflows and knowledge management.
+
+This module re-exports from the orchestration package for backward compatibility.
+New code should import directly from src.orchestration.
 """
 
 import asyncio
@@ -12,9 +17,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from src.circuit_breaker import circuit_breaker_async
@@ -22,7 +25,6 @@ from src.constants.threshold_constants import (
     AgentThresholds,
     CircuitBreakerDefaults,
     RetryConfig,
-    TimingConstants,
 )
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
@@ -34,88 +36,43 @@ from src.retry_mechanism import RetryStrategy, retry_async
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
 from src.utils.agent_selection import (
     find_best_agent_for_task as _find_best_agent,
-    update_agent_performance as _update_performance,
-    reserve_agent as _reserve_agent,
     release_agent as _release_agent,
+    reserve_agent as _reserve_agent,
+    update_agent_performance as _update_performance,
 )
+
+# Issue #381: Import from refactored orchestration package
+from src.orchestration import (
+    AgentCapability,
+    AgentInteraction,
+    AgentProfile,
+    AgentRegistry,
+    DocumentationType,
+    WorkflowDocumentation,
+    WorkflowDocumenter,
+    WorkflowExecutor,
+    WorkflowPlanner,
+    get_default_agents,
+)
+
+# Re-export for backward compatibility
+__all__ = [
+    "AgentCapability",
+    "AgentInteraction",
+    "AgentProfile",
+    "DocumentationType",
+    "EnhancedOrchestrator",
+    "WorkflowDocumentation",
+]
 
 logger = logging.getLogger(__name__)
 
 
-class AgentCapability(Enum):
-    """Agent capabilities for dynamic task assignment"""
-
-    RESEARCH = "research"
-    ANALYSIS = "analysis"
-    DOCUMENTATION = "documentation"
-    CODE_GENERATION = "code_generation"
-    SYSTEM_OPERATIONS = "system_operations"
-    DATA_PROCESSING = "data_processing"
-    KNOWLEDGE_MANAGEMENT = "knowledge_management"
-    WORKFLOW_COORDINATION = "workflow_coordination"
-
-
-class DocumentationType(Enum):
-    """Types of auto-generated documentation"""
-
-    WORKFLOW_SUMMARY = "workflow_summary"
-    AGENT_INTERACTION = "agent_interaction"
-    DECISION_LOG = "decision_log"
-    PERFORMANCE_REPORT = "performance_report"
-    KNOWLEDGE_EXTRACTION = "knowledge_extraction"
-    ERROR_ANALYSIS = "error_analysis"
-
-
-@dataclass
-class AgentProfile:
-    """Enhanced agent profile with capabilities and performance metrics"""
-
-    agent_id: str
-    agent_type: str
-    capabilities: Set[AgentCapability]
-    specializations: List[str]
-    performance_metrics: Dict[str, float] = field(default_factory=dict)
-    availability_status: str = "available"
-    current_workload: int = 0
-    max_concurrent_tasks: int = 3
-    success_rate: float = 1.0
-    average_completion_time: float = 0.0
-    preferred_task_types: List[str] = field(default_factory=list)
-
-
-@dataclass
-class WorkflowDocumentation:
-    """Auto-generated documentation for workflow execution"""
-
-    workflow_id: str
-    title: str
-    description: str
-    created_at: datetime
-    updated_at: datetime
-    documentation_type: DocumentationType
-    content: Dict[str, Any]
-    tags: List[str] = field(default_factory=list)
-    related_workflows: List[str] = field(default_factory=list)
-    knowledge_extracted: List[Dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class AgentInteraction:
-    """Record of interaction between agents"""
-
-    interaction_id: str
-    timestamp: datetime
-    source_agent: str
-    target_agent: str
-    interaction_type: str  # request, response, notification, collaboration
-    message: Dict[str, Any]
-    context: Dict[str, Any]
-    outcome: str = "pending"
-
-
 class EnhancedOrchestrator:
     """
-    Enhanced orchestrator with auto-documentation and advanced agent coordination
+    Enhanced orchestrator with auto-documentation and advanced agent coordination.
+
+    Issue #381: Refactored to use orchestration package components.
     """
 
     def __init__(self, base_orchestrator: Optional[Orchestrator] = None):
@@ -123,12 +80,29 @@ class EnhancedOrchestrator:
         # Initialize base orchestrator
         self.base_orchestrator = base_orchestrator or Orchestrator()
 
-        # Enhanced orchestrator components
-        self.agent_registry: Dict[str, AgentProfile] = {}
+        # Issue #381: Use AgentRegistry from orchestration package
+        self._agent_registry = AgentRegistry()
+        for agent in get_default_agents():
+            self._agent_registry.register(agent)
+
+        # Expose registry dict for backward compatibility
+        self.agent_registry: Dict[str, AgentProfile] = self._agent_registry._registry
+
+        # Workflow documentation storage
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
+
+        # Initialize dependencies
         self.knowledge_base = KnowledgeBase()
         self.llm_interface = LLMInterface()
+
+        # Issue #381: Use components from orchestration package
+        self._documenter = WorkflowDocumenter(
+            knowledge_base=self.knowledge_base,
+            llm_interface=self.llm_interface,
+        )
+        self._planner: Optional[WorkflowPlanner] = None
+        self._executor: Optional[WorkflowExecutor] = None
 
         # Performance tracking
         self.workflow_metrics = {
@@ -142,110 +116,65 @@ class EnhancedOrchestrator:
 
         # Auto-documentation settings
         self.auto_doc_enabled = True
-        self.doc_generation_threshold = AgentThresholds.CONSENSUS_THRESHOLD  # Issue #376
+        self.doc_generation_threshold = AgentThresholds.CONSENSUS_THRESHOLD
         self.knowledge_extraction_enabled = True
 
-        # Initialize default agents
-        self._initialize_default_agents()
+    def _get_planner(self) -> WorkflowPlanner:
+        """Lazy initialize workflow planner."""
+        if self._planner is None:
+            self._planner = WorkflowPlanner(
+                base_orchestrator=self.base_orchestrator,
+                agent_registry=self.agent_registry,
+                find_best_agent_callback=self.find_best_agent_for_task,
+            )
+        return self._planner
+
+    def _get_executor(self) -> WorkflowExecutor:
+        """Lazy initialize workflow executor."""
+        if self._executor is None:
+            self._executor = WorkflowExecutor(
+                agent_registry=self.agent_registry,
+                agent_interactions=self.agent_interactions,
+                reserve_agent_callback=self._reserve_agent,
+                release_agent_callback=self._release_agent,
+                update_performance_callback=self._update_agent_performance,
+            )
+        return self._executor
 
     # Issue #321: Delegation methods to reduce message chains (Law of Demeter)
-    def plan_workflow_steps(self, user_request: str, complexity: "TaskComplexity") -> List:
+    def plan_workflow_steps(
+        self, user_request: str, complexity: "TaskComplexity"
+    ) -> List:
         """Delegate workflow step planning to base orchestrator."""
         return self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
-    def _initialize_default_agents(self):
-        """Initialize default agent profiles"""
-        default_agents = [
-            AgentProfile(
-                agent_id="research_agent",
-                agent_type="research",
-                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-                specializations=[
-                    "web_search",
-                    "data_analysis",
-                    "information_synthesis",
-                ],
-                max_concurrent_tasks=5,
-                preferred_task_types=["research", "information_gathering", "analysis"],
-            ),
-            AgentProfile(
-                agent_id="documentation_agent",
-                agent_type="librarian",
-                capabilities={
-                    AgentCapability.DOCUMENTATION,
-                    AgentCapability.KNOWLEDGE_MANAGEMENT,
-                },
-                specializations=[
-                    "auto_documentation",
-                    "knowledge_extraction",
-                    "content_organization",
-                ],
-                max_concurrent_tasks=3,
-                preferred_task_types=["documentation", "knowledge_management"],
-            ),
-            AgentProfile(
-                agent_id="system_agent",
-                agent_type="system_commands",
-                capabilities={
-                    AgentCapability.SYSTEM_OPERATIONS,
-                    AgentCapability.CODE_GENERATION,
-                },
-                specializations=[
-                    "command_execution",
-                    "system_administration",
-                    "automation",
-                ],
-                max_concurrent_tasks=2,
-                preferred_task_types=["system_operations", "command_execution"],
-            ),
-            AgentProfile(
-                agent_id="coordination_agent",
-                agent_type="orchestrator",
-                capabilities={
-                    AgentCapability.WORKFLOW_COORDINATION,
-                    AgentCapability.ANALYSIS,
-                },
-                specializations=[
-                    "workflow_management",
-                    "resource_allocation",
-                    "decision_making",
-                ],
-                max_concurrent_tasks=10,
-                preferred_task_types=["coordination", "planning", "optimization"],
-            ),
-        ]
-
-        for agent in default_agents:
-            self.agent_registry[agent.agent_id] = agent
-
     async def register_agent(self, agent_profile: AgentProfile) -> bool:
-        """Register a new agent with the orchestrator"""
+        """Register a new agent with the orchestrator."""
         try:
-            if agent_profile.agent_id in self.agent_registry:
-                logger.warning(
-                    f"Agent {agent_profile.agent_id} already registered, updating profile"
-                )
-
-            self.agent_registry[agent_profile.agent_id] = agent_profile
+            self._agent_registry.register(agent_profile)
             logger.info(
-                f"Agent {agent_profile.agent_id} registered with capabilities: {agent_profile.capabilities}"
+                "Agent %s registered with capabilities: %s",
+                agent_profile.agent_id,
+                agent_profile.capabilities,
             )
 
             # Auto-document agent registration
             if self.auto_doc_enabled:
-                await self._document_agent_registration(agent_profile)
+                await self._documenter.document_agent_registration(agent_profile)
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to register agent {agent_profile.agent_id}: {e}")
+            logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
             return False
 
     def find_best_agent_for_task(
-        self, task_type: str, required_capabilities: Set[AgentCapability] = None
+        self,
+        task_type: str,
+        required_capabilities: Optional[Set[AgentCapability]] = None,
     ) -> Optional[str]:
         """
-        Find the best agent for a specific task based on capabilities and current workload.
+        Find the best agent for a specific task.
 
         Uses shared utility from src.utils.agent_selection (Issue #292).
         """
@@ -263,40 +192,24 @@ class EnhancedOrchestrator:
         start_time: float,
         auto_document: bool,
     ) -> Optional[WorkflowDocumentation]:
-        """
-        Initialize workflow execution including documentation setup.
-
-        Issue #281: Extracted from execute_enhanced_workflow to reduce function length
-        and isolate workflow initialization logic.
-
-        Args:
-            workflow_id: Unique identifier for this workflow
-            user_request: The user's request to process
-            context: Additional context for the workflow
-            start_time: Workflow start timestamp
-            auto_document: Whether to auto-generate documentation
-
-        Returns:
-            WorkflowDocumentation if auto_document is True, else None
-        """
+        """Initialize workflow execution including documentation setup."""
         if not auto_document:
             return None
 
-        workflow_doc = WorkflowDocumentation(
+        doc = self._documenter.create_workflow_doc(
             workflow_id=workflow_id,
             title=f"Workflow: {user_request[:50]}...",
             description=user_request,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            documentation_type=DocumentationType.WORKFLOW_SUMMARY,
-            content={
+        )
+        doc.content.update(
+            {
                 "request": user_request,
                 "context": context,
                 "start_time": start_time,
-            },
+            }
         )
-        self.workflow_documentation[workflow_id] = workflow_doc
-        return workflow_doc
+        self.workflow_documentation[workflow_id] = doc
+        return doc
 
     def _build_workflow_success_result(
         self,
@@ -305,21 +218,7 @@ class EnhancedOrchestrator:
         start_time: float,
         auto_document: bool,
     ) -> Dict[str, Any]:
-        """
-        Build the success result dictionary for a completed workflow.
-
-        Issue #281: Extracted from execute_enhanced_workflow to reduce function length
-        and isolate result construction logic.
-
-        Args:
-            workflow_id: Unique identifier for this workflow
-            execution_result: The result from workflow execution
-            start_time: Workflow start timestamp
-            auto_document: Whether documentation was generated
-
-        Returns:
-            Success result dictionary with workflow details
-        """
+        """Build the success result dictionary for a completed workflow."""
         return {
             "workflow_id": workflow_id,
             "status": execution_result["status"],
@@ -335,11 +234,13 @@ class EnhancedOrchestrator:
         failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
         recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
     )
-    @retry_async(max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF)
+    @retry_async(
+        max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
+    )
     async def execute_enhanced_workflow(
         self,
         user_request: str,
-        context: Dict[str, Any] = None,
+        context: Optional[Dict[str, Any]] = None,
         auto_document: bool = True,
         require_plan_approval: bool = False,
         plan_approval_callback: Optional[callable] = None,
@@ -347,52 +248,50 @@ class EnhancedOrchestrator:
         """
         Execute workflow with enhanced orchestration and auto-documentation.
 
-        Issue #390: Added require_plan_approval and plan_approval_callback
-        to present plan before execution.
-
-        Args:
-            user_request: The user's request to process
-            context: Additional context for the workflow
-            auto_document: Whether to auto-generate documentation
-            require_plan_approval: If True, waits for approval before execution
-            plan_approval_callback: Async function to present plan and get approval.
-                                   Should return (approved: bool, reason: str | None)
+        Issue #390: Added require_plan_approval and plan_approval_callback.
+        Issue #381: Refactored to use orchestration package components.
         """
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
         context = context or {}
 
-        logger.info(f"Starting enhanced workflow {workflow_id}: {user_request}")
+        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request)
 
         try:
-            # Issue #281: Use extracted helper for workflow initialization
+            # Initialize workflow documentation
             self._initialize_workflow_execution(
                 workflow_id, user_request, context, start_time, auto_document
             )
 
-            # Classify request complexity using base orchestrator
+            # Classify request complexity
             complexity = self.base_orchestrator.classify_request_complexity(
                 user_request
             )
 
             # Plan workflow steps with agent assignment
-            enhanced_steps = await self._plan_enhanced_workflow_steps(
+            planner = self._get_planner()
+            enhanced_steps = await planner.plan_enhanced_workflow_steps(
                 user_request, complexity, context
             )
 
             # Issue #390: Present plan for approval before execution
             if require_plan_approval:
-                approval_result = await self._request_plan_approval(
+                plan_summary = planner.create_plan_summary_for_approval(
+                    workflow_id, user_request, enhanced_steps
+                )
+                executor = self._get_executor()
+                approval_result = await executor.request_plan_approval(
                     workflow_id,
                     user_request,
-                    enhanced_steps,
+                    plan_summary,
                     plan_approval_callback,
                 )
 
                 if not approval_result.get("approved", False):
                     logger.info(
-                        f"Workflow {workflow_id} plan rejected: "
-                        f"{approval_result.get('reason', 'No reason provided')}"
+                        "Workflow %s plan rejected: %s",
+                        workflow_id,
+                        approval_result.get("reason", "No reason provided"),
                     )
                     return {
                         "workflow_id": workflow_id,
@@ -402,10 +301,11 @@ class EnhancedOrchestrator:
                         "execution_time": time.time() - start_time,
                     }
 
-                logger.info(f"Workflow {workflow_id} plan approved, proceeding")
+                logger.info("Workflow %s plan approved, proceeding", workflow_id)
 
             # Execute workflow with agent coordination
-            execution_result = await self._execute_coordinated_workflow(
+            executor = self._get_executor()
+            execution_result = await executor.execute_coordinated_workflow(
                 workflow_id, enhanced_steps, context
             )
 
@@ -416,27 +316,33 @@ class EnhancedOrchestrator:
 
             # Generate auto-documentation
             if auto_document:
-                await self._generate_workflow_documentation(
+                await self._documenter.generate_workflow_documentation(
                     workflow_id, execution_result
                 )
+                # Sync documentation
+                doc = self._documenter.get_doc(workflow_id)
+                if doc:
+                    self.workflow_documentation[workflow_id] = doc
 
             # Extract and store knowledge
             if self.knowledge_extraction_enabled:
-                await self._extract_workflow_knowledge(
-                    workflow_id, user_request, execution_result
+                await self._documenter.extract_workflow_knowledge(
+                    workflow_id, user_request, execution_result, self.agent_registry
                 )
 
-            # Issue #281: Use extracted helper for result construction
             return self._build_workflow_success_result(
                 workflow_id, execution_result, start_time, auto_document
             )
 
         except Exception as e:
-            logger.error(f"Enhanced workflow {workflow_id} failed: {e}")
+            logger.error("Enhanced workflow %s failed: %s", workflow_id, e)
 
             # Document failure
             if auto_document:
-                await self._document_workflow_failure(workflow_id, str(e))
+                await self._documenter.document_workflow_failure(workflow_id, str(e))
+                doc = self._documenter.get_doc(workflow_id)
+                if doc:
+                    self.workflow_documentation[workflow_id] = doc
 
             return {
                 "workflow_id": workflow_id,
@@ -445,454 +351,26 @@ class EnhancedOrchestrator:
                 "execution_time": time.time() - start_time,
             }
 
-    # =========================================================================
-    # Issue #390: Plan Approval Methods
-    # =========================================================================
-
-    async def _request_plan_approval(
-        self,
-        workflow_id: str,
-        user_request: str,
-        enhanced_steps: List[Dict[str, Any]],
-        approval_callback: Optional[callable] = None,
-    ) -> Dict[str, Any]:
-        """
-        Request approval for the workflow plan before execution.
-
-        Issue #390: Present plan to user and wait for approval.
-
-        Args:
-            workflow_id: ID of the workflow
-            user_request: Original user request
-            enhanced_steps: Planned workflow steps
-            approval_callback: Optional async callback to present plan and get approval
-
-        Returns:
-            Dict with 'approved' (bool), 'reason' (str), and 'plan' (dict)
-        """
-        # Create plan summary for presentation
-        plan_summary = {
-            "workflow_id": workflow_id,
-            "request": user_request,
-            "total_steps": len(enhanced_steps),
-            "estimated_total_duration": sum(
-                step.get("estimated_duration", 10.0) for step in enhanced_steps
-            ),
-            "steps": [
-                {
-                    "id": step.get("id"),
-                    "action": step.get("action"),
-                    "agent_type": step.get("agent_type"),
-                    "assigned_agent": step.get("assigned_agent"),
-                    "estimated_duration": step.get("estimated_duration"),
-                    "requires_approval": step.get("user_approval_required", False),
-                    "dependencies": step.get("dependencies", []),
-                }
-                for step in enhanced_steps
-            ],
-            "agents_involved": list(
-                set(
-                    step.get("assigned_agent")
-                    for step in enhanced_steps
-                    if step.get("assigned_agent")
-                )
-            ),
-        }
-
-        # If callback provided, use it to get approval
-        if approval_callback:
-            try:
-                approved, reason = await approval_callback(plan_summary)
-                return {
-                    "approved": approved,
-                    "reason": reason,
-                    "plan": plan_summary,
-                }
-            except Exception as e:
-                logger.error(f"Plan approval callback failed: {e}")
-                return {
-                    "approved": False,
-                    "reason": f"Approval callback error: {str(e)}",
-                    "plan": plan_summary,
-                }
-
-        # Default behavior: log plan and auto-approve (for backward compatibility)
-        logger.info(
-            f"Workflow {workflow_id} plan: {len(enhanced_steps)} steps, "
-            f"estimated {plan_summary['estimated_total_duration']:.1f}s total"
-        )
-
-        # Log each step for visibility
-        for step in plan_summary["steps"]:
-            logger.info(
-                f"  Step {step['id']}: {step['action']} "
-                f"(agent: {step['assigned_agent']}, ~{step['estimated_duration']:.1f}s)"
-            )
-
-        # Auto-approve if no callback (backward compatibility)
-        return {
-            "approved": True,
-            "reason": "Auto-approved (no approval callback provided)",
-            "plan": plan_summary,
-        }
-
     def get_plan_summary(
         self,
         user_request: str,
-        context: Dict[str, Any] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Get workflow plan summary without executing.
+        """Get workflow plan summary without executing."""
+        return self._get_planner().get_plan_summary(user_request, context)
 
-        Issue #390: Allow viewing plan before committing to execution.
-
-        Args:
-            user_request: The user's request to plan
-            context: Additional context
-
-        Returns:
-            Plan summary with steps and estimates
-        """
-        context = context or {}
-
-        # Classify complexity
-        complexity = self.base_orchestrator.classify_request_complexity(user_request)
-
-        # Get base steps synchronously (no agent assignment yet)
-        base_steps = self.base_orchestrator.plan_workflow_steps(
-            user_request, complexity
-        )
-
-        return {
-            "request": user_request,
-            "complexity": complexity.value,
-            "total_steps": len(base_steps),
-            "steps": [
-                {
-                    "id": step.id,
-                    "action": step.action,
-                    "agent_type": step.agent_type,
-                    "requires_approval": step.user_approval_required,
-                    "dependencies": step.dependencies or [],
-                }
-                for step in base_steps
-            ],
-        }
-
-    async def _plan_enhanced_workflow_steps(
-        self, user_request: str, complexity: TaskComplexity, context: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Plan workflow steps with intelligent agent assignment"""
-
-        # Get base workflow steps from original orchestrator
-        base_steps = self.base_orchestrator.plan_workflow_steps(
-            user_request, complexity
-        )
-
-        enhanced_steps = []
-
-        for step in base_steps:
-            # Determine required capabilities for each step
-            required_capabilities = self._determine_step_capabilities(
-                step.action, step.agent_type
-            )
-
-            # Find best agent for this step
-            assigned_agent = self.find_best_agent_for_task(
-                task_type=step.agent_type, required_capabilities=required_capabilities
-            )
-
-            enhanced_step = {
-                "id": step.id,
-                "agent_type": step.agent_type,
-                "assigned_agent": assigned_agent,
-                "action": step.action,
-                "inputs": step.inputs,
-                "user_approval_required": step.user_approval_required,
-                "dependencies": step.dependencies or [],
-                "required_capabilities": list(required_capabilities),
-                "estimated_duration": self._estimate_step_duration(
-                    step.action, assigned_agent
-                ),
-                "status": "planned",
-            }
-
-            enhanced_steps.append(enhanced_step)
-
-        return enhanced_steps
-
-    def _determine_step_capabilities(
-        self, action: str, agent_type: str
-    ) -> Set[AgentCapability]:
-        """Determine required capabilities for a workflow step"""
-        capability_mapping = {
-            "research": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            "search": {AgentCapability.RESEARCH},
-            "analyze": {AgentCapability.ANALYSIS, AgentCapability.DATA_PROCESSING},
-            "document": {
-                AgentCapability.DOCUMENTATION,
-                AgentCapability.KNOWLEDGE_MANAGEMENT,
-            },
-            "execute": {AgentCapability.SYSTEM_OPERATIONS},
-            "coordinate": {AgentCapability.WORKFLOW_COORDINATION},
-            "generate": {AgentCapability.CODE_GENERATION},
-            "process": {AgentCapability.DATA_PROCESSING},
-        }
-
-        required_capabilities = set()
-
-        # Check action keywords
-        for keyword, capabilities in capability_mapping.items():
-            if keyword in action.lower():
-                required_capabilities.update(capabilities)
-
-        # Agent type specific requirements
-        agent_capability_map = {
-            "research": {AgentCapability.RESEARCH},
-            "librarian": {
-                AgentCapability.KNOWLEDGE_MANAGEMENT,
-                AgentCapability.DOCUMENTATION,
-            },
-            "system_commands": {AgentCapability.SYSTEM_OPERATIONS},
-            "orchestrator": {AgentCapability.WORKFLOW_COORDINATION},
-        }
-
-        if agent_type in agent_capability_map:
-            required_capabilities.update(agent_capability_map[agent_type])
-
-        return required_capabilities or {AgentCapability.ANALYSIS}  # Default capability
-
-    def _estimate_step_duration(self, action: str, agent_id: Optional[str]) -> float:
-        """Estimate duration for a workflow step based on action and agent performance"""
-        base_durations = {
-            "research": 30.0,
-            "search": 15.0,
-            "analyze": 20.0,
-            "document": 25.0,
-            "execute": 10.0,
-            "coordinate": 5.0,
-        }
-
-        # Get base duration from action type
-        estimated_duration = 30.0  # Default
-        for action_type, duration in base_durations.items():
-            if action_type in action.lower():
-                estimated_duration = duration
-                break
-
-        # Adjust based on agent performance
-        if agent_id and agent_id in self.agent_registry:
-            agent = self.agent_registry[agent_id]
-            if agent.average_completion_time > 0:
-                # Use agent's historical performance
-                performance_factor = agent.average_completion_time / estimated_duration
-                estimated_duration *= min(
-                    performance_factor, 2.0
-                )  # Cap at 2x base duration
-
-        return estimated_duration
-
-    async def _execute_coordinated_workflow(
-        self, workflow_id: str, steps: List[Dict[str, Any]], context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Execute workflow with coordinated agent management"""
-
-        execution_context = {
-            "workflow_id": workflow_id,
-            "agents_involved": set(),
-            "interactions": [],
-            "step_results": {},
-            "status": "in_progress",
-        }
-
-        try:
-            # Execute steps with dependency management
-            for step in steps:
-                step_start_time = time.time()
-
-                # Check dependencies
-                if not await self._check_step_dependencies(
-                    step, execution_context["step_results"]
-                ):
-                    logger.warning(f"Step {step['id']} dependencies not met, skipping")
-                    step["status"] = "skipped"
-                    continue
-
-                # Reserve agent
-                agent_id = step.get("assigned_agent")
-                if agent_id:
-                    self._reserve_agent(agent_id)
-
-                try:
-                    # Execute step with agent coordination
-                    step_result = await self._execute_coordinated_step(
-                        step, execution_context, context
-                    )
-
-                    # Update step status and results
-                    step["status"] = (
-                        "completed" if step_result.get("success") else "failed"
-                    )
-                    step["execution_time"] = time.time() - step_start_time
-                    step["result"] = step_result
-
-                    execution_context["step_results"][step["id"]] = step_result
-
-                    if agent_id:
-                        execution_context["agents_involved"].add(agent_id)
-                        self._update_agent_performance(
-                            agent_id,
-                            step_result.get("success", False),
-                            time.time() - step_start_time,
-                        )
-
-                finally:
-                    # Release agent
-                    if agent_id:
-                        self._release_agent(agent_id)
-
-            # Determine overall workflow status
-            successful_steps = sum(
-                1 for step in steps if step.get("status") == "completed"
-            )
-            total_steps = len(steps)
-
-            if successful_steps == total_steps:
-                execution_context["status"] = "completed"
-            elif successful_steps > 0:
-                execution_context["status"] = "partially_completed"
-            else:
-                execution_context["status"] = "failed"
-
-            execution_context["success_rate"] = (
-                successful_steps / total_steps if total_steps > 0 else 0
-            )
-            execution_context["agents_involved"] = list(
-                execution_context["agents_involved"]
-            )
-
-            return execution_context
-
-        except Exception as e:
-            logger.error(f"Workflow {workflow_id} execution failed: {e}")
-            execution_context["status"] = "failed"
-            execution_context["error"] = str(e)
-            return execution_context
-
-    async def _check_step_dependencies(
-        self, step: Dict[str, Any], completed_results: Dict[str, Any]
-    ) -> bool:
-        """Check if step dependencies are satisfied"""
-        dependencies = step.get("dependencies", [])
-
-        if not dependencies:
-            return True  # No dependencies
-
-        for dep_id in dependencies:
-            if dep_id not in completed_results:
-                return False
-
-            if not completed_results[dep_id].get("success", False):
-                return False
-
-        return True
-
-    async def _execute_coordinated_step(
-        self,
-        step: Dict[str, Any],
-        execution_context: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Execute a single workflow step with agent coordination"""
-
-        agent_id = step.get("assigned_agent")
-        step_id = step["id"]
-
-        logger.info(f"Executing step {step_id} with agent {agent_id}")
-
-        # Record agent interaction
-        if agent_id:
-            interaction = AgentInteraction(
-                interaction_id=str(uuid.uuid4()),
-                timestamp=datetime.now(),
-                source_agent="orchestrator",
-                target_agent=agent_id,
-                interaction_type="request",
-                message={
-                    "step_id": step_id,
-                    "action": step["action"],
-                    "inputs": step["inputs"],
-                },
-                context={"workflow_id": execution_context["workflow_id"]},
-            )
-            self.agent_interactions.append(interaction)
-            execution_context["interactions"].append(interaction)
-
-        # Execute step using base orchestrator functionality
-        try:
-            # Simulate step execution (in real implementation, this would call actual agents)
-            result = await self._simulate_step_execution(step, context)
-
-            # Record successful interaction
-            if agent_id:
-                interaction.outcome = "success"
-                interaction.message["result"] = result
-
-            return {
-                "success": True,
-                "result": result,
-                "agent_id": agent_id,
-                "step_id": step_id,
-            }
-
-        except Exception as e:
-            logger.error(f"Step {step_id} execution failed: {e}")
-
-            # Record failed interaction
-            if agent_id:
-                interaction.outcome = "failed"
-                interaction.message["error"] = str(e)
-
-            return {
-                "success": False,
-                "error": str(e),
-                "agent_id": agent_id,
-                "step_id": step_id,
-            }
-
-    async def _simulate_step_execution(
-        self, step: Dict[str, Any], context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Simulate step execution (placeholder for actual agent execution)"""
-        # In real implementation, this would delegate to actual agents
-        action = step["action"]
-
-        # Add small delay to simulate work (Issue #376)
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-        return {"action_completed": action, "timestamp": time.time(), "simulated": True}
-
-    def _reserve_agent(self, agent_id: str):
-        """Reserve an agent for task execution.
-
-        Uses shared utility from src.utils.agent_selection (Issue #292).
-        """
+    def _reserve_agent(self, agent_id: str) -> None:
+        """Reserve an agent for task execution."""
         _reserve_agent(self.agent_registry, agent_id)
 
-    def _release_agent(self, agent_id: str):
-        """Release an agent after task completion.
-
-        Uses shared utility from src.utils.agent_selection (Issue #292).
-        """
+    def _release_agent(self, agent_id: str) -> None:
+        """Release an agent after task completion."""
         _release_agent(self.agent_registry, agent_id)
 
     def _update_agent_performance(
         self, agent_id: str, success: bool, execution_time: float
-    ):
-        """Update agent performance metrics.
-
-        Uses shared utility from src.utils.agent_selection (Issue #292).
-        """
+    ) -> None:
+        """Update agent performance metrics."""
         _update_performance(
             agent_registry=self.agent_registry,
             agent_id=agent_id,
@@ -902,8 +380,8 @@ class EnhancedOrchestrator:
 
     def _update_workflow_metrics(
         self, workflow_id: str, start_time: float, success: bool
-    ):
-        """Update overall workflow metrics"""
+    ) -> None:
+        """Update overall workflow metrics."""
         self.workflow_metrics["total_workflows"] += 1
 
         if success:
@@ -918,148 +396,8 @@ class EnhancedOrchestrator:
             (current_avg * (total_workflows - 1)) + execution_time
         ) / total_workflows
 
-    async def _document_agent_registration(self, agent_profile: AgentProfile):
-        """Auto-document agent registration"""
-        doc_content = {
-            "agent_id": agent_profile.agent_id,
-            "agent_type": agent_profile.agent_type,
-            "capabilities": [cap.value for cap in agent_profile.capabilities],
-            "specializations": agent_profile.specializations,
-            "max_concurrent_tasks": agent_profile.max_concurrent_tasks,
-            "preferred_task_types": agent_profile.preferred_task_types,
-            "registration_time": datetime.now().isoformat(),
-        }
-
-        # Store in knowledge base
-        if hasattr(self.knowledge_base, "add_document"):
-            await self.knowledge_base.add_document(
-                content=f"Agent Registration: {agent_profile.agent_id}",
-                metadata=doc_content,
-                doc_type="agent_profile",
-            )
-
-    async def _generate_workflow_documentation(
-        self, workflow_id: str, execution_result: Dict[str, Any]
-    ):
-        """Generate comprehensive workflow documentation"""
-        if workflow_id not in self.workflow_documentation:
-            return
-
-        workflow_doc = self.workflow_documentation[workflow_id]
-
-        # Update documentation with execution results
-        workflow_doc.updated_at = datetime.now()
-        workflow_doc.content.update(
-            {
-                "execution_result": execution_result,
-                "agents_involved": execution_result.get("agents_involved", []),
-                "success_rate": execution_result.get("success_rate", 0),
-                "status": execution_result.get("status", "unknown"),
-                "interactions": len(execution_result.get("interactions", [])),
-                "end_time": time.time(),
-            }
-        )
-
-        # Generate summary using LLM
-        try:
-            summary_prompt = """
-            Generate a concise summary of this workflow execution:
-
-            Request: {workflow_doc.description}
-            Status: {execution_result.get('status', 'unknown')}
-            Agents Involved: {', '.join(execution_result.get('agents_involved', []))}
-            Success Rate: {execution_result.get('success_rate', 0):.1%}
-
-            Provide a brief summary of what was accomplished and any key insights.
-            """
-
-            summary_result = await self.llm_interface.chat_completion(
-                model="default", messages=[{"role": "user", "content": summary_prompt}]
-            )
-
-            if summary_result:
-                workflow_doc.content["generated_summary"] = summary_result.get(
-                    "content", ""
-                )
-
-        except Exception as e:
-            logger.warning(f"Failed to generate workflow summary: {e}")
-
-        self.workflow_metrics["documentation_generated"] += 1
-
-    async def _extract_workflow_knowledge(
-        self, workflow_id: str, user_request: str, execution_result: Dict[str, Any]
-    ):
-        """Extract and store knowledge from workflow execution"""
-        try:
-            # Extract key learnings from workflow
-            knowledge_items = []
-
-            # Success patterns
-            if execution_result.get("success_rate", 0) > 0.8:
-                knowledge_items.append(
-                    {
-                        "type": "success_pattern",
-                        "content": (
-                            f"Successful workflow pattern for: {user_request[:100]}"
-                        ),
-                        "agents_used": execution_result.get("agents_involved", []),
-                        "success_rate": execution_result.get("success_rate", 0),
-                    }
-                )
-
-            # Agent performance insights
-            for agent_id in execution_result.get("agents_involved", []):
-                if agent_id in self.agent_registry:
-                    agent = self.agent_registry[agent_id]
-                    knowledge_items.append(
-                        {
-                            "type": "agent_performance",
-                            "agent_id": agent_id,
-                            "success_rate": agent.success_rate,
-                            "avg_completion_time": agent.average_completion_time,
-                            "capabilities": [cap.value for cap in agent.capabilities],
-                        }
-                    )
-
-            # Store extracted knowledge in parallel - eliminates N+1 sequential writes
-            if knowledge_items and hasattr(self.knowledge_base, "add_document"):
-                await asyncio.gather(
-                    *[
-                        self.knowledge_base.add_document(
-                            content=f"Workflow Knowledge: {item['type']}",
-                            metadata=item,
-                            doc_type="workflow_knowledge",
-                        )
-                        for item in knowledge_items
-                    ],
-                    return_exceptions=True,
-                )
-
-            self.workflow_metrics["knowledge_extracted"] += len(knowledge_items)
-
-        except Exception as e:
-            logger.warning(f"Failed to extract workflow knowledge: {e}")
-
-    async def _document_workflow_failure(self, workflow_id: str, error_message: str):
-        """Document workflow failure for analysis"""
-        if workflow_id not in self.workflow_documentation:
-            return
-
-        workflow_doc = self.workflow_documentation[workflow_id]
-        workflow_doc.documentation_type = DocumentationType.ERROR_ANALYSIS
-        workflow_doc.content.update(
-            {
-                "error_message": error_message,
-                "failure_time": datetime.now().isoformat(),
-                "failure_analysis": (
-                    "Workflow execution failed - requires investigation"
-                ),
-            }
-        )
-
     def get_orchestrator_status(self) -> Dict[str, Any]:
-        """Get comprehensive orchestrator status"""
+        """Get comprehensive orchestrator status."""
         return {
             "timestamp": datetime.now().isoformat(),
             "agent_registry": {
@@ -1091,7 +429,7 @@ class EnhancedOrchestrator:
     async def get_workflow_documentation(
         self, workflow_id: str
     ) -> Optional[Dict[str, Any]]:
-        """Get documentation for a specific workflow"""
+        """Get documentation for a specific workflow."""
         if workflow_id not in self.workflow_documentation:
             return None
 
@@ -1112,41 +450,30 @@ class EnhancedOrchestrator:
     async def search_workflow_documentation(
         self, query: str, doc_type: Optional[DocumentationType] = None
     ) -> List[Dict[str, Any]]:
-        """Search through workflow documentation"""
+        """Search through workflow documentation."""
+        # Delegate to documenter for core search
+        results = self._documenter.search_documentation(query, doc_type)
+
+        # Format results
         matching_docs = []
+        for doc in results:
+            matching_docs.append(
+                {
+                    "workflow_id": doc.workflow_id,
+                    "title": doc.title,
+                    "description": (
+                        doc.description[:200] + "..."
+                        if len(doc.description) > 200
+                        else doc.description
+                    ),
+                    "documentation_type": doc.documentation_type.value,
+                    "created_at": doc.created_at.isoformat(),
+                    "updated_at": doc.updated_at.isoformat(),
+                    "relevance_score": 1.0,  # Placeholder for actual relevance scoring
+                }
+            )
 
-        # Cache query.lower() outside loop for O(1) access (Issue #323)
-        query_lower = query.lower()
-        for doc_id, doc in self.workflow_documentation.items():
-            # Filter by document type if specified
-            if doc_type and doc.documentation_type != doc_type:
-                continue
-
-            # Simple text matching (in real implementation, use more sophisticated search)
-            if (
-                query_lower in doc.title.lower()
-                or query_lower in doc.description.lower()
-                or any(query_lower in tag.lower() for tag in doc.tags)
-            ):
-                matching_docs.append(
-                    {
-                        "workflow_id": doc.workflow_id,
-                        "title": doc.title,
-                        "description": (
-                            doc.description[:200] + "..."
-                            if len(doc.description) > 200
-                            else doc.description
-                        ),
-                        "documentation_type": doc.documentation_type.value,
-                        "created_at": doc.created_at.isoformat(),
-                        "updated_at": doc.updated_at.isoformat(),
-                        "relevance_score": (
-                            1.0
-                        ),  # Placeholder for actual relevance scoring
-                    }
-                )
-
-        # Sort by relevance (placeholder - use actual relevance in production)
+        # Sort by relevance
         matching_docs.sort(key=lambda x: x["relevance_score"], reverse=True)
 
         return matching_docs
@@ -1155,7 +482,7 @@ class EnhancedOrchestrator:
 if __name__ == "__main__":
     # Example usage and testing
     async def example_usage():
-        """Example usage of enhanced orchestrator"""
+        """Example usage of enhanced orchestrator."""
 
         # Create enhanced orchestrator
         enhanced_orchestrator = EnhancedOrchestrator()
@@ -1163,7 +490,7 @@ if __name__ == "__main__":
         # Execute an enhanced workflow
         result = await enhanced_orchestrator.execute_enhanced_workflow(
             user_request=(
-                "Research the latest developments in quantum computing and"
+                "Research the latest developments in quantum computing and "
                 "create a summary document"
             ),
             context={"priority": "high", "deadline": "2024-01-01"},
@@ -1174,7 +501,7 @@ if __name__ == "__main__":
 
         # Get orchestrator status
         status = enhanced_orchestrator.get_orchestrator_status()
-        print("\\nOrchestrator Status:")
+        print("\nOrchestrator Status:")
         print(json.dumps(status, indent=2, default=str))
 
     # Run example
