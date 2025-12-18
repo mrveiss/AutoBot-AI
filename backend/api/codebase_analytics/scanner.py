@@ -6,36 +6,54 @@ Codebase scanning and indexing functions
 """
 
 import asyncio
+import json
 import logging
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import HTTPException
 
 from backend.type_defs.common import Metadata
 from src.constants.path_constants import PATH
+from src.utils.file_categorization import (
+    # Category constants
+    FILE_CATEGORY_CODE,
+    FILE_CATEGORY_CONFIG,
+    FILE_CATEGORY_DOCS,
+    FILE_CATEGORY_LOGS,
+    FILE_CATEGORY_BACKUP,
+    FILE_CATEGORY_ARCHIVE,
+    FILE_CATEGORY_DATA,
+    FILE_CATEGORY_ASSETS,
+    FILE_CATEGORY_TEST,
+    # Extension sets
+    PYTHON_EXTENSIONS,
+    JS_EXTENSIONS,
+    TS_EXTENSIONS,
+    VUE_EXTENSIONS,
+    CSS_EXTENSIONS,
+    HTML_EXTENSIONS,
+    CONFIG_EXTENSIONS,
+    DOC_EXTENSIONS,
+    LOG_EXTENSIONS,
+    ALL_CODE_EXTENSIONS,
+    # Directory sets
+    SKIP_DIRS,
+    BACKUP_DIRS,
+    ARCHIVE_DIRS,
+    LOG_DIRS,
+    # Functions
+    get_file_category as _get_file_category,
+    should_skip_directory,
+    should_count_for_metrics,
+)
 
 from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
 from .storage import get_code_collection_async
 
 logger = logging.getLogger(__name__)
-
-# File extension categories (Issue #315)
-PYTHON_EXTENSIONS = {".py"}
-JS_EXTENSIONS = {".js", ".ts"}
-VUE_EXTENSIONS = {".vue"}
-CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".ini", ".conf"}
-
-# Documentation file extensions (Issue #367)
-DOC_EXTENSIONS = {".md", ".rst", ".txt", ".adoc", ".asciidoc"}
-
-# Directories to skip during scanning (Issue #315)
-SKIP_DIRS = {
-    "node_modules", ".git", "__pycache__", ".pytest_cache",
-    "dist", "build", ".venv", "venv", ".DS_Store", "logs", "temp", "archives",
-}
 
 
 def _should_count_file(file_path: Path) -> bool:
@@ -64,27 +82,56 @@ async def _count_scannable_files(root_path_obj: Path) -> int:
 async def _get_file_analysis(
     file_path: Path, extension: str, stats: dict
 ) -> Optional[dict]:
-    """Get analysis for a file based on its type (Issue #315, #367)."""
+    """
+    Get analysis for a file based on its type.
+
+    Issue #315, #367: Supports multiple file types including Python, JS/TS,
+    Vue, CSS, HTML, and documentation files.
+    """
+    # Python files - full AST analysis
     if extension in PYTHON_EXTENSIONS:
         stats["python_files"] += 1
         return await analyze_python_file(str(file_path))
 
+    # JavaScript files
     if extension in JS_EXTENSIONS:
         stats["javascript_files"] += 1
         return analyze_javascript_vue_file(str(file_path))
 
+    # TypeScript files
+    if extension in TS_EXTENSIONS:
+        stats["typescript_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
+
+    # Vue single-file components
     if extension in VUE_EXTENSIONS:
         stats["vue_files"] += 1
         return analyze_javascript_vue_file(str(file_path))
 
+    # CSS/SCSS/SASS/Less files - use JS analyzer for basic analysis
+    if extension in CSS_EXTENSIONS:
+        stats["css_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
+
+    # HTML files - use JS analyzer for basic analysis
+    if extension in HTML_EXTENSIONS:
+        stats["html_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
+
+    # Configuration files - track but no deep analysis
     if extension in CONFIG_EXTENSIONS:
         stats["config_files"] += 1
         return None
 
-    # Issue #367: Handle documentation files separately
+    # Documentation files - markdown analysis
     if extension in DOC_EXTENSIONS:
         stats["doc_files"] += 1
         return analyze_documentation_file(str(file_path))
+
+    # Other code files - basic analysis
+    if extension in ALL_CODE_EXTENSIONS:
+        stats["other_code_files"] += 1
+        return analyze_javascript_vue_file(str(file_path))
 
     stats["other_files"] += 1
     return None
@@ -171,10 +218,12 @@ async def _store_problems_batch_to_chromadb(
 
         for i, problem in enumerate(problems):
             problem_idx = start_idx + i
+            file_category = problem.get("file_category", FILE_CATEGORY_CODE)
             problem_doc = f"""
 Problem: {problem.get('type', 'unknown')}
 Severity: {problem.get('severity', 'medium')}
 File: {problem.get('file_path', '')}
+Category: {file_category}
 Line: {problem.get('line', 0)}
 Description: {problem.get('description', '')}
 Suggestion: {problem.get('suggestion', '')}
@@ -185,6 +234,7 @@ Suggestion: {problem.get('suggestion', '')}
                 "problem_type": problem.get("type", "unknown"),
                 "severity": problem.get("severity", "medium"),
                 "file_path": problem.get("file_path", ""),
+                "file_category": file_category,
                 "line_number": str(problem.get("line", 0)),
                 "description": problem.get("description", ""),
                 "suggestion": problem.get("suggestion", ""),
@@ -210,32 +260,59 @@ def _aggregate_file_analysis(
     analysis_results: Dict,
     file_analysis: Dict,
     relative_path: str,
+    file_category: str = FILE_CATEGORY_CODE,
 ) -> None:
-    """Aggregate file analysis results into main results dict."""
+    """
+    Aggregate file analysis results into main results dict.
+
+    Args:
+        analysis_results: Main results dictionary to update
+        file_analysis: Analysis results from a single file
+        relative_path: Relative path of the file
+        file_category: Category of the file (code, docs, logs, backup, archive)
+
+    Note: docs/logs files are tracked but don't count toward code line metrics.
+          backup/archive files are tracked separately for problem reporting.
+    """
     analysis_results["files"][relative_path] = file_analysis
-    analysis_results["stats"]["total_lines"] += file_analysis.get("line_count", 0)
-    analysis_results["stats"]["total_functions"] += len(file_analysis.get("functions", []))
-    analysis_results["stats"]["total_classes"] += len(file_analysis.get("classes", []))
+    file_line_count = file_analysis.get("line_count", 0)
 
-    # Aggregate line type counts (Issue #368)
-    analysis_results["stats"]["code_lines"] += file_analysis.get("code_lines", 0)
-    analysis_results["stats"]["comment_lines"] += file_analysis.get("comment_lines", 0)
-    analysis_results["stats"]["docstring_lines"] += file_analysis.get("docstring_lines", 0)
-    analysis_results["stats"]["blank_lines"] += file_analysis.get("blank_lines", 0)
+    # Track lines by category
+    analysis_results["stats"]["lines_by_category"][file_category] += file_line_count
+    analysis_results["stats"]["files_by_category"][file_category] += 1
 
-    # Aggregate documentation lines (Issue #367)
+    # Only count code/config/test files toward main line metrics (not docs/logs)
+    is_countable = file_category in (
+        FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST
+    )
+
+    if is_countable:
+        analysis_results["stats"]["total_lines"] += file_line_count
+        analysis_results["stats"]["total_functions"] += len(file_analysis.get("functions", []))
+        analysis_results["stats"]["total_classes"] += len(file_analysis.get("classes", []))
+
+        # Aggregate line type counts (Issue #368) - only for code files
+        analysis_results["stats"]["code_lines"] += file_analysis.get("code_lines", 0)
+        analysis_results["stats"]["comment_lines"] += file_analysis.get("comment_lines", 0)
+        analysis_results["stats"]["docstring_lines"] += file_analysis.get("docstring_lines", 0)
+        analysis_results["stats"]["blank_lines"] += file_analysis.get("blank_lines", 0)
+
+    # Aggregate documentation lines (Issue #367) - always track for reference
     analysis_results["stats"]["documentation_lines"] += file_analysis.get("documentation_lines", 0)
 
     for func in file_analysis.get("functions", []):
         func["file_path"] = relative_path
+        func["file_category"] = file_category
         analysis_results["all_functions"].append(func)
 
     for cls in file_analysis.get("classes", []):
         cls["file_path"] = relative_path
+        cls["file_category"] = file_category
         analysis_results["all_classes"].append(cls)
 
     for hardcode in file_analysis.get("hardcodes", []):
         hardcode["file_path"] = relative_path
+        hardcode["file_category"] = file_category
         analysis_results["all_hardcodes"].append(hardcode)
 
 
@@ -244,10 +321,22 @@ async def _process_file_problems(
     relative_path: str,
     analysis_results: Dict,
     immediate_store_collection,
+    file_category: str = FILE_CATEGORY_CODE,
 ) -> None:
-    """Process problems from file analysis and store to ChromaDB (Issue #315: extracted).
+    """
+    Process problems from file analysis and store to ChromaDB.
 
-    This helper extracts problem processing logic to reduce nesting depth in scan_codebase.
+    Issue #315: extracted to reduce nesting depth in scan_codebase.
+
+    Args:
+        file_analysis: Analysis results from a single file
+        relative_path: Relative path of the file
+        analysis_results: Main results dictionary to update
+        immediate_store_collection: ChromaDB collection for immediate storage
+        file_category: Category of the file (code, docs, logs, backup, archive)
+
+    Note: Problems are tagged with file_category and added to problems_by_category
+          for separate reporting of backup/archive issues.
     """
     file_problems = file_analysis.get("problems", [])
     if not file_problems:
@@ -256,10 +345,13 @@ async def _process_file_problems(
     # Track starting index for batch operation
     start_idx = len(analysis_results["all_problems"])
 
-    # Add file_path to each problem and collect for batch storage
+    # Add file_path and category to each problem and collect for batch storage
     for problem in file_problems:
         problem["file_path"] = relative_path
+        problem["file_category"] = file_category
         analysis_results["all_problems"].append(problem)
+        # Also add to category-specific list for separate reporting
+        analysis_results["problems_by_category"][file_category].append(problem)
 
     # Batch store all problems from this file in a single operation
     await _store_problems_batch_to_chromadb(
@@ -315,12 +407,36 @@ def _create_initial_task_state() -> Dict:
 
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
-    """Initialize and clear ChromaDB collection (Issue #281: extracted)."""
+    """Initialize and clear ChromaDB collection and Redis cache (Issue #281: extracted)."""
     update_phase("init", "running")
     await update_progress(
-        operation="Preparing ChromaDB",
+        operation="Preparing storage",
         current=0,
-        total=1,
+        total=2,
+        current_file="Clearing old cached data...",
+        phase="init",
+    )
+
+    # Clear Redis cache first to ensure fresh data
+    try:
+        from .storage import get_redis_connection
+        redis_client = await get_redis_connection()
+        if redis_client:
+            keys_to_delete = []
+            for key in redis_client.scan_iter(match="codebase:*"):
+                keys_to_delete.append(key)
+            if keys_to_delete:
+                redis_client.delete(*keys_to_delete)
+                logger.info(
+                    f"[Task {task_id}] Cleared {len(keys_to_delete)} Redis cache entries"
+                )
+    except Exception as e:
+        logger.warning(f"[Task {task_id}] Error clearing Redis cache: {e}")
+
+    await update_progress(
+        operation="Preparing ChromaDB",
+        current=1,
+        total=2,
         current_file="Connecting to ChromaDB...",
         phase="init",
     )
@@ -330,8 +446,8 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
     if code_collection:
         await update_progress(
             operation="Clearing old ChromaDB data",
-            current=0,
-            total=1,
+            current=1,
+            total=2,
             current_file="Removing existing entries...",
             phase="init",
         )
@@ -401,10 +517,18 @@ Docstring: {cls.get('docstring', 'No documentation')}
 def _prepare_stats_document(analysis_results: Dict) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
     stats = analysis_results["stats"]
+
+    # Get category counts for document
+    lines_by_cat = stats.get("lines_by_category", {})
+    files_by_cat = stats.get("files_by_category", {})
+
     stats_doc = f"""
 Codebase Statistics:
 Total Files: {stats['total_files']}
 Total Lines: {stats['total_lines']}
+Code Lines: {lines_by_cat.get('code', 0)}
+Backup Lines: {lines_by_cat.get('backup', 0)}
+Archive Lines: {lines_by_cat.get('archive', 0)}
 Python Files: {stats['python_files']}
 JavaScript Files: {stats['javascript_files']}
 Vue Files: {stats['vue_files']}
@@ -413,10 +537,13 @@ Total Classes: {stats['total_classes']}
 Last Indexed: {stats['last_indexed']}
     """.strip()
 
-    metadata = {
-        "type": "stats",
-        **{k: str(v) for k, v in stats.items()},
-    }
+    # Convert all values to strings for ChromaDB, serializing dicts as JSON
+    metadata = {"type": "stats"}
+    for k, v in stats.items():
+        if isinstance(v, dict):
+            metadata[k] = json.dumps(v)
+        else:
+            metadata[k] = str(v)
 
     return "codebase_stats", stats_doc, metadata
 
@@ -566,6 +693,57 @@ async def _store_batches_to_chromadb(
     return items_stored
 
 
+async def _store_hardcodes_to_redis(
+    hardcodes: List[Dict],
+    task_id: str,
+) -> int:
+    """
+    Store detected hardcoded values to Redis for retrieval by the /hardcodes endpoint.
+
+    Hardcodes are stored grouped by type (ip, url, port, api_key, config, etc.)
+    using keys like: codebase:hardcodes:ip, codebase:hardcodes:url, etc.
+
+    Args:
+        hardcodes: List of hardcode dictionaries with type, value, line, file_path
+        task_id: Current indexing task ID for logging
+
+    Returns:
+        Number of hardcodes stored
+    """
+    if not hardcodes:
+        logger.info(f"[Task {task_id}] No hardcodes to store")
+        return 0
+
+    from .storage import get_redis_connection
+
+    redis_client = await get_redis_connection()
+    if not redis_client:
+        logger.warning(f"[Task {task_id}] Redis unavailable, skipping hardcodes storage")
+        return 0
+
+    # Group hardcodes by type
+    grouped: Dict[str, List[Dict]] = {}
+    for hardcode in hardcodes:
+        htype = hardcode.get("type", "unknown")
+        if htype not in grouped:
+            grouped[htype] = []
+        grouped[htype].append(hardcode)
+
+    # Store each type group to Redis
+    stored_count = 0
+    for htype, items in grouped.items():
+        key = f"codebase:hardcodes:{htype}"
+        try:
+            redis_client.set(key, json.dumps(items))
+            stored_count += len(items)
+            logger.debug(f"[Task {task_id}] Stored {len(items)} hardcodes of type '{htype}'")
+        except Exception as e:
+            logger.error(f"[Task {task_id}] Failed to store hardcodes type '{htype}': {e}")
+
+    logger.info(f"[Task {task_id}] ✅ Stored {stored_count} hardcodes to Redis ({len(grouped)} types)")
+    return stored_count
+
+
 def _create_empty_analysis_results() -> Dict:
     """
     Create empty analysis results dictionary structure.
@@ -575,31 +753,74 @@ def _create_empty_analysis_results() -> Dict:
 
     Returns:
         Dict with initialized structure for files, stats, functions,
-        classes, hardcodes, and problems.
+        classes, hardcodes, and problems. Includes category-specific
+        tracking for code, docs, logs, backup, and archive files.
     """
     return {
         "files": {},
         "stats": {
             "total_files": 0,
+            # By language/type
             "python_files": 0,
             "javascript_files": 0,
+            "typescript_files": 0,
             "vue_files": 0,
+            "css_files": 0,
+            "html_files": 0,
             "config_files": 0,
             "doc_files": 0,
+            "other_code_files": 0,
             "other_files": 0,
+            # Line counts
             "total_lines": 0,
             "code_lines": 0,
             "comment_lines": 0,
             "docstring_lines": 0,
             "documentation_lines": 0,
             "blank_lines": 0,
+            # Declarations
             "total_functions": 0,
             "total_classes": 0,
+            # Category-specific stats (code lines not counted for docs/logs)
+            "lines_by_category": {
+                FILE_CATEGORY_CODE: 0,
+                FILE_CATEGORY_DOCS: 0,
+                FILE_CATEGORY_LOGS: 0,
+                FILE_CATEGORY_BACKUP: 0,
+                FILE_CATEGORY_ARCHIVE: 0,
+                FILE_CATEGORY_CONFIG: 0,
+                FILE_CATEGORY_TEST: 0,
+                FILE_CATEGORY_DATA: 0,
+                FILE_CATEGORY_ASSETS: 0,
+            },
+            "files_by_category": {
+                FILE_CATEGORY_CODE: 0,
+                FILE_CATEGORY_DOCS: 0,
+                FILE_CATEGORY_LOGS: 0,
+                FILE_CATEGORY_BACKUP: 0,
+                FILE_CATEGORY_ARCHIVE: 0,
+                FILE_CATEGORY_CONFIG: 0,
+                FILE_CATEGORY_TEST: 0,
+                FILE_CATEGORY_DATA: 0,
+                FILE_CATEGORY_ASSETS: 0,
+            },
         },
         "all_functions": [],
         "all_classes": [],
         "all_hardcodes": [],
         "all_problems": [],
+        # Problems by category (for separate reporting)
+        "problems_by_category": {
+            FILE_CATEGORY_CODE: [],
+            FILE_CATEGORY_DOCS: [],
+            FILE_CATEGORY_LOGS: [],
+            FILE_CATEGORY_BACKUP: [],
+            FILE_CATEGORY_ARCHIVE: [],
+            FILE_CATEGORY_CONFIG: [],
+            FILE_CATEGORY_TEST: [],
+            FILE_CATEGORY_DATA: [],
+            FILE_CATEGORY_ASSETS: [],
+        },
     }
 
 
@@ -696,6 +917,9 @@ async def scan_codebase(
             extension = file_path.suffix.lower()
             relative_path = str(file_path.relative_to(root_path_obj))
 
+            # Determine file category for tracking and reporting
+            file_category = _get_file_category(file_path)
+
             analysis_results["stats"]["total_files"] += 1
             files_processed += 1
 
@@ -718,12 +942,15 @@ async def scan_codebase(
             if not file_analysis:
                 continue
 
-            # Aggregate functions, classes, and hardcodes
-            _aggregate_file_analysis(analysis_results, file_analysis, relative_path)
+            # Aggregate functions, classes, and hardcodes (with category)
+            _aggregate_file_analysis(
+                analysis_results, file_analysis, relative_path, file_category
+            )
 
-            # Process and store problems
+            # Process and store problems (with category for separate reporting)
             await _process_file_problems(
-                file_analysis, relative_path, analysis_results, immediate_store_collection
+                file_analysis, relative_path, analysis_results,
+                immediate_store_collection, file_category
             )
 
         # Issue #281: Use extracted helper for statistics calculation
@@ -865,6 +1092,12 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             storage_type = "failed"
             raise Exception("ChromaDB connection failed")
 
+        # Store hardcodes to Redis for the /hardcodes endpoint
+        hardcodes_stored = await _store_hardcodes_to_redis(
+            analysis_results.get("all_hardcodes", []),
+            task_id,
+        )
+
         # Mark finalize phase
         update_phase("finalize", "running")
 
@@ -873,8 +1106,9 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         total_files = analysis_results['stats']['total_files']
         indexing_tasks[task_id]["result"] = {
             "status": "success",
-            "message": f"Indexed {total_files} files using {storage_type} storage",
+            "message": f"Indexed {total_files} files, found {hardcodes_stored} hardcodes using {storage_type} storage",
             "stats": analysis_results["stats"],
+            "hardcodes_count": hardcodes_stored,
             "storage_type": storage_type,
             "timestamp": datetime.now().isoformat(),
         }

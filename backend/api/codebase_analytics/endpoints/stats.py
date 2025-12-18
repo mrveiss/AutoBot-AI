@@ -27,8 +27,11 @@ def _parse_stats_metadata(stats_metadata: dict) -> dict:
     """Parse stats from ChromaDB metadata. (Issue #315 - extracted)"""
     stats = {}
     numeric_fields = [
-        "total_files", "python_files", "javascript_files", "vue_files",
-        "config_files", "other_files", "total_lines", "total_functions", "total_classes",
+        "total_files", "python_files", "javascript_files", "typescript_files",
+        "vue_files", "css_files", "html_files", "config_files", "doc_files",
+        "other_code_files", "other_files", "total_lines", "total_functions",
+        "total_classes", "code_lines", "comment_lines", "docstring_lines",
+        "documentation_lines", "blank_lines",
     ]
     for field in numeric_fields:
         if field in stats_metadata:
@@ -36,6 +39,23 @@ def _parse_stats_metadata(stats_metadata: dict) -> dict:
 
     if "average_file_size" in stats_metadata:
         stats["average_file_size"] = float(stats_metadata["average_file_size"])
+
+    # Parse category-specific stats (stored as JSON strings in ChromaDB)
+    for category_field in ["lines_by_category", "files_by_category"]:
+        if category_field in stats_metadata:
+            try:
+                value = stats_metadata[category_field]
+                if isinstance(value, str):
+                    stats[category_field] = json.loads(value)
+                elif isinstance(value, dict):
+                    stats[category_field] = value
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Parse ratio strings
+    for ratio_field in ["comment_ratio", "docstring_ratio", "documentation_ratio"]:
+        if ratio_field in stats_metadata:
+            stats[ratio_field] = stats_metadata[ratio_field]
 
     return stats
 
@@ -154,6 +174,7 @@ def _parse_problem_metadata(metadata: dict) -> dict:
         "type": metadata.get("problem_type", ""),
         "severity": metadata.get("severity", ""),
         "file_path": metadata.get("file_path", ""),
+        "file_category": metadata.get("file_category", "code"),
         "line_number": int(line_num) if line_num else None,
         "description": metadata.get("description", ""),
         "suggestion": metadata.get("suggestion", ""),
