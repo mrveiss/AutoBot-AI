@@ -34,7 +34,7 @@ import ast
 import logging
 import os
 import re
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 
 # Import types and models from the doc_generation package (Issue #381 refactoring)
 from src.code_intelligence.doc_generation.types import (
@@ -56,19 +56,18 @@ from src.code_intelligence.doc_generation.models import (
     ModuleDoc,
     PackageDoc,
 )
+from src.code_intelligence.doc_generation import helpers
 
 logger = logging.getLogger(__name__)
 
-# Issue #380: Module-level frozenset for enum base class checking
-_ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
-_ABSTRACT_DECORATORS: FrozenSet[str] = frozenset({"ABC", "abstractmethod"})
-_SELF_CLS_ARGS: FrozenSet[str] = frozenset({"self", "cls"})
-_SKIP_INHERITANCE_BASES: FrozenSet[str] = frozenset({"object", "ABC", "Enum"})
-
-# Issue #380: Module-level tuple for function definition AST nodes
-_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
-_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
-_SEQUENCE_TYPES = (ast.List, ast.Tuple)
+# Issue #381: Constants moved to helpers module, re-export for backward compatibility
+_ENUM_BASE_CLASSES = helpers.ENUM_BASE_CLASSES
+_ABSTRACT_DECORATORS = helpers.ABSTRACT_DECORATORS
+_SELF_CLS_ARGS = helpers.SELF_CLS_ARGS
+_SKIP_INHERITANCE_BASES = helpers.SKIP_INHERITANCE_BASES
+_FUNCTION_DEF_TYPES = helpers.FUNCTION_DEF_TYPES
+_IMPORT_TYPES = helpers.IMPORT_TYPES
+_SEQUENCE_TYPES = helpers.SEQUENCE_TYPES
 
 # Issue #380: Pre-compiled regex patterns for markdown-to-HTML conversion
 _MD_H5_RE = re.compile(r"^##### (.+)$", re.MULTILINE)
@@ -81,11 +80,6 @@ _MD_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 _MD_LIST_ITEM_RE = re.compile(r"^- (.+)$", re.MULTILINE)
 _MD_HR_RE = re.compile(r"^---$", re.MULTILINE)
-
-# Issue #380: Pre-compiled regex patterns for version/author extraction
-_VERSION_RE = re.compile(r'__version__\s*=\s*["\']([^"\']+)["\']')
-_SETUP_VERSION_RE = re.compile(r'version\s*=\s*["\']([^"\']+)["\']')
-_AUTHOR_RE = re.compile(r'__author__\s*=\s*["\']([^"\']+)["\']')
 
 # Re-export for backward compatibility
 __all__ = [
@@ -184,48 +178,18 @@ class DocGenerator:
         self._analyzed_files: Set[str] = set()
 
     def _validate_module_path(self, file_path: str) -> Optional[str]:
-        """Validate module path exists and is a Python file (Issue #315 - extracted helper).
+        """Validate module path exists and is a Python file.
 
-        Args:
-            file_path: Path to validate
-
-        Returns:
-            Absolute path if valid, None otherwise
+        Issue #381: Delegates to helpers.validate_module_path.
         """
-        abs_path = os.path.abspath(file_path)
-
-        if not os.path.exists(abs_path):
-            logger.error(f"File not found: {abs_path}")
-            return None
-
-        if not abs_path.endswith(".py"):
-            logger.warning(f"Not a Python file: {abs_path}")
-            return None
-
-        return abs_path
+        return helpers.validate_module_path(file_path)
 
     def _read_and_parse_module(self, file_path: str) -> Optional[Tuple[str, ast.Module]]:
-        """Read and parse a Python module (Issue #315 - extracted helper).
+        """Read and parse a Python module.
 
-        Args:
-            file_path: Path to the Python file
-
-        Returns:
-            Tuple of (source, ast) or None on error
+        Issue #381: Delegates to helpers.read_and_parse_module.
         """
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-        except OSError as e:
-            logger.error(f"Failed to read file {file_path}: {e}")
-            return None
-
-        try:
-            tree = ast.parse(source, filename=file_path)
-            return (source, tree)
-        except SyntaxError as e:
-            logger.error(f"Syntax error in {file_path}: {e}")
-            return None
+        return helpers.read_and_parse_module(file_path)
 
     def _process_module_node(
         self, node: ast.AST, source: str, module_doc: "ModuleDoc"
@@ -313,19 +277,12 @@ class DocGenerator:
         return module_doc
 
     # Issue #315 - Standard README file names to check
-    _README_NAMES = ["README.md", "README.rst", "README.txt", "README"]
-
     def _load_readme_content(self, package_path: str) -> Optional[str]:
-        """Load README content if available (Issue #315 - extracted helper)."""
-        for readme_name in self._README_NAMES:
-            readme_path = os.path.join(package_path, readme_name)
-            if os.path.exists(readme_path):
-                try:
-                    with open(readme_path, "r", encoding="utf-8") as f:
-                        return f.read()
-                except OSError:
-                    pass
-        return None
+        """Load README content if available.
+
+        Issue #381: Delegates to helpers.load_readme_content.
+        """
+        return helpers.load_readme_content(package_path)
 
     def _process_package_item(
         self, item: str, package_path: str, package_doc: "PackageDoc", depth: int
@@ -739,203 +696,88 @@ class DocGenerator:
         return True
 
     def _is_method(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
-        """Check if a function is a method (has self/cls parameter)."""
-        if node.args.args:
-            first_arg = node.args.args[0].arg
-            return first_arg in _SELF_CLS_ARGS
-        return False
+        """Check if a function is a method (has self/cls parameter).
+
+        Issue #381: Delegates to helpers.is_method.
+        """
+        return helpers.is_method(node)
 
     def _build_signature(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
-        """Build function signature string."""
-        params = []
+        """Build function signature string.
 
-        for arg in node.args.args:
-            if arg.arg in _SELF_CLS_ARGS:
-                continue
-            param_str = arg.arg
-            if arg.annotation:
-                param_str += f": {self._get_node_name(arg.annotation)}"
-            params.append(param_str)
-
-        for arg in node.args.kwonlyargs:
-            param_str = arg.arg
-            if arg.annotation:
-                param_str += f": {self._get_node_name(arg.annotation)}"
-            params.append(param_str)
-
-        signature = f"({', '.join(params)})"
-
-        if node.returns:
-            signature += f" -> {self._get_node_name(node.returns)}"
-
-        return signature
+        Issue #381: Delegates to helpers.build_signature.
+        """
+        return helpers.build_signature(node)
 
     def _get_node_name(self, node: Optional[ast.AST]) -> str:
-        """Get the name representation of an AST node."""
-        if node is None:
-            return "None"
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.Attribute):
-            return f"{self._get_node_name(node.value)}.{node.attr}"
-        if isinstance(node, ast.Subscript):
-            return f"{self._get_node_name(node.value)}[{self._get_node_name(node.slice)}]"
-        if isinstance(node, ast.Constant):
-            return repr(node.value)
-        if isinstance(node, ast.Tuple):
-            return f"({', '.join(self._get_node_name(e) for e in node.elts)})"
-        if isinstance(node, ast.List):
-            return f"[{', '.join(self._get_node_name(e) for e in node.elts)}]"
-        if isinstance(node, ast.Call):
-            return self._get_node_name(node.func)
-        if isinstance(node, ast.BinOp):
-            return f"{self._get_node_name(node.left)} | {self._get_node_name(node.right)}"
-        return str(type(node).__name__)
+        """Get the name representation of an AST node.
+
+        Issue #381: Delegates to helpers.get_node_name.
+        """
+        return helpers.get_node_name(node)
 
     def _get_node_value(self, node: Optional[ast.AST]) -> str:
-        """Get the value representation of an AST node."""
-        if node is None:
-            return "None"
-        if isinstance(node, ast.Constant):
-            return repr(node.value)
-        if isinstance(node, ast.Name):
-            return node.id
-        if isinstance(node, ast.List):
-            return f"[{', '.join(self._get_node_value(e) for e in node.elts)}]"
-        if isinstance(node, ast.Dict):
-            items = [
-                f"{self._get_node_value(k)}: {self._get_node_value(v)}"
-                for k, v in zip(node.keys, node.values)
-            ]
-            return "{" + ", ".join(items) + "}"
-        if isinstance(node, ast.Tuple):
-            return f"({', '.join(self._get_node_value(e) for e in node.elts)})"
-        if isinstance(node, ast.Call):
-            return f"{self._get_node_name(node.func)}(...)"
-        return "..."
+        """Get the value representation of an AST node.
+
+        Issue #381: Delegates to helpers.get_node_value.
+        """
+        return helpers.get_node_value(node)
 
     def _extract_description(self, docstring: str) -> str:
-        """Extract the description (first paragraph) from a docstring."""
-        if not docstring:
-            return ""
+        """Extract the description (first paragraph) from a docstring.
 
-        lines = docstring.strip().split("\n")
-        description_lines = []
-
-        for line in lines:
-            stripped = line.strip()
-            # Stop at section headers or empty lines after content
-            if any(p.match(stripped) for p in self.DOCSTRING_SECTIONS.values()):
-                break
-            if not stripped and description_lines:
-                break
-            if stripped:
-                description_lines.append(stripped)
-
-        return " ".join(description_lines)
+        Issue #381: Delegates to helpers.extract_description.
+        """
+        return helpers.extract_description(docstring, self.DOCSTRING_SECTIONS)
 
     def _extract_imports(self, node: Union[ast.Import, ast.ImportFrom]) -> List[str]:
-        """Extract import statements."""
-        imports = []
+        """Extract import statements.
 
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.append(alias.name)
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            for alias in node.names:
-                imports.append(f"{module}.{alias.name}" if module else alias.name)
-
-        return imports
+        Issue #381: Delegates to helpers.extract_imports.
+        """
+        return helpers.extract_imports(node)
 
     def _is_all_assignment(self, node: ast.AST) -> bool:
-        """Check if node is an __all__ assignment (Issue #315 - extracted helper)."""
-        if not isinstance(node, ast.Assign):
-            return False
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == "__all__":
-                return True
-        return False
+        """Check if node is an __all__ assignment.
+
+        Issue #381: Delegates to helpers.is_all_assignment.
+        """
+        return helpers.is_all_assignment(node)
 
     def _extract_all_values(self, value_node: ast.AST) -> List[str]:
-        """Extract string values from __all__ list/tuple (Issue #315 - extracted helper)."""
-        if not isinstance(value_node, _SEQUENCE_TYPES):  # Issue #380
-            return []
-        return [
-            e.value
-            for e in value_node.elts
-            if isinstance(e, ast.Constant) and isinstance(e.value, str)
-        ]
+        """Extract string values from __all__ list/tuple.
+
+        Issue #381: Delegates to helpers.extract_all_values.
+        """
+        return helpers.extract_all_values(value_node)
 
     def _extract_all_exports(self, tree: ast.Module) -> List[str]:
-        """Extract __all__ exports from a module."""
-        for node in ast.iter_child_nodes(tree):
-            if not self._is_all_assignment(node):
-                continue
-            return self._extract_all_values(node.value)
-        return []
+        """Extract __all__ exports from a module.
+
+        Issue #381: Delegates to helpers.extract_all_exports.
+        """
+        return helpers.extract_all_exports(tree)
 
     def _extract_dependencies(self, imports: List[str]) -> List[str]:
-        """Extract third-party dependencies from imports."""
-        stdlib_modules = {
-            "abc", "asyncio", "collections", "contextlib", "copy", "dataclasses",
-            "datetime", "enum", "functools", "hashlib", "inspect", "io", "itertools",
-            "json", "logging", "math", "os", "pathlib", "random", "re", "shutil",
-            "socket", "sqlite3", "string", "subprocess", "sys", "tempfile", "textwrap",
-            "threading", "time", "traceback", "typing", "unittest", "urllib", "uuid",
-            "warnings", "weakref",
-        }
+        """Extract third-party dependencies from imports.
 
-        dependencies = []
-        for imp in imports:
-            top_level = imp.split(".")[0]
-            if top_level not in stdlib_modules and not top_level.startswith("src"):
-                if top_level not in dependencies:
-                    dependencies.append(top_level)
-
-        return dependencies
+        Issue #381: Delegates to helpers.extract_dependencies.
+        """
+        return helpers.extract_dependencies(imports)
 
     def _extract_version(self, package_path: str) -> Optional[str]:
-        """Extract version from package."""
-        # Check __init__.py
-        init_path = os.path.join(package_path, "__init__.py")
-        if os.path.exists(init_path):
-            try:
-                with open(init_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                match = _VERSION_RE.search(content)
-                if match:
-                    return match.group(1)
-            except OSError:
-                pass
+        """Extract version from package.
 
-        # Check setup.py
-        setup_path = os.path.join(os.path.dirname(package_path), "setup.py")
-        if os.path.exists(setup_path):
-            try:
-                with open(setup_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                match = _SETUP_VERSION_RE.search(content)
-                if match:
-                    return match.group(1)
-            except OSError:
-                pass
-
-        return None
+        Issue #381: Delegates to helpers.extract_version.
+        """
+        return helpers.extract_version(package_path)
 
     def _extract_author(self, package_path: str) -> Optional[str]:
-        """Extract author from package."""
-        init_path = os.path.join(package_path, "__init__.py")
-        if os.path.exists(init_path):
-            try:
-                with open(init_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                match = _AUTHOR_RE.search(content)
-                if match:
-                    return match.group(1)
-            except OSError:
-                pass
-        return None
+        """Extract author from package.
+
+        Issue #381: Delegates to helpers.extract_author.
+        """
+        return helpers.extract_author(package_path)
 
     # =========================================================================
     # Documentation Generation
