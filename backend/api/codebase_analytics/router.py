@@ -17,6 +17,7 @@ from .endpoints import (
     declarations,
     duplicates,
     cache,
+    report,
 )
 
 # Create main router with common prefix and tags
@@ -32,3 +33,4 @@ router.include_router(call_graph.router)
 router.include_router(declarations.router)
 router.include_router(duplicates.router)
 router.include_router(cache.router)
+router.include_router(report.router)

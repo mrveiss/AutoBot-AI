@@ -9,11 +9,23 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from src.constants.path_constants import PATH
+
+
+class IndexCodebaseRequest(BaseModel):
+    """Request model for indexing a codebase path."""
+
+    root_path: Optional[str] = Field(
+        default=None,
+        description="Path to index. Defaults to PROJECT_ROOT if not provided.",
+    )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..scanner import (
@@ -36,9 +48,13 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 @router.post("/index")
-async def index_codebase():
+async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
-    Start background indexing of the AutoBot codebase
+    Start background indexing of a codebase path
+
+    Args:
+        request: Optional request body with root_path to index.
+                 If not provided or root_path is None, defaults to PROJECT_ROOT.
 
     Returns immediately with a task_id that can be used to poll progress
     via GET /api/analytics/codebase/index/status/{task_id}
@@ -71,9 +87,26 @@ async def index_codebase():
                     }
                 )
 
-        # Use centralized PathConstants (Issue #380)
-        root_path = str(PATH.PROJECT_ROOT)
-        logger.info(f"📁 project_root = {root_path}")
+        # Get root_path from request or default to PROJECT_ROOT
+        if request and request.root_path:
+            target_path = Path(request.root_path)
+            # Validate path exists
+            if not target_path.exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Path does not exist: {request.root_path}",
+                )
+            if not target_path.is_dir():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Path is not a directory: {request.root_path}",
+                )
+            root_path = str(target_path.resolve())
+        else:
+            # Default to PROJECT_ROOT if no path provided
+            root_path = str(PATH.PROJECT_ROOT)
+
+        logger.info(f"📁 Indexing path = {root_path}")
 
         # Generate unique task ID
         task_id = str(uuid.uuid4())

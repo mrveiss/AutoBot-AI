@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
-from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
+from src.agents.kb_librarian import EnhancedKBLibrarian
 from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)

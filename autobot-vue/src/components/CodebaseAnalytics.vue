@@ -31,6 +31,7 @@
             <button @click="getHardcodesData" class="btn-debug" style="padding: 5px 10px; background: #F44336; color: white; border: none; border-radius: 4px;">Test Hardcodes</button>
             <button @click="testNpuConnection" class="btn-debug" style="padding: 5px 10px; background: #9C27B0; color: white; border: none; border-radius: 4px;">Test NPU</button>
             <button @click="testDataState" class="btn-debug" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px;">Debug State</button>
+            <button @click="resetState" class="btn-debug" style="padding: 5px 10px; background: #FF5722; color: white; border: none; border-radius: 4px;">Reset State</button>
             <button @click="testAllEndpoints" class="btn-debug" style="padding: 5px 10px; background: #00BCD4; color: white; border: none; border-radius: 4px;">Test All APIs</button>
             <!-- Code Intelligence / Anti-Pattern Detection -->
             <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #E91E63; color: white; border: none; border-radius: 4px;">
@@ -39,6 +40,14 @@
             </button>
             <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #673AB7; color: white; border: none; border-radius: 4px;">
               <i class="fas fa-heartbeat"></i> Health Score
+            </button>
+            <button @click="exportReport" :disabled="exportingReport" class="btn-debug" style="padding: 5px 10px; background: #607D8B; color: white; border: none; border-radius: 4px;">
+              <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
+              {{ exportingReport ? 'Exporting...' : 'Export Report' }}
+            </button>
+            <button @click="clearCache" :disabled="clearingCache" class="btn-debug" style="padding: 5px 10px; background: #795548; color: white; border: none; border-radius: 4px;">
+              <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+              {{ clearingCache ? 'Clearing...' : 'Clear Cache' }}
             </button>
           </div>
         </div>
@@ -404,46 +413,50 @@
 
           <!-- Charts Row 1: Problem Types + Severity -->
           <div class="charts-row">
-            <div class="chart-container">
-              <ProblemTypesChart
-                v-if="filteredChartData?.problem_types && filteredChartData.problem_types.length > 0"
-                :data="filteredChartData.problem_types"
-                :title="selectedCategory === 'all' ? 'Problem Types Distribution' : `${selectedCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Issues`"
-                :height="320"
-              />
-              <EmptyState v-else icon="fas fa-chart-pie" :message="selectedCategory === 'all' ? 'No problem type data' : `No issues in ${selectedCategory.replace(/_/g, ' ')} category`" />
+            <ProblemTypesChart
+              v-if="filteredChartData?.problem_types && filteredChartData.problem_types.length > 0"
+              :data="filteredChartData.problem_types"
+              :title="selectedCategory === 'all' ? 'Problem Types Distribution' : `${selectedCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Issues`"
+              :height="320"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-chart-pie" :message="selectedCategory === 'all' ? 'No problem type data' : `No issues in ${selectedCategory.replace(/_/g, ' ')} category`" />
             </div>
-            <div class="chart-container">
-              <SeverityBarChart
-                v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
-                :data="chartData.severity_counts"
-                title="Problems by Severity"
-                :height="320"
-              />
-              <EmptyState v-else icon="fas fa-signal" message="No severity data" />
+            <SeverityBarChart
+              v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
+              :data="chartData.severity_counts"
+              title="Problems by Severity"
+              :height="320"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-signal" message="No severity data" />
             </div>
           </div>
 
           <!-- Charts Row 2: Race Conditions + Top Files -->
           <div class="charts-row">
-            <div class="chart-container">
-              <RaceConditionsDonut
-                v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
-                :data="chartData.race_conditions"
-                title="Race Conditions by Category"
-                :height="320"
-              />
-              <EmptyState v-else icon="fas fa-exclamation-circle" message="No race condition data" />
+            <RaceConditionsDonut
+              v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
+              :data="chartData.race_conditions"
+              title="Race Conditions by Category"
+              :height="320"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-exclamation-circle" message="No race condition data" />
             </div>
-            <div class="chart-container chart-wide">
-              <TopFilesChart
-                v-if="chartData.top_files && chartData.top_files.length > 0"
-                :data="chartData.top_files"
-                title="Top Files with Most Problems"
-                :height="400"
-                :maxFiles="10"
-              />
-              <EmptyState v-else icon="fas fa-file-code" message="No file data" />
+            <TopFilesChart
+              v-if="chartData.top_files && chartData.top_files.length > 0"
+              :data="chartData.top_files"
+              title="Top Files with Most Problems"
+              :height="400"
+              :maxFiles="10"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-file-code" message="No file data" />
             </div>
           </div>
         </div>
@@ -504,26 +517,28 @@
 
           <!-- Charts Row: External Dependencies + Top Importing Modules -->
           <div class="charts-row">
-            <div class="chart-container">
-              <DependencyTreemap
-                v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
-                :data="dependencyData.external_dependencies"
-                title="External Dependencies"
-                subtitle="Package usage across codebase"
-                :height="350"
-              />
-              <EmptyState v-else icon="fas fa-cube" message="No external dependencies found" />
+            <DependencyTreemap
+              v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
+              :data="dependencyData.external_dependencies"
+              title="External Dependencies"
+              subtitle="Package usage across codebase"
+              :height="350"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-cube" message="No external dependencies found" />
             </div>
-            <div class="chart-container">
-              <ModuleImportsChart
-                v-if="dependencyData.modules && dependencyData.modules.length > 0"
-                :data="dependencyData.modules.filter(m => m.import_count > 0)"
-                title="Modules with Most Imports"
-                subtitle="Files with highest dependency count"
-                :height="350"
-                :maxModules="12"
-              />
-              <EmptyState v-else icon="fas fa-file-import" message="No module data available" />
+            <ModuleImportsChart
+              v-if="dependencyData.modules && dependencyData.modules.length > 0"
+              :data="dependencyData.modules.filter(m => m.import_count > 0)"
+              title="Modules with Most Imports"
+              subtitle="Files with highest dependency count"
+              :height="350"
+              :maxModules="12"
+              class="chart-item"
+            />
+            <div v-else class="chart-empty-slot">
+              <EmptyState icon="fas fa-file-import" message="No module data available" />
             </div>
           </div>
 
@@ -1063,8 +1078,10 @@ const notify = (message, type = 'info') => {
 }
 
 // Reactive data
-// FIXED: Fetch project root from backend config (no hardcoding)
-const rootPath = ref('/home/kali/Desktop/AutoBot')
+// Load path from localStorage if available, otherwise use default
+const STORAGE_KEY_PATH = 'codebase-analytics-path'
+const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
+const rootPath = ref(savedPath || '/home/kali/Desktop/AutoBot')
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
@@ -1119,6 +1136,7 @@ const codebaseStats = ref(null)
 const problemsReport = ref([])
 const duplicateAnalysis = ref([])
 const declarationAnalysis = ref([])
+const hardcodeAnalysis = ref([])
 const refactoringSuggestions = ref([])
 
 // Code Intelligence / Anti-Pattern Detection data
@@ -1126,6 +1144,8 @@ const codeSmellsReport = ref(null)
 const codeHealthScore = ref(null)
 const analyzingCodeSmells = ref(false)
 const codeSmellsAnalysisType = ref('') // 'smells' or 'health'
+const exportingReport = ref(false)
+const clearingCache = ref(false)
 
 // Computed property for code smells progress title
 const codeSmellsProgressTitle = computed(() => {
@@ -1330,9 +1350,8 @@ const pollIntermediateResults = async () => {
     const problemsResponse = await fetch(`${backendUrl}/api/analytics/codebase/problems`)
     if (problemsResponse.ok) {
       const problemsData = await problemsResponse.json()
-      if (problemsData.problems && problemsData.problems.length > 0) {
-        problemsReport.value = problemsData.problems
-      }
+      // Always update problems (even if empty) to reflect current state
+      problemsReport.value = problemsData.problems || []
     }
 
     // Poll for stats
@@ -1386,8 +1405,15 @@ const cancelIndexingJob = async () => {
   }
 }
 
-// Fetch project root from backend configuration
+// Fetch project root from backend configuration (only if no localStorage path)
 const loadProjectRoot = async () => {
+  // Skip if we already have a saved path from localStorage
+  const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
+  if (savedPath) {
+    logger.debug('Using saved path from localStorage:', savedPath)
+    return
+  }
+
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const configEndpoint = `${backendUrl}/api/frontend-config`
@@ -1417,6 +1443,7 @@ const loadCodebaseAnalyticsData = async () => {
       getProblemsReport(),
       loadDeclarations(),    // Silent version
       loadDuplicates(),      // Silent version
+      loadHardcodes(),       // Silent version - hardcoded values detection
       loadChartData(),       // Load chart data for visualizations
       loadDependencyData(),  // Load dependency analysis
       loadImportTreeData(),  // Load import tree data
@@ -1718,6 +1745,31 @@ const loadDuplicates = async () => {
   }
 }
 
+// Silent version of hardcodes loading (no alerts)
+const loadHardcodes = async () => {
+  loadingProgress.hardcodes = true
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
+    const response = await fetch(hardcodesEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(`Hardcodes endpoint returned ${response.status}`)
+    }
+    const data = await response.json()
+    hardcodeAnalysis.value = data.hardcodes || []
+  } catch (error) {
+    logger.error('Failed to load hardcodes:', error)
+  } finally {
+    loadingProgress.hardcodes = false
+  }
+}
+
 onUnmounted(() => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
@@ -1737,6 +1789,17 @@ const indexCodebase = async () => {
   analyzing.value = true
   progressPercent.value = 10
   progressStatus.value = 'Starting codebase indexing...'
+
+  // Save the path to localStorage for persistence across page refreshes
+  localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
+
+  // Clear previous analysis data before starting new indexing
+  problemsReport.value = []
+  codebaseStats.value = null
+  declarationAnalysis.value = []
+  duplicateAnalysis.value = []
+  hardcodeAnalysis.value = []
+  chartData.value = null
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -1909,8 +1972,12 @@ const getHardcodesData = async () => {
     }
     const data = await response.json()
     const responseTime = Date.now() - startTime
-    const hardcodeCount = data.hardcodes ? data.hardcodes.length : 0
-    const hardcodeTypes = data.hardcodes ? [...new Set(data.hardcodes.map(h => h.type))].join(', ') : 'none'
+
+    // Store hardcodes data
+    hardcodeAnalysis.value = data.hardcodes || []
+
+    const hardcodeCount = hardcodeAnalysis.value.length
+    const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.type))].join(', ') : 'none'
     notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
   } catch (error) {
     const responseTime = Date.now() - startTime
@@ -1925,13 +1992,28 @@ const getHardcodesData = async () => {
 // Debug function to check data state
 const testDataState = () => {
   const summary = {
+    analyzing: analyzing.value,
+    rootPath: rootPath.value,
+    currentJobId: currentJobId.value,
     problems: problemsReport.value?.length || 0,
     declarations: declarationAnalysis.value?.length || 0,
     duplicates: duplicateAnalysis.value?.length || 0,
     stats: codebaseStats.value ? 'Available' : 'Not loaded'
   }
 
-  notify(`State: ${summary.problems} problems, ${summary.declarations} declarations, ${summary.duplicates} duplicates, Stats: ${summary.stats}`, 'info')
+  logger.info('Debug State:', summary)
+  notify(`analyzing=${summary.analyzing}, path=${summary.rootPath ? 'set' : 'empty'}, jobId=${summary.currentJobId || 'none'}, problems=${summary.problems}`, 'info')
+}
+
+// Reset stuck state (debug helper)
+const resetState = () => {
+  analyzing.value = false
+  currentJobId.value = null
+  currentJobStatus.value = null
+  stopJobPolling()
+  progressPercent.value = 0
+  progressStatus.value = 'Ready (state reset)'
+  notify('State reset - ready to analyze', 'success')
 }
 
 // FIXED: Check NPU worker endpoint directly (not via backend proxy)
@@ -2120,88 +2202,187 @@ const getCodeHealthScore = async () => {
   }
 }
 
-// Run full analysis
-const runFullAnalysis = async () => {
-  if (analyzing.value) return
-
-  analyzing.value = true
-  progressPercent.value = 0
-  const analysisStartTime = Date.now()
+// Export analysis report as Markdown
+const exportReport = async () => {
+  exportingReport.value = true
+  progressStatus.value = 'Generating report...'
 
   try {
-    progressStatus.value = 'Starting comprehensive analysis...'
-    progressPercent.value = 10
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const reportEndpoint = `${backendUrl}/api/analytics/codebase/report?format=markdown`
+    const response = await fetch(reportEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/markdown'
+      }
+    })
 
-    // First ensure codebase is indexed
-    await indexCodebase()
-    progressPercent.value = 30
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
 
-    await getCodebaseStats()
-    progressPercent.value = 40
+    // Get the markdown content
+    const reportContent = await response.text()
 
-    await getProblemsReport()
-    progressPercent.value = 50
+    // Create a blob and download it
+    const blob = new Blob([reportContent], { type: 'text/markdown;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    link.download = `code-analysis-report-${timestamp}.md`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
 
-    await getDeclarationsData()
-    progressPercent.value = 70
-
-    await getDuplicatesData()
-    progressPercent.value = 85
-
-    await getHardcodesData()
-    progressPercent.value = 100
-
-    const totalAnalysisTime = Date.now() - analysisStartTime
-    progressStatus.value = `Analysis complete! (${totalAnalysisTime}ms)`
-    notify(`Full analysis completed in ${totalAnalysisTime}ms`, 'success')
+    notify('Report exported successfully', 'success')
+    progressStatus.value = 'Report exported'
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Analysis failed:', error)
-    progressStatus.value = `Analysis failed: ${errorMessage}`
-    notify(`Analysis failed: ${errorMessage}`, 'error')
+    logger.error('Report export failed:', error)
+    notify(`Report export failed: ${errorMessage}`, 'error')
+    progressStatus.value = 'Report export failed'
   } finally {
-    analyzing.value = false
-    setTimeout(() => {
-      progressPercent.value = 0
-      progressStatus.value = 'Ready'
-    }, 5000)
+    exportingReport.value = false
   }
 }
 
-// Enhanced Analytics Methods
-// TODO: Replace mock data with actual API calls when endpoints are ready
+// Clear analysis cache (both Redis and ChromaDB)
+const clearCache = async () => {
+  clearingCache.value = true
+  progressStatus.value = 'Clearing cache...'
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/cache`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
+
+    const result = await response.json()
+
+    // Clear local state as well
+    codebaseStats.value = null
+    problemsReport.value = []
+    declarationAnalysis.value = []
+    duplicateAnalysis.value = []
+    hardcodeAnalysis.value = []
+    chartData.value = null
+
+    notify(`Cache cleared: ${result.deleted_keys || 0} entries removed`, 'success')
+    progressStatus.value = 'Cache cleared - Re-index to refresh data'
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Cache clear failed:', error)
+    notify(`Cache clear failed: ${errorMessage}`, 'error')
+    progressStatus.value = 'Cache clear failed'
+  } finally {
+    clearingCache.value = false
+  }
+}
+
+// Run full analysis - triggers indexing which automatically loads all data when complete
+const runFullAnalysis = async () => {
+  // Just trigger indexing - the polling mechanism will:
+  // 1. Track progress during indexing
+  // 2. Call loadCodebaseAnalyticsData() when complete (loads stats, problems, etc.)
+  await indexCodebase()
+}
+
+// Enhanced Analytics Methods - Connected to real backend endpoints
 const loadSystemOverview = async () => {
   try {
-    // Mock data for now - replace with actual API call
-    // const backendUrl = await appConfig.getServiceUrl('backend')
-    // const response = await fetch(`${backendUrl}/api/analytics/system/overview`)
-    const data = {
-      api_requests_per_minute: 142,
-      average_response_time: 85,
-      active_connections: 23,
-      system_health: 'Healthy'
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/dashboard/overview`)
+
+    if (!response.ok) {
+      throw new Error(`Status ${response.status}`)
     }
-    systemOverview.value = data
+
+    const result = await response.json()
+
+    // Extract relevant data from the comprehensive dashboard response
+    const commPatterns = result.communication_patterns || {}
+    const perfMetrics = result.performance_metrics || {}
+    const sysHealth = result.system_health || {}
+
+    // Calculate requests per minute from total calls and time window
+    const totalCalls = commPatterns.total_api_calls || 0
+    const avgResponseTime = commPatterns.avg_response_time || perfMetrics.avg_response_time || 0
+
+    // Get active connections from system health
+    const activeConnections = sysHealth.active_connections ||
+                              result.realtime_metrics?.active_connections?.value || 0
+
+    // Determine system health status
+    let healthStatus = 'Unknown'
+    if (sysHealth.status) {
+      healthStatus = sysHealth.status
+    } else if (sysHealth.cpu_percent !== undefined) {
+      healthStatus = sysHealth.cpu_percent < 80 ? 'Healthy' : 'Warning'
+    }
+
+    systemOverview.value = {
+      api_requests_per_minute: totalCalls,
+      average_response_time: Math.round(avgResponseTime * 1000), // Convert to ms
+      active_connections: activeConnections,
+      system_health: healthStatus
+    }
   } catch (error) {
-    // Silent failure for dashboard cards
     logger.error('loadSystemOverview failed:', error)
+    // Set empty state on error
+    systemOverview.value = null
   }
 }
 
 const loadCommunicationPatterns = async () => {
   try {
-    // Mock data for now - replace with actual API call
-    // const backendUrl = await appConfig.getServiceUrl('backend')
-    // const response = await fetch(`${backendUrl}/api/analytics/system/communication`)
-    const data = {
-      websocket_connections: 5,
-      api_call_frequency: 34,
-      data_transfer_rate: 1.2
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/communication/patterns`)
+
+    if (!response.ok) {
+      throw new Error(`Status ${response.status}`)
     }
-    communicationPatterns.value = data
+
+    const result = await response.json()
+
+    // Extract WebSocket activity and API patterns
+    const wsActivity = result.websocket_activity || {}
+    const apiPatterns = result.api_patterns || []
+    const totalCalls = result.total_api_calls || 0
+    const uniqueEndpoints = result.unique_endpoints || 0
+
+    // Calculate WebSocket connections from activity or use total
+    const wsConnections = Object.keys(wsActivity).length || 0
+
+    // Calculate API frequency (calls per minute estimate)
+    // Use the pattern data to estimate frequency
+    const apiFrequency = apiPatterns.length > 0
+      ? Math.round(apiPatterns.reduce((sum: number, p: any) => sum + (p.frequency || 0), 0) / Math.max(apiPatterns.length, 1))
+      : totalCalls
+
+    // Estimate data transfer rate from response times and call count
+    const avgResponseTime = result.avg_response_time || 0
+    const estimatedDataRate = Math.round((totalCalls * avgResponseTime * 10) / 100) / 10 // Rough estimate in KB/s
+
+    communicationPatterns.value = {
+      websocket_connections: wsConnections,
+      api_call_frequency: apiFrequency,
+      data_transfer_rate: estimatedDataRate
+    }
   } catch (error) {
-    // Silent failure for dashboard cards
     logger.error('loadCommunicationPatterns failed:', error)
+    // Set empty state on error
+    communicationPatterns.value = null
   }
 }
 
@@ -4638,16 +4819,21 @@ const getDeclarationTypeClass = (type) => {
   gap: 20px;
 }
 
-.chart-container {
-  background: rgba(30, 41, 59, 0.7);
+/* Chart items (BaseChart components) - minimal layout adjustment */
+.chart-item {
+  min-height: 350px;
+}
+
+/* Empty state placeholder (when chart has no data) */
+.chart-empty-slot {
+  background: rgba(30, 41, 59, 0.5);
   border-radius: 8px;
   padding: 16px;
   border: 1px solid rgba(71, 85, 105, 0.5);
   min-height: 350px;
-}
-
-.chart-container.chart-wide {
-  grid-column: span 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Responsive charts */
@@ -4660,10 +4846,6 @@ const getDeclarationTypeClass = (type) => {
 @media (max-width: 900px) {
   .charts-row {
     grid-template-columns: 1fr;
-  }
-
-  .chart-container.chart-wide {
-    grid-column: span 1;
   }
 }
 
