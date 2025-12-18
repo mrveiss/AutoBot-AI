@@ -1,0 +1,544 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Chat Knowledge Service
+
+Issue #381: Extracted from chat_knowledge_service.py god class refactoring.
+Contains the main ChatKnowledgeService class that coordinates knowledge retrieval.
+"""
+
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+from backend.services.rag_service import RAGService
+from src.advanced_rag_optimizer import SearchResult
+from src.utils.logging_manager import get_llm_logger
+
+from .context_enhancer import get_context_enhancer
+from .doc_searcher import DocumentationSearcher, get_documentation_searcher
+from .intent_detector import get_query_intent_detector
+from .types import EnhancedQuery, QueryIntentResult
+
+logger = get_llm_logger("chat_knowledge_service")
+
+
+class ChatKnowledgeService:
+    """
+    Service for retrieving and formatting knowledge for chat interactions.
+
+    This service acts as a bridge between the chat workflow and the RAG system,
+    providing knowledge retrieval with appropriate filtering and formatting.
+
+    Issue #249 Phase 2: Now includes smart intent detection to optimize
+    when to use knowledge retrieval.
+
+    Issue #250: Added documentation search integration for AutoBot self-awareness.
+    """
+
+    def __init__(self, rag_service: RAGService, enable_doc_search: bool = True):
+        """
+        Initialize chat knowledge service.
+
+        Args:
+            rag_service: Configured RAGService instance
+            enable_doc_search: Enable documentation search integration (Issue #250)
+        """
+        self.rag_service = rag_service
+        self.intent_detector = get_query_intent_detector()
+        self.context_enhancer = get_context_enhancer()
+
+        # Issue #250: Documentation search integration
+        self.doc_searcher: Optional[DocumentationSearcher] = None
+        if enable_doc_search:
+            self.doc_searcher = get_documentation_searcher()
+            self.doc_searcher.initialize()
+
+        logger.info(
+            "ChatKnowledgeService initialized with intent detection, "
+            "conversation-aware RAG, doc_search=%s",
+            enable_doc_search
+        )
+
+    async def retrieve_relevant_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        score_threshold: float = 0.7,
+    ) -> Tuple[str, List[Dict]]:
+        """
+        Retrieve relevant knowledge facts for a chat query.
+
+        Args:
+            query: User's chat message/query
+            top_k: Maximum number of knowledge facts to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+
+        Returns:
+            Tuple of (formatted_context_string, citation_list)
+            - formatted_context_string: Knowledge context for LLM prompt
+            - citation_list: List of citation dicts with metadata
+
+        Example:
+            context, citations = await service.retrieve_relevant_knowledge(
+                "How do I configure Redis?",
+                top_k=5,
+                score_threshold=0.7
+            )
+        """
+        start_time = time.time()
+
+        try:
+            # Perform advanced search using RAGService
+            # Issue #382: metrics unused, using _ to indicate intentionally discarded
+            results, _ = await self.rag_service.advanced_search(
+                query=query,
+                max_results=top_k,
+                enable_reranking=True,
+            )
+
+            # Filter by score threshold
+            filtered_results = self._filter_by_score(results, score_threshold)
+
+            # Format for chat integration
+            context_string = self.format_knowledge_context(filtered_results)
+            citations = self.format_citations(filtered_results)
+
+            retrieval_time = time.time() - start_time
+            logger.info(
+                "Retrieved %d/%d facts (threshold: %s) in %.3fs",
+                len(filtered_results),
+                len(results),
+                score_threshold,
+                retrieval_time
+            )
+
+            return context_string, citations
+
+        except Exception as e:
+            # Graceful degradation - don't break chat flow
+            logger.error("Knowledge retrieval failed for query '%s...': %s", query[:50], e)
+            logger.debug("Returning empty knowledge context due to error")
+            return "", []
+
+    def _filter_by_score(
+        self, results: List[SearchResult], threshold: float
+    ) -> List[SearchResult]:
+        """
+        Filter search results by relevance score.
+
+        Uses rerank_score if available (more accurate), otherwise falls back
+        to hybrid_score.
+
+        Args:
+            results: List of search results
+            threshold: Minimum score to include (0.0-1.0)
+
+        Returns:
+            Filtered list of results meeting threshold
+        """
+        filtered = []
+        for result in results:
+            # Prefer rerank_score if available (cross-encoder is more accurate)
+            score = (
+                result.rerank_score
+                if result.rerank_score is not None
+                else result.hybrid_score
+            )
+
+            if score >= threshold:
+                filtered.append(result)
+            else:
+                logger.debug(
+                    "Filtered out result (score %.3f < %s): %s...",
+                    score,
+                    threshold,
+                    result.content[:80]
+                )
+
+        return filtered
+
+    def format_knowledge_context(self, facts: List[SearchResult]) -> str:
+        """
+        Format knowledge facts into context string for LLM prompt.
+
+        Creates a clean, numbered list of relevant facts that can be
+        prepended to the LLM prompt.
+
+        Args:
+            facts: List of filtered search results
+
+        Returns:
+            Formatted context string for LLM
+        """
+        if not facts:
+            return ""
+
+        # Build context header
+        context_lines = ["KNOWLEDGE CONTEXT:"]
+
+        # Add each fact with ranking
+        for i, fact in enumerate(facts, 1):
+            # Use rerank_score if available for display
+            score = (
+                fact.rerank_score
+                if fact.rerank_score is not None
+                else fact.hybrid_score
+            )
+
+            # Format: "1. [score: 0.95] Fact content here"
+            context_lines.append(f"{i}. [score: {score:.2f}] {fact.content.strip()}")
+
+        # Join with newlines
+        return "\n".join(context_lines)
+
+    def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
+        """
+        Format facts into citation objects for frontend display.
+
+        Creates structured citation data that can be sent to frontend
+        for source attribution.
+
+        Args:
+            facts: List of filtered search results
+
+        Returns:
+            List of citation dictionaries with metadata
+        """
+        citations = []
+
+        for i, fact in enumerate(facts, 1):
+            # Extract relevant metadata
+            score = (
+                fact.rerank_score
+                if fact.rerank_score is not None
+                else fact.hybrid_score
+            )
+
+            citation = {
+                "id": fact.metadata.get("id", f"citation_{i}"),
+                "content": fact.content.strip(),
+                "score": round(score, 3),
+                "source": fact.source_path,
+                "rank": i,
+                "metadata": {
+                    "semantic_score": round(fact.semantic_score, 3),
+                    "keyword_score": round(fact.keyword_score, 3),
+                    "hybrid_score": round(fact.hybrid_score, 3),
+                    "chunk_index": fact.chunk_index,
+                },
+            }
+
+            # Add rerank_score if available
+            if fact.rerank_score is not None:
+                citation["metadata"]["rerank_score"] = round(fact.rerank_score, 3)
+
+            citations.append(citation)
+
+        return citations
+
+    async def smart_retrieve_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        score_threshold: float = 0.7,
+        force_retrieval: bool = False,
+    ) -> Tuple[str, List[Dict], QueryIntentResult]:
+        """
+        Smart knowledge retrieval with intent detection.
+
+        Issue #249 Phase 2: Uses query intent detection to decide whether
+        to perform knowledge retrieval, optimizing performance by skipping
+        RAG for queries that don't need it.
+
+        Args:
+            query: User's chat message/query
+            top_k: Maximum number of knowledge facts to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+            force_retrieval: If True, bypass intent detection and always retrieve
+
+        Returns:
+            Tuple of (context_string, citations, intent_result)
+            - context_string: Knowledge context for LLM prompt (empty if skipped)
+            - citations: List of citation dicts (empty if skipped)
+            - intent_result: The intent detection result for logging/debugging
+        """
+        start_time = time.time()
+
+        # Detect query intent
+        intent_result = self.intent_detector.detect_intent(query)
+
+        # Decide whether to retrieve knowledge
+        if not force_retrieval and not intent_result.should_use_knowledge:
+            logger.info(
+                "[Smart RAG] Skipping retrieval - intent=%s, confidence=%.2f, reason=%s",
+                intent_result.intent.value,
+                intent_result.confidence,
+                intent_result.reasoning
+            )
+            return "", [], intent_result
+
+        # Perform retrieval
+        logger.info(
+            "[Smart RAG] Retrieving - intent=%s, confidence=%.2f",
+            intent_result.intent.value,
+            intent_result.confidence
+        )
+
+        context_string, citations = await self.retrieve_relevant_knowledge(
+            query=query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        retrieval_time = time.time() - start_time
+        logger.info(
+            "[Smart RAG] Completed in %.3fs - %d citations found",
+            retrieval_time,
+            len(citations)
+        )
+
+        return context_string, citations, intent_result
+
+    def detect_query_intent(self, query: str) -> QueryIntentResult:
+        """
+        Detect the intent of a query without performing retrieval.
+
+        Useful for logging, debugging, or making decisions before retrieval.
+
+        Args:
+            query: User's chat message
+
+        Returns:
+            QueryIntentResult with intent type and recommendation
+        """
+        return self.intent_detector.detect_intent(query)
+
+    async def conversation_aware_retrieve(
+        self,
+        query: str,
+        conversation_history: List[Dict[str, str]],
+        top_k: int = 5,
+        score_threshold: float = 0.7,
+        force_retrieval: bool = False,
+    ) -> Tuple[str, List[Dict], QueryIntentResult, Optional[EnhancedQuery]]:
+        """
+        Conversation-aware knowledge retrieval with context enhancement.
+
+        Issue #249 Phase 3: Uses conversation history to enhance queries
+        before performing RAG retrieval. Combines intent detection (Phase 2)
+        with context enhancement for optimal results.
+
+        Args:
+            query: User's chat message/query
+            conversation_history: List of conversation exchanges
+                Format: [{"user": "msg", "assistant": "response"}, ...]
+            top_k: Maximum number of knowledge facts to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+            force_retrieval: If True, bypass intent detection and always retrieve
+
+        Returns:
+            Tuple of (context_string, citations, intent_result, enhanced_query)
+            - context_string: Knowledge context for LLM prompt (empty if skipped)
+            - citations: List of citation dicts (empty if skipped)
+            - intent_result: The intent detection result
+            - enhanced_query: The enhanced query result (None if not enhanced)
+        """
+        start_time = time.time()
+
+        # Step 1: Detect query intent
+        intent_result = self.intent_detector.detect_intent(query)
+
+        # Step 2: Check if we should skip retrieval
+        if not force_retrieval and not intent_result.should_use_knowledge:
+            logger.info(
+                "[Conversation RAG] Skipping - intent=%s, confidence=%.2f",
+                intent_result.intent.value,
+                intent_result.confidence
+            )
+            return "", [], intent_result, None
+
+        # Step 3: Enhance query with conversation context
+        enhanced_query = self.context_enhancer.enhance_query(
+            query=query,
+            conversation_history=conversation_history,
+            max_history_items=3,
+        )
+
+        # Log enhancement if applied
+        if enhanced_query.enhancement_applied:
+            logger.info(
+                "[Conversation RAG] Query enhanced: '%s...' → '%s...' (entities: %s)",
+                query[:50],
+                enhanced_query.enhanced_query[:80],
+                enhanced_query.context_entities
+            )
+        else:
+            logger.debug(
+                "[Conversation RAG] No enhancement needed for query: '%s...'",
+                query[:50]
+            )
+
+        # Step 4: Perform retrieval with enhanced query
+        search_query = (
+            enhanced_query.enhanced_query
+            if enhanced_query.enhancement_applied
+            else query
+        )
+
+        context_string, citations = await self.retrieve_relevant_knowledge(
+            query=search_query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        retrieval_time = time.time() - start_time
+        logger.info(
+            "[Conversation RAG] Completed in %.3fs - %d citations, enhanced=%s",
+            retrieval_time,
+            len(citations),
+            enhanced_query.enhancement_applied
+        )
+
+        return context_string, citations, intent_result, enhanced_query
+
+    async def retrieve_documentation(
+        self,
+        query: str,
+        n_results: int = 3,
+        score_threshold: float = 0.6,
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Retrieve relevant AutoBot documentation for a query.
+
+        Issue #250: Searches indexed documentation to provide context about
+        AutoBot deployment, APIs, architecture, and troubleshooting.
+
+        Args:
+            query: User's chat message/query
+            n_results: Maximum number of documentation chunks to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+
+        Returns:
+            Tuple of (formatted_context_string, documentation_results)
+            - formatted_context_string: Documentation context for LLM prompt
+            - documentation_results: List of result dicts with content and metadata
+        """
+        if not self.doc_searcher:
+            return "", []
+
+        try:
+            start_time = time.time()
+
+            # Check if query is about documentation
+            if not self.doc_searcher.is_documentation_query(query):
+                logger.debug(
+                    "[Doc Search] Query not documentation-related: '%s...'",
+                    query[:50]
+                )
+                return "", []
+
+            # Search documentation
+            results = self.doc_searcher.search(
+                query=query,
+                n_results=n_results,
+                score_threshold=score_threshold,
+            )
+
+            if not results:
+                logger.debug("[Doc Search] No results for: '%s...'", query[:50])
+                return "", []
+
+            # Format as context
+            context = self.doc_searcher.format_as_context(results)
+
+            retrieval_time = time.time() - start_time
+            logger.info(
+                "[Doc Search] Found %d documentation chunks in %.3fs for: '%s...'",
+                len(results),
+                retrieval_time,
+                query[:50]
+            )
+
+            return context, results
+
+        except Exception as e:
+            logger.error("Documentation retrieval failed: %s", e)
+            return "", []
+
+    async def retrieve_combined_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        doc_results: int = 3,
+        score_threshold: float = 0.7,
+        doc_threshold: float = 0.6,
+    ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:
+        """
+        Retrieve combined knowledge from RAG and documentation sources.
+
+        Issue #250: Combines general knowledge retrieval with documentation
+        search for comprehensive context.
+
+        Args:
+            query: User's chat message/query
+            top_k: Maximum knowledge facts from RAG
+            doc_results: Maximum documentation chunks
+            score_threshold: Minimum RAG relevance score
+            doc_threshold: Minimum documentation relevance score
+
+        Returns:
+            Tuple of (combined_context, rag_citations, doc_results)
+        """
+        # Retrieve from both sources in parallel-ish (documentation is sync)
+        doc_context, doc_results_list = await self.retrieve_documentation(
+            query=query,
+            n_results=doc_results,
+            score_threshold=doc_threshold,
+        )
+
+        rag_context, rag_citations = await self.retrieve_relevant_knowledge(
+            query=query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        # Combine contexts
+        combined_parts = []
+        if doc_context:
+            combined_parts.append(doc_context)
+        if rag_context:
+            combined_parts.append(rag_context)
+
+        combined_context = "\n\n".join(combined_parts) if combined_parts else ""
+
+        return combined_context, rag_citations, doc_results_list
+
+    async def get_knowledge_stats(self) -> Dict:
+        """
+        Get statistics about knowledge retrieval service.
+
+        Returns:
+            Dictionary with service statistics
+        """
+        rag_stats = self.rag_service.get_stats()
+
+        stats = {
+            "service": "ChatKnowledgeService",
+            "rag_service_initialized": rag_stats.get("initialized", False),
+            "rag_cache_entries": rag_stats.get("cache_entries", 0),
+            "kb_implementation": rag_stats.get("kb_implementation", "unknown"),
+            "intent_detector_available": self.intent_detector is not None,
+            "context_enhancer_available": self.context_enhancer is not None,
+            "doc_searcher_enabled": self.doc_searcher is not None,
+        }
+
+        # Add documentation stats if available
+        if self.doc_searcher and self.doc_searcher._initialized:
+            try:
+                doc_count = self.doc_searcher._collection.count()
+                stats["documentation_chunks"] = doc_count
+            except Exception:
+                stats["documentation_chunks"] = 0
+
+        return stats
