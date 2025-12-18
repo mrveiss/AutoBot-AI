@@ -1,0 +1,697 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+LLM Interface - Consolidated interface for all LLM providers.
+
+Extracted from llm_interface.py as part of Issue #381 god class refactoring.
+This simplified class delegates to specialized provider modules.
+"""
+
+import asyncio
+import logging
+import os
+import re
+import time
+import uuid
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+import xxhash
+
+from src.unified_config_manager import UnifiedConfigManager
+from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
+from src.utils.http_client import get_http_client
+from src.constants.model_constants import ModelConstants
+
+from .models import LLMSettings, LLMResponse, LLMRequest, ChatMessage
+from .types import ProviderType, LLMType
+from .hardware import HardwareDetector, TORCH_AVAILABLE
+from .streaming import StreamingManager
+from .mock_providers import local_llm, palm
+from .providers.ollama import OllamaProvider
+from .providers.openai_provider import OpenAIProvider
+from .providers.transformers_provider import TransformersProvider
+from .providers.vllm_provider import VLLMProviderHandler
+from .providers.mock_handler import MockHandler, LocalHandler
+
+# Optional imports
+try:
+    from src.prompt_manager import prompt_manager
+except ImportError:
+    prompt_manager = None
+
+try:
+    from src.utils.logging_manager import get_llm_logger
+    logger = get_llm_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
+
+# LLM Pattern Analyzer integration for cost optimization (Issue #229)
+try:
+    from backend.api.analytics_llm_patterns import (
+        get_pattern_analyzer,
+        UsageRecordRequest,
+    )
+    PATTERN_ANALYZER_AVAILABLE = True
+except ImportError:
+    PATTERN_ANALYZER_AVAILABLE = False
+    UsageRecordRequest = None
+    logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
+
+config = UnifiedConfigManager()
+
+
+class LLMInterface:
+    """
+    Consolidated LLM Interface integrating all provider capabilities.
+
+    Delegates to specialized provider modules for:
+    - Ollama, OpenAI, vLLM, HuggingFace, Transformers support
+    - Modern async patterns with proper timeout handling
+    - Performance optimization with caching and metrics
+    - Circuit breaker protection and fallback mechanisms
+    - Structured request/response handling
+    """
+
+    def __init__(self, settings: Optional[LLMSettings] = None):
+        """Initialize LLM interface with optional settings and configure providers."""
+        # Initialize settings
+        self.settings = settings or LLMSettings()
+
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
+
+        # Use unified configuration - NO HARDCODED VALUES
+        self.ollama_host = config.get_service_url("ollama")
+
+        # Configuration setup using unified config
+        self.openai_api_key = config.get(
+            "openai.api_key", os.getenv("OPENAI_API_KEY", "")
+        )
+
+        self.ollama_models = config.get(
+            "llm.fallback_models", [ModelConstants.DEFAULT_OLLAMA_MODEL]
+        )
+
+        # Use unified configuration for LLM models
+        selected_model = config.get(
+            "llm.fallback_models.0", ModelConstants.DEFAULT_OLLAMA_MODEL
+        )
+        self.orchestrator_llm_alias = f"ollama_{selected_model}"
+        self.task_llm_alias = f"ollama_{selected_model}"
+
+        self.orchestrator_llm_settings = config.get("llm.orchestrator_settings", {})
+        self.task_llm_settings = config.get("llm.task_settings", {})
+
+        # Initialize hardware detector
+        hardware_priority = config.get(
+            "hardware.acceleration.priority",
+            ["openvino_npu", "openvino", "cuda", "cpu"],
+        )
+        self._hardware_detector = HardwareDetector(priority=hardware_priority)
+
+        # Initialize prompts
+        self._initialize_prompts()
+
+        # Initialize async components
+        self._http_client = get_http_client()
+        self._models_cache: Optional[List[str]] = None
+        self._models_cache_time: float = 0
+        self._lock = asyncio.Lock()
+
+        # Performance optimization - L1 in-memory cache
+        self._memory_cache = {}
+        self._memory_cache_access = []
+        self._memory_cache_max_size = 100
+
+        # Performance metrics tracking
+        self._metrics = {
+            "total_requests": 0,
+            "cache_hits": 0,
+            "memory_cache_hits": 0,
+            "cache_misses": 0,
+            "avg_response_time": 0.0,
+            "total_response_time": 0.0,
+            "provider_usage": {},
+            "streaming_failures": {},
+        }
+
+        # Initialize streaming manager
+        self._streaming_manager = StreamingManager()
+
+        # Initialize providers
+        self._ollama_provider = OllamaProvider(self.settings, self._streaming_manager)
+        self._openai_provider = OpenAIProvider(self.openai_api_key)
+        self._transformers_provider = TransformersProvider()
+        self._vllm_handler = VLLMProviderHandler()
+        self._mock_handler = MockHandler()
+        self._local_handler = LocalHandler()
+
+        # Provider routing map for extensibility
+        self.provider_routing = {
+            "ollama": self._handle_ollama_request,
+            "openai": self._handle_openai_request,
+            "transformers": self._handle_transformers_request,
+            "vllm": self._handle_vllm_request,
+            "mock": self._handle_mock_request,
+            "local": self._handle_local_request,
+        }
+
+        # Request queue for proper async handling
+        self.request_queue = asyncio.Queue(maxsize=50)
+        self.active_requests = set()
+
+        # Backward compatibility attributes
+        self.streaming_failures = self._streaming_manager.streaming_failures
+        self.streaming_failure_threshold = self._streaming_manager.failure_threshold
+        self.streaming_reset_time = self._streaming_manager.reset_time
+        self.hardware_priority = hardware_priority
+
+        logger.info("LLM Interface initialized with all provider support")
+
+    def reload_ollama_configuration(self):
+        """Runtime reload of Ollama configuration."""
+        self.ollama_host = config.get_service_url("ollama")
+        logger.info(
+            f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}"
+        )
+        return self.ollama_host
+
+    def _initialize_prompts(self):
+        """Initialize system prompts using centralized prompt manager."""
+        try:
+            orchestrator_prompt_key = config.get(
+                "prompts.orchestrator_key", "default.agent.system.main"
+            )
+            if prompt_manager:
+                self.orchestrator_system_prompt = prompt_manager.get(
+                    orchestrator_prompt_key
+                )
+            else:
+                self.orchestrator_system_prompt = (
+                    "You are AutoBot, an autonomous Linux administration assistant."
+                )
+        except (KeyError, AttributeError):
+            logger.warning("Orchestrator prompt not found, using default")
+            self.orchestrator_system_prompt = (
+                "You are AutoBot, an autonomous Linux administration assistant."
+            )
+
+        try:
+            task_prompt_key = config.get(
+                "prompts.task_key", "reflection.agent.system.main.role"
+            )
+            if prompt_manager:
+                self.task_system_prompt = prompt_manager.get(task_prompt_key)
+            else:
+                self.task_system_prompt = (
+                    "You are AutoBot, completing specific tasks efficiently."
+                )
+        except (KeyError, AttributeError):
+            logger.warning("Task prompt not found, using default")
+            self.task_system_prompt = (
+                "You are AutoBot, completing specific tasks efficiently."
+            )
+
+        try:
+            tool_interpreter_prompt_key = config.get(
+                "prompts.tool_interpreter_key", "tool_interpreter_system_prompt"
+            )
+            if prompt_manager:
+                self.tool_interpreter_system_prompt = prompt_manager.get(
+                    tool_interpreter_prompt_key
+                )
+            else:
+                self.tool_interpreter_system_prompt = (
+                    "You are AutoBot's tool interpreter."
+                )
+        except (KeyError, AttributeError):
+            logger.warning("Tool interpreter prompt not found, using default")
+            self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
+
+    @property
+    def base_url(self) -> str:
+        """Get Ollama base URL."""
+        return f"http://{self.settings.ollama_host}:{self.settings.ollama_port}"
+
+    async def _generate_cache_key(
+        self, messages: List[ChatMessage], **params
+    ) -> str:
+        """Generate cache key with high-performance hashing."""
+        key_data = (
+            tuple((m.role, m.content) for m in messages),
+            params.get("model", self.settings.default_model),
+            params.get("temperature", self.settings.temperature),
+            params.get("top_k", self.settings.top_k),
+            params.get("top_p", self.settings.top_p),
+        )
+        return f"llm_cache_{xxhash.xxh64(str(key_data)).hexdigest()}"
+
+    # Backward compatibility methods for streaming
+    def _should_use_streaming(self, model: str) -> bool:
+        """Delegate to streaming manager."""
+        return self._streaming_manager.should_use_streaming(model)
+
+    def _record_streaming_failure(self, model: str):
+        """Delegate to streaming manager."""
+        self._streaming_manager.record_failure(model)
+
+    def _record_streaming_success(self, model: str):
+        """Delegate to streaming manager."""
+        self._streaming_manager.record_success(model)
+
+    # Hardware detection methods (delegate to HardwareDetector)
+    def _detect_hardware(self):
+        """Detect available hardware acceleration."""
+        return self._hardware_detector.detect_hardware()
+
+    def _select_backend(self):
+        """Select optimal backend based on hardware."""
+        return self._hardware_detector.select_backend()
+
+    # Legacy prompt loading methods (preserved for backward compatibility)
+    async def _load_prompt_from_file(self, file_path: str) -> str:
+        """Load prompt content from a file asynchronously."""
+        try:
+            from src.utils.async_file_operations import read_file_async
+            content = await read_file_async(file_path)
+            return content.strip()
+        except FileNotFoundError:
+            logger.error(f"Prompt file not found: {file_path}")
+            return ""
+        except Exception as e:
+            logger.error(f"Error loading prompt from {file_path}: {e}")
+            return ""
+
+    def _resolve_includes(self, content: str, base_path: str) -> str:
+        """Resolve @include directives in prompt content recursively."""
+
+        def replace_include(match):
+            included_file = match.group(1)
+            included_path = os.path.join(base_path, included_file)
+            if os.path.exists(included_path):
+                with open(included_path, "r", encoding="utf-8") as f:
+                    included_content = f.read()
+                return self._resolve_includes(
+                    included_content, os.path.dirname(included_path)
+                )
+            else:
+                logger.warning(f"Included file not found: {included_path}")
+                return f"<!-- MISSING: {included_file} -->"
+
+        return re.sub(r"@include\s*\(([^)]+)\)", replace_include, content)
+
+    def _load_composite_prompt(self, base_file_path: str) -> str:
+        """Load and resolve a composite prompt with include directives."""
+        try:
+            base_dir = os.path.dirname(base_file_path)
+            with open(base_file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return self._resolve_includes(content, base_dir).strip()
+        except FileNotFoundError:
+            logger.error(f"Base prompt file not found: {base_file_path}")
+            return ""
+        except Exception as e:
+            logger.error(f"Error loading composite prompt from {base_file_path}: {e}")
+            return ""
+
+    @error_boundary(component="llm_interface", function="check_ollama_connection")
+    async def check_ollama_connection(self) -> bool:
+        """Check if Ollama service is available."""
+        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+        if not ollama_host or not ollama_port:
+            raise ValueError(
+                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and "
+                "AUTOBOT_OLLAMA_PORT environment variables must be set"
+            )
+        self.ollama_host = f"http://{ollama_host}:{ollama_port}"
+
+        try:
+            from src.retry_mechanism import retry_network_operation
+
+            async def make_request():
+                http_client = get_http_client()
+                async with await http_client.get(
+                    f"{self.ollama_host}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as response:
+                    return response.status == 200
+
+            return await retry_network_operation(make_request)
+        except Exception as e:
+            logger.error(f"Ollama connection check failed: {e}")
+            return False
+
+    # Main chat completion method
+    async def chat_completion(
+        self, messages: list, llm_type: str = "orchestrator", **kwargs
+    ) -> LLMResponse:
+        """
+        Enhanced chat completion with multi-provider support and intelligent routing.
+
+        Args:
+            messages: List of message dicts
+            llm_type: Type of LLM ("orchestrator", "task", "chat", etc.)
+            **kwargs: Additional parameters (provider, model_name, etc.)
+
+        Returns:
+            LLMResponse object with standardized response structure
+        """
+        start_time = time.time()
+        request_id = kwargs.get("request_id", str(uuid.uuid4()))
+
+        try:
+            # Update metrics
+            self._metrics["total_requests"] += 1
+
+            # Determine provider and model
+            provider, model_name = self._determine_provider_and_model(
+                llm_type, **kwargs
+            )
+
+            # Setup system prompt
+            messages = self._setup_system_prompt(messages, llm_type)
+
+            # Create standardized request
+            request = LLMRequest(
+                messages=messages,
+                llm_type=llm_type,
+                provider=provider,
+                model_name=model_name,
+                request_id=request_id,
+                **kwargs,
+            )
+
+            # Route to appropriate provider
+            if provider in self.provider_routing:
+                response = await self.provider_routing[provider](request)
+            else:
+                logger.warning(f"Unknown provider {provider}, falling back to Ollama")
+                response = await self._handle_ollama_request(request)
+
+            # Update metrics
+            processing_time = time.time() - start_time
+            self._update_metrics(provider, processing_time, success=True)
+
+            # Track usage for cost optimization (Issue #229)
+            await self._track_llm_usage(
+                messages=messages,
+                model=model_name,
+                response=response,
+                processing_time=processing_time,
+                session_id=kwargs.get("session_id"),
+            )
+
+            return response
+
+        except Exception as e:
+            processing_time = time.time() - start_time
+            self._update_metrics("unknown", processing_time, success=False)
+            logger.error(f"Chat completion error: {e}")
+
+            return LLMResponse(
+                content=f"Error: {str(e)}",
+                model="error",
+                provider="error",
+                processing_time=processing_time,
+                request_id=request_id,
+                error=str(e),
+            )
+
+    def _determine_provider_and_model(
+        self, llm_type: str, **kwargs
+    ) -> tuple[str, str]:
+        """Determine the best provider and model for the request."""
+        if "provider" in kwargs:
+            provider = kwargs["provider"]
+            model_name = kwargs.get("model_name", "")
+            return provider, model_name
+
+        if llm_type == "orchestrator":
+            model_alias = self.orchestrator_llm_alias
+        elif llm_type == "task":
+            model_alias = self.task_llm_alias
+        else:
+            model_alias = kwargs.get("model_name", self.settings.default_model)
+
+        if model_alias.startswith("ollama_"):
+            provider = "ollama"
+            model_name = model_alias.replace("ollama_", "")
+            model_name = self.ollama_models.get(model_name, model_name)
+        elif model_alias.startswith("openai_"):
+            provider = "openai"
+            model_name = model_alias.replace("openai_", "")
+        elif model_alias.startswith("transformers_"):
+            provider = "transformers"
+            model_name = model_alias.replace("transformers_", "")
+        elif model_alias.startswith("vllm_"):
+            provider = "vllm"
+            model_name = model_alias.replace("vllm_", "")
+        else:
+            provider = "ollama"
+            model_name = model_alias
+
+        return provider, model_name
+
+    def _setup_system_prompt(self, messages: list, llm_type: str) -> list:
+        """Setup system prompt based on LLM type."""
+        if llm_type == "orchestrator":
+            system_prompt = self.orchestrator_system_prompt
+        elif llm_type == "task":
+            system_prompt = self.task_system_prompt
+        else:
+            system_prompt = None
+
+        if system_prompt and not any(m.get("role") == "system" for m in messages):
+            messages.insert(0, {"role": "system", "content": system_prompt})
+
+        return messages
+
+    def _update_metrics(self, provider: str, processing_time: float, success: bool):
+        """Update performance metrics."""
+        if provider not in self._metrics["provider_usage"]:
+            self._metrics["provider_usage"][provider] = {
+                "requests": 0,
+                "successes": 0,
+                "failures": 0,
+                "avg_time": 0.0,
+            }
+
+        provider_metrics = self._metrics["provider_usage"][provider]
+        provider_metrics["requests"] += 1
+
+        if success:
+            provider_metrics["successes"] += 1
+        else:
+            provider_metrics["failures"] += 1
+
+        old_avg = provider_metrics["avg_time"]
+        new_avg = (
+            old_avg * (provider_metrics["requests"] - 1) + processing_time
+        ) / provider_metrics["requests"]
+        provider_metrics["avg_time"] = new_avg
+
+        self._metrics["total_response_time"] += processing_time
+        self._metrics["avg_response_time"] = (
+            self._metrics["total_response_time"] / self._metrics["total_requests"]
+        )
+
+    async def _track_llm_usage(
+        self,
+        messages: list,
+        model: str,
+        response: LLMResponse,
+        processing_time: float,
+        session_id: Optional[str] = None,
+    ):
+        """Track LLM usage for cost optimization analysis (Issue #229)."""
+        if not PATTERN_ANALYZER_AVAILABLE:
+            return
+
+        try:
+            prompt_content = " ".join(
+                m.get("content", "") for m in messages if m.get("role") != "system"
+            )
+
+            usage = response.usage if hasattr(response, "usage") else {}
+            input_tokens = usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0)
+
+            if input_tokens == 0:
+                input_tokens = len(prompt_content.split()) * 1.3
+
+            if output_tokens == 0 and hasattr(response, "content"):
+                output_tokens = len(str(response.content).split()) * 1.3
+
+            analyzer = get_pattern_analyzer()
+            usage_request = UsageRecordRequest(
+                prompt=prompt_content[:2000],
+                model=model,
+                input_tokens=int(input_tokens),
+                output_tokens=int(output_tokens),
+                response_time=processing_time,
+                success=not bool(getattr(response, "error", None)),
+                session_id=session_id,
+            )
+            asyncio.create_task(analyzer.record_usage(usage_request))
+        except Exception as e:
+            logger.debug(f"LLM usage tracking failed (non-critical): {e}")
+
+    # Provider request handlers
+    async def _handle_ollama_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle Ollama requests via provider."""
+        return await self._ollama_provider.chat_completion(request)
+
+    async def _handle_openai_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle OpenAI requests via provider."""
+        return await self._openai_provider.chat_completion(request)
+
+    async def _handle_transformers_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle Transformers requests via provider."""
+        return await self._transformers_provider.chat_completion(request)
+
+    async def _handle_vllm_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle vLLM requests via provider with fallback."""
+        try:
+            return await self._vllm_handler.chat_completion(request)
+        except Exception as e:
+            logger.error(f"vLLM request failed: {e}, falling back to Ollama")
+            return await self._handle_ollama_request(request)
+
+    async def _handle_mock_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle mock requests via handler."""
+        return await self._mock_handler.chat_completion(request)
+
+    async def _handle_local_request(self, request: LLMRequest) -> LLMResponse:
+        """Handle local requests via handler."""
+        return await self._local_handler.chat_completion(request)
+
+    # Utility methods
+    async def get_available_models(self, provider: str = "ollama") -> List[str]:
+        """Get available models for a provider."""
+        if provider == "ollama":
+            ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+            ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
+            if not ollama_host or not ollama_port:
+                raise ValueError(
+                    "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and "
+                    "AUTOBOT_OLLAMA_PORT environment variables must be set"
+                )
+            self.ollama_host = f"http://{ollama_host}:{ollama_port}"
+
+            try:
+                session = await self._http_client.get_session()
+                async with session.get(f"{self.ollama_host}/api/tags") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return [model["name"] for model in data.get("models", [])]
+            except Exception as e:
+                logger.error(f"Failed to get Ollama models: {e}")
+
+        return []
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get performance metrics."""
+        return self._metrics.copy()
+
+    async def chat_completion_optimized(
+        self,
+        agent_type: str,
+        user_message: str,
+        session_id: str,
+        user_name: Optional[str] = None,
+        user_role: Optional[str] = None,
+        available_tools: Optional[list] = None,
+        recent_context: Optional[str] = None,
+        additional_params: Optional[dict] = None,
+        **llm_params,
+    ) -> LLMResponse:
+        """
+        Convenience method for chat completion with vLLM-optimized prompts.
+
+        This method automatically:
+        1. Gets the optimal base prompt for the agent tier
+        2. Constructs a cache-optimized prompt (98.7% cache hit rate)
+        3. Routes to vLLM provider for 3-4x performance improvement
+        """
+        from src.agent_tier_classifier import get_base_prompt_for_agent
+        from src.prompt_manager import get_optimized_prompt
+
+        system_prompt = get_optimized_prompt(
+            base_prompt_key=get_base_prompt_for_agent(agent_type),
+            session_id=session_id,
+            user_name=user_name,
+            user_role=user_role,
+            available_tools=available_tools,
+            recent_context=recent_context,
+            additional_params=additional_params,
+        )
+
+        request = LLMRequest(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            provider="vllm",
+            **llm_params,
+        )
+
+        response = await self.chat_completion(request)
+
+        if "cached_tokens" in response.usage:
+            cached_tokens = response.usage.get("cached_tokens", 0)
+            total_tokens = response.usage.get("prompt_tokens", 0)
+            cache_hit_rate = (
+                (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
+            )
+            response.metadata["cache_hit_rate"] = cache_hit_rate
+
+        return response
+
+    # Backward compatibility helper methods
+    def _get_ollama_host_from_env(self) -> str:
+        """Get Ollama host URL from environment variables."""
+        return self._ollama_provider.get_host_from_env()
+
+    def _build_ollama_request_data(
+        self, request: LLMRequest, model: str, use_streaming: bool
+    ) -> dict:
+        """Build Ollama API request data dictionary."""
+        return self._ollama_provider.build_request_data(request, model, use_streaming)
+
+    def _extract_content_from_response(self, response: dict) -> str:
+        """Safely extract content from Ollama response."""
+        return self._ollama_provider.extract_content(response)
+
+    def _build_llm_response(
+        self,
+        content: str,
+        response: dict,
+        model: str,
+        processing_time: float,
+        request_id: str,
+        fallback_used: bool = False,
+    ) -> LLMResponse:
+        """Build LLMResponse from extracted content."""
+        return self._ollama_provider.build_response(
+            content, response, model, processing_time, request_id, fallback_used
+        )
+
+    def _build_streaming_error_response(self, model: str, error: Exception) -> dict:
+        """Build error response dict for streaming failures."""
+        return self._ollama_provider.build_error_response(model, error)
+
+    async def cleanup(self):
+        """Cleanup resources."""
+        # Cleanup vLLM provider
+        try:
+            await self._vllm_handler.cleanup()
+        except Exception as e:
+            logger.warning(f"Error cleaning up vLLM provider: {e}")
+
+
+__all__ = [
+    "LLMInterface",
+]
