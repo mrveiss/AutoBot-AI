@@ -4,6 +4,14 @@
 """
 Enhanced Multi-Agent Orchestrator
 
+Issue #381: This file has been refactored into the enhanced_orchestration/ package.
+This thin facade maintains backward compatibility while delegating to focused modules.
+
+See: src/enhanced_orchestration/
+- types.py: Enums and dataclasses (AgentCapability, ExecutionStrategy, etc.)
+- execution_strategies.py: Strategy implementations
+- workflow_planning.py: Workflow planning and utilities
+
 Advanced orchestration system with improved agent coordination, parallel execution,
 intelligent task distribution, and collaborative workflows.
 """
@@ -11,160 +19,50 @@ intelligent task distribution, and collaborative workflows.
 import asyncio
 import json
 import logging
-import re
 import time
-import uuid
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from src.agents.llm_failsafe_agent import get_robust_llm_response
-from src.constants.threshold_constants import RetryConfig, TimingConstants
+from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
 from src.utils.redis_client import get_redis_client
 
+# Re-export all public API from the package for backward compatibility
+from src.enhanced_orchestration import (
+    FALLBACK_TIERS,
+    AgentCapability,
+    AgentPerformance,
+    AgentTask,
+    ExecutionStrategy,
+    ExecutionStrategyHandler,
+    WorkflowPlan,
+    WorkflowPlanner,
+)
+
 logger = logging.getLogger(__name__)
 
-# Issue #380: Module-level frozenset for fallback tier checks
-_FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
+# Backward compatibility alias
+_FALLBACK_TIERS = FALLBACK_TIERS
 
-
-class AgentCapability(Enum):
-    """Core agent capabilities"""
-
-    RESEARCH = "research"
-    ANALYSIS = "analysis"
-    EXECUTION = "execution"
-    MONITORING = "monitoring"
-    SYNTHESIS = "synthesis"
-    VALIDATION = "validation"
-    OPTIMIZATION = "optimization"
-    SECURITY = "security"
-
-
-class ExecutionStrategy(Enum):
-    """Task execution strategies"""
-
-    SEQUENTIAL = "sequential"  # One after another
-    PARALLEL = "parallel"  # All at once
-    PIPELINE = "pipeline"  # Output feeds next input
-    COLLABORATIVE = "collaborative"  # Agents work together
-    ADAPTIVE = "adaptive"  # Strategy changes based on progress
-
-
-@dataclass
-class AgentTask:
-    """Enhanced task definition for agents"""
-
-    task_id: str
-    agent_type: str
-    action: str
-    inputs: Dict[str, Any]
-    dependencies: List[str] = field(default_factory=list)  # Task IDs this depends on
-    priority: int = 5  # 1-10, higher is more important
-    timeout: float = float(TimingConstants.STANDARD_TIMEOUT)  # Issue #376
-    retry_count: int = 0
-    max_retries: int = RetryConfig.DEFAULT_RETRIES  # Issue #376
-    capabilities_required: Set[AgentCapability] = field(default_factory=set)
-    outputs: Optional[Dict[str, Any]] = None
-    status: str = "pending"  # pending, running, completed, failed
-    error: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def start_execution(self) -> None:
-        """Mark task as started (Issue #372 - reduces feature envy)."""
-        self.start_time = time.time()
-        self.status = "running"
-
-    def complete_execution(self, result: Dict[str, Any]) -> None:
-        """Mark task as completed with result (Issue #372 - reduces feature envy)."""
-        self.end_time = time.time()
-        self.status = "completed"
-        self.outputs = result
-
-    def fail_execution(self, error_msg: str) -> None:
-        """Mark task as failed with error (Issue #372 - reduces feature envy)."""
-        self.status = "failed"
-        self.error = error_msg
-
-    def get_execution_time(self) -> float:
-        """Get execution time in seconds (Issue #372 - reduces feature envy)."""
-        if self.start_time and self.end_time:
-            return self.end_time - self.start_time
-        return 0.0
-
-    def can_retry(self) -> bool:
-        """Check if task can be retried (Issue #372 - reduces feature envy)."""
-        return self.retry_count < self.max_retries
-
-    def increment_retry(self) -> None:
-        """Increment retry counter (Issue #372 - reduces feature envy)."""
-        self.retry_count += 1
-
-    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Get inputs enhanced with context (Issue #372 - reduces feature envy)."""
-        return {
-            **self.inputs,
-            "context": context,
-            "task_id": self.task_id,
-            "workflow_metadata": self.metadata,
-        }
-
-    def to_completed_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Build completed result dict (Issue #372 - reduces feature envy)."""
-        return {
-            "status": "completed",
-            "output": result,
-            "execution_time": self.get_execution_time(),
-            "agent": self.agent_type,
-        }
-
-    def to_failed_result(self, error_msg: str) -> Dict[str, Any]:
-        """Build failed result dict (Issue #372 - reduces feature envy)."""
-        return {
-            "status": "failed",
-            "error": error_msg,
-            "agent": self.agent_type,
-        }
-
-
-@dataclass
-class WorkflowPlan:
-    """Enhanced workflow execution plan"""
-
-    plan_id: str
-    goal: str
-    strategy: ExecutionStrategy
-    tasks: List[AgentTask]
-    dependencies_graph: Dict[str, List[str]]  # task_id -> [dependency_ids]
-    estimated_duration: float
-    resource_requirements: Dict[str, Any]
-    success_criteria: List[str]
-    fallback_plans: List["WorkflowPlan"] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class AgentPerformance:
-    """Track agent performance metrics"""
-
-    agent_type: str
-    total_tasks: int = 0
-    successful_tasks: int = 0
-    failed_tasks: int = 0
-    average_execution_time: float = 0.0
-    reliability_score: float = 1.0  # 0-1
-    capability_scores: Dict[AgentCapability, float] = field(default_factory=dict)
-    last_update: float = field(default_factory=time.time)
+__all__ = [
+    "AgentCapability",
+    "ExecutionStrategy",
+    "AgentTask",
+    "WorkflowPlan",
+    "AgentPerformance",
+    "EnhancedMultiAgentOrchestrator",
+    "enhanced_orchestrator",
+    "create_and_execute_workflow",
+    "FALLBACK_TIERS",
+    "_FALLBACK_TIERS",
+]
 
 
 class EnhancedMultiAgentOrchestrator:
     """
     Advanced orchestration system for multi-agent coordination.
+
+    Issue #381: Refactored to delegate to enhanced_orchestration package components.
 
     Features:
     - Intelligent task distribution based on agent capabilities
@@ -221,6 +119,25 @@ class EnhancedMultiAgentOrchestrator:
         self.max_parallel_tasks = 5
         self.resource_semaphore = asyncio.Semaphore(self.max_parallel_tasks)
 
+        # Initialize planner and strategy handler
+        self._planner = WorkflowPlanner(self.agent_capabilities)
+        self._strategy_handler = None  # Lazy initialization
+
+    def _get_strategy_handler(self) -> ExecutionStrategyHandler:
+        """Lazy initialization of strategy handler."""
+        if self._strategy_handler is None:
+            self._strategy_handler = ExecutionStrategyHandler(
+                max_parallel_tasks=self.max_parallel_tasks,
+                resource_semaphore=self.resource_semaphore,
+                execute_single_task=self._execute_single_task,
+                topological_sort_tasks=self._planner.topological_sort_tasks,
+                dependencies_met=self._planner.dependencies_met,
+                group_pipeline_stages=self._planner.group_pipeline_stages,
+                enhance_task_for_collaboration=self._planner.enhance_task_for_collaboration,
+                coordinate_collaboration=self._coordinate_collaboration,
+            )
+        return self._strategy_handler
+
     async def create_workflow_plan(
         self, goal: str, context: Optional[Dict[str, Any]] = None
     ) -> WorkflowPlan:
@@ -234,7 +151,7 @@ class EnhancedMultiAgentOrchestrator:
         Returns:
             Optimized workflow plan
         """
-        self.logger.info(f"Creating workflow plan for: {goal}")
+        self.logger.info("Creating workflow plan for: %s", goal)
 
         # Use LLM to analyze the goal and create a plan
         planning_prompt = f"""
@@ -243,7 +160,11 @@ class EnhancedMultiAgentOrchestrator:
         Goal: {goal}
 
         Available agents and their capabilities:
-        {json.dumps({agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()}, indent=2)}
+        {json.dumps(
+            {agent: [cap.value for cap in caps]
+             for agent, caps in self.agent_capabilities.items()},
+            indent=2
+        )}
 
         Create a workflow plan with:
         1. Required agents and their specific tasks
@@ -276,9 +197,9 @@ class EnhancedMultiAgentOrchestrator:
             response = await get_robust_llm_response(planning_prompt, context)
 
             # Parse the plan
-            if response.tier_used.value in _FALLBACK_TIERS:
+            if response.tier_used.value in FALLBACK_TIERS:
                 # Fallback to simple sequential plan
-                plan_data = self._create_fallback_plan(goal)
+                plan_data = self._planner.create_fallback_plan(goal)
             else:
                 # Parse LLM response
                 from src.agents.json_formatter_agent import json_formatter
@@ -288,10 +209,10 @@ class EnhancedMultiAgentOrchestrator:
                 if parse_result.success:
                     plan_data = parse_result.data
                 else:
-                    plan_data = self._create_fallback_plan(goal)
+                    plan_data = self._planner.create_fallback_plan(goal)
 
             # Create workflow plan
-            plan = self._build_workflow_plan(goal, plan_data)
+            plan = self._planner.build_workflow_plan(goal, plan_data)
 
             # Store active workflow
             self.active_workflows[plan.plan_id] = plan
@@ -299,67 +220,16 @@ class EnhancedMultiAgentOrchestrator:
             return plan
 
         except Exception as e:
-            self.logger.error(f"Failed to create workflow plan: {e}")
+            self.logger.error("Failed to create workflow plan: %s", e)
             # Return simple fallback plan
-            return self._create_simple_workflow_plan(goal)
-
-    async def _execute_by_strategy(
-        self, plan: WorkflowPlan
-    ) -> Dict[str, Any]:
-        """Execute workflow based on its strategy (Issue #315: extracted).
-
-        Args:
-            plan: Workflow plan with strategy
-
-        Returns:
-            Execution results
-        """
-        strategy_handlers = {
-            ExecutionStrategy.SEQUENTIAL: self._execute_sequential,
-            ExecutionStrategy.PARALLEL: self._execute_parallel,
-            ExecutionStrategy.PIPELINE: self._execute_pipeline,
-            ExecutionStrategy.COLLABORATIVE: self._execute_collaborative,
-        }
-        handler = strategy_handlers.get(plan.strategy, self._execute_adaptive)
-        return await handler(plan)
-
-    async def _try_fallback_plans(
-        self, plan: WorkflowPlan, original_error: Exception
-    ) -> Dict[str, Any] | None:
-        """Try fallback plans when main execution fails (Issue #315: extracted).
-
-        Args:
-            plan: Original workflow plan with fallback_plans
-            original_error: The original error that triggered fallback
-
-        Returns:
-            Fallback result if successful, None if all fallbacks fail
-        """
-        if not plan.fallback_plans:
-            return None
-
-        self.logger.info("Attempting fallback plan...")
-        for fallback in plan.fallback_plans:
-            try:
-                return await self.execute_workflow(fallback)
-            except Exception as fallback_error:
-                self.logger.error(f"Fallback plan failed: {fallback_error}")
-
-        return None
+            return self._planner.create_simple_workflow_plan(goal)
 
     async def execute_workflow(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute a workflow plan with intelligent coordination.
-
-        Issue #315: Refactored to use helper methods for reduced nesting depth.
-
-        Args:
-            plan: The workflow plan to execute
-
-        Returns:
-            Execution results
-        """
+        """Execute a workflow plan with intelligent coordination."""
         self.logger.info(
-            f"Executing workflow {plan.plan_id} with strategy: {plan.strategy.value}"
+            "Executing workflow %s with strategy: %s",
+            plan.plan_id,
+            plan.strategy.value,
         )
 
         start_time = time.time()
@@ -377,11 +247,11 @@ class EnhancedMultiAgentOrchestrator:
                 },
             )
 
-            # Issue #315: Use strategy dispatch helper
-            results = await self._execute_by_strategy(plan)
+            # Execute using strategy handler
+            results = await self._get_strategy_handler().execute_by_strategy(plan)
 
             # Check success criteria
-            success = self._check_success_criteria(plan, results)
+            success = self._planner.check_success_criteria(plan, results)
             execution_time = time.time() - start_time
 
             # Update performance metrics
@@ -394,7 +264,7 @@ class EnhancedMultiAgentOrchestrator:
                 {
                     "success": success,
                     "execution_time": execution_time,
-                    "results_summary": self._summarize_results(results),
+                    "results_summary": self._planner.summarize_results(results),
                 },
             )
 
@@ -407,12 +277,16 @@ class EnhancedMultiAgentOrchestrator:
             }
 
         except Exception as e:
-            self.logger.error(f"Workflow execution failed: {e}")
+            self.logger.error("Workflow execution failed: %s", e)
 
-            # Issue #315: Use fallback helper
-            fallback_result = await self._try_fallback_plans(plan, e)
-            if fallback_result is not None:
-                return fallback_result
+            # Try fallback plans
+            if plan.fallback_plans:
+                self.logger.info("Attempting fallback plan...")
+                for fallback in plan.fallback_plans:
+                    try:
+                        return await self.execute_workflow(fallback)
+                    except Exception as fallback_error:
+                        self.logger.error("Fallback plan failed: %s", fallback_error)
 
             # All plans failed
             return {
@@ -422,221 +296,10 @@ class EnhancedMultiAgentOrchestrator:
                 "results": results,
             }
 
-    async def _execute_sequential(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute tasks sequentially"""
-        results = {}
-
-        # Sort tasks by dependencies and priority
-        sorted_tasks = self._topological_sort_tasks(plan.tasks, plan.dependencies_graph)
-
-        for task in sorted_tasks:
-            self.logger.info(f"Executing task {task.task_id} ({task.agent_type})")
-
-            # Wait for dependencies
-            await self._wait_for_dependencies(task, results)
-
-            # Execute task
-            result = await self._execute_single_task(task, results)
-            results[task.task_id] = result
-
-            # Check if we should continue
-            if result.get("status") == "failed" and not task.metadata.get(
-                "optional", False
-            ):
-                self.logger.error(
-                    f"Required task {task.task_id} failed, stopping workflow"
-                )
-                break
-
-        return results
-
-    async def _execute_parallel(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute independent tasks in parallel"""
-        results = {}
-        pending_tasks = list(plan.tasks)
-        running_tasks = []
-
-        while pending_tasks or running_tasks:
-            # Start tasks that have their dependencies met
-            ready_tasks = []
-            for task in pending_tasks[:]:
-                if self._dependencies_met(task, results):
-                    ready_tasks.append(task)
-                    pending_tasks.remove(task)
-
-            # Start ready tasks (respecting resource limits)
-            for task in ready_tasks:
-                if len(running_tasks) < self.max_parallel_tasks:
-                    self.logger.info(f"Starting parallel task {task.task_id}")
-                    task_future = asyncio.create_task(
-                        self._execute_single_task(task, results)
-                    )
-                    running_tasks.append((task, task_future))
-
-            # Wait for any task to complete
-            if running_tasks:
-                done, _ = await asyncio.wait(  # Issue #382: pending unused
-                    [future for _, future in running_tasks],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                # Process completed tasks
-                for task, future in running_tasks[:]:
-                    if future in done:
-                        result = await future
-                        results[task.task_id] = result
-                        running_tasks.remove((task, future))
-                        self.logger.info(f"Completed parallel task {task.task_id}")
-            else:
-                # No tasks running, wait a bit (Issue #376 - use named constant)
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-        return results
-
-    async def _execute_pipeline(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute tasks in pipeline mode where outputs feed into next inputs"""
-        results = {}
-
-        # Group tasks into pipeline stages
-        stages = self._group_pipeline_stages(plan.tasks, plan.dependencies_graph)
-
-        pipeline_data = {}
-        for stage_num, stage_tasks in enumerate(stages):
-            self.logger.info(f"Executing pipeline stage {stage_num + 1}/{len(stages)}")
-
-            # Execute stage tasks in parallel
-            stage_results = await asyncio.gather(
-                *[
-                    self._execute_single_task(task, {**results, **pipeline_data})
-                    for task in stage_tasks
-                ]
-            )
-
-            # Collect results and prepare pipeline data for next stage
-            for task, result in zip(stage_tasks, stage_results):
-                results[task.task_id] = result
-
-                # Extract outputs for pipeline
-                if result.get("status") == "completed" and "output" in result:
-                    pipeline_data.update(result["output"])
-
-        return results
-
-    async def _execute_collaborative(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute tasks collaboratively with inter-agent communication"""
-        results = {}
-
-        # Create collaboration channels
-        collab_channel = f"{self.coordination_prefix}collab:{plan.plan_id}"
-
-        # Start collaboration coordinator
-        coordinator_task = asyncio.create_task(
-            self._coordinate_collaboration(plan, collab_channel)
-        )
-
-        # Execute tasks with collaboration
-        task_futures = []
-        for task in plan.tasks:
-            enhanced_task = self._enhance_task_for_collaboration(task, collab_channel)
-            future = asyncio.create_task(
-                self._execute_single_task(enhanced_task, results)
-            )
-            task_futures.append((task, future))
-
-        # Wait for all tasks
-        for task, future in task_futures:
-            result = await future
-            results[task.task_id] = result
-
-        # Stop coordinator
-        coordinator_task.cancel()
-
-        return results
-
-    def _adapt_strategy(
-        self, progress_ratio: float, failure_ratio: float, current: ExecutionStrategy
-    ) -> ExecutionStrategy:
-        """Adapt execution strategy based on progress metrics (Issue #315 - extracted helper)."""
-        if failure_ratio > 0.3:
-            self.logger.info("Adapting to SEQUENTIAL due to high failure rate")
-            return ExecutionStrategy.SEQUENTIAL
-
-        if progress_ratio > 0.7 and failure_ratio < 0.1:
-            self.logger.info("Adapting to PARALLEL due to good progress")
-            return ExecutionStrategy.PARALLEL
-
-        return current
-
-    async def _execute_parallel_batch(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> tuple[int, int]:
-        """Execute tasks in parallel batch (Issue #315 - extracted helper)."""
-        batch_size = min(self.max_parallel_tasks, len(pending_tasks))
-        batch_tasks = pending_tasks[:batch_size]
-
-        batch_results = await asyncio.gather(
-            *[
-                self._execute_single_task(task, results)
-                for task in batch_tasks
-                if self._dependencies_met(task, results)
-            ]
-        )
-
-        completed, failed = 0, 0
-        for task, result in zip(batch_tasks, batch_results):
-            results[task.task_id] = result
-            pending_tasks.remove(task)
-            if result.get("status") == "completed":
-                completed += 1
-            else:
-                failed += 1
-
-        return completed, failed
-
-    async def _execute_sequential_step(
-        self, pending_tasks: list, results: Dict[str, Any]
-    ) -> tuple[int, int]:
-        """Execute one sequential task step (Issue #315 - extracted helper)."""
-        for task in pending_tasks[:]:
-            if not self._dependencies_met(task, results):
-                continue
-
-            result = await self._execute_single_task(task, results)
-            results[task.task_id] = result
-            pending_tasks.remove(task)
-
-            if result.get("status") == "completed":
-                return 1, 0
-            return 0, 1
-
-        return 0, 0
-
-    async def _execute_adaptive(self, plan: WorkflowPlan) -> Dict[str, Any]:
-        """Execute with adaptive strategy (Issue #315 - refactored depth 5 to 2)."""
-        results = {}
-        current_strategy = plan.strategy
-        completed_tasks, failed_tasks = 0, 0
-        pending_tasks = list(plan.tasks)
-
-        while pending_tasks:
-            progress_ratio = completed_tasks / len(plan.tasks)
-            failure_ratio = failed_tasks / max(completed_tasks, 1)
-            current_strategy = self._adapt_strategy(progress_ratio, failure_ratio, current_strategy)
-
-            if current_strategy == ExecutionStrategy.PARALLEL:
-                c, f = await self._execute_parallel_batch(pending_tasks, results)
-            else:
-                c, f = await self._execute_sequential_step(pending_tasks, results)
-
-            completed_tasks += c
-            failed_tasks += f
-
-        return results
-
     async def _execute_single_task(
         self, task: AgentTask, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Execute a single agent task (Issue #372 - uses model methods)"""
+        """Execute a single agent task"""
         task.start_execution()
 
         try:
@@ -648,7 +311,7 @@ class EnhancedMultiAgentOrchestrator:
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
 
-                # Prepare inputs with context using model method (Issue #372)
+                # Prepare inputs with context using model method
                 enhanced_inputs = task.get_enhanced_inputs(context)
 
                 # Execute with timeout
@@ -671,16 +334,18 @@ class EnhancedMultiAgentOrchestrator:
         except asyncio.TimeoutError:
             task.fail_execution("Timeout")
 
-            # Retry logic using model methods (Issue #372)
+            # Retry logic using model methods
             if task.can_retry():
                 task.increment_retry()
                 self.logger.warning(
-                    f"Task {task.task_id} timed out, retrying ({task.retry_count}/{task.max_retries})"
+                    "Task %s timed out, retrying (%d/%d)",
+                    task.task_id,
+                    task.retry_count,
+                    task.max_retries,
                 )
                 return await self._execute_single_task(task, context)
 
             self._update_agent_performance(task.agent_type, False, task.timeout)
-
             return task.to_failed_result("Task execution timed out")
 
         except Exception as e:
@@ -695,16 +360,7 @@ class EnhancedMultiAgentOrchestrator:
     async def get_agent_recommendations(
         self, task_type: str, capabilities_needed: Set[AgentCapability]
     ) -> List[str]:
-        """
-        Get recommended agents for a task based on capabilities and performance.
-
-        Args:
-            task_type: Type of task
-            capabilities_needed: Required capabilities
-
-        Returns:
-            Ranked list of suitable agents
-        """
+        """Get recommended agents for a task based on capabilities and performance."""
         suitable_agents = []
 
         for agent, caps in self.agent_capabilities.items():
@@ -734,210 +390,10 @@ class EnhancedMultiAgentOrchestrator:
 
         return [agent for agent, _ in suitable_agents]
 
-    def _build_workflow_plan(
-        self, goal: str, plan_data: Dict[str, Any]
-    ) -> WorkflowPlan:
-        """Build workflow plan from parsed data"""
-        plan_id = str(uuid.uuid4())
-
-        # Create tasks
-        tasks = []
-        dependencies_graph = {}
-
-        for i, task_data in enumerate(plan_data.get("tasks", [])):
-            task_id = f"{plan_id}_task_{i}"
-
-            # Determine required capabilities
-            caps_required = set()
-            for cap_name in task_data.get("capabilities_required", []):
-                try:
-                    caps_required.add(AgentCapability(cap_name))
-                except ValueError:
-                    logger.debug("Unknown capability %s, skipping", cap_name)
-
-            task = AgentTask(
-                task_id=task_id,
-                agent_type=task_data.get("agent", "orchestrator"),
-                action=task_data.get("action", "process"),
-                inputs=task_data.get("inputs", {}),
-                dependencies=task_data.get("dependencies", []),
-                priority=task_data.get("priority", 5),
-                capabilities_required=caps_required,
-            )
-
-            tasks.append(task)
-            dependencies_graph[task_id] = task.dependencies
-
-        # Determine strategy
-        strategy_name = plan_data.get("strategy", "sequential")
-        try:
-            strategy = ExecutionStrategy(strategy_name)
-        except ValueError:
-            strategy = ExecutionStrategy.SEQUENTIAL
-
-        return WorkflowPlan(
-            plan_id=plan_id,
-            goal=goal,
-            strategy=strategy,
-            tasks=tasks,
-            dependencies_graph=dependencies_graph,
-            estimated_duration=plan_data.get("estimated_duration", 60.0),
-            resource_requirements=plan_data.get("resource_requirements", {}),
-            success_criteria=plan_data.get("success_criteria", ["All tasks completed"]),
-        )
-
-    def _create_fallback_plan(self, goal: str) -> Dict[str, Any]:
-        """Create a simple fallback plan"""
-        return {
-            "strategy": "sequential",
-            "tasks": [
-                {
-                    "agent": "classification_agent",
-                    "action": "classify_request",
-                    "inputs": {"message": goal},
-                    "dependencies": [],
-                    "priority": 8,
-                },
-                {
-                    "agent": "orchestrator",
-                    "action": "process_goal",
-                    "inputs": {"goal": goal},
-                    "dependencies": [],
-                    "priority": 5,
-                },
-            ],
-            "success_criteria": ["Goal processed"],
-            "estimated_duration": 30.0,
-            "resource_requirements": {},
-        }
-
-    def _create_simple_workflow_plan(self, goal: str) -> WorkflowPlan:
-        """Create a simple sequential workflow plan"""
-        plan_id = str(uuid.uuid4())
-
-        return WorkflowPlan(
-            plan_id=plan_id,
-            goal=goal,
-            strategy=ExecutionStrategy.SEQUENTIAL,
-            tasks=[
-                AgentTask(
-                    task_id=f"{plan_id}_task_0",
-                    agent_type="orchestrator",
-                    action="process_goal",
-                    inputs={"goal": goal},
-                    priority=5,
-                )
-            ],
-            dependencies_graph={},
-            estimated_duration=30.0,
-            resource_requirements={},
-            success_criteria=["Task completed"],
-        )
-
-    def _topological_sort_tasks(
-        self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]
-    ) -> List[AgentTask]:
-        """Sort tasks based on dependencies"""
-        # Create task lookup
-        task_map = {task.task_id: task for task in tasks}
-
-        # Kahn's algorithm for topological sort
-        in_degree = {task.task_id: 0 for task in tasks}
-        for deps in dependencies.values():
-            for dep in deps:
-                if dep in in_degree:
-                    in_degree[dep] += 1
-
-        queue = [task_id for task_id, degree in in_degree.items() if degree == 0]
-        sorted_tasks = []
-
-        while queue:
-            # Sort by priority within same dependency level
-            queue.sort(key=lambda tid: task_map[tid].priority, reverse=True)
-
-            task_id = queue.pop(0)
-            sorted_tasks.append(task_map[task_id])
-
-            # Reduce in-degree for dependent tasks
-            for other_id, deps in dependencies.items():
-                if task_id in deps:
-                    in_degree[other_id] -= 1
-                    if in_degree[other_id] == 0:
-                        queue.append(other_id)
-
-        # Add any remaining tasks (cycles)
-        for task in tasks:
-            if task not in sorted_tasks:
-                sorted_tasks.append(task)
-
-        return sorted_tasks
-
-    def _dependencies_met(self, task: AgentTask, results: Dict[str, Any]) -> bool:
-        """Check if task dependencies are met"""
-        for dep_id in task.dependencies:
-            if dep_id not in results or results[dep_id].get("status") != "completed":
-                return False
-        return True
-
-    async def _wait_for_dependencies(self, task: AgentTask, results: Dict[str, Any]):
-        """Wait for task dependencies to complete (Issue #376 - use named constant)"""
-        while not self._dependencies_met(task, results):
-            await asyncio.sleep(TimingConstants.SHORT_DELAY)
-
-    def _group_pipeline_stages(
-        self, tasks: List[AgentTask], dependencies: Dict[str, List[str]]
-    ) -> List[List[AgentTask]]:
-        """Group tasks into pipeline stages"""
-        stages = []
-        processed = set()
-
-        while len(processed) < len(tasks):
-            # Find tasks that can run in current stage
-            stage_tasks = []
-            for task in tasks:
-                if task.task_id not in processed:
-                    # Check if all dependencies are in previous stages
-                    deps_satisfied = all(dep in processed for dep in task.dependencies)
-                    if deps_satisfied:
-                        stage_tasks.append(task)
-
-            if not stage_tasks:
-                # Circular dependency or error
-                # Add remaining tasks as final stage
-                stage_tasks = [t for t in tasks if t.task_id not in processed]
-
-            stages.append(stage_tasks)
-            processed.update(t.task_id for t in stage_tasks)
-
-        return stages
-
-    def _enhance_task_for_collaboration(
-        self, task: AgentTask, collab_channel: str
-    ) -> AgentTask:
-        """Enhance task with collaboration metadata"""
-        task.metadata["collaboration_channel"] = collab_channel
-        task.metadata["enable_sharing"] = True
-        return task
-
-    async def _process_collaboration_message(
-        self, data: Dict[str, Any], shared_context: Dict[str, Any], collab_channel: str
-    ) -> None:
-        """Process a single collaboration message (Issue #315 - extracted helper)."""
-        if data.get("type") != "share_insight":
-            return
-
-        agent = data.get("agent")
-        insight = data.get("insight")
-        shared_context[f"{agent}_insight"] = insight
-
-        # Broadcast to other agents
-        await self._broadcast_to_agents(
-            collab_channel,
-            {"type": "context_update", "shared_context": shared_context},
-        )
-
-    async def _coordinate_collaboration(self, plan: WorkflowPlan, collab_channel: str):
-        """Coordinate inter-agent collaboration (Issue #315 - refactored depth 5 to 3)."""
+    async def _coordinate_collaboration(
+        self, plan: WorkflowPlan, collab_channel: str
+    ):
+        """Coordinate inter-agent collaboration"""
         try:
             pubsub = self.redis_async.pubsub()
             await pubsub.subscribe(collab_channel)
@@ -949,9 +405,18 @@ class EnhancedMultiAgentOrchestrator:
 
                 try:
                     data = json.loads(message["data"])
-                    await self._process_collaboration_message(data, shared_context, collab_channel)
+                    if data.get("type") == "share_insight":
+                        agent = data.get("agent")
+                        insight = data.get("insight")
+                        shared_context[f"{agent}_insight"] = insight
+
+                        # Broadcast to other agents
+                        await self._broadcast_to_agents(
+                            collab_channel,
+                            {"type": "context_update", "shared_context": shared_context},
+                        )
                 except Exception as e:
-                    self.logger.error(f"Collaboration coordination error: {e}")
+                    self.logger.error("Collaboration coordination error: %s", e)
 
         except asyncio.CancelledError:
             await pubsub.unsubscribe(collab_channel)
@@ -960,91 +425,6 @@ class EnhancedMultiAgentOrchestrator:
     async def _broadcast_to_agents(self, channel: str, data: Dict[str, Any]):
         """Broadcast data to agents on collaboration channel"""
         await self.redis_async.publish(channel, json.dumps(data))
-
-    def _check_success_criteria(
-        self, plan: WorkflowPlan, results: Dict[str, Any]
-    ) -> bool:
-        """Check if workflow met success criteria"""
-        # Basic check: all non-optional tasks completed
-        for task in plan.tasks:
-            if not task.metadata.get("optional", False):
-                result = results.get(task.task_id, {})
-                if result.get("status") != "completed":
-                    return False
-
-        # Check custom success criteria from the plan
-        if plan.success_criteria:
-            for criterion in plan.success_criteria:
-                if not self._evaluate_success_criterion(criterion, results):
-                    self.logger.warning(f"Success criterion not met: {criterion}")
-                    return False
-
-        return True
-
-    def _evaluate_success_criterion(
-        self, criterion: str, results: Dict[str, Any]
-    ) -> bool:
-        """
-        Evaluate a single success criterion against workflow results.
-
-        Supports these criterion patterns:
-        - "All tasks completed" - All tasks must have status 'completed'
-        - "No failures" - No task should have status 'failed'
-        - "Success rate >= X%" - At least X% of tasks must complete
-        - "Task:<task_id> completed" - Specific task must complete
-        - Default: Returns True (unknown criteria are considered met)
-        """
-        criterion_lower = criterion.lower().strip()
-
-        # Pattern: "All tasks completed"
-        if "all tasks completed" in criterion_lower:
-            return all(
-                r.get("status") == "completed" for r in results.values()
-            )
-
-        # Pattern: "No failures"
-        if "no failure" in criterion_lower:
-            return not any(
-                r.get("status") == "failed" for r in results.values()
-            )
-
-        # Pattern: "Success rate >= X%"
-        if "success rate" in criterion_lower and ">=" in criterion_lower:
-            match = re.search(r"(\d+(?:\.\d+)?)\s*%", criterion)
-            if match:
-                required_rate = float(match.group(1)) / 100
-                if results:
-                    completed = sum(
-                        1 for r in results.values() if r.get("status") == "completed"
-                    )
-                    actual_rate = completed / len(results)
-                    return actual_rate >= required_rate
-            return True
-
-        # Pattern: "Task:<task_id> completed"
-        if criterion_lower.startswith("task:") and "completed" in criterion_lower:
-            # Extract task_id between "task:" and "completed"
-            parts = criterion_lower.replace("task:", "").replace("completed", "").strip()
-            task_id = parts.strip()
-            if task_id in results:
-                return results[task_id].get("status") == "completed"
-            return False
-
-        # Default: unknown criteria considered met (log for visibility)
-        self.logger.debug(f"Unknown success criterion pattern: {criterion}")
-        return True
-
-    def _summarize_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Summarize workflow results"""
-        completed = sum(1 for r in results.values() if r.get("status") == "completed")
-        failed = sum(1 for r in results.values() if r.get("status") == "failed")
-
-        return {
-            "total_tasks": len(results),
-            "completed": completed,
-            "failed": failed,
-            "success_rate": completed / max(len(results), 1),
-        }
 
     async def _update_performance_metrics(
         self, plan: WorkflowPlan, results: Dict[str, Any], execution_time: float
@@ -1104,7 +484,7 @@ class EnhancedMultiAgentOrchestrator:
         class MockAgent:
             async def process_request(self, request):
                 """Process agent request and return simulated result."""
-                await asyncio.sleep(TimingConstants.SHORT_DELAY)  # Simulate work
+                await asyncio.sleep(TimingConstants.SHORT_DELAY)
                 return {"result": f"Processed by {agent_type}"}
 
         return MockAgent()
