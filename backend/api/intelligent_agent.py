@@ -7,6 +7,7 @@ Intelligent Agent API Endpoints
 Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Dict, List
@@ -28,9 +29,9 @@ logger = logging.getLogger(__name__)
 # Prometheus metrics instance
 prometheus_metrics = get_metrics_manager()
 
-# Global agent instance
+# Global agent instance with module-level lock to prevent race condition on lock initialization
 _agent_instance = None
-_agent_initialization_lock = None
+_agent_initialization_lock = asyncio.Lock()  # Issue #395: Initialize at module level to prevent race
 
 
 def get_lazy_dependencies():
@@ -57,18 +58,16 @@ def get_lazy_dependencies():
 
 
 async def get_agent() -> "IntelligentAgent":
-    """Get or create the global intelligent agent instance with lazy loading."""
-    global _agent_instance, _agent_initialization_lock
+    """Get or create the global intelligent agent instance with lazy loading.
+
+    Issue #395: Lock is now initialized at module level to prevent race condition.
+    """
+    global _agent_instance
 
     if _agent_instance is not None:
         return _agent_instance
 
-    # Prevent concurrent initialization
-    import asyncio
-
-    if _agent_initialization_lock is None:
-        _agent_initialization_lock = asyncio.Lock()
-
+    # Use module-level lock for thread-safe initialization
     async with _agent_initialization_lock:
         if _agent_instance is not None:
             return _agent_instance
