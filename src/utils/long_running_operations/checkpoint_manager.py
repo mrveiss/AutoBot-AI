@@ -172,22 +172,28 @@ class OperationCheckpointManager:
         if self.redis_client:
             try:
                 keys = await self.redis_client.keys(f"checkpoint:{operation_id}:*")
-                for key in keys:
-                    data = await self.redis_client.hget(key, "data")
-                    if data:
-                        checkpoint_data = pickle.loads(data)
-                        checkpoints.append(
-                            OperationCheckpoint(
-                                checkpoint_id=checkpoint_data["checkpoint_id"],
-                                operation_id=checkpoint_data["operation_id"],
-                                checkpoint_time=datetime.fromisoformat(
-                                    checkpoint_data["checkpoint_time"]
-                                ),
-                                progress_percent=checkpoint_data["progress_percent"],
-                                state_data=checkpoint_data["state_data"],
-                                metadata=checkpoint_data.get("metadata", {}),
+                # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
+                if keys:
+                    pipe = self.redis_client.pipeline()
+                    for key in keys:
+                        pipe.hget(key, "data")
+                    results = await pipe.execute()
+
+                    for data in results:
+                        if data:
+                            checkpoint_data = pickle.loads(data)
+                            checkpoints.append(
+                                OperationCheckpoint(
+                                    checkpoint_id=checkpoint_data["checkpoint_id"],
+                                    operation_id=checkpoint_data["operation_id"],
+                                    checkpoint_time=datetime.fromisoformat(
+                                        checkpoint_data["checkpoint_time"]
+                                    ),
+                                    progress_percent=checkpoint_data["progress_percent"],
+                                    state_data=checkpoint_data["state_data"],
+                                    metadata=checkpoint_data.get("metadata", {}),
+                                )
                             )
-                        )
             except Exception as e:
                 logger.warning("Failed to list checkpoints from Redis: %s", e)
 
@@ -242,8 +248,9 @@ class OperationCheckpointManager:
         if self.redis_client:
             try:
                 keys = await self.redis_client.keys(f"checkpoint:*:{checkpoint_id}")
-                for key in keys:
-                    await self.redis_client.delete(key)
+                # Issue #397: Fix N+1 pattern - batch delete using unpack
+                if keys:
+                    await self.redis_client.delete(*keys)
                     deleted = True
             except Exception as e:
                 logger.warning("Failed to delete checkpoint from Redis: %s", e)
