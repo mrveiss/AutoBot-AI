@@ -3,6 +3,8 @@
 AutoBot Performance Monitor
 Comprehensive performance monitoring system for the 6-VM distributed architecture.
 Tracks resource utilization, API response times, database performance, and hardware acceleration.
+
+Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 """
 
 import asyncio
@@ -14,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 import os
-import subprocess
 import psutil
 import aiohttp
 import aiofiles
@@ -197,32 +198,50 @@ class PerformanceMonitor:
     async def get_gpu_metrics(self) -> tuple[Optional[float], Optional[float]]:
         """Get GPU utilization and memory usage."""
         try:
-            # Check for NVIDIA GPU (RTX 4070)
-            result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'],
-                capture_output=True, text=True, timeout=5
+            # Check for NVIDIA GPU (RTX 4070) using async subprocess
+            process = await asyncio.create_subprocess_exec(
+                'nvidia-smi',
+                '--query-gpu=utilization.gpu,memory.used,memory.total',
+                '--format=csv,noheader,nounits',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                if lines and lines[0]:
-                    gpu_util, mem_used, mem_total = map(int, lines[0].split(', '))
-                    return float(gpu_util), (mem_used / mem_total) * 100
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=5.0
+                )
+                if process.returncode == 0:
+                    lines = stdout.decode('utf-8').strip().split('\n')
+                    if lines and lines[0]:
+                        gpu_util, mem_used, mem_total = map(int, lines[0].split(', '))
+                        return float(gpu_util), (mem_used / mem_total) * 100
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+        except (FileNotFoundError, Exception):
             pass
         return None, None
 
     async def get_npu_metrics(self) -> Optional[float]:
         """Get NPU utilization (Intel AI Boost chip)."""
         try:
-            # Check Intel NPU via OpenVINO tools
+            # Check Intel NPU via OpenVINO tools using async subprocess
             # This is a placeholder - actual implementation depends on Intel NPU drivers
-            result = subprocess.run(
-                ['python3', '-c', 'import openvino as ov; print("NPU Available")'],
-                capture_output=True, text=True, timeout=3
+            process = await asyncio.create_subprocess_exec(
+                'python3', '-c', 'import openvino as ov; print("NPU Available")',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            if result.returncode == 0:
-                # NPU is available but actual utilization requires specific Intel tools
-                return 0.0  # Placeholder
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=3.0
+                )
+                if process.returncode == 0:
+                    # NPU is available but actual utilization requires specific Intel tools
+                    return 0.0  # Placeholder
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
         except Exception:
             pass  # NPU check failed, likely not available
         return None
@@ -342,15 +361,27 @@ class PerformanceMonitor:
                 continue
 
             try:
-                # Ping test for latency and packet loss
-                ping_result = subprocess.run(
-                    ['ping', '-c', '5', '-W', '3', vm_ip],
-                    capture_output=True, text=True, timeout=20
+                # Ping test for latency and packet loss using async subprocess
+                process = await asyncio.create_subprocess_exec(
+                    'ping', '-c', '5', '-W', '3', vm_ip,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
+                try:
+                    stdout, _ = await asyncio.wait_for(
+                        process.communicate(), timeout=20.0
+                    )
+                    ping_returncode = process.returncode
+                    ping_stdout = stdout.decode('utf-8')
+                except asyncio.TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    ping_returncode = 1
+                    ping_stdout = ""
 
-                if ping_result.returncode == 0:
+                if ping_returncode == 0:
                     # Parse ping output
-                    lines = ping_result.stdout.split('\n')
+                    lines = ping_stdout.split('\n')
 
                     # Extract packet loss
                     packet_loss = 0.0

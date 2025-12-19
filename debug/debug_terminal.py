@@ -2,11 +2,13 @@
 """
 Terminal Debugging Utility for AutoBot
 Helps diagnose terminal functionality issues
+
+Issue #396: Converted from blocking requests to async httpx.
 """
 
 import asyncio
 import json
-import requests
+import httpx
 import websockets
 import sys
 from datetime import datetime
@@ -20,31 +22,32 @@ BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND
 WS_BASE_URL = f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
 
-def test_terminal_api():
+async def test_terminal_api():
     """Test the terminal REST API endpoints"""
     print("🔍 Testing Terminal REST API...")
 
     # Test session creation
     try:
-        response = requests.post(
-            f"{BASE_URL}/api/terminal/sessions",
-            json={
-                "shell": "/bin/bash",
-                "environment": {},
-                "working_directory": "/home/kali",
-            },
-            timeout=5,
-        )
-        if response.status_code == 200:
-            session_data = response.json()
-            session_id = session_data["session_id"]
-            print(f"✅ Session creation successful: {session_id}")
-            return session_id
-        else:
-            print(
-                f"❌ Session creation failed: {response.status_code} - {response.text}"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{BASE_URL}/api/terminal/sessions",
+                json={
+                    "shell": "/bin/bash",
+                    "environment": {},
+                    "working_directory": "/home/kali",
+                },
+                timeout=5.0,
             )
-            return None
+            if response.status_code == 200:
+                session_data = response.json()
+                session_id = session_data["session_id"]
+                print(f"✅ Session creation successful: {session_id}")
+                return session_id
+            else:
+                print(
+                    f"❌ Session creation failed: {response.status_code} - {response.text}"
+                )
+                return None
     except Exception as e:
         print(f"❌ Session creation error: {e}")
         return None
@@ -90,35 +93,37 @@ async def test_terminal_websocket(session_id):
         print(f"❌ WebSocket connection error: {e}")
 
 
-def test_system_health():
+async def test_system_health():
     """Test overall system health"""
     print("\n🔍 Testing System Health...")
 
     try:
-        response = requests.get(f"{BASE_URL}/api/system/health", timeout=5)
-        if response.status_code == 200:
-            health_data = response.json()
-            print(f"✅ System health: {health_data}")
-        else:
-            print(f"❌ Health check failed: {response.status_code}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{BASE_URL}/api/system/health", timeout=5.0)
+            if response.status_code == 200:
+                health_data = response.json()
+                print(f"✅ System health: {health_data}")
+            else:
+                print(f"❌ Health check failed: {response.status_code}")
     except Exception as e:
         print(f"❌ Health check error: {e}")
 
 
-def test_workflow_api():
+async def test_workflow_api():
     """Test workflow API that we know is working"""
     print("\n🔍 Testing Workflow API (known working)...")
 
     try:
-        response = requests.get(
-            f"{BASE_URL}/api/workflow/workflows", timeout=5
-        )
-        if response.status_code == 200:
-            workflow_data = response.json()
-            workflow_count = len(workflow_data.get('workflows', []))
-            print(f"✅ Workflow API working: {workflow_count} active workflows")
-        else:
-            print(f"❌ Workflow API failed: {response.status_code}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{BASE_URL}/api/workflow/workflows", timeout=5.0
+            )
+            if response.status_code == 200:
+                workflow_data = response.json()
+                workflow_count = len(workflow_data.get('workflows', []))
+                print(f"✅ Workflow API working: {workflow_count} active workflows")
+            else:
+                print(f"❌ Workflow API failed: {response.status_code}")
     except Exception as e:
         print(f"❌ Workflow API error: {e}")
 
@@ -131,13 +136,13 @@ async def main():
     print()
 
     # Test system health first
-    test_system_health()
+    await test_system_health()
 
     # Test workflow API to ensure backend is responding
-    test_workflow_api()
+    await test_workflow_api()
 
     # Test terminal API
-    session_id = test_terminal_api()
+    session_id = await test_terminal_api()
 
     if session_id:
         # Test WebSocket if session creation succeeded
@@ -145,13 +150,14 @@ async def main():
 
         # Clean up session
         try:
-            delete_response = requests.delete(
-                f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5
-            )
-            if delete_response.status_code == 200:
-                print(f"🧹 Session {session_id} cleaned up successfully")
-            else:
-                print(f"⚠️ Session cleanup warning: {delete_response.status_code}")
+            async with httpx.AsyncClient() as client:
+                delete_response = await client.delete(
+                    f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5.0
+                )
+                if delete_response.status_code == 200:
+                    print(f"🧹 Session {session_id} cleaned up successfully")
+                else:
+                    print(f"⚠️ Session cleanup warning: {delete_response.status_code}")
         except Exception as e:
             print(f"⚠️ Session cleanup error: {e}")
 
