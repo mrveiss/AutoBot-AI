@@ -9,6 +9,7 @@ Comprehensive monitoring of all AutoBot services
 import asyncio
 import logging
 import subprocess
+import threading
 import time
 from datetime import datetime
 from typing import List, Optional
@@ -798,15 +799,19 @@ class ServiceMonitor:
         }
 
 
-# Global monitor instance - initialized lazily
+# Global monitor instance - initialized lazily with thread-safe access
 monitor = None
+_monitor_lock = threading.Lock()
 
 
 def get_monitor():
-    """Get or create singleton ServiceMonitor instance."""
+    """Get or create singleton ServiceMonitor instance with thread-safe lazy initialization."""
     global monitor
     if monitor is None:
-        monitor = ServiceMonitor()
+        with _monitor_lock:
+            # Double-check after acquiring lock to prevent race condition
+            if monitor is None:
+                monitor = ServiceMonitor()
     return monitor
 
 

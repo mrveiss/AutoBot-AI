@@ -9,6 +9,7 @@ Integrates with LangChain, LlamaIndex, and Redis Vector Store
 
 import asyncio
 import logging
+import threading
 from typing import List, Optional
 
 from backend.type_defs.common import Metadata
@@ -24,39 +25,60 @@ from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
-# Initialize components
+# Initialize components with thread-safe locks (Issue #395)
 knowledge_base = None
 langchain_orchestrator = None
 redis_manager = None
+_knowledge_base_lock = threading.Lock()
+_redis_manager_lock = threading.Lock()
+_langchain_orchestrator_lock = threading.Lock()
 
 
 def get_knowledge_base():
-    """Get or create knowledge base instance with Redis vector store"""
+    """Get or create knowledge base instance with Redis vector store.
+
+    Issue #395: Added thread-safe lazy initialization with double-check locking.
+    """
     global knowledge_base
     if knowledge_base is None:
-        knowledge_base = KnowledgeBase(config_manager=global_config_manager)
+        with _knowledge_base_lock:
+            # Double-check after acquiring lock to prevent race condition
+            if knowledge_base is None:
+                knowledge_base = KnowledgeBase(config_manager=global_config_manager)
     return knowledge_base
 
 
 def get_redis_manager():
-    """Get Redis database manager for vector operations"""
+    """Get Redis database manager for vector operations.
+
+    Issue #395: Added thread-safe lazy initialization with double-check locking.
+    """
     global redis_manager
     if redis_manager is None:
-        redis_manager = RedisDatabaseManager()
+        with _redis_manager_lock:
+            # Double-check after acquiring lock to prevent race condition
+            if redis_manager is None:
+                redis_manager = RedisDatabaseManager()
     return redis_manager
 
 
 def get_langchain_orchestrator():
-    """Get LangChain orchestrator for advanced tool usage"""
+    """Get LangChain orchestrator for advanced tool usage.
+
+    Issue #395: Added thread-safe lazy initialization with double-check locking.
+    """
     global langchain_orchestrator
     if langchain_orchestrator is None:
-        # Initialize with knowledge base
-        kb = get_knowledge_base()
-        langchain_orchestrator = LangChainAgentOrchestrator(
-            config={},
-            worker_node=None,  # Will be initialized if needed
-            knowledge_base=kb,
-        )
+        with _langchain_orchestrator_lock:
+            # Double-check after acquiring lock to prevent race condition
+            if langchain_orchestrator is None:
+                # Initialize with knowledge base
+                kb = get_knowledge_base()
+                langchain_orchestrator = LangChainAgentOrchestrator(
+                    config={},
+                    worker_node=None,  # Will be initialized if needed
+                    knowledge_base=kb,
+                )
     return langchain_orchestrator
 
 

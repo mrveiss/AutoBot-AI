@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 
+# Thread-safe lock for lazy initialization of global state
+_markdown_system_lock = asyncio.Lock()
+
 # Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
 TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
 
@@ -70,15 +73,19 @@ async def get_memory_manager() -> tuple[AsyncEnhancedMemoryManager, MarkdownRefe
     """Lazy initialization of async memory manager to prevent startup blocking.
 
     Issue #357: Now uses AsyncEnhancedMemoryManager for non-blocking operations.
+    Issue #395: Added asyncio.Lock for thread-safe lazy initialization.
     """
     global _markdown_system
     memory_manager = get_async_enhanced_memory_manager()
     if _markdown_system is None:
-        # Note: MarkdownReferenceSystem still uses sync manager internally
-        # This is a compatibility bridge until it's also converted
-        from src.enhanced_memory_manager import EnhancedMemoryManager
-        _sync_memory_manager = EnhancedMemoryManager()
-        _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
+        async with _markdown_system_lock:
+            # Double-check after acquiring lock to prevent race condition
+            if _markdown_system is None:
+                # Note: MarkdownReferenceSystem still uses sync manager internally
+                # This is a compatibility bridge until it's also converted
+                from src.enhanced_memory_manager import EnhancedMemoryManager
+                _sync_memory_manager = EnhancedMemoryManager()
+                _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
     return memory_manager, _markdown_system
 
 
