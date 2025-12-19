@@ -44,6 +44,9 @@ if env_path.exists():
 
 from src.utils.chromadb_client import get_chromadb_client
 
+# Hash cache file for incremental indexing (Issue #400)
+HASH_CACHE_FILE = PROJECT_ROOT / "data" / ".doc_index_hashes.json"
+
 # Optional: Import knowledge base for full mode (requires Redis)
 try:
     from src.knowledge_base import KnowledgeBase
@@ -644,6 +647,73 @@ def index_file_sync(
         return {"status": "error", "file": file_path, "error": str(e)}
 
 
+# ============================================================================
+# INCREMENTAL INDEXING (Issue #400)
+# ============================================================================
+
+
+def compute_file_hash(file_path: str) -> str:
+    """Compute SHA-256 hash of file content for change detection."""
+    try:
+        with open(file_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except Exception as e:
+        logger.warning(f"Could not hash {file_path}: {e}")
+        return ""
+
+
+def load_hash_cache() -> Dict[str, str]:
+    """Load cached file hashes from disk."""
+    if HASH_CACHE_FILE.exists():
+        try:
+            with open(HASH_CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load hash cache: {e}")
+    return {}
+
+
+def save_hash_cache(hashes: Dict[str, str]) -> None:
+    """Save file hashes to disk."""
+    try:
+        HASH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(HASH_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(hashes, f, indent=2)
+        logger.info(f"Hash cache saved: {len(hashes)} entries")
+    except Exception as e:
+        logger.warning(f"Could not save hash cache: {e}")
+
+
+def filter_changed_files(
+    files: List[Tuple[str, int]], hash_cache: Dict[str, str]
+) -> Tuple[List[Tuple[str, int]], Dict[str, str]]:
+    """
+    Filter files to only those that have changed since last indexing.
+
+    Returns:
+        Tuple of (changed_files, new_hash_cache)
+    """
+    changed_files = []
+    new_hashes = {}
+
+    for file_path, tier in files:
+        rel_path = os.path.relpath(file_path, PROJECT_ROOT)
+        current_hash = compute_file_hash(file_path)
+        new_hashes[rel_path] = current_hash
+
+        cached_hash = hash_cache.get(rel_path)
+        if cached_hash != current_hash:
+            changed_files.append((file_path, tier))
+            if cached_hash:
+                logger.debug(f"Changed: {rel_path}")
+            else:
+                logger.debug(f"New file: {rel_path}")
+        else:
+            logger.debug(f"Unchanged: {rel_path}")
+
+    return changed_files, new_hashes
+
+
 async def index_documentation(
     tier: Optional[int] = None,
     file: Optional[str] = None,
@@ -690,9 +760,28 @@ async def index_documentation(
 
     logger.info(f"Discovered {len(files)} files to index")
 
-    # TODO: Implement incremental indexing with hash comparison
-    if incremental:
-        logger.warning("Incremental indexing not yet implemented - doing full index")
+    # Incremental indexing with hash comparison (Issue #400)
+    new_hashes = {}
+    if incremental and not file:  # Skip incremental for single-file mode
+        hash_cache = load_hash_cache()
+        original_count = len(files)
+        files, new_hashes = filter_changed_files(files, hash_cache)
+        unchanged_count = original_count - len(files)
+        logger.info(
+            f"Incremental mode: {len(files)} changed, {unchanged_count} unchanged"
+        )
+        if not files:
+            logger.info("No files have changed - nothing to index")
+            return {
+                "total_files": 0,
+                "success": 0,
+                "failed": 0,
+                "skipped": unchanged_count,
+                "unchanged": unchanged_count,
+                "elapsed_seconds": round(time.time() - start_time, 2),
+                "dry_run": dry_run,
+                "incremental": True,
+            }
 
     # Index each file
     for file_path, file_tier in files:
@@ -711,6 +800,13 @@ async def index_documentation(
 
     elapsed = time.time() - start_time
 
+    # Save hash cache for incremental indexing (Issue #400)
+    if not dry_run and new_hashes:
+        # Merge with existing cache (preserve hashes for files not in this run)
+        existing_cache = load_hash_cache()
+        existing_cache.update(new_hashes)
+        save_hash_cache(existing_cache)
+
     # Summary
     summary = {
         "total_files": len(files),
@@ -719,6 +815,7 @@ async def index_documentation(
         "skipped": results["skipped"],
         "elapsed_seconds": round(elapsed, 2),
         "dry_run": dry_run,
+        "incremental": incremental,
     }
 
     logger.info(f"\n{'='*60}")
@@ -731,6 +828,8 @@ async def index_documentation(
     logger.info(f"Elapsed: {summary['elapsed_seconds']}s")
     if dry_run:
         logger.info("MODE: DRY-RUN (no changes made)")
+    if incremental:
+        logger.info("MODE: INCREMENTAL (only changed files)")
     logger.info(f"{'='*60}")
 
     return summary
