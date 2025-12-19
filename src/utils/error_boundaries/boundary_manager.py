@@ -340,11 +340,17 @@ class ErrorBoundaryManager:
             pattern = "autobot:errors:*"
             error_keys = self.redis_client.keys(pattern)
 
+            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
             recent_errors = []
-            for key in error_keys:
-                error_data = self.redis_client.get(key)
-                if error_data:
-                    recent_errors.append(json.loads(error_data))
+            if error_keys:
+                pipe = self.redis_client.pipeline()
+                for key in error_keys:
+                    pipe.get(key)
+                results = pipe.execute()
+
+                for error_data in results:
+                    if error_data:
+                        recent_errors.append(json.loads(error_data))
 
             # Calculate statistics
             total_errors = len(recent_errors)

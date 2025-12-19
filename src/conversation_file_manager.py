@@ -480,13 +480,15 @@ class ConversationFileManager:
 
     async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
         """Insert file metadata records into database."""
-        for key, value in metadata.items():
-            await connection.execute(
+        # Issue #397: Fix N+1 pattern - use executemany for batch insert
+        if metadata:
+            metadata_records = [(file_id, key, str(value)) for key, value in metadata.items()]
+            await connection.executemany(
                 """
                 INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
                 VALUES (?, ?, ?)
                 """,
-                (file_id, key, str(value)),
+                metadata_records,
             )
 
     def _build_file_response(self, file_info: FileInfo) -> Dict[str, Any]:
@@ -730,16 +732,44 @@ class ConversationFileManager:
             return await cursor.fetchall()
 
     async def _delete_files_batch(self, connection, files: List, hard_delete: bool) -> int:
-        """Delete a batch of files, returning count deleted."""
-        count = 0
-        for file_row in files:
-            file_id, file_path = file_row["file_id"], Path(file_row["file_path"])
-            if hard_delete:
-                await self._hard_delete_file(connection, file_id, file_path)
-            else:
-                await self._soft_delete_file(connection, file_id)
-            count += 1
-        return count
+        """Delete a batch of files, returning count deleted.
+
+        Issue #397: Optimized to use batch SQL operations instead of N+1 pattern.
+        """
+        if not files:
+            return 0
+
+        file_ids = [file_row["file_id"] for file_row in files]
+
+        if hard_delete:
+            # For hard delete, we need to delete files from disk (can't batch filesystem ops)
+            # but we can batch the SQL delete
+            for file_row in files:
+                file_path = Path(file_row["file_path"])
+                if await asyncio.to_thread(file_path.exists):
+                    await asyncio.to_thread(file_path.unlink)
+                    logger.info(f"Hard deleted file: {file_path}")
+
+            # Issue #397: Batch SQL delete using IN clause
+            placeholders = ",".join("?" * len(file_ids))
+            await connection.execute(
+                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",
+                file_ids,
+            )
+        else:
+            # Issue #397: Batch soft delete using IN clause instead of N+1 pattern
+            placeholders = ",".join("?" * len(file_ids))
+            await connection.execute(
+                f"""
+                UPDATE conversation_files
+                SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
+                WHERE file_id IN ({placeholders})
+                """,
+                file_ids,
+            )
+            logger.info(f"Soft deleted {len(file_ids)} files in batch")
+
+        return len(file_ids)
 
     async def delete_session_files(self, session_id: str, hard_delete: bool = False) -> int:
         """Delete all files associated with a session."""

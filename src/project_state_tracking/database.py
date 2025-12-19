@@ -156,14 +156,14 @@ def save_snapshot_sync(
             ),
         )
 
-        # Also save metrics to history
-        for metric_name, metric_timestamp, value in metrics_list:
-            cursor.execute(
+        # Issue #397: Fix N+1 pattern - use executemany for batch insert
+        if metrics_list:
+            cursor.executemany(
                 """
                 INSERT INTO metrics_history (metric_name, timestamp, value)
                 VALUES (?, ?, ?)
             """,
-                (metric_name, metric_timestamp, value),
+                metrics_list,
             )
 
         conn.commit()

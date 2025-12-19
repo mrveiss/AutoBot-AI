@@ -407,11 +407,18 @@ and requirements of the request.
             pattern = "autobot:classification:log:*"
             keys = self.redis_client.keys(pattern)
 
+            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
             history = []
-            for key in keys[:limit]:
-                data = self.redis_client.get(key)
-                if data:
-                    history.append(json.loads(data))
+            keys_to_fetch = keys[:limit]
+            if keys_to_fetch:
+                pipe = self.redis_client.pipeline()
+                for key in keys_to_fetch:
+                    pipe.get(key)
+                results = pipe.execute()
+
+                for data in results:
+                    if data:
+                        history.append(json.loads(data))
 
             return sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
 
