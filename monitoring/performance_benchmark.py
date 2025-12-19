@@ -3,6 +3,8 @@
 AutoBot Performance Benchmark Suite
 Comprehensive benchmarking tools for measuring AutoBot distributed system performance
 across different workloads and configurations.
+
+Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 """
 
 import asyncio
@@ -634,18 +636,25 @@ class PerformanceBenchmark:
     async def _benchmark_gpu(self) -> Optional[float]:
         """Benchmark GPU performance (if available)."""
         try:
-            import subprocess
-
-            # Check if nvidia-smi is available
-            result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader'],
-                capture_output=True, text=True, timeout=5
+            # Check if nvidia-smi is available using async subprocess
+            process = await asyncio.create_subprocess_exec(
+                'nvidia-smi',
+                '--query-gpu=name,memory.total',
+                '--format=csv,noheader',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-
-            if result.returncode == 0:
-                # GPU is available, return a simple score
-                # This is a placeholder - actual GPU benchmarking would require CUDA/OpenCL
-                return 85.0  # Placeholder score for RTX 4070
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=5.0
+                )
+                if process.returncode == 0:
+                    # GPU is available, return a simple score
+                    # This is a placeholder - actual GPU benchmarking requires CUDA/OpenCL
+                    return 85.0  # Placeholder score for RTX 4070
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
 
         except Exception as e:
             self.logger.debug(f"GPU benchmark error: {e}")
@@ -655,18 +664,28 @@ class PerformanceBenchmark:
     async def _benchmark_npu(self) -> Optional[float]:
         """Benchmark NPU performance (Intel AI Boost chip)."""
         try:
-            # Check if Intel OpenVINO is available
-            import subprocess
-
-            result = subprocess.run(
-                ['python3', '-c', 'import openvino as ov; core = ov.Core(); print(core.available_devices)'],
-                capture_output=True, text=True, timeout=5
+            # Check if Intel OpenVINO is available using async subprocess
+            openvino_script = (
+                'import openvino as ov; '
+                'core = ov.Core(); '
+                'print(core.available_devices)'
             )
-
-            if result.returncode == 0 and 'NPU' in result.stdout:
-                # NPU is available, return a simple score
-                # This is a placeholder - actual NPU benchmarking requires specific Intel tools
-                return 45.0  # Placeholder score for Intel NPU
+            process = await asyncio.create_subprocess_exec(
+                'python3', '-c', openvino_script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=5.0
+                )
+                if process.returncode == 0 and 'NPU' in stdout.decode('utf-8'):
+                    # NPU is available, return a simple score
+                    # Placeholder - actual NPU benchmarking requires specific Intel tools
+                    return 45.0  # Placeholder score for Intel NPU
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
 
         except Exception as e:
             self.logger.debug(f"NPU benchmark error: {e}")

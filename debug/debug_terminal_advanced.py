@@ -2,11 +2,13 @@
 """
 Advanced Terminal Debugging Utility for AutoBot
 Tests both REST API sessions and Chat-based WebSocket sessions
+
+Issue #396: Converted from blocking requests to async httpx.
 """
 
 import asyncio
 import json
-import requests
+import httpx
 import websockets
 import sys
 from datetime import datetime
@@ -20,30 +22,31 @@ BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND
 WS_BASE_URL = f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
 
-def test_rest_api_approach():
+async def test_rest_api_approach():
     """Test the REST API terminal session approach"""
     print("🔍 Testing REST API Terminal Approach...")
     print("=" * 40)
 
     # Create session via REST API
     try:
-        response = requests.post(
-            f"{BASE_URL}/api/terminal/sessions",
-            json={
-                "shell": "/bin/bash",
-                "environment": {},
-                "working_directory": "/home/kali"
-            },
-            timeout=5
-        )
-        if response.status_code == 200:
-            session_data = response.json()
-            session_id = session_data["session_id"]
-            print(f"✅ REST session created: {session_id}")
-            return session_id
-        else:
-            print(f"❌ REST session failed: {response.status_code} - {response.text}")
-            return None
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{BASE_URL}/api/terminal/sessions",
+                json={
+                    "shell": "/bin/bash",
+                    "environment": {},
+                    "working_directory": "/home/kali",
+                },
+                timeout=5.0,
+            )
+            if response.status_code == 200:
+                session_data = response.json()
+                session_id = session_data["session_id"]
+                print(f"✅ REST session created: {session_id}")
+                return session_id
+            else:
+                print(f"❌ REST session failed: {response.status_code} - {response.text}")
+                return None
     except Exception as e:
         print(f"❌ REST session error: {e}")
         return None
@@ -135,7 +138,10 @@ async def test_rest_websocket_mismatch(session_id):
                 print(f"📥 Response: {response}")
 
                 data = json.loads(response)
-                if data.get("type") == "output" and "Testing with REST session ID" in data.get("content", ""):
+                if (
+                    data.get("type") == "output"
+                    and "Testing with REST session ID" in data.get("content", "")
+                ):
                     print("⚠️ Unexpectedly worked! This might explain the confusion.")
                     return True
                 else:
@@ -169,6 +175,18 @@ def test_frontend_simulation():
     print("3. Commands appear as text instead of being executed")
 
 
+async def cleanup_session(session_id: str):
+    """Clean up a REST session asynchronously"""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.delete(
+                f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5.0
+            )
+            print(f"🧹 Cleaned up REST session: {session_id}")
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
+
 async def main():
     """Run comprehensive terminal debugging"""
     print("🚀 Advanced AutoBot Terminal Diagnostic")
@@ -177,21 +195,18 @@ async def main():
     print()
 
     # Test REST API approach
-    session_id = test_rest_api_approach()
+    session_id = await test_rest_api_approach()
 
     # Test proper chat WebSocket approach
     chat_success = await test_chat_websocket_approach()
 
     # Test the problematic mixing of approaches
+    rest_ws_success = False
     if session_id:
         rest_ws_success = await test_rest_websocket_mismatch(session_id)
 
         # Cleanup REST session
-        try:
-            requests.delete(f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5)
-            print(f"🧹 Cleaned up REST session: {session_id}")
-        except Exception as e:
-            print(f"⚠️ Cleanup error: {e}")
+        await cleanup_session(session_id)
 
     # Show frontend simulation
     test_frontend_simulation()

@@ -2,6 +2,8 @@
 """
 AutoBot AI/ML Performance Analytics
 Specialized monitoring for AI workloads, NPU utilization, and multi-modal performance.
+
+Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 """
 
 import asyncio
@@ -12,7 +14,6 @@ import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
-import subprocess
 import aiofiles
 from pathlib import Path
 import statistics
@@ -134,9 +135,8 @@ class AIPerformanceAnalytics:
     async def collect_npu_metrics(self) -> Optional[NPUMetrics]:
         """Collect NPU (Intel AI Boost) performance metrics."""
         try:
-            # Check for Intel NPU via OpenVINO
-            openvino_check = subprocess.run(
-                ['python3', '-c', '''
+            # Check for Intel NPU via OpenVINO using async subprocess
+            openvino_script = '''
 import openvino as ov
 core = ov.Core()
 devices = core.available_devices
@@ -145,12 +145,24 @@ if npu_devices:
     print(f"NPU_FOUND:{npu_devices[0]}")
 else:
     print("NPU_NOT_FOUND")
-                '''],
-                capture_output=True, text=True, timeout=10
+'''
+            process = await asyncio.create_subprocess_exec(
+                'python3', '-c', openvino_script,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=10.0
+                )
+                openvino_output = stdout.decode('utf-8')
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                openvino_output = ""
 
-            if "NPU_FOUND" in openvino_check.stdout:
-                device_id = openvino_check.stdout.split(":")[1].strip()
+            if "NPU_FOUND" in openvino_output:
+                device_id = openvino_output.split(":")[1].strip()
 
                 # Get NPU utilization (simulated for now, requires Intel tools)
                 utilization = await self._get_npu_utilization()
@@ -279,13 +291,23 @@ else:
     async def _get_gpu_utilization(self) -> Optional[float]:
         """Get GPU utilization percentage."""
         try:
-            result = subprocess.run(
-                ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
-                capture_output=True, text=True, timeout=3
+            process = await asyncio.create_subprocess_exec(
+                'nvidia-smi',
+                '--query-gpu=utilization.gpu',
+                '--format=csv,noheader,nounits',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            if result.returncode == 0:
-                return float(result.stdout.strip())
-        except:
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(), timeout=3.0
+                )
+                if process.returncode == 0:
+                    return float(stdout.decode('utf-8').strip())
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+        except Exception:
             pass
         return None
 

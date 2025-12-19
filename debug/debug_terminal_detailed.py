@@ -2,11 +2,13 @@
 """
 Detailed Terminal Session Debugging for AutoBot
 Checks internal session state and process details
+
+Issue #396: Converted from blocking requests to async httpx.
 """
 
 import asyncio
 import json
-import requests
+import httpx
 import websockets
 import sys
 import time
@@ -43,7 +45,10 @@ async def test_session_lifecycle():
                     print(f"📥 Init message {i+1}: {msg}")
 
                     data = json.loads(msg)
-                    if data.get("type") == "terminal_session" and data.get("status") == "started":
+                    if (
+                        data.get("type") == "terminal_session"
+                        and data.get("status") == "started"
+                    ):
                         print("✅ Terminal session started successfully!")
                         break
                     elif data.get("type") == "connection":
@@ -58,24 +63,38 @@ async def test_session_lifecycle():
             # Step 2: Test active sessions API
             print("\n🔍 Step 2: Checking Active Sessions")
             try:
-                response = requests.get(f"{BASE_URL}/api/terminal/sessions", timeout=5)
-                if response.status_code == 200:
-                    sessions_data = response.json()
-                    print(f"📊 Active sessions response: {json.dumps(sessions_data, indent=2)}")
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{BASE_URL}/api/terminal/sessions", timeout=5.0
+                    )
+                    if response.status_code == 200:
+                        sessions_data = response.json()
+                        print(
+                            f"📊 Active sessions response: "
+                            f"{json.dumps(sessions_data, indent=2)}"
+                        )
 
-                    # Look for our session
-                    found_session = False
-                    sessions = sessions_data.get('sessions', []) if isinstance(sessions_data, dict) else sessions_data
-                    for session in sessions:
-                        if session.get('chat_id') == chat_id:
-                            found_session = True
-                            print(f"✅ Found our session: {session}")
-                            break
+                        # Look for our session
+                        found_session = False
+                        sessions = (
+                            sessions_data.get("sessions", [])
+                            if isinstance(sessions_data, dict)
+                            else sessions_data
+                        )
+                        for session in sessions:
+                            if session.get("chat_id") == chat_id:
+                                found_session = True
+                                print(f"✅ Found our session: {session}")
+                                break
 
-                    if not found_session:
-                        print(f"❌ Our session {chat_id} not found in active sessions")
-                else:
-                    print(f"❌ Failed to get active sessions: {response.status_code}")
+                        if not found_session:
+                            print(
+                                f"❌ Our session {chat_id} not found in active sessions"
+                            )
+                    else:
+                        print(
+                            f"❌ Failed to get active sessions: {response.status_code}"
+                        )
             except Exception as e:
                 print(f"❌ Active sessions check error: {e}")
 
@@ -84,10 +103,7 @@ async def test_session_lifecycle():
 
             # Send command
             command = "echo 'Debug test command'"
-            command_msg = json.dumps({
-                "type": "input",
-                "text": f"{command}\n"
-            })
+            command_msg = json.dumps({"type": "input", "text": f"{command}\n"})
 
             await websocket.send(command_msg)
             print(f"📤 Sent: {command}")
@@ -149,7 +165,8 @@ def test_system_command_agent_direct():
     try:
         # Try to import and test directly
         import sys
-        sys.path.append('/home/kali/Desktop/AutoBot')
+
+        sys.path.append("/home/kali/Desktop/AutoBot")
 
         from src.agents.system_command_agent import SystemCommandAgent
 
@@ -162,12 +179,14 @@ def test_system_command_agent_direct():
         # Check if we can access the agent state
         sessions = []
         for session_id, terminal in agent.active_sessions.items():
-            sessions.append({
-                "session_id": session_id,
-                "chat_id": terminal.chat_id,
-                "active": terminal.session_active,
-                "mode": terminal.input_mode
-            })
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "chat_id": terminal.chat_id,
+                    "active": terminal.session_active,
+                    "mode": terminal.input_mode,
+                }
+            )
 
         print(f"📋 Active sessions details: {json.dumps(sessions, indent=2)}")
         return True
