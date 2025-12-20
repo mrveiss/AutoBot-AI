@@ -102,72 +102,94 @@ class GPUAccelerationOptimizer:
         if self.gpu_available:
             self.logger.info(f"GPU capabilities detected: {self.gpu_capabilities}")
 
+    async def _apply_optimization_passes(self) -> tuple:
+        """Apply all optimization passes and collect results (Issue #398: extracted).
+
+        Returns:
+            Tuple of (applied_optimizations, recommendations)
+        """
+        applied_optimizations = []
+        recommendations = []
+
+        # Memory optimization
+        memory_result = await optimize_memory_allocation(self.config)
+        if memory_result["success"]:
+            applied_optimizations.extend(memory_result["optimizations"])
+        recommendations.extend(memory_result["recommendations"])
+
+        # Batch processing optimization
+        batch_result = await optimize_batch_processing(self.config, self._capabilities)
+        if batch_result["success"]:
+            applied_optimizations.extend(batch_result["optimizations"])
+        recommendations.extend(batch_result["recommendations"])
+
+        # Mixed precision optimization
+        if self._capabilities.mixed_precision:
+            precision_result = await enable_mixed_precision(self.config, self._capabilities)
+            if precision_result["success"]:
+                applied_optimizations.extend(precision_result["optimizations"])
+            recommendations.extend(precision_result["recommendations"])
+
+        # Tensor Core optimization
+        if self._capabilities.tensor_cores:
+            tensor_result = await optimize_tensor_cores(self.config, self._capabilities)
+            if tensor_result["success"]:
+                applied_optimizations.extend(tensor_result["optimizations"])
+            recommendations.extend(tensor_result["recommendations"])
+
+        # Model compilation optimization
+        compilation_result = await optimize_model_compilation(self.config)
+        if compilation_result["success"]:
+            applied_optimizations.extend(compilation_result["optimizations"])
+        recommendations.extend(compilation_result["recommendations"])
+
+        return applied_optimizations, recommendations
+
+    def _calculate_metrics_changes(
+        self, baseline: Dict[str, float], post_optimization: Dict[str, float]
+    ) -> tuple:
+        """Calculate improvement metrics between baseline and post-optimization (Issue #398: extracted).
+
+        Returns:
+            Tuple of (performance_improvement, memory_savings, throughput_improvement, latency_reduction)
+        """
+        performance_improvement = self._calculate_performance_improvement(
+            baseline, post_optimization
+        )
+        memory_savings = baseline.get("memory_used_mb", 0) - post_optimization.get(
+            "memory_used_mb", 0
+        )
+        throughput_improvement = post_optimization.get(
+            "throughput_fps", 0
+        ) - baseline.get("throughput_fps", 0)
+        latency_reduction = baseline.get(
+            "inference_latency_ms", 0
+        ) - post_optimization.get("inference_latency_ms", 0)
+
+        return performance_improvement, memory_savings, throughput_improvement, latency_reduction
+
     async def optimize_for_multimodal_workload(self) -> GPUOptimizationResult:
-        """Optimize GPU for multi-modal AI workloads."""
+        """Optimize GPU for multi-modal AI workloads (Issue #398: refactored to use helpers)."""
         try:
             self.logger.info("Starting multi-modal GPU optimization...")
 
             # Collect baseline metrics
             baseline = await self._collect_performance_baseline()
-
-            applied_optimizations = []
-            recommendations = []
             warnings: List[str] = []
 
-            # Memory optimization
-            memory_result = await optimize_memory_allocation(self.config)
-            if memory_result["success"]:
-                applied_optimizations.extend(memory_result["optimizations"])
-            recommendations.extend(memory_result["recommendations"])
-
-            # Batch processing optimization
-            batch_result = await optimize_batch_processing(
-                self.config, self._capabilities
-            )
-            if batch_result["success"]:
-                applied_optimizations.extend(batch_result["optimizations"])
-            recommendations.extend(batch_result["recommendations"])
-
-            # Mixed precision optimization
-            if self._capabilities.mixed_precision:
-                precision_result = await enable_mixed_precision(
-                    self.config, self._capabilities
-                )
-                if precision_result["success"]:
-                    applied_optimizations.extend(precision_result["optimizations"])
-                recommendations.extend(precision_result["recommendations"])
-
-            # Tensor Core optimization
-            if self._capabilities.tensor_cores:
-                tensor_result = await optimize_tensor_cores(
-                    self.config, self._capabilities
-                )
-                if tensor_result["success"]:
-                    applied_optimizations.extend(tensor_result["optimizations"])
-                recommendations.extend(tensor_result["recommendations"])
-
-            # Model compilation optimization
-            compilation_result = await optimize_model_compilation(self.config)
-            if compilation_result["success"]:
-                applied_optimizations.extend(compilation_result["optimizations"])
-            recommendations.extend(compilation_result["recommendations"])
+            # Issue #398: Apply all optimization passes using extracted helper
+            applied_optimizations, recommendations = await self._apply_optimization_passes()
 
             # Collect post-optimization metrics
             post_optimization = await self._collect_performance_baseline()
 
-            # Calculate improvements
-            performance_improvement = self._calculate_performance_improvement(
-                baseline, post_optimization
-            )
-            memory_savings = baseline.get("memory_used_mb", 0) - post_optimization.get(
-                "memory_used_mb", 0
-            )
-            throughput_improvement = post_optimization.get(
-                "throughput_fps", 0
-            ) - baseline.get("throughput_fps", 0)
-            latency_reduction = baseline.get(
-                "inference_latency_ms", 0
-            ) - post_optimization.get("inference_latency_ms", 0)
+            # Issue #398: Calculate improvements using extracted helper
+            (
+                performance_improvement,
+                memory_savings,
+                throughput_improvement,
+                latency_reduction,
+            ) = self._calculate_metrics_changes(baseline, post_optimization)
 
             # Create optimization result
             result = GPUOptimizationResult(
