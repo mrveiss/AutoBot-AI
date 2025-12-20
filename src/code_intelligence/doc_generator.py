@@ -25,16 +25,15 @@ Documentation Types:
 - Setup instructions
 - Module overviews
 
-Note: This module has been refactored as part of Issue #381 god class refactoring.
-Enums and data classes are now in the doc_generation/ package. This module provides
-backward compatibility by re-exporting all classes and contains the DocGenerator class.
+Refactoring History:
+- Issue #381: Extracted enums and data classes to doc_generation/ package
+- Issue #394: Extracted DocstringParser, MarkdownGenerator, and ModuleAnalyzer
+  to reduce god class DocGenerator from 48 methods to 5 methods (90% reduction)
 """
 
-import ast
 import logging
 import os
-import re
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set
 
 # Import types and models from the doc_generation package (Issue #381 refactoring)
 from src.code_intelligence.doc_generation.types import (
@@ -56,30 +55,13 @@ from src.code_intelligence.doc_generation.models import (
     ModuleDoc,
     PackageDoc,
 )
-from src.code_intelligence.doc_generation import helpers
+
+# Issue #394: Import refactored modules for delegation
+from src.code_intelligence.doc_generation.docstring_parser import DocstringParser
+from src.code_intelligence.doc_generation.markdown_generator import MarkdownGenerator
+from src.code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
 
 logger = logging.getLogger(__name__)
-
-# Issue #381: Constants moved to helpers module, re-export for backward compatibility
-_ENUM_BASE_CLASSES = helpers.ENUM_BASE_CLASSES
-_ABSTRACT_DECORATORS = helpers.ABSTRACT_DECORATORS
-_SELF_CLS_ARGS = helpers.SELF_CLS_ARGS
-_SKIP_INHERITANCE_BASES = helpers.SKIP_INHERITANCE_BASES
-_FUNCTION_DEF_TYPES = helpers.FUNCTION_DEF_TYPES
-_IMPORT_TYPES = helpers.IMPORT_TYPES
-_SEQUENCE_TYPES = helpers.SEQUENCE_TYPES
-
-# Issue #380: Pre-compiled regex patterns for markdown-to-HTML conversion
-_MD_H5_RE = re.compile(r"^##### (.+)$", re.MULTILINE)
-_MD_H4_RE = re.compile(r"^#### (.+)$", re.MULTILINE)
-_MD_H3_RE = re.compile(r"^### (.+)$", re.MULTILINE)
-_MD_H2_RE = re.compile(r"^## (.+)$", re.MULTILINE)
-_MD_H1_RE = re.compile(r"^# (.+)$", re.MULTILINE)
-_MD_CODE_BLOCK_RE = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
-_MD_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
-_MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
-_MD_LIST_ITEM_RE = re.compile(r"^- (.+)$", re.MULTILINE)
-_MD_HR_RE = re.compile(r"^---$", re.MULTILINE)
 
 # Re-export for backward compatibility
 __all__ = [
@@ -134,29 +116,16 @@ class DocGenerator:
     - Produce pattern explanations
     - Output in Markdown, HTML, or RST
 
+    Issue #394: This class was refactored from 48 methods to 5 methods (90%
+    reduction) by extracting DocstringParser, MarkdownGenerator, and
+    ModuleAnalyzer into separate classes in the doc_generation package.
+
     Example:
         >>> generator = DocGenerator()
         >>> module_doc = generator.analyze_module('path/to/module.py')
         >>> markdown = generator.generate_api_docs([module_doc])
         >>> print(markdown)
     """
-
-    # Google-style docstring patterns
-    DOCSTRING_SECTIONS = {
-        "args": re.compile(r"^\s*(Args?|Arguments?|Parameters?):\s*$", re.IGNORECASE),
-        "returns": re.compile(r"^\s*(Returns?|Yields?):\s*$", re.IGNORECASE),
-        "raises": re.compile(r"^\s*(Raises?|Exceptions?|Throws?):\s*$", re.IGNORECASE),
-        "examples": re.compile(r"^\s*(Examples?|Usage):\s*$", re.IGNORECASE),
-        "notes": re.compile(r"^\s*(Notes?|See Also|Warning|Todo):\s*$", re.IGNORECASE),
-        "attributes": re.compile(r"^\s*(Attributes?|Properties):\s*$", re.IGNORECASE),
-    }
-
-    # Type annotation extraction patterns
-    TYPE_PATTERNS = {
-        "param": re.compile(r"(\w+)\s*\(([^)]+)\):\s*(.*)"),
-        "simple": re.compile(r"(\w+):\s*(.*)"),
-        "type_only": re.compile(r"([^:]+):\s*(.*)"),
-    }
 
     def __init__(
         self,
@@ -176,69 +145,24 @@ class DocGenerator:
         self.include_dunder = include_dunder
         self.max_depth = max_depth
         self._analyzed_files: Set[str] = set()
+        # Issue #394: Delegate to extracted classes
+        self._docstring_parser = DocstringParser()
+        self._markdown_generator = MarkdownGenerator()
+        self._module_analyzer = ModuleAnalyzer(
+            include_private=include_private,
+            include_dunder=include_dunder,
+            max_depth=max_depth,
+        )
 
-    def _validate_module_path(self, file_path: str) -> Optional[str]:
-        """Validate module path exists and is a Python file.
-
-        Issue #381: Delegates to helpers.validate_module_path.
-        """
-        return helpers.validate_module_path(file_path)
-
-    def _read_and_parse_module(self, file_path: str) -> Optional[Tuple[str, ast.Module]]:
-        """Read and parse a Python module.
-
-        Issue #381: Delegates to helpers.read_and_parse_module.
-        """
-        return helpers.read_and_parse_module(file_path)
-
-    def _process_module_node(
-        self, node: ast.AST, source: str, module_doc: "ModuleDoc"
-    ) -> None:
-        """Process a single top-level module node (Issue #315 - extracted helper).
-
-        Args:
-            node: AST node to process
-            source: Module source code
-            module_doc: ModuleDoc to populate
-        """
-        if isinstance(node, ast.ClassDef):
-            class_doc = self._analyze_class(node, source)
-            if class_doc and self._should_include(class_doc.name):
-                module_doc.classes.append(class_doc)
-            return
-
-        if isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
-            func_doc = self._analyze_function(node, source)
-            if func_doc and self._should_include(func_doc.name):
-                module_doc.functions.append(func_doc)
-            return
-
-        if isinstance(node, ast.Assign):
-            self._process_module_constants(node, module_doc)
-            return
-
-        if isinstance(node, _IMPORT_TYPES):  # Issue #380
-            for import_stmt in self._extract_imports(node):
-                module_doc.add_import(import_stmt)
-
-    def _process_module_constants(self, node: ast.Assign, module_doc: "ModuleDoc") -> None:
-        """Extract constants from assignment node (Issue #315 - extracted helper).
-
-        Args:
-            node: Assignment AST node
-            module_doc: ModuleDoc to populate
-        """
-        for target in node.targets:
-            if not isinstance(target, ast.Name):
-                continue
-            if not target.id.isupper():
-                continue
-            value = self._get_node_value(node.value)
-            module_doc.add_constant(target.id, value)
+    # =========================================================================
+    # Module and Package Analysis (Issue #394: Delegates to ModuleAnalyzer)
+    # =========================================================================
 
     def analyze_module(self, file_path: str) -> Optional[ModuleDoc]:
         """
         Analyze a Python module and extract documentation.
+
+        Issue #394: Delegates to ModuleAnalyzer for actual analysis.
 
         Args:
             file_path: Path to the Python file
@@ -246,541 +170,30 @@ class DocGenerator:
         Returns:
             ModuleDoc containing extracted documentation, or None if parse fails
         """
-        validated_path = self._validate_module_path(file_path)
-        if validated_path is None:
-            return None
-
-        parsed = self._read_and_parse_module(validated_path)
-        if parsed is None:
-            return None
-
-        source, tree = parsed
-        module_name = os.path.splitext(os.path.basename(validated_path))[0]
-        module_doc = ModuleDoc(
-            name=module_name,
-            file_path=validated_path,
-            docstring=ast.get_docstring(tree),
-            line_count=len(source.splitlines()),
-        )
-
-        if module_doc.docstring:
-            module_doc.description = self._extract_description(module_doc.docstring)
-
-        for node in ast.iter_child_nodes(tree):
-            self._process_module_node(node, source, module_doc)
-
-        module_doc.exports = self._extract_all_exports(tree)
-        module_doc.dependencies = self._extract_dependencies(module_doc.imports)
-        module_doc.completeness = module_doc.calculate_completeness()
-
-        self._analyzed_files.add(validated_path)
-        return module_doc
-
-    # Issue #315 - Standard README file names to check
-    def _load_readme_content(self, package_path: str) -> Optional[str]:
-        """Load README content if available.
-
-        Issue #381: Delegates to helpers.load_readme_content.
-        """
-        return helpers.load_readme_content(package_path)
-
-    def _process_package_item(
-        self, item: str, package_path: str, package_doc: "PackageDoc", depth: int
-    ) -> None:
-        """Process a single item in package directory (Issue #315 - extracted helper)."""
-        item_path = os.path.join(package_path, item)
-
-        if os.path.isfile(item_path) and item.endswith(".py") and item != "__init__.py":
-            module_doc = self.analyze_module(item_path)
-            if module_doc:
-                package_doc.modules.append(module_doc)
-        elif os.path.isdir(item_path):
-            if os.path.exists(os.path.join(item_path, "__init__.py")):
-                subpackage = self.analyze_package(item_path, depth + 1)
-                if subpackage:
-                    package_doc.subpackages.append(subpackage)
+        result = self._module_analyzer.analyze_module(file_path)
+        if result:
+            self._analyzed_files.add(file_path)
+        return result
 
     def analyze_package(
         self, package_path: str, depth: int = 0
     ) -> Optional[PackageDoc]:
-        """Analyze a Python package and all its modules (Issue #315 - refactored)."""
-        if depth > self.max_depth:
-            logger.warning(f"Max depth reached for package: {package_path}")
-            return None
+        """
+        Analyze a Python package and all its modules.
 
-        package_path = os.path.abspath(package_path)
-
-        if not os.path.isdir(package_path):
-            logger.error(f"Not a directory: {package_path}")
-            return None
-
-        init_file = os.path.join(package_path, "__init__.py")
-        if not os.path.exists(init_file):
-            logger.warning(f"Not a Python package (no __init__.py): {package_path}")
-            return None
-
-        package_name = os.path.basename(package_path)
-        package_doc = PackageDoc(name=package_name, path=package_path)
-
-        # Read __init__.py docstring
-        init_module = self.analyze_module(init_file)
-        if init_module:
-            package_doc.init_docstring = init_module.docstring
-
-        # Load README content
-        package_doc.readme_content = self._load_readme_content(package_path)
-
-        # Process all items in package
-        for item in os.listdir(package_path):
-            self._process_package_item(item, package_path, package_doc, depth)
-
-        # Extract version and author
-        package_doc.version = self._extract_version(package_path)
-        package_doc.author = self._extract_author(package_path)
-
-        return package_doc
-
-    def _process_class_body_item(
-        self, item: ast.AST, source: str, class_doc: "ClassDoc"
-    ) -> None:
-        """Process a single class body item (Issue #315 - extracted helper).
+        Issue #394: Delegates to ModuleAnalyzer for actual analysis.
 
         Args:
-            item: AST node from class body
-            source: Module source code
-            class_doc: ClassDoc to populate
+            package_path: Path to the package directory
+            depth: Current recursion depth
+
+        Returns:
+            PackageDoc containing package documentation
         """
-        if isinstance(item, _FUNCTION_DEF_TYPES):  # Issue #380
-            if not self._should_include(item.name):
-                return
-            func_doc = self._analyze_function(item, source)
-            if func_doc:
-                class_doc.add_method(func_doc)
-            return
-
-        if isinstance(item, ast.AnnAssign):
-            self._process_annotated_class_var(item, class_doc)
-            return
-
-        if isinstance(item, ast.Assign):
-            self._process_unannotated_class_var(item, class_doc)
-
-    def _process_annotated_class_var(
-        self, item: ast.AnnAssign, class_doc: "ClassDoc"
-    ) -> None:
-        """Process annotated class variable (Issue #315 - extracted helper)."""
-        if not isinstance(item.target, ast.Name):
-            return
-        var_name = item.target.id
-        var_type = self._get_node_name(item.annotation) if item.annotation else "Any"
-        class_doc.add_class_variable(var_name, var_type)
-
-    def _process_unannotated_class_var(
-        self, item: ast.Assign, class_doc: "ClassDoc"
-    ) -> None:
-        """Process unannotated class variable (Issue #315 - extracted helper)."""
-        for target in item.targets:
-            if isinstance(target, ast.Name):
-                class_doc.add_class_variable(target.id)
-
-    def _analyze_class(self, node: ast.ClassDef, source: str) -> ClassDoc:
-        """Analyze a class definition and extract documentation."""
-        class_doc = ClassDoc(
-            name=node.name,
-            docstring=ast.get_docstring(node),
-            line_number=node.lineno,
-        )
-
-        for base in node.bases:
-            class_doc.add_base_class(self._get_node_name(base))
-
-        for decorator in node.decorator_list:
-            dec_name = self._get_node_name(decorator)
-            class_doc.add_decorator(dec_name)
-
-        class_doc.check_enum_inheritance()
-
-        if class_doc.docstring:
-            class_doc.description = self._extract_description(class_doc.docstring)
-
-        for item in node.body:
-            self._process_class_body_item(item, source, class_doc)
-
-        class_doc.completeness = class_doc.calculate_completeness()
-        return class_doc
-
-    # Decorator attribute mappings (Issue #315 - data-driven to avoid nesting)
-    _DECORATOR_ATTR_MAP = {
-        "staticmethod": ("is_static", True),
-        "classmethod": ("is_classmethod", True),
-        "abstractmethod": ("is_abstract", True),
-    }
-
-    def _process_function_decorator(self, dec_name: str, func_doc: "FunctionDoc") -> None:
-        """Process a single function decorator (Issue #315 - extracted helper).
-
-        Args:
-            dec_name: Name of the decorator
-            func_doc: FunctionDoc to update
-        """
-        func_doc.decorators.append(dec_name)
-
-        # Handle property decorator specially (sets two attributes)
-        if dec_name == "property":
-            func_doc.is_property = True
-            func_doc.element_type = ElementType.PROPERTY
-            return
-
-        # Use lookup for simple attribute decorators
-        if dec_name in self._DECORATOR_ATTR_MAP:
-            attr_name, attr_value = self._DECORATOR_ATTR_MAP[dec_name]
-            setattr(func_doc, attr_name, attr_value)
-
-    def _analyze_function(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], source: str
-    ) -> FunctionDoc:
-        """Analyze a function/method definition and extract documentation."""
-        is_async = isinstance(node, ast.AsyncFunctionDef)
-        element_type = ElementType.METHOD if self._is_method(node) else ElementType.FUNCTION
-
-        func_doc = FunctionDoc(
-            name=node.name,
-            element_type=element_type,
-            signature=self._build_signature(node),
-            docstring=ast.get_docstring(node),
-            is_async=is_async,
-            line_number=node.lineno,
-        )
-
-        for decorator in node.decorator_list:
-            dec_name = self._get_node_name(decorator)
-            self._process_function_decorator(dec_name, func_doc)
-
-        func_doc.parameters = self._extract_parameters(node)
-
-        if node.returns:
-            func_doc.returns = ReturnDoc(type_hint=self._get_node_name(node.returns))
-
-        if func_doc.docstring:
-            func_doc.description = self._extract_description(func_doc.docstring)
-            self._enhance_from_docstring(func_doc)
-
-        func_doc.completeness = func_doc.calculate_completeness()
-        return func_doc
-
-    def _extract_parameters(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> List[ParameterDoc]:
-        """Extract parameter documentation from function definition."""
-        params = []
-        args = node.args
-
-        # Regular arguments
-        defaults_offset = len(args.args) - len(args.defaults)
-
-        for i, arg in enumerate(args.args):
-            if arg.arg in _SELF_CLS_ARGS:
-                continue
-
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=self._get_node_name(arg.annotation) if arg.annotation else None,
-            )
-
-            # Check for default value
-            default_idx = i - defaults_offset
-            if default_idx >= 0 and default_idx < len(args.defaults):
-                param.default_value = self._get_node_value(args.defaults[default_idx])
-                param.is_optional = True
-
-            params.append(param)
-
-        # Positional-only arguments (Python 3.8+)
-        for arg in args.posonlyargs:
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=self._get_node_name(arg.annotation) if arg.annotation else None,
-                is_positional_only=True,
-            )
-            params.append(param)
-
-        # Keyword-only arguments
-        kw_defaults_map = {i: d for i, d in enumerate(args.kw_defaults) if d is not None}
-
-        for i, arg in enumerate(args.kwonlyargs):
-            param = ParameterDoc(
-                name=arg.arg,
-                type_hint=self._get_node_name(arg.annotation) if arg.annotation else None,
-                is_keyword_only=True,
-            )
-            if i in kw_defaults_map:
-                param.default_value = self._get_node_value(kw_defaults_map[i])
-                param.is_optional = True
-            params.append(param)
-
-        return params
-
-    def _enhance_from_docstring(self, func_doc: FunctionDoc) -> None:
-        """Parse Google-style docstring to enhance parameter/return documentation."""
-        if not func_doc.docstring:
-            return
-
-        lines = func_doc.docstring.split("\n")
-        current_section = None
-        current_content: List[str] = []
-
-        for line in lines:
-            # Check for section headers
-            section_found = False
-            for section_name, pattern in self.DOCSTRING_SECTIONS.items():
-                if pattern.match(line):
-                    # Process previous section
-                    self._process_docstring_section(
-                        func_doc, current_section, current_content
-                    )
-                    current_section = section_name
-                    current_content = []
-                    section_found = True
-                    break
-
-            if not section_found and current_section:
-                current_content.append(line)
-
-        # Process final section
-        self._process_docstring_section(func_doc, current_section, current_content)
-
-    def _process_docstring_section(
-        self, func_doc: FunctionDoc, section: Optional[str], content: List[str]
-    ) -> None:
-        """Process a docstring section and update function documentation."""
-        if not section or not content:
-            return
-
-        if section == "args":
-            self._parse_args_section(func_doc, content)
-        elif section == "returns":
-            self._parse_returns_section(func_doc, content)
-        elif section == "raises":
-            self._parse_raises_section(func_doc, content)
-        elif section == "examples":
-            self._parse_examples_section(func_doc, content)
-
-    def _parse_args_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
-        """Parse Args section of docstring."""
-        current_param: Optional[str] = None
-        current_desc: List[str] = []
-
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            # Check for new parameter
-            match = self.TYPE_PATTERNS["param"].match(stripped)
-            if match:
-                # Save previous parameter
-                if current_param:
-                    self._update_param_description(
-                        func_doc, current_param, " ".join(current_desc)
-                    )
-                current_param = match.group(1)
-                current_desc = [match.group(3)]
-                continue
-
-            match = self.TYPE_PATTERNS["simple"].match(stripped)
-            if match and not stripped.startswith(" "):
-                if current_param:
-                    self._update_param_description(
-                        func_doc, current_param, " ".join(current_desc)
-                    )
-                current_param = match.group(1)
-                current_desc = [match.group(2)]
-                continue
-
-            # Continuation of description
-            if current_param:
-                current_desc.append(stripped)
-
-        # Save last parameter
-        if current_param:
-            self._update_param_description(
-                func_doc, current_param, " ".join(current_desc)
-            )
-
-    def _parse_returns_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
-        """Parse Returns section of docstring."""
-        description = " ".join(line.strip() for line in lines if line.strip())
-        if description:
-            if func_doc.returns:
-                func_doc.returns.description = description
-            else:
-                func_doc.returns = ReturnDoc(description=description)
-
-    def _parse_raises_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
-        """Parse Raises section of docstring."""
-        current_exc: Optional[str] = None
-        current_desc: List[str] = []
-
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            match = self.TYPE_PATTERNS["type_only"].match(stripped)
-            if match:
-                if current_exc:
-                    func_doc.exceptions.append(
-                        ExceptionDoc(
-                            exception_type=current_exc,
-                            description=" ".join(current_desc),
-                        )
-                    )
-                current_exc = match.group(1).strip()
-                current_desc = [match.group(2)]
-            elif current_exc:
-                current_desc.append(stripped)
-
-        if current_exc:
-            func_doc.exceptions.append(
-                ExceptionDoc(
-                    exception_type=current_exc,
-                    description=" ".join(current_desc),
-                )
-            )
-
-    def _is_code_start(self, stripped: str) -> bool:
-        """Check if line starts a code example (Issue #315 - extracted helper)."""
-        return stripped.startswith(">>>") or stripped.startswith("...")
-
-    def _extract_code_content(self, stripped: str) -> str:
-        """Extract code content from doctest line (Issue #315 - extracted helper)."""
-        return stripped[4:] if len(stripped) > 4 else ""
-
-    def _finalize_code_block(
-        self, func_doc: FunctionDoc, code_lines: List[str]
-    ) -> List[str]:
-        """Add code block to examples and reset (Issue #315 - extracted helper)."""
-        if code_lines:
-            func_doc.examples.append(ExampleDoc(code="\n".join(code_lines)))
-        return []
-
-    def _parse_examples_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
-        """Parse Examples section of docstring (Issue #315 - refactored)."""
-        code_lines: List[str] = []
-        in_code_block = False
-
-        for line in lines:
-            stripped = line.strip()
-            if self._is_code_start(stripped):
-                in_code_block = True
-                code_lines.append(self._extract_code_content(stripped))
-            elif in_code_block:
-                if stripped.startswith("    "):
-                    code_lines.append(stripped)
-                elif not stripped:
-                    code_lines = self._finalize_code_block(func_doc, code_lines)
-                    in_code_block = False
-
-        self._finalize_code_block(func_doc, code_lines)
-
-    def _update_param_description(
-        self, func_doc: FunctionDoc, param_name: str, description: str
-    ) -> None:
-        """Update parameter description in function documentation."""
-        func_doc.update_parameter_description(param_name, description)
-
-    def _should_include(self, name: str) -> bool:
-        """Check if a name should be included based on settings."""
-        if name.startswith("__") and name.endswith("__"):
-            return self.include_dunder
-        if name.startswith("_"):
-            return self.include_private
-        return True
-
-    def _is_method(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> bool:
-        """Check if a function is a method (has self/cls parameter).
-
-        Issue #381: Delegates to helpers.is_method.
-        """
-        return helpers.is_method(node)
-
-    def _build_signature(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> str:
-        """Build function signature string.
-
-        Issue #381: Delegates to helpers.build_signature.
-        """
-        return helpers.build_signature(node)
-
-    def _get_node_name(self, node: Optional[ast.AST]) -> str:
-        """Get the name representation of an AST node.
-
-        Issue #381: Delegates to helpers.get_node_name.
-        """
-        return helpers.get_node_name(node)
-
-    def _get_node_value(self, node: Optional[ast.AST]) -> str:
-        """Get the value representation of an AST node.
-
-        Issue #381: Delegates to helpers.get_node_value.
-        """
-        return helpers.get_node_value(node)
-
-    def _extract_description(self, docstring: str) -> str:
-        """Extract the description (first paragraph) from a docstring.
-
-        Issue #381: Delegates to helpers.extract_description.
-        """
-        return helpers.extract_description(docstring, self.DOCSTRING_SECTIONS)
-
-    def _extract_imports(self, node: Union[ast.Import, ast.ImportFrom]) -> List[str]:
-        """Extract import statements.
-
-        Issue #381: Delegates to helpers.extract_imports.
-        """
-        return helpers.extract_imports(node)
-
-    def _is_all_assignment(self, node: ast.AST) -> bool:
-        """Check if node is an __all__ assignment.
-
-        Issue #381: Delegates to helpers.is_all_assignment.
-        """
-        return helpers.is_all_assignment(node)
-
-    def _extract_all_values(self, value_node: ast.AST) -> List[str]:
-        """Extract string values from __all__ list/tuple.
-
-        Issue #381: Delegates to helpers.extract_all_values.
-        """
-        return helpers.extract_all_values(value_node)
-
-    def _extract_all_exports(self, tree: ast.Module) -> List[str]:
-        """Extract __all__ exports from a module.
-
-        Issue #381: Delegates to helpers.extract_all_exports.
-        """
-        return helpers.extract_all_exports(tree)
-
-    def _extract_dependencies(self, imports: List[str]) -> List[str]:
-        """Extract third-party dependencies from imports.
-
-        Issue #381: Delegates to helpers.extract_dependencies.
-        """
-        return helpers.extract_dependencies(imports)
-
-    def _extract_version(self, package_path: str) -> Optional[str]:
-        """Extract version from package.
-
-        Issue #381: Delegates to helpers.extract_version.
-        """
-        return helpers.extract_version(package_path)
-
-    def _extract_author(self, package_path: str) -> Optional[str]:
-        """Extract author from package.
-
-        Issue #381: Delegates to helpers.extract_author.
-        """
-        return helpers.extract_author(package_path)
+        return self._module_analyzer.analyze_package(package_path, depth)
 
     # =========================================================================
-    # Documentation Generation
+    # Documentation Generation (Issue #394: Delegates to MarkdownGenerator)
     # =========================================================================
 
     def generate_api_docs(
@@ -794,6 +207,8 @@ class DocGenerator:
         """
         Generate API documentation from analyzed modules.
 
+        Issue #394: Delegates to MarkdownGenerator for actual generation.
+
         Args:
             modules: List of analyzed module documentation
             title: Documentation title
@@ -804,369 +219,9 @@ class DocGenerator:
         Returns:
             GeneratedDoc with the generated content
         """
-        if format == DocFormat.MARKDOWN:
-            return self._generate_markdown_api(
-                modules, title, include_toc, include_diagrams
-            )
-        elif format == DocFormat.HTML:
-            return self._generate_html_api(modules, title, include_toc, include_diagrams)
-        else:
-            # Default to markdown
-            return self._generate_markdown_api(
-                modules, title, include_toc, include_diagrams
-            )
-
-    def _generate_markdown_api(
-        self,
-        modules: List[ModuleDoc],
-        title: str,
-        include_toc: bool,
-        include_diagrams: bool,
-    ) -> GeneratedDoc:
-        """Generate Markdown API documentation."""
-        lines = [f"# {title}", ""]
-
-        # Table of contents
-        if include_toc:
-            lines.extend(self._generate_toc(modules))
-            lines.append("")
-
-        diagrams = []
-
-        # Process each module
-        for module in modules:
-            lines.append(f"## Module: `{module.name}`")
-            lines.append("")
-
-            if module.file_path:
-                lines.append(f"**File:** `{module.file_path}`")
-                lines.append("")
-
-            if module.description:
-                lines.append(module.description)
-                lines.append("")
-
-            # Module-level constants
-            if module.constants:
-                lines.append("### Constants")
-                lines.append("")
-                for name, value in module.constants.items():
-                    lines.append(f"- `{name}` = `{value}`")
-                lines.append("")
-
-            # Generate class diagram
-            if include_diagrams and module.classes:
-                diagram = self._generate_class_diagram(module)
-                diagrams.append(diagram)
-                lines.append("### Class Diagram")
-                lines.append("")
-                lines.append("```mermaid")
-                lines.append(diagram.to_mermaid())
-                lines.append("```")
-                lines.append("")
-
-            # Classes
-            for class_doc in module.classes:
-                lines.extend(self._generate_class_markdown(class_doc))
-
-            # Functions
-            if module.functions:
-                lines.append("### Functions")
-                lines.append("")
-                for func_doc in module.functions:
-                    lines.extend(self._generate_function_markdown(func_doc))
-
-            lines.append("---")
-            lines.append("")
-
-        content = "\n".join(lines)
-        word_count = len(content.split())
-
-        # Calculate overall completeness
-        all_completeness = [m.completeness for m in modules]
-        completeness_map = {
-            DocCompleteness.NONE: 0,
-            DocCompleteness.MINIMAL: 25,
-            DocCompleteness.PARTIAL: 50,
-            DocCompleteness.COMPLETE: 75,
-            DocCompleteness.COMPREHENSIVE: 100,
-        }
-        avg_completeness = sum(completeness_map[c] for c in all_completeness) / len(all_completeness) if all_completeness else 0
-
-        return GeneratedDoc(
-            title=title,
-            content=content,
-            format=DocFormat.MARKDOWN,
-            sections=[DocSection.API_REFERENCE],
-            source_files=[m.file_path for m in modules],
-            diagrams=diagrams,
-            word_count=word_count,
-            completeness_score=avg_completeness,
+        return self._markdown_generator.generate_api_docs(
+            modules, title, format, include_toc, include_diagrams
         )
-
-    def _generate_toc(self, modules: List[ModuleDoc]) -> List[str]:
-        """Generate table of contents."""
-        lines = ["## Table of Contents", ""]
-
-        for module in modules:
-            module_anchor = module.name.lower().replace(".", "-")
-            lines.append(f"- [Module: `{module.name}`](#{module_anchor})")
-
-            for class_doc in module.classes:
-                class_anchor = f"{module_anchor}-{class_doc.name.lower()}"
-                lines.append(f"  - [Class: `{class_doc.name}`](#{class_anchor})")
-
-            if module.functions:
-                lines.append("  - [Functions](#functions)")
-
-        return lines
-
-    def _generate_class_markdown(self, class_doc: ClassDoc) -> List[str]:
-        """Generate Markdown documentation for a class."""
-        lines = [f"### Class: `{class_doc.name}`", ""]
-
-        # Inheritance
-        if class_doc.base_classes:
-            bases = ", ".join(f"`{b}`" for b in class_doc.base_classes)
-            lines.append(f"**Inherits from:** {bases}")
-            lines.append("")
-
-        # Decorators
-        if class_doc.decorators:
-            decorators = ", ".join(f"`@{d}`" for d in class_doc.decorators)
-            lines.append(f"**Decorators:** {decorators}")
-            lines.append("")
-
-        # Description
-        if class_doc.description:
-            lines.append(class_doc.description)
-            lines.append("")
-
-        # Class variables
-        if class_doc.class_variables:
-            lines.append("#### Class Variables")
-            lines.append("")
-            lines.append("| Name | Type |")
-            lines.append("|------|------|")
-            for name, type_hint in class_doc.class_variables.items():
-                lines.append(f"| `{name}` | `{type_hint}` |")
-            lines.append("")
-
-        # Properties
-        if class_doc.properties:
-            lines.append("#### Properties")
-            lines.append("")
-            for prop in class_doc.properties:
-                lines.extend(self._generate_function_markdown(prop, is_property=True))
-
-        # Methods
-        if class_doc.methods:
-            lines.append("#### Methods")
-            lines.append("")
-            for method in class_doc.methods:
-                lines.extend(self._generate_function_markdown(method))
-
-        # Examples
-        if class_doc.examples:
-            lines.append("#### Examples")
-            lines.append("")
-            for example in class_doc.examples:
-                if example.description:
-                    lines.append(example.description)
-                    lines.append("")
-                lines.append(f"```{example.language}")
-                lines.append(example.code)
-                lines.append("```")
-                lines.append("")
-
-        return lines
-
-    def _generate_function_markdown(
-        self, func_doc: FunctionDoc, is_property: bool = False
-    ) -> List[str]:
-        """Generate Markdown documentation for a function/method."""
-        lines = []
-
-        # Header
-        prefix = "async " if func_doc.is_async else ""
-        decorator_info = ""
-        if func_doc.is_static:
-            decorator_info = " `@staticmethod`"
-        elif func_doc.is_classmethod:
-            decorator_info = " `@classmethod`"
-        elif is_property or func_doc.is_property:
-            decorator_info = " `@property`"
-
-        lines.append(f"##### `{prefix}{func_doc.name}`{decorator_info}")
-        lines.append("")
-
-        # Signature
-        lines.append("```python")
-        lines.append(f"def {func_doc.name}{func_doc.signature}")
-        lines.append("```")
-        lines.append("")
-
-        # Description
-        if func_doc.description:
-            lines.append(func_doc.description)
-            lines.append("")
-
-        # Parameters
-        if func_doc.parameters:
-            lines.append("**Parameters:**")
-            lines.append("")
-            for param in func_doc.parameters:
-                type_info = f": `{param.type_hint}`" if param.type_hint else ""
-                default_info = f" (default: `{param.default_value}`)" if param.default_value else ""
-                desc = f" - {param.description}" if param.description else ""
-                lines.append(f"- `{param.name}`{type_info}{default_info}{desc}")
-            lines.append("")
-
-        # Returns
-        if func_doc.returns:
-            type_info = f"`{func_doc.returns.type_hint}`" if func_doc.returns.type_hint else ""
-            desc = f": {func_doc.returns.description}" if func_doc.returns.description else ""
-            lines.append(f"**Returns:** {type_info}{desc}")
-            lines.append("")
-
-        # Exceptions
-        if func_doc.exceptions:
-            lines.append("**Raises:**")
-            lines.append("")
-            for exc in func_doc.exceptions:
-                desc = f": {exc.description}" if exc.description else ""
-                lines.append(f"- `{exc.exception_type}`{desc}")
-            lines.append("")
-
-        # Examples
-        if func_doc.examples:
-            lines.append("**Example:**")
-            lines.append("")
-            for example in func_doc.examples:
-                lines.append("```python")
-                lines.append(example.code)
-                lines.append("```")
-                lines.append("")
-
-        return lines
-
-    def _generate_class_diagram(self, module: ModuleDoc) -> DiagramSpec:
-        """Generate a class diagram specification for a module."""
-        diagram = DiagramSpec(
-            diagram_type=DiagramType.CLASS_DIAGRAM,
-            title=f"{module.name} Class Diagram",
-        )
-
-        for class_doc in module.classes:
-            element = {
-                "name": class_doc.name,
-                "attributes": list(class_doc.class_variables.keys())[:5],  # Limit
-                "methods": [m.name for m in class_doc.methods[:5]],  # Limit
-            }
-            diagram.elements.append(element)
-
-            # Add inheritance relationships
-            for base in class_doc.base_classes:
-                if base not in _SKIP_INHERITANCE_BASES:
-                    diagram.relationships.append((class_doc.name, base, "inherits"))
-
-        return diagram
-
-    def _generate_html_api(
-        self,
-        modules: List[ModuleDoc],
-        title: str,
-        include_toc: bool,
-        include_diagrams: bool,
-    ) -> GeneratedDoc:
-        """Generate HTML API documentation."""
-        # First generate markdown, then convert to HTML
-        md_doc = self._generate_markdown_api(modules, title, include_toc, include_diagrams)
-
-        # Simple markdown to HTML conversion
-        html_content = self._markdown_to_html(md_doc.content)
-
-        html_page = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; }}
-        code {{ background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }}
-        pre {{ background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }}
-        pre code {{ background: none; padding: 0; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-        th {{ background: #f4f4f4; }}
-        h1 {{ border-bottom: 2px solid #333; padding-bottom: 10px; }}
-        h2 {{ border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 40px; }}
-        h3 {{ color: #333; margin-top: 30px; }}
-        hr {{ border: none; border-top: 1px solid #ddd; margin: 30px 0; }}
-    </style>
-</head>
-<body>
-{html_content}
-</body>
-</html>"""
-
-        return GeneratedDoc(
-            title=title,
-            content=html_page,
-            format=DocFormat.HTML,
-            sections=[DocSection.API_REFERENCE],
-            source_files=md_doc.source_files,
-            diagrams=md_doc.diagrams,
-            word_count=md_doc.word_count,
-            completeness_score=md_doc.completeness_score,
-        )
-
-    def _markdown_to_html(self, markdown: str) -> str:
-        """Simple Markdown to HTML conversion."""
-        html = markdown
-
-        # Headers (Issue #380: use pre-compiled patterns)
-        html = _MD_H5_RE.sub(r"<h5>\1</h5>", html)
-        html = _MD_H4_RE.sub(r"<h4>\1</h4>", html)
-        html = _MD_H3_RE.sub(r"<h3>\1</h3>", html)
-        html = _MD_H2_RE.sub(r"<h2>\1</h2>", html)
-        html = _MD_H1_RE.sub(r"<h1>\1</h1>", html)
-
-        # Code blocks (Issue #380: use pre-compiled pattern)
-        html = _MD_CODE_BLOCK_RE.sub(r"<pre><code>\2</code></pre>", html)
-
-        # Inline code (Issue #380: use pre-compiled pattern)
-        html = _MD_INLINE_CODE_RE.sub(r"<code>\1</code>", html)
-
-        # Bold (Issue #380: use pre-compiled pattern)
-        html = _MD_BOLD_RE.sub(r"<strong>\1</strong>", html)
-
-        # Lists (Issue #380: use pre-compiled pattern)
-        html = _MD_LIST_ITEM_RE.sub(r"<li>\1</li>", html)
-
-        # Horizontal rules (Issue #380: use pre-compiled pattern)
-        html = _MD_HR_RE.sub(r"<hr>", html)
-
-        # Paragraphs (simple approach)
-        lines = html.split("\n")
-        result = []
-        in_list = False
-        for line in lines:
-            if line.startswith("<li>"):
-                if not in_list:
-                    result.append("<ul>")
-                    in_list = True
-                result.append(line)
-            else:
-                if in_list:
-                    result.append("</ul>")
-                    in_list = False
-                result.append(line)
-        if in_list:
-            result.append("</ul>")
-
-        return "\n".join(result)
 
     def generate_module_overview(
         self,
@@ -1176,6 +231,8 @@ class DocGenerator:
         """
         Generate an overview document for a single module.
 
+        Issue #394: Delegates to MarkdownGenerator for actual generation.
+
         Args:
             module: Analyzed module documentation
             format: Output format
@@ -1183,49 +240,7 @@ class DocGenerator:
         Returns:
             GeneratedDoc with the overview
         """
-        lines = [f"# {module.name}", ""]
-
-        if module.description:
-            lines.append(module.description)
-            lines.append("")
-
-        # Quick stats
-        lines.append("## Overview")
-        lines.append("")
-        lines.append(f"- **Classes:** {len(module.classes)}")
-        lines.append(f"- **Functions:** {len(module.functions)}")
-        lines.append(f"- **Constants:** {len(module.constants)}")
-        lines.append(f"- **Lines of code:** {module.line_count}")
-        lines.append(f"- **Documentation completeness:** {module.completeness.value}")
-        lines.append("")
-
-        # Dependencies
-        if module.dependencies:
-            lines.append("## Dependencies")
-            lines.append("")
-            for dep in module.dependencies:
-                lines.append(f"- `{dep}`")
-            lines.append("")
-
-        # Exports
-        if module.exports:
-            lines.append("## Public API (exports)")
-            lines.append("")
-            for export in module.exports:
-                lines.append(f"- `{export}`")
-            lines.append("")
-
-        content = "\n".join(lines)
-
-        return GeneratedDoc(
-            title=f"{module.name} Overview",
-            content=content,
-            format=format,
-            sections=[DocSection.OVERVIEW],
-            source_files=[module.file_path],
-            word_count=len(content.split()),
-            completeness_score=100 if module.completeness == DocCompleteness.COMPREHENSIVE else 50,
-        )
+        return self._markdown_generator.generate_module_overview(module, format)
 
 
 # =============================================================================
