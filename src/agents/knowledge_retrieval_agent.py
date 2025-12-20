@@ -73,6 +73,66 @@ class KnowledgeRetrievalAgent:
                 logger.error(f"Failed to initialize knowledge base: {e}")
                 self.knowledge_base = None
 
+    def _build_kb_unavailable_response(self) -> Dict[str, Any]:
+        """
+        Build response when knowledge base is unavailable.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "status": "error",
+            "message": "Knowledge base not available",
+            "documents_found": 0,
+            "documents": [],
+            "agent_type": "knowledge_retrieval",
+        }
+
+    def _build_success_response(
+        self,
+        query: str,
+        processed_results: Dict[str, Any],
+        summary: str,
+        processing_time: float,
+        similarity_threshold: float,
+    ) -> Dict[str, Any]:
+        """
+        Build successful query response.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "status": "success",
+            "query": query,
+            "documents_found": processed_results["documents_found"],
+            "documents": processed_results["documents"],
+            "summary": summary,
+            "processing_time": processing_time,
+            "is_question": self._is_question(query),
+            "agent_type": "knowledge_retrieval",
+            "model_used": self.model_name,
+            "metadata": {
+                "agent": "KnowledgeRetrievalAgent",
+                "search_type": "fast_lookup",
+                "similarity_threshold": similarity_threshold,
+            },
+        }
+
+    def _build_error_response(self, query: str, error: Exception) -> Dict[str, Any]:
+        """
+        Build error response for query failures.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "status": "error",
+            "message": f"Knowledge retrieval failed: {str(error)}",
+            "documents_found": 0,
+            "documents": [],
+            "query": query,
+            "agent_type": "knowledge_retrieval",
+            "model_used": self.model_name,
+        }
+
     async def process_query(
         self,
         query: str,
@@ -82,6 +142,8 @@ class KnowledgeRetrievalAgent:
     ) -> Dict[str, Any]:
         """
         Process a simple knowledge query and return quick results.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Args:
             query: User's question or search query
@@ -93,66 +155,34 @@ class KnowledgeRetrievalAgent:
             Dict containing search results and metadata
         """
         try:
-            logger.info(f"Knowledge Retrieval Agent processing query: {query[:50]}...")
+            logger.info("Knowledge Retrieval Agent processing query: %s...", query[:50])
             start_time = time.time()
 
-            # Ensure knowledge base is ready
             await self._ensure_kb_initialized()
 
             if not self.knowledge_base:
-                return {
-                    "status": "error",
-                    "message": "Knowledge base not available",
-                    "documents_found": 0,
-                    "documents": [],
-                    "agent_type": "knowledge_retrieval",
-                }
+                return self._build_kb_unavailable_response()
 
-            # Perform knowledge base search
             search_results = await self.knowledge_base.search(query, n_results=limit)
-
             processing_time = time.time() - start_time
 
-            # Process and filter results
             processed_results = self._process_search_results(
                 search_results, similarity_threshold, query
             )
 
-            # Generate quick summary if results found
             summary = ""
             if processed_results["documents"]:
                 summary = await self._generate_quick_summary(
-                    query, processed_results["documents"][:3]  # Use top 3 for summary
+                    query, processed_results["documents"][:3]
                 )
 
-            return {
-                "status": "success",
-                "query": query,
-                "documents_found": processed_results["documents_found"],
-                "documents": processed_results["documents"],
-                "summary": summary,
-                "processing_time": processing_time,
-                "is_question": self._is_question(query),
-                "agent_type": "knowledge_retrieval",
-                "model_used": self.model_name,
-                "metadata": {
-                    "agent": "KnowledgeRetrievalAgent",
-                    "search_type": "fast_lookup",
-                    "similarity_threshold": similarity_threshold,
-                },
-            }
+            return self._build_success_response(
+                query, processed_results, summary, processing_time, similarity_threshold
+            )
 
         except Exception as e:
-            logger.error(f"Knowledge Retrieval Agent error: {e}")
-            return {
-                "status": "error",
-                "message": f"Knowledge retrieval failed: {str(e)}",
-                "documents_found": 0,
-                "documents": [],
-                "query": query,
-                "agent_type": "knowledge_retrieval",
-                "model_used": self.model_name,
-            }
+            logger.error("Knowledge Retrieval Agent error: %s", e)
+            return self._build_error_response(query, e)
 
     async def find_similar_documents(
         self, query: str, top_k: int = 10, min_score: float = 0.5

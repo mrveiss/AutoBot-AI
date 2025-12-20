@@ -315,6 +315,53 @@ class AutoBotMemoryGraph:
 
     # ==================== ENTITY OPERATIONS ====================
 
+    def _prepare_entity_metadata(
+        self,
+        metadata: Optional[Dict[str, Any]],
+        tags: Optional[List[str]],
+    ) -> Dict[str, Any]:
+        """
+        Prepare enriched metadata for a new entity.
+
+        (Issue #398: extracted helper)
+        """
+        entity_metadata = metadata or {}
+        entity_metadata.update(
+            {
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "created_by": "autobot",
+                "tags": tags or [],
+                "priority": entity_metadata.get("priority", "medium"),
+                "status": entity_metadata.get("status", "active"),
+                "version": 1,
+            }
+        )
+        return entity_metadata
+
+    def _build_entity_document(
+        self,
+        entity_id: str,
+        entity_type: str,
+        name: str,
+        observations: List[str],
+        entity_metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build the complete entity document for storage.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "id": entity_id,
+            "type": entity_type,
+            "name": name,
+            "created_at": int(datetime.now().timestamp() * 1000),
+            "updated_at": int(datetime.now().timestamp() * 1000),
+            "observations": observations,
+            "metadata": entity_metadata,
+        }
+
     async def create_entity(
         self,
         entity_type: str,
@@ -325,6 +372,8 @@ class AutoBotMemoryGraph:
     ) -> Dict[str, Any]:
         """
         Create a new entity in the memory graph.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Args:
             entity_type: Type of entity (conversation, bug_fix, feature, etc.)
@@ -352,33 +401,11 @@ class AutoBotMemoryGraph:
             raise ValueError("Entity name cannot be empty")
 
         try:
-            # Generate entity ID
             entity_id = str(uuid.uuid4())
-
-            # Prepare metadata
-            entity_metadata = metadata or {}
-            entity_metadata.update(
-                {
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat(),
-                    "created_by": "autobot",
-                    "tags": tags or [],
-                    "priority": entity_metadata.get("priority", "medium"),
-                    "status": entity_metadata.get("status", "active"),
-                    "version": 1,
-                }
+            entity_metadata = self._prepare_entity_metadata(metadata, tags)
+            entity = self._build_entity_document(
+                entity_id, entity_type, name, observations, entity_metadata
             )
-
-            # Create entity document
-            entity = {
-                "id": entity_id,
-                "type": entity_type,
-                "name": name,
-                "created_at": int(datetime.now().timestamp() * 1000),
-                "updated_at": int(datetime.now().timestamp() * 1000),
-                "observations": observations,
-                "metadata": entity_metadata,
-            }
 
             # Store in Redis
             entity_key = f"memory:entity:{entity_id}"
