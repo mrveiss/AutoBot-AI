@@ -267,22 +267,23 @@ def with_loop(items):
         mock_class = MagicMock()
 
         # High score, many methods -> CRITICAL
-        mock_class.methods = [MagicMock() for _ in range(45)]
+        # Issue #372: Now uses method_count property instead of len(methods)
+        mock_class.method_count = 45
         severity = detector._god_class_severity(75, mock_class)
         assert severity == Severity.CRITICAL
 
         # Medium score -> HIGH
-        mock_class.methods = [MagicMock() for _ in range(25)]
+        mock_class.method_count = 25
         severity = detector._god_class_severity(55, mock_class)
         assert severity == Severity.HIGH
 
         # Low score -> MEDIUM
-        mock_class.methods = [MagicMock() for _ in range(22)]
+        mock_class.method_count = 22
         severity = detector._god_class_severity(35, mock_class)
         assert severity == Severity.MEDIUM
 
         # Very low score -> LOW
-        mock_class.methods = [MagicMock() for _ in range(21)]
+        mock_class.method_count = 21
         severity = detector._god_class_severity(25, mock_class)
         assert severity == Severity.LOW
 

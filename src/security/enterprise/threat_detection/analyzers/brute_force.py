@@ -9,7 +9,6 @@ Detects brute force authentication attacks.
 Part of Issue #381 - God Class Refactoring
 """
 
-import time
 from typing import Optional
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
@@ -38,18 +37,18 @@ class BruteForceAnalyzer(ThreatAnalyzer):
 
         if recent_failures >= threshold:
             confidence = min(1.0, recent_failures / threshold)
-            event_hash = hash(f"{event.user_id}_{event.source_ip}") % 10000
+
+            # Issue #372: Use SecurityEvent methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
 
             return ThreatEvent(
-                event_id=f"brute_force_{int(time.time())}_{event_hash}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("brute_force"),
+                **base_fields,
                 threat_category=ThreatCategory.BRUTE_FORCE,
                 threat_level=ThreatLevel.HIGH,
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action="authentication",
-                resource="login",
+                action="authentication",  # Override base action
+                resource="login",  # Override base resource
                 details={
                     "failed_attempts": recent_failures,
                     "time_window_minutes": window_minutes,
@@ -59,7 +58,6 @@ class BruteForceAnalyzer(ThreatAnalyzer):
                         else "dictionary_attack"
                     ),
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=["block_ip", "lock_account", "alert_security_team"],
             )
 
