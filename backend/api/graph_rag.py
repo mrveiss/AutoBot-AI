@@ -137,6 +137,54 @@ def generate_request_id() -> str:
 # ====================================================================
 
 
+def _serialize_search_results(results) -> List[Metadata]:
+    """
+    Convert search results to serializable format.
+
+    Issue #398: Extracted from graph_rag_search to reduce method length.
+    """
+    return [
+        {
+            "content": r.content,
+            "metadata": r.metadata,
+            "semantic_score": r.semantic_score,
+            "keyword_score": r.keyword_score,
+            "hybrid_score": r.hybrid_score,
+            "relevance_rank": r.relevance_rank,
+            "source_path": r.source_path,
+        }
+        for r in results
+    ]
+
+
+def _check_component_health(service: GraphRAGService) -> Dict[str, str]:
+    """
+    Check health status of service components.
+
+    Issue #398: Extracted from graph_rag_health to reduce method length.
+    """
+    return {
+        "graph_rag_service": "healthy",
+        "rag_service": "healthy" if service.rag else "unavailable",
+        "memory_graph": (
+            "healthy" if service.graph and service.graph.initialized else "unavailable"
+        ),
+    }
+
+
+def _determine_overall_status(components: Dict[str, str]) -> str:
+    """
+    Determine overall health status from component statuses.
+
+    Issue #398: Extracted from graph_rag_health to reduce method length.
+    """
+    if all(status == "healthy" for status in components.values()):
+        return "healthy"
+    elif any(status == "unavailable" for status in components.values()):
+        return "degraded"
+    return "unhealthy"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="graph_rag_search",
@@ -148,59 +196,9 @@ async def graph_rag_search(
     service: GraphRAGService = Depends(get_graph_rag_service),
 ) -> JSONResponse:
     """
-    Perform graph-aware RAG search.
+    Perform graph-aware RAG search combining semantic search with graph traversal.
 
-    This endpoint combines semantic search with graph relationship traversal
-    to provide context-enhanced results. It uses the existing RAGService and
-    AutoBotMemoryGraph components.
-
-    Args:
-        search_request: Search request parameters
-        service: GraphRAGService dependency
-
-    Returns:
-        JSONResponse with search results and performance metrics
-
-    Raises:
-        HTTPException: If search fails or times out
-
-    Example Request:
-        ```json
-        {
-            "query": "Redis timeout configuration",
-            "start_entity": "Bug Fix 2024-01-15",
-            "max_depth": 2,
-            "max_results": 5,
-            "enable_reranking": true,
-            "timeout": 10.0
-        }
-        ```
-
-    Example Response:
-        ```json
-        {
-            "success": true,
-            "results": [
-                {
-                    "content": "Redis timeout configuration...",
-                    "metadata": {
-                        "entity_type": "decision",
-                        "entity_name": "Redis Config",
-                        "source": "graph_expansion"
-                    },
-                    "hybrid_score": 0.87,
-                    "relevance_rank": 1
-                }
-            ],
-            "metrics": {
-                "total_time": 0.85,
-                "retrieval_time": 0.42,
-                "graph_traversal_time": 0.23,
-                "final_results_count": 5
-            },
-            "request_id": "abc-123-def-456"
-        }
-        ```
+    Issue #398: Refactored with extracted serialization helper.
     """
     request_id = generate_request_id()
 
@@ -210,7 +208,6 @@ async def graph_rag_search(
             f"(start_entity={search_request.start_entity}, max_depth={search_request.max_depth})"
         )
 
-        # Execute graph-aware search
         results, metrics = await service.graph_aware_search(
             query=search_request.query,
             start_entity=search_request.start_entity,
@@ -220,25 +217,12 @@ async def graph_rag_search(
             timeout=search_request.timeout,
         )
 
-        # Convert results to serializable format
-        results_data = [
-            {
-                "content": r.content,
-                "metadata": r.metadata,
-                "semantic_score": r.semantic_score,
-                "keyword_score": r.keyword_score,
-                "hybrid_score": r.hybrid_score,
-                "relevance_rank": r.relevance_rank,
-                "source_path": r.source_path,
-            }
-            for r in results
-        ]
-
-        # Convert metrics to dict (Issue #372 - use model method)
+        results_data = _serialize_search_results(results)
         metrics_data = metrics.to_response_dict()
 
         logger.info(
-            f"[{request_id}] Graph-RAG search complete: {len(results)} results in {metrics.total_time:.3f}s"
+            f"[{request_id}] Graph-RAG search complete: "
+            f"{len(results)} results in {metrics.total_time:.3f}s"
         )
 
         return JSONResponse(
@@ -258,10 +242,7 @@ async def graph_rag_search(
 
     except Exception as e:
         logger.error(f"[{request_id}] Graph-RAG search failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Graph-RAG search failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Graph-RAG search failed: {str(e)}")
 
 
 @with_error_handling(
@@ -299,25 +280,9 @@ async def graph_rag_health(
     from datetime import datetime
 
     try:
-        # Get service metrics
         service_metrics = await service.get_metrics()
-
-        # Check component health
-        components = {
-            "graph_rag_service": "healthy",
-            "rag_service": "healthy" if service.rag else "unavailable",
-            "memory_graph": (
-                "healthy" if service.graph and service.graph.initialized else "unavailable"
-            ),
-        }
-
-        # Determine overall status
-        if all(status == "healthy" for status in components.values()):
-            overall_status = "healthy"
-        elif any(status == "unavailable" for status in components.values()):
-            overall_status = "degraded"
-        else:
-            overall_status = "unhealthy"
+        components = _check_component_health(service)
+        overall_status = _determine_overall_status(components)
 
         return JSONResponse(
             status_code=200 if overall_status == "healthy" else 503,
