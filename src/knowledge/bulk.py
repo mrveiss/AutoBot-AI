@@ -1191,56 +1191,32 @@ class BulkOperationsMixin:
             logger.error("Bulk delete failed: %s", e)
             return {"status": "error", "message": str(e)}
 
-    async def bulk_update_category(
-        self, fact_ids: List[str], new_category: str
-    ) -> Dict[str, Any]:
-        """
-        Update category for multiple facts using parallel processing.
+    def _count_bulk_update_results(self, results: List[Any]) -> tuple[int, int]:
+        """Count bulk update results (Issue #398: extracted)."""
+        updated = errors = 0
+        for result in results:
+            if isinstance(result, Exception) or result.get("status") != "success":
+                errors += 1
+            else:
+                updated += 1
+        return updated, errors
 
-        Args:
-            fact_ids: List of fact IDs
-            new_category: New category name
-
-        Returns:
-            Dict with status and counts
-        """
+    async def bulk_update_category(self, fact_ids: List[str], new_category: str) -> Dict[str, Any]:
+        """Update category for multiple facts using parallel processing (Issue #398: refactored)."""
         try:
-            # Process all updates in parallel with bounded concurrency
             semaphore = asyncio.Semaphore(50)
 
             async def bounded_update(fact_id: str) -> Dict[str, Any]:
-                """Update single fact category with semaphore-controlled concurrency."""
                 async with semaphore:
                     try:
-                        return await self.update_fact(
-                            fact_id, metadata={"category": new_category}
-                        )
+                        return await self.update_fact(fact_id, metadata={"category": new_category})
                     except Exception as e:
                         return {"status": "error", "message": str(e)}
 
-            results = await asyncio.gather(
-                *[bounded_update(fact_id) for fact_id in fact_ids],
-                return_exceptions=True
-            )
+            results = await asyncio.gather(*[bounded_update(fid) for fid in fact_ids], return_exceptions=True)
+            updated, errors = self._count_bulk_update_results(results)
 
-            # Count results
-            updated = 0
-            errors = 0
-
-            for result in results:
-                if isinstance(result, Exception):
-                    errors += 1
-                elif result.get("status") == "success":
-                    updated += 1
-                else:
-                    errors += 1
-
-            return {
-                "status": "success",
-                "updated": updated,
-                "errors": errors,
-                "total": len(fact_ids),
-            }
+            return {"status": "success", "updated": updated, "errors": errors, "total": len(fact_ids)}
 
         except Exception as e:
             logger.error("Bulk category update failed: %s", e)
