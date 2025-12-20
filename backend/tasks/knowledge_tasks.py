@@ -190,6 +190,45 @@ def _run_async_in_loop(coro):
         loop.close()
 
 
+async def _store_man_pages_to_kb(kb, man_pages: list, delay: float) -> tuple[int, int]:
+    """Store man pages to knowledge base with delay between items (Issue #398: extracted).
+
+    Args:
+        kb: Knowledge base instance
+        man_pages: List of man page dicts with 'content' and 'metadata'
+        delay: Delay between storing each item (seconds)
+
+    Returns:
+        Tuple of (items_added, items_failed)
+    """
+    items_added = 0
+    items_failed = 0
+
+    for man_page in man_pages:
+        try:
+            content = man_page.get("content", "")
+            metadata = man_page.get("metadata", {})
+
+            if not content:
+                items_failed += 1
+                continue
+
+            result = await kb.store_fact(content=content, metadata=metadata)
+
+            if result and result.get("status") == "success":
+                items_added += 1
+            else:
+                items_failed += 1
+
+        except Exception as e:
+            logger.error(f"Error storing man page: {e}")
+            items_failed += 1
+
+        await asyncio.sleep(delay)
+
+    return items_added, items_failed
+
+
 async def _scan_man_page_changes_async(machine_id: str, limit: int | None = None) -> dict:
     """
     Async implementation of man page change scanning.
@@ -366,7 +405,7 @@ def full_man_page_index(
             f"(limit={limit}, sections={sections})..."
         )
 
-        # Run the async indexing
+        # Run the async indexing (Issue #398: refactored to use helper)
         async def _full_index():
             from src.utils.redis_client import get_redis_client
             from backend.services.fast_document_scanner import FastDocumentScanner
@@ -392,33 +431,10 @@ def full_man_page_index(
                 system_context=system_context,
             )
 
-            items_added = 0
-            items_failed = 0
-
-            for man_page in man_pages:
-                try:
-                    content = man_page.get("content", "")
-                    metadata = man_page.get("metadata", {})
-
-                    if not content:
-                        items_failed += 1
-                        continue
-
-                    result = await kb.store_fact(
-                        content=content,
-                        metadata=metadata,
-                    )
-
-                    if result and result.get("status") == "success":
-                        items_added += 1
-                    else:
-                        items_failed += 1
-
-                except Exception as e:
-                    logger.error(f"Error storing man page: {e}")
-                    items_failed += 1
-
-                await asyncio.sleep(TimingConstants.MICRO_DELAY)
+            # Store using extracted helper (Issue #398)
+            items_added, items_failed = await _store_man_pages_to_kb(
+                kb, man_pages, TimingConstants.MICRO_DELAY
+            )
 
             return {
                 "status": "success",
