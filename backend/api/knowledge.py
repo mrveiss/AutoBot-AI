@@ -217,6 +217,51 @@ async def get_knowledge_stats_basic(req: Request):
     }
 
 
+def _get_category_cache_keys(KnowledgeCategory) -> dict:
+    """Get cache keys for category counts (Issue #398: extracted)."""
+    return {
+        KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
+        KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
+        KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
+    }
+
+
+async def _get_or_compute_category_counts(
+    kb, cache_keys: dict, get_category_for_source, category_counts: dict
+) -> None:
+    """Get cached counts or compute from facts (Issue #398: extracted)."""
+    cached_values = await kb.aioredis_client.mget(list(cache_keys.values()))
+    if all(v is not None for v in cached_values):
+        # Use cached values
+        for i, cat_id in enumerate(cache_keys.keys()):
+            category_counts[cat_id] = int(cached_values[i])
+        logger.debug(f"Using cached category counts: {category_counts}")
+    else:
+        # Cache miss - compute counts
+        logger.info("Cache miss - computing category counts from all facts")
+        all_facts = await kb.get_all_facts()
+        logger.info(f"Categorizing {len(all_facts)} facts into main categories")
+        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
+        logger.info(f"Category counts: {category_counts}")
+        # Cache for 1 hour
+        for cat_id, cache_key in cache_keys.items():
+            await kb.aioredis_client.set(
+                cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
+            )
+
+
+def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
+    """Build main categories list with counts (Issue #398: extracted)."""
+    return [
+        {
+            "id": cat_id, "name": meta["name"], "description": meta["description"],
+            "icon": meta["icon"], "color": meta["color"],
+            "examples": meta["examples"], "count": category_counts.get(cat_id, 0),
+        }
+        for cat_id, meta in CATEGORY_METADATA.items()
+    ]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_main_categories",
@@ -224,111 +269,32 @@ async def get_knowledge_stats_basic(req: Request):
 )
 @router.get("/categories/main")
 async def get_main_categories(req: Request):
-    """
-    Get the 3 main knowledge base categories with their metadata and stats.
-    OPTIMIZED: Uses cached category counts for fast response (<50ms).
-
-    Returns:
-        {
-            "categories": [
-                {
-                    "id": "autobot-documentation",
-                    "name": "AutoBot Documentation",
-                    "description": "AutoBot's documentation, guides, and technical references",
-                    "icon": "fas fa-book",
-                    "color": "#3b82f6",
-                    "count": 150
-                },
-                ...
-            ]
-        }
-    """
+    """Get the 3 main knowledge base categories with their metadata and stats."""
     from backend.knowledge_categories import (
-        CATEGORY_METADATA,
-        KnowledgeCategory,
-        get_category_for_source,
+        CATEGORY_METADATA, KnowledgeCategory, get_category_for_source,
     )
 
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    has_redis = kb.aioredis_client is not None if kb else False
+    logger.info(f"get_main_categories - kb: {kb is not None}, has_redis: {has_redis}")
 
-    has_redis = kb_to_use.aioredis_client is not None if kb_to_use else False
-    logger.info(
-        f"get_main_categories - kb_to_use: {kb_to_use is not None}, "
-        f"has_redis: {has_redis}"
-    )
-
-    # Initialize category counts
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
         KnowledgeCategory.SYSTEM_KNOWLEDGE: 0,
         KnowledgeCategory.USER_KNOWLEDGE: 0,
     }
 
-    # PERFORMANCE FIX: Use cached category counts instead of scanning all facts
-    # Scanning 393 facts and parsing JSON metadata takes seconds
-    # Use pre-computed counts stored in Redis for instant lookups (<50ms)
-    if kb_to_use and kb_to_use.aioredis_client:
+    if kb and kb.aioredis_client:
         logger.info("Attempting to get cached category counts...")
         try:
-            # Try to get cached counts first (instant lookup)
-            cache_keys = {
-                KnowledgeCategory.AUTOBOT_DOCUMENTATION: (
-                    "kb:stats:category:autobot-documentation"
-                ),
-                KnowledgeCategory.SYSTEM_KNOWLEDGE: (
-                    "kb:stats:category:system-knowledge"
-                ),
-                KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
-            }
-
-            cached_values = await kb_to_use.aioredis_client.mget(
-                list(cache_keys.values())
+            cache_keys = _get_category_cache_keys(KnowledgeCategory)
+            await _get_or_compute_category_counts(
+                kb, cache_keys, get_category_for_source, category_counts
             )
-
-            # Check if all cache values exist
-            if all(v is not None for v in cached_values):
-                # Use cached values
-                for i, cat_id in enumerate(cache_keys.keys()):
-                    category_counts[cat_id] = int(cached_values[i])
-                logger.debug(f"Using cached category counts: {category_counts}")
-            else:
-                # Cache miss - compute counts the slow way using helper (Issue #315)
-                logger.info("Cache miss - computing category counts from all facts")
-                all_facts = await kb_to_use.get_all_facts()
-                logger.info(f"Categorizing {len(all_facts)} facts into main categories")
-
-                await _compute_category_counts(
-                    all_facts, get_category_for_source, category_counts
-                )
-                logger.info(f"Category counts: {category_counts}")
-
-                # Cache the counts for 1 hour (expensive to compute with 5k+ facts)
-                for cat_id, cache_key in cache_keys.items():
-                    await kb_to_use.aioredis_client.set(
-                        cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
-                    )
-
         except Exception as e:
             logger.error(f"Error categorizing facts: {e}")
-            # Fallback: just show 0 if we can't categorize
 
-    # Build main categories with counts
-    main_categories = []
-    for cat_id, meta in CATEGORY_METADATA.items():
-        count = category_counts.get(cat_id, 0)
-
-        main_categories.append(
-            {
-                "id": cat_id,
-                "name": meta["name"],
-                "description": meta["description"],
-                "icon": meta["icon"],
-                "color": meta["color"],
-                "examples": meta["examples"],
-                "count": count,
-            }
-        )
-
+    main_categories = _build_main_categories(CATEGORY_METADATA, category_counts)
     return {"categories": main_categories, "total": len(main_categories)}
 
 
@@ -486,6 +452,34 @@ async def get_knowledge_health(req: Request):
     }
 
 
+def _empty_entries_response(message: str = "", error: str = "") -> dict:
+    """Create empty entries response (Issue #398: extracted)."""
+    resp = {"entries": [], "next_cursor": "0", "count": 0, "has_more": False}
+    if message:
+        resp["message"] = message
+    if error:
+        resp["error"] = error
+    return resp
+
+
+def _parse_and_filter_facts(
+    items: dict, category: Optional[str], limit: int
+) -> list:
+    """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
+    entries = []
+    for fact_id, fact_json in items.items():
+        try:
+            fact = json.loads(fact_json)
+            if category and fact.get("metadata", {}).get("category", "") != category:
+                continue
+            entries.append(_format_knowledge_entry(fact_id, fact))
+            if len(entries) >= limit:
+                break
+        except Exception as e:
+            logger.warning(f"Error parsing fact {fact_id}: {e}")
+    return entries
+
+
 @router.get("/entries")
 async def get_knowledge_entries(
     req: Request,
@@ -493,101 +487,80 @@ async def get_knowledge_entries(
     cursor: Optional[str] = Query(default="0", regex=r"^[0-9]+$"),
     category: Optional[str] = Query(default=None, regex=r"^[a-zA-Z0-9_-]*$"),
 ):
-    """
-    Get knowledge base entries with cursor-based pagination.
+    """Get knowledge base entries with cursor-based pagination."""
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        return _empty_entries_response(message="Knowledge base not initialized")
 
-    Uses Redis SCAN for memory-efficient iteration over large datasets.
-    Returns cursor for next page - pass "0" or omit for first page.
-
-    Issue #281: Uses _format_knowledge_entry helper for entry formatting.
-
-    Args:
-        limit: Number of entries to return (1-1000)
-        cursor: Redis cursor for pagination (default "0" for first page)
-        category: Optional category filter
-
-    Returns:
-        entries: List of knowledge entries
-        next_cursor: Cursor for next page ("0" means no more results)
-        count: Number of entries returned
-        has_more: Whether more entries are available
-    """
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        return {
-            "entries": [],
-            "next_cursor": "0",
-            "count": 0,
-            "has_more": False,
-            "message": "Knowledge base not initialized",
-        }
-
-    logger.info(
-        f"Getting knowledge entries: limit={limit}, cursor={cursor}, category={category}"
-    )
-
-    # Use Redis SCAN for memory-efficient cursor-based iteration
-    entries = []
+    logger.info(f"Getting knowledge entries: limit={limit}, cursor={cursor}")
     current_cursor = int(cursor) if cursor else 0
 
     try:
-        # HSCAN iterates over hash fields without loading all data into memory
-        # match parameter filters keys during scan (server-side filtering)
-        # Issue #362: Wrapped sync Redis call with asyncio.to_thread
         def _hscan():
-            return kb_to_use.redis_client.hscan(
-                "knowledge_base:facts",
-                cursor=current_cursor,
-                count=limit * 2,  # Scan more to account for filtering
+            return kb.redis_client.hscan(
+                "knowledge_base:facts", cursor=current_cursor, count=limit * 2
             )
         next_cursor, items = await asyncio.to_thread(_hscan)
-
-        # Parse and filter facts
-        for fact_id, fact_json in items.items():
-            try:
-                fact = json.loads(fact_json)
-
-                # Filter by category if specified
-                if (
-                    category
-                    and fact.get("metadata", {}).get("category", "") != category
-                ):
-                    continue
-
-                # Issue #281: Use extracted helper for entry formatting
-                entries.append(_format_knowledge_entry(fact_id, fact))
-
-                # Stop when we have enough entries
-                if len(entries) >= limit:
-                    break
-
-            except Exception as parse_err:
-                logger.warning(f"Error parsing fact {fact_id}: {parse_err}")
-                continue
-
-        # Sort by creation date (newest first) - only sorts current page
+        entries = _parse_and_filter_facts(items, category, limit)
         entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-
-        # Limit to requested size
-        entries = entries[:limit]
-
         return {
-            "entries": entries,
-            "next_cursor": str(next_cursor),
-            "count": len(entries),
-            "has_more": next_cursor != 0,
+            "entries": entries[:limit], "next_cursor": str(next_cursor),
+            "count": len(entries[:limit]), "has_more": next_cursor != 0,
         }
+    except Exception as e:
+        logger.error(f"Redis error getting facts: {e}")
+        return _empty_entries_response(error="Redis connection error")
 
-    except Exception as redis_err:
-        logger.error(f"Redis error getting facts: {redis_err}")
+
+def _create_offline_stats_response() -> dict:
+    """Create offline stats response (Issue #398: extracted)."""
+    return {
+        "status": "offline", "message": "Knowledge base not initialized",
+        "basic_stats": {}, "category_breakdown": {}, "source_breakdown": {},
+        "type_breakdown": {}, "size_metrics": {},
+    }
+
+
+def _analyze_facts_for_stats(all_facts_data: dict) -> tuple:
+    """Analyze facts for detailed breakdowns (Issue #398: extracted).
+
+    Returns:
+        Tuple of (category_counts, source_counts, type_counts, fact_sizes)
+    """
+    category_counts, source_counts, type_counts = {}, {}, {}
+    fact_sizes = []
+    for fact_json in all_facts_data.values():
+        try:
+            fact = json.loads(fact_json)
+            metadata = fact.get("metadata", {})
+            cat = metadata.get("category", "uncategorized")
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+            src = metadata.get("source", "unknown")
+            source_counts[src] = source_counts.get(src, 0) + 1
+            ft = metadata.get("type", "document")
+            type_counts[ft] = type_counts.get(ft, 0) + 1
+            fact_sizes.append(len(fact.get("content", "")))
+        except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+            logger.warning(f"Error processing fact for size calculation: {e}")
+    return category_counts, source_counts, type_counts, fact_sizes
+
+
+def _compute_size_metrics(fact_sizes: list) -> dict:
+    """Compute size metrics from fact sizes (Issue #398: extracted)."""
+    if not fact_sizes:
         return {
-            "entries": [],
-            "next_cursor": "0",
-            "count": 0,
-            "has_more": False,
-            "error": "Redis connection error",
+            "total_content_size": 0, "average_fact_size": 0, "median_fact_size": 0,
+            "largest_fact_size": 0, "smallest_fact_size": 0,
         }
+    total = sum(fact_sizes)
+    sorted_sizes = sorted(fact_sizes)
+    return {
+        "total_content_size": total,
+        "average_fact_size": total / len(fact_sizes),
+        "median_fact_size": sorted_sizes[len(sorted_sizes) // 2],
+        "largest_fact_size": max(fact_sizes),
+        "smallest_fact_size": min(fact_sizes),
+    }
 
 
 @with_error_handling(
@@ -597,82 +570,27 @@ async def get_knowledge_entries(
 )
 @router.get("/detailed_stats")
 async def get_detailed_stats(req: Request):
-    """Get detailed knowledge base statistics with additional metrics"""
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    """Get detailed knowledge base statistics with additional metrics."""
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        return _create_offline_stats_response()
 
-    if kb_to_use is None:
-        return {
-            "status": "offline",
-            "message": "Knowledge base not initialized",
-            "basic_stats": {},
-            "category_breakdown": {},
-            "source_breakdown": {},
-            "type_breakdown": {},
-            "size_metrics": {},
-        }
-
-    # Get basic stats
-    basic_stats = await kb_to_use.get_stats()
-
-    # Get all facts for detailed analysis - async operation
+    basic_stats = await kb.get_stats()
     try:
         all_facts_data = await asyncio.to_thread(
-            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
+            kb.redis_client.hgetall, "knowledge_base:facts"
         )
     except Exception:
         all_facts_data = {}
 
-    # Analyze facts for detailed breakdowns
-    category_counts = {}
-    source_counts = {}
-    type_counts = {}
-    total_content_size = 0
-    fact_sizes = []
-
-    for fact_json in all_facts_data.values():
-        try:
-            fact = json.loads(fact_json)
-            metadata = fact.get("metadata", {})
-
-            # Category breakdown
-            category = metadata.get("category", "uncategorized")
-            category_counts[category] = category_counts.get(category, 0) + 1
-
-            # Source breakdown
-            source = metadata.get("source", "unknown")
-            source_counts[source] = source_counts.get(source, 0) + 1
-
-            # Type breakdown
-            fact_type = metadata.get("type", "document")
-            type_counts[fact_type] = type_counts.get(fact_type, 0) + 1
-
-            # Size metrics
-            content = fact.get("content", "")
-            content_size = len(content)
-            total_content_size += content_size
-            fact_sizes.append(content_size)
-        except (KeyError, TypeError, AttributeError) as e:
-            logger.warning(f"Error processing fact for size calculation: {e}")
-            continue
-
-    # Calculate size metrics
-    avg_size = total_content_size / len(fact_sizes) if fact_sizes else 0
-    fact_sizes.sort()
-    median_size = fact_sizes[len(fact_sizes) // 2] if fact_sizes else 0
-
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(all_facts_data)
     return {
         "status": "online" if basic_stats.get("initialized") else "offline",
         "basic_stats": basic_stats,
-        "category_breakdown": category_counts,
-        "source_breakdown": source_counts,
+        "category_breakdown": cat_counts,
+        "source_breakdown": src_counts,
         "type_breakdown": type_counts,
-        "size_metrics": {
-            "total_content_size": total_content_size,
-            "average_fact_size": avg_size,
-            "median_fact_size": median_size,
-            "largest_fact_size": max(fact_sizes) if fact_sizes else 0,
-            "smallest_fact_size": min(fact_sizes) if fact_sizes else 0,
-        },
+        "size_metrics": _compute_size_metrics(sizes),
         "rag_available": RAG_AVAILABLE,
     }
 
@@ -890,6 +808,21 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
     }
 
 
+async def _clear_kb_via_redis(kb) -> int:
+    """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
+    if not (hasattr(kb, "redis") and kb.redis):
+        logger.error("No clear method available for knowledge base implementation")
+        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
+
+    keys = await kb.redis.keys("fact:*")
+    if keys:
+        await kb.redis.delete(*keys)
+    index_keys = await kb.redis.keys("index:*")
+    if index_keys:
+        await kb.redis.delete(*index_keys)
+    return len(keys) if keys else 0
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_all_knowledge",
@@ -897,70 +830,35 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
 )
 @router.post("/clear_all")
 async def clear_all_knowledge(request: dict, req: Request):
-    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION"""
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
+    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION."""
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
         return {
-            "status": "error",
+            "status": "error", "items_removed": 0,
             "message": "Knowledge base not initialized - please check logs for errors",
-            "items_removed": 0,
         }
 
-    logger.warning(
-        "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
-    )
-
-    # Get current stats before clearing
+    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
     try:
-        stats_before = await kb_to_use.get_stats()
+        stats_before = await kb.get_stats()
         items_before = stats_before.get("total_facts", 0)
     except Exception:
         items_before = 0
 
-    # Clear the knowledge base
-    if hasattr(kb_to_use, "clear_all"):
-        # Use specific clear_all method if available
-        result = await kb_to_use.clear_all()
+    if hasattr(kb, "clear_all"):
+        result = await kb.clear_all()
         items_removed = result.get("items_removed", items_before)
     else:
-        # Fallback: try to clear via Redis if that's the implementation
         try:
-            if hasattr(kb_to_use, "redis") and kb_to_use.redis:
-                # For Redis-based implementations
-                keys = await kb_to_use.redis.keys("fact:*")
-                if keys:
-                    await kb_to_use.redis.delete(*keys)
-
-                # Clear any indexes
-                index_keys = await kb_to_use.redis.keys("index:*")
-                if index_keys:
-                    await kb_to_use.redis.delete(*index_keys)
-
-                items_removed = len(keys)
-            else:
-                logger.error(
-                    "No clear method available for knowledge base implementation"
-                )
-                raise HTTPException(
-                    status_code=500, detail="Knowledge base clearing not supported"
-                )
-
+            items_removed = await _clear_kb_via_redis(kb)
         except Exception as e:
             logger.error(f"Error during knowledge base clearing: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to clear knowledge base: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail=f"Failed to clear: {str(e)}")
 
     logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
-
     return {
-        "status": "success",
-        "message": (
-            f"Successfully cleared knowledge base. Removed {items_removed} entries."
-        ),
-        "items_removed": items_removed,
-        "items_before": items_before,
+        "status": "success", "items_removed": items_removed, "items_before": items_before,
+        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
     }
 
 
@@ -1115,6 +1013,31 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
         logger.warning(f"Failed to cache facts_by_category: {cache_error}")
 
 
+def _raise_kb_unavailable() -> None:
+    """Raise HTTP 503 for unavailable KB (Issue #398: extracted)."""
+    logger.error("Knowledge base not available for get_facts_by_category")
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "error": "Knowledge base unavailable",
+            "message": "The knowledge base service failed to initialize. Check server logs.",
+            "code": "KB_INIT_FAILED",
+        },
+    )
+
+
+def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
+    """Build categories dict from fetched facts (Issue #398: extracted)."""
+    categories_dict: dict = {}
+    for (cat, fact_key), fact_data in zip(all_fact_keys, fact_results):
+        processed = _process_fact_data(fact_data, cat, fact_key)
+        if processed:
+            if cat not in categories_dict:
+                categories_dict[cat] = []
+            categories_dict[cat].append(processed)
+    return categories_dict
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_category",
@@ -1124,68 +1047,29 @@ async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
 async def get_facts_by_category(
     req: Request, category: Optional[str] = None, limit: int = 100
 ):
-    """
-    Get facts grouped by category for browsing with caching.
-
-    Issue #281: Refactored from 178 lines to use extracted helper methods.
-    Performance: Uses Redis SET indexes (category:index:{category}) for O(1) lookups.
-    Issue #258: Optimized from 5000ms+ to <200ms target.
-    """
+    """Get facts grouped by category for browsing with caching."""
     kb = await get_or_create_knowledge_base(req.app)
-
-    # REUSABLE PATTERN: Validate KB exists before use
     if kb is None:
-        logger.error("Knowledge base not available for get_facts_by_category")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "Knowledge base unavailable",
-                "message": (
-                    "The knowledge base service failed to initialize. Please check server logs."
-                ),
-                "code": "KB_INIT_FAILED",
-            },
-        )
+        _raise_kb_unavailable()
 
-    # Check cache first (Issue #281: uses helper)
     cached_result, cache_key = await _check_facts_cache(kb, category, limit)
     if cached_result:
         return cached_result
 
     from backend.knowledge_categories import KnowledgeCategory
-
-    # Determine which categories to fetch
-    if category:
-        categories_to_fetch = [category]
-    else:
-        categories_to_fetch = [cat.value for cat in KnowledgeCategory]
+    categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
 
     try:
-        # Step 1: Get fact IDs from category indexes (Issue #281: uses helper)
         category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
-
         if not category_fact_ids:
-            logger.warning(
-                "No category indexes found - falling back to SCAN method. "
-                "Run category index migration to improve performance."
-            )
+            logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit)
 
-        # Step 2: Batch fetch fact data (Issue #281: uses helper)
         all_fact_keys, fact_results = await _batch_fetch_facts(kb, category_fact_ids)
-
         if not all_fact_keys:
             return {"categories": {}, "total_facts": 0}
 
-        # Step 3: Process facts (Issue #281: uses helper)
-        categories_dict = {}
-        for (cat, fact_key), fact_data in zip(all_fact_keys, fact_results):
-            processed = _process_fact_data(fact_data, cat, fact_key)
-            if processed:
-                if cat not in categories_dict:
-                    categories_dict[cat] = []
-                categories_dict[cat].append(processed)
-
+        categories_dict = _build_categories_dict(all_fact_keys, fact_results)
     except Exception as e:
         logger.error(f"Error in indexed fact retrieval: {e}")
         return {"categories": {}, "total_facts": 0, "error": str(e)}
@@ -1195,24 +1079,12 @@ async def get_facts_by_category(
         "total_facts": sum(len(v) for v in categories_dict.values()),
         "category_filter": category,
     }
-
-    # Cache the result (Issue #281: uses helper)
     await _cache_facts_result(kb, cache_key, result)
-
     return result
 
 
-async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
-    """
-    Legacy fallback: Get facts by scanning all keys.
-    Used when category indexes don't exist yet.
-    """
-    import json
-    from backend.knowledge_categories import get_category_for_source
-
-    categories_dict = {}
-
-    # Step 1: Collect all fact keys using SCAN (non-blocking, cursor-based)
+async def _scan_all_fact_keys(kb) -> list:
+    """Collect all fact keys using SCAN (Issue #398: extracted)."""
     all_fact_keys = []
     cursor = 0
     while True:
@@ -1222,82 +1094,82 @@ async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int)
         all_fact_keys.extend(keys)
         if cursor == 0:
             break
+    return all_fact_keys
 
-    if not all_fact_keys:
-        return {"categories": {}, "total_facts": 0}
 
-    # Step 2: Batch fetch all fact data using pipeline
-    chunk_size = 500
+async def _batch_fetch_facts_legacy(kb, fact_keys: list, chunk_size: int = 500) -> list:
+    """Batch fetch fact data using pipeline for legacy method (Issue #398: extracted)."""
     all_facts_data = []
-
-    for i in range(0, len(all_fact_keys), chunk_size):
-        chunk_keys = all_fact_keys[i : i + chunk_size]
+    for i in range(0, len(fact_keys), chunk_size):
+        chunk_keys = fact_keys[i : i + chunk_size]
         pipeline = kb.redis_client.pipeline()
         for key in chunk_keys:
             pipeline.hgetall(key)
         chunk_results = await asyncio.to_thread(pipeline.execute)
         all_facts_data.extend(zip(chunk_keys, chunk_results))
+    return all_facts_data
 
-    # Step 3: Process facts
+
+def _decode_bytes(raw, default: str = "") -> str:
+    """Decode bytes to string (Issue #398: extracted)."""
+    if isinstance(raw, bytes):
+        return raw.decode("utf-8")
+    return str(raw) if raw else default
+
+
+def _parse_fact_entry(
+    fact_key_bytes, fact_data, get_category_for_source
+) -> Optional[tuple]:
+    """Parse a single fact entry (Issue #398: extracted).
+
+    Returns:
+        Tuple of (fact_key, category, title, content, type, metadata) or None
+    """
+    if not fact_data:
+        return None
+    try:
+        fact_key = _decode_bytes(fact_key_bytes)
+        metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
+        metadata = json.loads(_decode_bytes(metadata_raw, "{}"))
+        content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
+        content = _decode_bytes(content_raw)
+        source = metadata.get("source", "")
+        category = get_category_for_source(source).value if source else "general"
+        title = metadata.get("title", metadata.get("command", "Untitled"))
+        fact_type = metadata.get("type", "unknown")
+        return (fact_key, category, title, content, fact_type, metadata)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
+    """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored)."""
+    from backend.knowledge_categories import get_category_for_source
+
+    all_fact_keys = await _scan_all_fact_keys(kb)
+    if not all_fact_keys:
+        return {"categories": {}, "total_facts": 0}
+
+    all_facts_data = await _batch_fetch_facts_legacy(kb, all_fact_keys)
+    categories_dict: dict = {}
+
     for fact_key_bytes, fact_data in all_facts_data:
-        try:
-            if not fact_data:
-                continue
-
-            fact_key = (
-                fact_key_bytes.decode("utf-8")
-                if isinstance(fact_key_bytes, bytes)
-                else str(fact_key_bytes)
-            )
-
-            metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
-            metadata_str = (
-                metadata_raw.decode("utf-8")
-                if isinstance(metadata_raw, bytes)
-                else str(metadata_raw)
-            )
-            metadata = json.loads(metadata_str) if metadata_str else {}
-
-            content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
-            content = (
-                content_raw.decode("utf-8")
-                if isinstance(content_raw, bytes)
-                else str(content_raw) if content_raw else ""
-            )
-
-            source = metadata.get("source", "")
-            fact_category = (
-                get_category_for_source(source).value if source else "general"
-            )
-
-            if category and fact_category != category:
-                continue
-
-            fact_title = metadata.get("title", metadata.get("command", "Untitled"))
-            fact_type = metadata.get("type", "unknown")
-
-            if fact_category not in categories_dict:
-                categories_dict[fact_category] = []
-
-            if len(categories_dict[fact_category]) >= limit:
-                continue
-
-            categories_dict[fact_category].append(
-                {
-                    "key": fact_key,
-                    "title": fact_title,
-                    "content": (
-                        content[:500] + "..." if len(content) > 500 else content
-                    ),
-                    "full_content": content,
-                    "category": fact_category,
-                    "type": fact_type,
-                    "metadata": metadata,
-                }
-            )
-
-        except (json.JSONDecodeError, KeyError, TypeError):
+        parsed = _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source)
+        if not parsed:
             continue
+        fact_key, fact_cat, title, content, fact_type, metadata = parsed
+        if category and fact_cat != category:
+            continue
+        if fact_cat not in categories_dict:
+            categories_dict[fact_cat] = []
+        if len(categories_dict[fact_cat]) >= limit:
+            continue
+        categories_dict[fact_cat].append({
+            "key": fact_key, "title": title,
+            "content": content[:500] + "..." if len(content) > 500 else content,
+            "full_content": content, "category": fact_cat,
+            "type": fact_type, "metadata": metadata,
+        })
 
     return {
         "categories": categories_dict,
