@@ -57,6 +57,55 @@ class WorkflowExecutor:
         self._release_agent = release_agent_callback
         self._update_performance = update_performance_callback
 
+    def _determine_workflow_status(
+        self, steps: List[Dict[str, Any]], execution_context: Dict[str, Any]
+    ) -> None:
+        """Determine overall workflow status from step results (Issue #398: extracted)."""
+        successful_steps = sum(1 for step in steps if step.get("status") == "completed")
+        total_steps = len(steps)
+
+        if successful_steps == total_steps:
+            execution_context["status"] = "completed"
+        elif successful_steps > 0:
+            execution_context["status"] = "partially_completed"
+        else:
+            execution_context["status"] = "failed"
+
+        execution_context["success_rate"] = (
+            successful_steps / total_steps if total_steps > 0 else 0
+        )
+        execution_context["agents_involved"] = list(execution_context["agents_involved"])
+
+    async def _execute_step_with_agent(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> None:
+        """Execute a single workflow step with agent management (Issue #398: extracted)."""
+        step_start_time = time.time()
+        agent_id = step.get("assigned_agent")
+
+        if agent_id:
+            self._reserve_agent(agent_id)
+
+        try:
+            step_result = await self._execute_coordinated_step(step, execution_context, context)
+
+            step["status"] = "completed" if step_result.get("success") else "failed"
+            step["execution_time"] = time.time() - step_start_time
+            step["result"] = step_result
+            execution_context["step_results"][step["id"]] = step_result
+
+            if agent_id:
+                execution_context["agents_involved"].add(agent_id)
+                self._update_performance(
+                    agent_id, step_result.get("success", False), time.time() - step_start_time
+                )
+        finally:
+            if agent_id:
+                self._release_agent(agent_id)
+
     async def execute_coordinated_workflow(
         self,
         workflow_id: str,
@@ -83,73 +132,16 @@ class WorkflowExecutor:
         }
 
         try:
-            # Execute steps with dependency management
+            # Execute steps with dependency management (Issue #398: refactored)
             for step in steps:
-                step_start_time = time.time()
-
-                # Check dependencies
-                if not await self._check_step_dependencies(
-                    step, execution_context["step_results"]
-                ):
-                    logger.warning(
-                        "Step %s dependencies not met, skipping", step["id"]
-                    )
+                if not await self._check_step_dependencies(step, execution_context["step_results"]):
+                    logger.warning("Step %s dependencies not met, skipping", step["id"])
                     step["status"] = "skipped"
                     continue
 
-                # Reserve agent
-                agent_id = step.get("assigned_agent")
-                if agent_id:
-                    self._reserve_agent(agent_id)
+                await self._execute_step_with_agent(step, execution_context, context)
 
-                try:
-                    # Execute step with agent coordination
-                    step_result = await self._execute_coordinated_step(
-                        step, execution_context, context
-                    )
-
-                    # Update step status and results
-                    step["status"] = (
-                        "completed" if step_result.get("success") else "failed"
-                    )
-                    step["execution_time"] = time.time() - step_start_time
-                    step["result"] = step_result
-
-                    execution_context["step_results"][step["id"]] = step_result
-
-                    if agent_id:
-                        execution_context["agents_involved"].add(agent_id)
-                        self._update_performance(
-                            agent_id,
-                            step_result.get("success", False),
-                            time.time() - step_start_time,
-                        )
-
-                finally:
-                    # Release agent
-                    if agent_id:
-                        self._release_agent(agent_id)
-
-            # Determine overall workflow status
-            successful_steps = sum(
-                1 for step in steps if step.get("status") == "completed"
-            )
-            total_steps = len(steps)
-
-            if successful_steps == total_steps:
-                execution_context["status"] = "completed"
-            elif successful_steps > 0:
-                execution_context["status"] = "partially_completed"
-            else:
-                execution_context["status"] = "failed"
-
-            execution_context["success_rate"] = (
-                successful_steps / total_steps if total_steps > 0 else 0
-            )
-            execution_context["agents_involved"] = list(
-                execution_context["agents_involved"]
-            )
-
+            self._determine_workflow_status(steps, execution_context)
             return execution_context
 
         except Exception as e:

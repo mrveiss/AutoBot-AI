@@ -589,83 +589,75 @@ Please provide a helpful, accurate response based on the available information. 
 
         return False
 
-    async def _conduct_research(self, user_message: str) -> Dict[str, Any]:
-        """Conduct external research using browser automation"""
-        try:
-            # Add planning message
-            planning_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content="Conducting external research with browser automation",
-                timestamp=datetime.now(),
-                message_type="planning",
-            )
-            self.messages.append(planning_msg)
+    def _add_system_message(
+        self, content: str, message_type: str = "system", metadata: Optional[Dict] = None
+    ) -> None:
+        """Add a system message to conversation (Issue #398: extracted)."""
+        msg = ConversationMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content=content,
+            timestamp=datetime.now(),
+            message_type=message_type,
+            metadata=metadata,
+        )
+        self.messages.append(msg)
 
-            # Generate search queries based on user message
+    async def _research_single_query(self, query: str) -> Optional[Dict[str, Any]]:
+        """Research a single query and return result (Issue #398: extracted)."""
+        search_url = f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
+        try:
+            research_result = await research_browser_manager.research_url(
+                self.conversation_id, search_url, extract_content=True
+            )
+            if research_result.get("success"):
+                track_source(
+                    SourceType.WEB_SEARCH,
+                    f"External research: {query}",
+                    reliability="medium",
+                    metadata={
+                        "query": query,
+                        "url": search_url,
+                        "research_session": research_result.get("session_id"),
+                        "interaction_required": research_result.get("status") == "interaction_required",
+                    },
+                )
+                return {
+                    "query": query,
+                    "url": search_url,
+                    "status": research_result.get("status"),
+                    "content": research_result.get("content", {}),
+                    "session_id": research_result.get("session_id"),
+                    "browser_url": research_result.get("browser_url"),
+                    "interaction_required": research_result.get("status") == "interaction_required",
+                }
+        except Exception as e:
+            logger.warning("Research query '%s' failed: %s", query, e)
+        return None
+
+    async def _conduct_research(self, user_message: str) -> Dict[str, Any]:
+        """Conduct external research using browser automation (Issue #398: refactored)."""
+        try:
+            self._add_system_message(
+                "Conducting external research with browser automation", "planning"
+            )
+
             search_queries = self._generate_search_queries(user_message)
 
-            # Issue #370: Research queries in parallel instead of sequentially
-            async def research_single_query(query: str) -> Optional[Dict[str, Any]]:
-                """Research a single query and return result."""
-                search_url = f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
-                try:
-                    research_result = await research_browser_manager.research_url(
-                        self.conversation_id, search_url, extract_content=True
-                    )
-                    if research_result.get("success"):
-                        # Track research source
-                        track_source(
-                            SourceType.WEB_SEARCH,
-                            f"External research: {query}",
-                            reliability="medium",
-                            metadata={
-                                "query": query,
-                                "url": search_url,
-                                "research_session": research_result.get("session_id"),
-                                "interaction_required": (
-                                    research_result.get("status") == "interaction_required"
-                                ),
-                            },
-                        )
-                        return {
-                            "query": query,
-                            "url": search_url,
-                            "status": research_result.get("status"),
-                            "content": research_result.get("content", {}),
-                            "session_id": research_result.get("session_id"),
-                            "browser_url": research_result.get("browser_url"),
-                            "interaction_required": (
-                                research_result.get("status") == "interaction_required"
-                            ),
-                        }
-                except Exception as e:
-                    logger.warning("Research query '%s' failed: %s", query, e)
-                return None
-
-            # Run research queries in parallel (limit to 2)
+            # Issue #370: Research queries in parallel (limit to 2)
             results = await asyncio.gather(
-                *[research_single_query(q) for q in search_queries[:2]],
+                *[self._research_single_query(q) for q in search_queries[:2]],
                 return_exceptions=True,
             )
 
-            # Filter successful results
-            research_results = [
-                r for r in results
-                if r is not None and not isinstance(r, Exception)
-            ]
+            research_results = [r for r in results if r and not isinstance(r, Exception)]
 
             if research_results:
-                # Add utility message about research
-                utility_msg = ConversationMessage(
-                    message_id=str(uuid.uuid4()),
-                    role="system",
-                    content=f"Completed external research with {len(research_results)} queries",
-                    timestamp=datetime.now(),
-                    message_type="utility",
-                    metadata={"research_queries": len(research_results)},
+                self._add_system_message(
+                    f"Completed external research with {len(research_results)} queries",
+                    "utility",
+                    {"research_queries": len(research_results)},
                 )
-                self.messages.append(utility_msg)
 
             return {
                 "success": True,
@@ -676,17 +668,7 @@ Please provide a helpful, accurate response based on the available information. 
 
         except Exception as e:
             logger.error("Research failed: %s", e)
-
-            error_msg = ConversationMessage(
-                message_id=str(uuid.uuid4()),
-                role="system",
-                content=f"External research failed: {str(e)}",
-                timestamp=datetime.now(),
-                message_type="debug",
-                metadata={"error": True},
-            )
-            self.messages.append(error_msg)
-
+            self._add_system_message(f"External research failed: {str(e)}", "debug", {"error": True})
             return {"success": False, "error": str(e)}
 
     def _generate_search_queries(self, user_message: str) -> List[str]:

@@ -22,6 +22,72 @@ from src.utils.logging_manager import get_logger
 logger = get_logger("agent_selection")
 
 
+def _calculate_agent_suitability_score(
+    agent: Any,
+    task_type: str,
+    current_workload_attr: str,
+    max_concurrent_tasks_attr: str,
+    preferred_task_types_attr: str,
+    specializations_attr: str,
+    success_rate_attr: str,
+) -> float:
+    """Calculate suitability score for an agent for a given task (Issue #398: extracted).
+
+    Returns:
+        Float score where higher is better
+    """
+    # Check task type preference
+    task_match_score = 0
+    preferred_tasks = getattr(agent, preferred_task_types_attr, [])
+    if task_type in preferred_tasks:
+        task_match_score += 2
+
+    specializations = getattr(agent, specializations_attr, [])
+    if any(spec in task_type for spec in specializations):
+        task_match_score += 1
+
+    # Calculate workload and performance factors
+    current_workload = getattr(agent, current_workload_attr, 0)
+    max_concurrent = getattr(agent, max_concurrent_tasks_attr, 3)
+    workload_factor = 1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
+    performance_factor = getattr(agent, success_rate_attr, 1.0)
+
+    return (task_match_score * 0.4) + (workload_factor * 0.3) + (performance_factor * 0.3)
+
+
+def _is_agent_eligible(
+    agent: Any,
+    required_capabilities: Set[Any],
+    availability_status_attr: str,
+    current_workload_attr: str,
+    max_concurrent_tasks_attr: str,
+    capabilities_attr: str,
+) -> bool:
+    """Check if agent is eligible for task assignment (Issue #398: extracted).
+
+    Returns:
+        True if agent is available and has required capabilities
+    """
+    # Check availability
+    availability = getattr(agent, availability_status_attr, "available")
+    if availability != "available":
+        return False
+
+    # Check workload capacity
+    current_workload = getattr(agent, current_workload_attr, 0)
+    max_concurrent = getattr(agent, max_concurrent_tasks_attr, 3)
+    if current_workload >= max_concurrent:
+        return False
+
+    # Check capabilities
+    if required_capabilities:
+        agent_capabilities = getattr(agent, capabilities_attr, set())
+        if not required_capabilities.issubset(agent_capabilities):
+            return False
+
+    return True
+
+
 def find_best_agent_for_task(
     agent_registry: Dict[str, Any],
     task_type: str,
@@ -67,46 +133,20 @@ def find_best_agent_for_task(
     """
     required_capabilities = required_capabilities or set()
 
+    # Find eligible agents and calculate scores (Issue #398: refactored to use helpers)
     suitable_agents: List[Tuple[str, float]] = []
 
     for agent_id, agent in agent_registry.items():
-        # Check availability
-        availability = getattr(agent, availability_status_attr, "available")
-        if availability != "available":
+        if not _is_agent_eligible(
+            agent, required_capabilities, availability_status_attr,
+            current_workload_attr, max_concurrent_tasks_attr, capabilities_attr
+        ):
             continue
 
-        # Check workload capacity
-        current_workload = getattr(agent, current_workload_attr, 0)
-        max_concurrent = getattr(agent, max_concurrent_tasks_attr, 3)
-        if current_workload >= max_concurrent:
-            continue
-
-        # Check capabilities
-        if required_capabilities:
-            agent_capabilities = getattr(agent, capabilities_attr, set())
-            if not required_capabilities.issubset(agent_capabilities):
-                continue
-
-        # Check task type preference
-        task_match_score = 0
-        preferred_tasks = getattr(agent, preferred_task_types_attr, [])
-        if task_type in preferred_tasks:
-            task_match_score += 2
-
-        specializations = getattr(agent, specializations_attr, [])
-        if any(spec in task_type for spec in specializations):
-            task_match_score += 1
-
-        # Calculate overall suitability score
-        workload_factor = 1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
-        performance_factor = getattr(agent, success_rate_attr, 1.0)
-
-        suitability_score = (
-            (task_match_score * 0.4)
-            + (workload_factor * 0.3)
-            + (performance_factor * 0.3)
+        suitability_score = _calculate_agent_suitability_score(
+            agent, task_type, current_workload_attr, max_concurrent_tasks_attr,
+            preferred_task_types_attr, specializations_attr, success_rate_attr
         )
-
         suitable_agents.append((agent_id, suitability_score))
 
     if not suitable_agents:
