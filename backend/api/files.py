@@ -117,6 +117,18 @@ INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
 # Issue #380: Module-level frozenset for dangerous filename characters
 _DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
 
+# Issue #398: Module-level sets for is_safe_file validation
+_DANGEROUS_FILENAMES = frozenset({
+    ".htaccess", ".env", "passwd", "shadow", "config",
+    "web.config", "autoexec.bat", "boot.ini", "hosts",
+    "httpd.conf", "nginx.conf",
+})
+
+_DANGEROUS_EXTENSIONS = frozenset({
+    ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".vbs",
+    ".js", ".jar", ".app", ".deb", ".rpm", ".dmg", ".pkg", ".msi",
+})
+
 
 class FileInfo(BaseModel):
     """File information model"""
@@ -240,62 +252,33 @@ def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
 
 
 def is_safe_file(filename: str) -> bool:
-    """Check if file type is allowed and filename is safe"""
+    """
+    Check if file type is allowed and filename is safe.
+
+    Issue #398: Refactored to use module-level constants.
+    """
     if not filename:
         return False
 
-    # Check for dangerous characters in filename (Issue #380: use module-level constant)
+    # Check for dangerous characters (Issue #380: module-level constant)
     if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
         return False
 
-    # Check filename length
     if len(filename) > 255:
         return False
 
-    # Check extension
     extension = Path(filename).suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
         return False
 
-    # Check for dangerous filenames
-    dangerous_names = {
-        ".htaccess",
-        ".env",
-        "passwd",
-        "shadow",
-        "config",
-        "web.config",
-        "autoexec.bat",
-        "boot.ini",
-        "hosts",
-        "httpd.conf",
-        "nginx.conf",
-    }
-    if filename.lower() in dangerous_names:
+    # Issue #398: Use module-level sets
+    if filename.lower() in _DANGEROUS_FILENAMES:
         return False
 
-    # Check for executable extensions not in allowlist
-    dangerous_extensions = {
-        ".exe",
-        ".bat",
-        ".cmd",
-        ".com",
-        ".scr",
-        ".pif",
-        ".vbs",
-        ".js",
-        ".jar",
-        ".app",
-        ".deb",
-        ".rpm",
-        ".dmg",
-        ".pkg",
-        ".msi",
-    }
-    if extension in dangerous_extensions and extension not in ALLOWED_EXTENSIONS:
+    if extension in _DANGEROUS_EXTENSIONS and extension not in ALLOWED_EXTENSIONS:
         return False
 
-    # Prevent null bytes and control characters in filename
+    # Prevent null bytes and control characters
     if "\0" in filename or any(ord(c) < 32 for c in filename):
         return False
 
@@ -539,6 +522,72 @@ def _log_upload_audit(
             "overwrite": overwrite,
         },
     )
+
+
+async def _delete_file_item(
+    target_path: Path, path: str, security_layer, user_data: dict, request: Request
+) -> dict:
+    """
+    Delete a single file and log audit.
+
+    Issue #398: Extracted from delete_file to reduce method length.
+    """
+    file_stat = await asyncio.to_thread(target_path.stat)
+    file_size = file_stat.st_size
+    await asyncio.to_thread(target_path.unlink)
+
+    security_layer.audit_log(
+        "file_delete",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "type": "file",
+            "size": file_size,
+            "filename": target_path.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+    return {"message": f"File '{target_path.name}' deleted successfully"}
+
+
+async def _delete_directory_item(
+    target_path: Path, path: str, security_layer, user_data: dict, request: Request
+) -> dict:
+    """
+    Delete a directory (empty or recursively) and log audit.
+
+    Issue #398: Extracted from delete_file to reduce method length.
+    """
+    try:
+        await asyncio.to_thread(target_path.rmdir)
+        delete_type = "directory"
+        extra = {}
+    except OSError:
+        await asyncio.to_thread(shutil.rmtree, target_path)
+        delete_type = "directory_recursive"
+        extra = {"warning": "recursive_delete_performed"}
+
+    security_layer.audit_log(
+        "file_delete",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "type": delete_type,
+            "dirname": target_path.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+            **extra,
+        },
+    )
+
+    if delete_type == "directory_recursive":
+        return {
+            "message": f"Directory '{target_path.name}' and all contents deleted successfully"
+        }
+    return {"message": f"Directory '{target_path.name}' deleted successfully"}
 
 
 @with_error_handling(
@@ -880,10 +929,11 @@ async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
 
+    Issue #398: Refactored with extracted helper methods.
+
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    # SECURITY FIX: Enable proper authentication and authorization
     has_permission, user_data = auth_middleware.check_file_permissions(
         request, "delete"
     )
@@ -892,79 +942,22 @@ async def delete_file(request: Request, path: str):
             status_code=403, detail="Insufficient permissions for file deletion"
         )
 
-    # Store user data in request state for audit logging
     request.state.user = user_data
-
     target_path = validate_and_resolve_path(path)
 
-    # Issue #358: Use asyncio.to_thread for blocking file I/O operations
     if not await asyncio.to_thread(target_path.exists):
         raise HTTPException(status_code=404, detail="File or directory not found")
 
-    # Log the deletion attempt
     security_layer = get_security_layer(request)
-
-    # Issue #358: Check file type in thread to avoid blocking
     is_file = await asyncio.to_thread(target_path.is_file)
+
     if is_file:
-        file_stat = await asyncio.to_thread(target_path.stat)
-        file_size = file_stat.st_size
-        await asyncio.to_thread(target_path.unlink)
-        security_layer.audit_log(
-            "file_delete",
-            user_data.get("username", "unknown"),
-            "success",
-            {
-                "path": path,
-                "type": "file",
-                "size": file_size,
-                "filename": target_path.name,
-                "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-            },
+        return await _delete_file_item(
+            target_path, path, security_layer, user_data, request
         )
-        return {"message": f"File '{target_path.name}' deleted successfully"}
-    else:
-        # Delete directory (only if empty for safety)
-        try:
-            # Issue #358: rmdir in thread to avoid blocking
-            await asyncio.to_thread(target_path.rmdir)
-            security_layer.audit_log(
-                "file_delete",
-                user_data.get("username", "unknown"),
-                "success",
-                {
-                    "path": path,
-                    "type": "directory",
-                    "dirname": target_path.name,
-                    "user_role": user_data.get("role", "unknown"),
-                    "ip": request.client.host if request.client else "unknown",
-                },
-            )
-            return {"message": f"Directory '{target_path.name}' deleted successfully"}
-        except OSError:
-            # Directory not empty, use recursive delete with caution
-            # Use asyncio.to_thread to avoid blocking the event loop
-            await asyncio.to_thread(shutil.rmtree, target_path)
-            security_layer.audit_log(
-                "file_delete",
-                user_data.get("username", "unknown"),
-                "success",
-                {
-                    "path": path,
-                    "type": "directory_recursive",
-                    "dirname": target_path.name,
-                    "user_role": user_data.get("role", "unknown"),
-                    "ip": request.client.host if request.client else "unknown",
-                    "warning": "recursive_delete_performed",
-                },
-            )
-            return {
-                "message": (
-                    f"Directory '{target_path.name}' and all contents "
-                    "deleted successfully"
-                )
-            }
+    return await _delete_directory_item(
+        target_path, path, security_layer, user_data, request
+    )
 
 
 @with_error_handling(
