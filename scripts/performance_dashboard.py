@@ -5,6 +5,9 @@
 """
 Performance Dashboard Generator for AutoBot
 Creates HTML dashboards for system monitoring and performance tracking
+
+NOTE: Long method (_get_additional_dashboard_css) is an ACCEPTABLE EXCEPTION
+per Issue #490 - CSS template generator with low cyclomatic complexity.
 """
 
 import json

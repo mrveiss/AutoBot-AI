@@ -19,6 +19,9 @@ Features:
 - Creates unified timeout configuration module
 - Validates timeout hierarchy and relationships
 - Generates implementation recommendations
+
+NOTE: generate_unified_config_module (~150 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - code generator producing configuration module. Low priority.
 """
 
 import re

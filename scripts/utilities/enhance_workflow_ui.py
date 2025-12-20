@@ -5,6 +5,9 @@
 """
 Enhance Workflow UI with additional features
 Adds workflow notifications and better user experience
+
+NOTE: Long methods (create_workflow_notification_component, create_workflow_progress_widget)
+are ACCEPTABLE EXCEPTIONS per Issue #490 - template generators with low cyclomatic complexity.
 """
 
 

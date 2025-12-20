@@ -5,6 +5,10 @@
 """
 Enhanced NPU Worker for AutoBot Semantic Search
 Optimized for Intel NPU hardware acceleration with OpenVINO
+
+NOTE: setup_routes method (~178 lines) is an ACCEPTABLE EXCEPTION per Issue #490 -
+FastAPI route setup with cohesive endpoint definitions. Deployed to VM2 via
+start-npu-semantic-search.sh. Low priority for refactoring.
 """
 
 import asyncio

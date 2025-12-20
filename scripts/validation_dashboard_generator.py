@@ -5,6 +5,9 @@
 """
 Real-Time Validation Dashboard Generator
 Creates comprehensive validation reports and dashboards for system monitoring
+
+NOTE: Long methods (_get_dashboard_css, _create_dashboard_html) are ACCEPTABLE
+EXCEPTIONS per Issue #490 - CSS/HTML template generators with low cyclomatic complexity.
 """
 
 import argparse

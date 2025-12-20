@@ -778,101 +778,105 @@ class ArchitectureAnalyzer:
                 indicators.append(f"code_pattern:{pattern[:30]}")
         return score
 
+    def _score_class_indicators(
+        self, class_info: Dict[str, Any], template: PatternTemplate
+    ) -> tuple:
+        """Score class name, methods, and base classes (Issue #398: extracted)."""
+        score = 0.0
+        indicators = []
+
+        for indicator in template.class_indicators:
+            if indicator in class_info["name"]:
+                score += 0.3
+                indicators.append(f"class_name:{indicator}")
+
+        for method in class_info["methods"]:
+            for indicator in template.method_indicators:
+                if re.search(indicator, method, re.IGNORECASE):
+                    score += 0.15
+                    indicators.append(f"method:{method}")
+                    break
+
+        for base in class_info["bases"]:
+            for indicator in template.class_indicators:
+                if indicator in base:
+                    score += 0.2
+                    indicators.append(f"base_class:{base}")
+
+        return score, indicators
+
+    def _build_class_match(
+        self, template: PatternTemplate, analysis: FileAnalysis,
+        class_info: Dict[str, Any], score: float, indicators: List[str], content: str,
+    ) -> PatternMatch:
+        """Build PatternMatch for class-level match (Issue #398: extracted)."""
+        lines = content.split("\n")
+        start_line = max(0, class_info["line"] - 1)
+        end_line = min(len(lines), class_info["line"] + 5)
+        snippet = "\n".join(lines[start_line:end_line])
+
+        return PatternMatch(
+            pattern_type=template.pattern_type,
+            file_path=analysis.file_path,
+            class_name=class_info["name"],
+            line_number=class_info["line"],
+            confidence=min(1.0, score),
+            indicators_found=indicators[:10],
+            code_snippet=snippet[:500],
+        )
+
+    def _match_module_level_patterns(
+        self, template: PatternTemplate, analysis: FileAnalysis, content: str,
+    ) -> Optional[PatternMatch]:
+        """Match module-level patterns (Issue #398: extracted)."""
+        if analysis.classes or not template.code_patterns:
+            return None
+
+        score = 0.0
+        indicators = []
+
+        for pattern in template.code_patterns:
+            matches_found = re.findall(pattern, content)
+            if matches_found:
+                score += 0.3 * len(matches_found)
+                indicators.append(f"pattern:{pattern[:30]}")
+
+        score += self._check_import_indicators(
+            analysis.imports, template.import_indicators, indicators,
+            score_per_match=0.2, first_match_only=False,
+        )
+
+        if score >= template.required_score:
+            return PatternMatch(
+                pattern_type=template.pattern_type,
+                file_path=analysis.file_path,
+                line_number=1,
+                confidence=min(1.0, score),
+                indicators_found=indicators[:10],
+            )
+        return None
+
     def _match_pattern(
-        self,
-        analysis: FileAnalysis,
-        content: str,
-        template: PatternTemplate,
+        self, analysis: FileAnalysis, content: str, template: PatternTemplate,
     ) -> List[PatternMatch]:
-        """Match a pattern template against file analysis."""
+        """Match a pattern template against file analysis (Issue #398: refactored)."""
         matches = []
 
-        # Check classes
         for class_info in analysis.classes:
-            score = 0.0
-            indicators = []
-
-            # Check class name indicators
-            for indicator in template.class_indicators:
-                if indicator in class_info["name"]:
-                    score += 0.3
-                    indicators.append(f"class_name:{indicator}")
-
-            # Check method indicators
-            for method in class_info["methods"]:
-                for indicator in template.method_indicators:
-                    if re.search(indicator, method, re.IGNORECASE):
-                        score += 0.15
-                        indicators.append(f"method:{method}")
-                        break
-
-            # Check base classes
-            for base in class_info["bases"]:
-                for indicator in template.class_indicators:
-                    if indicator in base:
-                        score += 0.2
-                        indicators.append(f"base_class:{base}")
-
-            # Check code patterns (Issue #281: uses helper)
-            score += self._check_code_patterns(
-                content, template.code_patterns, indicators
-            )
-
-            # Check imports (Issue #281: uses helper)
+            score, indicators = self._score_class_indicators(class_info, template)
+            score += self._check_code_patterns(content, template.code_patterns, indicators)
             score += self._check_import_indicators(
                 analysis.imports, template.import_indicators, indicators
             )
 
             if score >= template.required_score:
-                # Get code snippet
-                lines = content.split("\n")
-                start_line = max(0, class_info["line"] - 1)
-                end_line = min(len(lines), class_info["line"] + 5)
-                snippet = "\n".join(lines[start_line:end_line])
+                matches.append(self._build_class_match(
+                    template, analysis, class_info, score, indicators, content
+                ))
 
-                matches.append(
-                    PatternMatch(
-                        pattern_type=template.pattern_type,
-                        file_path=analysis.file_path,
-                        class_name=class_info["name"],
-                        line_number=class_info["line"],
-                        confidence=min(1.0, score),
-                        indicators_found=indicators[:10],
-                        code_snippet=snippet[:500],
-                    )
-                )
-
-        # Check for module-level patterns (like decorators, routers)
-        if not analysis.classes and template.code_patterns:
-            score = 0.0
-            indicators = []
-
-            # Module-level uses findall with multiplied score
-            for pattern in template.code_patterns:
-                matches_found = re.findall(pattern, content)
-                if matches_found:
-                    score += 0.3 * len(matches_found)
-                    indicators.append(f"pattern:{pattern[:30]}")
-
-            # Check imports (Issue #281: uses helper with module-level scoring)
-            score += self._check_import_indicators(
-                analysis.imports,
-                template.import_indicators,
-                indicators,
-                score_per_match=0.2,
-                first_match_only=False,
-            )
-
-            if score >= template.required_score:
-                matches.append(
-                    PatternMatch(
-                        pattern_type=template.pattern_type,
-                        file_path=analysis.file_path,
-                        line_number=1,
-                        confidence=min(1.0, score),
-                        indicators_found=indicators[:10],
-                    )
-                )
+        module_match = self._match_module_level_patterns(template, analysis, content)
+        if module_match:
+            matches.append(module_match)
 
         return matches
 

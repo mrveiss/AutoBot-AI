@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced AutoBot Security Fix Agent - XSS Vulnerability Remediation Tool
 
@@ -15,8 +18,8 @@ Features:
 - Safe minified code handling
 - Comprehensive security hardening
 
-Author: AutoBot Enhanced Security Fix Agent
-Version: 2.0.0
+NOTE: __init__ method (~141 lines) is an ACCEPTABLE EXCEPTION per Issue #490 -
+initialization of security agent with comprehensive report structure. Low priority.
 """
 
 import logging
@@ -26,7 +29,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = _HTML_EXTENSIONS
+_HTML_EXTENSIONS = (".html", ".htm")
 
 import os
 import re

@@ -594,11 +594,54 @@ class TemporalInvalidationService:
         except Exception as e:
             logger.error(f"Error recording invalidation history: {e}")
 
+    def _find_contradictory_facts(
+        self, new_fact: AtomicFact, similar_facts: List[AtomicFact]
+    ) -> List[AtomicFact]:
+        """
+        Find facts that contradict the new fact.
+
+        (Issue #398: extracted helper)
+        """
+        contradictory_facts = []
+        for existing_fact in similar_facts:
+            if (
+                existing_fact.subject.lower() == new_fact.subject.lower()
+                and existing_fact.predicate.lower() == new_fact.predicate.lower()
+                and existing_fact.object.lower() != new_fact.object.lower()
+                and existing_fact.fact_id != new_fact.fact_id
+            ):
+                if new_fact.is_contradictory_to(existing_fact):
+                    contradictory_facts.append(existing_fact)
+        return contradictory_facts
+
+    def _build_contradiction_reasons(
+        self, new_fact: AtomicFact, facts_to_invalidate: List[AtomicFact]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Build invalidation reasons for contradictory facts.
+
+        (Issue #398: extracted helper)
+        """
+        reasons = {}
+        for fact in facts_to_invalidate:
+            reasons[fact.fact_id] = {
+                "rule_id": "contradiction_detection",
+                "rule_name": "Contradiction Detection",
+                "reason": InvalidationReason.CONTRADICTION_DETECTED.value,
+                "contradicted_by": new_fact.fact_id,
+                "new_fact_confidence": new_fact.confidence,
+                "old_fact_confidence": fact.confidence,
+                "timestamp": datetime.now().isoformat(),
+            }
+        return reasons
+
     async def invalidate_contradictory_facts(
         self, new_fact: AtomicFact
     ) -> Dict[str, Any]:
         """
         Invalidate facts that contradict a new fact.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Args:
             new_fact: New fact that may contradict existing facts
@@ -613,49 +656,24 @@ class TemporalInvalidationService:
                     "message": "Fact extraction service not available",
                 }
 
-            logger.info(
-                f"Checking for contradictions with new fact: " f"{new_fact.fact_id}"
-            )
+            logger.info("Checking for contradictions with new fact: %s", new_fact.fact_id)
 
-            # Get facts with same subject and predicate
             similar_facts = await self.fact_extraction_service.get_facts_by_criteria(
                 active_only=True, limit=1000
             )
 
-            contradictory_facts = []
-            for existing_fact in similar_facts:
-                if (
-                    existing_fact.subject.lower() == new_fact.subject.lower()
-                    and existing_fact.predicate.lower() == new_fact.predicate.lower()
-                    and existing_fact.object.lower() != new_fact.object.lower()
-                    and existing_fact.fact_id != new_fact.fact_id
-                ):
-                    # Check if this is a meaningful contradiction
-                    if new_fact.is_contradictory_to(existing_fact):
-                        contradictory_facts.append(existing_fact)
+            contradictory_facts = self._find_contradictory_facts(new_fact, similar_facts)
 
-            # Invalidate contradictory facts if new fact has higher confidence
             invalidated_count = 0
             if contradictory_facts:
-                high_confidence_contradictions = [
+                high_confidence = [
                     f for f in contradictory_facts if new_fact.confidence > f.confidence
                 ]
 
-                if high_confidence_contradictions:
-                    reasons = {}
-                    for fact in high_confidence_contradictions:
-                        reasons[fact.fact_id] = {
-                            "rule_id": "contradiction_detection",
-                            "rule_name": "Contradiction Detection",
-                            "reason": InvalidationReason.CONTRADICTION_DETECTED.value,
-                            "contradicted_by": new_fact.fact_id,
-                            "new_fact_confidence": new_fact.confidence,
-                            "old_fact_confidence": fact.confidence,
-                            "timestamp": datetime.now().isoformat(),
-                        }
-
+                if high_confidence:
+                    reasons = self._build_contradiction_reasons(new_fact, high_confidence)
                     invalidated_count = await self._invalidate_facts(
-                        high_confidence_contradictions, reasons
+                        high_confidence, reasons
                     )
 
             return {
@@ -666,7 +684,7 @@ class TemporalInvalidationService:
             }
 
         except Exception as e:
-            logger.error(f"Error in contradiction invalidation: {e}")
+            logger.error("Error in contradiction invalidation: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def get_invalidation_statistics(self) -> Dict[str, Any]:

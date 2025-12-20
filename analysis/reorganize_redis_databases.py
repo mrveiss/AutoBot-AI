@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Reorganize Redis databases for optimal separation and search support
 
@@ -11,6 +14,9 @@ Target state:
 - DB 1: Knowledge facts and metadata
 - DB 2: Workflow rules and classification data
 - DB 3: Other system data
+
+NOTE: main() function (~175 lines) is an ACCEPTABLE EXCEPTION per Issue #490 -
+standalone one-time migration script with sequential operations. Low priority.
 """
 
 import asyncio
