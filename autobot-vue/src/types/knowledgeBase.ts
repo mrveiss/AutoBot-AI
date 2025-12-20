@@ -211,3 +211,35 @@ export interface BasicStatsResponse {
   total_vectors?: number
   last_updated?: string
 }
+
+/**
+ * Individual fact item from categorized facts response
+ */
+export interface CategorizedFact {
+  key: string
+  title: string
+  content: string
+  full_content?: string
+  category: string
+  type: string
+  metadata: Record<string, unknown>
+}
+
+/**
+ * Response from /api/knowledge_base/facts/by_category endpoint
+ */
+export interface CategorizedFactsResponse {
+  categories: Record<string, CategorizedFact[]>
+  total_facts: number
+  category_filter?: string | null
+}
+
+/**
+ * Category filter option for UI components
+ */
+export interface CategoryFilterOption {
+  value: string | null
+  label: string
+  icon: string
+  count: number
+}

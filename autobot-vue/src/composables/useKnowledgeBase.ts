@@ -36,7 +36,10 @@ import type {
   SystemKnowledgeResponse,
   ManPagesPopulateResponse,
   AutoBotDocsResponse,
-  BasicStatsResponse
+  BasicStatsResponse,
+  CategorizedFactsResponse,
+  CategorizedFact,
+  CategoryFilterOption
 } from '@/types/knowledgeBase'
 
 // KnowledgeStats imported from @/types/knowledgeBase (consolidated type definition)
@@ -144,6 +147,85 @@ export function useKnowledgeBase() {
       logger.error('Error fetching category:', error)
       throw error
     }
+  }
+
+  /**
+   * Fetch facts grouped by category for browsing
+   * Uses GET /api/knowledge_base/facts/by_category endpoint
+   * @param category - Optional category filter (null for all categories)
+   * @param limit - Maximum number of facts per category (default: 100)
+   * @returns CategorizedFactsResponse with facts grouped by category
+   */
+  const getCategorizedFacts = async (
+    category: string | null = null,
+    limit: number = 100
+  ): Promise<CategorizedFactsResponse> => {
+    try {
+      const params = new URLSearchParams()
+      if (category) {
+        params.append('category', category)
+      }
+      params.append('limit', String(limit))
+
+      const url = `/api/knowledge_base/facts/by_category?${params.toString()}`
+      const response = await apiClient.get(url)
+
+      if (!response) {
+        throw new Error('Failed to fetch categorized facts: No response from server')
+      }
+
+      const data = await parseApiResponse(response) as CategorizedFactsResponse
+
+      // Validate response structure
+      if (!data || typeof data.categories !== 'object') {
+        throw new Error('Invalid categorized facts response format')
+      }
+
+      logger.debug(`Fetched categorized facts: ${data.total_facts} total facts across ${Object.keys(data.categories).length} categories`)
+
+      return data
+    } catch (error) {
+      logger.error('Error fetching categorized facts:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Build category filter options from categorized facts
+   * Helper method to create CategoryFilterOption[] for UI components
+   * @param categorizedFacts - Response from getCategorizedFacts
+   * @returns Array of CategoryFilterOption for use in dropdowns/tabs
+   */
+  const buildCategoryFilterOptions = (
+    categorizedFacts: CategorizedFactsResponse
+  ): CategoryFilterOption[] => {
+    const options: CategoryFilterOption[] = [
+      {
+        value: null,
+        label: 'All Categories',
+        icon: 'fas fa-th-large',
+        count: categorizedFacts.total_facts
+      }
+    ]
+
+    // Add each category as an option
+    for (const [categoryName, facts] of Object.entries(categorizedFacts.categories)) {
+      options.push({
+        value: categoryName,
+        label: formatCategoryHelper(categoryName),
+        icon: getCategoryIcon(categoryName),
+        count: facts.length
+      })
+    }
+
+    // Sort by count (descending), keeping "All" at the top
+    options.sort((a, b) => {
+      if (a.value === null) return -1
+      if (b.value === null) return 1
+      return b.count - a.count
+    })
+
+    return options
   }
 
   /**
@@ -706,6 +788,9 @@ export function useKnowledgeBase() {
     populateAutoBotDocs,
     fetchMachineProfile,
     fetchBasicStats,
+    // Category filtering (Issue #161)
+    getCategorizedFacts,
+    buildCategoryFilterOptions,
     // Formatting helpers (using shared utilities)
     formatDate: formatDateHelper,
     formatCategory: formatCategoryHelper,

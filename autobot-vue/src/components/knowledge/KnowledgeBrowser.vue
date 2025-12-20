@@ -49,20 +49,51 @@
 
     <!-- Header -->
     <div class="browser-header">
-      <!-- Category Filter Tabs -->
-      <div class="category-tabs">
-        <BaseButton
-          v-for="cat in availableCategories"
-          :key="cat.value ?? 'all'"
-          :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
-          size="sm"
-          @click="selectCategory(cat.value)"
-          class="category-tab"
-        >
-          <i :class="cat.icon"></i>
-          {{ cat.label }}
-          <span v-if="cat.count > 0" class="category-count">{{ cat.count }}</span>
-        </BaseButton>
+      <!-- Category Filter Tabs with enhanced transitions (Issue #161) -->
+      <div class="category-tabs-container">
+        <div class="category-tabs">
+          <TransitionGroup name="category-tab">
+            <BaseButton
+              v-for="cat in availableCategories"
+              :key="cat.value ?? 'all'"
+              :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
+              size="sm"
+              @click="selectCategory(cat.value)"
+              :class="[
+                'category-tab',
+                { 'category-tab-active': selectedCategory === cat.value }
+              ]"
+              :aria-selected="selectedCategory === cat.value"
+              role="tab"
+            >
+              <i :class="[cat.icon, 'category-tab-icon']"></i>
+              <span class="category-tab-label">{{ cat.label }}</span>
+              <span
+                v-if="cat.count > 0"
+                :class="[
+                  'category-count',
+                  { 'category-count-active': selectedCategory === cat.value }
+                ]"
+              >
+                {{ cat.count }}
+              </span>
+            </BaseButton>
+          </TransitionGroup>
+        </div>
+        <!-- Active filter indicator -->
+        <transition name="fade">
+          <div v-if="selectedCategory" class="active-filter-badge">
+            <i class="fas fa-filter"></i>
+            <span>Filtering by: {{ formatCategoryName(selectedCategory) }}</span>
+            <button
+              @click="selectCategory(null)"
+              class="clear-filter-btn"
+              aria-label="Clear category filter"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </transition>
       </div>
 
       <!-- Search bar -->
@@ -284,7 +315,9 @@ const {
   formatDateOnly: formatDate,
   getCategoryIcon,
   populateAutoBotDocs,
-  refreshSystemKnowledge
+  refreshSystemKnowledge,
+  getCategorizedFacts,
+  buildCategoryFilterOptions
 } = useKnowledgeBase()
 
 const {
@@ -1189,16 +1222,60 @@ watch(() => props.mode, () => {
   flex-wrap: wrap;
 }
 
+/* Category Filter Container (Issue #161) */
+.category-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
 /* Category Tabs */
 .category-tabs {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
   flex: 0 0 auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.3) transparent;
+}
+
+.category-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.category-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.category-tabs::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 2px;
 }
 
 .category-tab {
   white-space: nowrap;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.category-tab-active {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+
+.category-tab-icon {
+  margin-right: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.category-tab:hover .category-tab-icon {
+  transform: scale(1.1);
+}
+
+.category-tab-label {
+  transition: color 0.2s ease;
 }
 
 .category-count {
@@ -1208,10 +1285,88 @@ watch(() => props.mode, () => {
   min-width: 1.5rem;
   height: 1.25rem;
   padding: 0 0.375rem;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
+  margin-left: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+.category-count-active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Active filter badge (Issue #161) */
+.active-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #93c5fd;
+  border-radius: 1rem;
+  font-size: 0.8125rem;
+  color: #1d4ed8;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.active-filter-badge i.fa-filter {
+  color: #3b82f6;
+  font-size: 0.75rem;
+}
+
+.clear-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-filter-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+/* Category tab transitions */
+.category-tab-enter-active,
+.category-tab-leave-active {
+  transition: all 0.3s ease;
+}
+
+.category-tab-enter-from {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.category-tab-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.category-tab-move {
+  transition: transform 0.3s ease;
+}
+
+/* Fade transition for filter badge */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
 }
 
 /* Batch Toolbar */
