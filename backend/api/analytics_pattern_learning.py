@@ -214,6 +214,29 @@ class FeedbackRecord:
     timestamp: datetime
     weight: float = 1.0
 
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def get_age_weeks(self, now: datetime) -> float:
+        """Get age of this feedback in weeks (Issue #372 - reduces feature envy)."""
+        return (now - self.timestamp).days / 7.0
+
+    def get_normalized_weight(self) -> float:
+        """Get weight normalized to 0-1 range (Issue #372 - reduces feature envy)."""
+        return (self.weight + 1.0) / 2.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response (Issue #372 - reduces feature envy)."""
+        return {
+            "feedback_id": self.feedback_id,
+            "feedback_type": self.feedback_type.value,
+            "file_path": self.file_path,
+            "line_number": self.line_number,
+            "code_snippet": self.code_snippet,
+            "developer_comment": self.developer_comment,
+            "timestamp": self.timestamp.isoformat(),
+            "weight": self.weight,
+        }
+
 
 @dataclass
 class PatternStats:
@@ -230,6 +253,62 @@ class PatternStats:
     confidence_score: float = 0.5
     last_updated: datetime = field(default_factory=datetime.now)
     version: int = 1
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    @property
+    def total_feedback_count(self) -> int:
+        """Get total feedback count (Issue #372 - reduces feature envy)."""
+        return (
+            self.correct_count
+            + self.incorrect_count
+            + self.missed_count
+            + self.partial_count
+            + self.irrelevant_count
+        )
+
+    @property
+    def feedback_count(self) -> int:
+        """Get count of feedback history entries (Issue #372 - reduces feature envy)."""
+        return len(self.feedback_history)
+
+    @property
+    def has_sufficient_feedback(self) -> bool:
+        """Check if has minimum feedback for confidence (Issue #372)."""
+        return self.feedback_count >= MIN_FEEDBACK_FOR_CONFIDENCE
+
+    @property
+    def has_conflicting_feedback(self) -> bool:
+        """Check if feedback is conflicting (Issue #372 - reduces feature envy)."""
+        return self.correct_count > 0 and self.incorrect_count > 0
+
+    @property
+    def conflict_ratio(self) -> float:
+        """Get conflict ratio between correct and incorrect (Issue #372)."""
+        total = self.correct_count + self.incorrect_count
+        return min(self.correct_count, self.incorrect_count) / max(total, 1)
+
+    def get_active_learning_priority(self) -> float:
+        """Calculate priority score for active learning (Issue #372)."""
+        priority = 0.0
+        # Low confidence = high priority
+        if self.confidence_score < 0.4:
+            priority += 0.5
+        # Conflicting feedback = high priority
+        priority += self.conflict_ratio * 0.3
+        # Little feedback = moderate priority
+        if not self.has_sufficient_feedback:
+            priority += 0.2
+        return priority
+
+    def get_most_recent_snippet(self) -> str:
+        """Get most recent code snippet from feedback (Issue #372)."""
+        if not self.feedback_history:
+            return ""
+        sorted_feedback = sorted(
+            self.feedback_history, key=lambda x: x.timestamp, reverse=True
+        )
+        return sorted_feedback[0].code_snippet or "" if sorted_feedback else ""
 
 
 class PatternLearningEngine:
@@ -445,15 +524,8 @@ class PatternLearningEngine:
 
     def _calculate_raw_score(self, stats: PatternStats) -> float:
         """Calculate raw accuracy score from feedback counts."""
-        total = (
-            stats.correct_count
-            + stats.incorrect_count
-            + stats.missed_count
-            + stats.partial_count
-            + stats.irrelevant_count
-        )
-
-        if total == 0:
+        # Issue #372: Use stats property instead of accessing attributes directly
+        if stats.total_feedback_count == 0:
             return 0.5  # Neutral
 
         # Weighted score calculation
@@ -480,10 +552,9 @@ class PatternLearningEngine:
         if not stats.feedback_history:
             return 0.5
 
-        total_feedback = len(stats.feedback_history)
-
+        # Issue #372: Use stats property instead of accessing len() directly
         # Volume factor: confidence in score increases with more feedback
-        volume_factor = min(1.0, total_feedback / 20)  # Max out at 20 feedback items
+        volume_factor = min(1.0, stats.feedback_count / 20)  # Max out at 20 feedback items
 
         # Time-weighted score
         now = datetime.now()
@@ -491,13 +562,10 @@ class PatternLearningEngine:
         weight_sum = 0.0
 
         for record in stats.feedback_history:
-            # Calculate age in weeks
-            age_weeks = (now - record.timestamp).days / 7.0
+            # Issue #372: Use FeedbackRecord methods to reduce feature envy
+            age_weeks = record.get_age_weeks(now)
             time_weight = CONFIDENCE_DECAY_RATE**age_weeks
-
-            feedback_weight = FEEDBACK_WEIGHTS.get(record.feedback_type, 0.0)
-            # Normalize to 0-1 range
-            normalized_weight = (feedback_weight + 1.0) / 2.0
+            normalized_weight = record.get_normalized_weight()
 
             weighted_sum += normalized_weight * time_weight
             weight_sum += time_weight
@@ -737,22 +805,8 @@ class PatternLearningEngine:
         candidates = []
 
         for pattern_id, stats in self.pattern_stats.items():
-            # Priority score for active learning
-            priority = 0.0
-
-            # Low confidence = high priority
-            if stats.confidence_score < 0.4:
-                priority += 0.5
-
-            # Conflicting feedback (both correct and incorrect) = high priority
-            conflict_ratio = min(stats.correct_count, stats.incorrect_count) / max(
-                stats.correct_count + stats.incorrect_count, 1
-            )
-            priority += conflict_ratio * 0.3
-
-            # Little feedback = moderate priority
-            if len(stats.feedback_history) < MIN_FEEDBACK_FOR_CONFIDENCE:
-                priority += 0.2
+            # Issue #372: Use PatternStats method to reduce feature envy
+            priority = stats.get_active_learning_priority()
 
             if priority > 0.2:
                 candidates.append((pattern_id, stats, priority))
@@ -761,14 +815,8 @@ class PatternLearningEngine:
         candidates.sort(key=lambda x: x[2], reverse=True)
 
         for pattern_id, stats, priority in candidates[:limit]:
-            # Get a recent example if available
-            recent_feedback = sorted(
-                stats.feedback_history, key=lambda x: x.timestamp, reverse=True
-            )
-
-            code_snippet = ""
-            if recent_feedback and recent_feedback[0].code_snippet:
-                code_snippet = recent_feedback[0].code_snippet
+            # Issue #372: Use PatternStats method to get snippet
+            code_snippet = stats.get_most_recent_snippet()
 
             queries.append(
                 ActiveLearningQuery(
@@ -792,17 +840,19 @@ class PatternLearningEngine:
                 f"Should this pattern be flagged? Please provide feedback."
             )
 
-        if stats.correct_count > 0 and stats.incorrect_count > 0:
+        # Issue #372: Use PatternStats property to reduce feature envy
+        if stats.has_conflicting_feedback:
             ratio = stats.correct_count / (stats.correct_count + stats.incorrect_count)
             return (
                 f"Pattern '{pattern_id}' has mixed feedback "
                 f"({ratio:.1%} positive). Is this match accurate?"
             )
 
-        if len(stats.feedback_history) < MIN_FEEDBACK_FOR_CONFIDENCE:
+        # Issue #372: Use PatternStats properties
+        if not stats.has_sufficient_feedback:
             return (
                 f"Pattern '{pattern_id}' needs more feedback "
-                f"({len(stats.feedback_history)} samples). Is this detection correct?"
+                f"({stats.feedback_count} samples). Is this detection correct?"
             )
 
         return f"Please validate pattern '{pattern_id}' match."
@@ -847,19 +897,8 @@ class PatternLearningEngine:
             stats.feedback_history, key=lambda x: x.timestamp, reverse=True
         )[:limit]
 
-        return [
-            {
-                "feedback_id": r.feedback_id,
-                "feedback_type": r.feedback_type.value,
-                "file_path": r.file_path,
-                "line_number": r.line_number,
-                "code_snippet": r.code_snippet,
-                "developer_comment": r.developer_comment,
-                "timestamp": r.timestamp.isoformat(),
-                "weight": r.weight,
-            }
-            for r in history
-        ]
+        # Issue #372: Use FeedbackRecord.to_dict() to reduce feature envy
+        return [r.to_dict() for r in history]
 
     async def run_learning_cycle(self) -> Dict[str, Any]:
         """

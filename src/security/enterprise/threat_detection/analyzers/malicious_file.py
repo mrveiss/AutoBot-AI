@@ -9,7 +9,6 @@ Detects malicious file uploads and suspicious file operations.
 Part of Issue #381 - God Class Refactoring
 """
 
-import time
 from typing import List, Optional
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
@@ -121,23 +120,22 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
                 else ThreatLevel.HIGH
             )
 
+            # Issue #372: Use SecurityEvent methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
+
             return ThreatEvent(
-                event_id=f"malicious_file_{int(time.time())}_{hash(filename) % 10000}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("malicious_file"),
+                **base_fields,
                 threat_category=ThreatCategory.MALICIOUS_UPLOAD,
                 threat_level=threat_level,
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action=event.action,
-                resource=filename,
+                resource=filename,  # Override base resource
                 details={
                     "detected_threats": threats,
                     "filename": filename,
                     "file_size": file_size,
                     "content_preview": file_content[:100] if file_content else "",
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=[
                     "quarantine_file",
                     "scan_with_antivirus",

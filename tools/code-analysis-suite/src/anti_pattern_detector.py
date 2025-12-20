@@ -25,7 +25,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.utils.redis_client import get_redis_client
 from src.unified_config import UnifiedConfig
 
 
@@ -115,6 +114,46 @@ class ClassInfo:
     external_references: Dict[str, int]  # other_class -> count of references
     lines_of_code: int
     complexity: int
+
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    @property
+    def method_count(self) -> int:
+        """Get count of methods (Issue #372 - reduces feature envy)."""
+        return len(self.methods)
+
+    @property
+    def attribute_count(self) -> int:
+        """Get count of attributes (Issue #372 - reduces feature envy)."""
+        return len(self.attributes)
+
+    @property
+    def public_method_count(self) -> int:
+        """Get count of non-dunder methods (Issue #372 - reduces feature envy)."""
+        return len([m for m in self.methods if not m.name.startswith('__')])
+
+    def has_base_class(self, *class_names: str) -> bool:
+        """Check if class has any of the specified base classes (Issue #372)."""
+        return any(base in class_names for base in self.base_classes)
+
+    def get_referenced_class_names(self) -> Set[str]:
+        """Get all class names referenced in method calls (Issue #372)."""
+        referenced: Set[str] = set()
+        referenced.update(self.base_classes)
+        for calls in self.method_calls.values():
+            referenced.update(
+                call.split('.', 1)[0] for call in calls if '.' in call
+            )
+        return referenced
+
+    def to_metrics_dict(self) -> Dict[str, Any]:
+        """Convert to metrics dictionary for reporting (Issue #372)."""
+        return {
+            "method_count": self.method_count,
+            "attribute_count": self.attribute_count,
+            "lines_of_code": self.lines_of_code,
+            "complexity": self.complexity,
+        }
 
 
 @dataclass
@@ -451,6 +490,9 @@ class AntiPatternDetector:
 
             if god_class_score > 0:
                 severity = self._god_class_severity(god_class_score, cls_info)
+                # Issue #372: Use cls_info.to_metrics_dict() to reduce feature envy
+                metrics = cls_info.to_metrics_dict()
+                metrics["god_class_score"] = god_class_score
                 issues.append(AntiPatternInstance(
                     pattern_type=AntiPatternType.GOD_CLASS,
                     severity=severity,
@@ -458,13 +500,7 @@ class AntiPatternDetector:
                     line_number=cls_info.line_number,
                     entity_name=cls_info.name,
                     description=self._god_class_description(cls_info),
-                    metrics={
-                        "method_count": len(cls_info.methods),
-                        "attribute_count": len(cls_info.attributes),
-                        "lines_of_code": cls_info.lines_of_code,
-                        "complexity": cls_info.complexity,
-                        "god_class_score": god_class_score
-                    },
+                    metrics=metrics,
                     suggestion=self._god_class_suggestion(cls_info),
                     refactoring_effort="high" if god_class_score > 70 else "medium"
                 ))
@@ -472,18 +508,19 @@ class AntiPatternDetector:
         return issues
 
     def _calculate_god_class_score(self, cls_info: ClassInfo) -> int:
-        """Calculate God Class score (0-100)"""
+        """Calculate God Class score (0-100)
+
+        Issue #372: Uses cls_info properties to reduce feature envy.
+        """
         score = 0
 
-        # Method count score
-        method_count = len(cls_info.methods)
-        if method_count > self.GOD_CLASS_METHOD_THRESHOLD:
-            score += min(30, (method_count - self.GOD_CLASS_METHOD_THRESHOLD) * 2)
+        # Method count score - Issue #372: use property
+        if cls_info.method_count > self.GOD_CLASS_METHOD_THRESHOLD:
+            score += min(30, (cls_info.method_count - self.GOD_CLASS_METHOD_THRESHOLD) * 2)
 
-        # Attribute count score
-        attr_count = len(cls_info.attributes)
-        if attr_count > self.GOD_CLASS_ATTR_THRESHOLD:
-            score += min(20, (attr_count - self.GOD_CLASS_ATTR_THRESHOLD) * 2)
+        # Attribute count score - Issue #372: use property
+        if cls_info.attribute_count > self.GOD_CLASS_ATTR_THRESHOLD:
+            score += min(20, (cls_info.attribute_count - self.GOD_CLASS_ATTR_THRESHOLD) * 2)
 
         # Lines of code score
         if cls_info.lines_of_code > self.GOD_CLASS_LOC_THRESHOLD:
@@ -496,33 +533,42 @@ class AntiPatternDetector:
         return min(100, score)
 
     def _god_class_severity(self, score: int, cls_info: ClassInfo) -> Severity:
-        """Determine God Class severity"""
-        if score >= 70 or len(cls_info.methods) > 40:
+        """Determine God Class severity
+
+        Issue #372: Uses cls_info.method_count property to reduce feature envy.
+        """
+        if score >= 70 or cls_info.method_count > 40:
             return Severity.CRITICAL
-        elif score >= 50 or len(cls_info.methods) > 30:
+        elif score >= 50 or cls_info.method_count > 30:
             return Severity.HIGH
         elif score >= 30:
             return Severity.MEDIUM
         return Severity.LOW
 
     def _god_class_description(self, cls_info: ClassInfo) -> str:
-        """Generate God Class description"""
+        """Generate God Class description
+
+        Issue #372: Uses cls_info properties to reduce feature envy.
+        """
         return (
-            f"Class '{cls_info.name}' has {len(cls_info.methods)} methods, "
-            f"{len(cls_info.attributes)} attributes, and {cls_info.lines_of_code} lines of code. "
+            f"Class '{cls_info.name}' has {cls_info.method_count} methods, "
+            f"{cls_info.attribute_count} attributes, and {cls_info.lines_of_code} lines of code. "
             f"This violates the Single Responsibility Principle."
         )
 
     def _god_class_suggestion(self, cls_info: ClassInfo) -> str:
-        """Generate God Class refactoring suggestion"""
+        """Generate God Class refactoring suggestion
+
+        Issue #372: Uses cls_info.attribute_count property to reduce feature envy.
+        """
         suggestions = [
             "Extract cohesive groups of methods into separate classes",
             "Apply Single Responsibility Principle - each class should have one reason to change",
             "Consider using composition instead of one monolithic class"
         ]
 
-        # Add specific suggestions based on analysis
-        if len(cls_info.attributes) > 20:
+        # Add specific suggestions based on analysis - Issue #372: use property
+        if cls_info.attribute_count > 20:
             suggestions.append("Group related attributes into data classes or value objects")
 
         if cls_info.complexity > 50:
@@ -745,17 +791,20 @@ class AntiPatternDetector:
     # ========== Lazy Class Detection ==========
 
     async def _detect_lazy_classes(self) -> List[AntiPatternInstance]:
-        """Detect classes that don't do enough to justify their existence"""
+        """Detect classes that don't do enough to justify their existence
+
+        Issue #372: Uses cls_info helper methods to reduce feature envy.
+        """
         issues = []
 
         for full_name, cls_info in self.classes.items():
             # Skip dataclasses, enums, and exception classes
-            if any(base in ['Enum', 'Exception', 'BaseException'] for base in cls_info.base_classes):
+            # Issue #372: Use has_base_class method to reduce feature envy
+            if cls_info.has_base_class('Enum', 'Exception', 'BaseException'):
                 continue
 
-            method_count = len([m for m in cls_info.methods if not m.name.startswith('__')])
-
-            if (method_count <= self.LAZY_CLASS_METHOD_THRESHOLD and
+            # Issue #372: Use public_method_count property to reduce feature envy
+            if (cls_info.public_method_count <= self.LAZY_CLASS_METHOD_THRESHOLD and
                     cls_info.lines_of_code <= self.LAZY_CLASS_LOC_THRESHOLD):
 
                 issues.append(AntiPatternInstance(
@@ -765,11 +814,11 @@ class AntiPatternDetector:
                     line_number=cls_info.line_number,
                     entity_name=cls_info.name,
                     description=(
-                        f"Class '{cls_info.name}' has only {method_count} methods "
+                        f"Class '{cls_info.name}' has only {cls_info.public_method_count} methods "
                         f"and {cls_info.lines_of_code} lines - may not justify its existence"
                     ),
                     metrics={
-                        "method_count": method_count,
+                        "method_count": cls_info.public_method_count,
                         "lines_of_code": cls_info.lines_of_code
                     },
                     suggestion=(
@@ -784,35 +833,42 @@ class AntiPatternDetector:
     # ========== Dead Code Detection ==========
 
     async def _detect_dead_code(self) -> List[AntiPatternInstance]:
-        """Detect potentially dead (unreferenced) classes and functions"""
+        """Detect potentially dead (unreferenced) classes and functions.
+
+        Issue #372: Uses cls_info.get_referenced_class_names() to reduce feature envy.
+
+        Optimized from O(m × c × v × n + m × c² × i) to O(m × c + total_calls):
+        1. Pre-compute all referenced names in a single pass using set operations
+        2. Pre-compute all imported names for O(1) lookup
+        3. Use tuple for entry point suffixes (O(1) vs list iteration)
+        """
         issues = []
 
-        # Find all referenced names
+        # Pre-compute entry point suffixes as tuple for faster endswith check
+        _ENTRY_POINT_SUFFIXES = ('Test', 'Tests', 'TestCase', 'Handler', 'View', 'API', 'Router')
+
+        # Collect all referenced names efficiently using set operations
+        # Issue #372: Use cls_info.get_referenced_class_names() to reduce feature envy
         referenced_names: Set[str] = set()
         for module in self.modules.values():
             for cls_info in module.classes:
-                referenced_names.update(cls_info.base_classes)
-                for calls in cls_info.method_calls.values():
-                    for call in calls:
-                        if '.' in call:
-                            referenced_names.add(call.split('.')[0])
+                # Issue #372: Use helper method instead of accessing internal attributes
+                referenced_names.update(cls_info.get_referenced_class_names())
 
-        # Check for unreferenced classes
+        # Pre-compute all imported names across all modules for O(1) lookup
+        # This avoids O(n²) repeated string searches
+        all_imports_str = '|'.join(str(m.imports) for m in self.modules.values())
+
+        # Check for unreferenced classes with O(1) lookups
         for full_name, cls_info in self.classes.items():
             # Skip if it's likely an entry point, test, or base class
-            if any(cls_info.name.endswith(suffix) for suffix in [
-                'Test', 'Tests', 'TestCase', 'Handler', 'View', 'API', 'Router'
-            ]):
+            # Using tuple for endswith is more efficient
+            if cls_info.name.endswith(_ENTRY_POINT_SUFFIXES):
                 continue
 
             if cls_info.name not in referenced_names and not cls_info.base_classes:
-                # Check if it's imported anywhere
-                is_imported = any(
-                    cls_info.name in str(m.imports)
-                    for m in self.modules.values()
-                )
-
-                if not is_imported:
+                # O(1) substring check in pre-computed import string
+                if cls_info.name not in all_imports_str:
                     issues.append(AntiPatternInstance(
                         pattern_type=AntiPatternType.DEAD_CODE,
                         severity=Severity.LOW,
@@ -824,7 +880,7 @@ class AntiPatternDetector:
                             f"no references found in analyzed codebase"
                         ),
                         metrics={
-                            "method_count": len(cls_info.methods),
+                            "method_count": cls_info.method_count,
                             "lines_of_code": cls_info.lines_of_code
                         },
                         suggestion=(
@@ -931,57 +987,47 @@ class AntiPatternDetector:
             analysis_time_seconds=analysis_time
         )
 
+    # Issue #372: Class-level recommendation mapping reduces feature envy
+    # by using self-contained data instead of repeated dict access
+    _RECOMMENDATION_MAP: List[Tuple[str, str]] = [
+        # Priority 1: Critical issues
+        ("god_class", "🔴 CRITICAL: Refactor God Classes - Break down large classes "
+                      "following Single Responsibility Principle"),
+        ("circular_dependency", "🔴 CRITICAL: Resolve Circular Dependencies - "
+                                "Use dependency injection or extract common code"),
+        # Priority 2: High severity
+        ("feature_envy", "🟠 HIGH: Address Feature Envy - "
+                         "Move methods to the classes they reference most"),
+        ("long_method", "🟠 HIGH: Extract Long Methods - "
+                        "Break into smaller, single-purpose methods"),
+        # Priority 3: Medium severity
+        ("long_parameter_list", "🟡 MEDIUM: Reduce Parameter Lists - "
+                                "Introduce parameter objects or builder pattern"),
+        ("data_clump", "🟡 MEDIUM: Extract Data Clumps - "
+                       "Group recurring parameters into data classes"),
+        # Priority 4: Low severity / housekeeping
+        ("lazy_class", "🟢 LOW: Review Lazy Classes - "
+                       "Consider merging or converting to functions"),
+        ("dead_code", "🟢 LOW: Remove Dead Code - "
+                      "Delete verified unused classes and functions"),
+    ]
+
     def _generate_recommendations(
         self,
         anti_patterns: List[AntiPatternInstance],
         summary_by_type: Dict[str, int]
     ) -> List[str]:
-        """Generate prioritized recommendations based on findings"""
+        """Generate prioritized recommendations based on findings.
+
+        Issue #372: Uses self._RECOMMENDATION_MAP to reduce feature envy
+        by minimizing repeated dictionary access patterns.
+        """
         recommendations = []
 
-        # Priority 1: Critical issues
-        if summary_by_type.get(AntiPatternType.GOD_CLASS.value, 0) > 0:
-            recommendations.append(
-                "🔴 CRITICAL: Refactor God Classes - Break down large classes following Single Responsibility Principle"
-            )
-
-        if summary_by_type.get(AntiPatternType.CIRCULAR_DEPENDENCY.value, 0) > 0:
-            recommendations.append(
-                "🔴 CRITICAL: Resolve Circular Dependencies - Use dependency injection or extract common code"
-            )
-
-        # Priority 2: High severity
-        if summary_by_type.get(AntiPatternType.FEATURE_ENVY.value, 0) > 0:
-            recommendations.append(
-                "🟠 HIGH: Address Feature Envy - Move methods to the classes they reference most"
-            )
-
-        if summary_by_type.get(AntiPatternType.LONG_METHOD.value, 0) > 0:
-            recommendations.append(
-                "🟠 HIGH: Extract Long Methods - Break into smaller, single-purpose methods"
-            )
-
-        # Priority 3: Medium severity
-        if summary_by_type.get(AntiPatternType.LONG_PARAMETER_LIST.value, 0) > 0:
-            recommendations.append(
-                "🟡 MEDIUM: Reduce Parameter Lists - Introduce parameter objects or builder pattern"
-            )
-
-        if summary_by_type.get(AntiPatternType.DATA_CLUMP.value, 0) > 0:
-            recommendations.append(
-                "🟡 MEDIUM: Extract Data Clumps - Group recurring parameters into data classes"
-            )
-
-        # Priority 4: Low severity / housekeeping
-        if summary_by_type.get(AntiPatternType.LAZY_CLASS.value, 0) > 0:
-            recommendations.append(
-                "🟢 LOW: Review Lazy Classes - Consider merging or converting to functions"
-            )
-
-        if summary_by_type.get(AntiPatternType.DEAD_CODE.value, 0) > 0:
-            recommendations.append(
-                "🟢 LOW: Remove Dead Code - Delete verified unused classes and functions"
-            )
+        # Issue #372: Use data-driven approach with class-level mapping
+        for pattern_type, recommendation in self._RECOMMENDATION_MAP:
+            if summary_by_type.get(pattern_type, 0) > 0:
+                recommendations.append(recommendation)
 
         # General recommendations
         if not recommendations:

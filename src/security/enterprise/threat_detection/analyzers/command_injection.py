@@ -10,7 +10,6 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import re
-import time
 from typing import Optional
 
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
@@ -38,22 +37,20 @@ class CommandInjectionAnalyzer(ThreatAnalyzer):
         if detected_patterns:
             confidence = min(1.0, len(detected_patterns) * 0.3 + 0.4)
 
+            # Issue #372: Use SecurityEvent methods to reduce feature envy
+            base_fields = event.get_threat_base_fields()
+
             return ThreatEvent(
-                event_id=f"cmd_inj_{int(time.time())}_{hash(command_content) % 10000}",
-                timestamp=event.timestamp,
+                event_id=event.generate_threat_id("cmd_inj"),
+                **base_fields,
                 threat_category=ThreatCategory.COMMAND_INJECTION,
                 threat_level=ThreatLevel(max_severity),
                 confidence_score=confidence,
-                user_id=event.user_id,
-                source_ip=event.source_ip,
-                action=event.action,
-                resource=event.resource,
                 details={
                     "detected_patterns": [p["description"] for p in detected_patterns],
                     "command_content": command_content[:200],
                     "pattern_categories": [p["category"] for p in detected_patterns],
                 },
-                raw_event=event.raw_event,
                 mitigation_actions=[
                     "block_command",
                     "quarantine_session",
