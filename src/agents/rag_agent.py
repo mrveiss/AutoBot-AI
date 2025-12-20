@@ -99,6 +99,50 @@ class RAGAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
+    def _build_rag_messages(
+        self, query: str, document_context: str
+    ) -> List[Dict[str, str]]:
+        """
+        Build message list for RAG query processing.
+
+        (Issue #398: extracted helper)
+        """
+        system_prompt = self._get_rag_system_prompt()
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": f"Retrieved Documents:\n{document_context}"},
+            {"role": "user", "content": query},
+        ]
+
+    def _build_rag_success_response(
+        self,
+        synthesis_result: Dict[str, Any],
+        document_analysis: Dict[str, Any],
+        documents: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Build successful RAG query response.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "status": "success",
+            "synthesized_response": synthesis_result.get("response", ""),
+            "confidence_score": synthesis_result.get("confidence", 0.8),
+            "document_analysis": document_analysis,
+            "sources_used": [
+                doc.get("metadata", {}).get("filename", "Unknown")
+                for doc in documents
+            ],
+            "agent_type": "rag",
+            "model_used": self.model_name,
+            "metadata": {
+                "agent": "RAGAgent",
+                "documents_processed": len(documents),
+                "synthesis_complexity": "high",
+            },
+        }
+
     async def process_document_query(
         self,
         query: str,
@@ -107,6 +151,8 @@ class RAGAgent(StandardizedAgent):
     ) -> Dict[str, Any]:
         """
         Process a query against retrieved documents and synthesize response.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Args:
             query: User's question or request
@@ -117,59 +163,28 @@ class RAGAgent(StandardizedAgent):
             Dict containing synthesized response and analysis
         """
         try:
-            logger.info(f"RAG Agent processing query with {len(documents)} documents")
+            logger.info("RAG Agent processing query with %d documents", len(documents))
 
-            # Prepare RAG-focused system prompt
-            system_prompt = self._get_rag_system_prompt()
-
-            # Build document context
             document_context = self._build_document_context(documents)
+            messages = self._build_rag_messages(query, document_context)
 
-            # Create messages with context
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "system",
-                    "content": f"Retrieved Documents:\n{document_context}",
-                },
-                {"role": "user", "content": query},
-            ]
-
-            # Generate synthesis with higher complexity settings
             response = await self.llm_interface.chat_completion(
                 messages=messages,
-                llm_type="rag",  # Uses RAG-specific model
-                temperature=0.5,  # Balanced creativity for synthesis
+                llm_type="rag",
+                temperature=0.5,
                 max_tokens=LLMDefaults.SYNTHESIS_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,
             )
 
-            # Extract and structure response
             synthesis_result = self._extract_synthesis_response(response)
-
-            # Add document analysis
             document_analysis = self._analyze_document_relevance(query, documents)
 
-            return {
-                "status": "success",
-                "synthesized_response": synthesis_result.get("response", ""),
-                "confidence_score": synthesis_result.get("confidence", 0.8),
-                "document_analysis": document_analysis,
-                "sources_used": [
-                    doc.get("metadata", {}).get("filename", "Unknown")
-                    for doc in documents
-                ],
-                "agent_type": "rag",
-                "model_used": self.model_name,
-                "metadata": {
-                    "agent": "RAGAgent",
-                    "documents_processed": len(documents),
-                    "synthesis_complexity": "high",
-                },
-            }
+            return self._build_rag_success_response(
+                synthesis_result, document_analysis, documents
+            )
 
         except Exception as e:
-            logger.error(f"RAG Agent error: {e}")
+            logger.error("RAG Agent error: %s", e)
             return {
                 "status": "error",
                 "synthesized_response": (

@@ -94,6 +94,60 @@ class AnsibleExecutor:
 
         return runner
 
+    def _setup_run_environment(
+        self, run_id: str, inventory: Metadata
+    ) -> tuple[str, Path]:
+        """
+        Set up temporary directory and inventory file for playbook execution.
+
+        (Issue #398: extracted helper)
+
+        Returns:
+            Tuple of (temp_dir path, inventory_file Path)
+        """
+        temp_dir = tempfile.mkdtemp(
+            prefix=f"ansible_{run_id}_", dir=self.private_data_dir
+        )
+        temp_path = Path(temp_dir)
+
+        inventory_file = temp_path / "inventory.json"
+        with open(inventory_file, "w", encoding="utf-8") as f:
+            json.dump(inventory, f, indent=2)
+
+        return temp_dir, temp_path, inventory_file
+
+    def _log_runner_result(
+        self, runner: ansible_runner.Runner, playbook_path: str, run_id: str
+    ) -> None:
+        """
+        Log the results of playbook execution.
+
+        (Issue #398: extracted helper)
+        """
+        if runner.status == "successful":
+            logger.info(
+                "Playbook execution successful: %s (run_id: %s)", playbook_path, run_id
+            )
+        else:
+            logger.error(
+                "Playbook execution failed: %s (run_id: %s)", playbook_path, run_id
+            )
+            logger.error("Status: %s", runner.status)
+            logger.error("Return code: %s", runner.rc)
+
+    def _cleanup_temp_dir(self, temp_dir: str) -> None:
+        """
+        Clean up temporary directory after execution.
+
+        (Issue #398: extracted helper)
+        """
+        if temp_dir and Path(temp_dir).exists():
+            try:
+                shutil.rmtree(temp_dir)
+                logger.debug("Cleaned up temporary directory: %s", temp_dir)
+            except Exception as e:
+                logger.warning("Failed to cleanup temp directory %s: %s", temp_dir, e)
+
     def _execute_runner(
         self,
         playbook_path: str,
@@ -103,7 +157,9 @@ class AnsibleExecutor:
         run_id: str,
     ) -> ansible_runner.Runner:
         """
-        Synchronous runner execution (called from thread pool)
+        Synchronous runner execution (called from thread pool).
+
+        (Issue #398: refactored to use extracted helpers)
 
         Args:
             playbook_path: Path to playbook
@@ -115,26 +171,17 @@ class AnsibleExecutor:
         Returns:
             ansible_runner.Runner instance with results
         """
-        inventory_file = None
         temp_dir = None
 
         try:
-            # Create temporary directory for this run
-            temp_dir = tempfile.mkdtemp(
-                prefix=f"ansible_{run_id}_", dir=self.private_data_dir
+            temp_dir, temp_path, inventory_file = self._setup_run_environment(
+                run_id, inventory
             )
-            temp_path = Path(temp_dir)
 
-            # Write inventory to temp file
-            inventory_file = temp_path / "inventory.json"
-            with open(inventory_file, "w") as f:
-                json.dump(inventory, f, indent=2)
+            logger.info("Executing playbook: %s", playbook_path)
+            logger.debug("Inventory: %s", inventory)
+            logger.debug("Extra vars: %s", extra_vars)
 
-            logger.info(f"Executing playbook: {playbook_path}")
-            logger.debug(f"Inventory: {inventory}")
-            logger.debug(f"Extra vars: {extra_vars}")
-
-            # Run ansible-runner
             runner = ansible_runner.run(
                 private_data_dir=str(temp_path),
                 playbook=playbook_path,
@@ -148,32 +195,15 @@ class AnsibleExecutor:
                 ident=run_id,
             )
 
-            # Log execution results
-            if runner.status == "successful":
-                logger.info(
-                    f"Playbook execution successful: {playbook_path} (run_id: {run_id})"
-                )
-            else:
-                logger.error(
-                    f"Playbook execution failed: {playbook_path} (run_id: {run_id})"
-                )
-                logger.error(f"Status: {runner.status}")
-                logger.error(f"Return code: {runner.rc}")
-
+            self._log_runner_result(runner, playbook_path, run_id)
             return runner
 
         except Exception as e:
-            logger.exception(f"Error executing playbook {playbook_path}: {e}")
+            logger.exception("Error executing playbook %s: %s", playbook_path, e)
             raise
 
         finally:
-            # Cleanup temporary files
-            if temp_dir and Path(temp_dir).exists():
-                try:
-                    shutil.rmtree(temp_dir)
-                    logger.debug(f"Cleaned up temporary directory: {temp_dir}")
-                except Exception as e:
-                    logger.warning(f"Failed to cleanup temp directory {temp_dir}: {e}")
+            self._cleanup_temp_dir(temp_dir)
 
     def _default_event_handler(self, event: Dict):
         """Default event handler for logging"""
