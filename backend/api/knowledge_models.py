@@ -543,6 +543,216 @@ class UpdateTagStyleRequest(BaseModel):
         return v
 
 
+# ===== CATEGORY MANAGEMENT MODELS (Issue #411) =====
+
+# Issue #411: Pre-compiled regex for category name validation
+_CATEGORY_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
+_CATEGORY_PATH_RE = re.compile(r"^[a-z0-9_/-]+$")
+
+
+class CreateCategoryRequest(BaseModel):
+    """
+    Request model for creating a new category (Issue #411).
+
+    Categories support hierarchical organization with parent-child relationships.
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Category name (lowercase, alphanumeric, hyphens, underscores)",
+    )
+    parent_id: Optional[str] = Field(
+        default=None,
+        description="Parent category ID (None = root category)",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Category description",
+    )
+    icon: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Icon identifier (e.g., 'fas fa-code')",
+    )
+    color: Optional[str] = Field(
+        default=None,
+        min_length=7,
+        max_length=7,
+        description="Hex color code (e.g., '#3B82F6')",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate category name format."""
+        v = v.lower().strip().replace(" ", "-")
+        if not _CATEGORY_NAME_RE.match(v):
+            raise ValueError(
+                "Invalid category name: only lowercase alphanumeric, "
+                "hyphens, underscores allowed"
+            )
+        if contains_path_traversal(v):
+            raise ValueError("Invalid characters in category name")
+        return v
+
+    @validator("parent_id")
+    def validate_parent_id(cls, v):
+        """Validate parent_id format."""
+        if v is not None:
+            if not _ALNUM_ID_RE.match(v):
+                raise ValueError("Invalid parent_id format")
+            if contains_path_traversal(v):
+                raise ValueError("Invalid characters in parent_id")
+        return v
+
+    @validator("color")
+    def validate_color(cls, v):
+        """Validate hex color format."""
+        if v is not None:
+            if not _HEX_COLOR_RE.match(v):
+                raise ValueError(
+                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
+                )
+        return v
+
+
+class UpdateCategoryRequest(BaseModel):
+    """
+    Request model for updating a category (Issue #411).
+
+    All fields are optional; only provided fields are updated.
+    Note: Renaming a category updates its path and all descendant paths.
+    """
+
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="New category name (triggers path update)",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="New description",
+    )
+    icon: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="New icon identifier",
+    )
+    color: Optional[str] = Field(
+        default=None,
+        min_length=7,
+        max_length=7,
+        description="New hex color code",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate category name format if provided."""
+        if v is not None:
+            v = v.lower().strip().replace(" ", "-")
+            if not _CATEGORY_NAME_RE.match(v):
+                raise ValueError(
+                    "Invalid category name: only lowercase alphanumeric, "
+                    "hyphens, underscores allowed"
+                )
+        return v
+
+    @validator("color")
+    def validate_color(cls, v):
+        """Validate hex color format if provided."""
+        if v is not None:
+            if not _HEX_COLOR_RE.match(v):
+                raise ValueError(
+                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
+                )
+        return v
+
+
+class DeleteCategoryRequest(BaseModel):
+    """
+    Request model for deleting a category (Issue #411).
+
+    Provides options for handling child categories and assigned facts.
+    """
+
+    recursive: bool = Field(
+        default=False,
+        description="Delete all descendant categories. If False, fails if has children.",
+    )
+    reassign_to: Optional[str] = Field(
+        default=None,
+        description="Category ID to reassign facts to. If None, facts become uncategorized.",
+    )
+
+    @validator("reassign_to")
+    def validate_reassign_to(cls, v):
+        """Validate reassign_to format if provided."""
+        if v is not None:
+            if not _ALNUM_ID_RE.match(v):
+                raise ValueError("Invalid reassign_to category ID format")
+        return v
+
+
+class AssignFactToCategoryRequest(BaseModel):
+    """
+    Request model for assigning a fact to a category (Issue #411).
+    """
+
+    category_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Category ID to assign fact to",
+    )
+
+    @validator("category_id")
+    def validate_category_id(cls, v):
+        """Validate category_id format."""
+        if not _ALNUM_ID_RE.match(v):
+            raise ValueError("Invalid category_id format")
+        if contains_path_traversal(v):
+            raise ValueError("Invalid characters in category_id")
+        return v
+
+
+class SearchCategoriesByPathRequest(BaseModel):
+    """
+    Request model for searching categories by path pattern (Issue #411).
+
+    Supports wildcard patterns like 'tech/python/*'.
+    """
+
+    path_pattern: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Path pattern with optional wildcard (e.g., 'tech/python/*')",
+    )
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum number of categories to return",
+    )
+
+    @validator("path_pattern")
+    def validate_path_pattern(cls, v):
+        """Validate path pattern format."""
+        v = v.lower().strip()
+        # Remove trailing asterisk for validation
+        check_pattern = v.rstrip("*")
+        if check_pattern and not _CATEGORY_PATH_RE.match(check_pattern):
+            raise ValueError(
+                "Invalid path pattern: only lowercase alphanumeric, "
+                "hyphens, underscores, and forward slashes allowed"
+            )
+        return v
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -863,6 +1073,12 @@ __all__ = [
     # Tag styling (Issue #410)
     "UpdateTagStyleRequest",
     "DEFAULT_TAG_COLORS",
+    # Category management (Issue #411)
+    "CreateCategoryRequest",
+    "UpdateCategoryRequest",
+    "DeleteCategoryRequest",
+    "AssignFactToCategoryRequest",
+    "SearchCategoriesByPathRequest",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",
