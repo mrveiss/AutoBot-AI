@@ -298,6 +298,7 @@ async def _store_autobot_config_info(kb_to_use) -> bool:
     Generate and store AutoBot system configuration in knowledge base.
 
     Issue #281: Extracted helper for config info generation and storage.
+    Issue #398: Refactored to use _store_system_config (DRY principle).
 
     Args:
         kb_to_use: Knowledge base instance
@@ -305,61 +306,8 @@ async def _store_autobot_config_info(kb_to_use) -> bool:
     Returns:
         True if stored successfully, False otherwise
     """
-    try:
-        # Import constants for network configuration reference
-        from src.constants.network_constants import NetworkConstants
-        from src.constants.path_constants import PATH
-
-        config_info = f"""AutoBot System Configuration
-
-Network Layout:
-- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
-  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
-  Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
-  (SINGLE FRONTEND SERVER)
-- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
-- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
-- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
-- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
-  Web automation (Playwright)
-
-Key Commands:
-- Setup: bash setup.sh [--full|--minimal|--distributed]
-- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
-
-Critical Rules:
-- NEVER edit code directly on remote VMs (VM1-VM5)
-- ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
-- Use ./sync-frontend.sh or sync scripts to deploy changes
-- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
-- NO temporary fixes or workarounds allowed
-
-Source: AutoBot System Configuration
-Category: AutoBot
-Type: System Configuration
-"""
-
-        metadata = {
-            "title": "AutoBot System Configuration",
-            "source": "autobot_docs_population",
-            "category": "configuration",
-            "type": "system_configuration",
-        }
-
-        if hasattr(kb_to_use, "store_fact"):
-            result = await kb_to_use.store_fact(content=config_info, metadata=metadata)
-        else:
-            result = await kb_to_use.store_fact(text=config_info, metadata=metadata)
-
-        if result and result.get("fact_id"):
-            logger.info("Added AutoBot system configuration")
-            return True
-        return False
-
-    except Exception as e:
-        logger.error(f"Error adding AutoBot configuration: {e}")
-        return False
+    # Delegate to the consolidated implementation (Issue #398)
+    return await _store_system_config(kb_to_use)
 
 
 # ===== POPULATION ENDPOINTS =====
@@ -718,40 +666,46 @@ async def _store_doc_file(
         return None
 
 
+async def _read_doc_file_content(file_path) -> str | None:
+    """
+    Read documentation file content asynchronously.
+
+    Issue #398: Extracted from _process_doc_file to reduce method length.
+
+    Returns:
+        File content string, or None if file doesn't exist or is empty.
+    """
+    file_exists = await asyncio.to_thread(file_path.exists)
+    is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
+    if not file_exists or not is_file:
+        return None
+
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+        return content if content.strip() else None
+    except OSError:
+        return None
+
+
 async def _process_doc_file(
     kb_to_use, tracker, autobot_base_path, doc_file: str
 ) -> tuple[int, int, int]:
     """
     Process a single documentation file.
 
+    Issue #398: Refactored to extract file reading logic.
+
     Returns:
         Tuple of (added, skipped, failed) counts
     """
     file_path = autobot_base_path / doc_file
+    content = await _read_doc_file_content(file_path)
 
-    # Check file exists
-    # Issue #358 - avoid blocking
-    file_exists = await asyncio.to_thread(file_path.exists)
-    is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
-    if not file_exists or not is_file:
-        logger.warning(f"File not found: {doc_file}")
+    if content is None:
+        logger.warning(f"File not found or empty: {doc_file}")
         return (0, 1, 0)
 
-    # Read content
-    try:
-        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-            content = await f.read()
-    except OSError as e:
-        tracker.mark_failed(str(file_path), f"File read error: {e}")
-        logger.error(f"Failed to read AutoBot doc {doc_file}: {e}")
-        return (0, 0, 1)
-
-    # Check for empty content
-    if not content.strip():
-        logger.warning(f"Empty file: {doc_file}")
-        return (0, 1, 0)
-
-    # Extract category and store
     category = extract_category_from_path(doc_file)
     result = await _store_doc_file(kb_to_use, doc_file, file_path, content, category)
 
@@ -760,17 +714,12 @@ async def _process_doc_file(
             file_path=str(file_path),
             category=category,
             facts_count=1,
-            metadata={
-                "fact_id": result.get("fact_id"),
-                "title": f"AutoBot: {doc_file}",
-                "content_length": len(content),
-            },
+            metadata={"fact_id": result.get("fact_id"), "title": f"AutoBot: {doc_file}"},
         )
         logger.info(f"Added AutoBot doc: {doc_file}")
         return (1, 0, 0)
 
     tracker.mark_failed(str(file_path), "Failed to store in knowledge base")
-    logger.warning(f"Failed to store AutoBot doc: {doc_file}")
     return (0, 0, 1)
 
 
@@ -835,62 +784,61 @@ async def _store_system_config(kb_to_use) -> bool:
         return False
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="populate_autobot_docs",
-    error_code_prefix="KNOWLEDGE",
-)
-@router.post("/populate_autobot_docs")
-async def populate_autobot_docs(request: dict, req: Request):
+async def _scan_doc_files(
+    autobot_base_path: PathLib, tracker, force_reindex: bool
+) -> tuple[list[str], int]:
     """
-    Populate knowledge base with AutoBot-specific documentation.
+    Scan for documentation files that need processing.
 
-    Issue #281: Refactored from 145 lines to use extracted helper method.
+    Issue #398: Extracted from populate_autobot_docs to reduce method length.
+
+    Args:
+        autobot_base_path: Base path of the AutoBot project.
+        tracker: Import tracker instance.
+        force_reindex: Whether to force reindex all files.
+
+    Returns:
+        Tuple of (doc_files list, items_skipped count).
     """
-    from backend.models.knowledge_import_tracking import ImportTracker
-
-    # Check if force reindex is requested
-    force_reindex = request.get("force", False) if request else False
-
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        return {
-            "status": "error",
-            "message": "Knowledge base not initialized - please check logs for errors",
-            "items_added": 0,
-        }
-
-    logger.info("Starting AutoBot documentation population with import tracking...")
-
-    tracker = ImportTracker()
-    # Use project-relative path instead of absolute path
-    autobot_base_path = PathLib(__file__).parent.parent.parent
-
-    # Scan for all markdown files recursively in docs/ ONLY
     doc_files = []
+    items_skipped = 0
 
-    # Initialize counters before any loops
+    docs_path = autobot_base_path / "docs"
+    if not await asyncio.to_thread(docs_path.exists):
+        return doc_files, items_skipped
+
+    md_files = await asyncio.to_thread(lambda: list(docs_path.rglob("*.md")))
+    for md_file in md_files:
+        rel_path = md_file.relative_to(autobot_base_path)
+        if not force_reindex and not tracker.needs_reimport(str(md_file)):
+            logger.info(f"Skipping unchanged file: {rel_path}")
+            items_skipped += 1
+            continue
+        doc_files.append(str(rel_path))
+
+    return doc_files, items_skipped
+
+
+async def _process_all_doc_files(
+    kb_to_use, tracker, autobot_base_path: PathLib, doc_files: list[str]
+) -> tuple[int, int, int]:
+    """
+    Process all documentation files.
+
+    Issue #398: Extracted from populate_autobot_docs to reduce method length.
+
+    Args:
+        kb_to_use: Knowledge base instance.
+        tracker: Import tracker instance.
+        autobot_base_path: Base path of the AutoBot project.
+        doc_files: List of doc file paths to process.
+
+    Returns:
+        Tuple of (items_added, items_skipped, items_failed).
+    """
     items_added = 0
     items_skipped = 0
     items_failed = 0
-
-    # Recursively find all .md files in docs/ folder ONLY
-    # AutoBot documentation should ONLY include files from docs/ folder
-    # Root files like CLAUDE.md, README.md are NOT documentation
-    docs_path = autobot_base_path / "docs"
-    # Issue #358 - avoid blocking
-    if await asyncio.to_thread(docs_path.exists):
-        # Issue #358 - use lambda to defer rglob to thread
-        md_files = await asyncio.to_thread(lambda: list(docs_path.rglob("*.md")))
-        for md_file in md_files:
-            rel_path = md_file.relative_to(autobot_base_path)
-            # Skip if already imported and unchanged (unless force reindex)
-            if not force_reindex and not tracker.needs_reimport(str(md_file)):
-                logger.info(f"Skipping unchanged file: {rel_path}")
-                items_skipped += 1
-                continue
-            doc_files.append(str(rel_path))
 
     for doc_file in doc_files:
         try:
@@ -905,28 +853,62 @@ async def populate_autobot_docs(request: dict, req: Request):
             tracker.mark_failed(str(autobot_base_path / doc_file), str(e))
             logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
 
-        # Small delay between files
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-    # Add AutoBot configuration information (Issue #281: uses extracted helper)
-    if await _store_autobot_config_info(kb_to_use):
-        items_added += 1
+    return items_added, items_skipped, items_failed
 
-    logger.info(
-        f"AutoBot documentation population completed. Added {items_added} documents "
-        f"({items_skipped} skipped, {items_failed} failed)."
-    )
 
+def _build_population_response(
+    items_added: int, items_skipped: int, items_failed: int,
+    doc_count: int, force_reindex: bool
+) -> dict:
+    """Build response dict for populate_autobot_docs. Issue #398: Extracted helper."""
     mode = "Force reindex" if force_reindex else "Incremental update"
     return {
         "status": "success",
-        "message": (
-            f"{mode}: Successfully imported {items_added} AutoBot documents "
-            f"({items_skipped} skipped, {items_failed} failed)"
-        ),
+        "message": f"{mode}: Successfully imported {items_added} AutoBot documents "
+                   f"({items_skipped} skipped, {items_failed} failed)",
         "items_added": items_added,
         "items_skipped": items_skipped,
         "items_failed": items_failed,
-        "total_files": len(doc_files) + 1,  # +1 for config info
+        "total_files": doc_count + 1,
         "force_reindex": force_reindex,
     }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="populate_autobot_docs",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/populate_autobot_docs")
+async def populate_autobot_docs(request: dict, req: Request):
+    """
+    Populate knowledge base with AutoBot-specific documentation.
+
+    Issue #281: Refactored from 145 lines to use extracted helper method.
+    Issue #398: Further refactored to extract scanning, processing, and response logic.
+    """
+    from backend.models.knowledge_import_tracking import ImportTracker
+
+    force_reindex = request.get("force", False) if request else False
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb_to_use is None:
+        return {"status": "error", "message": "Knowledge base not initialized", "items_added": 0}
+
+    logger.info("Starting AutoBot documentation population with import tracking...")
+
+    tracker = ImportTracker()
+    autobot_base_path = PathLib(__file__).parent.parent.parent
+
+    doc_files, scan_skipped = await _scan_doc_files(autobot_base_path, tracker, force_reindex)
+    items_added, proc_skipped, items_failed = await _process_all_doc_files(
+        kb_to_use, tracker, autobot_base_path, doc_files
+    )
+    items_skipped = scan_skipped + proc_skipped
+
+    if await _store_autobot_config_info(kb_to_use):
+        items_added += 1
+
+    logger.info(f"AutoBot docs completed: {items_added} added, {items_skipped} skipped, {items_failed} failed")
+    return _build_population_response(items_added, items_skipped, items_failed, len(doc_files), force_reindex)
