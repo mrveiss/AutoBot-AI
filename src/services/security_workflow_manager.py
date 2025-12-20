@@ -702,33 +702,53 @@ class SecurityWorkflowManager:
             f"to {host_ip} in assessment {assessment_id}"
         )
 
-        # Create Memory MCP entities
-        try:
-            memory = await _get_memory_integration()
-            if memory:
-                # Create host entity if new
-                if is_new_host:
-                    await memory.create_host_entity(
-                        assessment_id=assessment_id,
-                        ip=host_ip,
-                        status="up",
-                    )
-
-                # Create service entity for identified services
-                if service and state == "open":
-                    await memory.create_service_entity(
-                        assessment_id=assessment_id,
-                        host_ip=host_ip,
-                        port=port,
-                        protocol=protocol,
-                        service_name=service,
-                        version=version,
-                        product=product,
-                    )
-        except Exception as e:
-            logger.warning(f"Failed to create service entity in Memory MCP: {e}")
+        # Issue #398: Create Memory MCP entities (uses extracted helper)
+        await self._create_port_memory_entity(
+            assessment_id, host_ip, is_new_host, port, protocol, state,
+            service, version, product
+        )
 
         return assessment
+
+    async def _create_port_memory_entity(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        is_new_host: bool,
+        port: int,
+        protocol: str,
+        state: str,
+        service: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+    ) -> None:
+        """Create Memory MCP entities for port discovery (Issue #398: extracted)."""
+        try:
+            memory = await _get_memory_integration()
+            if not memory:
+                return
+
+            # Create host entity if new
+            if is_new_host:
+                await memory.create_host_entity(
+                    assessment_id=assessment_id,
+                    ip=host_ip,
+                    status="up",
+                )
+
+            # Create service entity for identified services
+            if service and state == "open":
+                await memory.create_service_entity(
+                    assessment_id=assessment_id,
+                    host_ip=host_ip,
+                    port=port,
+                    protocol=protocol,
+                    service_name=service,
+                    version=version,
+                    product=product,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to create service entity in Memory MCP: {e}")
 
     async def add_vulnerability(
         self,
@@ -799,38 +819,61 @@ class SecurityWorkflowManager:
             f"in assessment {assessment_id}"
         )
 
-        # Create Memory MCP entities
-        try:
-            memory = await _get_memory_integration()
-            if memory:
-                # Create host entity if new
-                if is_new_host:
-                    await memory.create_host_entity(
-                        assessment_id=assessment_id,
-                        ip=host_ip,
-                        status="up",
-                    )
-
-                # Issue #319: Use request object to reduce parameter count
-                from src.services.security_memory_integration import VulnerabilityRequest
-
-                vuln_request = VulnerabilityRequest(
-                    assessment_id=assessment_id,
-                    host_ip=host_ip,
-                    cve_id=cve_id,
-                    title=title,
-                    severity=severity,
-                    description=description,
-                    affected_port=affected_port,
-                    affected_service=affected_service,
-                    references=references,
-                    metadata=metadata,
-                )
-                await memory.create_vulnerability_entity(request=vuln_request)
-        except Exception as e:
-            logger.warning(f"Failed to create vulnerability entity in Memory MCP: {e}")
+        # Issue #398: Create Memory MCP entities (uses extracted helper)
+        await self._create_vulnerability_memory_entity(
+            assessment_id, host_ip, is_new_host, cve_id, title,
+            severity, description, affected_port, affected_service,
+            references, metadata
+        )
 
         return assessment
+
+    async def _create_vulnerability_memory_entity(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        is_new_host: bool,
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        references: Optional[list[str]],
+        metadata: Optional[dict[str, Any]],
+    ) -> None:
+        """Create Memory MCP entities for vulnerability (Issue #398: extracted)."""
+        try:
+            memory = await _get_memory_integration()
+            if not memory:
+                return
+
+            # Create host entity if new
+            if is_new_host:
+                await memory.create_host_entity(
+                    assessment_id=assessment_id,
+                    ip=host_ip,
+                    status="up",
+                )
+
+            # Issue #319: Use request object to reduce parameter count
+            from src.services.security_memory_integration import VulnerabilityRequest
+
+            vuln_request = VulnerabilityRequest(
+                assessment_id=assessment_id,
+                host_ip=host_ip,
+                cve_id=cve_id,
+                title=title,
+                severity=severity,
+                description=description,
+                affected_port=affected_port,
+                affected_service=affected_service,
+                references=references,
+                metadata=metadata,
+            )
+            await memory.create_vulnerability_entity(request=vuln_request)
+        except Exception as e:
+            logger.warning(f"Failed to create vulnerability entity in Memory MCP: {e}")
 
     async def add_finding(
         self,
