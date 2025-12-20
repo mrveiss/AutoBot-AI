@@ -209,79 +209,98 @@ class MultiModalPerformanceMonitor:
             logger.error(f"Failed to enable mixed precision: {e}")
             return False
 
-    async def monitor_processing_performance(self) -> Dict[str, Any]:
-        """Monitor comprehensive processing performance metrics (thread-safe).
+    def _emit_prometheus_metrics(
+        self, cpu_percent: float, memory_percent: float, gpu_stats: Dict[str, Any]
+    ) -> None:
+        """
+        Emit Prometheus system and GPU metrics.
 
-        Issue #473: Now also emits Prometheus metrics for system/GPU monitoring.
+        (Issue #398: extracted helper, Issue #473: Prometheus integration)
+        """
+        _metrics.update_system_cpu(cpu_percent)
+        _metrics.update_system_memory(memory_percent)
+
+        if gpu_stats and self.gpu_available:
+            _metrics.set_gpu_available(True)
+            _metrics.update_gpu_metrics(
+                gpu_id="0",
+                gpu_name=gpu_stats.get("device_name", "Unknown GPU"),
+                utilization=gpu_stats.get("utilization_percent", 0),
+                memory_utilization=gpu_stats.get("utilization_percent", 0),
+                temperature=0,
+                power_watts=0,
+            )
+
+    def _build_performance_metrics(
+        self,
+        timestamp: float,
+        gpu_stats: Dict[str, Any],
+        cpu_percent: float,
+        memory,
+        processing_stats: Dict[str, Any],
+        throughput_stats: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build the complete performance metrics dictionary.
+
+        (Issue #398: extracted helper)
+        """
+        with self._lock:
+            batch_sizes_copy = self.batch_sizes.copy()
+            last_optimization = self.last_optimization
+
+        return {
+            "timestamp": timestamp,
+            "gpu_available": self.gpu_available,
+            "gpu_stats": gpu_stats,
+            "cpu_utilization": cpu_percent,
+            "ram_usage": {
+                "used_mb": memory.used / 1024 / 1024,
+                "available_mb": memory.available / 1024 / 1024,
+                "percent": memory.percent,
+            },
+            "processing_times": processing_stats,
+            "throughput": throughput_stats,
+            "batch_sizes": batch_sizes_copy,
+            "optimization_status": {
+                "last_optimization": last_optimization,
+                "time_since_optimization": timestamp - last_optimization,
+                "needs_optimization": (
+                    timestamp - last_optimization > self.optimization_interval
+                ),
+            },
+        }
+
+    async def monitor_processing_performance(self) -> Dict[str, Any]:
+        """
+        Monitor comprehensive processing performance metrics (thread-safe).
+
+        (Issue #398: refactored to use extracted helpers)
+        Issue #473: Also emits Prometheus metrics for system/GPU monitoring.
         """
         try:
             timestamp = time.time()
-
-            # GPU metrics
             gpu_stats = self._get_gpu_stats() if self.gpu_available else {}
-
-            # CPU and system metrics
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
 
-            # Issue #473: Emit Prometheus system metrics
-            _metrics.update_system_cpu(cpu_percent)
-            _metrics.update_system_memory(memory.percent)
+            self._emit_prometheus_metrics(cpu_percent, memory.percent, gpu_stats)
 
-            # Issue #473: Emit GPU metrics to Prometheus if available
-            if gpu_stats and self.gpu_available:
-                _metrics.set_gpu_available(True)
-                _metrics.update_gpu_metrics(
-                    gpu_id="0",
-                    gpu_name=gpu_stats.get("device_name", "Unknown GPU"),
-                    utilization=gpu_stats.get("utilization_percent", 0),
-                    memory_utilization=gpu_stats.get("utilization_percent", 0),
-                    temperature=0,  # Not available from torch
-                    power_watts=0,  # Not available from torch
-                )
-
-            # Processing time statistics (uses lock internally)
             processing_stats = self._get_processing_time_stats()
-
-            # Throughput calculations (uses lock internally)
             throughput_stats = self._calculate_throughput()
 
-            # Get shared state under lock
-            with self._lock:
-                batch_sizes_copy = self.batch_sizes.copy()
-                last_optimization = self.last_optimization
+            metrics = self._build_performance_metrics(
+                timestamp, gpu_stats, cpu_percent, memory,
+                processing_stats, throughput_stats
+            )
 
-            # Create performance metrics
-            metrics = {
-                "timestamp": timestamp,
-                "gpu_available": self.gpu_available,
-                "gpu_stats": gpu_stats,
-                "cpu_utilization": cpu_percent,
-                "ram_usage": {
-                    "used_mb": memory.used / 1024 / 1024,
-                    "available_mb": memory.available / 1024 / 1024,
-                    "percent": memory.percent,
-                },
-                "processing_times": processing_stats,
-                "throughput": throughput_stats,
-                "batch_sizes": batch_sizes_copy,
-                "optimization_status": {
-                    "last_optimization": last_optimization,
-                    "time_since_optimization": timestamp - last_optimization,
-                    "needs_optimization": (
-                        timestamp - last_optimization > self.optimization_interval
-                    ),
-                },
-            }
-
-            # Store in history under lock
             with self._lock:
                 self.metrics_history.append(metrics)
 
             return metrics
 
         except Exception as e:
-            logger.error(f"Performance monitoring failed: {e}")
+            logger.error("Performance monitoring failed: %s", e)
             return {"error": str(e), "timestamp": time.time()}
 
     def _get_gpu_stats(self) -> Dict[str, Any]:
