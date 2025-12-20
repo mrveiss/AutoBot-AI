@@ -79,59 +79,36 @@ async def _count_scannable_files(root_path_obj: Path) -> int:
     return total_files
 
 
-async def _get_file_analysis(
-    file_path: Path, extension: str, stats: dict
-) -> Optional[dict]:
+# Issue #398: File type mapping for cleaner dispatch in _get_file_analysis
+_FILE_TYPE_MAP = [
+    (PYTHON_EXTENSIONS, "python_files", "python"),
+    (JS_EXTENSIONS, "javascript_files", "js"),
+    (TS_EXTENSIONS, "typescript_files", "js"),
+    (VUE_EXTENSIONS, "vue_files", "js"),
+    (CSS_EXTENSIONS, "css_files", "js"),
+    (HTML_EXTENSIONS, "html_files", "js"),
+    (CONFIG_EXTENSIONS, "config_files", None),
+    (DOC_EXTENSIONS, "doc_files", "doc"),
+    (ALL_CODE_EXTENSIONS, "other_code_files", "js"),
+]
+
+
+async def _get_file_analysis(file_path: Path, extension: str, stats: dict) -> Optional[dict]:
     """
     Get analysis for a file based on its type.
 
-    Issue #315, #367: Supports multiple file types including Python, JS/TS,
-    Vue, CSS, HTML, and documentation files.
+    Issue #315, #367, #398: Refactored with mapping table for reduced complexity.
     """
-    # Python files - full AST analysis
-    if extension in PYTHON_EXTENSIONS:
-        stats["python_files"] += 1
-        return await analyze_python_file(str(file_path))
-
-    # JavaScript files
-    if extension in JS_EXTENSIONS:
-        stats["javascript_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
-
-    # TypeScript files
-    if extension in TS_EXTENSIONS:
-        stats["typescript_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
-
-    # Vue single-file components
-    if extension in VUE_EXTENSIONS:
-        stats["vue_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
-
-    # CSS/SCSS/SASS/Less files - use JS analyzer for basic analysis
-    if extension in CSS_EXTENSIONS:
-        stats["css_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
-
-    # HTML files - use JS analyzer for basic analysis
-    if extension in HTML_EXTENSIONS:
-        stats["html_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
-
-    # Configuration files - track but no deep analysis
-    if extension in CONFIG_EXTENSIONS:
-        stats["config_files"] += 1
-        return None
-
-    # Documentation files - markdown analysis
-    if extension in DOC_EXTENSIONS:
-        stats["doc_files"] += 1
-        return analyze_documentation_file(str(file_path))
-
-    # Other code files - basic analysis
-    if extension in ALL_CODE_EXTENSIONS:
-        stats["other_code_files"] += 1
-        return analyze_javascript_vue_file(str(file_path))
+    for ext_set, stat_key, analyzer_type in _FILE_TYPE_MAP:
+        if extension in ext_set:
+            stats[stat_key] += 1
+            if analyzer_type == "python":
+                return await analyze_python_file(str(file_path))
+            elif analyzer_type == "js":
+                return analyze_javascript_vue_file(str(file_path))
+            elif analyzer_type == "doc":
+                return analyze_documentation_file(str(file_path))
+            return None
 
     stats["other_files"] += 1
     return None
@@ -202,24 +179,15 @@ Suggestion: {problem.get('suggestion', '')}
         logger.debug(f"Failed to store problem immediately: {e}")
 
 
-async def _store_problems_batch_to_chromadb(
-    collection,
-    problems: list,
-    start_idx: int,
-) -> None:
-    """Store multiple problems to ChromaDB collection in a single batch operation."""
-    if not collection or not problems:
-        return
+def _prepare_problem_document(problem: Dict, problem_idx: int) -> tuple:
+    """
+    Prepare a problem document for ChromaDB storage.
 
-    try:
-        ids = []
-        documents = []
-        metadatas = []
-
-        for i, problem in enumerate(problems):
-            problem_idx = start_idx + i
-            file_category = problem.get("file_category", FILE_CATEGORY_CODE)
-            problem_doc = f"""
+    Issue #398: Extracted from _store_problems_batch_to_chromadb.
+    Returns tuple of (id, document, metadata).
+    """
+    file_category = problem.get("file_category", FILE_CATEGORY_CODE)
+    problem_doc = f"""
 Problem: {problem.get('type', 'unknown')}
 Severity: {problem.get('severity', 'medium')}
 File: {problem.get('file_path', '')}
@@ -227,93 +195,99 @@ Category: {file_category}
 Line: {problem.get('line', 0)}
 Description: {problem.get('description', '')}
 Suggestion: {problem.get('suggestion', '')}
-            """.strip()
+    """.strip()
 
-            metadata = {
-                "type": "problem",
-                "problem_type": problem.get("type", "unknown"),
-                "severity": problem.get("severity", "medium"),
-                "file_path": problem.get("file_path", ""),
-                "file_category": file_category,
-                "line_number": str(problem.get("line", 0)),
-                "description": problem.get("description", ""),
-                "suggestion": problem.get("suggestion", ""),
-            }
+    metadata = {
+        "type": "problem",
+        "problem_type": problem.get("type", "unknown"),
+        "severity": problem.get("severity", "medium"),
+        "file_path": problem.get("file_path", ""),
+        "file_category": file_category,
+        "line_number": str(problem.get("line", 0)),
+        "description": problem.get("description", ""),
+        "suggestion": problem.get("suggestion", ""),
+    }
 
-            ids.append(f"problem_{problem_idx}_{problem.get('type', 'unknown')}")
+    doc_id = f"problem_{problem_idx}_{problem.get('type', 'unknown')}"
+    return doc_id, problem_doc, metadata
+
+
+async def _store_problems_batch_to_chromadb(collection, problems: list, start_idx: int) -> None:
+    """Store multiple problems to ChromaDB collection in batch (Issue #398: refactored)."""
+    if not collection or not problems:
+        return
+
+    try:
+        ids, documents, metadatas = [], [], []
+        for i, problem in enumerate(problems):
+            doc_id, problem_doc, metadata = _prepare_problem_document(problem, start_idx + i)
+            ids.append(doc_id)
             documents.append(problem_doc)
             metadatas.append(metadata)
 
-        # Single batch operation instead of N individual calls
-        # Issue #388: Use direct await for async collections (AsyncChromaCollection)
-        await collection.add(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas,
-        )
+        await collection.add(ids=ids, documents=documents, metadatas=metadatas)
         logger.debug(f"Batch stored {len(problems)} problems to ChromaDB")
     except Exception as e:
         logger.debug(f"Failed to batch store problems: {e}")
 
 
+def _aggregate_stats_for_countable(stats: Dict, file_analysis: Dict, file_line_count: int) -> None:
+    """
+    Aggregate stats for countable file categories (code/config/test).
+
+    Issue #398: Extracted from _aggregate_file_analysis to reduce method length.
+    """
+    stats["total_lines"] += file_line_count
+    stats["total_functions"] += len(file_analysis.get("functions", []))
+    stats["total_classes"] += len(file_analysis.get("classes", []))
+    stats["code_lines"] += file_analysis.get("code_lines", 0)
+    stats["comment_lines"] += file_analysis.get("comment_lines", 0)
+    stats["docstring_lines"] += file_analysis.get("docstring_lines", 0)
+    stats["blank_lines"] += file_analysis.get("blank_lines", 0)
+
+
+def _aggregate_items_to_list(
+    items: List[Dict], target_list: list, relative_path: str, file_category: str
+) -> None:
+    """
+    Add file_path and file_category to items and append to target list.
+
+    Issue #398: Extracted from _aggregate_file_analysis to reduce method length.
+    """
+    for item in items:
+        item["file_path"] = relative_path
+        item["file_category"] = file_category
+        target_list.append(item)
+
+
 def _aggregate_file_analysis(
-    analysis_results: Dict,
-    file_analysis: Dict,
-    relative_path: str,
+    analysis_results: Dict, file_analysis: Dict, relative_path: str,
     file_category: str = FILE_CATEGORY_CODE,
 ) -> None:
     """
     Aggregate file analysis results into main results dict.
 
-    Args:
-        analysis_results: Main results dictionary to update
-        file_analysis: Analysis results from a single file
-        relative_path: Relative path of the file
-        file_category: Category of the file (code, docs, logs, backup, archive)
-
-    Note: docs/logs files are tracked but don't count toward code line metrics.
-          backup/archive files are tracked separately for problem reporting.
+    Issue #398: Refactored with extracted helpers.
     """
     analysis_results["files"][relative_path] = file_analysis
     file_line_count = file_analysis.get("line_count", 0)
+    stats = analysis_results["stats"]
 
-    # Track lines by category
-    analysis_results["stats"]["lines_by_category"][file_category] += file_line_count
-    analysis_results["stats"]["files_by_category"][file_category] += 1
+    stats["lines_by_category"][file_category] += file_line_count
+    stats["files_by_category"][file_category] += 1
 
-    # Only count code/config/test files toward main line metrics (not docs/logs)
-    is_countable = file_category in (
-        FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST
-    )
-
+    is_countable = file_category in (FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST)
     if is_countable:
-        analysis_results["stats"]["total_lines"] += file_line_count
-        analysis_results["stats"]["total_functions"] += len(file_analysis.get("functions", []))
-        analysis_results["stats"]["total_classes"] += len(file_analysis.get("classes", []))
+        _aggregate_stats_for_countable(stats, file_analysis, file_line_count)
 
-        # Aggregate line type counts (Issue #368) - only for code files
-        analysis_results["stats"]["code_lines"] += file_analysis.get("code_lines", 0)
-        analysis_results["stats"]["comment_lines"] += file_analysis.get("comment_lines", 0)
-        analysis_results["stats"]["docstring_lines"] += file_analysis.get("docstring_lines", 0)
-        analysis_results["stats"]["blank_lines"] += file_analysis.get("blank_lines", 0)
+    stats["documentation_lines"] += file_analysis.get("documentation_lines", 0)
 
-    # Aggregate documentation lines (Issue #367) - always track for reference
-    analysis_results["stats"]["documentation_lines"] += file_analysis.get("documentation_lines", 0)
-
-    for func in file_analysis.get("functions", []):
-        func["file_path"] = relative_path
-        func["file_category"] = file_category
-        analysis_results["all_functions"].append(func)
-
-    for cls in file_analysis.get("classes", []):
-        cls["file_path"] = relative_path
-        cls["file_category"] = file_category
-        analysis_results["all_classes"].append(cls)
-
-    for hardcode in file_analysis.get("hardcodes", []):
-        hardcode["file_path"] = relative_path
-        hardcode["file_category"] = file_category
-        analysis_results["all_hardcodes"].append(hardcode)
+    all_funcs = analysis_results["all_functions"]
+    all_cls = analysis_results["all_classes"]
+    all_hc = analysis_results["all_hardcodes"]
+    _aggregate_items_to_list(file_analysis.get("functions", []), all_funcs, relative_path, file_category)
+    _aggregate_items_to_list(file_analysis.get("classes", []), all_cls, relative_path, file_category)
+    _aggregate_items_to_list(file_analysis.get("hardcodes", []), all_hc, relative_path, file_category)
 
 
 async def _process_file_problems(
@@ -406,62 +380,62 @@ def _create_initial_task_state() -> Dict:
     }
 
 
-async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
-    """Initialize and clear ChromaDB collection and Redis cache (Issue #281: extracted)."""
-    update_phase("init", "running")
-    await update_progress(
-        operation="Preparing storage",
-        current=0,
-        total=2,
-        current_file="Clearing old cached data...",
-        phase="init",
-    )
+async def _clear_redis_codebase_cache(task_id: str) -> None:
+    """
+    Clear Redis cache entries for codebase data.
 
-    # Clear Redis cache first to ensure fresh data
+    Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
+    """
     try:
         from .storage import get_redis_connection
         redis_client = await get_redis_connection()
         if redis_client:
-            keys_to_delete = []
-            for key in redis_client.scan_iter(match="codebase:*"):
-                keys_to_delete.append(key)
+            keys_to_delete = [key for key in redis_client.scan_iter(match="codebase:*")]
             if keys_to_delete:
                 redis_client.delete(*keys_to_delete)
-                logger.info(
-                    f"[Task {task_id}] Cleared {len(keys_to_delete)} Redis cache entries"
-                )
+                logger.info(f"[Task {task_id}] Cleared {len(keys_to_delete)} Redis cache entries")
     except Exception as e:
         logger.warning(f"[Task {task_id}] Error clearing Redis cache: {e}")
 
+
+async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
+    """
+    Clear existing entries from ChromaDB collection.
+
+    Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
+    """
+    try:
+        existing_data = await code_collection.get()
+        existing_ids = existing_data["ids"]
+        if existing_ids:
+            await code_collection.delete(ids=existing_ids)
+            logger.info(f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB")
+    except Exception as e:
+        logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
+
+
+async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
+    """Initialize and clear ChromaDB collection and Redis cache (Issue #281, #398: refactored)."""
+    update_phase("init", "running")
     await update_progress(
-        operation="Preparing ChromaDB",
-        current=1,
-        total=2,
-        current_file="Connecting to ChromaDB...",
-        phase="init",
+        operation="Preparing storage", current=0, total=2,
+        current_file="Clearing old cached data...", phase="init",
+    )
+
+    await _clear_redis_codebase_cache(task_id)
+
+    await update_progress(
+        operation="Preparing ChromaDB", current=1, total=2,
+        current_file="Connecting to ChromaDB...", phase="init",
     )
 
     code_collection = await get_code_collection_async()
-
     if code_collection:
         await update_progress(
-            operation="Clearing old ChromaDB data",
-            current=1,
-            total=2,
-            current_file="Removing existing entries...",
-            phase="init",
+            operation="Clearing old ChromaDB data", current=1, total=2,
+            current_file="Removing existing entries...", phase="init",
         )
-
-        try:
-            existing_data = await code_collection.get()
-            existing_ids = existing_data["ids"]
-            if existing_ids:
-                await code_collection.delete(ids=existing_ids)
-                logger.info(
-                    f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB"
-                )
-        except Exception as e:
-            logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
+        await _clear_chromadb_collection(code_collection, task_id)
 
     return code_collection
 
@@ -520,7 +494,6 @@ def _prepare_stats_document(analysis_results: Dict) -> tuple:
 
     # Get category counts for document
     lines_by_cat = stats.get("lines_by_category", {})
-    files_by_cat = stats.get("files_by_category", {})
 
     stats_doc = f"""
 Codebase Statistics:
@@ -548,36 +521,24 @@ Last Indexed: {stats['last_indexed']}
     return "codebase_stats", stats_doc, metadata
 
 
-async def _prepare_batch_data(
-    analysis_results: Dict,
-    task_id: str,
+async def _prepare_functions_batch(
+    functions: List[Dict],
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
     update_progress,
-    update_phase,
-) -> tuple:
-    """Prepare all batch data for ChromaDB storage (Issue #281: extracted)."""
-    update_phase("prepare", "running")
+    total_items: int,
+) -> int:
+    """
+    Prepare function documents for batch storage.
 
-    batch_ids = []
-    batch_documents = []
-    batch_metadatas = []
+    Issue #398: Extracted from _prepare_batch_data to reduce method length.
 
-    total_items_to_store = (
-        len(analysis_results["all_functions"])
-        + len(analysis_results["all_classes"])
-        + 1  # stats
-    )
+    Returns:
+        Number of items prepared.
+    """
     items_prepared = 0
-
-    await update_progress(
-        operation="Preparing functions",
-        current=0,
-        total=total_items_to_store,
-        current_file="Processing functions...",
-        phase="prepare",
-    )
-
-    # Prepare functions
-    for idx, func in enumerate(analysis_results["all_functions"]):
+    for idx, func in enumerate(functions):
         doc_id, doc_text, metadata = _prepare_function_document(func, idx)
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
@@ -588,19 +549,31 @@ async def _prepare_batch_data(
             await update_progress(
                 operation="Storing functions",
                 current=items_prepared,
-                total=total_items_to_store,
-                current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}",
+                total=total_items,
+                current_file=f"Function {idx+1}/{len(functions)}",
             )
+    return items_prepared
 
-    # Prepare classes
-    await update_progress(
-        operation="Storing classes",
-        current=items_prepared,
-        total=total_items_to_store,
-        current_file="Processing classes...",
-    )
 
-    for idx, cls in enumerate(analysis_results["all_classes"]):
+async def _prepare_classes_batch(
+    classes: List[Dict],
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    update_progress,
+    total_items: int,
+    items_offset: int,
+) -> int:
+    """
+    Prepare class documents for batch storage.
+
+    Issue #398: Extracted from _prepare_batch_data to reduce method length.
+
+    Returns:
+        Number of items prepared (including offset).
+    """
+    items_prepared = items_offset
+    for idx, cls in enumerate(classes):
         doc_id, doc_text, metadata = _prepare_class_document(cls, idx)
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
@@ -611,85 +584,120 @@ async def _prepare_batch_data(
             await update_progress(
                 operation="Storing classes",
                 current=items_prepared,
-                total=total_items_to_store,
-                current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}",
+                total=total_items,
+                current_file=f"Class {idx+1}/{len(classes)}",
             )
+    return items_prepared
 
-    # Prepare stats
+
+async def _prepare_batch_data(
+    analysis_results: Dict,
+    task_id: str,
+    update_progress,
+    update_phase,
+) -> tuple:
+    """Prepare all batch data for ChromaDB storage (Issue #281, #398: refactored)."""
+    update_phase("prepare", "running")
+
+    batch_ids = []
+    batch_documents = []
+    batch_metadatas = []
+
+    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + 1
+
+    await update_progress(
+        operation="Preparing functions", current=0, total=total_items,
+        current_file="Processing functions...", phase="prepare",
+    )
+
+    items_prepared = await _prepare_functions_batch(
+        analysis_results["all_functions"], batch_ids, batch_documents, batch_metadatas, update_progress, total_items
+    )
+
+    await update_progress(
+        operation="Storing classes", current=items_prepared, total=total_items, current_file="Processing classes..."
+    )
+
+    all_classes = analysis_results["all_classes"]
+    await _prepare_classes_batch(
+        all_classes, batch_ids, batch_documents, batch_metadatas,
+        update_progress, total_items, items_prepared
+    )
+
     stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results)
     batch_ids.append(stats_id)
     batch_documents.append(stats_doc)
     batch_metadatas.append(stats_meta)
 
     update_phase("prepare", "completed")
-
     return batch_ids, batch_documents, batch_metadatas
 
 
-async def _store_batches_to_chromadb(
-    code_collection,
-    batch_ids: list,
-    batch_documents: list,
-    batch_metadatas: list,
-    task_id: str,
-    update_progress,
-    update_phase,
-    update_batch_info,
-    update_stats,
+async def _store_single_batch(
+    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
+    start_idx: int, batch_size: int, batch_num: int, total_batches: int, total_items: int,
+    task_id: str, update_progress, update_stats,
 ) -> int:
-    """Store prepared data to ChromaDB in batches (Issue #281: extracted)."""
+    """
+    Store a single batch to ChromaDB.
+
+    Issue #398: Extracted from _store_batches_to_chromadb to reduce method length.
+
+    Returns:
+        Number of items stored in this batch.
+    """
+    end_idx = min(start_idx + batch_size, len(batch_ids))
+    batch_slice_ids = batch_ids[start_idx:end_idx]
+    batch_slice_docs = batch_documents[start_idx:end_idx]
+    batch_slice_metas = batch_metadatas[start_idx:end_idx]
+
+    await code_collection.add(ids=batch_slice_ids, documents=batch_slice_docs, metadatas=batch_slice_metas)
+    items_in_batch = len(batch_slice_ids)
+
+    indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
+
+    await update_progress(
+        operation="Writing to ChromaDB", current=end_idx, total=total_items,
+        current_file=f"Batch {batch_num}/{total_batches}", phase="store",
+        batch_info={"current": batch_num, "total": total_batches, "items": items_in_batch}
+    )
+    update_stats(items_stored=end_idx)
+
+    logger.info(
+        f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
+        f"{items_in_batch} items ({end_idx}/{total_items})"
+    )
+    return items_in_batch
+
+
+async def _store_batches_to_chromadb(
+    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
+    task_id: str, update_progress, update_phase, update_batch_info, update_stats,
+) -> int:
+    """Store prepared data to ChromaDB in batches (Issue #281, #398: refactored)."""
     update_phase("store", "running")
 
     BATCH_SIZE = 5000
     total_items = len(batch_ids)
-    items_stored = 0
     total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
 
     update_batch_info(0, total_batches, 0)
-
     await update_progress(
-        operation="Writing to ChromaDB",
-        current=0,
-        total=total_items,
-        current_file="Batch storage in progress...",
-        phase="store",
+        operation="Writing to ChromaDB", current=0, total=total_items,
+        current_file="Batch storage in progress...", phase="store",
         batch_info={"current": 0, "total": total_batches, "items": 0}
     )
 
+    items_stored = 0
     for i in range(0, total_items, BATCH_SIZE):
-        batch_slice_ids = batch_ids[i : i + BATCH_SIZE]
-        batch_slice_docs = batch_documents[i : i + BATCH_SIZE]
-        batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
         batch_num = i // BATCH_SIZE + 1
-
-        await code_collection.add(
-            ids=batch_slice_ids,
-            documents=batch_slice_docs,
-            metadatas=batch_slice_metas,
-        )
-        items_stored += len(batch_slice_ids)
-
-        indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
-
-        await update_progress(
-            operation="Writing to ChromaDB",
-            current=items_stored,
-            total=total_items,
-            current_file=f"Batch {batch_num}/{total_batches}",
-            phase="store",
-            batch_info={"current": batch_num, "total": total_batches, "items": len(batch_slice_ids)}
-        )
-
-        update_stats(items_stored=items_stored)
-
-        logger.info(
-            f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
-            f"{len(batch_slice_ids)} items ({items_stored}/{total_items})"
+        items_stored += await _store_single_batch(
+            code_collection, batch_ids, batch_documents, batch_metadatas,
+            i, BATCH_SIZE, batch_num, total_batches, total_items, task_id, update_progress, update_stats
         )
 
     update_phase("store", "completed")
     logger.info(f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB")
-
     return items_stored
 
 
@@ -869,6 +877,69 @@ def _calculate_analysis_statistics(analysis_results: Dict) -> None:
 # =============================================================================
 
 
+async def _process_single_file(
+    file_path: Path,
+    root_path_obj: Path,
+    analysis_results: Dict,
+    immediate_store_collection,
+) -> bool:
+    """
+    Process a single file during codebase scan.
+
+    Issue #398: Extracted from scan_codebase to reduce method length.
+
+    Returns:
+        True if file was processed, False if skipped.
+    """
+    is_file = await asyncio.to_thread(file_path.is_file)
+    if not is_file:
+        return False
+    if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+        return False
+
+    extension = file_path.suffix.lower()
+    relative_path = str(file_path.relative_to(root_path_obj))
+    file_category = _get_file_category(file_path)
+
+    analysis_results["stats"]["total_files"] += 1
+
+    file_analysis = await _get_file_analysis(file_path, extension, analysis_results["stats"])
+    if not file_analysis:
+        return True
+
+    _aggregate_file_analysis(analysis_results, file_analysis, relative_path, file_category)
+    await _process_file_problems(
+        file_analysis, relative_path, analysis_results, immediate_store_collection, file_category
+    )
+    return True
+
+
+async def _iterate_and_process_files(
+    all_files: list, root_path_obj: Path, analysis_results: Dict,
+    immediate_store_collection, progress_callback, total_files: int
+) -> None:
+    """
+    Iterate through files and process each one.
+
+    Issue #398: Extracted from scan_codebase to reduce method length.
+    """
+    files_processed = 0
+    for file_path in all_files:
+        processed = await _process_single_file(
+            file_path, root_path_obj, analysis_results, immediate_store_collection
+        )
+        if processed:
+            files_processed += 1
+            if progress_callback and files_processed % 10 == 0:
+                relative_path = str(file_path.relative_to(root_path_obj))
+                await progress_callback(
+                    operation="Scanning files", current=files_processed,
+                    total=total_files, current_file=relative_path
+                )
+            elif files_processed % 5 == 0:
+                await asyncio.sleep(0)
+
+
 async def scan_codebase(
     root_path: Optional[str] = None,
     progress_callback: Optional[callable] = None,
@@ -877,85 +948,29 @@ async def scan_codebase(
     """
     Scan the entire codebase using MCP-like file operations.
 
-    Issue #315: Reduced nesting with helper functions.
-    Issue #281: Uses extracted helpers for initialization and statistics.
+    Issue #315, #281, #398: Uses extracted helpers for modular processing.
     """
-    # Use centralized PathConstants (Issue #380)
     if root_path is None:
         root_path = str(PATH.PROJECT_ROOT)
 
-    # Issue #281: Use extracted helper for initialization
     analysis_results = _create_empty_analysis_results()
 
     try:
         root_path_obj = Path(root_path)
-
-        # First pass: count total files for progress tracking (Issue #315: uses helper)
         total_files = 0
         if progress_callback:
             total_files = await _count_scannable_files(root_path_obj)
-            # Report total files discovered
             await progress_callback(
-                operation="Scanning files",
-                current=0,
-                total=total_files,
-                current_file="Initializing...",
+                operation="Scanning files", current=0,
+                total=total_files, current_file="Initializing..."
             )
 
-        # Walk through all files (Issue #315: restructured to reduce nesting)
-        # Issue #358 - avoid blocking (must use lambda to defer rglob execution)
         all_files = await asyncio.to_thread(lambda: list(root_path_obj.rglob("*")))
-        files_processed = 0
-        for file_path in all_files:
-            # Issue #358 - avoid blocking
-            is_file = await asyncio.to_thread(file_path.is_file)
-            if not is_file:
-                continue
-            if any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
-                continue
-
-            extension = file_path.suffix.lower()
-            relative_path = str(file_path.relative_to(root_path_obj))
-
-            # Determine file category for tracking and reporting
-            file_category = _get_file_category(file_path)
-
-            analysis_results["stats"]["total_files"] += 1
-            files_processed += 1
-
-            # Update progress or yield to event loop
-            if progress_callback and files_processed % 10 == 0:
-                await progress_callback(
-                    operation="Scanning files",
-                    current=files_processed,
-                    total=total_files,
-                    current_file=relative_path,
-                )
-            elif files_processed % 5 == 0:
-                await asyncio.sleep(0)
-
-            # Get file analysis using type dispatch (Issue #315)
-            file_analysis = await _get_file_analysis(
-                file_path, extension, analysis_results["stats"]
-            )
-
-            if not file_analysis:
-                continue
-
-            # Aggregate functions, classes, and hardcodes (with category)
-            _aggregate_file_analysis(
-                analysis_results, file_analysis, relative_path, file_category
-            )
-
-            # Process and store problems (with category for separate reporting)
-            await _process_file_problems(
-                file_analysis, relative_path, analysis_results,
-                immediate_store_collection, file_category
-            )
-
-        # Issue #281: Use extracted helper for statistics calculation
+        await _iterate_and_process_files(
+            all_files, root_path_obj, analysis_results,
+            immediate_store_collection, progress_callback, total_files
+        )
         _calculate_analysis_statistics(analysis_results)
-
         return analysis_results
 
     except Exception as e:
@@ -963,164 +978,180 @@ async def scan_codebase(
         raise HTTPException(status_code=500, detail=f"Codebase scan failed: {str(e)}")
 
 
+def _update_task_phase(task_id: str, phase_id: str, status: str) -> None:
+    """
+    Update phase status and track completion in task state.
+
+    Issue #398: Extracted from do_indexing_with_progress inline helper.
+    """
+    phases = indexing_tasks[task_id]["phases"]
+    phases["current_phase"] = phase_id
+    for phase in phases["phase_list"]:
+        if phase["id"] == phase_id:
+            phase["status"] = status
+            if status == "completed" and phase_id not in phases["phases_completed"]:
+                phases["phases_completed"].append(phase_id)
+            break
+
+
+def _update_task_batch_info(
+    task_id: str, current_batch: int, total_batches: int, items_in_batch: int = 0
+) -> None:
+    """
+    Update batch progress tracking for indexing task.
+
+    Issue #398: Extracted from do_indexing_with_progress inline helper.
+    """
+    batches = indexing_tasks[task_id]["batches"]
+    batches["current_batch"] = current_batch
+    batches["total_batches"] = total_batches
+    if items_in_batch > 0 and current_batch > len(batches["items_per_batch"]):
+        batches["items_per_batch"].append(items_in_batch)
+
+
+def _update_task_stats(task_id: str, **kwargs) -> None:
+    """
+    Update task statistics with provided key-value pairs.
+
+    Issue #398: Extracted from do_indexing_with_progress inline helper.
+    """
+    for key, value in kwargs.items():
+        if key in indexing_tasks[task_id]["stats"]:
+            indexing_tasks[task_id]["stats"][key] = value
+
+
+def _mark_task_completed(
+    task_id: str, analysis_results: Dict, hardcodes_stored: int, storage_type: str
+) -> None:
+    """
+    Mark indexing task as completed with results.
+
+    Issue #398: Extracted from do_indexing_with_progress.
+    """
+    indexing_tasks[task_id]["status"] = "completed"
+    total_files = analysis_results["stats"]["total_files"]
+    indexing_tasks[task_id]["result"] = {
+        "status": "success",
+        "message": f"Indexed {total_files} files, found {hardcodes_stored} hardcodes using {storage_type} storage",
+        "stats": analysis_results["stats"],
+        "hardcodes_count": hardcodes_stored,
+        "storage_type": storage_type,
+        "timestamp": datetime.now().isoformat(),
+    }
+    indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+
+
+def _mark_task_failed(task_id: str, error: Exception) -> None:
+    """
+    Mark indexing task as failed with error.
+
+    Issue #398: Extracted from do_indexing_with_progress.
+    """
+    indexing_tasks[task_id]["status"] = "failed"
+    indexing_tasks[task_id]["error"] = str(error)
+    indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+
+
+def _create_progress_updater(task_id: str, update_phase, update_batch_info):
+    """
+    Create a progress update callback for the given task.
+
+    Issue #398: Extracted from do_indexing_with_progress to reduce method length.
+    """
+    async def update_progress(
+        operation: str, current: int, total: int, current_file: str,
+        phase: str = None, batch_info: dict = None
+    ):
+        percent = int((current / total * 100)) if total > 0 else 0
+        indexing_tasks[task_id]["progress"] = {
+            "current": current, "total": total, "percent": percent,
+            "current_file": current_file, "operation": operation,
+        }
+        if phase:
+            update_phase(phase, "running")
+        if batch_info:
+            update_batch_info(batch_info.get("current", 0), batch_info.get("total", 0), batch_info.get("items", 0))
+        logger.debug(f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)")
+    return update_progress
+
+
+async def _run_indexing_phases(
+    task_id: str, root_path: str, update_progress,
+    update_phase, update_batch_info, update_stats
+):
+    """
+    Execute the core indexing phases.
+
+    Issue #398: Extracted from do_indexing_with_progress to reduce method length.
+    """
+    code_collection = await _initialize_chromadb_collection(
+        task_id, update_progress, update_phase
+    )
+    if not code_collection:
+        raise Exception("ChromaDB connection failed")
+
+    update_phase("init", "completed")
+    update_phase("scan", "running")
+
+    analysis_results = await scan_codebase(
+        root_path, progress_callback=update_progress,
+        immediate_store_collection=code_collection
+    )
+
+    update_stats(
+        files_scanned=analysis_results["stats"]["total_files"],
+        problems_found=len(analysis_results["all_problems"]),
+        functions_found=len(analysis_results["all_functions"]),
+        classes_found=len(analysis_results["all_classes"]),
+    )
+    update_phase("scan", "completed")
+
+    batch_ids, batch_documents, batch_metadatas = await _prepare_batch_data(
+        analysis_results, task_id, update_progress, update_phase
+    )
+    if batch_ids:
+        await _store_batches_to_chromadb(
+            code_collection, batch_ids, batch_documents, batch_metadatas,
+            task_id, update_progress, update_phase, update_batch_info, update_stats,
+        )
+
+    hardcodes_stored = await _store_hardcodes_to_redis(analysis_results.get("all_hardcodes", []), task_id)
+    return analysis_results, hardcodes_stored
+
+
 async def do_indexing_with_progress(task_id: str, root_path: str):
     """
     Background task: Index codebase with real-time progress updates.
 
-    Issue #281: Refactored from 397 lines to use extracted helper methods.
-
-    Updates indexing_tasks[task_id] with progress information:
-    - status: "running" | "completed" | "failed"
-    - progress: {current, total, percent, current_file, operation}
-    - result: final results when completed
-    - error: error message if failed
+    Issue #281, #398: Refactored with extracted helpers for reduced complexity.
     """
     try:
-        logger.info(
-            f"[Task {task_id}] Starting background codebase indexing for: {root_path}"
-        )
+        logger.info(f"[Task {task_id}] Starting background codebase indexing for: {root_path}")
 
-        # Initialize task status (Issue #281: uses helper)
         async with _tasks_lock:
             indexing_tasks[task_id] = _create_initial_task_state()
 
-        # Helper to update phase status
-        def update_phase(phase_id: str, status: str):
-            """Update phase status and track completion in task state."""
-            phases = indexing_tasks[task_id]["phases"]
-            phases["current_phase"] = phase_id
-            for phase in phases["phase_list"]:
-                if phase["id"] == phase_id:
-                    phase["status"] = status
-                    if status == "completed" and phase_id not in phases["phases_completed"]:
-                        phases["phases_completed"].append(phase_id)
-                    break
+        # Create task-specific helper closures
+        def update_phase(phase_id, status):
+            _update_task_phase(task_id, phase_id, status)
 
-        # Helper to update batch info
-        def update_batch_info(current_batch: int, total_batches: int, items_in_batch: int = 0):
-            """Update batch progress tracking for indexing task."""
-            batches = indexing_tasks[task_id]["batches"]
-            batches["current_batch"] = current_batch
-            batches["total_batches"] = total_batches
-            if items_in_batch > 0 and current_batch > len(batches["items_per_batch"]):
-                batches["items_per_batch"].append(items_in_batch)
+        def update_batch_info(c, t, i=0):
+            _update_task_batch_info(task_id, c, t, i)
 
-        # Helper to update stats
         def update_stats(**kwargs):
-            """Update task statistics with provided key-value pairs."""
-            for key, value in kwargs.items():
-                if key in indexing_tasks[task_id]["stats"]:
-                    indexing_tasks[task_id]["stats"][key] = value
+            _update_task_stats(task_id, **kwargs)
 
-        # Progress callback function
-        async def update_progress(
-            operation: str, current: int, total: int, current_file: str,
-            phase: str = None, batch_info: dict = None
-        ):
-            """Update indexing task progress with current operation status."""
-            percent = int((current / total * 100)) if total > 0 else 0
-            indexing_tasks[task_id]["progress"] = {
-                "current": current,
-                "total": total,
-                "percent": percent,
-                "current_file": current_file,
-                "operation": operation,
-            }
+        update_progress = _create_progress_updater(task_id, update_phase, update_batch_info)
 
-            if phase:
-                update_phase(phase, "running")
-
-            if batch_info:
-                update_batch_info(
-                    batch_info.get("current", 0),
-                    batch_info.get("total", 0),
-                    batch_info.get("items", 0)
-                )
-
-            logger.debug(
-                f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)"
-            )
-
-        # Initialize ChromaDB collection (Issue #281: uses helper)
-        code_collection = await _initialize_chromadb_collection(
-            task_id, update_progress, update_phase
-        )
-        storage_type = "chromadb" if code_collection else "memory"
-
-        # Mark init phase as completed, start scan phase
-        update_phase("init", "completed")
-        update_phase("scan", "running")
-
-        # Scan the codebase with progress tracking
-        analysis_results = await scan_codebase(
-            root_path,
-            progress_callback=update_progress,
-            immediate_store_collection=code_collection,
+        analysis_results, hardcodes_stored = await _run_indexing_phases(
+            task_id, root_path, update_progress, update_phase, update_batch_info, update_stats
         )
 
-        # Update stats from scan results
-        update_stats(
-            files_scanned=analysis_results["stats"]["total_files"],
-            problems_found=len(analysis_results["all_problems"]),
-            functions_found=len(analysis_results["all_functions"]),
-            classes_found=len(analysis_results["all_classes"]),
-        )
-
-        # Mark scan phase completed
-        update_phase("scan", "completed")
-
-        if code_collection:
-            # Prepare batch data (Issue #281: uses helper)
-            batch_ids, batch_documents, batch_metadatas = await _prepare_batch_data(
-                analysis_results, task_id, update_progress, update_phase
-            )
-
-            # Store to ChromaDB in batches (Issue #281: uses helper)
-            if batch_ids:
-                await _store_batches_to_chromadb(
-                    code_collection,
-                    batch_ids,
-                    batch_documents,
-                    batch_metadatas,
-                    task_id,
-                    update_progress,
-                    update_phase,
-                    update_batch_info,
-                    update_stats,
-                )
-        else:
-            storage_type = "failed"
-            raise Exception("ChromaDB connection failed")
-
-        # Store hardcodes to Redis for the /hardcodes endpoint
-        hardcodes_stored = await _store_hardcodes_to_redis(
-            analysis_results.get("all_hardcodes", []),
-            task_id,
-        )
-
-        # Mark finalize phase
         update_phase("finalize", "running")
-
-        # Mark task as completed
-        indexing_tasks[task_id]["status"] = "completed"
-        total_files = analysis_results['stats']['total_files']
-        indexing_tasks[task_id]["result"] = {
-            "status": "success",
-            "message": f"Indexed {total_files} files, found {hardcodes_stored} hardcodes using {storage_type} storage",
-            "stats": analysis_results["stats"],
-            "hardcodes_count": hardcodes_stored,
-            "storage_type": storage_type,
-            "timestamp": datetime.now().isoformat(),
-        }
-        indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
-
-        # Mark finalize phase as completed
+        _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
-
         logger.info(f"[Task {task_id}] ✅ Indexing completed successfully")
 
     except Exception as e:
         logger.error(f"[Task {task_id}] ❌ Indexing failed: {e}", exc_info=True)
-        indexing_tasks[task_id]["status"] = "failed"
-        indexing_tasks[task_id]["error"] = str(e)
-        indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+        _mark_task_failed(task_id, e)
