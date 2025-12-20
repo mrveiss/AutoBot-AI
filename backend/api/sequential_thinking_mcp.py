@@ -229,6 +229,29 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     return [MCPTool(name=name, description=description, input_schema=input_schema)]
 
 
+def _enrich_thought_record(thought_record: dict, request: SequentialThinkingRequest) -> None:
+    """Add revision/branch info to thought record (Issue #398: extracted)."""
+    if request.is_revision and request.revises_thought:
+        thought_record["revision_of"] = request.revises_thought
+        logger.info(f"Thought {request.thought_number} revises thought {request.revises_thought}")
+
+    if request.branch_from_thought:
+        thought_record["branched_from"] = request.branch_from_thought
+        logger.info(
+            f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})"
+        )
+
+
+def _calculate_session_summary(session_thoughts: list, thought_number: int) -> dict:
+    """Calculate summary for completed thinking session (Issue #398: extracted)."""
+    return {
+        "total_thoughts_recorded": len(session_thoughts),
+        "revisions_made": sum(1 for t in session_thoughts if t.get("is_revision")),
+        "branches_created": len(set(t.get("branch_id") for t in session_thoughts if t.get("branch_id"))),
+        "thinking_duration_thoughts": thought_number,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sequential_thinking_mcp",
@@ -236,98 +259,48 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
 )
 @router.post("/mcp/sequential_thinking")
 async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadata:
-    """
-    Execute sequential thinking tool (Issue #372 - uses model methods).
-
-    Stores and tracks thinking progression through a problem-solving process.
-    Supports revision, branching, and dynamic adjustment of thought count.
-    """
+    """Execute sequential thinking tool (Issue #398: refactored)."""
     session_id = request.get_session_key()
 
     async with _thinking_sessions_lock:
-        # Initialize session if doesn't exist
         if session_id not in thinking_sessions:
             thinking_sessions[session_id] = []
 
-    # Validate thought progression using model method
     if not request.is_valid_thought_number():
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Thought number {request.thought_number} exceeds total thoughts"
-                f"{request.total_thoughts}. Set needs_more_thoughts=true to extend."
-            )
+            detail=f"Thought number {request.thought_number} exceeds total thoughts {request.total_thoughts}. Set needs_more_thoughts=true to extend."
         )
 
-    # Create thought record using model method (Issue #372)
     thought_record = request.to_thought_record()
+    _enrich_thought_record(thought_record, request)
 
-    # Handle revision
-    if request.is_revision and request.revises_thought:
-        thought_record["revision_of"] = request.revises_thought
-        logger.info(
-            f"Thought {request.thought_number} revises thought {request.revises_thought}"
-        )
-
-    # Handle branching
-    if request.branch_from_thought:
-        thought_record["branched_from"] = request.branch_from_thought
-        logger.info(
-            f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})"
-        )
-
-    # Store thought (thread-safe)
     async with _thinking_sessions_lock:
         thinking_sessions[session_id].append(thought_record)
         session_thought_count = len(thinking_sessions[session_id])
 
-    # Calculate progress using model method (Issue #372)
-    progress_percentage = request.get_progress_percentage()
-
-    # Determine if thinking is complete
     thinking_complete = not request.next_thought_needed
 
-    # Build response (Issue #372: Use model method for progress message)
     response = {
         "success": True,
         "session_id": session_id,
         "thought_number": request.thought_number,
         "total_thoughts": request.total_thoughts,
-        "progress_percentage": round(progress_percentage, 1),
+        "progress_percentage": round(request.get_progress_percentage(), 1),
         "thinking_complete": thinking_complete,
         "session_thought_count": session_thought_count,
         "message": request.get_progress_message(),
     }
 
-    # Issue #372: Use model methods for revision and branch info
-    revision_info = request.get_revision_info()
-    if revision_info:
+    if revision_info := request.get_revision_info():
         response["revision_info"] = revision_info
-
-    branch_info = request.get_branch_info()
-    if branch_info:
+    if branch_info := request.get_branch_info():
         response["branch_info"] = branch_info
 
-    # If thinking is complete, provide summary (thread-safe)
     if thinking_complete:
         async with _thinking_sessions_lock:
-            response["summary"] = {
-                "total_thoughts_recorded": len(thinking_sessions[session_id]),
-                "revisions_made": sum(
-                    1 for t in thinking_sessions[session_id] if t.get("is_revision")
-                ),
-                "branches_created": len(
-                    set(
-                        t.get("branch_id")
-                        for t in thinking_sessions[session_id]
-                        if t.get("branch_id")
-                    )
-                ),
-                "thinking_duration_thoughts": request.thought_number,
-            }
-        logger.info(
-            f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts"
-        )
+            response["summary"] = _calculate_session_summary(thinking_sessions[session_id], request.thought_number)
+        logger.info(f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts")
 
     return response
 

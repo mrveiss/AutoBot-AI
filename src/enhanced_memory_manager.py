@@ -401,7 +401,7 @@ class EnhancedMemoryManager:
 
             conn.commit()
 
-        logger.debug("Stored embedding for content hash: %16]...", content_hash[)
+        logger.debug("Stored embedding for content hash: %s...", content_hash[:16])
         return True
 
     def get_embedding(
@@ -437,7 +437,7 @@ class EnhancedMemoryManager:
                 embedding_data = base64.b64decode(row[0])
                 embedding_vector = json.loads(embedding_data.decode())
 
-                logger.debug("Retrieved cached embedding for: %16]...", content_hash[)
+                logger.debug("Retrieved cached embedding for: %s...", content_hash[:16])
                 return embedding_vector
 
         return None

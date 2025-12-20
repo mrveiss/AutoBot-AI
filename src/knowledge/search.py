@@ -354,64 +354,57 @@ class SearchMixin:
             enable_reranking,
         )
 
+    def _calculate_fetch_limit(
+        self, limit: int, offset: int, tags: Optional[List[str]], min_score: float
+    ) -> int:
+        """Calculate fetch limit based on filters (Issue #398: extracted)."""
+        multiplier = 3 if tags or min_score > 0 else 1.5
+        return min(int((limit + offset) * multiplier), 500)
+
+    async def _execute_enhanced_search_pipeline(
+        self, processed_query: str, mode: str, category: Optional[str],
+        fetch_limit: int, tag_filtered_ids: Optional[Set[str]],
+        min_score: float, enable_reranking: bool,
+    ) -> List[Dict[str, Any]]:
+        """Execute search pipeline with filtering and reranking (Issue #398: extracted)."""
+        results = await self._execute_search_by_mode(mode, processed_query, fetch_limit, category)
+        results = self._apply_post_search_filters(results, tag_filtered_ids, min_score)
+        if enable_reranking and results:
+            results = await self._rerank_results(processed_query, results)
+        return results
+
     @error_boundary(component="knowledge_base", function="enhanced_search")
     async def enhanced_search(
-        self,
-        query: str,
-        limit: int = 10,
-        offset: int = 0,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        tags_match_any: bool = False,
-        mode: str = "hybrid",
-        enable_reranking: bool = False,
-        min_score: float = 0.0,
+        self, query: str, limit: int = 10, offset: int = 0,
+        category: Optional[str] = None, tags: Optional[List[str]] = None,
+        tags_match_any: bool = False, mode: str = "hybrid",
+        enable_reranking: bool = False, min_score: float = 0.0,
     ) -> Dict[str, Any]:
-        """Enhanced search with tag filtering, hybrid mode, and query preprocessing."""
+        """Enhanced search with filtering and reranking (Issue #398: refactored)."""
         self.ensure_initialized()
-
         if not query.strip():
             return self._build_empty_query_response()
 
         try:
             processed_query = self._preprocess_query(query)
-
             tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
                 tags, tags_match_any, processed_query
             )
             if early_return:
                 return early_return
 
-            fetch_multiplier = 3 if tags or min_score > 0 else 1.5
-            fetch_limit = min(int((limit + offset) * fetch_multiplier), 500)
-
-            results = await self._execute_search_by_mode(
-                mode, processed_query, fetch_limit, category
+            fetch_limit = self._calculate_fetch_limit(limit, offset, tags, min_score)
+            results = await self._execute_enhanced_search_pipeline(
+                processed_query, mode, category, fetch_limit,
+                tag_filtered_ids, min_score, enable_reranking,
             )
-            results = self._apply_post_search_filters(
-                results, tag_filtered_ids, min_score
-            )
-
-            if enable_reranking and results:
-                results = await self._rerank_results(processed_query, results)
 
             return self._build_success_response(
-                results,
-                len(results),
-                offset,
-                limit,
-                processed_query,
-                mode,
-                tags,
-                min_score,
-                enable_reranking,
+                results, len(results), offset, limit, processed_query,
+                mode, tags, min_score, enable_reranking,
             )
-
         except Exception as e:
             logger.error("Enhanced search failed: %s", e)
-            import traceback
-
-            logger.error(traceback.format_exc())
             return {"success": False, "results": [], "total_count": 0, "error": str(e)}
 
     def _preprocess_query(self, query: str) -> str:

@@ -395,7 +395,7 @@ class NPUSemanticSearch:
         if not query.strip():
             return [], self._create_empty_metrics()
 
-        logger.info("🔍 Enhanced search: '%50]...' (top_k=%s)", query[, similarity_top_k)
+        logger.info("🔍 Enhanced search: '%s...' (top_k=%s)", query[:50], similarity_top_k)
 
         # Check cache first
         cache_key = self._generate_cache_key(query, similarity_top_k, filters)
@@ -449,7 +449,7 @@ class NPUSemanticSearch:
         # Check embedding cache first (Issue #65 P0 optimization)
         cached_embedding = await self.embedding_cache.get(text)
         if cached_embedding is not None:
-            logger.debug("✅ Using cached embedding for query: %50]...", text[)
+            logger.debug("✅ Using cached embedding for query: %s...", text[:50])
             return np.array(cached_embedding), "cached"
 
         try:

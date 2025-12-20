@@ -97,67 +97,21 @@ class ResponseBuilder:
         return clusters, unclustered
 
     def build_enhanced_response(
-        self,
-        results: List[Dict[str, Any]],
-        unclustered: List[Dict[str, Any]],
-        clusters: Optional[List[Dict[str, Any]]],
-        query: str,
-        mode: str,
-        tags: Optional[List[str]],
-        min_score: float,
-        enable_reranking: bool,
-        enable_query_expansion: bool,
-        enable_relevance_scoring: bool,
-        enable_clustering: bool,
-        queries_count: int,
-        duration_ms: int,
-        offset: int,
-        limit: int,
+        self, results: List[Dict[str, Any]], unclustered: List[Dict[str, Any]],
+        clusters: Optional[List[Dict[str, Any]]], query: str, mode: str,
+        tags: Optional[List[str]], min_score: float, enable_reranking: bool,
+        enable_query_expansion: bool, enable_relevance_scoring: bool,
+        enable_clustering: bool, queries_count: int, duration_ms: int,
+        offset: int, limit: int,
     ) -> Dict[str, Any]:
-        """
-        Build the enhanced search response.
-
-        Issue #281: Extracted from enhanced_search_v2 for clarity.
-        Issue #375: Delegates to build_enhanced_response_ctx using
-        SearchResponseContext for backward compatibility.
-
-        Args:
-            results: All search results
-            unclustered: Unclustered results
-            clusters: Clustered results (if enabled)
-            query: Processed query
-            mode: Search mode
-            tags: Applied tags
-            min_score: Minimum score threshold
-            enable_reranking: Whether reranking was applied
-            enable_query_expansion: Whether query expansion was applied
-            enable_relevance_scoring: Whether relevance scoring was applied
-            enable_clustering: Whether clustering was applied
-            queries_count: Number of query variations searched
-            duration_ms: Search duration in milliseconds
-            offset: Pagination offset
-            limit: Pagination limit
-
-        Returns:
-            Enhanced search response dictionary
-        """
-        # Issue #375: Create context and delegate
+        """Build enhanced response (Issue #398: delegates to ctx version)."""
         ctx = SearchResponseContext(
-            results=results,
-            unclustered=unclustered,
-            clusters=clusters,
-            query_processed=query,
-            mode=mode,
-            tags=tags,
-            min_score=min_score,
-            enable_reranking=enable_reranking,
-            enable_query_expansion=enable_query_expansion,
+            results=results, unclustered=unclustered, clusters=clusters,
+            query_processed=query, mode=mode, tags=tags, min_score=min_score,
+            enable_reranking=enable_reranking, enable_query_expansion=enable_query_expansion,
             enable_relevance_scoring=enable_relevance_scoring,
-            enable_clustering=enable_clustering,
-            queries_count=queries_count,
-            duration_ms=duration_ms,
-            offset=offset,
-            limit=limit,
+            enable_clustering=enable_clustering, queries_count=queries_count,
+            duration_ms=duration_ms, offset=offset, limit=limit,
         )
         return self.build_enhanced_response_ctx(ctx)
 

@@ -64,69 +64,48 @@ class MetadataMixin:
     TEMPLATE_ALL = "metadata:template:all"
     CATEGORY_TEMPLATES = "metadata:category:templates:"
 
-    async def create_metadata_template(
-        self,
-        name: str,
-        fields: List[Dict[str, Any]],
-        description: str = None,
-        applicable_categories: List[str] = None,
+    def _build_template_data(
+        self, template_id: str, name: str, description: str,
+        validated_fields: List[Dict], applicable_categories: List[str],
     ) -> Dict[str, Any]:
-        """
-        Create a new metadata template.
+        """Build template data dictionary (Issue #398: extracted)."""
+        created_at = datetime.utcnow().isoformat()
+        return {
+            "id": template_id, "name": name, "description": description or "",
+            "fields": validated_fields, "applicable_categories": applicable_categories or [],
+            "created_at": created_at, "updated_at": created_at,
+        }
 
-        Args:
-            name: Template name (e.g., "API Documentation")
-            fields: List of field definitions, each with:
-                - name: str (required)
-                - type: str (required) - "string", "number", "date", "boolean", "list"
-                - required: bool (default: False)
-                - default: Any (optional)
-                - validation: str (optional) - regex pattern
-                - description: str (optional)
-            description: Template description
-            applicable_categories: Categories this template applies to
+    async def _store_template_in_redis(
+        self, template_id: str, template_data: Dict[str, Any],
+        applicable_categories: List[str],
+    ) -> None:
+        """Store template and link to categories (Issue #398: extracted)."""
+        template_key = f"{self.TEMPLATE_PREFIX}{template_id}"
+        await asyncio.to_thread(self.redis_client.set, template_key, json.dumps(template_data))
+        await asyncio.to_thread(self.redis_client.sadd, self.TEMPLATE_ALL, template_id)
 
-        Returns:
-            Dict with created template details
-        """
+        for category in applicable_categories or []:
+            await asyncio.to_thread(
+                self.redis_client.sadd, f"{self.CATEGORY_TEMPLATES}{category}", template_id
+            )
+
+    async def create_metadata_template(
+        self, name: str, fields: List[Dict[str, Any]],
+        description: str = None, applicable_categories: List[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a new metadata template (Issue #398: refactored)."""
         try:
-            # Validate fields
             validated_fields = self._validate_field_definitions(fields)
             if not validated_fields.get("success"):
                 return validated_fields
 
             template_id = str(uuid.uuid4())[:8]
-            created_at = datetime.utcnow().isoformat()
-
-            template_data = {
-                "id": template_id,
-                "name": name,
-                "description": description or "",
-                "fields": validated_fields["fields"],
-                "applicable_categories": applicable_categories or [],
-                "created_at": created_at,
-                "updated_at": created_at,
-            }
-
-            # Store template
-            template_key = f"{self.TEMPLATE_PREFIX}{template_id}"
-            await asyncio.to_thread(
-                self.redis_client.set, template_key, json.dumps(template_data)
+            template_data = self._build_template_data(
+                template_id, name, description, validated_fields["fields"], applicable_categories
             )
 
-            # Add to all templates set
-            await asyncio.to_thread(
-                self.redis_client.sadd, self.TEMPLATE_ALL, template_id
-            )
-
-            # Link to categories
-            if applicable_categories:
-                for category in applicable_categories:
-                    category_key = f"{self.CATEGORY_TEMPLATES}{category}"
-                    await asyncio.to_thread(
-                        self.redis_client.sadd, category_key, template_id
-                    )
-
+            await self._store_template_in_redis(template_id, template_data, applicable_categories)
             logger.info("Created metadata template '%s' (id=%s)", name, template_id)
             return {"status": "success", "template": template_data}
 

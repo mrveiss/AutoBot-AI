@@ -155,6 +155,60 @@ class SecurityRiskJudge(BaseLLMJudge):
             context=security_context,
         )
 
+    def _extract_dimension_score(
+        self, judgment: JudgmentResult, dimension: JudgmentDimension
+    ) -> float:
+        """
+        Extract a specific dimension score from judgment result.
+
+        (Issue #398: extracted helper to reduce duplication)
+
+        Args:
+            judgment: The judgment result containing criterion scores
+            dimension: The dimension to extract score for
+
+        Returns:
+            Score for the dimension, or 0.0 if not found
+        """
+        return next(
+            (s.score for s in judgment.criterion_scores if s.dimension == dimension),
+            0.0,
+        )
+
+    def _build_file_access_result(
+        self,
+        judgment: JudgmentResult,
+        safety_score: float,
+        security_score: float,
+        path_risks: List[str],
+        operation_risk: str,
+    ) -> Dict[str, Any]:
+        """
+        Build the file access risk assessment result.
+
+        (Issue #398: extracted helper)
+
+        Args:
+            judgment: The judgment result
+            safety_score: Extracted safety score
+            security_score: Extracted security score
+            path_risks: List of path-related risks
+            operation_risk: Operation risk level
+
+        Returns:
+            Dict with complete risk assessment
+        """
+        return {
+            "risk_level": self._calculate_risk_level(safety_score, security_score),
+            "should_allow": safety_score > 0.7 and security_score > 0.7,
+            "requires_confirmation": safety_score < 0.9 or security_score < 0.9,
+            "risk_factors": (
+                path_risks + [operation_risk] if operation_risk else path_risks
+            ),
+            "detailed_assessment": judgment,
+            "mitigation_suggestions": judgment.improvement_suggestions,
+        }
+
     async def assess_file_access_risk(
         self,
         file_path: str,
@@ -163,19 +217,17 @@ class SecurityRiskJudge(BaseLLMJudge):
         user_context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Assess security risk of file access operations
+        Assess security risk of file access operations.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Returns:
             Dict with risk assessment and recommendations
         """
         try:
-            # Analyze file path for security risks
             path_risks = self._analyze_file_path_risks(file_path)
-
-            # Evaluate operation type risk
             operation_risk = self._evaluate_operation_risk(operation, file_path)
 
-            # Define criteria for file access evaluation
             criteria = [
                 JudgmentDimension.SAFETY,
                 JudgmentDimension.SECURITY,
@@ -197,34 +249,17 @@ class SecurityRiskJudge(BaseLLMJudge):
                 context=access_context,
             )
 
-            # Extract security-specific metrics
-            safety_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.SAFETY
-                ),
-                0.0,
+            # Extract security-specific metrics (Issue #398: uses helper)
+            safety_score = self._extract_dimension_score(
+                judgment, JudgmentDimension.SAFETY
             )
-            security_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.SECURITY
-                ),
-                0.0,
+            security_score = self._extract_dimension_score(
+                judgment, JudgmentDimension.SECURITY
             )
 
-            return {
-                "risk_level": self._calculate_risk_level(safety_score, security_score),
-                "should_allow": safety_score > 0.7 and security_score > 0.7,
-                "requires_confirmation": safety_score < 0.9 or security_score < 0.9,
-                "risk_factors": (
-                    path_risks + [operation_risk] if operation_risk else path_risks
-                ),
-                "detailed_assessment": judgment,
-                "mitigation_suggestions": judgment.improvement_suggestions,
-            }
+            return self._build_file_access_result(
+                judgment, safety_score, security_score, path_risks, operation_risk
+            )
 
         except Exception as e:
             logger.error("Error assessing file access risk: %s", e)

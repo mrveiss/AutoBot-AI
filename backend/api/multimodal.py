@@ -588,7 +588,7 @@ async def combine_multimodal_inputs(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Multi-modal fusion failed: {e}")
+        logger.error("Multi-modal fusion failed: %s", e)
         processing_time = time.time() - start_time
         return {"success": False, "error": str(e), "processing_time": processing_time}
 

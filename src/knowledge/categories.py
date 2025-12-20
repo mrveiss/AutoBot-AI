@@ -595,61 +595,46 @@ class CategoriesMixin:
             logger.error("Failed to get facts for category '%s': %s", category_id, e)
             return {"success": False, "message": str(e)}
 
+    def _build_redis_path_pattern(self, path_pattern: str) -> str:
+        """Build Redis SCAN pattern from path pattern (Issue #398: extracted)."""
+        pattern = path_pattern.strip().lower()
+        if pattern.endswith("*"):
+            return f"category:path:{pattern}"
+        return f"category:path:{pattern}*"
+
+    async def _scan_matching_categories(
+        self, redis_pattern: str, limit: int
+    ) -> List[Dict[str, Any]]:
+        """Scan Redis for categories matching pattern (Issue #398: extracted)."""
+        matching = []
+        async for key in self.aioredis_client.scan_iter(match=redis_pattern, count=100):
+            if len(matching) >= limit:
+                break
+            key = key.decode("utf-8") if isinstance(key, bytes) else key
+            category_id = await self.aioredis_client.get(key)
+            if category_id:
+                category_id = category_id.decode("utf-8") if isinstance(category_id, bytes) else category_id
+                cat_data = await self._get_category_data(category_id)
+                if cat_data:
+                    matching.append(cat_data)
+        matching.sort(key=lambda x: x.get("path", ""))
+        return matching
+
     async def search_categories_by_path(
-        self,
-        path_pattern: str,
-        limit: int = 50,
+        self, path_pattern: str, limit: int = 50
     ) -> Dict[str, Any]:
-        """
-        Search categories by path pattern.
-
-        Issue #411: Path-based queries.
-
-        Args:
-            path_pattern: Path pattern with wildcards (e.g., "tech/python/*")
-            limit: Maximum results
-
-        Returns:
-            Dict with matching categories
-        """
+        """Search categories by path pattern (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Convert pattern for Redis SCAN
-            pattern = path_pattern.strip().lower()
-            if pattern.endswith("*"):
-                redis_pattern = f"category:path:{pattern}"
-            else:
-                redis_pattern = f"category:path:{pattern}*"
-
-            # Scan for matching paths
-            matching_categories = []
-            async for key in self.aioredis_client.scan_iter(match=redis_pattern, count=100):
-                if len(matching_categories) >= limit:
-                    break
-
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-
-                category_id = await self.aioredis_client.get(key)
-                if category_id:
-                    if isinstance(category_id, bytes):
-                        category_id = category_id.decode("utf-8")
-                    cat_data = await self._get_category_data(category_id)
-                    if cat_data:
-                        matching_categories.append(cat_data)
-
-            # Sort by path
-            matching_categories.sort(key=lambda x: x.get("path", ""))
+            redis_pattern = self._build_redis_path_pattern(path_pattern)
+            matching_categories = await self._scan_matching_categories(redis_pattern, limit)
 
             return {
-                "success": True,
-                "pattern": path_pattern,
-                "categories": matching_categories,
-                "count": len(matching_categories),
+                "success": True, "pattern": path_pattern,
+                "categories": matching_categories, "count": len(matching_categories),
             }
-
         except Exception as e:
             logger.error("Failed to search categories by path '%s': %s", path_pattern, e)
             return {"success": False, "message": str(e)}

@@ -145,66 +145,49 @@ class IndexMixin:
             ),
         }
 
+    async def _get_old_collection_and_count(self, chroma_client: Any) -> tuple:
+        """Get old collection and its vector count (Issue #398: extracted)."""
+        old_collection = await asyncio.to_thread(
+            chroma_client.get_collection, name=self.chromadb_collection
+        )
+        old_count = await asyncio.to_thread(old_collection.count)
+        return old_collection, old_count
+
+    async def _execute_index_migration(
+        self, chroma_client: Any, target_name: str, old_collection: Any, old_count: int
+    ) -> Dict[str, Any]:
+        """Execute the full migration process (Issue #398: extracted)."""
+        hnsw_metadata = self._get_hnsw_metadata()
+        new_collection = await self._prepare_target_collection(chroma_client, target_name, hnsw_metadata)
+        migrated = await self._migrate_vectors_batch(old_collection, new_collection, old_count)
+        return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
+
     async def rebuild_chromadb_index(
         self, new_collection_name: Optional[str] = None
     ) -> dict:
-        """
-        Rebuild ChromaDB collection with optimized HNSW parameters.
-
-        Issue #72: This method creates a new collection with optimized parameters
-        and migrates all vectors from the existing collection.
-        Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
-        Issue #281: Refactored from 136 lines to use extracted helper methods.
-
-        Args:
-            new_collection_name: Optional new collection name. If None, uses
-                                 "{current_name}_optimized"
-
-        Returns:
-            Dict with migration status and statistics
-        """
+        """Rebuild ChromaDB collection with optimized HNSW (Issue #398: refactored)."""
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from src.utils.chromadb_client import (
-                get_chromadb_client as create_chromadb_client,
-            )
+            from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
-
-            # Get the ChromaDB client and old collection
-            chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(
-                db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+                db_path=str(Path(self.chromadb_path)), allow_reset=False, anonymized_telemetry=False
             )
 
-            # Issue #369: Wrap blocking get_collection and count() with asyncio.to_thread
-            old_collection = await asyncio.to_thread(
-                chroma_client.get_collection, name=self.chromadb_collection
-            )
-            old_count = await asyncio.to_thread(old_collection.count)
-
+            old_collection, old_count = await self._get_old_collection_and_count(chroma_client)
             if old_count == 0:
                 return {"status": "skipped", "message": "No vectors to migrate", "old_count": 0}
 
-            # Prepare target collection with HNSW params
             target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
-            hnsw_metadata = self._get_hnsw_metadata()
-            new_collection = await self._prepare_target_collection(
-                chroma_client, target_name, hnsw_metadata
+            return await self._execute_index_migration(
+                chroma_client, target_name, old_collection, old_count
             )
-
-            # Migrate vectors in batches
-            migrated = await self._migrate_vectors_batch(old_collection, new_collection, old_count)
-
-            return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
 
         except Exception as e:
             logger.error("ChromaDB index rebuild failed: %s", e)
-            import traceback
-
-            logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
     async def get_chromadb_index_info(self) -> dict:

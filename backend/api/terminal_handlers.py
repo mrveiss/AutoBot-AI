@@ -970,20 +970,13 @@ class ConsolidatedTerminalWebSocket:
         }
 
         self.audit_log.append(log_entry)
+        logger.info("Terminal audit: %s", json.dumps(log_entry))
 
-        # Also log to system logger for persistent audit trail
-        logger.info(f"Terminal audit: {json.dumps(log_entry)}")
-
-    async def send_output(self, content: str):
-        """Enhanced output sending with standardized format
-
-        Phase 3: Uses queue-based delivery for better responsiveness.
-        Messages are queued and sent asynchronously by _async_output_sender().
-        """
-        # Standardize message format for frontend compatibility
-        message = {
+    def _build_output_message(self, content: str) -> dict:
+        """Build standardized output message format (Issue #486: extracted)."""
+        return {
             "type": "output",
-            "content": content,  # Frontend expects 'content' field
+            "content": content,
             "metadata": {
                 "session_id": self.session_id,
                 "timestamp": time.time(),
@@ -992,88 +985,84 @@ class ConsolidatedTerminalWebSocket:
             },
         }
 
-        # Phase 3: Queue message for async delivery instead of sending directly
-        # This prevents blocking on slow WebSocket send operations
+    async def _queue_output_message(self, message: dict) -> bool:
+        """Queue message for async delivery (Issue #486: extracted)."""
         import queue
 
         try:
             self.output_queue.put_nowait(message)
+            return True
         except queue.Full:
-            # Queue is full, drop oldest message to prevent blocking
             try:
-                self.output_queue.get_nowait()  # Remove oldest
-                self.output_queue.put_nowait(message)  # Add new
-                logger.warning(
-                    f"Output queue full for session {self.session_id}, dropped oldest message"
-                )
+                self.output_queue.get_nowait()
+                self.output_queue.put_nowait(message)
+                logger.warning("Output queue full for session %s, dropped oldest", self.session_id)
+                return True
             except (queue.Empty, queue.Full):
-                logger.error(f"Failed to queue output for session {self.session_id}")
+                logger.error("Failed to queue output for session %s", self.session_id)
+                return False
         except Exception as e:
-            logger.error(f"Error queuing output: {e}")
-            # Fallback: Send directly if queuing fails
+            logger.error("Error queuing output: %s", e)
             await self.send_message(message)
+            return True
 
-        # CRITICAL: Log ALL terminal output to transcript file
-        # This creates a complete record of the terminal session
-        if self.terminal_logger and self.conversation_id and content:
-            try:
-                # Write raw output to transcript file
-                transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-                from pathlib import Path
+    async def _log_to_transcript(self, content: str) -> None:
+        """Log output to transcript file (Issue #486: extracted)."""
+        if not (self.terminal_logger and self.conversation_id and content):
+            return
 
-                import aiofiles
+        from pathlib import Path
+        import aiofiles
 
-                transcript_path = Path("data/chats") / transcript_file
-                async with aiofiles.open(
-                    transcript_path, "a", encoding="utf-8"
-                ) as f:
-                    await f.write(content)
-            except OSError as e:
-                logger.error(
-                    f"Failed to write terminal transcript (I/O error): {e}"
+        try:
+            transcript_path = Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
+            async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
+                await f.write(content)
+        except OSError as e:
+            logger.error("Failed to write terminal transcript (I/O error): %s", e)
+        except Exception as e:
+            logger.error("Failed to write terminal transcript: %s", e)
+
+    async def _save_to_chat_buffered(self, content: str) -> None:
+        """Save output to chat with buffering (Issue #486: extracted)."""
+        if not (self.chat_history_manager and self.conversation_id and content):
+            return
+
+        async with self._output_lock:
+            self._output_buffer += content
+            current_time = time.time()
+
+            should_save = (
+                len(self._output_buffer) > 500
+                or (current_time - self._last_output_save_time) > 2.0
+                or "\n" in content
+            )
+
+            if should_save and self._output_buffer.strip():
+                reset_buffer, _ = await _save_buffered_output_to_chat(
+                    self.chat_history_manager,
+                    self.conversation_id,
+                    self._output_buffer,
                 )
-            except Exception as e:
-                logger.error(f"Failed to write terminal transcript: {e}")
+                if reset_buffer:
+                    self._output_buffer = ""
+                    self._last_output_save_time = current_time
 
-        # CRITICAL FIX: Save output to chat (buffered to avoid too many messages)
-        # Protected by asyncio.Lock to prevent race conditions in concurrent scenarios
-        if self.chat_history_manager and self.conversation_id and content:
-            async with self._output_lock:
-                # Accumulate output in buffer
-                self._output_buffer += content
-                current_time = time.time()
+    async def send_output(self, content: str):
+        """
+        Enhanced output sending with standardized format (Issue #486: refactored).
 
-                # Save to chat when:
-                # 1. Buffer is large enough (>500 chars) OR
-                # 2. Enough time has passed (>2 seconds) OR
-                # 3. Output contains a newline (command completed)
-                should_save = (
-                    len(self._output_buffer) > 500
-                    or (current_time - self._last_output_save_time) > 2.0
-                    or "\n" in content
-                )
+        Phase 3: Uses queue-based delivery for better responsiveness.
+        """
+        message = self._build_output_message(content)
+        await self._queue_output_message(message)
+        await self._log_to_transcript(content)
+        await self._save_to_chat_buffered(content)
 
-                # CRITICAL FIX: Strip ANSI codes and detect terminal prompts before saving
-                # Prevents saving blank prompts and terminal UI elements to chat
-                # Issue #315: Uses helper to reduce nesting depth
-                if should_save and self._output_buffer.strip():
-                    reset_buffer, _ = await _save_buffered_output_to_chat(
-                        self.chat_history_manager,
-                        self.conversation_id,
-                        self._output_buffer,
-                    )
-                    if reset_buffer:
-                        self._output_buffer = ""
-                        self._last_output_save_time = current_time
-
-        # Log output if security logging enabled
-        if self.enable_logging and len(content.strip()) > 0:
+        if self.enable_logging and content.strip():
             self._log_command_activity(
                 "command_output",
-                {
-                    "output_length": len(content),
-                    "timestamp": datetime.now().isoformat(),
-                },
+                {"output_length": len(content), "timestamp": datetime.now().isoformat()},
             )
 
     def _get_next_message_from_queue(self):

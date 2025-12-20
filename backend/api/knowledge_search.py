@@ -747,8 +747,11 @@ async def enhanced_search_v2(request: dict, req: Request):
         return await _fallback_to_enhanced_search(kb_to_use, params)
 
     logger.info(
-        f"Enhanced search v2: '{query}' (expansion={params['enable_query_expansion']}, "
-        f"clustering={params['enable_clustering']}, relevance={params['enable_relevance_scoring']})"
+        "Enhanced search v2: '%s' (expansion=%s, clustering=%s, relevance=%s)",
+        query,
+        params["enable_query_expansion"],
+        params["enable_clustering"],
+        params["enable_relevance_scoring"],
     )
 
     return await kb_to_use.enhanced_search_v2(**params)

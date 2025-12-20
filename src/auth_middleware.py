@@ -305,7 +305,7 @@ class AuthenticationMiddleware:
                     self.session_timeout_minutes * 60,  # TTL in seconds
                     json.dumps(session_data, default=str),
                 )
-                logger.debug("Session %8]... stored in Redis", session_id[)
+                logger.debug("Session %s... stored in Redis", session_id[:8])
             except Exception as e:
                 logger.warning("Failed to store session in Redis: %s", e)
                 # Fallback to in-memory
@@ -369,7 +369,7 @@ class AuthenticationMiddleware:
                     session = json.loads(session_data)
                     user_data = session.get("user_data", {})
                     self.redis_client.delete(session_key)
-                    logger.debug("Session %8]... removed from Redis", session_id[)
+                    logger.debug("Session %s... removed from Redis", session_id[:8])
             except Exception as e:
                 logger.warning("Failed to remove session from Redis: %s", e)
 

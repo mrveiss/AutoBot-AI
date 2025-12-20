@@ -522,64 +522,88 @@ class RedisServiceManager:
             await self._record_error()
             return ServiceStatus(status="unknown", last_check=datetime.now())
 
+    async def _check_redis_connectivity(self) -> tuple:
+        """
+        Test Redis connectivity via redis-cli PING.
+
+        (Issue #398: extracted helper)
+
+        Returns:
+            Tuple of (connectivity: bool, response_time_ms: float)
+        """
+        try:
+            ping_start = datetime.now()
+            ping_result = await self.ssh_manager.execute_command(
+                host=self.redis_host,
+                command=(
+                    f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT}"
+                    f"PING"
+                ),
+                timeout=5,
+                validate=False,
+            )
+            response_time_ms = (datetime.now() - ping_start).total_seconds() * 1000
+            connectivity = ping_result.success and "PONG" in ping_result.stdout
+            return connectivity, response_time_ms
+        except Exception as e:
+            logger.warning(f"Redis connectivity check failed: {e}")
+            return False, 0.0
+
+    def _determine_health_status(
+        self, service_running: bool, connectivity: bool
+    ) -> str:
+        """
+        Determine overall health status based on service and connectivity.
+
+        (Issue #398: extracted helper)
+        """
+        if service_running and connectivity:
+            return "healthy"
+        elif service_running and not connectivity:
+            return "degraded"
+        return "critical"
+
+    def _generate_health_recommendations(
+        self, service_running: bool, connectivity: bool, response_time_ms: float
+    ) -> List[str]:
+        """
+        Generate health recommendations based on current state.
+
+        (Issue #398: extracted helper)
+        """
+        recommendations = []
+        if not service_running:
+            recommendations.append(
+                "Redis Stack service is not running - consider starting it"
+            )
+        if not connectivity and service_running:
+            recommendations.append(
+                "Redis Stack service running but not responding - check logs"
+            )
+        if response_time_ms > 1000:
+            recommendations.append(
+                f"High response time ({response_time_ms:.1f}ms) - check system load"
+            )
+        return recommendations
+
     async def get_health(self) -> HealthStatus:
         """
-        Get detailed health status
+        Get detailed health status.
+
+        (Issue #398: refactored to use extracted helpers)
 
         Returns:
             HealthStatus with comprehensive health information
         """
         try:
-            # Get service status
             status = await self.get_service_status(use_cache=False)
             service_running = status.status == "running"
 
-            # Test Redis connectivity via redis-cli PING
-            connectivity = False
-            response_time_ms = 0.0
-
-            try:
-                ping_start = datetime.now()
-                ping_result = await self.ssh_manager.execute_command(
-                    host=self.redis_host,
-                    command=(
-                        f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT}"
-                        f"PING"
-                    ),
-                    timeout=5,
-                    validate=False,
-                )
-                ping_duration = (datetime.now() - ping_start).total_seconds() * 1000
-                response_time_ms = ping_duration
-
-                if ping_result.success and "PONG" in ping_result.stdout:
-                    connectivity = True
-            except Exception as e:
-                logger.warning(f"Redis connectivity check failed: {e}")
-                connectivity = False
-
-            # Determine overall status
-            if service_running and connectivity:
-                overall_status = "healthy"
-            elif service_running and not connectivity:
-                overall_status = "degraded"
-            else:
-                overall_status = "critical"
-
-            # Generate recommendations
-            recommendations = []
-            if not service_running:
-                recommendations.append(
-                    "Redis Stack service is not running - consider starting it"
-                )
-            if not connectivity and service_running:
-                recommendations.append(
-                    "Redis Stack service running but not responding - check logs"
-                )
-            if response_time_ms > 1000:
-                recommendations.append(
-                    f"High response time ({response_time_ms:.1f}ms) - check system load"
-                )
+            connectivity, response_time_ms = await self._check_redis_connectivity()
+            overall_status = self._determine_health_status(service_running, connectivity)
+            recommendations = self._generate_health_recommendations(
+                service_running, connectivity, response_time_ms
+            )
 
             return HealthStatus(
                 overall_status=overall_status,
