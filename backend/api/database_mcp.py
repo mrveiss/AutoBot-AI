@@ -248,7 +248,8 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
 
         table_info = []
         for (table_name,) in tables:
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
+            # nosec B608 - table_name comes from sqlite_master (system table), not user input
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
             row_count = cursor.fetchone()[0]
             table_info.append({"name": table_name, "row_count": row_count})
 
@@ -326,7 +327,8 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = cursor.fetchall()
         for (table_name,) in tables:
-            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")
+            # nosec B608 - table_name comes from sqlite_master (system table), not user input
+            cursor.execute(f"SELECT COUNT(*) FROM [{table_name}]")  # nosec B608
             total_rows += cursor.fetchone()[0]
 
         cursor.execute("SELECT sqlite_version()")

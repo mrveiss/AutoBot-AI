@@ -62,7 +62,8 @@ _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
-_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})
+# nosec B108 - These are string patterns for detection, not actual temp directory usage
+_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})  # nosec B108
 _SAFE_FILE_TYPES = frozenset({
     ".pid", ".lock", ".json", ".yaml", ".yml", ".toml", ".ini",
     ".md", ".txt", ".csv", ".html", ".xml"
