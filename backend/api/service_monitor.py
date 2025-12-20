@@ -87,6 +87,143 @@ def _parse_service_status(vm_name: str, service_result: str) -> tuple:
     return service_result, []
 
 
+# Issue #398: ServiceStatus factory for error cases (reduces repetition)
+def _service_error_status(
+    name: str,
+    message: str,
+    icon: str = "fas fa-server",
+    category: str = "core",
+    response_time: Optional[int] = None,
+) -> "ServiceStatus":
+    """Create a ServiceStatus for error cases (Issue #398: extracted)."""
+    return ServiceStatus(
+        name=name,
+        status="error",
+        message=message,
+        response_time=response_time,
+        last_check=datetime.now(),
+        icon=icon,
+        category=category,
+    )
+
+
+def _service_warning_status(
+    name: str,
+    message: str,
+    icon: str = "fas fa-server",
+    category: str = "core",
+    response_time: Optional[int] = None,
+) -> "ServiceStatus":
+    """Create a ServiceStatus for warning cases (Issue #398: extracted)."""
+    return ServiceStatus(
+        name=name,
+        status="warning",
+        message=message,
+        response_time=response_time,
+        last_check=datetime.now(),
+        icon=icon,
+        category=category,
+    )
+
+
+def _vm_error_status(
+    vm_name: str,
+    host: str,
+    message: str,
+    details: Optional[Metadata] = None,
+) -> "VMStatus":
+    """Create a VMStatus for error cases (Issue #398: extracted)."""
+    return VMStatus(
+        name=vm_name.title().replace("_", " "),
+        host=host,
+        status="error",
+        message=message,
+        last_check=datetime.now(),
+        icon="fas fa-server",
+        services=[],
+        details=details or {},
+    )
+
+
+def _vm_warning_status(
+    vm_name: str,
+    host: str,
+    message: str,
+    details: Optional[Metadata] = None,
+) -> "VMStatus":
+    """Create a VMStatus for warning cases (Issue #398: extracted)."""
+    return VMStatus(
+        name=vm_name.title().replace("_", " "),
+        host=host,
+        status="warning",
+        message=message,
+        last_check=datetime.now(),
+        icon="fas fa-server",
+        services=[],
+        details=details or {},
+    )
+
+
+# Issue #398: Module-level VM icon mapping (used in check_vm_ssh)
+_VM_ICONS = {
+    "frontend": "fas fa-globe",
+    "redis": "fas fa-database",
+    "ai_stack": "fas fa-brain",
+    "npu_worker": "fas fa-microchip",
+    "browser_service": "fas fa-chrome",
+}
+
+
+def _build_vm_success_status(
+    vm_name: str,
+    host: str,
+    output_lines: List[str],
+    response_time: int,
+) -> "VMStatus":
+    """Build VMStatus for successful SSH check (Issue #398: extracted).
+
+    Args:
+        vm_name: Name of the VM
+        host: Host IP/hostname
+        output_lines: Lines from SSH command output
+        response_time: Response time in milliseconds
+
+    Returns:
+        VMStatus with parsed details
+    """
+    hostname = output_lines[0] if len(output_lines) > 0 else "unknown"
+    uptime_line = output_lines[1] if len(output_lines) > 1 else ""
+
+    # Extract load average from uptime
+    load_avg, uptime_display = _parse_uptime_info(uptime_line)
+
+    # Extract service status
+    service_status = "unknown"
+    active_services: List[str] = []
+    if len(output_lines) > 2:
+        service_result = output_lines[2].strip()
+        service_status, active_services = _parse_service_status(vm_name, service_result)
+
+    return VMStatus(
+        name=vm_name.title().replace("_", " "),
+        host=host,
+        status="online",
+        message=f"Up: {uptime_display}",
+        response_time=response_time,
+        last_check=datetime.now(),
+        icon=_VM_ICONS.get(vm_name, "fas fa-server"),
+        services=active_services,
+        details={
+            "hostname": hostname,
+            "uptime": uptime_display,
+            "uptime_raw": uptime_line,
+            "load_average": load_avg,
+            "service_status": service_status,
+            "active_services_count": len(active_services),
+        },
+    )
+
+
 class ServiceStatus(BaseModel):
     name: str
     status: str  # "online", "offline", "warning", "error"
@@ -137,7 +274,7 @@ class ServiceMonitor:
         # Services now run on VMs via systemd, not Docker containers
 
     async def check_backend_api(self) -> ServiceStatus:
-        """Check backend API health"""
+        """Check backend API health (Issue #398: refactored with helpers)."""
         import aiohttp
 
         start_time = time.time()
@@ -163,56 +300,21 @@ class ServiceMonitor:
                         category="core",
                         details=data,
                     )
-                else:
-                    return ServiceStatus(
-                        name="Backend API",
-                        status="warning",
-                        message=f"HTTP {response.status}",
-                        response_time=response_time,
-                        last_check=datetime.now(),
-                        icon="fas fa-server",
-                        category="core",
-                    )
+                return _service_warning_status(
+                    "Backend API", f"HTTP {response.status}", response_time=response_time
+                )
         except asyncio.TimeoutError:
             logger.warning(f"Backend API health check timed out: {backend_url}")
-            return ServiceStatus(
-                name="Backend API",
-                status="error",
-                message="Connection timed out",
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                category="core",
-            )
+            return _service_error_status("Backend API", "Connection timed out")
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"Backend API connection refused: {backend_url} - {e}")
-            return ServiceStatus(
-                name="Backend API",
-                status="error",
-                message="Connection refused",
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                category="core",
-            )
+            return _service_error_status("Backend API", "Connection refused")
         except aiohttp.ClientError as e:
             logger.warning(f"Backend API HTTP error: {e}")
-            return ServiceStatus(
-                name="Backend API",
-                status="error",
-                message=f"HTTP error: {str(e)[:50]}",
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                category="core",
-            )
+            return _service_error_status("Backend API", f"HTTP error: {str(e)[:50]}")
         except Exception as e:
             logger.error(f"Backend API check unexpected error: {e}", exc_info=True)
-            return ServiceStatus(
-                name="Backend API",
-                status="error",
-                message=str(e)[:100],
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                category="core",
-            )
+            return _service_error_status("Backend API", str(e)[:100])
 
     def check_redis(self) -> ServiceStatus:
         """Check Redis database"""
@@ -283,13 +385,10 @@ class ServiceMonitor:
         return services
 
     async def check_llm_services(self) -> List[ServiceStatus]:
-        """Check LLM service availability"""
+        """Check LLM service availability (Issue #398: refactored with helpers)."""
         import aiohttp
 
-        services = []
-        llm_url = config.get_service_url(
-            "backend", "/api/llm/status/comprehensive"
-        )
+        llm_url = config.get_service_url("backend", "/api/llm/status/comprehensive")
 
         try:
             start_time = time.time()
@@ -302,88 +401,46 @@ class ServiceMonitor:
 
                 if response.status == 200:
                     data = await response.json()
-                    services.append(
-                        ServiceStatus(
-                            name="LLM Manager",
-                            status="online",
-                            message=f"Response: {response_time}ms",
-                            response_time=response_time,
-                            last_check=datetime.now(),
-                            icon="fas fa-brain",
-                            category="ai",
-                            details=data,
-                        )
-                    )
-                else:
-                    services.append(
-                        ServiceStatus(
-                            name="LLM Manager",
-                            status="warning",
-                            message=f"HTTP {response.status}",
-                            last_check=datetime.now(),
-                            icon="fas fa-brain",
-                            category="ai",
-                        )
-                    )
+                    return [ServiceStatus(
+                        name="LLM Manager",
+                        status="online",
+                        message=f"Response: {response_time}ms",
+                        response_time=response_time,
+                        last_check=datetime.now(),
+                        icon="fas fa-brain",
+                        category="ai",
+                        details=data,
+                    )]
+                return [_service_warning_status(
+                    "LLM Manager", f"HTTP {response.status}", icon="fas fa-brain", category="ai"
+                )]
         except asyncio.TimeoutError:
             logger.warning(f"LLM service check timed out: {llm_url}")
-            services.append(
-                ServiceStatus(
-                    name="LLM Manager",
-                    status="error",
-                    message="Connection timed out",
-                    last_check=datetime.now(),
-                    icon="fas fa-brain",
-                    category="ai",
-                )
-            )
+            return [_service_error_status(
+                "LLM Manager", "Connection timed out", icon="fas fa-brain", category="ai"
+            )]
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"LLM service connection refused: {llm_url} - {e}")
-            services.append(
-                ServiceStatus(
-                    name="LLM Manager",
-                    status="error",
-                    message="Connection refused",
-                    last_check=datetime.now(),
-                    icon="fas fa-brain",
-                    category="ai",
-                )
-            )
+            return [_service_error_status(
+                "LLM Manager", "Connection refused", icon="fas fa-brain", category="ai"
+            )]
         except aiohttp.ClientError as e:
             logger.warning(f"LLM service HTTP error: {e}")
-            services.append(
-                ServiceStatus(
-                    name="LLM Manager",
-                    status="error",
-                    message=f"HTTP error: {str(e)[:50]}",
-                    last_check=datetime.now(),
-                    icon="fas fa-brain",
-                    category="ai",
-                )
-            )
+            return [_service_error_status(
+                "LLM Manager", f"HTTP error: {str(e)[:50]}", icon="fas fa-brain", category="ai"
+            )]
         except Exception as e:
             logger.error(f"LLM service check unexpected error: {e}", exc_info=True)
-            services.append(
-                ServiceStatus(
-                    name="LLM Manager",
-                    status="error",
-                    message=str(e)[:50],
-                    last_check=datetime.now(),
-                    icon="fas fa-brain",
-                    category="ai",
-                )
-            )
-
-        return services
+            return [_service_error_status(
+                "LLM Manager", str(e)[:50], icon="fas fa-brain", category="ai"
+            )]
 
     async def check_knowledge_base(self) -> ServiceStatus:
-        """Check knowledge base status"""
+        """Check knowledge base status (Issue #398: refactored with helpers)."""
         import aiohttp
 
         start_time = time.time()
-        kb_url = config.get_service_url(
-            "backend", "/api/knowledge_base/stats/basic"
-        )
+        kb_url = config.get_service_url("backend", "/api/knowledge_base/stats/basic")
 
         try:
             timeout = aiohttp.ClientTimeout(
@@ -396,7 +453,6 @@ class ServiceMonitor:
                 if response.status == 200:
                     data = await response.json()
                     total_docs = data.get("total_documents", 0)
-
                     return ServiceStatus(
                         name="Knowledge Base",
                         status="online",
@@ -407,54 +463,29 @@ class ServiceMonitor:
                         category="knowledge",
                         details=data,
                     )
-                else:
-                    return ServiceStatus(
-                        name="Knowledge Base",
-                        status="warning",
-                        message=f"HTTP {response.status}",
-                        last_check=datetime.now(),
-                        icon="fas fa-database",
-                        category="knowledge",
-                    )
+                return _service_warning_status(
+                    "Knowledge Base", f"HTTP {response.status}",
+                    icon="fas fa-database", category="knowledge"
+                )
         except asyncio.TimeoutError:
             logger.warning(f"Knowledge base check timed out: {kb_url}")
-            return ServiceStatus(
-                name="Knowledge Base",
-                status="error",
-                message="Connection timed out",
-                last_check=datetime.now(),
-                icon="fas fa-database",
-                category="knowledge",
+            return _service_error_status(
+                "Knowledge Base", "Connection timed out", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"Knowledge base connection refused: {kb_url} - {e}")
-            return ServiceStatus(
-                name="Knowledge Base",
-                status="error",
-                message="Connection refused",
-                last_check=datetime.now(),
-                icon="fas fa-database",
-                category="knowledge",
+            return _service_error_status(
+                "Knowledge Base", "Connection refused", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientError as e:
             logger.warning(f"Knowledge base HTTP error: {e}")
-            return ServiceStatus(
-                name="Knowledge Base",
-                status="error",
-                message=f"HTTP error: {str(e)[:50]}",
-                last_check=datetime.now(),
-                icon="fas fa-database",
-                category="knowledge",
+            return _service_error_status(
+                "Knowledge Base", f"HTTP error: {str(e)[:50]}", icon="fas fa-database", category="knowledge"
             )
         except Exception as e:
             logger.error(f"Knowledge base check unexpected error: {e}", exc_info=True)
-            return ServiceStatus(
-                name="Knowledge Base",
-                status="error",
-                message=str(e)[:50],
-                last_check=datetime.now(),
-                icon="fas fa-database",
-                category="knowledge",
+            return _service_error_status(
+                "Knowledge Base", str(e)[:50], icon="fas fa-database", category="knowledge"
             )
 
     def check_system_resources(self) -> Metadata:
@@ -536,25 +567,16 @@ class ServiceMonitor:
         return service_checks.get(vm_name, "ps aux | grep -v grep | wc -l")
 
     async def check_vm_ssh(self, vm_name: str, host: str) -> VMStatus:
-        """Check VM connectivity via SSH and basic health"""
+        """Check VM connectivity via SSH and basic health (Issue #398: refactored)."""
         try:
             start_time = time.time()
-
-            # SSH command to check basic health: hostname, uptime, and service status based on VM
-            # type
-            # Different VMs have different expected services
             service_cmd = self._get_service_check_command(vm_name)
 
             ssh_cmd = [
-                "ssh",
-                "-i",
-                str(PATH.SSH_AUTOBOT_KEY),
-                "-o",
-                "ConnectTimeout=5",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "BatchMode=yes",
+                "ssh", "-i", str(PATH.SSH_AUTOBOT_KEY),
+                "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "BatchMode=yes",
                 f"autobot@{host}",
                 f"hostname && uptime && {service_cmd}",
             ]
@@ -562,136 +584,53 @@ class ServiceMonitor:
             result = await asyncio.create_subprocess_exec(
                 *ssh_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-
             stdout, stderr = await asyncio.wait_for(result.communicate(), timeout=10)
             response_time = int((time.time() - start_time) * 1000)
 
             if result.returncode == 0:
                 output_lines = stdout.decode().strip().split("\n")
-                hostname = output_lines[0] if len(output_lines) > 0 else "unknown"
-                uptime_line = output_lines[1] if len(output_lines) > 1 else ""
+                return _build_vm_success_status(vm_name, host, output_lines, response_time)
 
-                # Extract load average from uptime (Issue #315: uses helper)
-                load_avg, uptime_display = _parse_uptime_info(uptime_line)
-
-                # Extract service status (Issue #315: uses helper)
-                service_status = "unknown"
-                active_services = []
-                if len(output_lines) > 2:
-                    service_result = output_lines[2].strip()
-                    service_status, active_services = _parse_service_status(
-                        vm_name, service_result
-                    )
-
-                vm_icons = {
-                    "frontend": "fas fa-globe",
-                    "redis": "fas fa-database",
-                    "ai_stack": "fas fa-brain",
-                    "npu_worker": "fas fa-microchip",
-                    "browser_service": "fas fa-chrome",
-                }
-
-                return VMStatus(
-                    name=vm_name.title().replace("_", " "),
-                    host=host,
-                    status="online",
-                    message=f"Up: {uptime_display}",
-                    response_time=response_time,
-                    last_check=datetime.now(),
-                    icon=vm_icons.get(vm_name, "fas fa-server"),
-                    services=active_services,
-                    details={
-                        "hostname": hostname,
-                        "uptime": uptime_display,
-                        "uptime_raw": uptime_line,
-                        "load_average": load_avg,
-                        "service_status": service_status,
-                        "active_services_count": len(active_services),
-                    },
-                )
-            else:
-                error_msg = stderr.decode().strip()[:100]
-                return VMStatus(
-                    name=vm_name.title().replace("_", " "),
-                    host=host,
-                    status="error",
-                    message=f"SSH failed: {error_msg}",
-                    last_check=datetime.now(),
-                    icon="fas fa-server",
-                    services=[],
-                    details={"ssh_error": error_msg},
-                )
+            error_msg = stderr.decode().strip()[:100]
+            return _vm_error_status(vm_name, host, f"SSH failed: {error_msg}", {"ssh_error": error_msg})
 
         except asyncio.TimeoutError:
-            return VMStatus(
-                name=vm_name.title().replace("_", " "),
-                host=host,
-                status="warning",
-                message="SSH timeout (>10s)",
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                services=[],
-                details={"error": "timeout"},
-            )
+            return _vm_warning_status(vm_name, host, "SSH timeout (>10s)", {"error": "timeout"})
         except Exception as e:
-            return VMStatus(
-                name=vm_name.title().replace("_", " "),
-                host=host,
-                status="error",
-                message=str(e)[:50],
-                last_check=datetime.now(),
-                icon="fas fa-server",
-                services=[],
-                details={"error": str(e)},
-            )
+            return _vm_error_status(vm_name, host, str(e)[:50], {"error": str(e)})
+
+    def _build_main_machine_status(self, vm_hosts: dict) -> VMStatus:
+        """Build VMStatus for main machine (Issue #398: extracted)."""
+        main_host = vm_hosts.get("backend", NetworkConstants.MAIN_MACHINE_IP)
+        return VMStatus(
+            name="Main Machine (WSL)",
+            host=main_host,
+            status="online",
+            message="Backend API + VNC",
+            response_time=0,
+            last_check=datetime.now(),
+            icon="fas fa-desktop",
+            services=["backend-api", "vnc-desktop"],
+            details={
+                "role": f"Backend API (port {NetworkConstants.BACKEND_PORT}) + VNC Desktop (port {NetworkConstants.VNC_PORT})",
+                "note": "Frontend runs on VM1, not here",
+            },
+        )
 
     async def check_all_vms(self) -> List[VMStatus]:
-        """Check status of all VMs in the infrastructure"""
+        """Check status of all VMs (Issue #398: refactored)."""
         try:
-            # Get VM definitions from config
             vm_hosts = config.get("infrastructure.hosts", {})
-
-            # Filter out localhost/main machine entries
             remote_vms = {
-                name: host
-                for name, host in vm_hosts.items()
+                name: host for name, host in vm_hosts.items()
                 if host not in LOCAL_MACHINE_IPS
             }
 
-            # Add main machine status
-            vm_results = []
+            vm_results = [self._build_main_machine_status(vm_hosts)]
 
-            # Main machine (backend host) - FIXED: Only backend API + VNC Desktop, NO frontend
-            main_host = vm_hosts.get("backend", NetworkConstants.MAIN_MACHINE_IP)
-            vm_results.append(
-                VMStatus(
-                    name="Main Machine (WSL)",
-                    host=main_host,
-                    status="online",
-                    message="Backend API + VNC",
-                    response_time=0,
-                    last_check=datetime.now(),
-                    icon="fas fa-desktop",
-                    services=[
-                        "backend-api",
-                        "vnc-desktop",
-                    ],  # FIXED: Correct services only
-                    details={
-                        "role": f"Backend API (port {NetworkConstants.BACKEND_PORT}) + VNC Desktop (port {NetworkConstants.VNC_PORT})",
-                        "note": "Frontend runs on VM1, not here",
-                    },
-                )
-            )
-
-            # Check remote VMs concurrently
             if remote_vms:
-                vm_tasks = [
-                    self.check_vm_ssh(vm_name, host)
-                    for vm_name, host in remote_vms.items()
-                ]
-
+                vm_tasks = [self.check_vm_ssh(vm_name, host) for vm_name, host in remote_vms.items()]
                 vm_statuses = await asyncio.gather(*vm_tasks, return_exceptions=True)
-
                 for status in vm_statuses:
                     if isinstance(status, VMStatus):
                         vm_results.append(status)
@@ -702,100 +641,68 @@ class ServiceMonitor:
 
         except Exception as e:
             logger.error(f"VM monitoring failed: {e}")
-            return [
-                VMStatus(
-                    name="VM Monitor",
-                    host="unknown",
-                    status="error",
-                    message=f"Monitor failed: {str(e)[:50]}",
-                    last_check=datetime.now(),
-                    icon="fas fa-exclamation-triangle",
-                    services=[],
-                    details={"error": str(e)},
-                )
-            ]
+            return [VMStatus(
+                name="VM Monitor", host="unknown", status="error",
+                message=f"Monitor failed: {str(e)[:50]}",
+                last_check=datetime.now(), icon="fas fa-exclamation-triangle",
+                services=[], details={"error": str(e)},
+            )]
+
+    def _calculate_overall_status(self, services: List[ServiceStatus]) -> str:
+        """Calculate overall status from services (Issue #398: extracted)."""
+        statuses = [s.status for s in services]
+        if "error" in statuses:
+            return "error"
+        if "warning" in statuses or "offline" in statuses:
+            return "warning"
+        return "online"
+
+    def _build_status_summary(self, items: list, status_attr: str = "status") -> dict:
+        """Build status summary counts (Issue #398: extracted)."""
+        return {
+            "total_services" if status_attr == "status" else "total_vms": len(items),
+            "online": len([i for i in items if getattr(i, status_attr) == "online"]),
+            "warning": len([i for i in items if getattr(i, status_attr) == "warning"]),
+            "error": len([i for i in items if getattr(i, status_attr) == "error"]),
+            "offline": len([i for i in items if getattr(i, status_attr) == "offline"]),
+        }
+
+    def _build_category_map(self, services: List[ServiceStatus]) -> dict:
+        """Build category mapping (Issue #398: extracted)."""
+        categories = ["core", "database", "web", "ai", "automation", "monitoring", "infrastructure", "knowledge"]
+        return {cat: [s for s in services if s.category == cat] for cat in categories}
 
     async def get_all_services(self) -> Metadata:
-        """Get comprehensive service status"""
+        """Get comprehensive service status (Issue #398: refactored)."""
         start_time = time.time()
 
-        # Run all checks concurrently
-        tasks = [
-            self.check_backend_api(),
-            self.check_knowledge_base(),
-        ]
-
-        # Add sync checks
-        redis_status = self.check_redis()
-        distributed_services = self.check_distributed_services()
-        llm_services = await self.check_llm_services()
-        system_resources = self.check_system_resources()
-
-        # Wait for async tasks
+        # Run async checks
+        tasks = [self.check_backend_api(), self.check_knowledge_base()]
         async_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Compile all services
-        all_services = []
+        # Collect services
+        all_services = [r for r in async_results if isinstance(r, ServiceStatus)]
+        for r in async_results:
+            if not isinstance(r, ServiceStatus):
+                logger.error(f"Service check failed: {r}")
 
-        # Add async results
-        for result in async_results:
-            if isinstance(result, ServiceStatus):
-                all_services.append(result)
-            else:
-                logger.error(f"Service check failed: {result}")
+        # Add sync checks
+        all_services.append(self.check_redis())
+        all_services.extend(self.check_distributed_services())
+        all_services.extend(await self.check_llm_services())
 
-        # Add sync results
-        all_services.append(redis_status)
-        all_services.extend(distributed_services)
-        all_services.extend(llm_services)
-
-        # Get VM status
         vm_statuses = await self.check_all_vms()
-
-        # Calculate overall status
-        statuses = [s.status for s in all_services]
-        overall_status = "online"
-        if "error" in statuses:
-            overall_status = "error"
-        elif "warning" in statuses:
-            overall_status = "warning"
-        elif "offline" in statuses:
-            overall_status = "warning"
-
         total_time = int((time.time() - start_time) * 1000)
 
         return {
-            "overall_status": overall_status,
+            "overall_status": self._calculate_overall_status(all_services),
             "check_duration_ms": total_time,
             "services": [s.dict() for s in all_services],
             "vms": [vm.dict() for vm in vm_statuses],
-            "system_resources": system_resources,
-            "categories": {
-                "core": [s for s in all_services if s.category == "core"],
-                "database": [s for s in all_services if s.category == "database"],
-                "web": [s for s in all_services if s.category == "web"],
-                "ai": [s for s in all_services if s.category == "ai"],
-                "automation": [s for s in all_services if s.category == "automation"],
-                "monitoring": [s for s in all_services if s.category == "monitoring"],
-                "infrastructure": [
-                    s for s in all_services if s.category == "infrastructure"
-                ],
-                "knowledge": [s for s in all_services if s.category == "knowledge"],
-            },
-            "summary": {
-                "total_services": len(all_services),
-                "online": len([s for s in all_services if s.status == "online"]),
-                "warning": len([s for s in all_services if s.status == "warning"]),
-                "error": len([s for s in all_services if s.status == "error"]),
-                "offline": len([s for s in all_services if s.status == "offline"]),
-            },
-            "vm_summary": {
-                "total_vms": len(vm_statuses),
-                "online": len([vm for vm in vm_statuses if vm.status == "online"]),
-                "warning": len([vm for vm in vm_statuses if vm.status == "warning"]),
-                "error": len([vm for vm in vm_statuses if vm.status == "error"]),
-                "offline": len([vm for vm in vm_statuses if vm.status == "offline"]),
-            },
+            "system_resources": self.check_system_resources(),
+            "categories": self._build_category_map(all_services),
+            "summary": self._build_status_summary(all_services),
+            "vm_summary": self._build_status_summary(vm_statuses),
         }
 
 
@@ -867,6 +774,53 @@ async def get_service_health():
         }
 
 
+def _get_cpu_info(psutil) -> dict:
+    """Get CPU utilization info (Issue #398: extracted)."""
+    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_count = psutil.cpu_count()
+    try:
+        load_avg = list(psutil.getloadavg()) if hasattr(psutil, "getloadavg") else [0, 0, 0]
+    except Exception:
+        load_avg = [0, 0, 0]
+    return {"usage_percent": cpu_percent, "core_count": cpu_count, "load_average": load_avg}
+
+
+def _get_memory_info(psutil) -> dict:
+    """Get memory info in GB (Issue #398: extracted)."""
+    memory = psutil.virtual_memory()
+    return {
+        "total": round(memory.total / (1024**3), 2),
+        "available": round(memory.available / (1024**3), 2),
+        "used": round(memory.used / (1024**3), 2),
+        "percent": memory.percent,
+    }
+
+
+def _get_disk_info(psutil) -> dict:
+    """Get disk info in GB (Issue #398: extracted)."""
+    disk = psutil.disk_usage("/")
+    return {
+        "total": round(disk.total / (1024**3), 2),
+        "used": round(disk.used / (1024**3), 2),
+        "free": round(disk.free / (1024**3), 2),
+        "percent": round((disk.used / disk.total) * 100, 2),
+    }
+
+
+def _get_network_info(psutil) -> dict:
+    """Get network I/O info (Issue #398: extracted)."""
+    try:
+        net_io = psutil.net_io_counters()
+        return {
+            "bytes_sent": net_io.bytes_sent,
+            "bytes_recv": net_io.bytes_recv,
+            "packets_sent": net_io.packets_sent,
+            "packets_recv": net_io.packets_recv,
+        }
+    except Exception:
+        return {"error": "Network info not available"}
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_resources",
@@ -874,56 +828,16 @@ async def get_service_health():
 )
 @router.get("/resources")
 async def get_system_resources():
-    """Get system resource utilization (CPU, memory, disk)"""
+    """Get system resource utilization (Issue #398: refactored with helpers)."""
     try:
         import psutil
 
-        # CPU utilization
-        cpu_percent = psutil.cpu_percent(interval=1)
-        cpu_count = psutil.cpu_count()
-
-        # Load average (Unix systems)
-        try:
-            load_avg = list(psutil.getloadavg()) if hasattr(psutil, "getloadavg") else [0, 0, 0]
-        except Exception:
-            load_avg = [0, 0, 0]
-
-        # Memory information
-        memory = psutil.virtual_memory()
-        memory_info = {
-            "total": round(memory.total / (1024**3), 2),  # GB
-            "available": round(memory.available / (1024**3), 2),  # GB
-            "used": round(memory.used / (1024**3), 2),  # GB
-            "percent": memory.percent,
-        }
-
-        # Disk information
-        disk = psutil.disk_usage("/")
-        disk_info = {
-            "total": round(disk.total / (1024**3), 2),  # GB
-            "used": round(disk.used / (1024**3), 2),  # GB
-            "free": round(disk.free / (1024**3), 2),  # GB
-            "percent": round((disk.used / disk.total) * 100, 2),
-        }
-
-        # Network information (optional)
-        try:
-            net_io = psutil.net_io_counters()
-            network_info = {
-                "bytes_sent": net_io.bytes_sent,
-                "bytes_recv": net_io.bytes_recv,
-                "packets_sent": net_io.packets_sent,
-                "packets_recv": net_io.packets_recv,
-            }
-        except Exception:
-            network_info = {"error": "Network info not available"}
-
         return {
             "timestamp": datetime.utcnow().isoformat(),
-            "cpu": {"usage_percent": cpu_percent, "core_count": cpu_count, "load_average": load_avg},
-            "memory": memory_info,
-            "disk": disk_info,
-            "network": network_info,
+            "cpu": _get_cpu_info(psutil),
+            "memory": _get_memory_info(psutil),
+            "disk": _get_disk_info(psutil),
+            "network": _get_network_info(psutil),
             "status": "ok",
         }
     except ImportError:
@@ -937,6 +851,37 @@ async def get_system_resources():
         return {"error": str(e), "status": "error"}
 
 
+async def _check_redis_quick() -> tuple:
+    """Quick Redis check (Issue #398: extracted). Returns (status, health)."""
+    try:
+        from src.utils.redis_client import get_redis_client
+
+        r = get_redis_client(database="main")
+        if r is None:
+            raise Exception("Redis client initialization returned None")
+        await asyncio.to_thread(r.ping)
+        return "online", "✅"
+    except Exception:
+        return "offline", "❌"
+
+
+async def _check_ollama_quick() -> tuple:
+    """Quick Ollama check (Issue #398: extracted). Returns (status, health)."""
+    import aiohttp
+
+    try:
+        http_client = get_http_client()
+        timeout = aiohttp.ClientTimeout(total=2)
+        async with await http_client.get(
+            f"{ServiceURLs.OLLAMA_LOCAL}/api/version", timeout=timeout
+        ) as response:
+            if response.status == 200:
+                return "online", "✅"
+            return "error", "⚠️"
+    except Exception:
+        return "offline", "❌"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_services",
@@ -944,79 +889,32 @@ async def get_system_resources():
 )
 @router.get("/services")
 async def get_all_services():
-    """Get status of all AutoBot services"""
+    """Get status of all AutoBot services (Issue #398: refactored)."""
     try:
-        # Get distributed service URLs from environment
         import os
 
         redis_host = os.environ.get("REDIS_HOST", NetworkConstants.REDIS_VM_IP)
         redis_port = os.environ.get("REDIS_PORT", str(NetworkConstants.REDIS_PORT))
 
         services = {
-            "backend": {
-                "status": "online",
-                "url": ServiceURLs.BACKEND_LOCAL,
-                "health": "✅",
-            },
-            "redis": {
-                "status": "checking",
-                "url": f"redis://{redis_host}:{redis_port}",
-                "health": "⏳",
-            },
-            "ollama": {
-                "status": "checking",
-                "url": ServiceURLs.OLLAMA_LOCAL,
-                "health": "⏳",
-            },
-            "frontend": {
-                "status": "checking",
-                "url": ServiceURLs.FRONTEND_VM,
-                "health": "⏳",
-            },
+            "backend": {"status": "online", "url": ServiceURLs.BACKEND_LOCAL, "health": "✅"},
+            "redis": {"status": "checking", "url": f"redis://{redis_host}:{redis_port}", "health": "⏳"},
+            "ollama": {"status": "checking", "url": ServiceURLs.OLLAMA_LOCAL, "health": "⏳"},
+            "frontend": {"status": "checking", "url": ServiceURLs.FRONTEND_VM, "health": "⏳"},
         }
 
-        # Quick Redis check using canonical utility
-        try:
-            from src.utils.redis_client import get_redis_client
+        # Check services concurrently
+        redis_status, redis_health = await _check_redis_quick()
+        services["redis"]["status"], services["redis"]["health"] = redis_status, redis_health
 
-            r = get_redis_client(database="main")
-            if r is None:
-                raise Exception("Redis client initialization returned None")
-            # Issue #361 - avoid blocking
-            await asyncio.to_thread(r.ping)
-            services["redis"]["status"] = "online"
-            services["redis"]["health"] = "✅"
-        except Exception:
-            services["redis"]["status"] = "offline"
-            services["redis"]["health"] = "❌"
-
-        # Quick Ollama check using singleton HTTP client
-        try:
-            import aiohttp
-
-            http_client = get_http_client()
-            timeout = aiohttp.ClientTimeout(total=2)
-            async with await http_client.get(
-                f"{ServiceURLs.OLLAMA_LOCAL}/api/version",
-                timeout=timeout
-            ) as response:
-                if response.status == 200:
-                    services["ollama"]["status"] = "online"
-                    services["ollama"]["health"] = "✅"
-                else:
-                    services["ollama"]["status"] = "error"
-                    services["ollama"]["health"] = "⚠️"
-        except Exception:
-            services["ollama"]["status"] = "offline"
-            services["ollama"]["health"] = "❌"
+        ollama_status, ollama_health = await _check_ollama_quick()
+        services["ollama"]["status"], services["ollama"]["health"] = ollama_status, ollama_health
 
         return {
             "timestamp": datetime.utcnow().isoformat(),
             "services": services,
             "total_services": len(services),
-            "online_count": sum(
-                1 for s in services.values() if s["status"] == "online"
-            ),
+            "online_count": sum(1 for s in services.values() if s["status"] == "online"),
             "status": "ok",
         }
     except Exception as e:
