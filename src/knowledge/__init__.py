@@ -18,6 +18,8 @@ from multiple focused mixins:
 - CategoriesMixin: Hierarchical category tree structure
 - CollectionsMixin: Collections/folders for grouping documents
 - SuggestionsMixin: ML-based tag and category suggestions (Issue #413)
+- MetadataMixin: Custom metadata templates and validation (Issue #414)
+- VersioningMixin: Fact version history and reversion (Issue #414)
 - BulkOperationsMixin: Import, export, and bulk operations
 
 Usage:
@@ -43,6 +45,8 @@ from src.knowledge.categories import CategoriesMixin
 from src.knowledge.collections import CollectionsMixin
 from src.knowledge.documents import DocumentsMixin
 from src.knowledge.suggestions import SuggestionsMixin
+from src.knowledge.metadata import MetadataMixin
+from src.knowledge.versioning import VersioningMixin
 from src.knowledge.facts import FactsMixin
 from src.knowledge.index import IndexMixin
 from src.knowledge.search import SearchMixin
@@ -63,6 +67,8 @@ class KnowledgeBase(
     CategoriesMixin,
     CollectionsMixin,
     SuggestionsMixin,
+    MetadataMixin,
+    VersioningMixin,
     BulkOperationsMixin,
 ):
     """
@@ -106,7 +112,7 @@ class KnowledgeBase(
         all instance variables that are shared across mixins.
         """
         super().__init__()
-        logger.debug("KnowledgeBase instance created (composed from 11 mixins)")
+        logger.debug("KnowledgeBase instance created (composed from 13 mixins)")
 
     async def initialize(self) -> bool:
         """
@@ -230,5 +236,7 @@ __all__ = [
     "CategoriesMixin",
     "CollectionsMixin",
     "SuggestionsMixin",
+    "MetadataMixin",
+    "VersioningMixin",
     "BulkOperationsMixin",
 ]

@@ -29,6 +29,7 @@ from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_categories import router as knowledge_categories_router
 from backend.api.knowledge_collections import router as knowledge_collections_router
 from backend.api.knowledge_suggestions import router as knowledge_suggestions_router
+from backend.api.knowledge_metadata import router as knowledge_metadata_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
 from backend.api.llm import router as llm_router
 from backend.api.mcp_registry import router as mcp_registry_router
@@ -86,6 +87,12 @@ def load_core_routers():
             "/knowledge_base",
             ["knowledge-suggestions"],
             "knowledge_suggestions",
+        ),
+        (
+            knowledge_metadata_router,
+            "/knowledge_base",
+            ["knowledge-metadata"],
+            "knowledge_metadata",
         ),
         (
             knowledge_population_router,

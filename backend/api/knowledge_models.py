@@ -1026,6 +1026,230 @@ class AutoApplySuggestionsRequest(BaseModel):
     )
 
 
+# ===== METADATA TEMPLATE MODELS (Issue #414) =====
+
+# Valid field types for metadata templates
+VALID_FIELD_TYPES = ("string", "number", "date", "boolean", "list", "url", "email")
+
+
+class MetadataFieldDefinition(BaseModel):
+    """
+    Definition of a single metadata field (Issue #414).
+
+    Used within metadata templates to define custom fields.
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Field name (alphanumeric, underscores)",
+    )
+    type: str = Field(
+        default="string",
+        description="Field type: string, number, date, boolean, list, url, email",
+    )
+    required: bool = Field(
+        default=False,
+        description="Whether this field is required",
+    )
+    default: Optional[str] = Field(
+        default=None,
+        description="Default value if not provided",
+    )
+    validation: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Optional regex validation pattern",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Field description for UI",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate field name format."""
+        v = v.strip()
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
+            raise ValueError(
+                "Field name must start with letter, contain only alphanumeric/underscore"
+            )
+        return v
+
+    @validator("type")
+    def validate_type(cls, v):
+        """Validate field type."""
+        if v not in VALID_FIELD_TYPES:
+            raise ValueError(f"Invalid type: {v}. Must be one of: {VALID_FIELD_TYPES}")
+        return v
+
+    @validator("validation")
+    def validate_regex(cls, v):
+        """Validate regex pattern if provided."""
+        if v:
+            try:
+                re.compile(v)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern: {e}")
+        return v
+
+
+class CreateMetadataTemplateRequest(BaseModel):
+    """
+    Request model for creating a metadata template (Issue #414).
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Template name (e.g., 'API Documentation')",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Template description",
+    )
+    fields: List[MetadataFieldDefinition] = Field(
+        ...,
+        min_items=1,
+        max_items=20,
+        description="List of field definitions",
+    )
+    applicable_categories: Optional[List[str]] = Field(
+        default=None,
+        max_items=20,
+        description="Categories this template applies to",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate template name."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Template name cannot be empty")
+        return v
+
+
+class UpdateMetadataTemplateRequest(BaseModel):
+    """
+    Request model for updating a metadata template (Issue #414).
+    """
+
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="New template name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="New description",
+    )
+    fields: Optional[List[MetadataFieldDefinition]] = Field(
+        default=None,
+        max_items=20,
+        description="New field definitions (replaces all existing)",
+    )
+    applicable_categories: Optional[List[str]] = Field(
+        default=None,
+        max_items=20,
+        description="New applicable categories",
+    )
+
+
+class ValidateMetadataRequest(BaseModel):
+    """
+    Request model for validating metadata against templates (Issue #414).
+    """
+
+    metadata: dict = Field(
+        ...,
+        description="Metadata dict to validate",
+    )
+    category: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Category to determine applicable templates",
+    )
+
+
+class SearchByMetadataRequest(BaseModel):
+    """
+    Request model for searching facts by metadata field (Issue #414).
+    """
+
+    field_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Metadata field name to search",
+    )
+    value: str = Field(
+        ...,
+        max_length=500,
+        description="Value to match",
+    )
+    operator: str = Field(
+        default="eq",
+        description="Comparison operator: eq, contains, gt, lt",
+    )
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum results to return",
+    )
+
+    @validator("operator")
+    def validate_operator(cls, v):
+        """Validate comparison operator."""
+        valid_ops = ("eq", "contains", "gt", "lt")
+        if v not in valid_ops:
+            raise ValueError(f"Invalid operator: {v}. Must be one of: {valid_ops}")
+        return v
+
+
+# ===== VERSION HISTORY MODELS (Issue #414) =====
+
+
+class RevertToVersionRequest(BaseModel):
+    """
+    Request model for reverting a fact to a previous version (Issue #414).
+    """
+
+    version: int = Field(
+        ...,
+        ge=1,
+        description="Version number to revert to",
+    )
+    created_by: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="User/agent performing the revert",
+    )
+
+
+class CompareVersionsRequest(BaseModel):
+    """
+    Request model for comparing two versions of a fact (Issue #414).
+    """
+
+    version_a: int = Field(
+        ...,
+        ge=1,
+        description="First version number",
+    )
+    version_b: int = Field(
+        ...,
+        ge=1,
+        description="Second version number",
+    )
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -1361,6 +1585,16 @@ __all__ = [
     "SuggestCategoriesRequest",
     "SuggestAllRequest",
     "AutoApplySuggestionsRequest",
+    # Metadata templates (Issue #414)
+    "VALID_FIELD_TYPES",
+    "MetadataFieldDefinition",
+    "CreateMetadataTemplateRequest",
+    "UpdateMetadataTemplateRequest",
+    "ValidateMetadataRequest",
+    "SearchByMetadataRequest",
+    # Version history (Issue #414)
+    "RevertToVersionRequest",
+    "CompareVersionsRequest",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",
