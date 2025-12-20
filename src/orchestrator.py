@@ -187,7 +187,7 @@ class OrchestratorConfig:
         )
 
         logger.info(
-            f"Orchestrator configured with model: {self.orchestrator_llm_model}"
+            "Orchestrator configured with model: %s", self.orchestrator_llm_model
         )
 
 
@@ -271,7 +271,7 @@ class ConsolidatedOrchestrator:
         self._initialize_default_agents()
 
         logger.info(
-            f"Consolidated Orchestrator initialized with session: {self.session_id}"
+            "Consolidated Orchestrator initialized with session: %s", self.session_id
         )
 
     def _initialize_default_agents(self):
@@ -370,12 +370,12 @@ class ConsolidatedOrchestrator:
         # Try primary model
         if await self._validate_llm_model(self.config.orchestrator_llm_model):
             logger.info(
-                f"✅ Orchestrator model '{self.config.orchestrator_llm_model}' is working"
+                "✅ Orchestrator model '%s' is working", self.config.orchestrator_llm_model
             )
             return
 
         logger.warning(
-            f"⚠️ Orchestrator model '{self.config.orchestrator_llm_model}' test failed"
+            "⚠️ Orchestrator model '%s' test failed", self.config.orchestrator_llm_model
         )
 
         # Try fallback model
@@ -433,7 +433,7 @@ class ConsolidatedOrchestrator:
         # Complete pending tasks
         if self.active_tasks:
             logger.info(
-                f"Waiting for {len(self.active_tasks)} active tasks to complete..."
+                "Waiting for %d active tasks to complete...", len(self.active_tasks)
             )
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Brief wait for tasks
 
@@ -803,12 +803,12 @@ class ConsolidatedOrchestrator:
         try:
             if agent_profile.agent_id in self.agent_registry:
                 logger.warning(
-                    f"Agent {agent_profile.agent_id} already registered, updating profile"
+                    "Agent %s already registered, updating profile", agent_profile.agent_id
                 )
 
             self.agent_registry[agent_profile.agent_id] = agent_profile
             logger.info(
-                f"Agent {agent_profile.agent_id} registered with capabilities: {agent_profile.capabilities}"
+                "Agent %s registered with capabilities: %s", agent_profile.agent_id, agent_profile.capabilities
             )
 
             return True
@@ -1034,7 +1034,7 @@ class ConsolidatedOrchestrator:
                 )
 
             logger.info(
-                f"Generated {len(steps)} workflow steps for {complexity.value} task"
+                "Generated %d workflow steps for %s task", len(steps), complexity.value
             )
             return steps
 

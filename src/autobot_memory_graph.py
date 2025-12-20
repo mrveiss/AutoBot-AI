@@ -192,7 +192,7 @@ class AutoBotMemoryGraph:
             # Test connection
             await self.redis_client.ping()
             logger.info(
-                f"Memory Graph Redis client connected (database {self.redis_db})"
+                "Memory Graph Redis client connected (database %s)", self.redis_db
             )
 
         except Exception as e:
@@ -286,7 +286,7 @@ class AutoBotMemoryGraph:
 
         except Exception as e:
             logger.warning(
-                f"Could not initialize Knowledge Base (embeddings unavailable): {e}"
+                "Could not initialize Knowledge Base (embeddings unavailable): %s", e
             )
             self.knowledge_base = None
 
@@ -496,7 +496,7 @@ class AutoBotMemoryGraph:
             self.search_cache.clear()
 
             logger.info(
-                f"Added {len(observations)} observations to entity: {entity_name}"
+                "Added %d observations to entity: %s", len(observations), entity_name
             )
 
             return await self.redis_client.json().get(entity_key)
@@ -636,7 +636,7 @@ class AutoBotMemoryGraph:
             await self.redis_client.json().arrappend(in_key, "$.relations", reverse_rel)
 
             logger.info(
-                f"Created relation: {from_entity} --[{relation_type}]--> {to_entity}"
+                "Created relation: %s --[%s]--> %s", from_entity, relation_type, to_entity
             )
 
             return relation
@@ -766,7 +766,7 @@ class AutoBotMemoryGraph:
                 )
 
             logger.info(
-                f"Deleted relation: {from_entity} --[{relation_type}]--> {to_entity}"
+                "Deleted relation: %s --[%s]--> %s", from_entity, relation_type, to_entity
             )
 
             return True
