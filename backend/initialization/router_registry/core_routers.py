@@ -28,6 +28,7 @@ from backend.api.knowledge_population import router as knowledge_population_rout
 from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_categories import router as knowledge_categories_router
 from backend.api.knowledge_collections import router as knowledge_collections_router
+from backend.api.knowledge_suggestions import router as knowledge_suggestions_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
 from backend.api.llm import router as llm_router
 from backend.api.mcp_registry import router as mcp_registry_router
@@ -68,9 +69,30 @@ def load_core_routers():
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (knowledge_search_router, "/knowledge_base", ["knowledge-search"], "knowledge_search"),
         (knowledge_tags_router, "/knowledge_base", ["knowledge-tags"], "knowledge_tags"),
-        (knowledge_categories_router, "/knowledge_base", ["knowledge-categories"], "knowledge_categories"),
-        (knowledge_collections_router, "/knowledge_base", ["knowledge-collections"], "knowledge_collections"),
-        (knowledge_population_router, "/knowledge_base", ["knowledge-population"], "knowledge_population"),
+        (
+            knowledge_categories_router,
+            "/knowledge_base",
+            ["knowledge-categories"],
+            "knowledge_categories",
+        ),
+        (
+            knowledge_collections_router,
+            "/knowledge_base",
+            ["knowledge-collections"],
+            "knowledge_collections",
+        ),
+        (
+            knowledge_suggestions_router,
+            "/knowledge_base",
+            ["knowledge-suggestions"],
+            "knowledge_suggestions",
+        ),
+        (
+            knowledge_population_router,
+            "/knowledge_base",
+            ["knowledge-population"],
+            "knowledge_population",
+        ),
         (llm_router, "/llm", ["llm"], "llm"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),

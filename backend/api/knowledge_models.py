@@ -887,6 +887,145 @@ class CollectionFactsRequest(BaseModel):
         return v
 
 
+# ===== ML-BASED SUGGESTION MODELS (Issue #413) =====
+
+
+class SuggestTagsRequest(BaseModel):
+    """
+    Request model for tag suggestions based on content (Issue #413).
+
+    Uses embedding-based similarity to find related documents and
+    suggest tags with confidence scores.
+    """
+
+    content: str = Field(
+        ...,
+        min_length=10,
+        max_length=100000,
+        description="Document content to analyze for tag suggestions",
+    )
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of tag suggestions to return",
+    )
+    min_confidence: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for suggestions (0.0-1.0)",
+    )
+    similarity_limit: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Number of similar documents to analyze",
+    )
+
+
+class SuggestCategoriesRequest(BaseModel):
+    """
+    Request model for category suggestions based on content (Issue #413).
+
+    Uses embedding-based similarity to find related documents and
+    suggest categories with confidence scores.
+    """
+
+    content: str = Field(
+        ...,
+        min_length=10,
+        max_length=100000,
+        description="Document content to analyze for category suggestions",
+    )
+    limit: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum number of category suggestions to return",
+    )
+    min_confidence: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold for suggestions (0.0-1.0)",
+    )
+    similarity_limit: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Number of similar documents to analyze",
+    )
+
+
+class SuggestAllRequest(BaseModel):
+    """
+    Request model for combined tag and category suggestions (Issue #413).
+
+    More efficient than separate calls as it only performs one similarity search.
+    """
+
+    content: str = Field(
+        ...,
+        min_length=10,
+        max_length=100000,
+        description="Document content to analyze",
+    )
+    tag_limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum number of tag suggestions",
+    )
+    category_limit: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum number of category suggestions",
+    )
+    min_confidence: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence threshold",
+    )
+    similarity_limit: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Number of similar documents to analyze",
+    )
+
+
+class AutoApplySuggestionsRequest(BaseModel):
+    """
+    Request model for auto-applying suggestions to a fact (Issue #413).
+
+    Automatically applies high-confidence tags and categories to an existing fact.
+    """
+
+    content: str = Field(
+        ...,
+        min_length=10,
+        max_length=100000,
+        description="Content to analyze for suggestions",
+    )
+    apply_tags: bool = Field(
+        default=True,
+        description="Whether to apply tag suggestions",
+    )
+    apply_category: bool = Field(
+        default=True,
+        description="Whether to apply category suggestion",
+    )
+    min_confidence: float = Field(
+        default=0.85,
+        ge=0.5,
+        le=1.0,
+        description="Minimum confidence to auto-apply (0.5-1.0, higher = stricter)",
+    )
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -1217,6 +1356,11 @@ __all__ = [
     "CreateCollectionRequest",
     "UpdateCollectionRequest",
     "CollectionFactsRequest",
+    # ML-based suggestions (Issue #413)
+    "SuggestTagsRequest",
+    "SuggestCategoriesRequest",
+    "SuggestAllRequest",
+    "AutoApplySuggestionsRequest",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",
