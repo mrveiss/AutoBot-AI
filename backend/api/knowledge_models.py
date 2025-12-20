@@ -753,6 +753,140 @@ class SearchCategoriesByPathRequest(BaseModel):
         return v
 
 
+# ===== COLLECTION MANAGEMENT MODELS (Issue #412) =====
+
+
+class CreateCollectionRequest(BaseModel):
+    """
+    Request model for creating a new collection (Issue #412).
+
+    Collections enable project-based grouping of facts with many-to-many relationships.
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Collection name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Collection description",
+    )
+    icon: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Icon identifier (e.g., 'fas fa-folder')",
+    )
+    color: Optional[str] = Field(
+        default=None,
+        min_length=7,
+        max_length=7,
+        description="Hex color code (e.g., '#3B82F6')",
+    )
+    metadata: Optional[dict] = Field(
+        default=None,
+        description="Custom metadata for the collection",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate collection name."""
+        v = v.strip()
+        if not v:
+            raise ValueError("Collection name cannot be empty")
+        if contains_path_traversal(v):
+            raise ValueError("Invalid characters in collection name")
+        return v
+
+    @validator("color")
+    def validate_color(cls, v):
+        """Validate hex color format."""
+        if v is not None:
+            if not _HEX_COLOR_RE.match(v):
+                raise ValueError(
+                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
+                )
+        return v
+
+
+class UpdateCollectionRequest(BaseModel):
+    """
+    Request model for updating a collection (Issue #412).
+
+    All fields are optional; only provided fields are updated.
+    """
+
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="New collection name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="New description",
+    )
+    icon: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="New icon identifier",
+    )
+    color: Optional[str] = Field(
+        default=None,
+        min_length=7,
+        max_length=7,
+        description="New hex color code",
+    )
+    metadata: Optional[dict] = Field(
+        default=None,
+        description="New custom metadata (replaces existing)",
+    )
+
+    @validator("name")
+    def validate_name(cls, v):
+        """Validate collection name if provided."""
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("Collection name cannot be empty")
+        return v
+
+    @validator("color")
+    def validate_color(cls, v):
+        """Validate hex color format if provided."""
+        if v is not None:
+            if not _HEX_COLOR_RE.match(v):
+                raise ValueError(
+                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
+                )
+        return v
+
+
+class CollectionFactsRequest(BaseModel):
+    """
+    Request model for adding/removing facts from a collection (Issue #412).
+    """
+
+    fact_ids: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=500,
+        description="List of fact IDs to add/remove",
+    )
+
+    @validator("fact_ids", each_item=True)
+    def validate_fact_id(cls, v):
+        """Validate fact ID format."""
+        if not _ALNUM_ID_RE.match(v):
+            raise ValueError(f"Invalid fact_id format: {v}")
+        if contains_path_traversal(v):
+            raise ValueError(f"Invalid characters in fact_id: {v}")
+        return v
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -1079,6 +1213,10 @@ __all__ = [
     "DeleteCategoryRequest",
     "AssignFactToCategoryRequest",
     "SearchCategoriesByPathRequest",
+    # Collection management (Issue #412)
+    "CreateCollectionRequest",
+    "UpdateCollectionRequest",
+    "CollectionFactsRequest",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",
