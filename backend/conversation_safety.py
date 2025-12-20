@@ -51,6 +51,59 @@ class ConversationSafetyGuards:
     # Minimum confidence required for END intent
     MIN_END_CONFIDENCE = 0.85
 
+    def _check_context_rules(self, context: ConversationContext) -> list[str]:
+        """
+        Check context-based safety rules.
+
+        (Issue #398: extracted helper)
+        """
+        violated = []
+
+        if context.has_recent_question:
+            violated.append("assistant_asked_question")
+            logger.info("Safety guard: Cannot end - assistant just asked a question")
+
+        if context.has_confusion_signals:
+            violated.append("user_confused")
+            logger.info("Safety guard: Cannot end - user expressed confusion")
+
+        if context.message_count < self.MIN_CONVERSATION_LENGTH:
+            violated.append("conversation_too_short")
+            logger.info(
+                "Safety guard: Cannot end - conversation too short (%d < %d)",
+                context.message_count, self.MIN_CONVERSATION_LENGTH
+            )
+
+        if context.has_active_task:
+            violated.append("active_task")
+            logger.info("Safety guard: Cannot end - active task in progress")
+
+        return violated
+
+    def _check_intent_rules(
+        self, classification: IntentClassification, context: ConversationContext
+    ) -> list[str]:
+        """
+        Check intent-based safety rules.
+
+        (Issue #398: extracted helper)
+        """
+        violated = []
+
+        if classification.intent == ConversationIntent.END:
+            if classification.confidence < self.MIN_END_CONFIDENCE:
+                violated.append("low_confidence_end")
+                logger.info(
+                    "Safety guard: Cannot end - confidence too low (%.2f < %.2f)",
+                    classification.confidence, self.MIN_END_CONFIDENCE
+                )
+
+            if context.user_engagement_level == "high":
+                violated.append("high_engagement")
+                logger.info("Safety guard: Cannot end - user showing high engagement")
+
+        return violated
+
     def check(
         self,
         classification: IntentClassification,
@@ -59,6 +112,8 @@ class ConversationSafetyGuards:
         """
         Check if it's safe to end the conversation based on classification and context.
 
+        (Issue #398: refactored to use extracted helpers)
+
         Args:
             classification: Intent classification result
             context: Conversation context analysis
@@ -66,49 +121,10 @@ class ConversationSafetyGuards:
         Returns:
             SafetyCheckResult indicating if it's safe to end and any overrides
         """
-        violated_rules = []
+        violated_rules = self._check_context_rules(context)
+        violated_rules.extend(self._check_intent_rules(classification, context))
 
-        # SAFETY RULE 1: Never end on questions
-        if context.has_recent_question:
-            violated_rules.append("assistant_asked_question")
-            logger.info("Safety guard: Cannot end - assistant just asked a question")
-
-        # SAFETY RULE 2: Never end on confusion signals
-        if context.has_confusion_signals:
-            violated_rules.append("user_confused")
-            logger.info("Safety guard: Cannot end - user expressed confusion")
-
-        # SAFETY RULE 3: Never end on short conversations
-        if context.message_count < self.MIN_CONVERSATION_LENGTH:
-            violated_rules.append("conversation_too_short")
-            logger.info(
-                f"Safety guard: Cannot end - conversation too short "
-                f"({context.message_count} < {self.MIN_CONVERSATION_LENGTH})"
-            )
-
-        # SAFETY RULE 4: Never end on active tasks
-        if context.has_active_task:
-            violated_rules.append("active_task")
-            logger.info("Safety guard: Cannot end - active task in progress")
-
-        # SAFETY RULE 5: Require high confidence for END intent
-        if classification.intent == ConversationIntent.END:
-            if classification.confidence < self.MIN_END_CONFIDENCE:
-                violated_rules.append("low_confidence_end")
-                logger.info(
-                    f"Safety guard: Cannot end - confidence too low "
-                    f"({classification.confidence} < {self.MIN_END_CONFIDENCE})"
-                )
-
-        # SAFETY RULE 6: High engagement level prevents ending
-        if context.user_engagement_level == "high":
-            if classification.intent == ConversationIntent.END:
-                violated_rules.append("high_engagement")
-                logger.info("Safety guard: Cannot end - user showing high engagement")
-
-        # Determine if it's safe to end
         if violated_rules:
-            # Override END intent to CONTINUE
             override_intent = (
                 ConversationIntent.CONTINUE
                 if classification.intent == ConversationIntent.END
@@ -122,7 +138,6 @@ class ConversationSafetyGuards:
                 violated_rules=violated_rules,
             )
 
-        # All safety checks passed
         return SafetyCheckResult(
             is_safe_to_end=True,
             override_intent=None,

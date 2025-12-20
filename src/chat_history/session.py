@@ -113,39 +113,19 @@ class SessionMixin:
                 logger.warning("Could not load old format data: %s", e)
         return {}
 
-    async def create_session(
+    def _build_session_data(
         self,
-        session_id: Optional[str] = None,
-        title: Optional[str] = None,
-        session_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        session_id: str,
+        session_title: str,
+        current_time: str,
+        metadata: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
-        Create a new chat session.
+        Build the session data dictionary.
 
-        Args:
-            session_id: Optional session ID (auto-generated if not provided)
-            title: Optional title for the session
-            session_name: Optional name for the session (backward compatibility)
-            metadata: Optional metadata for the session
-
-        Returns:
-            Session data including session_id, title, etc.
+        (Issue #398: extracted helper)
         """
-        # Initialize Memory Graph if not already done
-        await self._init_memory_graph()
-
-        # Generate session ID if not provided
-        if not session_id:
-            session_id = f"chat-{int(time.time() * 1000)}-{str(uuid.uuid4())[:8]}"
-
-        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Use title, or session_name (for backward compatibility), or auto-generate
-        session_title = title or session_name or f"Chat {session_id[:13]}"
-
-        # Prepare session data
-        session_data = {
+        return {
             "id": session_id,
             "chatId": session_id,  # Backward compatibility
             "title": session_title,
@@ -159,35 +139,81 @@ class SessionMixin:
             "metadata": metadata or {},
         }
 
-        # Create session with initial metadata
+    async def _create_memory_graph_entity(
+        self,
+        session_id: str,
+        session_title: str,
+        current_time: str,
+        metadata: Optional[Dict[str, Any]],
+    ) -> None:
+        """
+        Create conversation entity in Memory Graph.
+
+        (Issue #398: extracted helper)
+        """
+        if not (self.memory_graph_enabled and self.memory_graph):
+            return
+
+        try:
+            entity_metadata = {
+                "session_id": session_id,
+                "title": session_title,
+                "created_at": current_time,
+                "status": "active",
+                "priority": "medium",
+            }
+
+            if metadata:
+                entity_metadata.update(metadata)
+
+            await self.memory_graph.create_conversation_entity(
+                session_id=session_id, metadata=entity_metadata
+            )
+
+            logger.info("Created Memory Graph entity for session: %s", session_id)
+
+        except Exception as e:
+            logger.warning(
+                "Failed to create Memory Graph entity (continuing): %s", e
+            )
+
+    async def create_session(
+        self,
+        session_id: Optional[str] = None,
+        title: Optional[str] = None,
+        session_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a new chat session.
+
+        (Issue #398: refactored to use extracted helpers)
+
+        Args:
+            session_id: Optional session ID (auto-generated if not provided)
+            title: Optional title for the session
+            session_name: Optional name for the session (backward compatibility)
+            metadata: Optional metadata for the session
+
+        Returns:
+            Session data including session_id, title, etc.
+        """
+        await self._init_memory_graph()
+
+        if not session_id:
+            session_id = f"chat-{int(time.time() * 1000)}-{str(uuid.uuid4())[:8]}"
+
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        session_title = title or session_name or f"Chat {session_id[:13]}"
+
+        session_data = self._build_session_data(
+            session_id, session_title, current_time, metadata
+        )
+
         await self.save_session(session_id=session_id, messages=[], name=session_title)
-
-        # Memory Graph: Create conversation entity (non-blocking)
-        if self.memory_graph_enabled and self.memory_graph:
-            try:
-                entity_metadata = {
-                    "session_id": session_id,
-                    "title": session_title,
-                    "created_at": current_time,
-                    "status": "active",
-                    "priority": "medium",
-                }
-
-                # Merge user-provided metadata
-                if metadata:
-                    entity_metadata.update(metadata)
-
-                # Create conversation entity
-                await self.memory_graph.create_conversation_entity(
-                    session_id=session_id, metadata=entity_metadata
-                )
-
-                logger.info("Created Memory Graph entity for session: %s", session_id)
-
-            except Exception as e:
-                logger.warning(
-                    "Failed to create Memory Graph entity (continuing): %s", e
-                )
+        await self._create_memory_graph_entity(
+            session_id, session_title, current_time, metadata
+        )
 
         logger.info("Created new chat session: %s", session_id)
         return session_data
