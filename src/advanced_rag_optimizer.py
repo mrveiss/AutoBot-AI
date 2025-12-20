@@ -21,7 +21,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-
 from src.constants.model_constants import model_config
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
@@ -244,13 +243,16 @@ class AdvancedRAGOptimizer:
     ) -> List[SearchResult]:
         """Perform semantic similarity search using embeddings."""
         try:
-            # Use knowledge base's existing search functionality
-            facts = await asyncio.to_thread(self.kb.get_fact, query=query)
+            # Use knowledge base's search method for semantic search
+            # Issue #429: Fixed - was incorrectly calling get_fact(query=query)
+            # get_fact() only accepts fact_id, not query. Use search() instead.
+            facts = await self.kb.search(query, top_k=limit)
 
             semantic_results = []
             for i, fact in enumerate(facts[:limit]):
-                # Extract metadata
-                metadata = json.loads(fact.get("metadata", "{}"))
+                # Extract metadata - already a dict from search results
+                # Issue #429: Fixed - metadata is already parsed, no need for json.loads
+                metadata = fact.get("metadata", {})
 
                 # Create search result with semantic scoring
                 result = SearchResult(
@@ -294,8 +296,9 @@ class AdvancedRAGOptimizer:
                     if query.lower() in combined_text:
                         keyword_score *= 1.5
 
-                    # Extract metadata
-                    metadata = json.loads(fact.get("metadata", "{}"))
+                    # Extract metadata - already a dict from get_all_facts()
+                    # Issue #429: Fixed - metadata is already parsed, no need for json.loads
+                    metadata = fact.get("metadata", {})
 
                     result = SearchResult(
                         content=fact.get("content", ""),
