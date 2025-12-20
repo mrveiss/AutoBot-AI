@@ -131,7 +131,7 @@ class EncryptionService:
             return base64.b64encode(encrypted_data).decode("ascii")
 
         except Exception as e:
-            logger.error(f"Encryption failed: {e}")
+            logger.error("Encryption failed: %s", e)
             raise ValueError(f"Encryption failed: {e}")
 
     def decrypt(self, encrypted_data: str) -> str:
@@ -170,7 +170,7 @@ class EncryptionService:
             return plaintext_bytes.decode("utf-8")
 
         except Exception as e:
-            logger.error(f"Decryption failed: {e}")
+            logger.error("Decryption failed: %s", e)
             raise ValueError(f"Decryption failed: {e}")
 
     def encrypt_json(self, data: dict) -> str:

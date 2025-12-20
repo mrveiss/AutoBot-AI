@@ -310,7 +310,7 @@ class UnifiedKnowledgeManager:
             logger.info("Unified knowledge manager initialized")
 
         except Exception as e:
-            logger.error(f"Failed to initialize unified knowledge manager: {e}")
+            logger.error("Failed to initialize unified knowledge manager: %s", e)
             raise RuntimeError(f"Initialization failed: {e}") from e
 
     async def reload(self):
@@ -839,7 +839,7 @@ class UnifiedKnowledgeManager:
                 # 1. Import via system manager (existing functionality)
                 # Note: This is a conceptual example - actual implementation
                 # would depend on SystemKnowledgeManager having this method
-                logger.info(f"Importing {file_path} (category: {category})")
+                logger.info("Importing %s (category: %s)", file_path, category)
 
                 # For now, log the intent - actual import would call system_manager
                 # In a real implementation, you'd call:
@@ -870,7 +870,7 @@ class UnifiedKnowledgeManager:
                         tracked_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to import {file_path}: {e}")
+                logger.error("Failed to import %s: %s", file_path, e)
 
         return {
             "imported_count": imported_count,
@@ -970,7 +970,7 @@ class UnifiedKnowledgeManager:
 
         # Search system knowledge via knowledge base
         # Note: Actual implementation would query knowledge_base
-        logger.info(f"Searching knowledge for: {query}")
+        logger.info("Searching knowledge for: %s", query)
 
         # Search man pages if requested and available
         if include_man_pages and self.enable_machine_aware:
@@ -979,7 +979,7 @@ class UnifiedKnowledgeManager:
                 results["man_page_results"] = man_results
                 results["total_results"] += len(man_results)
             except Exception as e:
-                logger.warning(f"Man page search failed: {e}")
+                logger.warning("Man page search failed: %s", e)
 
         return results
 
@@ -1044,7 +1044,7 @@ class UnifiedKnowledgeManager:
                     temporal_backup_path
                 )
 
-        logger.info(f"Knowledge backup completed: {backup_info['components']}")
+        logger.info("Knowledge backup completed: %s", backup_info['components'])
         return backup_info
 
     async def cleanup_expired_content(self) -> Dict[str, int]:
@@ -1072,7 +1072,7 @@ class UnifiedKnowledgeManager:
             await self.process_invalidation_job(job)
             cleanup_counts[job.priority.value] = len(job.content_ids)
 
-        logger.info(f"Cleanup completed: {cleanup_counts}")
+        logger.info("Cleanup completed: %s", cleanup_counts)
         return cleanup_counts
 
 

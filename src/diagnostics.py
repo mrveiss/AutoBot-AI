@@ -62,7 +62,7 @@ class PerformanceOptimizedDiagnostics:
                 logger.warning("Diagnostics: Redis connection failed")
                 self.redis_client = None
         except Exception as e:
-            logger.error(f"Diagnostics: Redis initialization error: {e}")
+            logger.error("Diagnostics: Redis initialization error: %s", e)
             self.redis_client = None
 
     def _get_system_info(self) -> Dict[str, Any]:
@@ -97,7 +97,7 @@ class PerformanceOptimizedDiagnostics:
                 "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error gathering system info: {e}")
+            logger.error("Error gathering system info: %s", e)
             return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
     def _get_gpu_info(self) -> Dict[str, Any]:
@@ -149,11 +149,11 @@ class PerformanceOptimizedDiagnostics:
                 "timeout_seconds": self.max_user_permission_timeout,
             },
         )
-        print(
-            f"Permission request sent for task {task_id} "
-            f"(attempt {attempt + 1}/{self.permission_retry_attempts})"
+        logger.info(
+            "Permission request sent for task %s (attempt %d/%d)",
+            task_id, attempt + 1, self.permission_retry_attempts
         )
-        print(f"Waiting up to {self.max_user_permission_timeout}s for response...")
+        logger.info("Waiting up to %ds for response...", self.max_user_permission_timeout)
         return permission_future
 
     async def _handle_permission_timeout(
@@ -161,7 +161,7 @@ class PerformanceOptimizedDiagnostics:
     ) -> bool:
         """Handle permission timeout with retry logic (Issue #315 - extracted helper)."""
         elapsed_time = time.time() - start_time
-        logger.warning(f"User permission timeout after {elapsed_time:.2f}s (attempt {attempt + 1})")
+        logger.warning("User permission timeout after %.2fs (attempt %s)", elapsed_time, attempt + 1)
 
         if attempt < self.permission_retry_attempts - 1:
             await event_manager.publish(
@@ -190,7 +190,7 @@ class PerformanceOptimizedDiagnostics:
 
         for attempt in range(self.permission_retry_attempts):
             try:
-                logger.info(f"Requesting user permission for task {task_id} (attempt {attempt + 1})")
+                logger.info("Requesting user permission for task %s (attempt %s)", task_id, attempt + 1)
                 permission_future = await self._publish_permission_request(task_id, report, attempt)
 
                 try:
@@ -198,7 +198,7 @@ class PerformanceOptimizedDiagnostics:
                         permission_future, timeout=self.max_user_permission_timeout
                     )
                     elapsed_time = time.time() - start_time
-                    logger.info(f"User permission received in {elapsed_time:.2f}s: {permission_granted}")
+                    logger.info("User permission received in %.2fs: %s", elapsed_time, permission_granted)
                     return permission_granted
 
                 except asyncio.TimeoutError:
@@ -207,7 +207,7 @@ class PerformanceOptimizedDiagnostics:
                         return False
 
             except Exception as e:
-                logger.error(f"Error in permission request (attempt {attempt + 1}): {e}")
+                logger.error("Error in permission request (attempt %s): %s", attempt + 1, e)
                 if attempt == self.permission_retry_attempts - 1:
                     return False
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
@@ -253,7 +253,7 @@ class PerformanceOptimizedDiagnostics:
                 "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Error checking system resources: {e}")
+            logger.error("Error checking system resources: %s", e)
             return {"error": str(e)}
 
     def _analyze_performance_bottlenecks(self) -> Dict[str, Any]:
@@ -337,7 +337,7 @@ class PerformanceOptimizedDiagnostics:
             return analysis
 
         except Exception as e:
-            logger.error(f"Performance analysis error: {e}")
+            logger.error("Performance analysis error: %s", e)
             return {"error": str(e)}
 
     def _generate_performance_recommendations(self) -> List[Dict[str, str]]:
@@ -400,7 +400,7 @@ class PerformanceOptimizedDiagnostics:
             return recommendations
 
         except Exception as e:
-            logger.error(f"Error generating recommendations: {e}")
+            logger.error("Error generating recommendations: %s", e)
             return [{"category": "error", "recommendation": f"Error: {str(e)}"}]
 
     def cleanup_and_optimize_memory(self):
@@ -435,7 +435,7 @@ class PerformanceOptimizedDiagnostics:
             }
 
         except Exception as e:
-            logger.error(f"Memory cleanup error: {e}")
+            logger.error("Memory cleanup error: %s", e)
             return {"error": str(e)}
 
 

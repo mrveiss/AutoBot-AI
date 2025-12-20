@@ -150,7 +150,7 @@ class AsyncEnhancedMemoryManager:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        logger.info(f"Async Enhanced Memory Manager initialized: {self.db_path}")
+        logger.info("Async Enhanced Memory Manager initialized: %s", self.db_path)
 
     async def _configure_pragmas(self, conn) -> None:
         """
@@ -287,7 +287,7 @@ class AsyncEnhancedMemoryManager:
                 self._initialized = True
                 logger.info("Async enhanced memory database initialized")
             except aiosqlite.Error as e:
-                logger.error(f"Failed to initialize database: {e}")
+                logger.error("Failed to initialize database: %s", e)
                 raise RuntimeError(f"Database initialization failed: {e}")
 
     async def create_task(self, task: TaskEntry) -> str:
@@ -313,10 +313,10 @@ class AsyncEnhancedMemoryManager:
                 )
                 await conn.commit()
 
-            logger.info(f"Created task: {task.task_id}")
+            logger.info("Created task: %s", task.task_id)
             return task.task_id
         except aiosqlite.Error as e:
-            logger.error(f"Failed to create task {task.task_id}: {e}")
+            logger.error("Failed to create task %s: %s", task.task_id, e)
             raise RuntimeError(f"Failed to create task: {e}")
 
     async def update_task_status(
@@ -361,13 +361,13 @@ class AsyncEnhancedMemoryManager:
                 await conn.commit()
 
             if success:
-                logger.info(f"Updated task {task_id} status to {status.value}")
+                logger.info("Updated task %s status to %s", task_id, status.value)
             else:
-                logger.warning(f"Task {task_id} not found for status update")
+                logger.warning("Task %s not found for status update", task_id)
 
             return success
         except aiosqlite.Error as e:
-            logger.error(f"Failed to update task {task_id} status: {e}")
+            logger.error("Failed to update task %s status: %s", task_id, e)
             raise RuntimeError(f"Failed to update task status: {e}")
 
     async def log_execution(self, record: ExecutionRecord) -> str:
@@ -403,10 +403,10 @@ class AsyncEnhancedMemoryManager:
                 )
                 await conn.commit()
 
-            logger.debug(f"Logged execution record: {record.record_id}")
+            logger.debug("Logged execution record: %s", record.record_id)
             return record.record_id
         except aiosqlite.Error as e:
-            logger.error(f"Failed to log execution record: {e}")
+            logger.error("Failed to log execution record: %s", e)
             raise RuntimeError(f"Failed to log execution: {e}")
 
     async def get_task(self, task_id: str) -> Optional[TaskEntry]:
@@ -442,7 +442,7 @@ class AsyncEnhancedMemoryManager:
                     markdown_reference=row[15],
                 )
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get task {task_id}: {e}")
+            logger.error("Failed to get task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get task: {e}")
 
     async def get_tasks_by_status(
@@ -485,7 +485,7 @@ class AsyncEnhancedMemoryManager:
 
                 return tasks
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get tasks by status: {e}")
+            logger.error("Failed to get tasks by status: %s", e)
             raise RuntimeError(f"Failed to get tasks: {e}")
 
     async def get_execution_history(
@@ -520,7 +520,7 @@ class AsyncEnhancedMemoryManager:
 
                 return records
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get execution history for {task_id}: {e}")
+            logger.error("Failed to get execution history for %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get execution history: {e}")
 
     async def store_memory(
@@ -557,10 +557,10 @@ class AsyncEnhancedMemoryManager:
                 memory_id = cursor.lastrowid
                 await conn.commit()
 
-            logger.debug(f"Stored memory entry {memory_id} in category {category}")
+            logger.debug("Stored memory entry %s in category %s", memory_id, category)
             return memory_id
         except aiosqlite.Error as e:
-            logger.error(f"Failed to store memory entry: {e}")
+            logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory: {e}")
 
     async def get_task_statistics(self) -> Dict[str, Any]:
@@ -616,7 +616,7 @@ class AsyncEnhancedMemoryManager:
 
                 return stats
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get task statistics: {e}")
+            logger.error("Failed to get task statistics: %s", e)
             raise RuntimeError(f"Failed to get task statistics: {e}")
 
     async def cleanup_old_data(self, retention_days: int = 90):
@@ -653,7 +653,7 @@ class AsyncEnhancedMemoryManager:
                     f"{deleted_tasks} tasks, {deleted_memories} memories"
                 )
         except aiosqlite.Error as e:
-            logger.error(f"Failed to cleanup old data: {e}")
+            logger.error("Failed to cleanup old data: %s", e)
             raise RuntimeError(f"Failed to cleanup old data: {e}")
 
     async def close(self):

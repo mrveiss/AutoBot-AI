@@ -54,7 +54,7 @@ class SecurityLayer:
         logger.info(
             f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}"
         )
-        logger.debug(f"Audit log file: {self.audit_log_file}")
+        logger.debug("Audit log file: %s", self.audit_log_file)
 
     def check_permission(
         self, user_role: str, action_type: str, resource: Optional[str] = None
@@ -197,7 +197,7 @@ class SecurityLayer:
         try:
             with open(self.audit_log_file, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-            logger.debug(f"Audit log: {action} by {user} - {outcome}")
+            logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
             logger.error(
                 f"Failed to write to audit log file {self.audit_log_file}: {e}"

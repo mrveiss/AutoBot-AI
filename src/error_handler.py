@@ -56,7 +56,7 @@ def log_error(
         logger.error(log_msg, exc_info=include_traceback)
     else:
         # Log unexpected errors at critical level
-        logger.critical(f"Unexpected {log_msg}", exc_info=True)
+        logger.critical("Unexpected %s", log_msg, exc_info=True)
 
 
 def with_error_handling(
@@ -135,7 +135,7 @@ def _handle_retry_attempt(
 # (Issue #315 - extracted) Helper function for max retry logging
 def _log_max_retries_exceeded(max_attempts: int, func_name: str) -> None:
     """Log when max retries are exceeded"""
-    logger.error(f"Max retries ({max_attempts}) exceeded for {func_name}")
+    logger.error("Max retries (%s) exceeded for %s", max_attempts, func_name)
 
 
 def retry(
@@ -260,7 +260,7 @@ class CircuitBreaker:
                     with self._lock:
                         self._state = "closed"
                         self.failure_count = 0
-                    logger.info(f"Circuit breaker closed for {func.__name__}")
+                    logger.info("Circuit breaker closed for %s", func.__name__)
                 return result
             except self.expected_exception:
                 self._handle_failure(func.__name__)
@@ -278,7 +278,7 @@ class CircuitBreaker:
                     with self._lock:
                         self._state = "closed"
                         self.failure_count = 0
-                    logger.info(f"Circuit breaker closed for {func.__name__}")
+                    logger.info("Circuit breaker closed for %s", func.__name__)
                 return result
             except self.expected_exception:
                 self._handle_failure(func.__name__)

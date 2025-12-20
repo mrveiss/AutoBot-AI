@@ -145,7 +145,7 @@ class SourceAttributionManager:
         # Prevent memory leak by cleaning up old sources
         self._cleanup_sources_if_needed()
 
-        logger.debug(f"Added source: {source.format_citation()}")
+        logger.debug("Added source: %s", source.format_citation())
         return source
 
     def _cleanup_sources_if_needed(self):

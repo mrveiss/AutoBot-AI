@@ -209,7 +209,7 @@ class LLMSelfAwareness:
             return context
 
         except Exception as e:
-            logger.error(f"Error building system context: {e}")
+            logger.error("Error building system context: %s", e)
             return self._get_error_context(e)
 
     def _get_categorization_rules(self) -> Dict[str, List[str]]:
@@ -446,7 +446,7 @@ You should be aware of your current capabilities and limitations based on the sy
             return "\n".join(summary)
 
         except Exception as e:
-            logger.error(f"Error creating capability summary: {e}")
+            logger.error("Error creating capability summary: %s", e)
             return f"Error creating capability summary: {str(e)}"
 
     async def get_phase_aware_response(self, query: str) -> Dict[str, Any]:
@@ -537,9 +537,9 @@ You should be aware of your current capabilities and limitations based on the sy
         try:
             async with aiofiles.open(output_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(export_data, indent=2, default=str))
-            logger.info(f"System awareness data exported to {output_path}")
+            logger.info("System awareness data exported to %s", output_path)
         except OSError as e:
-            logger.error(f"Failed to export system awareness data to {output_path}: {e}")
+            logger.error("Failed to export system awareness data to %s: %s", output_path, e)
             raise
         return output_path
 

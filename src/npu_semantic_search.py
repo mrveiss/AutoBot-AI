@@ -252,7 +252,7 @@ class NPUSemanticSearch:
                 )
 
         except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize hybrid search: {e}")
+            logger.warning("⚠️ Failed to initialize hybrid search: %s", e)
             self.hybrid_search = None
 
     async def _test_npu_connectivity(self):
@@ -273,7 +273,7 @@ class NPUSemanticSearch:
                         f"⚠️ NPU Worker health check failed: {response.status}"
                     )
         except Exception as e:
-            logger.warning(f"⚠️ NPU Worker connectivity test failed: {e}")
+            logger.warning("⚠️ NPU Worker connectivity test failed: %s", e)
 
     def _create_empty_metrics(self) -> SearchMetrics:
         """Create metrics for empty query case."""
@@ -350,7 +350,7 @@ class NPUSemanticSearch:
         start_time: float,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Handle search error with fallback."""
-        logger.error(f"❌ Enhanced search failed: {error}")
+        logger.error("❌ Enhanced search failed: %s", error)
         basic_results = await self.knowledge_base.search(
             query, similarity_top_k, filters, "auto"
         )
@@ -395,7 +395,7 @@ class NPUSemanticSearch:
         if not query.strip():
             return [], self._create_empty_metrics()
 
-        logger.info(f"🔍 Enhanced search: '{query[:50]}...' (top_k={similarity_top_k})")
+        logger.info("🔍 Enhanced search: '%50]...' (top_k=%s)", query[, similarity_top_k)
 
         # Check cache first
         cache_key = self._generate_cache_key(query, similarity_top_k, filters)
@@ -449,7 +449,7 @@ class NPUSemanticSearch:
         # Check embedding cache first (Issue #65 P0 optimization)
         cached_embedding = await self.embedding_cache.get(text)
         if cached_embedding is not None:
-            logger.debug(f"✅ Using cached embedding for query: {text[:50]}...")
+            logger.debug("✅ Using cached embedding for query: %50]...", text[)
             return np.array(cached_embedding), "cached"
 
         try:
@@ -565,7 +565,7 @@ class NPUSemanticSearch:
             return results
 
         except Exception as e:
-            logger.error(f"❌ Vector similarity search failed: {e}")
+            logger.error("❌ Vector similarity search failed: %s", e)
             return []
 
     async def _get_hardware_utilization(self) -> Dict[str, float]:
@@ -584,7 +584,7 @@ class NPUSemanticSearch:
 
                 return utilization
         except Exception as e:
-            logger.warning(f"⚠️ Could not get hardware utilization: {e}")
+            logger.warning("⚠️ Could not get hardware utilization: %s", e)
 
         return {}
 
@@ -655,7 +655,7 @@ class NPUSemanticSearch:
         if not queries:
             return []
 
-        logger.info(f"🔍 Batch search: {len(queries)} queries (top_k={similarity_top_k})")
+        logger.info("🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k)
 
         # Process all queries in parallel with controlled concurrency
         semaphore = asyncio.Semaphore(10)  # Limit concurrent searches
@@ -678,7 +678,7 @@ class NPUSemanticSearch:
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"Batch search failed for query {i}: {result}")
+                logger.error("Batch search failed for query %s: %s", i, result)
                 # Return empty result for failed query
                 processed_results.append(
                     (
@@ -696,7 +696,7 @@ class NPUSemanticSearch:
             else:
                 processed_results.append(result)
 
-        logger.info(f"✅ Batch search completed: {len(processed_results)} results")
+        logger.info("✅ Batch search completed: %s results", len(processed_results))
         return processed_results
 
     async def benchmark_search_performance(
@@ -719,7 +719,7 @@ class NPUSemanticSearch:
         for device in devices_to_test:
             device_results = []
 
-            logger.info(f"🔧 Testing device: {device.value}")
+            logger.info("🔧 Testing device: %s", device.value)
 
             for query in test_queries:
                 for iteration in range(iterations):
@@ -752,7 +752,7 @@ class NPUSemanticSearch:
                         )
 
                     except Exception as e:
-                        logger.error(f"❌ Benchmark failed for {device.value}: {e}")
+                        logger.error("❌ Benchmark failed for %s: %s", device.value, e)
                         device_results.append(
                             {"query": query, "iteration": iteration, "error": str(e)}
                         )
@@ -868,7 +868,7 @@ class NPUSemanticSearch:
             logger.info("✅ ChromaDB multi-modal collections initialized")
 
         except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB: {e}")
+            logger.error("Failed to initialize ChromaDB: %s", e)
             self.chroma_client = None
 
     async def store_multimodal_embedding(
@@ -949,13 +949,13 @@ class NPUSemanticSearch:
                         )
 
                 except Exception as e:
-                    logger.warning(f"Failed to store in multimodal collection: {e}")
+                    logger.warning("Failed to store in multimodal collection: %s", e)
 
-            logger.info(f"✅ Stored {modality} content with ID: {doc_id}")
+            logger.info("✅ Stored %s content with ID: %s", modality, doc_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to store multimodal embedding: {e}")
+            logger.error("Failed to store multimodal embedding: %s", e)
             return False
 
     async def cross_modal_search(
@@ -1025,13 +1025,13 @@ class NPUSemanticSearch:
                     )
 
                 except Exception as e:
-                    logger.error(f"Search failed for modality {modality}: {e}")
+                    logger.error("Search failed for modality %s: %s", modality, e)
                     results[modality] = []
 
             return results
 
         except Exception as e:
-            logger.error(f"Cross-modal search failed: {e}")
+            logger.error("Cross-modal search failed: %s", e)
             return {}
 
     async def optimize_for_workload(
@@ -1080,7 +1080,7 @@ class NPUSemanticSearch:
             }
         )
 
-        logger.info(f"🎯 Search engine optimized for {workload_type}")
+        logger.info("🎯 Search engine optimized for %s", workload_type)
         return optimizations
 
 

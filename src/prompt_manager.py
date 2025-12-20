@@ -66,7 +66,7 @@ class PromptManager:
         Uses Redis caching for faster loading.
         """
         if not self.prompts_dir.exists():
-            logger.warning(f"Prompts directory '{self.prompts_dir}' not found")
+            logger.warning("Prompts directory '%s' not found", self.prompts_dir)
             return
 
         # Check if prompts need updating based on file changes
@@ -114,10 +114,10 @@ class PromptManager:
                     self.prompts[prompt_key] = content
                     self.templates[prompt_key] = self.jinja_env.from_string(content)
 
-                    logger.debug(f"Loaded prompt: {prompt_key} from {file_path}")
+                    logger.debug("Loaded prompt: %s from %s", prompt_key, file_path)
 
                 except Exception as e:
-                    logger.error(f"Error loading prompt from {file_path}: {e}")
+                    logger.error("Error loading prompt from %s: %s", file_path, e)
 
         # Cache to Redis for next time
         cache_key = self._get_cache_key()
@@ -126,7 +126,7 @@ class PromptManager:
         # Update change tracking cache
         self._update_prompt_change_cache()
 
-        logger.info(f"Loaded {len(self.prompts)} prompts from {self.prompts_dir}")
+        logger.info("Loaded %s prompts from %s", len(self.prompts), self.prompts_dir)
 
     def _path_to_key(self, path: Path) -> str:
         """
@@ -181,7 +181,7 @@ class PromptManager:
             template = self.templates[prompt_key]
             return template.render(**kwargs)
         except Exception as e:
-            logger.error(f"Error rendering template '{prompt_key}': {e}")
+            logger.error("Error rendering template '%s': %s", prompt_key, e)
             # Return raw content as fallback
             return self.prompts.get(prompt_key, f"Error loading prompt: {prompt_key}")
 
@@ -216,7 +216,7 @@ class PromptManager:
         ]
         if similar_keys:
             best_match = similar_keys[0]  # Take first match
-            logger.warning(f"Using similar prompt '{best_match}' for '{prompt_key}'")
+            logger.warning("Using similar prompt '%s' for '%s'", best_match, prompt_key)
             return self.prompts[best_match]
 
         return None
@@ -288,7 +288,7 @@ class PromptManager:
         """
         self.prompts[prompt_key] = content
         self.templates[prompt_key] = Template(content)
-        logger.debug(f"Added/updated prompt: {prompt_key}")
+        logger.debug("Added/updated prompt: %s", prompt_key)
 
     def get_categories(self) -> List[str]:
         """
@@ -359,7 +359,7 @@ class PromptManager:
             return needs_update, changed_files
 
         except Exception as e:
-            logger.debug(f"Error checking prompt changes: {e}")
+            logger.debug("Error checking prompt changes: %s", e)
             # On error, assume update is needed
             return True, ["error-triggered-update"]
 
@@ -387,7 +387,7 @@ class PromptManager:
                     file_states[relative_path] = file_hash
 
                 except Exception as e:
-                    logger.warning(f"Error processing prompt file {file_path}: {e}")
+                    logger.warning("Error processing prompt file %s: %s", file_path, e)
 
         return file_states
 
@@ -413,7 +413,7 @@ class PromptManager:
                 return data.get("file_states", data)
 
         except Exception as e:
-            logger.debug(f"Redis prompt change cache load failed: {e}")
+            logger.debug("Redis prompt change cache load failed: %s", e)
 
         return None
 
@@ -450,10 +450,10 @@ class PromptManager:
                 ),
             )
 
-            logger.debug(f"Updated prompt change cache with {len(current_state)} files")
+            logger.debug("Updated prompt change cache with %s files", len(current_state))
 
         except Exception as e:
-            logger.debug(f"Failed to update prompt change cache: {e}")
+            logger.debug("Failed to update prompt change cache: %s", e)
 
     def _get_cache_key(self) -> str:
         """Generate cache key based on prompts directory content hash"""
@@ -469,7 +469,7 @@ class PromptManager:
             cache_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()[:12]
             return f"autobot:prompts:cache:{cache_hash}"
         except Exception as e:
-            logger.warning(f"Failed to generate cache key: {e}")
+            logger.warning("Failed to generate cache key: %s", e)
             return "autobot:prompts:cache:default"
 
     def _load_from_redis_cache(self, cache_key: str) -> Optional[Dict]:
@@ -490,7 +490,7 @@ class PromptManager:
                 logger.debug("Loading prompts from Redis prompts database (DB 2)")
                 return json.loads(cached_data)
         except Exception as e:
-            logger.debug(f"Redis prompts cache load failed: {e}")
+            logger.debug("Redis prompts cache load failed: %s", e)
         return None
 
     def _save_to_redis_cache(self, cache_key: str, data: Dict) -> None:
@@ -508,9 +508,9 @@ class PromptManager:
 
             # Cache for 24 hours in dedicated prompts database (DB 2)
             redis_client.setex(cache_key, 86400, json.dumps(data))
-            logger.debug(f"Saved prompts to Redis prompts database (DB 2): {cache_key}")
+            logger.debug("Saved prompts to Redis prompts database (DB 2): %s", cache_key)
         except Exception as e:
-            logger.debug(f"Redis prompts cache save failed: {e}")
+            logger.debug("Redis prompts cache save failed: %s", e)
 
 
 # Global prompt manager instance

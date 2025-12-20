@@ -104,7 +104,7 @@ class AuthenticationMiddleware:
             logger.info("Generated and stored secure JWT secret")
             return secure_secret
         except Exception as e:
-            logger.error(f"Failed to store JWT secret in config: {e}")
+            logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret
 
@@ -118,7 +118,7 @@ class AuthenticationMiddleware:
         try:
             return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
         except Exception as e:
-            logger.error(f"Password verification error: {e}")
+            logger.error("Password verification error: %s", e)
             return False
 
     def is_account_locked(self, username: str) -> bool:
@@ -280,7 +280,7 @@ class AuthenticationMiddleware:
             logger.warning("JWT token expired")
             return None
         except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid JWT token: {e}")
+            logger.warning("Invalid JWT token: %s", e)
             return None
 
     def create_session(self, user_data: Dict, request: Request) -> str:
@@ -305,9 +305,9 @@ class AuthenticationMiddleware:
                     self.session_timeout_minutes * 60,  # TTL in seconds
                     json.dumps(session_data, default=str),
                 )
-                logger.debug(f"Session {session_id[:8]}... stored in Redis")
+                logger.debug("Session %8]... stored in Redis", session_id[)
             except Exception as e:
-                logger.warning(f"Failed to store session in Redis: {e}")
+                logger.warning("Failed to store session in Redis: %s", e)
                 # Fallback to in-memory
                 self.active_sessions[session_id] = session_data
         else:
@@ -333,7 +333,7 @@ class AuthenticationMiddleware:
                     )
                     return session
             except Exception as e:
-                logger.warning(f"Failed to get session from Redis: {e}")
+                logger.warning("Failed to get session from Redis: %s", e)
 
         # Fallback to in-memory
         if session_id not in self.active_sessions:
@@ -369,9 +369,9 @@ class AuthenticationMiddleware:
                     session = json.loads(session_data)
                     user_data = session.get("user_data", {})
                     self.redis_client.delete(session_key)
-                    logger.debug(f"Session {session_id[:8]}... removed from Redis")
+                    logger.debug("Session %8]... removed from Redis", session_id[)
             except Exception as e:
-                logger.warning(f"Failed to remove session from Redis: {e}")
+                logger.warning("Failed to remove session from Redis: %s", e)
 
         # Remove from in-memory store
         if session_id in self.active_sessions:

@@ -40,7 +40,7 @@ def _parse_windows_systeminfo(output: str) -> Dict[str, str]:
             result["windows_os_name"] = parts[0].strip('"')
             result["windows_os_version"] = parts[1].strip('"')
     except Exception as e:
-        logger.debug(f"Failed to parse Windows systeminfo: {e}")
+        logger.debug("Failed to parse Windows systeminfo: %s", e)
     return result
 
 
@@ -74,7 +74,7 @@ class SystemIntegration:
     def __init__(self):
         """Initialize system integration with OS-specific configuration."""
         self.os_type = platform.system()
-        logger.info(f"SystemIntegration initialized for OS: {self.os_type}")
+        logger.info("SystemIntegration initialized for OS: %s", self.os_type)
 
     def _run_command(self, command: List[str], shell: bool = False) -> Dict[str, Any]:
         """Helper to run shell commands and capture output."""

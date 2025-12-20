@@ -166,7 +166,7 @@ class AutoBotMemoryGraph:
                 return True
 
             except Exception as e:
-                logger.error(f"Memory Graph initialization failed: {e}")
+                logger.error("Memory Graph initialization failed: %s", e)
                 await self._cleanup_on_failure()
                 return False
 
@@ -196,7 +196,7 @@ class AutoBotMemoryGraph:
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize Redis connection: {e}")
+            logger.error("Failed to initialize Redis connection: %s", e)
             raise
 
     async def _create_search_indexes(self):
@@ -209,7 +209,7 @@ class AutoBotMemoryGraph:
                 return
             except Exception as e:
                 # Index doesn't exist, create it
-                logger.debug(f"Search index not found, will create: {e}")
+                logger.debug("Search index not found, will create: %s", e)
 
             # Create entity search index
             await self.redis_client.execute_command(
@@ -271,7 +271,7 @@ class AutoBotMemoryGraph:
             logger.info("Created RediSearch index: memory_entity_idx")
 
         except Exception as e:
-            logger.warning(f"Could not create search index: {e}")
+            logger.warning("Could not create search index: %s", e)
             # Don't fail initialization - search will be limited but entities can still be stored
 
     async def _init_knowledge_base(self):
@@ -304,7 +304,7 @@ class AutoBotMemoryGraph:
             logger.info("Cleanup completed after initialization failure")
 
         except Exception as e:
-            logger.warning(f"Error during cleanup: {e}")
+            logger.warning("Error during cleanup: %s", e)
 
     def ensure_initialized(self):
         """Ensure the memory graph is initialized (raises exception if not)"""
@@ -388,12 +388,12 @@ class AutoBotMemoryGraph:
             if self.knowledge_base:
                 await self._generate_entity_embedding(entity_id, entity)
 
-            logger.info(f"Created entity: {name} ({entity_type}) with ID {entity_id}")
+            logger.info("Created entity: %s (%s) with ID %s", name, entity_type, entity_id)
 
             return entity
 
         except Exception as e:
-            logger.error(f"Failed to create entity: {e}")
+            logger.error("Failed to create entity: %s", e)
             raise RuntimeError(f"Entity creation failed: {str(e)}")
 
     async def get_entity(
@@ -444,7 +444,7 @@ class AutoBotMemoryGraph:
             return entity
 
         except Exception as e:
-            logger.error(f"Failed to get entity: {e}")
+            logger.error("Failed to get entity: %s", e)
             return None
 
     async def add_observations(
@@ -502,7 +502,7 @@ class AutoBotMemoryGraph:
             return await self.redis_client.json().get(entity_key)
 
         except Exception as e:
-            logger.error(f"Failed to add observations: {e}")
+            logger.error("Failed to add observations: %s", e)
             raise RuntimeError(f"Add observations failed: {str(e)}")
 
     async def delete_entity(
@@ -547,12 +547,12 @@ class AutoBotMemoryGraph:
             if entity_id in self.embedding_cache:
                 del self.embedding_cache[entity_id]
 
-            logger.info(f"Deleted entity: {entity_name}")
+            logger.info("Deleted entity: %s", entity_name)
 
             return deleted > 0
 
         except Exception as e:
-            logger.error(f"Failed to delete entity: {e}")
+            logger.error("Failed to delete entity: %s", e)
             return False
 
     # ==================== RELATIONSHIP OPERATIONS ====================
@@ -642,7 +642,7 @@ class AutoBotMemoryGraph:
             return relation
 
         except Exception as e:
-            logger.error(f"Failed to create relation: {e}")
+            logger.error("Failed to create relation: %s", e)
             raise RuntimeError(f"Relation creation failed: {str(e)}")
 
     async def get_related_entities(
@@ -705,7 +705,7 @@ class AutoBotMemoryGraph:
             return related
 
         except Exception as e:
-            logger.error(f"Failed to get related entities: {e}")
+            logger.error("Failed to get related entities: %s", e)
             return []
 
     async def delete_relation(
@@ -772,7 +772,7 @@ class AutoBotMemoryGraph:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to delete relation: {e}")
+            logger.error("Failed to delete relation: %s", e)
             return False
 
     async def _get_outgoing_relations(self, entity_id: str) -> List[Dict[str, Any]]:
@@ -914,16 +914,16 @@ class AutoBotMemoryGraph:
 
                 # Parse results using helper (Issue #315: depth reduction)
                 entities = await self._parse_search_results(results, limit)
-                logger.info(f"Search query '{query}' returned {len(entities)} results")
+                logger.info("Search query '%s' returned %d results", query, len(entities))
                 return entities
 
             except Exception as search_error:
                 # Fallback: manual search if RediSearch not available
-                logger.warning(f"RediSearch failed, using fallback: {search_error}")
+                logger.warning("RediSearch failed, using fallback: %s", search_error)
                 return await self._fallback_search(query, entity_type, limit)
 
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error("Search failed: %s", e)
             return []
 
     async def _parse_search_results(
@@ -999,7 +999,7 @@ class AutoBotMemoryGraph:
             return entities
 
         except Exception as e:
-            logger.error(f"Fallback search failed: {e}")
+            logger.error("Fallback search failed: %s", e)
             return []
 
     async def _generate_entity_embedding(self, entity_id: str, entity: Dict[str, Any]):
@@ -1023,7 +1023,7 @@ class AutoBotMemoryGraph:
             self.embedding_cache[entity_id] = embedding_text
 
         except Exception as e:
-            logger.warning(f"Failed to generate embedding for entity {entity_id}: {e}")
+            logger.warning("Failed to generate embedding for entity %s: %s", entity_id, e)
 
     # ==================== INTEGRATION METHODS ====================
 
@@ -1075,12 +1075,12 @@ class AutoBotMemoryGraph:
                 tags=tags,
             )
 
-            logger.info(f"Created conversation entity for session {session_id}")
+            logger.info("Created conversation entity for session %s", session_id)
 
             return entity
 
         except Exception as e:
-            logger.error(f"Failed to create conversation entity: {e}")
+            logger.error("Failed to create conversation entity: %s", e)
             raise
 
     async def close(self):
@@ -1096,4 +1096,4 @@ class AutoBotMemoryGraph:
             logger.info("Memory Graph connections closed")
 
         except Exception as e:
-            logger.warning(f"Error during Memory Graph cleanup: {e}")
+            logger.warning("Error during Memory Graph cleanup: %s", e)

@@ -101,7 +101,7 @@ class Conversation:
         self.kb_timeout = float(TimingConstants.LONG_DELAY)  # 10s - allows for circuit breaker recovery
         self.include_sources = True
 
-        logger.info(f"Created conversation {self.conversation_id}")
+        logger.info("Created conversation %s", self.conversation_id)
 
     def _initialize_classification_agent(self):
         """Initialize the appropriate classification agent based on configuration."""
@@ -122,16 +122,16 @@ class Conversation:
                     logger.info("Using Gemma-powered classification agent")
                     return
                 except ImportError as e:
-                    logger.warning(f"Failed to load Gemma classification agent: {e}")
+                    logger.warning("Failed to load Gemma classification agent: %s", e)
                 except Exception as e:
-                    logger.warning(f"Gemma classification agent error: {e}")
+                    logger.warning("Gemma classification agent error: %s", e)
 
             # Fallback to standard classification agent
             self.classification_agent = ClassificationAgent()
             logger.info("Using standard classification agent")
 
         except Exception as e:
-            logger.error(f"Error initializing classification agent: {e}")
+            logger.error("Error initializing classification agent: %s", e)
             # Ultimate fallback
             self.classification_agent = ClassificationAgent()
 
@@ -308,7 +308,7 @@ class Conversation:
             )
 
         except Exception as e:
-            logger.error(f"Classification failed: {e}")
+            logger.error("Classification failed: %s", e)
             # Default to SIMPLE if classification fails
             self.state.classification = ClassificationResult(
                 complexity=TaskComplexity.SIMPLE,
@@ -371,14 +371,14 @@ class Conversation:
                 )
                 self.messages.append(utility_msg)
 
-                logger.info(f"KB search found {len(results)} results")
+                logger.info("KB search found %s results", len(results))
                 return results
             else:
                 logger.info("No KB results found")
                 return []
 
         except asyncio.TimeoutError:
-            logger.warning(f"KB search timed out after {self.kb_timeout}s")
+            logger.warning("KB search timed out after %ss", self.kb_timeout)
 
             timeout_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
@@ -392,7 +392,7 @@ class Conversation:
             return []
 
         except Exception as e:
-            logger.error(f"KB search failed: {e}")
+            logger.error("KB search failed: %s", e)
 
             error_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
@@ -542,11 +542,11 @@ Please provide a helpful, accurate response based on the available information. 
 
             # Add utility message and return response
             self._add_utility_message(llm_response)
-            logger.info(f"Response generated using {llm_response.tier_used.value} tier")
+            logger.info("Response generated using %s tier", llm_response.tier_used.value)
             return llm_response.content
 
         except Exception as e:
-            logger.error(f"Response generation failed: {e}")
+            logger.error("Response generation failed: %s", e)
             return "I'm having trouble generating a response right now. Please try again."
 
     def _needs_external_research(
@@ -640,7 +640,7 @@ Please provide a helpful, accurate response based on the available information. 
                             ),
                         }
                 except Exception as e:
-                    logger.warning(f"Research query '{query}' failed: {e}")
+                    logger.warning("Research query '%s' failed: %s", query, e)
                 return None
 
             # Run research queries in parallel (limit to 2)
@@ -675,7 +675,7 @@ Please provide a helpful, accurate response based on the available information. 
             }
 
         except Exception as e:
-            logger.error(f"Research failed: {e}")
+            logger.error("Research failed: %s", e)
 
             error_msg = ConversationMessage(
                 message_id=str(uuid.uuid4()),
@@ -759,7 +759,7 @@ Please provide a helpful, accurate response based on the available information. 
     async def cleanup(self):
         """Clean up conversation resources"""
         clear_sources()
-        logger.info(f"Cleaned up conversation {self.conversation_id}")
+        logger.info("Cleaned up conversation %s", self.conversation_id)
 
 
 # Conversation Manager for handling multiple conversations
@@ -783,7 +783,7 @@ class ConversationManager:
             )
             # Note: cleanup will be called when conversation is replaced
             del self.conversations[oldest_id]
-            logger.info(f"Cleaned up oldest conversation {oldest_id}")
+            logger.info("Cleaned up oldest conversation %s", oldest_id)
 
         self.conversations[conversation.conversation_id] = conversation
         return conversation
@@ -803,7 +803,7 @@ class ConversationManager:
         if conversation_id in self.conversations:
             await self.conversations[conversation_id].cleanup()
             del self.conversations[conversation_id]
-            logger.info(f"Cleaned up conversation {conversation_id}")
+            logger.info("Cleaned up conversation %s", conversation_id)
 
 
 # Global conversation manager instance

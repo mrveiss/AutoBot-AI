@@ -105,7 +105,7 @@ class CommandManualManager:
                 conn.commit()
                 logger.info("Command manuals database initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize command manuals database: {e}")
+            logger.error("Failed to initialize command manuals database: %s", e)
             raise
 
     def _get_high_risk_commands(self) -> List[str]:
@@ -502,14 +502,14 @@ class CommandManualManager:
             if result.returncode == 0:
                 return result.stdout
             else:
-                logger.warning(f"No manual found for command: {command_name}")
+                logger.warning("No manual found for command: %s", command_name)
                 return None
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Timeout getting manual for command: {command_name}")
+            logger.error("Timeout getting manual for command: %s", command_name)
             return None
         except Exception as e:
-            logger.error(f"Error getting manual for command {command_name}: {e}")
+            logger.error("Error getting manual for command %s: %s", command_name, e)
             return None
 
     def store_manual(self, command_manual: CommandManual) -> bool:
@@ -546,7 +546,7 @@ class CommandManualManager:
                     ),
                 )
                 conn.commit()
-                logger.info(f"Stored manual for command: {command_manual.command_name}")
+                logger.info("Stored manual for command: %s", command_manual.command_name)
                 return True
 
         except Exception as e:
@@ -585,7 +585,7 @@ class CommandManualManager:
                 row = cursor.fetchone()
                 return self._row_to_command_manual(row) if row else None
         except Exception as e:
-            logger.error(f"Failed to retrieve manual for {command_name}: {e}")
+            logger.error("Failed to retrieve manual for %s: %s", command_name, e)
             return None
 
     def _build_search_query(self, query: str, category: Optional[str]) -> Tuple[str, List[str]]:
@@ -611,7 +611,7 @@ class CommandManualManager:
                 cursor.execute(sql, params)
                 return [self._row_to_command_manual(row) for row in cursor.fetchall()]
         except Exception as e:
-            logger.error(f"Failed to search manuals for query '{query}': {e}")
+            logger.error("Failed to search manuals for query '%s': %s", query, e)
             return []
 
     def ingest_command(self, command_name: str) -> bool:
@@ -625,14 +625,14 @@ class CommandManualManager:
         """
         manual_text = self.get_manual_text(command_name)
         if not manual_text:
-            logger.warning(f"No manual text found for command: {command_name}")
+            logger.warning("No manual text found for command: %s", command_name)
             return False
 
         try:
             command_manual = self._parse_manual_text(command_name, manual_text)
             return self.store_manual(command_manual)
         except Exception as e:
-            logger.error(f"Failed to ingest command {command_name}: {e}")
+            logger.error("Failed to ingest command %s: %s", command_name, e)
             return False
 
     def get_command_suggestions(self, user_intent: str) -> List[Tuple[str, str, str]]:

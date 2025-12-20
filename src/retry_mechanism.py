@@ -191,7 +191,7 @@ class RetryMechanism:
 
                 # Success!
                 if attempt > 1:
-                    logger.info(f"{operation_name} succeeded on attempt {attempt}")
+                    logger.info("%s succeeded on attempt %s", operation_name, attempt)
 
                 # Update operation stats (thread-safe)
                 self._update_stats_success(operation_name, attempt)
@@ -218,7 +218,7 @@ class RetryMechanism:
 
                 # Calculate delay and wait
                 delay = self.calculate_delay(attempt)
-                logger.debug(f"Retrying {operation_name} in {delay:.2f} seconds...")
+                logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
                 await asyncio.sleep(delay)
 
         # All attempts exhausted - update stats (thread-safe)
@@ -248,7 +248,7 @@ class RetryMechanism:
 
                 # Success!
                 if attempt > 1:
-                    logger.info(f"{operation_name} succeeded on attempt {attempt}")
+                    logger.info("%s succeeded on attempt %s", operation_name, attempt)
 
                 # Update operation stats (thread-safe)
                 self._update_stats_success(operation_name, attempt)
@@ -275,7 +275,7 @@ class RetryMechanism:
 
                 # Calculate delay and wait
                 delay = self.calculate_delay(attempt)
-                logger.debug(f"Retrying {operation_name} in {delay:.2f} seconds...")
+                logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
                 time.sleep(delay)
 
         # All attempts exhausted - update stats (thread-safe)

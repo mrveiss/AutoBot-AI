@@ -196,7 +196,7 @@ class CircuitBreaker:
             if self.state != CircuitState.OPEN:  # Double-check with lock
                 return False
 
-            logger.info(f"Circuit breaker {self.name}: Transitioning to HALF_OPEN")
+            logger.info("Circuit breaker %s: Transitioning to HALF_OPEN", self.name)
             self.state = CircuitState.HALF_OPEN
             self.state_change_time = current_time
             self.stats["state_changes"] += 1
@@ -227,7 +227,7 @@ class CircuitBreaker:
                 )
 
                 if self.success_count >= self.config.success_threshold:
-                    logger.info(f"Circuit breaker {self.name}: Transitioning to CLOSED")
+                    logger.info("Circuit breaker %s: Transitioning to CLOSED", self.name)
                     self.state = CircuitState.CLOSED
                     self.failure_count = 0
                     self.success_count = 0
@@ -425,7 +425,7 @@ class CircuitBreaker:
     def reset(self):
         """Reset circuit breaker to closed state"""
         with self._lock:
-            logger.info(f"Circuit breaker {self.name}: Manual reset to CLOSED")
+            logger.info("Circuit breaker %s: Manual reset to CLOSED", self.name)
             self.state = CircuitState.CLOSED
             self.failure_count = 0
             self.success_count = 0

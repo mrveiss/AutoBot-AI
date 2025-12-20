@@ -225,7 +225,7 @@ class EnhancedMemoryManager:
 
             conn.commit()
 
-        logger.info(f"Created task record: {task_id} - {task_name}")
+        logger.info("Created task record: %s - %s", task_id, task_name)
         return task_id
 
     def start_task(self, task_id: str) -> bool:
@@ -244,10 +244,10 @@ class EnhancedMemoryManager:
 
             if cursor.rowcount > 0:
                 conn.commit()
-                logger.info(f"Started task: {task_id}")
+                logger.info("Started task: %s", task_id)
                 return True
             else:
-                logger.warning(f"Task not found for start: {task_id}")
+                logger.warning("Task not found for start: %s", task_id)
                 return False
 
     def complete_task(
@@ -270,7 +270,7 @@ class EnhancedMemoryManager:
 
             row = cursor.fetchone()
             if not row:
-                logger.warning(f"Task not found for completion: {task_id}")
+                logger.warning("Task not found for completion: %s", task_id)
                 return False
 
             started_at = row[0]
@@ -296,7 +296,7 @@ class EnhancedMemoryManager:
 
             if cursor.rowcount > 0:
                 conn.commit()
-                logger.info(f"Completed task: {task_id} (duration: {duration}s)")
+                logger.info("Completed task: %s (duration: %ss)", task_id, duration)
                 return True
             else:
                 return False
@@ -323,7 +323,7 @@ class EnhancedMemoryManager:
 
             if cursor.rowcount > 0:
                 conn.commit()
-                logger.error(f"Failed task: {task_id} - {error_message}")
+                logger.error("Failed task: %s - %s", task_id, error_message)
                 return True
             else:
                 return False
@@ -336,7 +336,7 @@ class EnhancedMemoryManager:
     ) -> bool:
         """Add markdown file reference to task"""
         if not Path(markdown_file_path).exists():
-            logger.warning(f"Markdown file not found: {markdown_file_path}")
+            logger.warning("Markdown file not found: %s", markdown_file_path)
             return False
 
         # Calculate content hash for tracking changes
@@ -362,7 +362,7 @@ class EnhancedMemoryManager:
 
             conn.commit()
 
-        logger.info(f"Added markdown reference: {task_id} -> {markdown_file_path}")
+        logger.info("Added markdown reference: %s -> %s", task_id, markdown_file_path)
         return True
 
     def store_embedding(
@@ -401,7 +401,7 @@ class EnhancedMemoryManager:
 
             conn.commit()
 
-        logger.debug(f"Stored embedding for content hash: {content_hash[:16]}...")
+        logger.debug("Stored embedding for content hash: %16]...", content_hash[)
         return True
 
     def get_embedding(
@@ -437,7 +437,7 @@ class EnhancedMemoryManager:
                 embedding_data = base64.b64decode(row[0])
                 embedding_vector = json.loads(embedding_data.decode())
 
-                logger.debug(f"Retrieved cached embedding for: {content_hash[:16]}...")
+                logger.debug("Retrieved cached embedding for: %16]...", content_hash[)
                 return embedding_vector
 
         return None

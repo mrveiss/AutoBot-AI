@@ -50,8 +50,8 @@ class MarkdownReferenceSystem:
         self._init_markdown_tables()
 
         logger.info("Markdown Reference System initialized")
-        logger.info(f"Docs root: {self.docs_root}")
-        logger.info(f"Knowledge root: {self.knowledge_root}")
+        logger.info("Docs root: %s", self.docs_root)
+        logger.info("Knowledge root: %s", self.knowledge_root)
 
     def _init_markdown_tables(self):
         """Initialize additional SQLite tables for markdown management"""
@@ -139,7 +139,7 @@ class MarkdownReferenceSystem:
     ) -> Dict[str, Any]:
         """Scan directory for markdown files and update database"""
         if not directory.exists():
-            logger.warning(f"Directory does not exist: {directory}")
+            logger.warning("Directory does not exist: %s", directory)
             return {"error": "Directory not found"}
 
         scanned_files = 0
@@ -364,7 +364,7 @@ class MarkdownReferenceSystem:
                     self._extract_references(conn, file_path, content, files)
 
                 except Exception as e:
-                    logger.warning(f"Error processing references in {file_path}: {e}")
+                    logger.warning("Error processing references in %s: %s", file_path, e)
 
             conn.commit()
 
@@ -669,7 +669,7 @@ class MarkdownReferenceSystem:
                     results["total_files"] += 1
                 except Exception as e:
                     results["total_errors"] += 1
-                    logger.error(f"Error processing {location}: {e}")
+                    logger.error("Error processing %s: %s", location, e)
 
         logger.info(
             f"Markdown system initialization completed: {results['total_files']} files processed"

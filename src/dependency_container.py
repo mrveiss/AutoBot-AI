@@ -109,7 +109,7 @@ class AsyncServiceContainer:
             dependencies=dependencies or [],
         )
 
-        logger.debug(f"Registered service: {name} ({service_type.__name__})")
+        logger.debug("Registered service: %s (%s)", name, service_type.__name__)
 
     def register_instance(self, name: str, instance: Any) -> None:
         """Register an existing instance"""
@@ -123,7 +123,7 @@ class AsyncServiceContainer:
         self._instances[name] = instance
         self._initialized_services.add(name)
 
-        logger.debug(f"Registered instance: {name} ({service_type.__name__})")
+        logger.debug("Registered instance: %s (%s)", name, service_type.__name__)
 
     async def get_service(self, name: str) -> Any:
         """Get service instance with dependency resolution"""
@@ -178,7 +178,7 @@ class AsyncServiceContainer:
                 else:
                     hook(instance)
 
-            logger.info(f"Initialized service: {name}")
+            logger.info("Initialized service: %s", name)
             return instance
 
     @asynccontextmanager
@@ -196,7 +196,7 @@ class AsyncServiceContainer:
                     else:
                         instance.close()
                 except Exception as e:
-                    logger.warning(f"Error closing service {name}: {e}")
+                    logger.warning("Error closing service %s: %s", name, e)
 
     async def initialize_all_services(self) -> Dict[str, bool]:
         """Initialize all registered services"""
@@ -209,10 +209,10 @@ class AsyncServiceContainer:
             try:
                 await self.get_service(service_name)
                 results[service_name] = True
-                logger.info(f"✅ Service initialized: {service_name}")
+                logger.info("✅ Service initialized: %s", service_name)
             except Exception as e:
                 results[service_name] = False
-                logger.error(f"❌ Failed to initialize service {service_name}: {e}")
+                logger.error("❌ Failed to initialize service %s: %s", service_name, e)
 
         return results
 
@@ -263,7 +263,7 @@ class AsyncServiceContainer:
                 else:
                     hook()
             except Exception as e:
-                logger.warning(f"Shutdown hook error: {e}")
+                logger.warning("Shutdown hook error: %s", e)
 
         # Shutdown services in reverse initialization order
         for service_name in reversed(list(self._initialized_services)):
@@ -289,10 +289,10 @@ class AsyncServiceContainer:
                     else:
                         instance.close()
 
-                logger.info(f"Shutdown service: {service_name}")
+                logger.info("Shutdown service: %s", service_name)
 
             except Exception as e:
-                logger.error(f"Error shutting down service {service_name}: {e}")
+                logger.error("Error shutting down service %s: %s", service_name, e)
 
         # Clear all caches
         self._instances.clear()
@@ -382,7 +382,7 @@ async def service_context():
         ]
 
         if failed_critical:
-            logger.warning(f"Critical services failed to initialize: {failed_critical}")
+            logger.warning("Critical services failed to initialize: %s", failed_critical)
 
         logger.info(
             f"Service container initialized: {len(initialization_results)} services"

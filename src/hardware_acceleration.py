@@ -90,7 +90,7 @@ class HardwareAccelerationManager:
         self._configure_device_priorities()
 
         logger.info("Hardware Acceleration Manager initialized")
-        logger.info(f"Available devices: {list(self.available_devices.keys())}")
+        logger.info("Available devices: %s", list(self.available_devices.keys()))
 
     def _detect_available_hardware(self):
         """Detect available hardware acceleration options."""
@@ -121,7 +121,7 @@ class HardwareAccelerationManager:
                 or self._check_npu_via_openvino()
             )
         except Exception as e:
-            logger.error(f"NPU detection error: {e}")
+            logger.error("NPU detection error: %s", e)
             return False
 
     def _check_npu_device_files(self) -> bool:
@@ -136,7 +136,7 @@ class HardwareAccelerationManager:
         ]
 
         if npu_devices:
-            logger.info(f"Intel NPU devices detected: {npu_devices}")
+            logger.info("Intel NPU devices detected: %s", npu_devices)
             return True
         return False
 
@@ -163,12 +163,12 @@ class HardwareAccelerationManager:
             core = Core()
             npu_devices = [d for d in core.available_devices if "NPU" in d]
             if npu_devices:
-                logger.info(f"NPU devices available via OpenVINO: {npu_devices}")
+                logger.info("NPU devices available via OpenVINO: %s", npu_devices)
                 return True
         except ImportError:
             logger.debug("OpenVINO not available for NPU detection")
         except Exception as e:
-            logger.debug(f"OpenVINO NPU detection failed: {e}")
+            logger.debug("OpenVINO NPU detection failed: %s", e)
         return False
 
     def _detect_gpu(self) -> bool:
@@ -230,7 +230,7 @@ class HardwareAccelerationManager:
             return False
 
         except Exception as e:
-            logger.error(f"GPU detection error: {e}")
+            logger.error("GPU detection error: %s", e)
             return False
 
     def _get_npu_info(self) -> Dict[str, Any]:
@@ -254,7 +254,7 @@ class HardwareAccelerationManager:
             info["openvino_support"] = False
             info["devices"] = ["NPU (detected)"]
         except Exception as e:
-            logger.debug(f"NPU info gathering error: {e}")
+            logger.debug("NPU info gathering error: %s", e)
             info["devices"] = ["NPU (detected)"]
 
         return info
@@ -335,7 +335,7 @@ class HardwareAccelerationManager:
             return cpu_info
 
         except Exception as e:
-            logger.error(f"CPU info gathering error: {e}")
+            logger.error("CPU info gathering error: %s", e)
             return {"type": "CPU", "available": True, "cores": self.cpu_cores}
 
     def _configure_device_priorities(self):
@@ -564,12 +564,12 @@ class HardwareAccelerationManager:
             config_manager.set("runtime.environment_overrides", env_vars)
             for key, value in env_vars.items():
                 os.environ[key] = value
-                logger.debug(f"Set {key}={value}")
+                logger.debug("Set %s=%s", key, value)
 
             logger.info("System environment configured for hardware optimization")
 
         except Exception as e:
-            logger.error(f"Failed to configure system environment: {e}")
+            logger.error("Failed to configure system environment: %s", e)
 
     def get_device_status(self) -> Dict[str, Any]:
         """Get current device status and utilization."""

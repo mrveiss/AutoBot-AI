@@ -107,7 +107,7 @@ class ElevationWrapper:
                 }
 
         except Exception as e:
-            logger.error(f"Elevation request failed: {e}")
+            logger.error("Elevation request failed: %s", e)
             return {
                 "success": False,
                 "error": f"Failed to request elevation: {str(e)}",
@@ -176,7 +176,7 @@ class ElevationWrapper:
                 return await self._execute_normal(f"sudo {command}")
 
         except Exception as e:
-            logger.error(f"Elevated execution failed: {e}")
+            logger.error("Elevated execution failed: %s", e)
             return {"success": False, "error": str(e), "return_code": -1}
 
     def clear_session(self):
@@ -209,11 +209,11 @@ _original_popen = subprocess.Popen
 def _elevation_aware_popen(cmd, *args, **kwargs):
     """Intercept subprocess calls and handle sudo"""
     if isinstance(cmd, str) and "sudo" in cmd:
-        logger.warning(f"Direct sudo call intercepted: {cmd}")
+        logger.warning("Direct sudo call intercepted: %s", cmd)
         # In production, this should trigger elevation dialog
         # For now, pass through with warning
     elif isinstance(cmd, list) and "sudo" in cmd:
-        logger.warning(f"Direct sudo call intercepted: {' '.join(cmd)}")
+        logger.warning("Direct sudo call intercepted: %s", ' '.join(cmd))
 
     return _original_popen(cmd, *args, **kwargs)
 

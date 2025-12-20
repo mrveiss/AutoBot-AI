@@ -22,6 +22,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Set
 
+from src.agents.agent_client import AgentRegistry as AgentClientRegistry
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
@@ -122,6 +123,9 @@ class EnhancedMultiAgentOrchestrator:
         # Initialize planner and strategy handler
         self._planner = WorkflowPlanner(self.agent_capabilities)
         self._strategy_handler = None  # Lazy initialization
+
+        # Agent client registry for actual agent instances
+        self._agent_client_registry = AgentClientRegistry()
 
     def _get_strategy_handler(self) -> ExecutionStrategyHandler:
         """Lazy initialization of strategy handler."""
@@ -477,17 +481,31 @@ class EnhancedMultiAgentOrchestrator:
         )
 
     async def _get_agent_instance(self, agent_type: str):
-        """Get agent instance dynamically"""
+        """
+        Get agent instance dynamically from the agent registry.
 
-        # This would be implemented to actually get agent instances
-        # For now, return a mock that processes requests
-        class MockAgent:
-            async def process_request(self, request):
-                """Process agent request and return simulated result."""
-                await asyncio.sleep(TimingConstants.SHORT_DELAY)
-                return {"result": f"Processed by {agent_type}"}
+        Args:
+            agent_type: The type of agent to retrieve
 
-        return MockAgent()
+        Returns:
+            Agent instance if found and available, None otherwise
+        """
+        # First, try to get from agent client registry
+        agent = self._agent_client_registry.get_agent(agent_type)
+
+        if agent is not None:
+            # Update health status before returning
+            await self._agent_client_registry.update_agent_health(agent_type)
+            return agent
+
+        # Agent not registered - log and return None
+        # The caller already handles None case with proper error
+        self.logger.warning(
+            "Agent '%s' not found in registry. Available agents: %s",
+            agent_type,
+            self._agent_client_registry.list_agents()
+        )
+        return None
 
     def get_performance_report(self) -> Dict[str, Any]:
         """Get comprehensive performance report"""

@@ -218,7 +218,7 @@ class AsyncLongTermMemoryManager:
                 self._initialized = True
                 self.logger.info("Async memory database initialization completed")
             except aiosqlite.Error as e:
-                self.logger.error(f"Failed to initialize memory database: {e}")
+                self.logger.error("Failed to initialize memory database: %s", e)
                 raise RuntimeError(f"Failed to initialize memory database: {e}")
 
     async def store_memory(
@@ -256,10 +256,10 @@ class AsyncLongTermMemoryManager:
                 memory_id = cursor.lastrowid
                 await conn.commit()
 
-            self.logger.debug(f"Stored memory entry {memory_id} in category {category}")
+            self.logger.debug("Stored memory entry %s in category %s", memory_id, category)
             return memory_id
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to store memory entry: {e}")
+            self.logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory: {e}")
 
     async def get_memories(
@@ -307,10 +307,10 @@ class AsyncLongTermMemoryManager:
                         )
                     )
 
-            self.logger.debug(f"Retrieved {len(memories)} memory entries")
+            self.logger.debug("Retrieved %s memory entries", len(memories))
             return memories
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to get memories: {e}")
+            self.logger.error("Failed to get memories: %s", e)
             raise RuntimeError(f"Failed to get memories: {e}")
 
     async def log_task_execution(
@@ -356,10 +356,10 @@ class AsyncLongTermMemoryManager:
                 log_id = cursor.lastrowid
                 await conn.commit()
 
-            self.logger.debug(f"Logged task execution {log_id} for {task_id}")
+            self.logger.debug("Logged task execution %s for %s", log_id, task_id)
             return log_id
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to log task execution for {task_id}: {e}")
+            self.logger.error("Failed to log task execution for %s: %s", task_id, e)
             raise RuntimeError(f"Failed to log task execution: {e}")
 
     async def store_agent_state(
@@ -393,10 +393,10 @@ class AsyncLongTermMemoryManager:
                 state_id = cursor.lastrowid
                 await conn.commit()
 
-            self.logger.debug(f"Stored agent state {state_id}: {state_name}")
+            self.logger.debug("Stored agent state %s: %s", state_id, state_name)
             return state_id
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to store agent state {state_name}: {e}")
+            self.logger.error("Failed to store agent state %s: %s", state_name, e)
             raise RuntimeError(f"Failed to store agent state: {e}")
 
     async def log_conversation(
@@ -434,10 +434,10 @@ class AsyncLongTermMemoryManager:
                 conv_id = cursor.lastrowid
                 await conn.commit()
 
-            self.logger.debug(f"Logged conversation {conv_id} for session {session_id}")
+            self.logger.debug("Logged conversation %s for session %s", conv_id, session_id)
             return conv_id
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to log conversation for session {session_id}: {e}")
+            self.logger.error("Failed to log conversation for session %s: %s", session_id, e)
             raise RuntimeError(f"Failed to log conversation: {e}")
 
     async def log_config_change(
@@ -469,10 +469,10 @@ class AsyncLongTermMemoryManager:
                 config_id = cursor.lastrowid
                 await conn.commit()
 
-            self.logger.debug(f"Logged config change {config_id} for {config_key}")
+            self.logger.debug("Logged config change %s for %s", config_id, config_key)
             return config_id
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to log config change for {config_key}: {e}")
+            self.logger.error("Failed to log config change for %s: %s", config_key, e)
             raise RuntimeError(f"Failed to log config change: {e}")
 
     async def cleanup_old_entries(self):
@@ -517,7 +517,7 @@ class AsyncLongTermMemoryManager:
                     f"{deleted_states} states, {deleted_conversations} conversations"
                 )
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to cleanup old entries: {e}")
+            self.logger.error("Failed to cleanup old entries: %s", e)
             raise RuntimeError(f"Failed to cleanup old entries: {e}")
 
     async def get_statistics(self) -> Dict[str, Any]:
@@ -556,7 +556,7 @@ class AsyncLongTermMemoryManager:
 
                 return stats
         except aiosqlite.Error as e:
-            self.logger.error(f"Failed to get statistics: {e}")
+            self.logger.error("Failed to get statistics: %s", e)
             raise RuntimeError(f"Failed to get statistics: {e}")
 
     async def close(self):

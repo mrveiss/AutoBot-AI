@@ -83,7 +83,7 @@ async def _try_fallback_processing(
             return await process_on_gpu(task)
         return await process_on_cpu(task)
     except Exception as fallback_error:
-        logger.error(f"❌ Fallback also failed: {fallback_error}")
+        logger.error("❌ Fallback also failed: %s", fallback_error)
         return None
 
 
@@ -204,7 +204,7 @@ class AIHardwareAccelerator:
             if self.redis_client:
                 logger.info("✅ Connected to Redis for task coordination")
         except Exception as e:
-            logger.warning(f"⚠️ Redis connection failed: {e}")
+            logger.warning("⚠️ Redis connection failed: %s", e)
 
         # Check hardware availability
         await self._check_hardware_availability()
@@ -260,7 +260,7 @@ class AIHardwareAccelerator:
                     )
                     self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
-            logger.warning(f"⚠️ NPU Worker connection failed: {e}")
+            logger.warning("⚠️ NPU Worker connection failed: %s", e)
             self.device_status[HardwareDevice.NPU]["available"] = False
 
     async def _check_gpu_availability(self):
@@ -283,14 +283,14 @@ class AIHardwareAccelerator:
                     available_memory_mb=gpu_metrics["available_memory_mb"],
                     last_updated=datetime.now(),
                 )
-                logger.info(f"✅ GPU available: {torch.cuda.get_device_name(0)}")
+                logger.info("✅ GPU available: %s", torch.cuda.get_device_name(0))
             else:
                 # pynvml not available, assume GPU is available with basic detection
                 logger.info("✅ GPU available (basic detection)")
 
             self.device_status[HardwareDevice.GPU]["available"] = True
         except Exception as e:
-            logger.warning(f"⚠️ GPU availability check failed: {e}")
+            logger.warning("⚠️ GPU availability check failed: %s", e)
             self.device_status[HardwareDevice.GPU]["available"] = False
 
     async def _update_npu_metrics(self, health_data: Dict[str, Any]):
@@ -323,7 +323,7 @@ class AIHardwareAccelerator:
                 await asyncio.sleep(HardwareAcceleratorConfig.HARDWARE_CHECK_INTERVAL_S)
                 await self._check_hardware_availability()
             except Exception as e:
-                logger.error(f"❌ Hardware monitoring error: {e}")
+                logger.error("❌ Hardware monitoring error: %s", e)
 
     def _classify_by_threshold(self, value: int, light_threshold: int, mod_threshold: int) -> TaskComplexity:
         """Classify by value thresholds (Issue #315 - extracted helper)."""
@@ -419,13 +419,13 @@ class AIHardwareAccelerator:
         """Process an AI task using optimal hardware (Issue #315 - refactored)."""
         start_time = time.time()
         selected_device = self._select_optimal_device(task)
-        logger.info(f"🎯 Processing task {task.task_id} on {selected_device.value}")
+        logger.info("🎯 Processing task %s on %s", task.task_id, selected_device.value)
 
         try:
             result = await self._route_to_processor(task, selected_device)
             return self._create_success_result(task, selected_device, result, start_time)
         except Exception as e:
-            logger.error(f"❌ Task {task.task_id} failed on {selected_device.value}: {e}")
+            logger.error("❌ Task %s failed on %s: %s", task.task_id, selected_device.value, e)
             return await self._handle_task_failure(task, selected_device, e, start_time)
 
     async def _route_to_processor(
@@ -459,7 +459,7 @@ class AIHardwareAccelerator:
         fallback_device = self._get_fallback_device(selected_device)
 
         if fallback_device and fallback_device != selected_device:
-            logger.info(f"🔄 Retrying task {task.task_id} on {fallback_device.value}")
+            logger.info("🔄 Retrying task %s on %s", task.task_id, fallback_device.value)
             fallback_result = await _try_fallback_processing(
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )
@@ -551,7 +551,7 @@ class AIHardwareAccelerator:
             return
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Initializing multi-modal models on {device}")
+        logger.info("Initializing multi-modal models on %s", device)
 
         try:
             # Initialize CLIP for image embeddings
@@ -592,7 +592,7 @@ class AIHardwareAccelerator:
 
             logger.info("✅ Multi-modal models initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize multi-modal models: {e}")
+            logger.error("Failed to initialize multi-modal models: %s", e)
 
     async def _generate_text_embedding(
         self, content: Any, device: torch.device
@@ -705,7 +705,7 @@ class AIHardwareAccelerator:
             }
 
         except Exception as e:
-            logger.error(f"GPU embedding generation failed: {e}")
+            logger.error("GPU embedding generation failed: %s", e)
             return {
                 "embeddings": np.zeros(self.unified_dim).tolist(),
                 "modality": modality,

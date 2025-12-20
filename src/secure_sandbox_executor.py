@@ -98,7 +98,7 @@ class SecureSandboxExecutor:
             self.docker_client = docker_client or docker.from_env()
             self.logger.info("Docker client initialized")
         except DockerException as e:
-            self.logger.error(f"Failed to initialize Docker client: {e}")
+            self.logger.error("Failed to initialize Docker client: %s", e)
             raise
 
         # Redis for monitoring and coordination
@@ -121,16 +121,16 @@ class SecureSandboxExecutor:
 
         try:
             self.docker_client.images.get(image_name)
-            self.logger.info(f"Sandbox image {image_name} is available")
+            self.logger.info("Sandbox image %s is available", image_name)
         except ImageNotFound:
-            self.logger.warning(f"Sandbox image {image_name} not found, building...")
+            self.logger.warning("Sandbox image %s not found, building...", image_name)
             # In production, this would trigger a build process
             # For now, we'll use the basic sandbox image as fallback
             try:
                 self.docker_client.images.pull("alpine:3.18")
                 self.logger.info("Using alpine:3.18 as fallback sandbox image")
             except Exception as e:
-                self.logger.error(f"Failed to pull fallback image: {e}")
+                self.logger.error("Failed to pull fallback image: %s", e)
                 raise
 
     def _create_validation_failure_result(
@@ -254,7 +254,7 @@ class SecureSandboxExecutor:
         container_id = f"{self.container_prefix}{uuid.uuid4().hex[:8]}"
         start_time = time.time()
 
-        self.logger.info(f"Executing command in sandbox: {command}")
+        self.logger.info("Executing command in sandbox: %s", command)
 
         try:
             # Validate command
@@ -275,7 +275,7 @@ class SecureSandboxExecutor:
             )
 
         except Exception as e:
-            self.logger.error(f"Sandbox execution error: {e}")
+            self.logger.error("Sandbox execution error: %s", e)
             return SandboxResult(
                 success=False,
                 exit_code=-1,
@@ -340,7 +340,7 @@ class SecureSandboxExecutor:
             try:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
-                self.logger.debug(f"Failed to cleanup script file {script_path}: {e}")
+                self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
 
     def _validate_command(
         self, command: Union[str, List[str]], config: SandboxConfig
@@ -377,7 +377,7 @@ class SecureSandboxExecutor:
 
         blocked = config.blocked_commands or default_blocked
         if command_name in blocked:
-            self.logger.warning(f"Command blocked by security policy: {command_name}")
+            self.logger.warning("Command blocked by security policy: %s", command_name)
             return False
 
         # Check allowed commands for high security
@@ -401,7 +401,7 @@ class SecureSandboxExecutor:
 
             allowed = config.allowed_commands or default_allowed
             if command_name not in allowed:
-                self.logger.warning(f"Command not in whitelist: {command_name}")
+                self.logger.warning("Command not in whitelist: %s", command_name)
                 return False
 
         return True
@@ -501,7 +501,7 @@ class SecureSandboxExecutor:
                 ),
             }
         except Exception as e:
-            self.logger.error(f"Failed to parse resource usage: {e}")
+            self.logger.error("Failed to parse resource usage: %s", e)
             return {}
 
     async def _monitor_container(self, container_id: str, sandbox_id: str):
@@ -547,10 +547,10 @@ class SecureSandboxExecutor:
                             )
 
                 except Exception as e:
-                    self.logger.error(f"Error processing container log: {e}")
+                    self.logger.error("Error processing container log: %s", e)
 
         except Exception as e:
-            self.logger.error(f"Container monitoring error: {e}")
+            self.logger.error("Container monitoring error: %s", e)
 
     async def _collect_security_events(self, container_id: str) -> List[Dict[str, Any]]:
         """Collect security events for a container"""
@@ -568,12 +568,12 @@ class SecureSandboxExecutor:
                     event = json.loads(raw_event)
                     events.append(event)
                 except Exception as e:
-                    self.logger.debug(f"Skipping malformed security event: {e}")
+                    self.logger.debug("Skipping malformed security event: %s", e)
 
             return events
 
         except Exception as e:
-            self.logger.error(f"Failed to collect security events: {e}")
+            self.logger.error("Failed to collect security events: %s", e)
             return []
 
     async def _log_execution_metrics(self, container_id: str, result: SandboxResult):
@@ -602,7 +602,7 @@ class SecureSandboxExecutor:
             await asyncio.to_thread(_store_metrics)
 
         except Exception as e:
-            self.logger.error(f"Failed to log metrics: {e}")
+            self.logger.error("Failed to log metrics: %s", e)
 
     async def _cleanup_container(self, container_id: str):
         """Clean up container and related resources"""
@@ -614,15 +614,15 @@ class SecureSandboxExecutor:
                 try:
                     container = self.docker_client.containers.get(docker_id)
                     container.remove(force=True)
-                    self.logger.info(f"Cleaned up container {container_id}")
+                    self.logger.info("Cleaned up container %s", container_id)
                 except Exception as e:
-                    self.logger.error(f"Failed to remove container: {e}")
+                    self.logger.error("Failed to remove container: %s", e)
 
             # Clean up Redis keys (they have TTL but we can be explicit)
             # Keys will expire automatically
 
         except Exception as e:
-            self.logger.error(f"Cleanup error: {e}")
+            self.logger.error("Cleanup error: %s", e)
 
     async def get_sandbox_stats(self) -> Dict[str, Any]:
         """Get sandbox execution statistics"""
@@ -642,7 +642,7 @@ class SecureSandboxExecutor:
             }
 
         except Exception as e:
-            self.logger.error(f"Failed to get stats: {e}")
+            self.logger.error("Failed to get stats: %s", e)
             return {}
 
 
@@ -671,7 +671,7 @@ def get_secure_sandbox() -> Optional[SecureSandboxExecutor]:
                 _sandbox_instance = SecureSandboxExecutor()
                 logger.info("Secure sandbox initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize secure sandbox: {e}")
+                logger.error("Failed to initialize secure sandbox: %s", e)
                 logger.warning(
                     "Command execution will proceed without sandboxing - SECURITY RISK"
                 ),

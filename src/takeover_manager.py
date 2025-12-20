@@ -170,7 +170,7 @@ class TakeoverManager:
         if request.auto_approve:
             await self._auto_approve_request(request_id)
 
-        logger.info(f"Takeover requested: {request_id} - {trigger.value} - {reason}")
+        logger.info("Takeover requested: %s - %s - %s", request_id, trigger.value, reason)
 
         # Notify state change callbacks
         await self._notify_state_change("request_created", request_id)
@@ -269,7 +269,7 @@ class TakeoverManager:
         action_record["result"] = result
         session.actions_taken.append(action_record)
 
-        logger.info(f"Takeover action executed: {action_type} in session {session_id}")
+        logger.info("Takeover action executed: %s in session %s", action_type, session_id)
 
         return result
 
@@ -375,7 +375,7 @@ class TakeoverManager:
             # Resume paused tasks temporarily
             await self._resume_affected_tasks(session.request.affected_tasks)
 
-            logger.info(f"Takeover session paused: {session_id}")
+            logger.info("Takeover session paused: %s", session_id)
             await self._notify_state_change("session_paused", session_id)
             return True
 
@@ -393,7 +393,7 @@ class TakeoverManager:
             # Pause affected tasks again
             await self._pause_affected_tasks(session.request.affected_tasks)
 
-            logger.info(f"Takeover session resumed: {session_id}")
+            logger.info("Takeover session resumed: %s", session_id)
             await self._notify_state_change("session_resumed", session_id)
             return True
 
@@ -439,7 +439,7 @@ class TakeoverManager:
         self.memory_manager.start_task(completion_task_id)
         self.memory_manager.complete_task(completion_task_id, outputs=completion_data)
 
-        logger.info(f"Takeover session completed: {session_id} - {resolution}")
+        logger.info("Takeover session completed: %s - %s", session_id, resolution)
 
         # Notify state change
         await self._notify_state_change("session_completed", session_id)
@@ -454,7 +454,7 @@ class TakeoverManager:
             # to actually pause the tasks
 
         if task_ids:
-            logger.info(f"Paused {len(task_ids)} autonomous tasks")
+            logger.info("Paused %s autonomous tasks", len(task_ids))
 
     async def _resume_affected_tasks(self, task_ids: List[str]):
         """Resume specified autonomous tasks"""
@@ -464,7 +464,7 @@ class TakeoverManager:
             # to actually resume the tasks
 
         if task_ids:
-            logger.info(f"Resumed {len(task_ids)} autonomous tasks")
+            logger.info("Resumed %s autonomous tasks", len(task_ids))
 
     async def _capture_system_snapshot(self) -> Dict[str, Any]:
         """Capture current system state for takeover context"""
@@ -489,7 +489,7 @@ class TakeoverManager:
             return snapshot
 
         except Exception as e:
-            logger.error(f"Failed to capture system snapshot: {e}")
+            logger.error("Failed to capture system snapshot: %s", e)
             return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
     async def _execute_trigger_handlers(self, request: TakeoverRequest):
@@ -503,7 +503,7 @@ class TakeoverManager:
                 else:
                     handler(request)
             except Exception as e:
-                logger.error(f"Trigger handler error: {e}")
+                logger.error("Trigger handler error: %s", e)
 
     async def _auto_approve_request(self, request_id: str):
         """Automatically approve a takeover request"""
@@ -511,9 +511,9 @@ class TakeoverManager:
             session_id = await self.approve_takeover(
                 request_id, human_operator="system_auto_approval"
             )
-            logger.info(f"Auto-approved takeover request: {request_id} -> {session_id}")
+            logger.info("Auto-approved takeover request: %s -> %s", request_id, session_id)
         except Exception as e:
-            logger.error(f"Auto-approval failed for {request_id}: {e}")
+            logger.error("Auto-approval failed for %s: %s", request_id, e)
 
     async def _expire_request(self, request_id: str):
         """Handle expired takeover request"""
@@ -525,7 +525,7 @@ class TakeoverManager:
             if task_id:
                 self.memory_manager.fail_task(task_id, "Takeover request expired")
 
-            logger.info(f"Takeover request expired: {request_id}")
+            logger.info("Takeover request expired: %s", request_id)
             await self._notify_state_change("request_expired", request_id)
 
     def _get_task_id_for_request(self, request_id: str) -> Optional[str]:
@@ -543,7 +543,7 @@ class TakeoverManager:
                 else:
                     callback(event_type, identifier)
             except Exception as e:
-                logger.error(f"State change callback error: {e}")
+                logger.error("State change callback error: %s", e)
 
     def register_trigger_handler(self, trigger: TakeoverTrigger, handler: Callable):
         """Register a handler for specific takeover triggers"""

@@ -601,7 +601,7 @@ class WorkflowScheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Scheduler loop error: {e}")
+                logger.error("Scheduler loop error: %s", e)
                 await asyncio.sleep(WorkflowConfig.SCHEDULER_ERROR_BACKOFF_S)
 
     async def _process_scheduled_workflows(self) -> None:
@@ -615,7 +615,7 @@ class WorkflowScheduler:
             ):
                 # Move to queue
                 self.queue.add(workflow)
-                logger.info(f"Queued workflow {workflow.id}: {workflow.name}")
+                logger.info("Queued workflow %s: %s", workflow.id, workflow.name)
 
     async def _execute_queued_workflows(self) -> None:
         """Execute workflows from queue"""
@@ -627,7 +627,7 @@ class WorkflowScheduler:
             if not workflow:
                 break
 
-            logger.info(f"Executing workflow {workflow.id}: {workflow.name}")
+            logger.info("Executing workflow %s: %s", workflow.id, workflow.name)
 
             # Execute workflow in background
             asyncio.create_task(self._execute_workflow(workflow))
@@ -641,13 +641,13 @@ class WorkflowScheduler:
                 if result and result.get("success"):
                     self.queue.complete_workflow(workflow.id, WorkflowStatus.COMPLETED)
                     self._move_to_completed(workflow)
-                    logger.info(f"Workflow {workflow.id} completed successfully")
+                    logger.info("Workflow %s completed successfully", workflow.id)
                 else:
                     # Handle failure with retry logic
                     await self._handle_workflow_failure(workflow)
 
         except Exception as e:
-            logger.error(f"Workflow execution error: {e}")
+            logger.error("Workflow execution error: %s", e)
             await self._handle_workflow_failure(workflow)
 
     async def _handle_workflow_failure(self, workflow: ScheduledWorkflow) -> None:
@@ -668,7 +668,7 @@ class WorkflowScheduler:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
             self._move_to_completed(workflow)
-            logger.warning(f"Workflow {workflow.id} failed after {workflow.retry_count} retries")
+            logger.warning("Workflow %s failed after %s retries", workflow.id, workflow.retry_count)
 
     def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
         """Move workflow to completed storage"""
@@ -730,7 +730,7 @@ class WorkflowScheduler:
                     json.dump(data, f, indent=2, default=str, ensure_ascii=False)
 
             except Exception as e:
-                logger.error(f"Failed to save workflows: {e}")
+                logger.error("Failed to save workflows: %s", e)
 
     def _load_workflow_dict(
         self, data: Dict[str, Any], key: str, target: Dict[str, ScheduledWorkflow]
@@ -741,7 +741,7 @@ class WorkflowScheduler:
                 workflow = ScheduledWorkflow.from_dict(wf_data)
                 target[wf_id] = workflow
             except Exception as e:
-                logger.warning(f"Failed to load {key} workflow {wf_id}: {e}")
+                logger.warning("Failed to load %s workflow %s: %s", key, wf_id, e)
 
     def _load_workflows(self) -> None:
         """Load workflows from persistent storage (Issue #315 - refactored depth 5 to 3)."""
@@ -756,7 +756,7 @@ class WorkflowScheduler:
             except FileNotFoundError:
                 pass  # No existing data, start fresh
             except Exception as e:
-                logger.error(f"Failed to load workflows: {e}")
+                logger.error("Failed to load workflows: %s", e)
 
 
 # Global scheduler instance

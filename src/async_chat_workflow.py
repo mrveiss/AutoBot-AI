@@ -122,7 +122,7 @@ class AsyncChatWorkflow:
         message = WorkflowMessage(type=msg_type, content=content, metadata=metadata)
 
         self.workflow_messages.append(message)
-        logger.info(f"WORKFLOW MESSAGE ({msg_type}): {content}")
+        logger.info("WORKFLOW MESSAGE (%s): %s", msg_type, content)
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
@@ -247,7 +247,7 @@ class AsyncChatWorkflow:
     ) -> ChatWorkflowResult:
         """Build successful workflow result. Issue #281: Extracted helper."""
         processing_time = time.time() - self._start_time
-        logger.info(f"Chat workflow completed in {processing_time:.2f}s")
+        logger.info("Chat workflow completed in %.2fs", processing_time)
         return ChatWorkflowResult(
             response=llm_response.content,
             message_type=message_type,
@@ -375,7 +375,7 @@ async def process_chat_message(
             processing_time=25.0,
         )
     except Exception as e:
-        logger.error(f"Chat workflow error: {e}")
+        logger.error("Chat workflow error: %s", e)
         return ChatWorkflowResult(
             response=f"I encountered an error processing your message. Error: {str(e)}",
             message_type=MessageType.GENERAL_QUERY,

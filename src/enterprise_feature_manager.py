@@ -325,7 +325,7 @@ class EnterpriseFeatureManager:
         self.features.update(self._get_load_balancing_features())
         self.features.update(self._get_monitoring_features())
         self.features.update(self._get_config_and_deployment_features())
-        logger.info(f"Initialized {len(self.features)} enterprise features")
+        logger.info("Initialized %s enterprise features", len(self.features))
 
     async def enable_feature(self, feature_name: str) -> Dict[str, Any]:
         """Enable a specific enterprise feature"""
@@ -352,7 +352,7 @@ class EnterpriseFeatureManager:
 
         try:
             feature.status = FeatureStatus.ENABLING
-            logger.info(f"Enabling enterprise feature: {feature_name}")
+            logger.info("Enabling enterprise feature: %s", feature_name)
 
             # Feature-specific enablement logic
             result = await self._enable_feature_implementation(feature_name, feature)
@@ -365,7 +365,7 @@ class EnterpriseFeatureManager:
                 if feature.health_check_endpoint:
                     await self._start_health_monitoring(feature_name, feature)
 
-                logger.info(f"✅ Enterprise feature enabled: {feature_name}")
+                logger.info("✅ Enterprise feature enabled: %s", feature_name)
                 return {
                     "status": "success",
                     "message": f"Feature {feature_name} enabled successfully",
@@ -375,7 +375,7 @@ class EnterpriseFeatureManager:
                 }
             else:
                 feature.status = FeatureStatus.ERROR
-                logger.error(f"❌ Failed to enable feature: {feature_name}")
+                logger.error("❌ Failed to enable feature: %s", feature_name)
                 return {
                     "status": "error",
                     "message": (
@@ -386,7 +386,7 @@ class EnterpriseFeatureManager:
 
         except Exception as e:
             feature.status = FeatureStatus.ERROR
-            logger.error(f"Exception enabling feature {feature_name}: {e}")
+            logger.error("Exception enabling feature %s: %s", feature_name, e)
             return {
                 "status": "error",
                 "message": f"Exception enabling {feature_name}: {str(e)}",
@@ -709,7 +709,7 @@ class EnterpriseFeatureManager:
     # Placeholder methods for implementation
     async def _update_chat_workflow_config(self, config_updates: Dict[str, Any]):
         """Update chat workflow configuration"""
-        logger.info(f"Updating chat workflow config: {config_updates}")
+        logger.info("Updating chat workflow config: %s", config_updates)
 
     async def _initialize_research_endpoints(self):
         """Initialize research service endpoints"""
@@ -717,7 +717,7 @@ class EnterpriseFeatureManager:
 
     async def _create_load_balancer_service(self, config: Dict[str, Any]):
         """Create load balancer service"""
-        logger.info(f"Creating load balancer service: {config}")
+        logger.info("Creating load balancer service: %s", config)
 
     async def _detect_hardware_capabilities(self) -> Dict[str, Any]:
         """Detect available hardware capabilities"""
@@ -729,11 +729,11 @@ class EnterpriseFeatureManager:
 
     async def _create_task_routing_engine(self, config: Dict[str, Any]):
         """Create task routing engine"""
-        logger.info(f"Creating task routing engine: {config}")
+        logger.info("Creating task routing engine: %s", config)
 
     async def _create_health_monitoring_system(self, config: Dict[str, Any]):
         """Create health monitoring system"""
-        logger.info(f"Creating health monitoring system: {config}")
+        logger.info("Creating health monitoring system: %s", config)
 
     async def _create_degradation_system(
         self, circuit_config: Dict[str, Any], fallback_config: Dict[str, Any]
@@ -747,7 +747,7 @@ class EnterpriseFeatureManager:
         self, feature_name: str, feature: EnterpriseFeature
     ):
         """Start health monitoring for a feature"""
-        logger.info(f"Starting health monitoring for {feature_name}")
+        logger.info("Starting health monitoring for %s", feature_name)
 
     async def _check_feature_health(self, feature_name: str) -> Dict[str, Any]:
         """Check health of a specific feature"""

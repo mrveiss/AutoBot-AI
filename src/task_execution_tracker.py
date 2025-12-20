@@ -107,7 +107,7 @@ class TaskExecutionTracker:
             # Mark as failed
             error_msg = f"{type(e).__name__}: {str(e)}"
             self.memory_manager.fail_task(task_id, error_msg)
-            logger.error(f"Task {task_id} failed: {error_msg}")
+            logger.error("Task %s failed: %s", task_id, error_msg)
             raise
 
         finally:
@@ -168,7 +168,7 @@ class TaskExecutionTracker:
                 else:
                     await asyncio.to_thread(callback, task_id)
             except Exception as e:
-                logger.error(f"Task callback error for {task_id}: {e}")
+                logger.error("Task callback error for %s: %s", task_id, e)
 
         await asyncio.gather(
             *[run_callback(cb_info) for cb_info in callbacks],
@@ -348,9 +348,9 @@ class TaskExecutionTracker:
             # Clean up mapping
             del self._task_id_mapping[task_id]
 
-            logger.info(f"Completed task: {task_id}")
+            logger.info("Completed task: %s", task_id)
         else:
-            logger.warning(f"Task {task_id} not found in mapping for completion")
+            logger.warning("Task %s not found in mapping for completion", task_id)
 
     def fail_task(self, task_id: str, error_message: str):
         """
@@ -369,9 +369,9 @@ class TaskExecutionTracker:
             # Clean up mapping
             del self._task_id_mapping[task_id]
 
-            logger.error(f"Failed task: {task_id} - {error_message}")
+            logger.error("Failed task: %s - %s", task_id, error_message)
         else:
-            logger.warning(f"Task {task_id} not found in mapping for failure")
+            logger.warning("Task %s not found in mapping for failure", task_id)
 
 
 class TaskExecutionContext:

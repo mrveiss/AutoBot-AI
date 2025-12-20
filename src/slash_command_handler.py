@@ -350,7 +350,7 @@ class StatusCommand(Command):
 For detailed status, visit the monitoring dashboard."""
 
         except Exception as e:
-            logger.warning(f"Could not get detailed status: {e}")
+            logger.warning("Could not get detailed status: %s", e)
             content = f"""## ⚡ AutoBot System Status
 
 **Status:** ✅ Running
@@ -395,7 +395,7 @@ class ScanCommand(Command):
             return self._format_scan_result(assessment, scan_params["training_mode"])
 
         except Exception as e:
-            logger.error(f"Failed to create security assessment: {e}")
+            logger.error("Failed to create security assessment: %s", e)
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SCAN,
@@ -535,7 +535,7 @@ class SecurityCommand(Command):
                 )
 
         except Exception as e:
-            logger.error(f"Security command failed: {e}")
+            logger.error("Security command failed: %s", e)
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECURITY,
@@ -909,7 +909,7 @@ class SlashCommandHandler:
             "testing": "testing/",
         }
 
-        logger.info(f"SlashCommandHandler initialized with docs path: {docs_base_path}")
+        logger.info("SlashCommandHandler initialized with docs path: %s", docs_base_path)
 
     def is_slash_command(self, message: str) -> bool:
         """

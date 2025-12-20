@@ -21,7 +21,7 @@ Usage:
     # In app startup
     validation_result = await validate_startup_dependencies()
     if not validation_result.success:
-        logger.error(f"Startup validation failed: {validation_result.errors}")
+        logger.error("Startup validation failed: %s", validation_result.errors)
 """
 
 import asyncio
@@ -145,10 +145,10 @@ class StartupValidator:
             )
 
         for warning in self.result.warnings:
-            logger.warning(f"⚠️  {warning}")
+            logger.warning("⚠️  %s", warning)
 
         for error in self.result.errors:
-            logger.error(f"❌ {error}")
+            logger.error("❌ %s", error)
 
         return self.result
 
@@ -159,7 +159,7 @@ class StartupValidator:
         for module_name in self.critical_imports:
             try:
                 importlib.import_module(module_name)
-                logger.debug(f"✅ Critical import: {module_name}")
+                logger.debug("✅ Critical import: %s", module_name)
             except ImportError as e:
                 self.result.add_error(
                     f"Critical import failed: {module_name}",
@@ -173,7 +173,7 @@ class StartupValidator:
         for module_name in self.autobot_modules:
             try:
                 importlib.import_module(module_name)
-                logger.debug(f"✅ AutoBot module: {module_name}")
+                logger.debug("✅ AutoBot module: %s", module_name)
             except ImportError as e:
                 self.result.add_error(
                     f"AutoBot module import failed: {module_name}",
@@ -193,7 +193,7 @@ class StartupValidator:
         for module_name in self.optional_modules:
             try:
                 importlib.import_module(module_name)
-                logger.debug(f"✅ Optional module: {module_name}")
+                logger.debug("✅ Optional module: %s", module_name)
             except ImportError as e:
                 self.result.add_warning(
                     f"Optional module not available: {module_name}", {"error": str(e)}
@@ -242,7 +242,7 @@ class StartupValidator:
             """Validate a single service and return result."""
             try:
                 await validator_func()
-                logger.debug(f"✅ Service connectivity: {service_name}")
+                logger.debug("✅ Service connectivity: %s", service_name)
                 return service_name, None
             except Exception as e:
                 return service_name, str(e)

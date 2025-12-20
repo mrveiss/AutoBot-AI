@@ -249,7 +249,7 @@ class SecureCommandExecutor:
             return await self.require_approval_callback(approval_data)
 
         # If no callback, log and deny by default for safety
-        logger.warning(f"No approval callback set. Denying command: {command}")
+        logger.warning("No approval callback set. Denying command: %s", command)
         return False
 
     def _build_docker_command(self, command: str) -> str:
@@ -368,7 +368,7 @@ class SecureCommandExecutor:
 
         # Handle forbidden commands (Issue #281: uses helper)
         if risk == CommandRisk.FORBIDDEN:
-            logger.error(f"Forbidden command blocked: {command}")
+            logger.error("Forbidden command blocked: %s", command)
             log_entry["error"] = "Command forbidden by security policy"
             self.command_history.append(log_entry)
             return self._build_blocked_result(
@@ -383,7 +383,7 @@ class SecureCommandExecutor:
             log_entry["approved"] = approved
 
             if not approved:
-                logger.warning(f"Command denied by user: {command}")
+                logger.warning("Command denied by user: %s", command)
                 log_entry["error"] = "User denied execution"
                 self.command_history.append(log_entry)
                 return self._build_blocked_result(
@@ -393,7 +393,7 @@ class SecureCommandExecutor:
         # Prepare command for execution
         if self.use_docker_sandbox and risk != CommandRisk.SAFE:
             actual_command = self._build_docker_command(command)
-            logger.info(f"Executing in Docker sandbox: {command}")
+            logger.info("Executing in Docker sandbox: %s", command)
         else:
             actual_command = command
 
@@ -414,14 +414,14 @@ class SecureCommandExecutor:
             return result
 
         except asyncio.TimeoutError:
-            logger.error(f"Command timed out: {command}")
+            logger.error("Command timed out: %s", command)
             log_entry["error"] = "Command timed out"
             self.command_history.append(log_entry)
             return self._build_error_result(
                 risk, reasons, "timeout", "Command execution timed out after 5 minutes"
             )
         except Exception as e:
-            logger.error(f"Command execution error: {e}")
+            logger.error("Command execution error: %s", e)
             log_entry["error"] = str(e)
             self.command_history.append(log_entry)
             return self._build_error_result(

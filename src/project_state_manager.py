@@ -364,7 +364,7 @@ class ProjectStateManager:
         try:
             self.current_phase = DevelopmentPhase(row[0])
         except ValueError:
-            logger.warning(f"Invalid phase in database: {row[0]}")
+            logger.warning("Invalid phase in database: %s", row[0])
 
     def _load_phase_status(self, cursor) -> None:
         """Load phase completion status (Issue #315 - extracted helper)."""
@@ -390,7 +390,7 @@ class ProjectStateManager:
                 self._load_current_phase(cursor)
                 self._load_phase_status(cursor)
         except sqlite3.Error as e:
-            logger.error(f"Error loading project state: {e}")
+            logger.error("Error loading project state: %s", e)
 
     def _save_current_phase(self, cursor: sqlite3.Cursor) -> None:
         """Save current phase to database."""
@@ -439,7 +439,7 @@ class ProjectStateManager:
                 conn.commit()
                 logger.info("Project state saved successfully")
         except sqlite3.Error as e:
-            logger.error(f"Error saving project state: {e}")
+            logger.error("Error saving project state: %s", e)
 
     async def save_state_async(self):
         """Save current project state to database asynchronously.
@@ -596,7 +596,7 @@ class ProjectStateManager:
         phase_info = self.phases[phase]
         results = []
 
-        logger.info(f"Validating phase: {phase_info.name}")
+        logger.info("Validating phase: %s", phase_info.name)
 
         for capability in phase_info.capabilities:
             result = self.validate_capability(capability)

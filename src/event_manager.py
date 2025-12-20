@@ -80,7 +80,7 @@ class EventManager:
         if self._is_debug_mode():
             await self.publish(event_type, payload)
         else:
-            logger.debug(f"Debug event '{event_type}' not published (debug mode off).")
+            logger.debug("Debug event '%s' not published (debug mode off).", event_type)
 
     def subscribe(
         self, event_type: str, listener: Callable[[Dict[str, Any]], Awaitable[None]]

@@ -203,9 +203,9 @@ class WorkerNode:
             gpu_devices = [d for d in available_devices if "GPU" in d]
 
             if npu_devices:
-                logger.info(f"NPU acceleration available: {npu_devices}")
+                logger.info("NPU acceleration available: %s", npu_devices)
             if gpu_devices:
-                logger.info(f"OpenVINO GPU acceleration available: {gpu_devices}")
+                logger.info("OpenVINO GPU acceleration available: %s", gpu_devices)
 
             return {
                 "openvino_available": True,
@@ -218,7 +218,7 @@ class WorkerNode:
         except ImportError:
             return {"openvino_available": False}
         except Exception as e:
-            logger.warning(f"OpenVINO detection error: {e}")
+            logger.warning("OpenVINO detection error: %s", e)
             return {"openvino_available": False}
 
     def _detect_onnx_capabilities(self) -> Dict[str, Any]:
@@ -258,9 +258,9 @@ class WorkerNode:
             await asyncio.to_thread(
                 self.redis_client.publish, channel, json.dumps(capabilities)
             )
-            logger.info(f"Worker capabilities reported to Redis channel '{channel}'.")
+            logger.info("Worker capabilities reported to Redis channel '%s'.", channel)
         else:
-            logger.debug(f"Worker capabilities detected (local mode): {capabilities}")
+            logger.debug("Worker capabilities detected (local mode): %s", capabilities)
             await event_manager.publish("worker_capability_report", capabilities)
 
     async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -348,7 +348,7 @@ class WorkerNode:
                 if message["type"] == "message":
                     task_payload = json.loads(message["data"])
                     task_id = task_payload.get("task_id", "N/A")
-                    logger.info(f"Worker {self.worker_id} received task: {task_id}")
+                    logger.info("Worker %s received task: %s", self.worker_id, task_id)
                     asyncio.create_task(self._process_and_respond(task_payload))
         else:
             logger.info(
@@ -387,6 +387,6 @@ class WorkerNode:
 
         This is the main entry point for the worker node lifecycle.
         """
-        logger.info(f"Worker Node {self.worker_id} starting...")
+        logger.info("Worker Node %s starting...", self.worker_id)
         await self.report_capabilities()
         await self.listen_for_tasks()

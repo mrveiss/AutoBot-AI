@@ -266,20 +266,20 @@ class PromptKnowledgeSync:
             )
             if success:
                 results["updated"] += 1
-                logger.debug(f"Updated prompt in knowledge base: {prompt_key}")
+                logger.debug("Updated prompt in knowledge base: %s", prompt_key)
             else:
                 results["errors"] += 1
-                logger.error(f"Failed to update prompt: {prompt_key}")
+                logger.error("Failed to update prompt: %s", prompt_key)
         else:
             result = await self.knowledge_base.store_fact(
                 content=content, metadata=metadata
             )
             if result.get("status") == "success":
                 results["imported"] += 1
-                logger.debug(f"Imported prompt to knowledge base: {prompt_key}")
+                logger.debug("Imported prompt to knowledge base: %s", prompt_key)
             else:
                 results["errors"] += 1
-                logger.error(f"Failed to import prompt: {prompt_key}")
+                logger.error("Failed to import prompt: %s", prompt_key)
 
     async def sync_prompts_to_knowledge(
         self, force_update: bool = False
@@ -381,7 +381,7 @@ class PromptKnowledgeSync:
 
             return exact_matches
         except Exception as e:
-            logger.warning(f"Error finding existing prompt entry for {prompt_key}: {e}")
+            logger.warning("Error finding existing prompt entry for %s: %s", prompt_key, e)
             return []
 
     async def remove_prompt_knowledge(self, prompt_key: str) -> bool:
@@ -406,7 +406,7 @@ class PromptKnowledgeSync:
             return removed_count > 0
 
         except Exception as e:
-            logger.error(f"Error removing prompt knowledge for {prompt_key}: {e}")
+            logger.error("Error removing prompt knowledge for %s: %s", prompt_key, e)
             return False
 
     async def get_sync_status(self) -> Dict[str, Any]:
@@ -457,7 +457,7 @@ class PromptKnowledgeSync:
             }
 
         except Exception as e:
-            logger.error(f"Error getting sync status: {e}")
+            logger.error("Error getting sync status: %s", e)
             return {"error": str(e)}
 
 

@@ -96,7 +96,7 @@ class KnowledgeBaseInitializer:
                 return cls._instance
 
             except Exception as e:
-                logger.error(f"Knowledge base initialization failed: {e}")
+                logger.error("Knowledge base initialization failed: %s", e)
                 cls._initialization_failed = True
                 cls._initialization_error = e
                 cls._instance = None
@@ -112,7 +112,7 @@ class KnowledgeBaseInitializer:
             await asyncio.wait_for(cls._initialization_complete.wait(), timeout=timeout)
             return cls._instance
         except asyncio.TimeoutError:
-            logger.warning(f"Knowledge base initialization timed out after {timeout}s")
+            logger.warning("Knowledge base initialization timed out after %ss", timeout)
             return None
 
     @classmethod
@@ -149,7 +149,7 @@ async def get_knowledge_base(
         return instance
 
     except Exception as e:
-        logger.error(f"Failed to get knowledge base: {e}")
+        logger.error("Failed to get knowledge base: %s", e)
         return None
 
 
@@ -174,7 +174,7 @@ async def knowledge_base_context(timeout: float = TimingConstants.SHORT_TIMEOUT)
             raise RuntimeError("Failed to initialize knowledge base")
         yield kb
     except Exception as e:
-        logger.error(f"Knowledge base context error: {e}")
+        logger.error("Knowledge base context error: %s", e)
         raise
     finally:
         # Cleanup could be added here if needed
@@ -189,7 +189,7 @@ async def initialize_knowledge_base_background():
         await get_knowledge_base()
         logger.info("Background knowledge base initialization completed")
     except Exception as e:
-        logger.error(f"Background knowledge base initialization failed: {e}")
+        logger.error("Background knowledge base initialization failed: %s", e)
 
 
 def start_background_initialization():
@@ -200,7 +200,7 @@ def start_background_initialization():
         logger.info("Knowledge base background initialization task created")
         return task
     except Exception as e:
-        logger.error(f"Failed to start background initialization: {e}")
+        logger.error("Failed to start background initialization: %s", e)
         return None
 
 

@@ -42,7 +42,7 @@ class GUIController:
         interval: float = 0.0,
     ) -> Dict[str, Any]:
         """Return success status without performing click in dummy mode."""
-        logger.debug(f"Dummy GUIController: click_element('{image_path}') skipped.")
+        logger.debug("Dummy GUIController: click_element('%s') skipped.", image_path)
         await asyncio.sleep(0)
         return {"status": "success", "message": "GUI click skipped (Dummy Controller)."}
 
@@ -63,7 +63,7 @@ class GUIController:
 
     async def type_text(self, text: str, interval: float = 0.0) -> Dict[str, Any]:
         """Return success status without typing text in dummy mode."""
-        logger.debug(f"Dummy GUIController: type_text('{text}') skipped.")
+        logger.debug("Dummy GUIController: type_text('%s') skipped.", text)
         await asyncio.sleep(0)
         return {
             "status": "success",
@@ -72,7 +72,7 @@ class GUIController:
 
     async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
         """Return success status without moving mouse in dummy mode."""
-        logger.debug(f"Dummy GUIController: move_mouse({x}, {y}) skipped.")
+        logger.debug("Dummy GUIController: move_mouse(%s, %s) skipped.", x, y)
         await asyncio.sleep(0)
         return {
             "status": "success",

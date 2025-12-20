@@ -91,7 +91,7 @@ class WorkflowClassifier:
             try:
                 self._initialize_default_rules()
             except Exception as e:
-                logger.error(f"Failed to initialize classification rules: {e}")
+                logger.error("Failed to initialize classification rules: %s", e)
                 self.redis_client = None
 
     def _initialize_default_rules(self):
@@ -120,7 +120,7 @@ class WorkflowClassifier:
                 keywords = json.loads(keywords_data)
                 return keywords.get(category, [])
         except Exception as e:
-            logger.error(f"Error getting keywords: {e}")
+            logger.error("Error getting keywords: %s", e)
         return []
 
     def add_keywords(self, category: str, new_keywords: List[str]):
@@ -142,9 +142,9 @@ class WorkflowClassifier:
                     existing_keywords_lower.add(keyword_lower)
 
             self.redis_client.set(self.keywords_key, json.dumps(keywords))
-            logger.info(f"Added {len(new_keywords)} keywords to category {category}")
+            logger.info("Added %s keywords to category %s", len(new_keywords), category)
         except Exception as e:
-            logger.error(f"Error adding keywords: {e}")
+            logger.error("Error adding keywords: %s", e)
 
     def classify_request(self, user_message: str) -> TaskComplexity:
         """Classify user request using Redis-stored rules and keywords."""
@@ -198,7 +198,7 @@ class WorkflowClassifier:
             return TaskComplexity.SIMPLE
 
         except Exception as e:
-            logger.error(f"Error in classification: {e}")
+            logger.error("Error in classification: %s", e)
             # Fallback to simple classification
             return self._fallback_classification(message_lower)
 
@@ -257,7 +257,7 @@ class WorkflowClassifier:
 
             return safe_evaluator.evaluate(condition, eval_context)
         except Exception as e:
-            logger.error(f"Error evaluating condition '{condition}': {e}")
+            logger.error("Error evaluating condition '%s': %s", condition, e)
             return False
 
     def get_classification_stats(self) -> Dict[str, Any]:
@@ -279,7 +279,7 @@ class WorkflowClassifier:
 
             return stats
         except Exception as e:
-            logger.error(f"Error getting stats: {e}")
+            logger.error("Error getting stats: %s", e)
             return {}
 
 

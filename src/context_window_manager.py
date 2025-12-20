@@ -37,17 +37,17 @@ class ContextWindowManager:
         """
         path = Path(config_path)
         if not path.exists():
-            logger.warning(f"Config not found: {config_path}, using defaults")
+            logger.warning("Config not found: %s, using defaults", config_path)
             return self._get_default_config()
 
         try:
             with open(path, "r") as f:
                 config = yaml.safe_load(f)
 
-            logger.info(f"✅ Loaded config for {len(config['models'])} models")
+            logger.info("✅ Loaded config for %s models", len(config['models']))
             return config
         except Exception as e:
-            logger.error(f"Failed to load config: {e}, using defaults")
+            logger.error("Failed to load config: %s, using defaults", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict:
@@ -88,12 +88,12 @@ class ContextWindowManager:
             model_name: Name of the LLM model to use
         """
         if model_name not in self.config["models"]:
-            logger.warning(f"Unknown model {model_name}, using default")
+            logger.warning("Unknown model %s, using default", model_name)
             self.current_model = self.config["models"]["default"]["name"]
         else:
             self.current_model = model_name
 
-        logger.info(f"Active model: {self.current_model}")
+        logger.info("Active model: %s", self.current_model)
 
     def get_message_limit(self, model_name: Optional[str] = None) -> int:
         """Get recommended message limit for model.

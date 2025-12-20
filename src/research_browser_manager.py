@@ -85,7 +85,7 @@ class ResearchBrowserSession:
                     headless=headless,
                     args=browser_args,
                 )
-                logger.info(f"Launched new browser for session {self.session_id}")
+                logger.info("Launched new browser for session %s", self.session_id)
 
             self.context = await self.browser.new_context(
                 viewport=viewport,
@@ -98,11 +98,11 @@ class ResearchBrowserSession:
             # Set up event listeners for interaction detection
             await self._setup_interaction_detection()
 
-            logger.info(f"Browser session {self.session_id} initialized successfully")
+            logger.info("Browser session %s initialized successfully", self.session_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize browser session {self.session_id}: {e}")
+            logger.error("Failed to initialize browser session %s: %s", self.session_id, e)
             self.status = "error"
             return False
 
@@ -232,7 +232,7 @@ class ResearchBrowserSession:
             }
 
         except Exception as e:
-            logger.error(f"Navigation failed for session {self.session_id}: {e}")
+            logger.error("Navigation failed for session %s: %s", self.session_id, e)
             return {"success": False, "error": str(e)}
 
     async def extract_content(self) -> Dict[str, Any]:
@@ -339,16 +339,16 @@ class ResearchBrowserSession:
                 async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
                     await f.write(result["data"])
             except OSError as e:
-                logger.error(f"Failed to write MHTML file {filepath}: {e}")
+                logger.error("Failed to write MHTML file %s: %s", filepath, e)
                 return None
 
             self.mhtml_files.append(filepath)
-            logger.info(f"Saved MHTML file: {filepath}")
+            logger.info("Saved MHTML file: %s", filepath)
 
             return filepath
 
         except Exception as e:
-            logger.error(f"Failed to save MHTML for session {self.session_id}: {e}")
+            logger.error("Failed to save MHTML for session %s: %s", self.session_id, e)
             return None
 
     async def wait_for_user_interaction(self, timeout_seconds: int = 300) -> bool:
@@ -372,7 +372,7 @@ class ResearchBrowserSession:
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every 2 seconds
 
             except Exception as e:
-                logger.error(f"Error checking interaction status: {e}")
+                logger.error("Error checking interaction status: %s", e)
                 break
 
         return False
@@ -396,7 +396,7 @@ class ResearchBrowserSession:
                     if await asyncio.to_thread(os.path.exists, mhtml_file):
                         await asyncio.to_thread(os.remove, mhtml_file)
                 except Exception as e:
-                    logger.warning(f"Failed to clean up MHTML file {mhtml_file}: {e}")
+                    logger.warning("Failed to clean up MHTML file %s: %s", mhtml_file, e)
 
             if self.mhtml_files:
                 await asyncio.gather(
@@ -405,10 +405,10 @@ class ResearchBrowserSession:
                 )
 
             self.status = "closed"
-            logger.info(f"Browser session {self.session_id} closed")
+            logger.info("Browser session %s closed", self.session_id)
 
         except Exception as e:
-            logger.error(f"Error closing browser session {self.session_id}: {e}")
+            logger.error("Error closing browser session %s: %s", self.session_id, e)
 
 
 class ResearchBrowserManager:
@@ -510,7 +510,7 @@ class ResearchBrowserManager:
             }
 
         except Exception as e:
-            logger.error(f"Research failed for URL {url}: {e}")
+            logger.error("Research failed for URL %s: %s", url, e)
             return {"success": False, "error": str(e)}
 
     async def _try_mhtml_fallback(
@@ -518,7 +518,7 @@ class ResearchBrowserManager:
     ) -> Dict[str, Any]:
         """Try to crawl using MHTML fallback"""
         try:
-            logger.info(f"Attempting MHTML fallback for {url}")
+            logger.info("Attempting MHTML fallback for %s", url)
 
             # Create a simple page to load the URL and save MHTML
             await session.page.goto("about:blank")
@@ -540,7 +540,7 @@ class ResearchBrowserManager:
                         "message": "Content extracted from MHTML backup",
                     }
             except Exception as e:
-                logger.error(f"MHTML fallback also failed: {e}")
+                logger.error("MHTML fallback also failed: %s", e)
 
             return {
                 "success": False,
@@ -548,7 +548,7 @@ class ResearchBrowserManager:
             }
 
         except Exception as e:
-            logger.error(f"MHTML fallback error: {e}")
+            logger.error("MHTML fallback error: %s", e)
             return {"success": False, "error": f"MHTML fallback error: {str(e)}"}
 
     async def _extract_from_mhtml(self, mhtml_path: str) -> Dict[str, Any]:
@@ -571,7 +571,7 @@ class ResearchBrowserManager:
             }
 
         except Exception as e:
-            logger.error(f"Failed to extract from MHTML {mhtml_path}: {e}")
+            logger.error("Failed to extract from MHTML %s: %s", mhtml_path, e)
             return {"success": False, "error": str(e)}
 
     async def _cleanup_oldest_session(self):
@@ -596,7 +596,7 @@ class ResearchBrowserManager:
             if session.conversation_id in self.conversation_sessions:
                 del self.conversation_sessions[session.conversation_id]
 
-            logger.info(f"Cleaned up research session {session_id}")
+            logger.info("Cleaned up research session %s", session_id)
 
     async def cleanup_all(self):
         """Clean up all sessions"""

@@ -55,7 +55,7 @@ class GUIController:
             os.environ["DISPLAY"] = ":99"
             logger.info("Virtual display started on :99")
         except Exception as e:
-            logger.error(f"Error starting virtual display: {e}")
+            logger.error("Error starting virtual display: %s", e)
 
     def stop_virtual_display(self):
         """Stop the Xvfb virtual display if it was started by this controller."""
@@ -71,24 +71,24 @@ class GUIController:
         try:
             return await asyncio.to_thread(pyautogui.screenshot)
         except Exception as e:
-            logger.error(f"Error capturing screenshot: {e}")
+            logger.error("Error capturing screenshot: %s", e)
             return None
 
     async def click_at(self, x, y):
         """Simulate a mouse click at the specified coordinates."""
         try:
             await asyncio.to_thread(pyautogui.click, x, y)
-            logger.debug(f"Clicked at ({x}, {y})")
+            logger.debug("Clicked at (%s, %s)", x, y)
         except Exception as e:
-            logger.error(f"Error clicking at ({x}, {y}): {e}")
+            logger.error("Error clicking at (%s, %s): %s", x, y, e)
 
     async def type_text(self, text):
         """Simulate typing the specified text."""
         try:
             await asyncio.to_thread(pyautogui.write, text)
-            logger.debug(f"Typed text: {text}")
+            logger.debug("Typed text: %s", text)
         except Exception as e:
-            logger.error(f"Error typing text: {e}")
+            logger.error("Error typing text: %s", e)
 
     async def locate_element_by_image(self, image_path, confidence=0.8):
         """Locate an element on the screen by matching an image."""
@@ -97,13 +97,13 @@ class GUIController:
                 pyautogui.locateCenterOnScreen, image_path, confidence=confidence
             )
             if location:
-                logger.debug(f"Found element at {location}")
+                logger.debug("Found element at %s", location)
                 return location
             else:
-                logger.debug(f"Element not found for image: {image_path}")
+                logger.debug("Element not found for image: %s", image_path)
                 return None
         except Exception as e:
-            logger.error(f"Error locating element by image {image_path}: {e}")
+            logger.error("Error locating element by image %s: %s", image_path, e)
             return None
 
     async def draw_visual_feedback(self, x, y, duration=2):
@@ -114,9 +114,9 @@ class GUIController:
             await asyncio.to_thread(pyautogui.moveTo, x, y)
             await asyncio.sleep(duration)
             await asyncio.to_thread(pyautogui.moveTo, original_pos)
-            logger.debug(f"Drew visual feedback at ({x}, {y})")
+            logger.debug("Drew visual feedback at (%s, %s)", x, y)
         except Exception as e:
-            logger.error(f"Error drawing visual feedback: {e}")
+            logger.error("Error drawing visual feedback: %s", e)
 
     def check_wsl2_kex(self):
         """Check if running under WSL2 and if Kex is available."""
@@ -141,7 +141,7 @@ class GUIController:
                     )
                     return False
             except Exception as e:
-                logger.error(f"Error checking for Kex: {e}")
+                logger.error("Error checking for Kex: %s", e)
                 return False
         return False
 

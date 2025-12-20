@@ -98,7 +98,7 @@ class EnhancedSecurityLayer:
                 self.sandbox_executor = secure_sandbox
                 logger.info("Enhanced Docker sandbox executor initialized")
             except Exception as e:
-                logger.warning(f"Failed to initialize enhanced sandbox executor: {e}")
+                logger.warning("Failed to initialize enhanced sandbox executor: %s", e)
 
         # Approval queue for async command approvals
         self.pending_approvals: Dict[str, asyncio.Event] = {}
@@ -106,10 +106,10 @@ class EnhancedSecurityLayer:
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
         logger.info("EnhancedSecurityLayer initialized")
-        logger.debug(f"Authentication enabled: {self.enable_auth}")
-        logger.debug(f"Command security enabled: {self.enable_command_security}")
-        logger.debug(f"Docker sandbox: {self.use_docker_sandbox}")
-        logger.debug(f"Audit log file: {self.audit_log_file}")
+        logger.debug("Authentication enabled: %s", self.enable_auth)
+        logger.debug("Command security enabled: %s", self.enable_command_security)
+        logger.debug("Docker sandbox: %s", self.use_docker_sandbox)
+        logger.debug("Audit log file: %s", self.audit_log_file)
 
     def _create_security_policy(self) -> SecurityPolicy:
         """Create security policy from configuration"""
@@ -486,9 +486,9 @@ class EnhancedSecurityLayer:
         try:
             with open(self.audit_log_file, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-            logger.debug(f"Audit log: {action} by {user} - {outcome}")
+            logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
-            logger.error(f"Failed to write to audit log: {e}")
+            logger.error("Failed to write to audit log: %s", e)
 
     def get_command_history(
         self, user: Optional[str] = None, limit: int = 100

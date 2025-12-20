@@ -165,7 +165,7 @@ def detect_exit_intent(message: str) -> bool:
 
     # Check for exact exit phrases
     if message_lower in EXIT_KEYWORDS:
-        logger.info(f"Exit intent detected: '{message_lower}'")
+        logger.info("Exit intent detected: '%s'", message_lower)
         return True
 
     # Check for exit keywords in message (with word boundaries)
@@ -174,7 +174,7 @@ def detect_exit_intent(message: str) -> bool:
         if exit_word in words:
             # Only consider it an exit if it's not part of a question
             if "?" not in message:
-                logger.info(f"Exit intent detected from keyword: '{exit_word}'")
+                logger.info("Exit intent detected from keyword: '%s'", exit_word)
                 return True
 
     return False
@@ -299,7 +299,7 @@ def select_context_prompt(intent: str, base_prompt: str) -> str:
     try:
         context_key = CONTEXT_PROMPT_MAP[intent]
         context_prompt = get_prompt(context_key)
-        logger.info(f"Loaded context prompt: {context_key} for intent: {intent}")
+        logger.info("Loaded context prompt: %s for intent: %s", context_key, intent)
 
         # Combine base prompt with context-specific prompt
         combined_prompt = f"""{base_prompt}
@@ -317,7 +317,7 @@ def select_context_prompt(intent: str, base_prompt: str) -> str:
         return combined_prompt
 
     except Exception as e:
-        logger.warning(f"Failed to load context prompt for intent '{intent}': {e}")
+        logger.warning("Failed to load context prompt for intent '%s': %s", intent, e)
         logger.warning("Falling back to base system prompt")
         return base_prompt
 

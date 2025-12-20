@@ -58,7 +58,7 @@ class NPUWorkerClient:
                     return {"status": "unhealthy", "error": f"HTTP {response.status}"}
         except Exception as e:
             self.available = False
-            logger.warning(f"NPU worker health check failed: {e}")
+            logger.warning("NPU worker health check failed: %s", e)
             return {"status": "unavailable", "error": str(e)}
 
     async def get_available_models(self) -> Dict[str, Any]:
@@ -72,7 +72,7 @@ class NPUWorkerClient:
                 else:
                     return {"loaded_models": {}, "error": f"HTTP {response.status}"}
         except Exception as e:
-            logger.error(f"Failed to get NPU models: {e}")
+            logger.error("Failed to get NPU models: %s", e)
             return {"loaded_models": {}, "error": str(e)}
 
     async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
@@ -84,7 +84,7 @@ class NPUWorkerClient:
             ) as response:
                 return await response.json()
         except Exception as e:
-            logger.error(f"Failed to load model {model_id}: {e}")
+            logger.error("Failed to load model %s: %s", model_id, e)
             return {"success": False, "error": str(e)}
 
     async def run_inference(
@@ -117,7 +117,7 @@ class NPUWorkerClient:
                         "success": False,
                     }
         except Exception as e:
-            logger.error(f"NPU inference failed: {e}")
+            logger.error("NPU inference failed: %s", e)
             return {"error": str(e), "success": False}
 
     async def offload_heavy_processing(
@@ -171,7 +171,7 @@ class NPUWorkerClient:
                 }
 
         except Exception as e:
-            logger.error(f"Heavy processing offload failed: {e}")
+            logger.error("Heavy processing offload failed: %s", e)
             return {"success": False, "error": str(e), "fallback": True}
 
     async def close(self):
@@ -200,7 +200,7 @@ class NPUTaskQueue:
         for i in range(self.max_concurrent):
             worker = asyncio.create_task(self._worker(f"npu_worker_{i}"))
             self.workers.append(worker)
-        logger.info(f"Started {self.max_concurrent} NPU workers")
+        logger.info("Started %s NPU workers", self.max_concurrent)
 
     async def stop_workers(self):
         """Stop background worker tasks"""
@@ -213,7 +213,7 @@ class NPUTaskQueue:
 
     async def _worker(self, worker_id: str):
         """Background worker that processes NPU tasks"""
-        logger.info(f"NPU worker {worker_id} started")
+        logger.info("NPU worker %s started", worker_id)
         while self.running:
             try:
                 # Wait for task with timeout to allow graceful shutdown
@@ -240,7 +240,7 @@ class NPUTaskQueue:
             except asyncio.TimeoutError:
                 continue  # No task available, continue loop
             except Exception as e:
-                logger.error(f"NPU worker {worker_id} error: {e}")
+                logger.error("NPU worker %s error: %s", worker_id, e)
                 if "future" in locals() and not task_data["future"].done():
                     task_data["future"].set_exception(e)
 
@@ -304,10 +304,10 @@ async def process_with_npu_fallback(
         result = await queue.submit_task(task_type, data)
 
         if result.get("fallback") or not result.get("success"):
-            logger.info(f"NPU processing failed, using fallback for {task_type}")
+            logger.info("NPU processing failed, using fallback for %s", task_type)
             return await fallback_func()
 
         return result
     except Exception as e:
-        logger.warning(f"NPU processing error for {task_type}: {e}")
+        logger.warning("NPU processing error for %s: %s", task_type, e)
         return await fallback_func()

@@ -278,7 +278,7 @@ class PhaseProgressionManager:
             "trigger": ProgressionTrigger.VALIDATION_COMPLETE.value,
             "status": PhasePromotionStatus.PROMOTED.value,
         })
-        logger.info(f"✅ Successfully progressed to {phase_name}")
+        logger.info("✅ Successfully progressed to %s", phase_name)
 
     def _record_failed_progression(
         self, phase_name: str, progression_result: Dict[str, Any], progression_results: Dict[str, Any]
@@ -288,7 +288,7 @@ class PhaseProgressionManager:
             "phase": phase_name,
             "reason": progression_result.get("reason", "Unknown error"),
         })
-        logger.warning(f"❌ Failed to progress to {phase_name}: {progression_result.get('reason')}")
+        logger.warning("❌ Failed to progress to %s: %s", phase_name, progression_result.get('reason'))
 
     async def execute_automated_progression(self) -> Dict[str, Any]:
         """Execute automated phase progression based on current state."""
@@ -308,7 +308,7 @@ class PhaseProgressionManager:
         eligibility = await self.check_progression_eligibility()
         for phase_info in eligibility["eligible_phases"]:
             phase_name = phase_info["phase"]
-            logger.info(f"📈 Attempting progression to {phase_name}...")
+            logger.info("📈 Attempting progression to %s...", phase_name)
             progression_result = await self._attempt_phase_progression(phase_name, phase_info)
             progression_results["progressions_attempted"].append({
                 "phase": phase_name,
@@ -368,7 +368,7 @@ class PhaseProgressionManager:
             else:
                 progression_result["reason"] = "Failed to create phase infrastructure"
         except Exception as e:
-            logger.error(f"Error during phase progression for {phase_name}: {e}")
+            logger.error("Error during phase progression for %s: %s", phase_name, e)
             progression_result["reason"] = f"Exception during progression: {str(e)}"
             progression_result["status"] = PhasePromotionStatus.BLOCKED
 
@@ -409,11 +409,11 @@ class PhaseProgressionManager:
                 )
                 return False
 
-            logger.info(f"📁 Created infrastructure for {phase_name}")
+            logger.info("📁 Created infrastructure for %s", phase_name)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to create infrastructure for {phase_name}: {e}")
+            logger.error("Failed to create infrastructure for %s: %s", phase_name, e)
             return False
 
     async def _apply_phase_changes(
@@ -439,7 +439,7 @@ class PhaseProgressionManager:
                 changes.extend(endpoint_changes)
 
         except Exception as e:
-            logger.error(f"Error applying changes for {phase_name}: {e}")
+            logger.error("Error applying changes for %s: %s", phase_name, e)
 
         return changes
 
@@ -461,7 +461,7 @@ class PhaseProgressionManager:
                 await handler()
                 return True
             except Exception as e:
-                logger.error(f"Failed to enable capability {capability}: {e}")
+                logger.error("Failed to enable capability %s: %s", capability, e)
                 return False
 
         return True  # Unknown capabilities are considered successful
@@ -518,7 +518,7 @@ class PhaseProgressionManager:
         try:
             await self.project_state.update_phase_status(phase_name, status.value)
         except Exception as e:
-            logger.error(f"Failed to update project state for {phase_name}: {e}")
+            logger.error("Failed to update project state for %s: %s", phase_name, e)
 
     def _is_in_cooldown(self) -> bool:
         """Check if progression system is in cooldown period"""
@@ -551,7 +551,7 @@ class PhaseProgressionManager:
         self, phase_name: str, user_id: str = "system"
     ) -> Dict[str, Any]:
         """Manually trigger progression to a specific phase"""
-        logger.info(f"🔧 Manual progression triggered for {phase_name} by {user_id}")
+        logger.info("🔧 Manual progression triggered for %s by %s", phase_name, user_id)
 
         # Check if phase exists in rules
         if phase_name not in self.progression_rules:

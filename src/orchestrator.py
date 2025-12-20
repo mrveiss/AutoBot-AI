@@ -265,7 +265,7 @@ class ConsolidatedOrchestrator:
                 self.classification_agent = GemmaClassificationAgent()
                 logger.info("Classification agent initialized successfully")
             except Exception as e:
-                logger.warning(f"Failed to initialize classification agent: {e}")
+                logger.warning("Failed to initialize classification agent: %s", e)
 
         # Initialize default agent profiles
         self._initialize_default_agents()
@@ -339,7 +339,7 @@ class ConsolidatedOrchestrator:
         for agent in default_agents:
             self.agent_registry[agent.agent_id] = agent
 
-        logger.info(f"Initialized {len(default_agents)} default agent profiles")
+        logger.info("Initialized %d default agent profiles", len(default_agents))
 
     async def _validate_llm_model(self, model_name: str) -> bool:
         """Test if an LLM model is available and working (Issue #315: extracted).
@@ -356,7 +356,7 @@ class ConsolidatedOrchestrator:
             )
             return bool(test_response)
         except Exception as e:
-            logger.debug(f"Model test failed for {model_name}: {e}")
+            logger.debug("Model test failed for %s: %s", model_name, e)
             return False
 
     async def _ensure_working_llm_model(self) -> None:
@@ -381,11 +381,11 @@ class ConsolidatedOrchestrator:
         # Try fallback model
         fallback_model = config_manager.get_default_llm_model()
         if await self._validate_llm_model(fallback_model):
-            logger.info(f"✅ Using fallback model: {fallback_model}")
+            logger.info("✅ Using fallback model: %s", fallback_model)
             self.config.orchestrator_llm_model = fallback_model
             return
 
-        logger.error(f"❌ Fallback model '{fallback_model}' also failed")
+        logger.error("❌ Fallback model '%s' also failed", fallback_model)
         raise Exception("No working LLM models available")
 
     async def initialize(self) -> None:
@@ -421,7 +421,7 @@ class ConsolidatedOrchestrator:
             logger.info("✅ Consolidated Orchestrator initialization complete")
 
         except Exception as e:
-            logger.error(f"❌ Orchestrator initialization failed: {e}")
+            logger.error("❌ Orchestrator initialization failed: %s", e)
             raise
 
     async def shutdown(self) -> None:
@@ -446,14 +446,14 @@ class ConsolidatedOrchestrator:
                 return_exceptions=True,  # Don't fail if one cleanup fails
             )
         except Exception as e:
-            logger.warning(f"Cleanup warning: {e}")
+            logger.warning("Cleanup warning: %s", e)
 
         # Log final metrics
         uptime = datetime.now() - self.start_time if self.start_time else 0
-        logger.info(f"Orchestrator session {self.session_id} completed:")
-        logger.info(f"  Uptime: {uptime}")
-        logger.info(f"  Tasks completed: {self.metrics['tasks_completed']}")
-        logger.info(f"  Tasks failed: {self.metrics['tasks_failed']}")
+        logger.info("Orchestrator session %s completed:", self.session_id)
+        logger.info("  Uptime: %s", uptime)
+        logger.info("  Tasks completed: %s", self.metrics['tasks_completed'])
+        logger.info("  Tasks failed: %s", self.metrics['tasks_failed'])
         logger.info("✅ Orchestrator shutdown complete")
 
     async def process_user_request(
@@ -471,7 +471,7 @@ class ConsolidatedOrchestrator:
         start_time = time.time()
         task_id = str(uuid.uuid4())
 
-        logger.info(f"Processing user request {task_id}: {user_message[:100]}...")
+        logger.info("Processing user request %s: %s...", task_id, user_message[:100])
 
         try:
             # Track task
@@ -502,7 +502,7 @@ class ConsolidatedOrchestrator:
 
             # Complete task tracking
             task_tracker.complete_task(task_id, result)
-            logger.info(f"✅ Request {task_id} completed in {processing_time:.2f}s")
+            logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
 
             return self._build_success_response(
                 task_id, result, processing_time, classification_result, target_llm_model, mode
@@ -513,7 +513,7 @@ class ConsolidatedOrchestrator:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
             task_tracker.fail_task(task_id, str(e))
-            logger.error(f"❌ Request {task_id} failed after {processing_time:.2f}s: {e}")
+            logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
 
             return self._build_failure_response(task_id, e, processing_time, mode)
 
@@ -525,10 +525,10 @@ class ConsolidatedOrchestrator:
             return None
         try:
             result = await self.classification_agent.classify_user_request(user_message)
-            logger.info(f"Task classified: {result.complexity.value} complexity")
+            logger.info("Task classified: %s complexity", result.complexity.value)
             return result
         except Exception as e:
-            logger.warning(f"Classification failed: {e}")
+            logger.warning("Classification failed: %s", e)
             return None
 
     def _select_model_for_task(
@@ -537,9 +537,9 @@ class ConsolidatedOrchestrator:
         """Select appropriate LLM model based on task classification (Issue #281 - extracted helper)."""
         if classification_result and classification_result.complexity == TaskComplexity.SIMPLE:
             model = config_manager.get_default_llm_model()
-            logger.info(f"Using fast model for simple task: {model}")
+            logger.info("Using fast model for simple task: %s", model)
             return model
-        logger.info(f"Generating plan using Orchestrator LLM: {self.config.orchestrator_llm_model}")
+        logger.info("Generating plan using Orchestrator LLM: %s", self.config.orchestrator_llm_model)
         return self.config.orchestrator_llm_model
 
     async def _execute_mode_request(
@@ -737,7 +737,7 @@ class ConsolidatedOrchestrator:
                     agent_results[agent_name] = result
                     execution_order.append(agent_name)
                 except Exception as e:
-                    logger.warning(f"Agent {agent_name} failed: {e}")
+                    logger.warning("Agent %s failed: %s", agent_name, e)
                     agent_results[agent_name] = {"error": str(e)}
         else:
             # Parallel execution for simpler tasks
@@ -814,7 +814,7 @@ class ConsolidatedOrchestrator:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to register agent {agent_profile.agent_id}: {e}")
+            logger.error("Failed to register agent %s: %s", agent_profile.agent_id, e)
             return False
 
     def find_best_agent_for_task(
@@ -862,7 +862,7 @@ class ConsolidatedOrchestrator:
     def set_phi2_enabled(self, enabled: bool):
         """Set Phi-2 model enabled status"""
         self.config.phi2_enabled = enabled
-        logger.info(f"Phi-2 enabled status set to: {self.config.phi2_enabled}")
+        logger.info("Phi-2 enabled status set to: %s", self.config.phi2_enabled)
 
         # Publish configuration change
         try:
@@ -922,7 +922,7 @@ class ConsolidatedOrchestrator:
             for key, value in new_config.items():
                 if hasattr(self.config, key):
                     setattr(self.config, key, value)
-                    logger.info(f"Updated configuration: {key} = {value}")
+                    logger.info("Updated configuration: %s = %s", key, value)
 
             # Reinitialize components if needed
             if "orchestrator_llm_model" in new_config:
@@ -932,7 +932,7 @@ class ConsolidatedOrchestrator:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update configuration: {e}")
+            logger.error("Failed to update configuration: %s", e)
             return False
 
     # ========================================================================
@@ -962,7 +962,7 @@ class ConsolidatedOrchestrator:
                 )
                 return TaskComplexity.COMPLEX
         except Exception as e:
-            logger.error(f"Classification failed: {e}, defaulting to COMPLEX")
+            logger.error("Classification failed: %s, defaulting to COMPLEX", e)
             return TaskComplexity.COMPLEX
 
     async def plan_workflow_steps(
@@ -1039,7 +1039,7 @@ class ConsolidatedOrchestrator:
             return steps
 
         except Exception as e:
-            logger.error(f"Failed to plan workflow steps: {e}")
+            logger.error("Failed to plan workflow steps: %s", e)
             return []
 
 

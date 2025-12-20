@@ -157,7 +157,7 @@ class AdvancedRAGOptimizer:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize RAG optimizer: {e}")
+            logger.error("Failed to initialize RAG optimizer: %s", e)
             return False
 
     def _analyze_query_context(self, query: str) -> QueryContext:
@@ -235,7 +235,7 @@ class AdvancedRAGOptimizer:
         # Remove duplicates and limit
         unique_expanded = list(dict.fromkeys(expanded))[:5]
 
-        logger.debug(f"Query expansion: {len(unique_expanded)} variants generated")
+        logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded
 
     async def _perform_semantic_search(
@@ -267,11 +267,11 @@ class AdvancedRAGOptimizer:
                 )
                 semantic_results.append(result)
 
-            logger.debug(f"Semantic search returned {len(semantic_results)} results")
+            logger.debug("Semantic search returned %s results", len(semantic_results))
             return semantic_results
 
         except Exception as e:
-            logger.error(f"Semantic search failed: {e}")
+            logger.error("Semantic search failed: %s", e)
             return []
 
     def _perform_keyword_search(
@@ -319,11 +319,11 @@ class AdvancedRAGOptimizer:
             for i, result in enumerate(keyword_results):
                 result.relevance_rank = i + 1
 
-            logger.debug(f"Keyword search returned {len(keyword_results)} results")
+            logger.debug("Keyword search returned %s results", len(keyword_results))
             return keyword_results[:20]  # Limit results
 
         except Exception as e:
-            logger.error(f"Keyword search failed: {e}")
+            logger.error("Keyword search failed: %s", e)
             return []
 
     def _combine_hybrid_results(
@@ -369,7 +369,7 @@ class AdvancedRAGOptimizer:
         for i, result in enumerate(combined_results):
             result.relevance_rank = i + 1
 
-        logger.debug(f"Hybrid combination produced {len(combined_results)} results")
+        logger.debug("Hybrid combination produced %s results", len(combined_results))
         return combined_results
 
     def _diversify_results(self, results: List[SearchResult]) -> List[SearchResult]:
@@ -405,7 +405,7 @@ class AdvancedRAGOptimizer:
                 if len(diversified) >= 10:
                     break
 
-        logger.debug(f"Diversification: {len(results)} → {len(diversified)} results")
+        logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
     async def _rerank_with_cross_encoder(
@@ -429,7 +429,7 @@ class AdvancedRAGOptimizer:
                         "reranking_model",
                         "cross-encoder/ms-marco-MiniLM-L-6-v2",
                     )
-                    logger.info(f"Loading cross-encoder model: {model_name}")
+                    logger.info("Loading cross-encoder model: %s", model_name)
                     self._cross_encoder = CrossEncoder(model_name)
                     logger.info("Cross-encoder model loaded successfully")
                 except ImportError:
@@ -438,7 +438,7 @@ class AdvancedRAGOptimizer:
                     )
                     self._cross_encoder = None
                 except Exception as e:
-                    logger.error(f"Failed to load cross-encoder model: {e}")
+                    logger.error("Failed to load cross-encoder model: %s", e)
                     self._cross_encoder = None
 
             # Use full cross-encoder model if available
@@ -505,7 +505,7 @@ class AdvancedRAGOptimizer:
             return results
 
         except Exception as e:
-            logger.error(f"Reranking failed: {e}")
+            logger.error("Reranking failed: %s", e)
             # Return original results on error
             return results
 
@@ -522,7 +522,7 @@ class AdvancedRAGOptimizer:
         metrics = RAGMetrics()
 
         try:
-            logger.info(f"Advanced search: '{query}' (max_results={max_results})")
+            logger.info("Advanced search: '%s' (max_results=%s)", query, max_results)
 
             # Step 1: Query analysis and context optimization
             query_start = time.time()
@@ -579,15 +579,15 @@ class AdvancedRAGOptimizer:
             metrics.gpu_acceleration_used = True  # Semantic chunker uses GPU
 
             logger.info("Advanced search completed:")
-            logger.info(f"  - Total time: {metrics.total_time:.3f}s")
-            logger.info(f"  - Documents considered: {metrics.documents_considered}")
-            logger.info(f"  - Final results: {metrics.final_results_count}")
-            logger.info(f"  - Query type: {context.query_type}")
+            logger.info("  - Total time: %.3fs", metrics.total_time)
+            logger.info("  - Documents considered: %s", metrics.documents_considered)
+            logger.info("  - Final results: %s", metrics.final_results_count)
+            logger.info("  - Query type: %s", context.query_type)
 
             return optimized_results, metrics
 
         except Exception as e:
-            logger.error(f"Advanced search failed: {e}")
+            logger.error("Advanced search failed: %s", e)
             metrics.total_time = time.time() - start_time
             return [], metrics
 
@@ -650,7 +650,7 @@ class AdvancedRAGOptimizer:
             return final_context, metrics
 
         except Exception as e:
-            logger.error(f"Context optimization failed: {e}")
+            logger.error("Context optimization failed: %s", e)
             metrics = RAGMetrics()
             return f"Error retrieving context: {str(e)}", metrics
 

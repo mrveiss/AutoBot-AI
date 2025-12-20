@@ -302,7 +302,7 @@ class TemporalKnowledgeManager:
                     await kb_instance.delete_fact(content_id)
                     return True
                 except Exception as e:
-                    logger.warning(f"Failed to invalidate content {content_id}: {e}")
+                    logger.warning("Failed to invalidate content %s: %s", content_id, e)
                     return False
 
             results = await asyncio.gather(
@@ -327,7 +327,7 @@ class TemporalKnowledgeManager:
             )
 
         except Exception as e:
-            logger.error(f"Invalidation job failed: {e}")
+            logger.error("Invalidation job failed: %s", e)
 
     async def schedule_smart_refresh(self) -> List[str]:
         """Schedule smart refresh for content that's about to expire."""
@@ -459,7 +459,7 @@ class TemporalKnowledgeManager:
                     logger.info("Temporal background processing cancelled")
                     break
                 except Exception as e:
-                    logger.error(f"Temporal background processing error: {e}")
+                    logger.error("Temporal background processing error: %s", e)
                     await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
 
         finally:
