@@ -74,61 +74,46 @@ class KnowledgeBaseCore:
     - V1 compatibility methods
     """
 
-    def __init__(self):
-        """Initialize instance variables only - no async operations"""
-        self.initialized = False
-        self.initialization_lock = asyncio.Lock()
-
-        # Error boundary manager for enhanced error tracking
-        self.error_manager = get_error_boundary_manager()
-
-        # Configuration from unified config
+    def _init_redis_config(self) -> None:
+        """Initialize Redis configuration (Issue #398: extracted)."""
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
-        # Knowledge base DB number - now managed by get_redis_client(database="knowledge")
-        # The database mapping is handled automatically by redis_client utility
         self.redis_db = 1  # Default for knowledge base (historical compatibility)
+        self.redis_index_name = config.get("redis.indexes.knowledge_base", "llama_index")
 
-        # ChromaDB configuration
+    def _init_chromadb_config(self) -> None:
+        """Initialize ChromaDB configuration (Issue #398: extracted)."""
         self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
-        self.chromadb_collection = config.get(
-            "memory.chromadb.collection_name", "autobot_memory"
-        )
-
+        self.chromadb_collection = config.get("memory.chromadb.collection_name", "autobot_memory")
         # Issue #72: HNSW parameters optimized for 545K+ vectors
         self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
-        self.hnsw_construction_ef = config.get(
-            "memory.chromadb.hnsw.construction_ef", 300
-        )
+        self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
         self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
         self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
 
-        # Redis index name (legacy compatibility - not used with ChromaDB)
-        self.redis_index_name = config.get(
-            "redis.indexes.knowledge_base", "llama_index"
-        )
-
-        # Connection clients (initialized in async method)
+    def _init_connection_vars(self) -> None:
+        """Initialize connection and state variables (Issue #398: extracted)."""
         self.redis_client: Optional[redis.Redis] = None
         self.aioredis_client: Optional[aioredis.Redis] = None
-
-        # Vector store components (initialized in async method)
         self.vector_store: Optional[ChromaVectorStore] = None
         self.vector_index: Optional[VectorStoreIndex] = None
-        # Issue #369: Async wrapper for direct ChromaDB operations
         self._async_chroma_collection = None
-
-        # Configuration flags
         self.llama_index_configured = False
-        self.embedding_model_name: Optional[str] = None  # Store actual model being used
-        self.embedding_dimensions: Optional[int] = None  # Store vector dimensions
-
-        # Redis initialization flag (V1 compatibility)
+        self.embedding_model_name: Optional[str] = None
+        self.embedding_dimensions: Optional[int] = None
         self._redis_initialized = False
-
-        # Stats counter key (Issue #71 - O(1) stats tracking)
         self._stats_key = "kb:stats"
+
+    def __init__(self):
+        """Initialize instance variables only (Issue #398: refactored)."""
+        self.initialized = False
+        self.initialization_lock = asyncio.Lock()
+        self.error_manager = get_error_boundary_manager()
+
+        self._init_redis_config()
+        self._init_chromadb_config()
+        self._init_connection_vars()
 
     @error_boundary(component="knowledge_base", function="initialize")
     async def initialize(self) -> bool:

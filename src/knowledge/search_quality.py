@@ -328,25 +328,10 @@ class RelevanceScorer:
             return self.factors.exact_match_boost
         return 1.0
 
-    def calculate_relevance_score(
-        self,
-        base_score: float,
-        query: str,
-        result: Dict[str, Any],
-    ) -> float:
-        """
-        Calculate final relevance score with all factors.
-
-        Issue #78: Combined relevance scoring.
-
-        Args:
-            base_score: Initial semantic/hybrid score
-            query: Search query
-            result: Search result dict
-
-        Returns:
-            Enhanced relevance score
-        """
+    def _parse_result_metadata(
+        self, result: Dict[str, Any]
+    ) -> Tuple[str, str, str, str, bool, Optional[datetime]]:
+        """Parse metadata from result for scoring (Issue #398: extracted)."""
         metadata = result.get("metadata", {})
         content = result.get("content", "")
         title = metadata.get("title", "")
@@ -354,7 +339,6 @@ class RelevanceScorer:
         source = metadata.get("source", "unknown")
         verified = metadata.get("verified", False)
 
-        # Parse created_at if available
         created_at = None
         if "created_at" in metadata:
             try:
@@ -362,29 +346,39 @@ class RelevanceScorer:
             except (ValueError, TypeError):
                 pass
 
-        # Calculate individual boosts
+        return content, title, doc_id, source, verified, created_at
+
+    def _compute_boosted_score(
+        self, base_score: float, query: str, content: str, title: str,
+        doc_id: str, source: str, verified: bool, created_at: Optional[datetime]
+    ) -> float:
+        """Compute boosted score from all factors (Issue #398: extracted)."""
         recency_boost = self.calculate_recency_boost(created_at)
         popularity_boost = self.calculate_popularity_boost(doc_id)
         authority_boost = self.calculate_authority_boost(source, verified)
         exact_boost = self.calculate_exact_match_boost(query, content, title)
 
-        # Weighted combination
-        # Base score is primary, boosts add secondary adjustments
         boosted_score = base_score * exact_boost
         boosted_score += self.factors.recency_weight * recency_boost
         boosted_score += self.factors.popularity_weight * popularity_boost
         boosted_score += self.factors.authority_weight * authority_boost
 
-        # Normalize to 0-1 range (approximate)
         max_possible = (
             1.0 * self.factors.title_match_boost
             + self.factors.recency_weight
             + self.factors.popularity_weight
             + self.factors.authority_weight
         )
-        normalized_score = min(boosted_score / max_possible, 1.0)
+        return min(boosted_score / max_possible, 1.0)
 
-        return normalized_score
+    def calculate_relevance_score(
+        self, base_score: float, query: str, result: Dict[str, Any]
+    ) -> float:
+        """Calculate final relevance score with all factors (Issue #398: refactored)."""
+        content, title, doc_id, source, verified, created_at = self._parse_result_metadata(result)
+        return self._compute_boosted_score(
+            base_score, query, content, title, doc_id, source, verified, created_at
+        )
 
     def record_access(self, doc_id: str) -> None:
         """Record document access for popularity tracking."""

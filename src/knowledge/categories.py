@@ -337,54 +337,42 @@ class CategoriesMixin:
     # CATEGORY TREE OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def get_category_tree(
-        self,
-        root_id: Optional[str] = None,
-        max_depth: int = 10,
-        include_fact_counts: bool = True,
+    async def _build_full_tree(
+        self, max_depth: int, include_fact_counts: bool
     ) -> Dict[str, Any]:
-        """
-        Get the full category tree structure.
+        """Build full tree from all roots (Issue #398: extracted)."""
+        root_ids = await self.aioredis_client.smembers("category:root")
+        tree = []
+        total = 0
 
-        Issue #411: Recursive tree building for API response.
+        for rid in root_ids:
+            if isinstance(rid, bytes):
+                rid = rid.decode("utf-8")
+            node = await self._build_tree_node(rid, 0, max_depth, include_fact_counts)
+            if node:
+                tree.append(node)
+                total += self._count_tree_nodes(node)
 
-        Args:
-            root_id: Optional root to start from (None = full tree)
-            max_depth: Maximum depth to traverse
-            include_fact_counts: Include fact counts in each node
+        tree.sort(key=lambda x: x.get("name", ""))
+        return {"success": True, "tree": tree, "total_categories": total}
 
-        Returns:
-            Dict with tree structure
-        """
+    async def get_category_tree(
+        self, root_id: Optional[str] = None, max_depth: int = 10,
+        include_fact_counts: bool = True
+    ) -> Dict[str, Any]:
+        """Get full category tree structure (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
             if root_id:
-                # Get subtree from specific root
                 root_data = await self._get_category_data(root_id)
                 if not root_data:
                     return {"success": False, "message": f"Category not found: {root_id}"}
                 tree = await self._build_tree_node(root_id, 0, max_depth, include_fact_counts)
                 return {"success": True, "tree": [tree], "total_categories": 1}
-            else:
-                # Get all root categories
-                root_ids = await self.aioredis_client.smembers("category:root")
-                tree = []
-                total = 0
 
-                for rid in root_ids:
-                    if isinstance(rid, bytes):
-                        rid = rid.decode("utf-8")
-                    node = await self._build_tree_node(rid, 0, max_depth, include_fact_counts)
-                    if node:
-                        tree.append(node)
-                        total += self._count_tree_nodes(node)
-
-                # Sort by name
-                tree.sort(key=lambda x: x.get("name", ""))
-
-                return {"success": True, "tree": tree, "total_categories": total}
+            return await self._build_full_tree(max_depth, include_fact_counts)
 
         except Exception as e:
             logger.error("Failed to get category tree: %s", e)
@@ -478,54 +466,47 @@ class CategoriesMixin:
     # CATEGORY-FACT OPERATIONS (Issue #411)
     # =========================================================================
 
-    async def assign_fact_to_category(
-        self,
-        fact_id: str,
-        category_id: str,
-    ) -> Dict[str, Any]:
+    async def _validate_fact_and_category(
+        self, fact_id: str, category_id: str
+    ) -> tuple[Optional[Dict], Optional[str]]:
+        """Validate fact and category exist (Issue #398: extracted).
+
+        Returns: (category_data, error_message)
         """
-        Assign a fact to a category.
+        category = await self._get_category_data(category_id)
+        if not category:
+            return None, f"Category not found: {category_id}"
 
-        Issue #411: Category assignment to facts.
+        fact_exists = await self.aioredis_client.exists(f"fact:{fact_id}")
+        if not fact_exists:
+            return None, f"Fact not found: {fact_id}"
 
-        Args:
-            fact_id: Fact UUID
-            category_id: Category UUID
+        return category, None
 
-        Returns:
-            Dict with success status
-        """
+    async def _remove_from_old_category(self, fact_id: str, new_category_id: str) -> None:
+        """Remove fact from old category if reassigning (Issue #398: extracted)."""
+        old_category = await self._get_fact_category_id(fact_id)
+        if old_category and old_category != new_category_id:
+            await self.aioredis_client.srem(f"category:facts:{old_category}", fact_id)
+            await self._decrement_category_count(old_category)
+
+    async def assign_fact_to_category(self, fact_id: str, category_id: str) -> Dict[str, Any]:
+        """Assign a fact to a category (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Verify category exists
-            category = await self._get_category_data(category_id)
-            if not category:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+            category, error = await self._validate_fact_and_category(fact_id, category_id)
+            if error:
+                return {"success": False, "message": error}
 
-            # Verify fact exists
-            fact_exists = await self.aioredis_client.exists(f"fact:{fact_id}")
-            if not fact_exists:
-                return {"success": False, "message": f"Fact not found: {fact_id}"}
-
-            # Remove from old category if any
-            old_category = await self._get_fact_category_id(fact_id)
-            if old_category and old_category != category_id:
-                await self.aioredis_client.srem(f"category:facts:{old_category}", fact_id)
-                await self._decrement_category_count(old_category)
-
-            # Assign to new category
+            await self._remove_from_old_category(fact_id, category_id)
             await self._assign_fact_to_category(fact_id, category_id)
 
             logger.info("Assigned fact '%s' to category '%s'", fact_id, category_id)
-
             return {
-                "success": True,
-                "fact_id": fact_id,
-                "category_id": category_id,
-                "category_path": category.get("path"),
-                "message": "Fact assigned to category",
+                "success": True, "fact_id": fact_id, "category_id": category_id,
+                "category_path": category.get("path"), "message": "Fact assigned to category",
             }
 
         except Exception as e:

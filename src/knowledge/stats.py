@@ -112,18 +112,26 @@ class StatsMixin:
                 logger.warning("Failed to get all stats: %s", e)
         return {}
 
-    async def _initialize_stats_counters(self) -> None:
-        """
-        Initialize stats counters from existing data (one-time migration).
+    async def _set_initial_counters(self, fact_count: int, vector_count: int) -> None:
+        """Set initial counter values in Redis (Issue #398: extracted)."""
+        await self.aioredis_client.hset(
+            self._stats_key,
+            mapping={
+                "total_facts": fact_count,
+                "total_vectors": vector_count,
+                "total_documents": vector_count,
+                "total_chunks": vector_count,
+                "initialized_at": datetime.now().isoformat(),
+            },
+        )
+        logger.info("Stats counters initialized: facts=%d, vectors=%d", fact_count, vector_count)
 
-        This performs a SCAN to count existing facts but only runs once
-        when the kb:stats hash doesn't exist.
-        """
+    async def _initialize_stats_counters(self) -> None:
+        """Initialize stats counters from existing data (Issue #398: refactored)."""
         if not self.aioredis_client:
             return
 
         try:
-            # Check if counters already exist
             exists = await self.aioredis_client.exists(self._stats_key)
             if exists:
                 logger.info("Stats counters already initialized")
@@ -131,36 +139,18 @@ class StatsMixin:
 
             logger.info("Initializing stats counters from existing data...")
 
-            # Count existing facts using scan_iter (one-time operation)
             fact_count = 0
             async for _ in self.aioredis_client.scan_iter(match="fact:*", count=1000):
                 fact_count += 1
 
-            # Get vector count from ChromaDB
             vector_count = 0
             if self.vector_store:
                 try:
-                    chroma_collection = self.vector_store._collection
-                    vector_count = chroma_collection.count()
+                    vector_count = self.vector_store._collection.count()
                 except Exception as e:
                     logger.debug("Could not get vector count: %s", e)
 
-            # Initialize the counters
-            await self.aioredis_client.hset(
-                self._stats_key,
-                mapping={
-                    "total_facts": fact_count,
-                    "total_vectors": vector_count,
-                    "total_documents": vector_count,
-                    "total_chunks": vector_count,
-                    "initialized_at": datetime.now().isoformat(),
-                },
-            )
-
-            logger.info(
-                "Stats counters initialized: facts=%d, vectors=%d",
-                fact_count, vector_count
-            )
+            await self._set_initial_counters(fact_count, vector_count)
 
         except Exception as e:
             logger.error("Failed to initialize stats counters: %s", e)

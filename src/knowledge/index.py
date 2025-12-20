@@ -190,56 +190,48 @@ class IndexMixin:
             logger.error("ChromaDB index rebuild failed: %s", e)
             return {"status": "error", "message": str(e)}
 
+    def _build_index_info_result(
+        self, chroma_path: Path, vector_count: int, metadata: Dict
+    ) -> Dict[str, Any]:
+        """Build index info result dictionary (Issue #398: extracted)."""
+        return {
+            "status": "success",
+            "collection_name": self.chromadb_collection,
+            "vector_count": vector_count,
+            "chromadb_path": str(chroma_path),
+            "hnsw_params": {
+                "space": metadata.get("hnsw:space", "unknown"),
+                "construction_ef": metadata.get("hnsw:construction_ef", "default"),
+                "search_ef": metadata.get("hnsw:search_ef", "default"),
+                "M": metadata.get("hnsw:M", "default"),
+            },
+            "configured_params": {
+                "space": self.hnsw_space,
+                "construction_ef": self.hnsw_construction_ef,
+                "search_ef": self.hnsw_search_ef,
+                "M": self.hnsw_m,
+            },
+        }
+
     async def get_chromadb_index_info(self) -> dict:
-        """
-        Get information about the current ChromaDB collection and HNSW parameters.
-
-        Issue #72: Useful for verifying current index configuration.
-        Issue #369: All ChromaDB operations wrapped with asyncio.to_thread().
-
-        Returns:
-            Dict with collection info and HNSW parameters
-        """
+        """Get ChromaDB collection and HNSW info (Issue #398: refactored)."""
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from src.utils.chromadb_client import (
-                get_chromadb_client as create_chromadb_client,
-            )
+            from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            # Issue #369: Wrap blocking get_collection with asyncio.to_thread
             collection = await asyncio.to_thread(
                 chroma_client.get_collection, name=self.chromadb_collection
             )
-            metadata = collection.metadata or {}
-
-            # Issue #369: Wrap blocking count() with asyncio.to_thread
             vector_count = await asyncio.to_thread(collection.count)
 
-            return {
-                "status": "success",
-                "collection_name": self.chromadb_collection,
-                "vector_count": vector_count,
-                "chromadb_path": str(chroma_path),
-                "hnsw_params": {
-                    "space": metadata.get("hnsw:space", "unknown"),
-                    "construction_ef": metadata.get("hnsw:construction_ef", "default"),
-                    "search_ef": metadata.get("hnsw:search_ef", "default"),
-                    "M": metadata.get("hnsw:M", "default"),
-                },
-                "configured_params": {
-                    "space": self.hnsw_space,
-                    "construction_ef": self.hnsw_construction_ef,
-                    "search_ef": self.hnsw_search_ef,
-                    "M": self.hnsw_m,
-                },
-            }
+            return self._build_index_info_result(chroma_path, vector_count, collection.metadata or {})
 
         except Exception as e:
             logger.error("Failed to get ChromaDB index info: %s", e)
