@@ -18,17 +18,21 @@ Includes:
 import asyncio
 import json
 import logging
+from datetime import datetime
 from pathlib import Path as PathLib
 from fastapi import APIRouter, HTTPException, Path, Query, Request
 
 # Import Pydantic models from dedicated module
 from backend.api.knowledge_models import (
+    BackupRequest,
     BulkCategoryUpdateRequest,
     BulkDeleteRequest,
     CleanupRequest,
     DeduplicationRequest,
+    DeleteBackupRequest,
     ExportRequest,
     ImportRequest,
+    RestoreRequest,
     ScanHostChangesRequest,
     UpdateFactRequest,
 )
@@ -229,16 +233,132 @@ async def find_duplicates(request: DeduplicationRequest, req: Request):
 
     logger.info(
         f"Deduplication request: threshold={request.similarity_threshold}, "
+        f"use_embeddings={request.use_embeddings}, "
         f"dry_run={request.dry_run}, category={request.category}"
     )
 
     result = await kb.find_duplicates(
         similarity_threshold=request.similarity_threshold,
+        use_embeddings=request.use_embeddings,
         category=request.category,
-        max_comparisons=request.max_comparisons,
+        max_results=request.max_results,
     )
 
     return result
+
+
+# ===== DATA QUALITY METRICS (Issue #418) =====
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_data_quality_metrics",
+    error_code_prefix="KB",
+)
+@router.get("/quality")
+async def get_data_quality_metrics(req: Request):
+    """
+    Get comprehensive data quality metrics for the knowledge base.
+
+    Issue #418: Data quality metrics and health dashboard.
+
+    Returns comprehensive quality analysis including:
+    - Overall quality score (0-100)
+    - Dimension scores:
+      - Completeness: How complete is the metadata
+      - Consistency: How consistent is the data format
+      - Freshness: How recent is the data
+      - Uniqueness: How unique is the data (duplicates)
+      - Validity: Is the data valid and well-formed
+    - Issues: Specific problems found with severity levels
+    - Recommendations: Suggested actions to improve quality
+
+    Returns:
+    - status: success or error
+    - overall_score: Weighted quality score (0-100)
+    - dimensions: Per-dimension scores and details
+    - summary: Quick overview of issues
+    - issues: List of specific problems found
+    - recommendations: Actions to improve quality
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info("Data quality metrics requested")
+
+    result = await kb.get_data_quality_metrics()
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health_dashboard",
+    error_code_prefix="KB",
+)
+@router.get("/health/dashboard")
+async def get_health_dashboard(req: Request):
+    """
+    Get a combined health dashboard with stats and quality metrics.
+
+    Issue #418: Health dashboard endpoint.
+
+    Returns:
+    - status: Overall system status
+    - stats: Knowledge base statistics
+    - quality: Data quality metrics summary
+    - last_updated: Dashboard generation timestamp
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info("Health dashboard requested")
+
+    # Get both stats and quality metrics in parallel
+    stats_task = kb.get_stats()
+    quality_task = kb.get_data_quality_metrics()
+
+    stats, quality = await asyncio.gather(stats_task, quality_task)
+
+    # Determine overall health status
+    health_status = "healthy"
+    if quality.get("overall_score", 100) < 50:
+        health_status = "degraded"
+    elif quality.get("overall_score", 100) < 70:
+        health_status = "warning"
+
+    if stats.get("status") == "error":
+        health_status = "error"
+
+    return {
+        "status": health_status,
+        "last_updated": datetime.now().isoformat(),
+        "stats": {
+            "total_facts": stats.get("total_facts", 0),
+            "total_vectors": stats.get("total_vectors", 0),
+            "db_size": stats.get("db_size", 0),
+            "categories": len(stats.get("categories", [])),
+            "embedding_cache": stats.get("embedding_cache", {}),
+        },
+        "quality": {
+            "overall_score": quality.get("overall_score", 0),
+            "dimensions": {
+                dim: data.get("score", 0)
+                for dim, data in quality.get("dimensions", {}).items()
+            },
+            "critical_issues": quality.get("summary", {}).get("critical_issues", 0),
+            "warnings": quality.get("summary", {}).get("warnings", 0),
+        },
+        "top_recommendations": quality.get("recommendations", [])[:3],
+    }
 
 
 # ===== HOST CHANGE SCANNING =====
@@ -715,6 +835,7 @@ async def export_knowledge(request: ExportRequest, req: Request):
         date_to=date_to,
         include_metadata=request.include_metadata,
         include_tags=request.include_tags,
+        include_embeddings=request.include_embeddings,
     )
 
     return result
@@ -1048,5 +1169,180 @@ async def cleanup_knowledge_base(request: CleanupRequest, req: Request):
         fix_metadata=request.fix_metadata,
         dry_run=request.dry_run,
     )
+
+    return result
+
+
+# ===== BACKUP AND RESTORE ENDPOINTS (Issue #419) =====
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_backup",
+    error_code_prefix="KB",
+)
+@router.post("/backup")
+async def create_backup(request: BackupRequest, req: Request):
+    """
+    Create a backup of the knowledge base.
+
+    Issue #419: Backup and restore functionality.
+
+    Request body:
+    - include_embeddings: Include vector embeddings (default: True, larger file)
+    - include_metadata: Include backup metadata (default: True)
+    - compression: Use gzip compression (default: True)
+    - description: Optional description for the backup
+
+    Returns:
+    - status: success or error
+    - backup_file: Path to created backup file
+    - backup_name: Name of the backup
+    - facts_count: Number of facts in backup
+    - file_size: Size of backup file in bytes
+    - created_at: ISO timestamp of backup creation
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Backup request: embeddings={request.include_embeddings}, "
+        f"compression={request.compression}"
+    )
+
+    result = await kb.create_backup(
+        include_embeddings=request.include_embeddings,
+        include_metadata=request.include_metadata,
+        compression=request.compression,
+        description=request.description,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="restore_backup",
+    error_code_prefix="KB",
+)
+@router.post("/restore")
+async def restore_backup(request: RestoreRequest, req: Request):
+    """
+    Restore knowledge base from a backup file.
+
+    Issue #419: Backup and restore functionality.
+
+    Request body:
+    - backup_file: Path to backup file (required)
+    - overwrite_existing: Overwrite existing facts (default: False)
+    - skip_duplicates: Skip duplicate facts (default: True)
+    - restore_embeddings: Restore vector embeddings (default: True)
+    - dry_run: Only validate, don't restore (default: True)
+
+    Returns:
+    - status: success or error
+    - mode: "dry_run" or "restore"
+    - backup_version: Version of backup format
+    - backup_created_at: When the backup was created
+    - total_facts_in_backup: Number of facts in backup
+    - restored: Number of facts restored (if not dry_run)
+    - skipped: Number of facts skipped (if not dry_run)
+    - updated: Number of facts updated (if not dry_run)
+    - errors: Number of errors (if not dry_run)
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Restore request: file={request.backup_file}, "
+        f"dry_run={request.dry_run}, overwrite={request.overwrite_existing}"
+    )
+
+    result = await kb.restore_backup(
+        backup_file=request.backup_file,
+        overwrite_existing=request.overwrite_existing,
+        skip_duplicates=request.skip_duplicates,
+        restore_embeddings=request.restore_embeddings,
+        dry_run=request.dry_run,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_backups",
+    error_code_prefix="KB",
+)
+@router.get("/backups")
+async def list_backups(
+    req: Request,
+    limit: int = Query(default=50, ge=1, le=200, description="Max backups to return"),
+):
+    """
+    List available knowledge base backups.
+
+    Issue #419: Backup and restore functionality.
+
+    Query parameters:
+    - limit: Maximum number of backups to return (default: 50, max: 200)
+
+    Returns:
+    - status: success or error
+    - backup_dir: Directory containing backups
+    - backups: List of backup files with metadata
+    - total_count: Total number of backups found
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(f"List backups request: limit={limit}")
+
+    result = await kb.list_backups(limit=limit)
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_backup",
+    error_code_prefix="KB",
+)
+@router.delete("/backup")
+async def delete_backup(request: DeleteBackupRequest, req: Request):
+    """
+    Delete a knowledge base backup file.
+
+    Issue #419: Backup and restore functionality.
+
+    Request body:
+    - backup_file: Path to backup file to delete (required)
+
+    Returns:
+    - status: success or error
+    - deleted_file: Path of deleted backup file
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(f"Delete backup request: file={request.backup_file}")
+
+    result = await kb.delete_backup(backup_file=request.backup_file)
 
     return result
