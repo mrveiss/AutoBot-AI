@@ -244,6 +244,19 @@ class MetadataMixin:
             logger.error("Failed to list metadata templates: %s", e)
             return {"status": "error", "message": str(e), "templates": []}
 
+    async def _update_template_category_links(
+        self, template_id: str, old_categories: set, new_categories: set
+    ) -> None:
+        """Update category links for template (Issue #398: extracted)."""
+        for cat in old_categories - new_categories:
+            await asyncio.to_thread(
+                self.redis_client.srem, f"{self.CATEGORY_TEMPLATES}{cat}", template_id
+            )
+        for cat in new_categories - old_categories:
+            await asyncio.to_thread(
+                self.redis_client.sadd, f"{self.CATEGORY_TEMPLATES}{cat}", template_id
+            )
+
     async def update_metadata_template(
         self,
         template_id: str,
@@ -252,21 +265,8 @@ class MetadataMixin:
         fields: List[Dict[str, Any]] = None,
         applicable_categories: List[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Update a metadata template.
-
-        Args:
-            template_id: Template ID to update
-            name: New name (optional)
-            description: New description (optional)
-            fields: New field definitions (optional)
-            applicable_categories: New categories (optional)
-
-        Returns:
-            Dict with updated template
-        """
+        """Update a metadata template (Issue #398: refactored)."""
         try:
-            # Get existing template
             result = await self.get_metadata_template(template_id)
             if result.get("status") != "success":
                 return result
@@ -274,7 +274,6 @@ class MetadataMixin:
             template = result["template"]
             old_categories = set(template.get("applicable_categories", []))
 
-            # Update fields
             if name is not None:
                 template["name"] = name
             if description is not None:
@@ -288,32 +287,15 @@ class MetadataMixin:
                 template["applicable_categories"] = applicable_categories
 
             template["updated_at"] = datetime.utcnow().isoformat()
-
-            # Save template
             template_key = f"{self.TEMPLATE_PREFIX}{template_id}"
             await asyncio.to_thread(
                 self.redis_client.set, template_key, json.dumps(template)
             )
 
-            # Update category links if changed
             if applicable_categories is not None:
-                new_categories = set(applicable_categories)
-
-                # Remove from old categories
-                for cat in old_categories - new_categories:
-                    await asyncio.to_thread(
-                        self.redis_client.srem,
-                        f"{self.CATEGORY_TEMPLATES}{cat}",
-                        template_id,
-                    )
-
-                # Add to new categories
-                for cat in new_categories - old_categories:
-                    await asyncio.to_thread(
-                        self.redis_client.sadd,
-                        f"{self.CATEGORY_TEMPLATES}{cat}",
-                        template_id,
-                    )
+                await self._update_template_category_links(
+                    template_id, old_categories, set(applicable_categories)
+                )
 
             logger.info("Updated metadata template %s", template_id)
             return {"status": "success", "template": template}
@@ -357,84 +339,53 @@ class MetadataMixin:
             logger.error("Failed to delete metadata template: %s", e)
             return {"status": "error", "message": str(e)}
 
+    def _validate_single_field(
+        self, field: Dict, field_value: Any, errors: List[str]
+    ) -> None:
+        """Validate a single field against its definition (Issue #398: extracted)."""
+        field_name = field["name"]
+        if field.get("required") and field_value is None:
+            errors.append(f"Required field '{field_name}' is missing")
+            return
+        if field_value is None:
+            return
+        field_type = field.get("type", "string")
+        type_error = self._validate_field_type(field_name, field_value, field_type)
+        if type_error:
+            errors.append(type_error)
+            return
+        pattern = field.get("validation")
+        if pattern and isinstance(field_value, str) and not re.match(pattern, field_value):
+            errors.append(f"Field '{field_name}' doesn't match pattern: {pattern}")
+
     async def validate_metadata(
         self, metadata: Dict[str, Any], category: str = None
     ) -> Dict[str, Any]:
-        """
-        Validate metadata against applicable templates.
-
-        Args:
-            metadata: Metadata dict to validate
-            category: Category to determine applicable templates
-
-        Returns:
-            Dict with validation result, errors, and warnings
-        """
+        """Validate metadata against applicable templates (Issue #398: refactored)."""
         try:
             errors = []
-            warnings = []
 
-            # Get templates for category
             if category:
                 result = await self.list_metadata_templates(category=category)
                 templates = result.get("templates", [])
             else:
                 templates = []
 
-            # If no templates, metadata is valid by default
             if not templates:
                 return {
-                    "valid": True,
-                    "errors": [],
-                    "warnings": [],
+                    "valid": True, "errors": [], "warnings": [],
                     "message": "No templates apply to this category",
                 }
 
-            # Validate against each template
             for template in templates:
                 for field in template.get("fields", []):
-                    field_name = field["name"]
-                    field_value = metadata.get(field_name)
+                    self._validate_single_field(field, metadata.get(field["name"]), errors)
 
-                    # Check required fields
-                    if field.get("required") and field_value is None:
-                        errors.append(f"Required field '{field_name}' is missing")
-                        continue
-
-                    # Skip validation if field not present and not required
-                    if field_value is None:
-                        continue
-
-                    # Type validation
-                    field_type = field.get("type", "string")
-                    type_error = self._validate_field_type(
-                        field_name, field_value, field_type
-                    )
-                    if type_error:
-                        errors.append(type_error)
-                        continue
-
-                    # Pattern validation
-                    pattern = field.get("validation")
-                    if pattern and isinstance(field_value, str):
-                        if not re.match(pattern, field_value):
-                            errors.append(
-                                f"Field '{field_name}' doesn't match pattern: {pattern}"
-                            )
-
-            return {
-                "valid": len(errors) == 0,
-                "errors": errors,
-                "warnings": warnings,
-            }
+            return {"valid": len(errors) == 0, "errors": errors, "warnings": []}
 
         except Exception as e:
             logger.error("Failed to validate metadata: %s", e)
-            return {
-                "valid": False,
-                "errors": [str(e)],
-                "warnings": [],
-            }
+            return {"valid": False, "errors": [str(e)], "warnings": []}
 
     def _validate_field_type(
         self, field_name: str, value: Any, field_type: str
@@ -511,6 +462,32 @@ class MetadataMixin:
             logger.error("Failed to apply template defaults: %s", e)
             return {"status": "error", "message": str(e), "metadata": metadata}
 
+    def _match_metadata_value(
+        self, field_value: Any, value: Any, operator: str
+    ) -> bool:
+        """Check if field value matches criteria (Issue #398: extracted)."""
+        if operator == "eq":
+            return field_value == value
+        elif operator == "contains":
+            return (
+                isinstance(field_value, str) and isinstance(value, str)
+                and value.lower() in field_value.lower()
+            )
+        elif operator == "gt":
+            return field_value > value
+        elif operator == "lt":
+            return field_value < value
+        return False
+
+    async def _get_filtered_fact_keys(self) -> List[str]:
+        """Get fact keys excluding index keys (Issue #398: extracted)."""
+        fact_keys = await asyncio.to_thread(self.redis_client.keys, "fact:*")
+        return [
+            k for k in fact_keys
+            if not any(x in (k.decode() if isinstance(k, bytes) else k)
+                       for x in [":tags", ":category", ":all"])
+        ]
+
     async def search_by_metadata(
         self,
         field_name: str,
@@ -518,84 +495,39 @@ class MetadataMixin:
         operator: str = "eq",
         limit: int = 50,
     ) -> Dict[str, Any]:
-        """
-        Search facts by metadata field value.
-
-        Args:
-            field_name: Metadata field name to search
-            value: Value to match
-            operator: Comparison operator ("eq", "contains", "gt", "lt")
-            limit: Maximum results
-
-        Returns:
-            Dict with matching fact IDs
-        """
+        """Search facts by metadata field value (Issue #398: refactored)."""
         try:
-            # Get all fact keys
-            fact_keys = await asyncio.to_thread(
-                self.redis_client.keys, "fact:*"
-            )
-
-            # Exclude index keys
-            fact_keys = [
-                k for k in fact_keys
-                if not any(x in k.decode() if isinstance(k, bytes) else k
-                           for x in [":tags", ":category", ":all"])
-            ]
-
+            fact_keys = await self._get_filtered_fact_keys()
             matching_facts = []
 
-            for key in fact_keys[:500]:  # Limit scan
+            for key in fact_keys[:500]:
                 key_str = key.decode() if isinstance(key, bytes) else key
                 if ":" in key_str and key_str.count(":") > 1:
-                    continue  # Skip index keys
+                    continue
 
                 metadata_json = await asyncio.to_thread(
                     self.redis_client.hget, key, "metadata"
                 )
-
                 if not metadata_json:
                     continue
 
                 try:
                     metadata = json.loads(metadata_json)
                     field_value = metadata.get(field_name)
-
                     if field_value is None:
                         continue
 
-                    # Apply operator
-                    match = False
-                    if operator == "eq":
-                        match = field_value == value
-                    elif operator == "contains":
-                        match = (
-                            isinstance(field_value, str)
-                            and isinstance(value, str)
-                            and value.lower() in field_value.lower()
-                        )
-                    elif operator == "gt":
-                        match = field_value > value
-                    elif operator == "lt":
-                        match = field_value < value
-
-                    if match:
-                        fact_id = key_str.split(":")[-1]
-                        matching_facts.append(fact_id)
-
+                    if self._match_metadata_value(field_value, value, operator):
+                        matching_facts.append(key_str.split(":")[-1])
                         if len(matching_facts) >= limit:
                             break
-
                 except (json.JSONDecodeError, TypeError):
                     continue
 
             return {
-                "status": "success",
-                "fact_ids": matching_facts,
-                "count": len(matching_facts),
-                "field": field_name,
-                "operator": operator,
-                "value": value,
+                "status": "success", "fact_ids": matching_facts,
+                "count": len(matching_facts), "field": field_name,
+                "operator": operator, "value": value,
             }
 
         except Exception as e:

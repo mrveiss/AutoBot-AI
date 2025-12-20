@@ -12,6 +12,7 @@ Collections provide a way to group related facts together. Unlike categories
 multiple collections (many-to-many relationship).
 """
 
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -268,7 +269,11 @@ class CollectionsMixin:
             updated = await self._get_collection_data(collection_id)
 
             logger.info("Updated collection '%s'", collection_id)
-            return {"success": True, "collection": updated, "message": "Collection updated successfully"}
+            return {
+                "success": True,
+                "collection": updated,
+                "message": "Collection updated successfully",
+            }
 
         except Exception as e:
             logger.error("Failed to update collection '%s': %s", collection_id, e)
@@ -485,6 +490,24 @@ class CollectionsMixin:
             logger.error("Failed to remove facts from collection '%s': %s", collection_id, e)
             return {"success": False, "message": str(e)}
 
+    async def _fetch_fact_for_collection(
+        self, fid: str, include_content: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch a single fact for collection display (Issue #398: extracted)."""
+        fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
+        if not fact_data:
+            return None
+        decoded = {
+            (k.decode("utf-8") if isinstance(k, bytes) else k):
+            (v.decode("utf-8") if isinstance(v, bytes) else v)
+            for k, v in fact_data.items()
+        }
+        result = {"id": fid, "category": decoded.get("category", ""),
+                  "created_at": decoded.get("created_at", "")}
+        if include_content:
+            result["content"] = decoded.get("content", "")
+        return result
+
     async def get_facts_in_collection(
         self,
         collection_id: str,
@@ -492,74 +515,34 @@ class CollectionsMixin:
         offset: int = 0,
         include_content: bool = False,
     ) -> Dict[str, Any]:
-        """
-        Get all facts in a collection.
-
-        Issue #412: Collections/Folders for grouping documents.
-
-        Args:
-            collection_id: Collection UUID
-            limit: Maximum number of facts
-            offset: Pagination offset
-            include_content: Whether to include fact content
-
-        Returns:
-            Dict with facts list
-        """
+        """Get all facts in a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Verify collection exists
             collection = await self._get_collection_data(collection_id)
             if not collection:
                 return {"success": False, "message": f"Collection not found: {collection_id}"}
 
-            # Get fact IDs
             fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
             total_count = len(fact_ids)
 
-            # Convert to list and sort for consistent pagination
             fact_ids_list = sorted([
-                fid.decode("utf-8") if isinstance(fid, bytes) else fid
-                for fid in fact_ids
+                fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids
             ])
-
-            # Apply pagination
             paginated_ids = fact_ids_list[offset : offset + limit]
 
-            # Get fact data
             facts = []
             for fid in paginated_ids:
-                fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
-                if fact_data:
-                    decoded = {}
-                    for k, v in fact_data.items():
-                        key = k.decode("utf-8") if isinstance(k, bytes) else k
-                        val = v.decode("utf-8") if isinstance(v, bytes) else v
-                        decoded[key] = val
-
-                    result = {"id": fid}
-
-                    if include_content:
-                        result["content"] = decoded.get("content", "")
-
-                    # Add basic metadata
-                    result["category"] = decoded.get("category", "")
-                    result["created_at"] = decoded.get("created_at", "")
-
-                    facts.append(result)
+                fact = await self._fetch_fact_for_collection(fid, include_content)
+                if fact:
+                    facts.append(fact)
 
             return {
-                "success": True,
-                "collection_id": collection_id,
-                "collection_name": collection.get("name"),
-                "facts": facts,
-                "total_count": total_count,
-                "returned_count": len(facts),
-                "limit": limit,
-                "offset": offset,
-                "has_more": offset + limit < total_count,
+                "success": True, "collection_id": collection_id,
+                "collection_name": collection.get("name"), "facts": facts,
+                "total_count": total_count, "returned_count": len(facts),
+                "limit": limit, "offset": offset, "has_more": offset + limit < total_count,
             }
 
         except Exception as e:
@@ -616,67 +599,63 @@ class CollectionsMixin:
     # COLLECTION BULK OPERATIONS (Issue #412)
     # =========================================================================
 
+    async def _export_single_fact(
+        self,
+        fid: str,
+        include_content: bool,
+        include_metadata: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """Export a single fact with optional content/metadata (Issue #398: extracted)."""
+        fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
+        if not fact_data:
+            return None
+
+        decoded = {}
+        for k, v in fact_data.items():
+            key = k.decode("utf-8") if isinstance(k, bytes) else k
+            val = v.decode("utf-8") if isinstance(v, bytes) else v
+            decoded[key] = val
+
+        export_fact: Dict[str, Any] = {"id": fid}
+
+        if include_content:
+            export_fact["content"] = decoded.get("content", "")
+
+        if include_metadata:
+            export_fact["category"] = decoded.get("category", "")
+            export_fact["created_at"] = decoded.get("created_at", "")
+            export_fact["updated_at"] = decoded.get("updated_at", "")
+            if "metadata" in decoded:
+                try:
+                    export_fact["metadata"] = json.loads(decoded["metadata"])
+                except Exception:
+                    export_fact["metadata"] = {}
+
+        return export_fact
+
     async def export_collection(
         self,
         collection_id: str,
         include_content: bool = True,
         include_metadata: bool = True,
     ) -> Dict[str, Any]:
-        """
-        Export all facts in a collection.
-
-        Issue #412: Collection-level bulk operations.
-
-        Args:
-            collection_id: Collection UUID
-            include_content: Include fact content
-            include_metadata: Include fact metadata
-
-        Returns:
-            Dict with export data
-        """
+        """Export all facts in a collection (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Verify collection exists
             collection = await self._get_collection_data(collection_id)
             if not collection:
                 return {"success": False, "message": f"Collection not found: {collection_id}"}
 
-            # Get all fact IDs
             fact_ids = await self.aioredis_client.smembers(f"collection:facts:{collection_id}")
 
-            # Export facts
             facts = []
             for fid in fact_ids:
                 if isinstance(fid, bytes):
                     fid = fid.decode("utf-8")
-
-                fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
-                if fact_data:
-                    decoded = {}
-                    for k, v in fact_data.items():
-                        key = k.decode("utf-8") if isinstance(k, bytes) else k
-                        val = v.decode("utf-8") if isinstance(v, bytes) else v
-                        decoded[key] = val
-
-                    export_fact = {"id": fid}
-
-                    if include_content:
-                        export_fact["content"] = decoded.get("content", "")
-
-                    if include_metadata:
-                        export_fact["category"] = decoded.get("category", "")
-                        export_fact["created_at"] = decoded.get("created_at", "")
-                        export_fact["updated_at"] = decoded.get("updated_at", "")
-                        if "metadata" in decoded:
-                            try:
-                                import json
-                                export_fact["metadata"] = json.loads(decoded["metadata"])
-                            except Exception:
-                                export_fact["metadata"] = {}
-
+                export_fact = await self._export_single_fact(fid, include_content, include_metadata)
+                if export_fact:
                     facts.append(export_fact)
 
             return {

@@ -132,68 +132,41 @@ class BulkOperationsMixin:
     aioredis_client: "aioredis.Redis"
     vector_store: Any
 
+    async def _get_export_facts(
+        self, fact_ids: Optional[List[str]], category: Optional[str],
+        categories: Optional[List[str]], tags: Optional[List[str]],
+        date_from: Optional[str], date_to: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """Get and filter facts for export (Issue #398: extracted)."""
+        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await self.get_all_facts()
+        facts = self._apply_category_filter(facts, category)
+        facts = self._apply_categories_filter(facts, categories)
+        facts = self._apply_tags_filter(facts, tags)
+        return self._apply_date_filter(facts, date_from, date_to)
+
     async def export_facts(
-        self,
-        format: str = "json",
-        output_file: Optional[str] = None,
-        category: Optional[str] = None,
-        categories: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        fact_ids: Optional[List[str]] = None,
-        include_embeddings: bool = False,
-        include_metadata: bool = True,
+        self, format: str = "json", output_file: Optional[str] = None,
+        category: Optional[str] = None, categories: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None, date_from: Optional[str] = None,
+        date_to: Optional[str] = None, fact_ids: Optional[List[str]] = None,
+        include_embeddings: bool = False, include_metadata: bool = True,
         include_tags: bool = True,
     ) -> Dict[str, Any]:
-        """
-        Export facts with optional filtering.
-
-        Issue #415: Enhanced with date filtering, fact IDs filter, and embeddings export.
-
-        Args:
-            format: Export format ("json", "csv", "markdown")
-            output_file: Optional output file path
-            category: Filter by single category (legacy support)
-            categories: Filter by multiple categories (any match)
-            tags: Filter by tags (any match)
-            date_from: Filter facts created on or after this date (YYYY-MM-DD)
-            date_to: Filter facts created on or before this date (YYYY-MM-DD)
-            fact_ids: Export only these specific fact IDs
-            include_embeddings: Include vector embeddings in export
-            include_metadata: Include metadata in export (default: True)
-            include_tags: Include tags in export (default: True)
-
-        Returns:
-            Dict with status and data/file path
-        """
+        """Export facts with optional filtering (Issue #398: refactored)."""
         try:
-            # Get facts - either specific IDs or all
-            if fact_ids:
-                facts = await self._get_facts_by_ids(fact_ids)
-            else:
-                facts = await self.get_all_facts()
+            facts = await self._get_export_facts(
+                fact_ids, category, categories, tags, date_from, date_to
+            )
 
-            # Apply filters
-            facts = self._apply_category_filter(facts, category)
-            facts = self._apply_categories_filter(facts, categories)
-            facts = self._apply_tags_filter(facts, tags)
-            facts = self._apply_date_filter(facts, date_from, date_to)
-
-            # Include embeddings if requested (Issue #415)
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
-
-            # Remove metadata/tags if not requested
             if not include_metadata or not include_tags:
                 facts = self._filter_fact_fields(facts, include_metadata, include_tags)
 
-            # Format output
             output = self._format_output(facts, format)
             if output is None:
-                return {"status": "error", "message": "Unknown format: %s" % format}
+                return {"status": "error", "message": f"Unknown format: {format}"}
 
-            # Build and return result
             return await self._build_export_result(facts, output, output_file)
 
         except Exception as e:
@@ -346,113 +319,71 @@ class BulkOperationsMixin:
 
         return filtered
 
-    async def _get_facts_by_ids(
-        self, fact_ids: List[str]
-    ) -> List[Dict[str, Any]]:
-        """
-        Get specific facts by their IDs.
+    def _decode_redis_field(self, data: dict, *keys: str) -> Optional[str]:
+        """Decode a Redis field value (Issue #398: extracted)."""
+        for key in keys:
+            value = data.get(key.encode()) or data.get(key)
+            if value:
+                return value.decode("utf-8") if isinstance(value, bytes) else value
+        return None
 
-        Issue #415: Selective export by fact IDs.
+    def _parse_fact_data(self, fact_id: str, fact_data: dict) -> Dict[str, Any]:
+        """Parse Redis fact data to dict (Issue #398: extracted)."""
+        fact = {"fact_id": fact_id}
+        content = self._decode_redis_field(fact_data, "content")
+        if content:
+            fact["content"] = content
+        metadata_json = self._decode_redis_field(fact_data, "metadata")
+        if metadata_json:
+            fact["metadata"] = json.loads(metadata_json)
+        timestamp = self._decode_redis_field(fact_data, "timestamp")
+        if timestamp:
+            fact["timestamp"] = timestamp
+        return fact
 
-        Args:
-            fact_ids: List of fact IDs to retrieve
-
-        Returns:
-            List of fact dictionaries
-        """
+    async def _get_facts_by_ids(self, fact_ids: List[str]) -> List[Dict[str, Any]]:
+        """Get specific facts by their IDs (Issue #398: refactored)."""
         facts = []
-
         for fact_id in fact_ids:
             try:
-                fact_key = f"fact:{fact_id}"
                 fact_data = await asyncio.to_thread(
-                    self.redis_client.hgetall, fact_key
+                    self.redis_client.hgetall, f"fact:{fact_id}"
                 )
-
                 if fact_data:
-                    fact = {"fact_id": fact_id}
-
-                    # Parse content
-                    content = fact_data.get(b"content") or fact_data.get("content")
-                    if content:
-                        if isinstance(content, bytes):
-                            content = content.decode("utf-8")
-                        fact["content"] = content
-
-                    # Parse metadata
-                    metadata_json = (
-                        fact_data.get(b"metadata") or fact_data.get("metadata")
-                    )
-                    if metadata_json:
-                        if isinstance(metadata_json, bytes):
-                            metadata_json = metadata_json.decode("utf-8")
-                        fact["metadata"] = json.loads(metadata_json)
-
-                    # Parse timestamp
-                    timestamp = (
-                        fact_data.get(b"timestamp") or fact_data.get("timestamp")
-                    )
-                    if timestamp:
-                        if isinstance(timestamp, bytes):
-                            timestamp = timestamp.decode("utf-8")
-                        fact["timestamp"] = timestamp
-
-                    facts.append(fact)
-
+                    facts.append(self._parse_fact_data(fact_id, fact_data))
             except Exception as e:
                 logger.warning("Failed to get fact %s: %s", fact_id, e)
-
         return facts
 
-    async def _add_embeddings_to_facts(
-        self, facts: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Add vector embeddings to facts from ChromaDB.
+    async def _fetch_embeddings_from_vector_store(
+        self, fact_ids: List[str]
+    ) -> Dict[str, List[float]]:
+        """Fetch embeddings from vector store (Issue #398: extracted)."""
+        result = await asyncio.to_thread(
+            self.vector_store.get, ids=fact_ids, include=["embeddings"]
+        )
+        if result and result.get("ids") and result.get("embeddings"):
+            return dict(zip(result["ids"], result["embeddings"]))
+        return {}
 
-        Issue #415: Include embeddings in export.
-
-        Args:
-            facts: List of facts to enhance with embeddings
-
-        Returns:
-            Facts with embeddings added
-        """
+    async def _add_embeddings_to_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Add vector embeddings to facts from ChromaDB (Issue #398: refactored)."""
         if not facts or not hasattr(self, "vector_store") or self.vector_store is None:
             return facts
 
         try:
-            # Get fact IDs
             fact_ids = [f.get("fact_id") for f in facts if f.get("fact_id")]
-
             if not fact_ids:
                 return facts
 
-            # Retrieve embeddings from ChromaDB
             try:
-                result = await asyncio.to_thread(
-                    self.vector_store.get,
-                    ids=fact_ids,
-                    include=["embeddings"],
-                )
-
-                # Map embeddings by ID
-                embeddings_map = {}
-                if result and result.get("ids") and result.get("embeddings"):
-                    for fact_id, embedding in zip(
-                        result["ids"], result["embeddings"]
-                    ):
-                        embeddings_map[fact_id] = embedding
-
-                # Add embeddings to facts
+                embeddings_map = await self._fetch_embeddings_from_vector_store(fact_ids)
                 for fact in facts:
                     fact_id = fact.get("fact_id")
                     if fact_id and fact_id in embeddings_map:
                         fact["embedding"] = embeddings_map[fact_id]
-
             except Exception as e:
                 logger.warning("Could not retrieve embeddings: %s", e)
-
         except Exception as e:
             logger.error("Failed to add embeddings to facts: %s", e)
 
@@ -532,119 +463,122 @@ class BulkOperationsMixin:
 
         return "\n".join(lines)
 
-    async def import_facts(
+    async def _get_import_content(
+        self, source_file: Optional[str], data: Optional[str]
+    ) -> tuple:
+        """Get content for import from file or data (Issue #398: extracted)."""
+        if source_file:
+            return await asyncio.to_thread(_read_file_sync, source_file), None
+        elif data:
+            return data, None
+        return None, {"status": "error", "message": "Either source_file or data required"}
+
+    def _parse_import_data(
+        self, content: str, format: str
+    ) -> tuple:
+        """Parse import data based on format (Issue #398: extracted)."""
+        if format == "json":
+            return self._parse_import_json(content), None
+        elif format == "csv":
+            return self._parse_import_csv(content), None
+        return None, {"status": "error", "message": f"Unknown format: {format}"}
+
+    def _validate_all_facts(
         self,
-        source_file: Optional[str] = None,
-        data: Optional[str] = None,
-        format: str = "json",
-        skip_duplicates: bool = True,
-        validate_only: bool = False,
-        overwrite_existing: bool = False,
-        default_category: str = "imported",
-        min_content_length: int = 1,
-        max_content_length: int = 100000,
+        facts: List[Dict[str, Any]],
+        default_category: str,
+        min_content_length: int,
+        max_content_length: int,
+    ) -> tuple:
+        """Validate all facts and return results (Issue #398: extracted)."""
+        validation_results = []
+        valid_facts = []
+
+        for idx, fact_data in enumerate(facts):
+            validation = self._validate_fact_for_import(
+                fact_data, idx, default_category, min_content_length, max_content_length
+            )
+            validation_results.append(validation)
+            if validation["valid"]:
+                valid_facts.append(validation["normalized_fact"])
+
+        valid_count = sum(1 for v in validation_results if v["valid"])
+        invalid_count = len(validation_results) - valid_count
+
+        return valid_facts, validation_results, valid_count, invalid_count
+
+    def _build_validation_only_result(
+        self, facts: List, validation_results: List, valid_count: int, invalid_count: int
     ) -> Dict[str, Any]:
-        """
-        Import facts from a file or data string using parallel processing.
+        """Build validation-only result (Issue #398: extracted)."""
+        return {
+            "status": "success",
+            "mode": "validate_only",
+            "total_facts": len(facts),
+            "valid_count": valid_count,
+            "invalid_count": invalid_count,
+            "validation_results": validation_results,
+        }
 
-        Issue #416: Enhanced with validation, progress tracking, and overwrite mode.
+    def _build_import_result(
+        self,
+        facts: List,
+        validation_results: List,
+        valid_count: int,
+        invalid_count: int,
+        import_results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build final import result (Issue #398: extracted)."""
+        return {
+            "status": "success",
+            "total_facts": len(facts),
+            "valid_count": valid_count,
+            "invalid_count": invalid_count,
+            "imported": import_results["imported"],
+            "skipped": import_results["skipped"],
+            "updated": import_results.get("updated", 0),
+            "errors": import_results["errors"] + invalid_count,
+            "import_results": import_results.get("per_fact_results", []),
+            "validation_errors": [v for v in validation_results if not v["valid"]],
+        }
 
-        Args:
-            source_file: Source file path (mutually exclusive with data)
-            data: Import data as string (mutually exclusive with source_file)
-            format: Import format ("json", "csv")
-            skip_duplicates: Skip duplicate facts (default: True)
-            validate_only: Only validate, don't actually import (default: False)
-            overwrite_existing: Overwrite existing facts with same ID (default: False)
-            default_category: Default category for facts without one (default: "imported")
-            min_content_length: Minimum content length (default: 1)
-            max_content_length: Maximum content length (default: 100000)
+    def _build_no_valid_facts_result(
+        self, facts: List, invalid_count: int, validation_results: List
+    ) -> Dict[str, Any]:
+        """Build error result for no valid facts case (Issue #398: extracted)."""
+        return {
+            "status": "error", "message": "No valid facts to import",
+            "total_facts": len(facts), "valid_count": 0,
+            "invalid_count": invalid_count, "validation_results": validation_results,
+        }
 
-        Returns:
-            Dict with import status and per-fact results
-        """
+    async def import_facts(
+        self, source_file: Optional[str] = None, data: Optional[str] = None,
+        format: str = "json", skip_duplicates: bool = True, validate_only: bool = False,
+        overwrite_existing: bool = False, default_category: str = "imported",
+        min_content_length: int = 1, max_content_length: int = 100000,
+    ) -> Dict[str, Any]:
+        """Import facts from file or data string (Issue #398: refactored)."""
         try:
-            # Get content from file or data parameter
-            if source_file:
-                content = await asyncio.to_thread(_read_file_sync, source_file)
-            elif data:
-                content = data
-            else:
-                return {"status": "error", "message": "Either source_file or data required"}
+            content, error = await self._get_import_content(source_file, data)
+            if error:
+                return error
 
-            # Parse based on format
-            if format == "json":
-                facts = self._parse_import_json(content)
-            elif format == "csv":
-                facts = self._parse_import_csv(content)
-            else:
-                return {"status": "error", "message": f"Unknown format: {format}"}
+            facts, error = self._parse_import_data(content, format)
+            if error:
+                return error
 
-            # Validate all facts first (Issue #416)
-            validation_results = []
-            valid_facts = []
-
-            for idx, fact_data in enumerate(facts):
-                validation = self._validate_fact_for_import(
-                    fact_data,
-                    idx,
-                    default_category,
-                    min_content_length,
-                    max_content_length,
-                )
-                validation_results.append(validation)
-
-                if validation["valid"]:
-                    valid_facts.append(validation["normalized_fact"])
-
-            # Count validation results
-            valid_count = sum(1 for v in validation_results if v["valid"])
-            invalid_count = len(validation_results) - valid_count
-
-            # If validate_only, return validation results without importing
-            if validate_only:
-                return {
-                    "status": "success",
-                    "mode": "validate_only",
-                    "total_facts": len(facts),
-                    "valid_count": valid_count,
-                    "invalid_count": invalid_count,
-                    "validation_results": validation_results,
-                }
-
-            # If no valid facts, return early
-            if not valid_facts:
-                return {
-                    "status": "error",
-                    "message": "No valid facts to import",
-                    "total_facts": len(facts),
-                    "valid_count": 0,
-                    "invalid_count": invalid_count,
-                    "validation_results": validation_results,
-                }
-
-            # Import valid facts
-            import_results = await self._import_valid_facts(
-                valid_facts,
-                skip_duplicates,
-                overwrite_existing,
+            valid_facts, validation_results, valid_count, invalid_count = (
+                self._validate_all_facts(facts, default_category, min_content_length, max_content_length)
             )
 
-            # Merge validation and import results
-            return {
-                "status": "success",
-                "total_facts": len(facts),
-                "valid_count": valid_count,
-                "invalid_count": invalid_count,
-                "imported": import_results["imported"],
-                "skipped": import_results["skipped"],
-                "updated": import_results.get("updated", 0),
-                "errors": import_results["errors"] + invalid_count,
-                "import_results": import_results.get("per_fact_results", []),
-                "validation_errors": [
-                    v for v in validation_results if not v["valid"]
-                ],
-            }
+            if validate_only:
+                return self._build_validation_only_result(facts, validation_results, valid_count, invalid_count)
+            if not valid_facts:
+                return self._build_no_valid_facts_result(facts, invalid_count, validation_results)
+
+            import_results = await self._import_valid_facts(valid_facts, skip_duplicates, overwrite_existing)
+            return self._build_import_result(facts, validation_results, valid_count, invalid_count, import_results)
 
         except json.JSONDecodeError as e:
             logger.error("JSON parse error during import: %s", e)
@@ -959,61 +893,35 @@ class BulkOperationsMixin:
             )
         return facts
 
+    def _build_empty_duplicates_result(self, use_embeddings: bool) -> Dict[str, Any]:
+        """Build empty result for no facts case (Issue #398: extracted)."""
+        return {
+            "status": "success", "duplicates_found": 0, "duplicate_groups": [],
+            "method": "embedding" if use_embeddings else "hash",
+        }
+
     async def find_duplicates(
-        self,
-        similarity_threshold: float = 0.95,
-        use_embeddings: bool = False,
-        category: Optional[str] = None,
-        max_results: int = 100,
+        self, similarity_threshold: float = 0.95, use_embeddings: bool = False,
+        category: Optional[str] = None, max_results: int = 100,
     ) -> Dict[str, Any]:
-        """
-        Find duplicate facts based on content hash or embedding similarity.
-
-        Issue #417: Enhanced with embedding-based similarity detection.
-
-        Args:
-            similarity_threshold: Similarity threshold (0.0-1.0)
-            use_embeddings: Use vector embeddings for similarity (more accurate)
-            category: Optional category to limit search scope
-            max_results: Maximum number of duplicate groups to return
-
-        Returns:
-            Dict with duplicate groups and similarity scores
-        """
+        """Find duplicate facts by hash or embedding similarity (Issue #398: refactored)."""
         try:
-            # Get all facts
             facts = await self.get_all_facts()
-
-            # Apply category filter if provided
-            if category:
-                facts = [
-                    f for f in facts
-                    if f.get("metadata", {}).get("category") == category
-                ]
+            facts = self._apply_category_filter(facts, category)
 
             if not facts:
-                return {
-                    "status": "success",
-                    "duplicates_found": 0,
-                    "duplicate_groups": [],
-                    "method": "embedding" if use_embeddings else "hash",
-                }
+                return self._build_empty_duplicates_result(use_embeddings)
 
-            # Choose detection method
-            if use_embeddings:
-                duplicate_groups = await self._find_duplicates_by_embedding(
-                    facts, similarity_threshold, max_results
-                )
-            else:
-                duplicate_groups = self._find_duplicates_by_hash(facts)
+            duplicate_groups = (
+                await self._find_duplicates_by_embedding(facts, similarity_threshold, max_results)
+                if use_embeddings else self._find_duplicates_by_hash(facts)
+            )
 
             return {
-                "status": "success",
-                "duplicates_found": len(duplicate_groups),
+                "status": "success", "duplicates_found": len(duplicate_groups),
                 "duplicate_groups": duplicate_groups[:max_results],
                 "method": "embedding" if use_embeddings else "hash",
-                "threshold": similarity_threshold,
-                "total_facts_analyzed": len(facts),
+                "threshold": similarity_threshold, "total_facts_analyzed": len(facts),
             }
 
         except Exception as e:
@@ -1846,78 +1754,53 @@ class BulkOperationsMixin:
 
         return results
 
-    async def list_backups(
-        self,
-        backup_dir: Optional[str] = None,
-        limit: int = 50,
-    ) -> Dict[str, Any]:
-        """
-        List available backups.
+    def _is_valid_backup_file(self, filename: str) -> bool:
+        """Check if filename is a valid backup file (Issue #398: extracted)."""
+        return filename.startswith("kb_backup_") and (
+            filename.endswith(".json")
+            or filename.endswith(".jsongz")
+            or filename.endswith(".json.gz")
+        )
 
-        Issue #419: Backup and restore functionality.
-
-        Args:
-            backup_dir: Directory to scan (default: backups/)
-            limit: Maximum number of backups to return (default: 50)
-
-        Returns:
-            Dict with list of available backups
-        """
+    def _scan_backup_files(self, backup_dir: str) -> List[Dict[str, Any]]:
+        """Scan directory for backup files (Issue #398: extracted)."""
         import os
-        from pathlib import Path
+        backups = []
+        for filename in os.listdir(backup_dir):
+            if self._is_valid_backup_file(filename):
+                filepath = os.path.join(backup_dir, filename)
+                stat = os.stat(filepath)
+                backups.append({
+                    "filename": filename,
+                    "filepath": filepath,
+                    "size": stat.st_size,
+                    "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "compressed": filename.endswith("gz"),
+                })
+        return backups
+
+    async def list_backups(
+        self, backup_dir: Optional[str] = None, limit: int = 50
+    ) -> Dict[str, Any]:
+        """List available backups (Issue #398: refactored)."""
+        import os
 
         try:
-            # Set default backup directory
-            if not backup_dir:
-                project_root = Path(__file__).parent.parent.parent
-                backup_dir = str(project_root / "backups" / "knowledge")
+            backup_dir = self._get_backup_dir(backup_dir)
 
-            # Check if directory exists
             if not os.path.exists(backup_dir):
-                return {
-                    "status": "success",
-                    "backup_dir": backup_dir,
-                    "backups": [],
-                    "total_count": 0,
-                }
+                return {"status": "success", "backup_dir": backup_dir, "backups": [], "total_count": 0}
 
-            # List backup files
-            backups = []
-
-            def _scan_backups():
-                for filename in os.listdir(backup_dir):
-                    is_backup = filename.startswith("kb_backup_") and (
-                        filename.endswith(".json")
-                        or filename.endswith(".jsongz")
-                        or filename.endswith(".json.gz")
-                    )
-                    if is_backup:
-                        filepath = os.path.join(backup_dir, filename)
-                        stat = os.stat(filepath)
-                        backups.append({
-                            "filename": filename,
-                            "filepath": filepath,
-                            "size": stat.st_size,
-                            "created_at": datetime.fromtimestamp(
-                                stat.st_mtime
-                            ).isoformat(),
-                            "compressed": filename.endswith("gz"),
-                        })
-
-            await asyncio.to_thread(_scan_backups)
-
-            # Sort by creation time (newest first)
+            backups = await asyncio.to_thread(self._scan_backup_files, backup_dir)
             backups.sort(key=lambda x: x["created_at"], reverse=True)
 
             return {
-                "status": "success",
-                "backup_dir": backup_dir,
-                "backups": backups[:limit],
-                "total_count": len(backups),
+                "status": "success", "backup_dir": backup_dir,
+                "backups": backups[:limit], "total_count": len(backups),
             }
 
         except Exception as e:
-            logger.error(f"Failed to list backups: {e}")
+            logger.error("Failed to list backups: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def delete_backup(
@@ -1949,7 +1832,7 @@ class BulkOperationsMixin:
             # Delete the file
             await asyncio.to_thread(os.remove, backup_file)
 
-            logger.info(f"Backup deleted: {backup_file}")
+            logger.info("Backup deleted: %s", backup_file)
 
             return {
                 "status": "success",
@@ -1957,7 +1840,7 @@ class BulkOperationsMixin:
             }
 
         except Exception as e:
-            logger.error(f"Failed to delete backup: {e}")
+            logger.error("Failed to delete backup: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def get_stats(self) -> Dict[str, Any]:

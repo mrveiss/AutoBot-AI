@@ -156,7 +156,7 @@ class QueryExpander:
                     queries.append(expanded)
                     expansions_added += 1
 
-        logger.debug(f"Query expansion: '{query}' -> {len(queries)} variations")
+        logger.debug("Query expansion: '%s' -> %d variations", query, len(queries))
         return queries
 
     def get_synonyms(self, term: str) -> List[str]:
@@ -600,92 +600,60 @@ class ResultClusterer:
         self.max_clusters = max_clusters
         self.min_cluster_size = min_cluster_size
 
-    def cluster_results(
-        self,
-        results: List[Dict[str, Any]],
-    ) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
-        """
-        Cluster results by topic.
-
-        Issue #78: Result clustering by topic.
-
-        Args:
-            results: Search results to cluster
-
-        Returns:
-            Tuple of (clusters, unclustered_results)
-        """
-        if not results:
-            return [], []
-
-        # Count topic matches for each result
-        result_topics: Dict[int, List[str]] = {}
+    def _match_topics_to_results(
+        self, results: List[Dict[str, Any]]
+    ) -> Dict[str, List[int]]:
+        """Match topics to result indices (Issue #398: extracted)."""
         topic_results: Dict[str, List[int]] = defaultdict(list)
-
         for idx, result in enumerate(results):
             content = result.get("content", "").lower()
             title = result.get("metadata", {}).get("title", "").lower()
             text = f"{title} {content}"
-
-            matched_topics = []
             for topic, keywords in self.TOPIC_KEYWORDS.items():
                 if any(kw in text for kw in keywords):
-                    matched_topics.append(topic)
                     topic_results[topic].append(idx)
+        return topic_results
 
-            result_topics[idx] = matched_topics
+    def _build_cluster(
+        self, topic: str, indices: List[int], results: List[Dict]
+    ) -> ResultCluster:
+        """Build a cluster from topic and indices (Issue #398: extracted)."""
+        cluster_results = [results[i] for i in indices]
+        scores = [r.get("score", 0) for r in cluster_results]
+        avg_score = sum(scores) / len(scores) if scores else 0.0
+        keywords = self.TOPIC_KEYWORDS.get(topic, [])[:5]
+        return ResultCluster(
+            topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score
+        )
 
-        # Build clusters from topics with enough results
+    def cluster_results(
+        self, results: List[Dict[str, Any]]
+    ) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
+        """Cluster results by topic (Issue #398: refactored)."""
+        if not results:
+            return [], []
+
+        topic_results = self._match_topics_to_results(results)
         clusters = []
         clustered_indices: Set[int] = set()
 
-        # Sort topics by number of results (largest first)
-        sorted_topics = sorted(
-            topic_results.items(),
-            key=lambda x: len(x[1]),
-            reverse=True
-        )
+        sorted_topics = sorted(topic_results.items(), key=lambda x: len(x[1]), reverse=True)
 
         for topic, indices in sorted_topics:
             if len(clusters) >= self.max_clusters:
                 break
+            available = [i for i in indices if i not in clustered_indices]
+            if len(available) >= self.min_cluster_size:
+                clusters.append(self._build_cluster(topic, available, results))
+                clustered_indices.update(available)
 
-            # Filter out already clustered results
-            available_indices = [i for i in indices if i not in clustered_indices]
-
-            if len(available_indices) >= self.min_cluster_size:
-                cluster_results = [results[i] for i in available_indices]
-
-                # Calculate average score
-                scores = [r.get("score", 0) for r in cluster_results]
-                avg_score = sum(scores) / len(scores) if scores else 0.0
-
-                # Get top keywords
-                keywords = self.TOPIC_KEYWORDS.get(topic, [])[:5]
-
-                cluster = ResultCluster(
-                    topic=topic,
-                    results=cluster_results,
-                    keywords=keywords,
-                    avg_score=avg_score,
-                )
-                clusters.append(cluster)
-                clustered_indices.update(available_indices)
-
-        # Collect unclustered results
-        unclustered = [
-            results[i] for i in range(len(results))
-            if i not in clustered_indices
-        ]
-
-        # Sort clusters by average score
+        unclustered = [results[i] for i in range(len(results)) if i not in clustered_indices]
         clusters.sort(key=lambda c: c.avg_score, reverse=True)
 
         logger.debug(
-            f"Clustered {len(results)} results into {len(clusters)} clusters, "
-            f"{len(unclustered)} unclustered"
+            "Clustered %d results into %d clusters, %d unclustered",
+            len(results), len(clusters), len(unclustered)
         )
-
         return clusters, unclustered
 
 

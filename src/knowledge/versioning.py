@@ -51,6 +51,34 @@ class VersioningMixin:
     VERSION_PREFIX = "fact:versions:"
     VERSION_META = "fact:version:meta:"
 
+    async def _get_next_version_number(self, version_meta_key: str) -> int:
+        """Get next version number for a fact (Issue #398: extracted)."""
+        current_version = await asyncio.to_thread(
+            self.redis_client.hget, version_meta_key, "current_version"
+        )
+        return int(current_version) + 1 if current_version else 1
+
+    async def _store_version_data(
+        self, fact_id: str, version_data: Dict, version_num: int
+    ) -> None:
+        """Store version data in Redis (Issue #398: extracted)."""
+        version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
+        version_meta_key = f"{self.VERSION_META}{fact_id}"
+
+        await asyncio.to_thread(
+            self.redis_client.lpush, version_list_key, json.dumps(version_data)
+        )
+        await asyncio.to_thread(
+            self.redis_client.ltrim, version_list_key, 0, MAX_VERSIONS - 1
+        )
+        await asyncio.to_thread(
+            self.redis_client.hset, version_meta_key, mapping={
+                "current_version": str(version_num),
+                "total_versions": str(min(version_num, MAX_VERSIONS)),
+                "last_updated": datetime.utcnow().isoformat(),
+            }
+        )
+
     async def create_version(
         self,
         fact_id: str,
@@ -59,35 +87,11 @@ class VersioningMixin:
         change_summary: str = None,
         created_by: str = None,
     ) -> Dict[str, Any]:
-        """
-        Create a new version for a fact.
-
-        Called automatically when facts are updated, or can be called
-        manually to create a named checkpoint.
-
-        Args:
-            fact_id: Fact ID to version
-            content: Content at this version
-            metadata: Metadata at this version
-            change_summary: Optional description of changes
-            created_by: Optional user/agent who made changes
-
-        Returns:
-            Dict with version details
-        """
+        """Create a new version for a fact (Issue #398: refactored)."""
         try:
-            # Get current version number
             version_meta_key = f"{self.VERSION_META}{fact_id}"
-            current_version = await asyncio.to_thread(
-                self.redis_client.hget, version_meta_key, "current_version"
-            )
+            version_num = await self._get_next_version_number(version_meta_key)
 
-            if current_version:
-                version_num = int(current_version) + 1
-            else:
-                version_num = 1
-
-            # Create version data
             version_data = {
                 "version": version_num,
                 "content": content,
@@ -97,39 +101,10 @@ class VersioningMixin:
                 "change_summary": change_summary,
             }
 
-            # Store version in list
-            version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
-            await asyncio.to_thread(
-                self.redis_client.lpush,
-                version_list_key,
-                json.dumps(version_data),
-            )
-
-            # Trim to max versions
-            await asyncio.to_thread(
-                self.redis_client.ltrim,
-                version_list_key,
-                0,
-                MAX_VERSIONS - 1,
-            )
-
-            # Update version metadata
-            await asyncio.to_thread(
-                self.redis_client.hset,
-                version_meta_key,
-                mapping={
-                    "current_version": str(version_num),
-                    "total_versions": str(min(version_num, MAX_VERSIONS)),
-                    "last_updated": datetime.utcnow().isoformat(),
-                },
-            )
+            await self._store_version_data(fact_id, version_data, version_num)
 
             logger.debug("Created version %d for fact %s", version_num, fact_id)
-            return {
-                "status": "success",
-                "version": version_num,
-                "fact_id": fact_id,
-            }
+            return {"status": "success", "version": version_num, "fact_id": fact_id}
 
         except Exception as e:
             logger.error("Failed to create version for %s: %s", fact_id, e)

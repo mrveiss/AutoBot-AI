@@ -201,6 +201,21 @@ class SuggestionsMixin:
                 "error": str(e),
             }
 
+    def _empty_suggestion_response(self, error: str = None) -> Dict[str, Any]:
+        """Build empty suggestion response (Issue #398: extracted)."""
+        return {
+            "success": error is None,
+            "tag_suggestions": [],
+            "category_suggestions": [],
+            "error": error,
+        } if error else {
+            "success": True,
+            "tag_suggestions": [],
+            "category_suggestions": [],
+            "similar_docs_analyzed": 0,
+            "message": "No similar documents found for analysis",
+        }
+
     async def suggest_all(
         self,
         content: str,
@@ -209,54 +224,22 @@ class SuggestionsMixin:
         min_confidence: float = 0.3,
         similarity_limit: int = 20,
     ) -> Dict[str, Any]:
-        """
-        Suggest both tags and categories in a single call.
-
-        More efficient than calling suggest_tags and suggest_categories
-        separately as it only performs one similarity search.
-
-        Args:
-            content: Document text to analyze
-            tag_limit: Maximum number of tag suggestions
-            category_limit: Maximum number of category suggestions
-            min_confidence: Minimum confidence score to include
-            similarity_limit: Number of similar documents to analyze
-
-        Returns:
-            Dict with tag_suggestions and category_suggestions
-        """
+        """Suggest both tags and categories in a single call (Issue #398: refactored)."""
         self.ensure_initialized()
 
         if not content or not content.strip():
-            return {
-                "success": False,
-                "tag_suggestions": [],
-                "category_suggestions": [],
-                "error": "Content is required",
-            }
+            return self._empty_suggestion_response("Content is required")
 
         try:
-            # Find similar documents once
-            similar_docs = await self._find_similar_documents(
-                content, similarity_limit
-            )
-
+            similar_docs = await self._find_similar_documents(content, similarity_limit)
             if not similar_docs:
-                return {
-                    "success": True,
-                    "tag_suggestions": [],
-                    "category_suggestions": [],
-                    "similar_docs_analyzed": 0,
-                    "message": "No similar documents found for analysis",
-                }
+                return self._empty_suggestion_response()
 
-            # Extract both in parallel
             tag_scores, category_scores = await asyncio.gather(
                 self._extract_weighted_tags(similar_docs),
                 self._extract_weighted_categories(similar_docs),
             )
 
-            # Build suggestions lists
             tag_suggestions = self._build_suggestions_list(
                 tag_scores, tag_limit, min_confidence
             )
@@ -266,9 +249,7 @@ class SuggestionsMixin:
 
             logger.info(
                 "Generated %d tag and %d category suggestions from %d similar docs",
-                len(tag_suggestions),
-                len(category_suggestions),
-                len(similar_docs),
+                len(tag_suggestions), len(category_suggestions), len(similar_docs),
             )
 
             return {
@@ -280,12 +261,43 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest tags and categories: %s", e)
-            return {
-                "success": False,
-                "tag_suggestions": [],
-                "category_suggestions": [],
-                "error": str(e),
-            }
+            return self._empty_suggestion_response(str(e))
+
+    async def _apply_tag_suggestions(
+        self, fact_id: str, suggestions: List[Dict], min_confidence: float, result: Dict
+    ) -> None:
+        """Apply tag suggestions to a fact (Issue #398: extracted)."""
+        high_conf_tags = [
+            s["tag"] for s in suggestions if s["confidence"] >= min_confidence
+        ]
+        if high_conf_tags:
+            add_result = await self.add_tags_to_fact(fact_id, high_conf_tags)
+            if add_result.get("status") == "success":
+                result["applied_tags"] = high_conf_tags
+            else:
+                result["tag_error"] = add_result.get("message")
+        result["skipped_tags"] = [
+            {"tag": s["tag"], "confidence": s["confidence"]}
+            for s in suggestions if s["confidence"] < min_confidence
+        ]
+
+    async def _apply_category_suggestion(
+        self, fact_id: str, suggestions: List[Dict], min_confidence: float, result: Dict
+    ) -> None:
+        """Apply category suggestion to a fact (Issue #398: extracted)."""
+        top_category = suggestions[0]
+        if top_category["confidence"] >= min_confidence:
+            assign_result = await self.assign_fact_to_category(
+                fact_id, top_category["category_path"]
+            )
+            if assign_result.get("status") == "success":
+                result["applied_category"] = top_category["category_path"]
+            else:
+                result["category_error"] = assign_result.get("message")
+        result["skipped_categories"] = [
+            {"category_path": s["category_path"], "confidence": s["confidence"]}
+            for s in suggestions if s["confidence"] < min_confidence
+        ]
 
     async def auto_apply_suggestions(
         self,
@@ -295,97 +307,40 @@ class SuggestionsMixin:
         apply_category: bool = True,
         min_confidence: float = 0.85,
     ) -> Dict[str, Any]:
-        """
-        Automatically apply high-confidence suggestions to a fact.
-
-        Args:
-            fact_id: The fact ID to apply suggestions to
-            content: Content to analyze for suggestions
-            apply_tags: Whether to apply tag suggestions
-            apply_category: Whether to apply category suggestion
-            min_confidence: Minimum confidence to auto-apply
-
-        Returns:
-            Dict with applied tags, category, and details
-        """
+        """Auto-apply high-confidence suggestions to a fact (Issue #398: refactored)."""
         self.ensure_initialized()
 
         result = {
-            "success": True,
-            "fact_id": fact_id,
-            "applied_tags": [],
-            "applied_category": None,
-            "skipped_tags": [],
-            "skipped_categories": [],
+            "success": True, "fact_id": fact_id, "applied_tags": [],
+            "applied_category": None, "skipped_tags": [], "skipped_categories": [],
         }
 
         try:
-            # Get suggestions
             suggestions = await self.suggest_all(
-                content,
-                tag_limit=10,
-                category_limit=3,
-                min_confidence=min_confidence,
+                content, tag_limit=10, category_limit=3, min_confidence=min_confidence
             )
 
             if not suggestions.get("success"):
                 return {
-                    "success": False,
-                    "fact_id": fact_id,
+                    "success": False, "fact_id": fact_id,
                     "error": suggestions.get("error", "Failed to get suggestions"),
                 }
 
-            # Apply high-confidence tags
             if apply_tags and suggestions.get("tag_suggestions"):
-                high_conf_tags = [
-                    s["tag"]
-                    for s in suggestions["tag_suggestions"]
-                    if s["confidence"] >= min_confidence
-                ]
-                if high_conf_tags:
-                    # Use existing add_tags_to_fact method
-                    add_result = await self.add_tags_to_fact(fact_id, high_conf_tags)
-                    if add_result.get("status") == "success":
-                        result["applied_tags"] = high_conf_tags
-                    else:
-                        result["tag_error"] = add_result.get("message")
+                await self._apply_tag_suggestions(
+                    fact_id, suggestions["tag_suggestions"], min_confidence, result
+                )
 
-                # Track skipped tags
-                result["skipped_tags"] = [
-                    {"tag": s["tag"], "confidence": s["confidence"]}
-                    for s in suggestions["tag_suggestions"]
-                    if s["confidence"] < min_confidence
-                ]
-
-            # Apply highest-confidence category
             if apply_category and suggestions.get("category_suggestions"):
-                top_category = suggestions["category_suggestions"][0]
-                if top_category["confidence"] >= min_confidence:
-                    # Use existing assign_fact_to_category method
-                    assign_result = await self.assign_fact_to_category(
-                        fact_id, top_category["category_path"]
-                    )
-                    if assign_result.get("status") == "success":
-                        result["applied_category"] = top_category["category_path"]
-                    else:
-                        result["category_error"] = assign_result.get("message")
-
-                # Track skipped categories
-                result["skipped_categories"] = [
-                    {"category_path": s["category_path"], "confidence": s["confidence"]}
-                    for s in suggestions["category_suggestions"]
-                    if s["confidence"] < min_confidence
-                ]
+                await self._apply_category_suggestion(
+                    fact_id, suggestions["category_suggestions"], min_confidence, result
+                )
 
             return result
 
         except Exception as e:
             logger.error("Failed to auto-apply suggestions: %s", e)
-            return {
-                "success": False,
-                "fact_id": fact_id,
-                "error": str(e),
-            }
+            return {"success": False, "fact_id": fact_id, "error": str(e)}
 
     async def _find_similar_documents(
         self, content: str, limit: int

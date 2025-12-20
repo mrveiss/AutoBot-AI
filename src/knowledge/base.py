@@ -260,73 +260,56 @@ class KnowledgeBaseCore:
             logger.error("Failed to initialize Redis connections: %s", e)
             raise
 
+    def _build_hnsw_metadata(self) -> dict:
+        """Build HNSW metadata for ChromaDB collection (Issue #398: extracted)."""
+        return {
+            "hnsw:space": self.hnsw_space,
+            "hnsw:construction_ef": self.hnsw_construction_ef,
+            "hnsw:search_ef": self.hnsw_search_ef,
+            "hnsw:M": self.hnsw_m,
+        }
+
+    async def _create_chroma_collection(self, chroma_client, hnsw_metadata: dict):
+        """Create ChromaDB collection with HNSW parameters (Issue #398: extracted)."""
+        logger.info(
+            "Creating ChromaDB collection with HNSW params: "
+            "space=%s, construction_ef=%d, search_ef=%d, M=%d",
+            self.hnsw_space, self.hnsw_construction_ef,
+            self.hnsw_search_ef, self.hnsw_m
+        )
+
+        chroma_collection = await asyncio.to_thread(
+            chroma_client.get_or_create_collection,
+            name=self.chromadb_collection,
+            metadata=hnsw_metadata,
+        )
+
+        self._async_chroma_collection = wrap_collection_async(chroma_collection)
+        self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+
+        logger.info("ChromaDB vector store initialized: collection='%s'", self.chromadb_collection)
+
+        collection_count = await asyncio.to_thread(chroma_collection.count)
+        logger.info("ChromaDB collection contains %d vectors", collection_count)
+
     async def _init_vector_store(self):
-        """Initialize LlamaIndex vector store with ChromaDB backend.
-
-        Issue #369: ChromaDB operations are synchronous and block the event loop.
-        All blocking operations are now wrapped with asyncio.to_thread().
-        """
+        """Initialize LlamaIndex vector store with ChromaDB (Issue #398: refactored)."""
         try:
-            # Create ChromaDB directory if it doesn't exist
             chroma_path = Path(self.chromadb_path)
-
             logger.info("Initializing ChromaDB at path: %s", chroma_path)
 
-            # Create ChromaDB persistent client with telemetry disabled
-            # Note: Client creation is fast, doesn't need to_thread wrapper
             chroma_client = create_chromadb_client(
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            # Issue #72: Get or create collection with optimized HNSW parameters
-            # These parameters are tuned for 545K+ vectors
-            hnsw_metadata = {
-                "hnsw:space": self.hnsw_space,
-                "hnsw:construction_ef": self.hnsw_construction_ef,
-                "hnsw:search_ef": self.hnsw_search_ef,
-                "hnsw:M": self.hnsw_m,
-            }
+            hnsw_metadata = self._build_hnsw_metadata()
+            await self._create_chroma_collection(chroma_client, hnsw_metadata)
 
-            logger.info(
-                "Creating ChromaDB collection with optimized HNSW params: "
-                "space=%s, construction_ef=%d, search_ef=%d, M=%d",
-                self.hnsw_space, self.hnsw_construction_ef,
-                self.hnsw_search_ef, self.hnsw_m
-            )
-
-            # Issue #369: Wrap blocking get_or_create_collection with asyncio.to_thread
-            chroma_collection = await asyncio.to_thread(
-                chroma_client.get_or_create_collection,
-                name=self.chromadb_collection,
-                metadata=hnsw_metadata,
-            )
-
-            # Store async wrapper for collection operations outside LlamaIndex
-            # This allows async access for direct ChromaDB operations
-            self._async_chroma_collection = wrap_collection_async(chroma_collection)
-
-            # Create ChromaVectorStore for LlamaIndex (requires sync collection)
-            self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-
-            logger.info(
-                "ChromaDB vector store initialized: collection='%s'",
-                self.chromadb_collection
-            )
-
-            # Issue #369: Wrap blocking count() operation with asyncio.to_thread
-            collection_count = await asyncio.to_thread(chroma_collection.count)
-            logger.info("ChromaDB collection contains %d vectors", collection_count)
-
-            # Skip eager index creation to prevent blocking during initialization
-            # with 545K+ vectors. Index will be created lazily on first use.
-            logger.info(
-                "Skipping eager vector index creation - will create on first query (lazy loading)"
-            )
+            logger.info("Skipping eager vector index creation - will create on first query")
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDB vector store: %s", e)
             import traceback
-
             logger.error(traceback.format_exc())
             self.vector_store = None
 

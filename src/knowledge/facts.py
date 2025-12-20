@@ -96,7 +96,7 @@ class FactsMixin:
         """
         try:
             # Check Redis SET for unique key mapping
-            unique_key_name = f"unique_key:man_page:{unique_key}"
+            unique_key_name = "unique_key:man_page:%s" % unique_key
             fact_id = await asyncio.to_thread(self.redis_client.get, unique_key_name)
 
             if not fact_id:
@@ -107,7 +107,7 @@ class FactsMixin:
                 fact_id = fact_id.decode("utf-8")
 
             # Get the actual fact data
-            fact_key = f"fact:{fact_id}"
+            fact_key = "fact:%s" % fact_id
             fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
 
             if not fact_data:
@@ -123,7 +123,7 @@ class FactsMixin:
             }
 
         except Exception as e:
-            logger.debug(f"Error finding fact by unique key: {e}")
+            logger.debug("Error finding fact by unique key: %s", e)
 
         return None
 
@@ -145,7 +145,7 @@ class FactsMixin:
             content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
             # Check if hash exists in Redis
-            hash_key = f"content_hash:{content_hash}"
+            hash_key = "content_hash:%s" % content_hash
             existing_id = await asyncio.to_thread(self.redis_client.get, hash_key)
 
             if existing_id:
@@ -154,7 +154,7 @@ class FactsMixin:
                 return existing_id
 
         except Exception as e:
-            logger.debug(f"Error checking for existing fact: {e}")
+            logger.debug("Error checking for existing fact: %s", e)
 
         return None
 
@@ -178,7 +178,7 @@ class FactsMixin:
             existing = await self._find_fact_by_unique_key(metadata["unique_key"])
             if existing:
                 logger.info(
-                    f"Duplicate detected via unique_key: {metadata['unique_key']}"
+                    "Duplicate detected via unique_key: %s", metadata["unique_key"]
                 )
                 return {
                     "status": "duplicate",
@@ -189,7 +189,7 @@ class FactsMixin:
         # Check for content duplicates
         existing_id = await self._find_existing_fact(content, metadata)
         if existing_id:
-            logger.info(f"Duplicate content detected: {existing_id}")
+            logger.info("Duplicate content detected: %s", existing_id)
             return {
                 "status": "duplicate",
                 "fact_id": existing_id,
@@ -212,7 +212,7 @@ class FactsMixin:
             metadata: Fact metadata dict
         """
         # Store in Redis
-        fact_key = f"fact:{fact_id}"
+        fact_key = "fact:%s" % fact_id
         await asyncio.to_thread(
             self.redis_client.hset,
             fact_key,
@@ -226,12 +226,12 @@ class FactsMixin:
         # Store content hash for deduplication
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
         await asyncio.to_thread(
-            self.redis_client.set, f"content_hash:{content_hash}", fact_id
+            self.redis_client.set, "content_hash:%s" % content_hash, fact_id
         )
 
         # Store unique_key mapping if provided
         if "unique_key" in metadata:
-            unique_key_name = f"unique_key:man_page:{metadata['unique_key']}"
+            unique_key_name = "unique_key:man_page:%s" % metadata["unique_key"]
             await asyncio.to_thread(
                 self.redis_client.set, unique_key_name, fact_id
             )
@@ -268,7 +268,7 @@ class FactsMixin:
         # Add to vector store
         await asyncio.to_thread(self.vector_store.add, [doc])
 
-        logger.info(f"Vectorized fact {fact_id} in ChromaDB")
+        logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
     async def store_fact(
         self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None
@@ -325,7 +325,7 @@ class FactsMixin:
             return {"status": "success", "fact_id": fact_id, "action": "created"}
 
         except Exception as e:
-            logger.error(f"Failed to store fact: {e}")
+            logger.error("Failed to store fact: %s", e)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -345,7 +345,7 @@ class FactsMixin:
 
         try:
             # Get fact from Redis
-            fact_key = f"fact:{fact_id}"
+            fact_key = "fact:%s" % fact_id
             fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
 
             if not fact_data:
@@ -373,7 +373,9 @@ class FactsMixin:
             metadata["fact_id"] = fact_id
 
             # Import sanitization utility
-            from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
+            from src.knowledge.utils import (
+                sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
+            )
 
             # Sanitize metadata
             sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
@@ -385,13 +387,13 @@ class FactsMixin:
                 )
                 await asyncio.to_thread(self.vector_store.add, [doc])
 
-                logger.info(f"Vectorized existing fact {fact_id}")
+                logger.info("Vectorized existing fact %s", fact_id)
                 return {"status": "success", "message": "Fact vectorized successfully"}
             else:
                 return {"status": "error", "message": "Vector store not available"}
 
         except Exception as e:
-            logger.error(f"Failed to vectorize fact {fact_id}: {e}")
+            logger.error("Failed to vectorize fact %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
     def get_fact(self, fact_id: str) -> Optional[Dict[str, Any]]:
@@ -405,7 +407,7 @@ class FactsMixin:
             Dict with fact data or None if not found
         """
         try:
-            fact_key = f"fact:{fact_id}"
+            fact_key = "fact:%s" % fact_id
             fact_data = self.redis_client.hgetall(fact_key)
 
             if not fact_data:
@@ -434,7 +436,7 @@ class FactsMixin:
             }
 
         except Exception as e:
-            logger.error(f"Error retrieving fact {fact_id}: {e}")
+            logger.error("Error retrieving fact %s: %s", fact_id, e)
             return None
 
     def _process_fact_data(
@@ -521,44 +523,46 @@ class FactsMixin:
             return facts
 
         except Exception as e:
-            logger.error(f"Error retrieving all facts: {e}")
+            logger.error("Error retrieving all facts: %s", e)
             return []
+
+    def _decode_fact_data(self, fact_data: Dict) -> Dict[str, str]:
+        """Decode Redis fact data from bytes (Issue #398: extracted)."""
+        decoded = {}
+        for key, value in fact_data.items():
+            k = key.decode("utf-8") if isinstance(key, bytes) else key
+            v = value.decode("utf-8") if isinstance(value, bytes) else value
+            decoded[k] = v
+        return decoded
+
+    async def _revectorize_fact(
+        self, fact_id: str, content: str, current_metadata: Dict
+    ) -> None:
+        """Re-vectorize fact after content update (Issue #398: extracted)."""
+        from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
+
+        sanitized_metadata = _sanitize(current_metadata)
+        sanitized_metadata["fact_id"] = fact_id
+        await asyncio.to_thread(self.vector_store.delete, fact_id)
+        doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
+        await asyncio.to_thread(self.vector_store.add, [doc])
+        logger.info("Re-vectorized updated fact %s", fact_id)
 
     async def update_fact(
         self, fact_id: str, content: str = None, metadata: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        """
-        Update an existing fact.
-
-        Args:
-            fact_id: ID of the fact to update
-            content: New content (optional)
-            metadata: New or updated metadata (optional)
-
-        Returns:
-            Dict with status
-        """
+        """Update an existing fact (Issue #398: refactored)."""
         self.ensure_initialized()
 
         try:
-            fact_key = f"fact:{fact_id}"
-
-            # Check if fact exists
+            fact_key = "fact:%s" % fact_id
             exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
             if not exists:
                 return {"status": "error", "message": "Fact not found"}
 
-            # Get current fact data
             fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
+            decoded = self._decode_fact_data(fact_data)
 
-            # Decode current data
-            decoded = {}
-            for key, value in fact_data.items():
-                k = key.decode("utf-8") if isinstance(key, bytes) else key
-                v = value.decode("utf-8") if isinstance(value, bytes) else value
-                decoded[k] = v
-
-            # Parse current metadata
             current_metadata = {}
             if "metadata" in decoded:
                 try:
@@ -566,52 +570,27 @@ class FactsMixin:
                 except json.JSONDecodeError:
                     pass
 
-            # Update content if provided
             if content is not None:
                 decoded["content"] = content
-
-            # Update metadata if provided
             if metadata is not None:
                 current_metadata.update(metadata)
-
-            # Update timestamp
             current_metadata["updated_at"] = datetime.now().isoformat()
 
-            # Store updated fact
             await asyncio.to_thread(
-                self.redis_client.hset,
-                fact_key,
-                mapping={
+                self.redis_client.hset, fact_key, mapping={
                     "content": decoded["content"],
                     "metadata": json.dumps(current_metadata),
                     "timestamp": decoded.get("timestamp", ""),
-                },
+                }
             )
 
-            # Re-vectorize if content changed
             if content is not None and self.vector_store:
-                from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
-
-                sanitized_metadata = _sanitize_metadata_for_chromadb(current_metadata)
-                sanitized_metadata["fact_id"] = fact_id
-
-                # Delete old vector
-                await asyncio.to_thread(self.vector_store.delete, fact_id)
-
-                # Add new vector
-                doc = Document(
-                    text=decoded["content"],
-                    doc_id=fact_id,
-                    metadata=sanitized_metadata,
-                )
-                await asyncio.to_thread(self.vector_store.add, [doc])
-
-                logger.info(f"Re-vectorized updated fact {fact_id}")
+                await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
 
             return {"status": "success", "fact_id": fact_id, "action": "updated"}
 
         except Exception as e:
-            logger.error(f"Failed to update fact {fact_id}: {e}")
+            logger.error("Failed to update fact %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
     async def delete_fact(self, fact_id: str) -> dict:
@@ -627,7 +606,7 @@ class FactsMixin:
         self.ensure_initialized()
 
         try:
-            fact_key = f"fact:{fact_id}"
+            fact_key = "fact:%s" % fact_id
 
             # Check if fact exists
             exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
@@ -642,7 +621,7 @@ class FactsMixin:
                 try:
                     await asyncio.to_thread(self.vector_store.delete, fact_id)
                 except Exception as e:
-                    logger.warning(f"Could not delete vector for fact {fact_id}: {e}")
+                    logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
 
             # Issue #379: Decrement stats counters in parallel (Issue #71)
             await asyncio.gather(
@@ -650,11 +629,11 @@ class FactsMixin:
                 self._decrement_stat("total_vectors"),
             )
 
-            logger.info(f"Deleted fact {fact_id}")
+            logger.info("Deleted fact %s", fact_id)
             return {"status": "success", "fact_id": fact_id, "action": "deleted"}
 
         except Exception as e:
-            logger.error(f"Failed to delete fact {fact_id}: {e}")
+            logger.error("Failed to delete fact %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
     # Method references needed from other mixins

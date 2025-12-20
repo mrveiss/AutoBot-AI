@@ -560,140 +560,178 @@ class SearchMixin:
         )
         return await self.enhanced_search_v2_ctx(ctx)
 
+    def _extract_search_params(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
+        """Extract search parameters from context (Issue #398: extracted)."""
+        return {
+            "query": ctx.query_params.query,
+            "limit": ctx.query_params.limit,
+            "offset": ctx.query_params.offset,
+            "tags": ctx.query_params.tags,
+            "tags_match_any": ctx.query_params.tags_match_any,
+            "exclude_terms": ctx.query_params.exclude_terms,
+            "require_terms": ctx.query_params.require_terms,
+            "category": ctx.filters.category,
+            "created_after": ctx.filters.created_after,
+            "created_before": ctx.filters.created_before,
+            "exclude_sources": ctx.filters.exclude_sources,
+            "verified_only": ctx.filters.verified_only,
+            "mode": ctx.options.mode,
+            "enable_reranking": ctx.options.enable_reranking,
+            "min_score": ctx.options.min_score,
+            "enable_query_expansion": ctx.options.enable_query_expansion,
+            "enable_relevance_scoring": ctx.options.enable_relevance_scoring,
+            "enable_clustering": ctx.options.enable_clustering,
+            "track_analytics": ctx.options.track_analytics,
+            "session_id": ctx.session_id,
+        }
+
+    async def _execute_multi_query_search(
+        self,
+        queries: List[str],
+        mode: str,
+        fetch_limit: int,
+        category: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Execute search across multiple query variations (Issue #398: extracted)."""
+        all_results: List[Dict[str, Any]] = []
+        seen_ids: Set[str] = set()
+
+        for search_query in queries:
+            query_results = await self._execute_search_by_mode(
+                mode, search_query, fetch_limit, category
+            )
+            for result in query_results:
+                result_id = (
+                    result.get("metadata", {}).get("fact_id")
+                    or result.get("node_id", "")
+                )
+                if result_id not in seen_ids:
+                    seen_ids.add(result_id)
+                    result["matched_query"] = search_query
+                    all_results.append(result)
+
+        return all_results
+
+    async def _apply_all_search_filters(
+        self,
+        results: List[Dict[str, Any]],
+        params: Dict[str, Any],
+        tag_filtered_ids: Optional[Set[str]],
+        processed_query: str,
+        fetch_limit: int,
+    ) -> List[Dict[str, Any]]:
+        """Apply all filters and reranking to results (Issue #398: extracted)."""
+        # Apply tag and score filters
+        results = self._apply_post_search_filters(
+            results, tag_filtered_ids, params["min_score"]
+        )
+        # Apply advanced filters
+        results = self._apply_advanced_search_filters(
+            results,
+            params["created_after"],
+            params["created_before"],
+            params["exclude_terms"],
+            params["require_terms"],
+            params["exclude_sources"],
+            params["verified_only"],
+            params["min_score"],
+            fetch_limit,
+        )
+        # Relevance scoring
+        results = self._apply_relevance_scoring(
+            results, processed_query, params["enable_relevance_scoring"]
+        )
+        # Reranking
+        if params["enable_reranking"] and results:
+            results = await self._rerank_results(processed_query, results)
+
+        return results
+
+    def _finalize_search_response(
+        self,
+        results: List[Dict[str, Any]],
+        params: Dict[str, Any],
+        processed_query: str,
+        queries_count: int,
+        duration_ms: int,
+    ) -> Dict[str, Any]:
+        """Finalize search with analytics, clustering, and response (Issue #398: extracted)."""
+        # Analytics tracking
+        self._track_search_analytics(
+            params["query"],
+            len(results),
+            duration_ms,
+            params["session_id"],
+            params["mode"],
+            params["tags"],
+            params["category"],
+            params["enable_query_expansion"],
+            params["enable_relevance_scoring"],
+            params["track_analytics"],
+        )
+        # Clustering
+        clusters, unclustered = self._cluster_search_results(
+            results, params["enable_clustering"], params["offset"], params["limit"]
+        )
+        # Build response
+        return self._build_enhanced_search_response(
+            results,
+            unclustered,
+            clusters,
+            processed_query,
+            params["mode"],
+            params["tags"],
+            params["min_score"],
+            params["enable_reranking"],
+            params["enable_query_expansion"],
+            params["enable_relevance_scoring"],
+            params["enable_clustering"],
+            queries_count,
+            duration_ms,
+            params["offset"],
+            params["limit"],
+        )
+
     @error_boundary(component="knowledge_base", function="enhanced_search_v2_ctx")
     async def enhanced_search_v2_ctx(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
-        """Enhanced search v2 using EnhancedSearchContext."""
+        """Enhanced search v2 using EnhancedSearchContext (Issue #398: refactored)."""
         self.ensure_initialized()
 
-        # Extract commonly used values
-        query = ctx.query_params.query
-        limit = ctx.query_params.limit
-        offset = ctx.query_params.offset
-        tags = ctx.query_params.tags
-        tags_match_any = ctx.query_params.tags_match_any
-        exclude_terms = ctx.query_params.exclude_terms
-        require_terms = ctx.query_params.require_terms
-
-        category = ctx.filters.category
-        created_after = ctx.filters.created_after
-        created_before = ctx.filters.created_before
-        exclude_sources = ctx.filters.exclude_sources
-        verified_only = ctx.filters.verified_only
-
-        mode = ctx.options.mode
-        enable_reranking = ctx.options.enable_reranking
-        min_score = ctx.options.min_score
-        enable_query_expansion = ctx.options.enable_query_expansion
-        enable_relevance_scoring = ctx.options.enable_relevance_scoring
-        enable_clustering = ctx.options.enable_clustering
-        track_analytics = ctx.options.track_analytics
-
-        session_id = ctx.session_id
-
-        if not query.strip():
+        params = self._extract_search_params(ctx)
+        if not params["query"].strip():
             return self._build_empty_query_response()
 
         start_time = time.time()
 
         try:
-            processed_query = self._preprocess_query(query)
-
-            # Query expansion
+            processed_query = self._preprocess_query(params["query"])
             queries_to_search = self._expand_query_terms(
-                processed_query, enable_query_expansion
+                processed_query, params["enable_query_expansion"]
             )
 
-            # Tag filtering
             tag_filtered_ids, early_return = await self._get_tag_filtered_ids(
-                tags, tags_match_any, processed_query
+                params["tags"], params["tags_match_any"], processed_query
             )
             if early_return:
                 return early_return
 
-            # Calculate fetch limit
-            fetch_multiplier = 3 if (tags or min_score > 0 or exclude_terms) else 1.5
-            fetch_limit = min(int((limit + offset) * fetch_multiplier), 500)
-
-            # Execute search with all query variations
-            all_results: List[Dict[str, Any]] = []
-            seen_ids: Set[str] = set()
-
-            for search_query in queries_to_search:
-                query_results = await self._execute_search_by_mode(
-                    mode, search_query, fetch_limit, category
-                )
-                for result in query_results:
-                    result_id = (
-                        result.get("metadata", {}).get("fact_id")
-                        or result.get("node_id", "")
-                    )
-                    if result_id not in seen_ids:
-                        seen_ids.add(result_id)
-                        result["matched_query"] = search_query
-                        all_results.append(result)
-
-            # Apply filters
-            results = self._apply_post_search_filters(
-                all_results, tag_filtered_ids, min_score
-            )
-            results = self._apply_advanced_search_filters(
-                results,
-                created_after,
-                created_before,
-                exclude_terms,
-                require_terms,
-                exclude_sources,
-                verified_only,
-                min_score,
-                fetch_limit,
+            fetch_multiplier = 3 if (
+                params["tags"] or params["min_score"] > 0 or params["exclude_terms"]
+            ) else 1.5
+            fetch_limit = min(
+                int((params["limit"] + params["offset"]) * fetch_multiplier), 500
             )
 
-            # Relevance scoring
-            results = self._apply_relevance_scoring(
-                results, processed_query, enable_relevance_scoring
+            results = await self._execute_multi_query_search(
+                queries_to_search, params["mode"], fetch_limit, params["category"]
             )
-
-            # Reranking
-            if enable_reranking and results:
-                results = await self._rerank_results(processed_query, results)
+            results = await self._apply_all_search_filters(
+                results, params, tag_filtered_ids, processed_query, fetch_limit
+            )
 
             duration_ms = int((time.time() - start_time) * 1000)
-
-            # Analytics tracking
-            self._track_search_analytics(
-                query,
-                len(results),
-                duration_ms,
-                session_id,
-                mode,
-                tags,
-                category,
-                enable_query_expansion,
-                enable_relevance_scoring,
-                track_analytics,
-            )
-
-            # Clustering and response building
-            clusters, unclustered = self._cluster_search_results(
-                results, enable_clustering, offset, limit
-            )
-
-            return self._build_enhanced_search_response(
-                results,
-                unclustered,
-                clusters,
-                processed_query,
-                mode,
-                tags,
-                min_score,
-                enable_reranking,
-                enable_query_expansion,
-                enable_relevance_scoring,
-                enable_clustering,
-                len(queries_to_search),
-                duration_ms,
-                offset,
-                limit,
+            return self._finalize_search_response(
+                results, params, processed_query, len(queries_to_search), duration_ms
             )
 
         except Exception as e:
