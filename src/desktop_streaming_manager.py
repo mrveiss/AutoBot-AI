@@ -14,12 +14,55 @@ import logging
 import os
 import subprocess
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import websockets
 
 from src.constants.threshold_constants import TimingConstants
+
+
+@dataclass
+class VNCSessionData:
+    """
+    Data class for VNC session information.
+
+    Issue #399: Reduces _build_session_data from 11 parameters to a single object.
+    Groups all session-related data into a cohesive structure.
+    """
+
+    session_id: str
+    user_id: str
+    display_num: int
+    vnc_port: int
+    novnc_port: int
+    resolution: str
+    depth: int
+    xvfb_process: asyncio.subprocess.Process
+    vnc_process: asyncio.subprocess.Process
+    novnc_process: Optional[asyncio.subprocess.Process] = None
+    created_at: float = field(default_factory=time.time)
+    status: str = "active"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage in active_sessions."""
+        return {
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "display_num": self.display_num,
+            "vnc_port": self.vnc_port,
+            "novnc_port": self.novnc_port,
+            "resolution": self.resolution,
+            "depth": self.depth,
+            "created_at": self.created_at,
+            "xvfb_process": self.xvfb_process,
+            "vnc_process": self.vnc_process,
+            "novnc_process": self.novnc_process,
+            "status": self.status,
+        }
+
+
 from src.task_execution_tracker import TaskPriority, task_tracker
 from src.unified_config_manager import config_manager
 
@@ -167,12 +210,20 @@ class VNCServerManager:
                 if self.novnc_available:
                     novnc_process = await self._start_novnc(vnc_port, novnc_port)
 
-                # Build and store session data (Issue #281 - uses helper)
-                session_data = self._build_session_data(
-                    session_id, user_id, display_num, vnc_port, novnc_port,
-                    resolution, depth, xvfb_process, vnc_process, novnc_process,
+                # Build and store session data (Issue #281 - uses helper, Issue #399 - uses dataclass)
+                vnc_session = VNCSessionData(
+                    session_id=session_id,
+                    user_id=user_id,
+                    display_num=display_num,
+                    vnc_port=vnc_port,
+                    novnc_port=novnc_port,
+                    resolution=resolution,
+                    depth=depth,
+                    xvfb_process=xvfb_process,
+                    vnc_process=vnc_process,
+                    novnc_process=novnc_process,
                 )
-                self.active_sessions[session_id] = session_data
+                self.active_sessions[session_id] = self._build_session_data(vnc_session)
 
                 # Build outputs (Issue #281 - uses helper)
                 outputs = self._build_session_output(session_id, display_num, vnc_port, novnc_port)
@@ -290,27 +341,20 @@ class VNCServerManager:
             stderr=asyncio.subprocess.PIPE
         )
 
-    def _build_session_data(
-        self, session_id: str, user_id: str, display_num: int, vnc_port: int,
-        novnc_port: int, resolution: str, depth: int,
-        xvfb_process: asyncio.subprocess.Process, vnc_process: asyncio.subprocess.Process,
-        novnc_process: Optional[asyncio.subprocess.Process],
-    ) -> Dict[str, Any]:
-        """Build session data dictionary (Issue #281 - extracted helper)."""
-        return {
-            "session_id": session_id,
-            "user_id": user_id,
-            "display_num": display_num,
-            "vnc_port": vnc_port,
-            "novnc_port": novnc_port,
-            "resolution": resolution,
-            "depth": depth,
-            "created_at": time.time(),
-            "xvfb_process": xvfb_process,
-            "vnc_process": vnc_process,
-            "novnc_process": novnc_process,
-            "status": "active",
-        }
+    def _build_session_data(self, session_data: VNCSessionData) -> Dict[str, Any]:
+        """
+        Build session data dictionary from VNCSessionData.
+
+        Issue #281: Extracted helper method.
+        Issue #399: Reduced from 11 parameters to 1 using VNCSessionData dataclass.
+
+        Args:
+            session_data: VNCSessionData object containing all session information
+
+        Returns:
+            Dictionary representation for storage in active_sessions
+        """
+        return session_data.to_dict()
 
     def _build_session_output(
         self, session_id: str, display_num: int, vnc_port: int, novnc_port: int
