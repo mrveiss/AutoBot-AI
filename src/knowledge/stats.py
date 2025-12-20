@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     import aioredis
@@ -165,79 +165,81 @@ class StatsMixin:
         except Exception as e:
             logger.error("Failed to initialize stats counters: %s", e)
 
+    async def _count_actual_facts(self) -> int:
+        """Count actual facts via Redis scan (Issue #398: extracted)."""
+        count = 0
+        async for _ in self.aioredis_client.scan_iter(match="fact:*", count=1000):
+            count += 1
+        return count
+
+    def _count_actual_vectors(self) -> int:
+        """Count actual vectors from ChromaDB (Issue #398: extracted)."""
+        if not self.vector_store:
+            return 0
+        try:
+            return self.vector_store._collection.count()
+        except Exception as e:
+            logger.debug("Could not get actual vector count: %s", e)
+            return 0
+
+    async def _correct_stats_drift(self, actual_facts: int, actual_vectors: int) -> None:
+        """Correct stats counters to actual values (Issue #398: extracted)."""
+        await self.aioredis_client.hset(
+            self._stats_key,
+            mapping={
+                "total_facts": actual_facts,
+                "total_vectors": actual_vectors,
+                "total_documents": actual_vectors,
+                "total_chunks": actual_vectors,
+                "last_corrected": datetime.now().isoformat(),
+            },
+        )
+        logger.info("Stats counters corrected to actual values")
+
+    def _build_consistency_result(
+        self, stored_facts: int, actual_facts: int, stored_vectors: int, actual_vectors: int
+    ) -> dict:
+        """Build consistency check result dict (Issue #398: extracted)."""
+        fact_drift = actual_facts - stored_facts
+        vector_drift = actual_vectors - stored_vectors
+        return {
+            "status": "consistent" if fact_drift == 0 and vector_drift == 0 else "drift_detected",
+            "stored_facts": stored_facts,
+            "actual_facts": actual_facts,
+            "fact_drift": fact_drift,
+            "stored_vectors": stored_vectors,
+            "actual_vectors": actual_vectors,
+            "vector_drift": vector_drift,
+            "checked_at": datetime.now().isoformat(),
+            "is_consistent": fact_drift == 0 and vector_drift == 0,
+        }
+
     async def _verify_stats_consistency(self, auto_correct: bool = True) -> dict:
-        """
-        Verify stats counters are accurate by comparing to actual counts.
-
-        This is an expensive O(n) operation and should only be called
-        periodically (e.g., once per day or on admin request).
-
-        Args:
-            auto_correct: If True, correct counters if drift detected
-
-        Returns:
-            Dict with consistency check results
-        """
+        """Verify stats counters are accurate (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"status": "error", "message": "Redis not available"}
 
         try:
-            # Get current counter values
-            current_counters = await self._get_all_stats()
-            stored_facts = current_counters.get("total_facts", 0)
-            stored_vectors = current_counters.get("total_vectors", 0)
+            counters = await self._get_all_stats()
+            stored_facts = counters.get("total_facts", 0)
+            stored_vectors = counters.get("total_vectors", 0)
 
-            # Count actual facts (expensive O(n) operation)
-            actual_fact_count = 0
-            async for _ in self.aioredis_client.scan_iter(match="fact:*", count=1000):
-                actual_fact_count += 1
+            actual_facts = await self._count_actual_facts()
+            actual_vectors = self._count_actual_vectors()
 
-            # Count actual vectors from ChromaDB
-            actual_vector_count = 0
-            if self.vector_store:
-                try:
-                    chroma_collection = self.vector_store._collection
-                    actual_vector_count = chroma_collection.count()
-                except Exception as e:
-                    logger.debug("Could not get actual vector count: %s", e)
-
-            # Calculate drift
-            fact_drift = actual_fact_count - stored_facts
-            vector_drift = actual_vector_count - stored_vectors
-
-            is_consistent = fact_drift == 0 and vector_drift == 0
-
-            result = {
-                "status": "consistent" if is_consistent else "drift_detected",
-                "stored_facts": stored_facts,
-                "actual_facts": actual_fact_count,
-                "fact_drift": fact_drift,
-                "stored_vectors": stored_vectors,
-                "actual_vectors": actual_vector_count,
-                "vector_drift": vector_drift,
-                "checked_at": datetime.now().isoformat(),
-            }
+            result = self._build_consistency_result(
+                stored_facts, actual_facts, stored_vectors, actual_vectors
+            )
+            is_consistent = result.pop("is_consistent")
 
             if not is_consistent:
                 logger.warning(
                     "Stats counter drift detected: facts=%+d, vectors=%+d",
-                    fact_drift, vector_drift
+                    result["fact_drift"], result["vector_drift"]
                 )
-
                 if auto_correct:
-                    # Correct the counters
-                    await self.aioredis_client.hset(
-                        self._stats_key,
-                        mapping={
-                            "total_facts": actual_fact_count,
-                            "total_vectors": actual_vector_count,
-                            "total_documents": actual_vector_count,
-                            "total_chunks": actual_vector_count,
-                            "last_corrected": datetime.now().isoformat(),
-                        },
-                    )
+                    await self._correct_stats_drift(actual_facts, actual_vectors)
                     result["corrected"] = True
-                    logger.info("Stats counters corrected to actual values")
             else:
                 logger.info("Stats counters are consistent with actual data")
 
@@ -335,50 +337,44 @@ class StatsMixin:
             logger.debug("Could not get Redis memory info: %s", e)
             return 0
 
+    def _build_base_stats(self) -> Dict[str, Any]:
+        """Build base stats dictionary with defaults (Issue #398: extracted)."""
+        return {
+            "total_documents": 0, "total_chunks": 0, "total_facts": 0, "total_vectors": 0,
+            "categories": [], "db_size": 0, "status": "online",
+            "last_updated": datetime.now().isoformat(), "redis_db": self.redis_db,
+            "vector_store": "chromadb", "chromadb_collection": self.chromadb_collection,
+            "initialized": self.initialized, "llama_index_configured": self.llama_index_configured,
+            "embedding_model": self.embedding_model_name,
+            "embedding_dimensions": self.embedding_dimensions,
+        }
+
+    async def _populate_redis_stats(self, stats: Dict[str, Any]) -> None:
+        """Populate stats from Redis data (Issue #398: extracted)."""
+        fact_count, vector_count = await self._get_counts_with_fallback()
+        logger.debug("O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count)
+
+        stats["total_facts"] = fact_count
+        stats["total_documents"] = vector_count
+        stats["total_vectors"] = vector_count
+        stats["total_chunks"] = vector_count
+        stats["db_size"] = await self._get_redis_memory_size()
+
+        fact_keys_sample = await self._sample_fact_keys(limit=10)
+        stats["categories"] = await self._get_fact_categories(fact_keys_sample)
+
     async def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive knowledge base statistics (Issue #315: depth 7→3)"""
-        # Import here to avoid circular import
+        """Get comprehensive knowledge base statistics (Issue #398: refactored)."""
         from src.knowledge.embedding_cache import get_embedding_cache
 
         logger.info("=== get_stats() called with caching ===")
         try:
-            stats = {
-                "total_documents": 0,
-                "total_chunks": 0,
-                "total_facts": 0,
-                "total_vectors": 0,
-                "categories": [],
-                "db_size": 0,
-                "status": "online",
-                "last_updated": datetime.now().isoformat(),
-                "redis_db": self.redis_db,
-                "vector_store": "chromadb",
-                "chromadb_collection": self.chromadb_collection,
-                "initialized": self.initialized,
-                "llama_index_configured": self.llama_index_configured,
-                "embedding_model": self.embedding_model_name,
-                "embedding_dimensions": self.embedding_dimensions,
-            }
+            stats = self._build_base_stats()
 
             if self.aioredis_client:
-                # Get counts using helper with fallback (Issue #315)
-                fact_count, vector_count = await self._get_counts_with_fallback()
-                logger.debug("O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count)
+                await self._populate_redis_stats(stats)
 
-                stats["total_facts"] = fact_count
-                stats["total_documents"] = vector_count
-                stats["total_vectors"] = vector_count
-                stats["total_chunks"] = vector_count
-                stats["db_size"] = await self._get_redis_memory_size()
-
-                # Sample facts and extract categories
-                fact_keys_sample = await self._sample_fact_keys(limit=10)
-                stats["categories"] = await self._get_fact_categories(fact_keys_sample)
-
-            # Get ChromaDB stats using helper (Issue #298)
             await self._get_chromadb_stats(stats)
-
-            # Add embedding cache statistics (P0 optimization monitoring)
             stats["embedding_cache"] = get_embedding_cache().get_stats()
 
             return stats
@@ -386,15 +382,9 @@ class StatsMixin:
         except Exception as e:
             logger.error("Error getting knowledge base stats: %s", e)
             return {
-                "total_documents": 0,
-                "total_chunks": 0,
-                "total_facts": 0,
-                "total_vectors": 0,
-                "categories": [],
-                "db_size": 0,
-                "status": "error",
-                "error": str(e),
-                "last_updated": datetime.now().isoformat(),
+                "total_documents": 0, "total_chunks": 0, "total_facts": 0, "total_vectors": 0,
+                "categories": [], "db_size": 0, "status": "error",
+                "error": str(e), "last_updated": datetime.now().isoformat(),
             }
 
     async def _get_memory_stats(self) -> Dict[str, float]:
@@ -735,7 +725,10 @@ class StatsMixin:
     def _compute_age_buckets(self, facts: List[Dict[str, Any]]) -> Dict[str, int]:
         """Compute age distribution buckets (Issue #398: extracted)."""
         now = datetime.now()
-        buckets = {"last_day": 0, "last_week": 0, "last_month": 0, "last_year": 0, "older": 0, "unknown": 0}
+        buckets = {
+            "last_day": 0, "last_week": 0, "last_month": 0,
+            "last_year": 0, "older": 0, "unknown": 0
+        }
 
         for fact in facts:
             fact_dt = self._parse_fact_timestamp(fact)
@@ -754,7 +747,10 @@ class StatsMixin:
         total = len(facts)
 
         if total == 0:
-            return {"score": 100.0, "age_distribution": age_buckets, "issues": [], "recommendations": []}
+            return {
+                "score": 100.0, "age_distribution": age_buckets,
+                "issues": [], "recommendations": []
+            }
 
         recent = age_buckets["last_day"] + age_buckets["last_week"] + age_buckets["last_month"]
         score = (recent / total * 80) + ((total - age_buckets["older"]) / total * 20)
