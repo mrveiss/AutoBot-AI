@@ -30,102 +30,42 @@ _DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})
 class EnhancedSystemCommandsAgent(StandardizedAgent):
     """System commands agent with security-focused prompting and validation."""
 
-    def __init__(self):
-        """Initialize the System Commands Agent with 1B model for efficiency."""
-        super().__init__("enhanced_system_commands")
-        self.llm_interface = LLMInterface()
-        self.model_name = global_config_manager.get_task_specific_model(
-            "system_commands"
-        )
-        self.capabilities = [
-            "command_generation",
-            "security_validation",
-            "shell_operations",
-            "system_administration",
-            "command_explanation",
-        ]
-
-        # Security: Define allowed commands and dangerous patterns
-        self.allowed_commands = {
-            "ls",
-            "dir",
-            "pwd",
-            "cd",
-            "cat",
-            "head",
-            "tail",
-            "grep",
-            "find",
-            "ps",
-            "top",
-            "htop",
-            "d",
-            "du",
-            "free",
-            "lscpu",
-            "lsblk",
-            "ifconfig",
-            "ip",
-            "netstat",
-            "ss",
-            "ping",
-            "curl",
-            "wget",
-            "systemctl",
-            "service",
-            "journalctl",
-            "dmesg",
-            "uname",
-            "whoami",
-            "which",
-            "whereis",
-            "file",
-            "stat",
-            "chmod",
-            "chown",
-            "mkdir",
-            "rmdir",
-            "cp",
-            "mv",
-            "touch",
-            "ln",
-            "tar",
-            "gzip",
-            "gunzip",
-            "zip",
-            "unzip",
-            "sort",
-            "uniq",
-            "wc",
-            "awk",
-            "sed",
-            "cut",
+    def _init_allowed_commands(self) -> set:
+        """Initialize set of allowed commands (Issue #398: extracted)."""
+        return {
+            "ls", "dir", "pwd", "cd", "cat", "head", "tail", "grep", "find",
+            "ps", "top", "htop", "d", "du", "free", "lscpu", "lsblk",
+            "ifconfig", "ip", "netstat", "ss", "ping", "curl", "wget",
+            "systemctl", "service", "journalctl", "dmesg", "uname", "whoami",
+            "which", "whereis", "file", "stat", "chmod", "chown", "mkdir",
+            "rmdir", "cp", "mv", "touch", "ln", "tar", "gzip", "gunzip",
+            "zip", "unzip", "sort", "uniq", "wc", "awk", "sed", "cut",
         }
 
-        self.dangerous_patterns = [
-            r"rm\s+-rf\s+/",
-            r"rm\s+-rf\s+\*",
-            r":(){ :|:& };:",  # Dangerous rm, fork bomb
-            r"dd\s+.*of=/dev/",
-            r"mkfs",
-            r"fdisk",
-            r"cfdisk",  # Disk operations
-            r"iptables\s+-F",
-            r"ufw\s+disable",
-            r"firewall-cmd",  # Firewall changes
-            r"passwd",
-            r"usermod",
-            r"userdel",
-            r"groupdel",  # User management
-            r"chmod\s+777",
-            r"chmod\s+-R\s+777",  # Dangerous permissions
-            r"curl.*\|\s*bash",
-            r"wget.*\|\s*sh",  # Pipe to shell
-            r"sudo\s+su\s*-",
-            r"su\s+-",  # Root access
+    def _init_dangerous_patterns(self) -> list:
+        """Initialize list of dangerous command patterns (Issue #398: extracted)."""
+        return [
+            r"rm\s+-rf\s+/", r"rm\s+-rf\s+\*", r":(){ :|:& };:",
+            r"dd\s+.*of=/dev/", r"mkfs", r"fdisk", r"cfdisk",
+            r"iptables\s+-F", r"ufw\s+disable", r"firewall-cmd",
+            r"passwd", r"usermod", r"userdel", r"groupdel",
+            r"chmod\s+777", r"chmod\s+-R\s+777",
+            r"curl.*\|\s*bash", r"wget.*\|\s*sh",
+            r"sudo\s+su\s*-", r"su\s+-",
         ]
 
-        logger.info(f"System Commands Agent initialized with model: {self.model_name}")
+    def __init__(self):
+        """Initialize the System Commands Agent (Issue #398: refactored)."""
+        super().__init__("enhanced_system_commands")
+        self.llm_interface = LLMInterface()
+        self.model_name = global_config_manager.get_task_specific_model("system_commands")
+        self.capabilities = [
+            "command_generation", "security_validation", "shell_operations",
+            "system_administration", "command_explanation",
+        ]
+        self.allowed_commands = self._init_allowed_commands()
+        self.dangerous_patterns = self._init_dangerous_patterns()
+        logger.info("System Commands Agent initialized with model: %s", self.model_name)
 
     async def action_process_command(self, request: AgentRequest) -> Dict[str, Any]:
         """Handle process_command action."""
@@ -143,81 +83,64 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
+    def _build_command_messages(
+        self, request: str, context: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
+        """Build messages for command generation (Issue #398: extracted)."""
+        messages = [{"role": "system", "content": self._get_system_commands_prompt()}]
+        if context:
+            context_str = self._build_context_string(context)
+            messages.append({"role": "system", "content": f"Context: {context_str}"})
+        messages.append({"role": "user", "content": request})
+        return messages
+
+    def _build_success_response(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Build success response with metadata (Issue #398: extracted)."""
+        return {
+            "status": "success" if command_info.get("is_safe", False) else "warning",
+            **command_info,
+            "agent_type": "system_commands",
+            "model_used": self.model_name,
+            "metadata": {
+                "agent": "EnhancedSystemCommandsAgent",
+                "security_checked": True,
+                "validation_level": "strict",
+            },
+        }
+
+    def _build_error_response(self, error: Exception) -> Dict[str, Any]:
+        """Build error response (Issue #398: extracted)."""
+        return {
+            "status": "error",
+            "command": "",
+            "explanation": "Failed to process command request",
+            "is_safe": False,
+            "error": str(error),
+            "agent_type": "system_commands",
+            "model_used": self.model_name,
+        }
+
     async def process_command_request(
         self, request: str, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """
-        Process a system command request and generate safe, validated commands.
-
-        Args:
-            request: User's command request
-            context: Optional context (OS info, current directory, etc.)
-
-        Returns:
-            Dict containing command, validation status, and metadata
-        """
+        """Process a command request (Issue #398: refactored)."""
         try:
-            logger.info(f"System Commands Agent processing: {request[:50]}...")
-
-            # Prepare security-focused system prompt
-            system_prompt = self._get_system_commands_prompt()
-
-            # Build context-aware messages
-            messages = [{"role": "system", "content": system_prompt}]
-
-            # Add context if available
-            if context:
-                context_str = self._build_context_string(context)
-                messages.append(
-                    {"role": "system", "content": f"Context: {context_str}"}
-                )
-
-            # Add user request
-            messages.append({"role": "user", "content": request})
-
-            # Generate command using focused settings
+            logger.info("System Commands Agent processing: %s...", request[:50])
+            messages = self._build_command_messages(request, context)
             response = await self.llm_interface.chat_completion(
                 messages=messages,
-                llm_type="system_commands",  # Uses system_commands model
-                temperature=0.3,  # Lower temperature for more predictable commands
+                llm_type="system_commands",
+                temperature=0.3,
                 max_tokens=LLMDefaults.CONCISE_MAX_TOKENS,
                 top_p=0.8,
             )
-
-            # Extract and validate command
             command_info = self._extract_and_validate_command(response)
-
-            # Additional security validation
-            security_check = self._security_validate_command(
-                command_info.get("command", "")
-            )
+            security_check = self._security_validate_command(command_info.get("command", ""))
             command_info.update(security_check)
-
-            return {
-                "status": (
-                    "success" if command_info.get("is_safe", False) else "warning"
-                ),
-                **command_info,
-                "agent_type": "system_commands",
-                "model_used": self.model_name,
-                "metadata": {
-                    "agent": "EnhancedSystemCommandsAgent",
-                    "security_checked": True,
-                    "validation_level": "strict",
-                },
-            }
-
+            return self._build_success_response(command_info)
         except Exception as e:
-            logger.error(f"System Commands Agent error: {e}")
-            return {
-                "status": "error",
-                "command": "",
-                "explanation": "Failed to process command request",
-                "is_safe": False,
-                "error": str(e),
-                "agent_type": "system_commands",
-                "model_used": self.model_name,
-            }
+            logger.error("System Commands Agent error: %s", e)
+            return self._build_error_response(e)
 
     def _get_system_commands_prompt(self) -> str:
         """Get security-focused system prompt for command generation."""
@@ -337,57 +260,50 @@ and suggest alternatives."""
 
         return text.strip()
 
-    def _security_validate_command(self, command: str) -> Dict[str, Any]:
-        """Perform security validation of the generated command."""
-        if not command:
-            return {"is_safe": False, "security_warning": "Empty command"}
-
-        # Check for dangerous patterns
+    def _check_dangerous_patterns(self, command: str) -> Optional[Dict[str, Any]]:
+        """Check command against dangerous patterns (Issue #398: extracted)."""
         for pattern in self.dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return {
                     "is_safe": False,
-                    "security_warning": (
-                        f"Command contains dangerous pattern: {pattern}"
-                    ),
+                    "security_warning": f"Command contains dangerous pattern: {pattern}",
                     "recommended_action": "reject",
                 }
+        return None
 
-        # Parse command to check the main command
+    def _validate_parsed_command(
+        self, parts: list, main_command: str
+    ) -> Dict[str, Any]:
+        """Validate parsed command parts (Issue #398: extracted)."""
+        if main_command not in self.allowed_commands:
+            return {
+                "is_safe": False,
+                "security_warning": f"Command '{main_command}' not in allowed commands list",
+                "recommended_action": "review_manually",
+            }
+        if main_command == "rm" and any(flag in parts for flag in _DANGEROUS_RM_FLAGS):
+            return {
+                "is_safe": False,
+                "security_warning": "rm command with potentially dangerous flags",
+                "recommended_action": "reject",
+            }
+        return {"is_safe": True, "security_warning": None, "main_command": main_command}
+
+    def _security_validate_command(self, command: str) -> Dict[str, Any]:
+        """Perform security validation (Issue #398: refactored)."""
+        if not command:
+            return {"is_safe": False, "security_warning": "Empty command"}
+
+        danger_result = self._check_dangerous_patterns(command)
+        if danger_result:
+            return danger_result
+
         try:
-            # Use shlex to safely parse the command
             parts = shlex.split(command)
             if not parts:
                 return {"is_safe": False, "security_warning": "Unable to parse command"}
-
-            main_command = parts[0].split("/")[-1]  # Get basename
-
-            # Check if main command is in allowed list
-            if main_command not in self.allowed_commands:
-                return {
-                    "is_safe": False,
-                    "security_warning": (
-                        f"Command '{main_command}' not in allowed commands list"
-                    ),
-                    "recommended_action": "review_manually",
-                }
-
-            # Additional checks for specific commands
-            if main_command == "rm" and any(
-                flag in parts for flag in _DANGEROUS_RM_FLAGS
-            ):
-                return {
-                    "is_safe": False,
-                    "security_warning": "rm command with potentially dangerous flags",
-                    "recommended_action": "reject",
-                }
-
-            return {
-                "is_safe": True,
-                "security_warning": None,
-                "main_command": main_command,
-            }
-
+            main_command = parts[0].split("/")[-1]
+            return self._validate_parsed_command(parts, main_command)
         except Exception as e:
             return {
                 "is_safe": False,

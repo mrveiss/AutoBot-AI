@@ -26,32 +26,32 @@ YAML_FILE_EXTENSIONS = {".yaml", ".yml"}
 def load_yaml_config(config_file: Path) -> Dict[str, Any]:
     """Load base configuration from YAML file"""
     if not config_file.exists():
-        logger.info(f"Base configuration file not found: {config_file}, using defaults")
+        logger.info("Base configuration file not found: %s, using defaults", config_file)
         return get_default_config()
 
     try:
         with open(config_file, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f) or {}
-        logger.info(f"Base configuration loaded from {config_file}")
+        logger.info("Base configuration loaded from %s", config_file)
         return config
     except Exception as e:
-        logger.error(f"Failed to load YAML configuration: {e}")
+        logger.error("Failed to load YAML configuration: %s", e)
         return get_default_config()
 
 
 def load_json_settings(settings_file: Path) -> Dict[str, Any]:
     """Load user settings from JSON file"""
     if not settings_file.exists():
-        logger.debug(f"Settings file not found: {settings_file}")
+        logger.debug("Settings file not found: %s", settings_file)
         return {}
 
     try:
         with open(settings_file, "r", encoding="utf-8") as f:
             settings = json.load(f)
-        logger.info(f"User settings loaded from {settings_file}")
+        logger.info("User settings loaded from %s", settings_file)
         return settings
     except Exception as e:
-        logger.warning(f"Failed to load JSON settings: {e}")
+        logger.warning("Failed to load JSON settings: %s", e)
         return {}
 
 
@@ -137,7 +137,7 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
 
             # Set the value in the config
             set_nested_value(env_overrides, config_path, env_value)
-            logger.info(f"Applied environment override: {env_var} = {env_value}")
+            logger.info("Applied environment override: %s = %s", env_var, env_value)
 
     # Merge environment overrides
     if env_overrides:
@@ -187,5 +187,5 @@ def load_configuration(
         return config
 
     except Exception as e:
-        logger.error(f"Failed to load configuration: {e}")
+        logger.error("Failed to load configuration: %s", e)
         raise

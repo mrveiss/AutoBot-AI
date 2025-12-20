@@ -682,29 +682,10 @@ async def get_roi_priorities(limit: int = Query(default=20, ge=1, le=100)):
     )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_debt_report",
-    error_code_prefix="DEBT",
-)
-@router.get("/report")
-async def get_debt_report(format: str = Query(default="json", description="json or markdown")):
-    """
-    Generate a comprehensive debt report (Issue #315 - refactored).
-
-    Useful for stakeholder presentations and planning.
-    """
-    debt_data = _get_latest_debt_data()
-
-    if not debt_data:
-        return JSONResponse(
-            {"status": "no_data", "message": "No debt analysis found. Run POST /calculate first."}
-        )
-
-    if format == "markdown":
-        # Generate markdown report
-        summary = debt_data.get("summary", {})
-        report = f"""# Technical Debt Report
+def _build_debt_executive_summary(debt_data: dict) -> str:
+    """Build executive summary section of report (Issue #398: extracted)."""
+    summary = debt_data.get("summary", {})
+    return f"""# Technical Debt Report
 
 **Generated:** {debt_data.get('timestamp', 'N/A')}
 
@@ -716,56 +697,35 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 | Estimated Hours | {summary.get('total_hours', 0):.1f} |
 | Estimated Cost | ${summary.get('total_cost_usd', 0):,.2f} |
 | Hourly Rate Used | ${summary.get('hourly_rate', 75)}/hr |
-
-## Debt by Severity
-
-| Severity | Count |
-|----------|-------|
 """
-        # Build table rows using list + join (O(n)) instead of += (O(n²))
-        severity_rows = [
-            f"| {sev.capitalize()} | {count} |"
-            for sev, count in summary.get("by_severity", {}).items()
-        ]
-        report += "\n".join(severity_rows) + "\n"
 
-        report += """
-## Debt by Category
 
-| Category | Count |
-|----------|-------|
-"""
-        category_rows = [
-            f"| {cat.replace('_', ' ').title()} | {count} |"
-            for cat, count in summary.get("by_category", {}).items()
-        ]
-        report += "\n".join(category_rows) + "\n"
+def _build_debt_tables(debt_data: dict) -> str:
+    """Build severity, category, files, and ROI tables (Issue #398: extracted)."""
+    summary = debt_data.get("summary", {})
 
-        report += """
-## Top Files by Debt
+    # Severity section
+    severity_rows = [f"| {sev.capitalize()} | {count} |" for sev, count in summary.get("by_severity", {}).items()]
+    result = "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n" + "\n".join(severity_rows) + "\n"
 
-| File | Hours | Cost |
-|------|-------|------|
-"""
-        file_rows = [
-            f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |"
-            for f in debt_data.get("top_files", [])[:10]
-        ]
-        report += "\n".join(file_rows) + "\n"
+    # Category section
+    category_rows = [f"| {cat.replace('_', ' ').title()} | {count} |" for cat, count in summary.get("by_category", {}).items()]
+    result += "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n" + "\n".join(category_rows) + "\n"
 
-        report += """
-## Top ROI Priorities (Quick Wins)
+    # Top files section
+    file_rows = [f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |" for f in debt_data.get("top_files", [])[:10]]
+    result += "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n" + "\n".join(file_rows) + "\n"
 
-| Description | ROI | Hours | Complexity |
-|-------------|-----|-------|------------|
-"""
-        roi_rows = [
-            f"| {item.get('description', '')[:40]}... | {item.get('roi_score', 0)} | {item.get('estimated_hours', 0):.1f} | {item.get('fix_complexity', 'unknown')} |"
-            for item in debt_data.get("roi_ranking", [])[:10]
-        ]
-        report += "\n".join(roi_rows) + "\n"
+    # ROI priorities section
+    roi_rows = [f"| {item.get('description', '')[:40]}... | {item.get('roi_score', 0)} | {item.get('estimated_hours', 0):.1f} | {item.get('fix_complexity', 'unknown')} |" for item in debt_data.get("roi_ranking", [])[:10]]
+    result += "\n## Top ROI Priorities (Quick Wins)\n\n| Description | ROI | Hours | Complexity |\n|-------------|-----|-------|------------|\n" + "\n".join(roi_rows) + "\n"
 
-        report += """
+    return result
+
+
+def _build_debt_recommendations() -> str:
+    """Build recommendations section (Issue #398: extracted)."""
+    return """
 ## Recommendations
 
 1. **Start with Quick Wins**: Address items with high ROI scores first
@@ -774,11 +734,26 @@ async def get_debt_report(format: str = Query(default="json", description="json 
 4. **Set Targets**: Aim to reduce total debt hours by 10% per sprint
 """
 
-        return JSONResponse(
-            {"status": "success", "format": "markdown", "report": report}
-        )
 
-    # Default JSON format
-    return JSONResponse(
-        {"status": "success", "format": "json", "data": debt_data}
-    )
+def _generate_markdown_report(debt_data: dict) -> str:
+    """Generate complete markdown debt report (Issue #398: extracted)."""
+    return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_debt_report",
+    error_code_prefix="DEBT",
+)
+@router.get("/report")
+async def get_debt_report(format: str = Query(default="json", description="json or markdown")):
+    """Generate a comprehensive debt report (Issue #398: refactored)."""
+    debt_data = _get_latest_debt_data()
+
+    if not debt_data:
+        return JSONResponse({"status": "no_data", "message": "No debt analysis found. Run POST /calculate first."})
+
+    if format == "markdown":
+        return JSONResponse({"status": "success", "format": "markdown", "report": _generate_markdown_report(debt_data)})
+
+    return JSONResponse({"status": "success", "format": "json", "data": debt_data})

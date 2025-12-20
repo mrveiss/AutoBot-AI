@@ -75,7 +75,7 @@ class AsyncOperationsMixin:
                     # Check if field name contains sensitive pattern
                     if any(pattern in key_lower for pattern in sensitive_patterns):
                         obj[key] = "***REDACTED***"
-                        logger.debug(f"Redacted sensitive field: {current_path}")
+                        logger.debug("Redacted sensitive field: %s", current_path)
                     elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
 
@@ -110,11 +110,11 @@ class AsyncOperationsMixin:
                 cached_data = await redis_client.get(cache_key)
                 if cached_data:
                     data = json.loads(cached_data.decode())
-                    logger.debug(f"Loaded {config_type} config from Redis cache")
+                    logger.debug("Loaded %s config from Redis cache", config_type)
                     return data
 
         except Exception as e:
-            logger.debug(f"Failed to load {config_type} from Redis cache: {e}")
+            logger.debug("Failed to load %s from Redis cache: %s", config_type, e)
 
         return None
 
@@ -141,11 +141,12 @@ class AsyncOperationsMixin:
                     ex=self.settings.cache_ttl,
                 )
                 logger.debug(
-                    f"Saved {config_type} config to Redis cache (sensitive data filtered)"
+                    "Saved %s config to Redis cache (sensitive data filtered)",
+                    config_type,
                 )
 
         except Exception as e:
-            logger.debug(f"Failed to save {config_type} to Redis cache: {e}")
+            logger.debug("Failed to save %s to Redis cache: %s", config_type, e)
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
@@ -170,10 +171,10 @@ class AsyncOperationsMixin:
                     return json.loads(content)
 
         except OSError as e:
-            logger.error(f"Failed to read config file {file_path}: {e}")
+            logger.error("Failed to read config file %s: %s", file_path, e)
             raise
         except Exception as e:
-            logger.error(f"Failed to parse config file {file_path}: {e}")
+            logger.error("Failed to parse config file %s: %s", file_path, e)
             raise
 
     @retry(
@@ -196,10 +197,10 @@ class AsyncOperationsMixin:
                     await file.write(json.dumps(data, indent=2, ensure_ascii=False))
 
         except OSError as e:
-            logger.error(f"Failed to write config file {file_path}: {e}")
+            logger.error("Failed to write config file %s: %s", file_path, e)
             raise
         except Exception as e:
-            logger.error(f"Failed to serialize config for {file_path}: {e}")
+            logger.error("Failed to serialize config for %s: %s", file_path, e)
             raise
 
     async def load_config_async(
@@ -241,7 +242,7 @@ class AsyncOperationsMixin:
             # Filter out prompts
             filtered_data = copy.deepcopy(data)
             if "prompts" in filtered_data:
-                logger.info(f"Removing prompts section from async {config_type} save")
+                logger.info("Removing prompts section from async %s save", config_type)
                 del filtered_data["prompts"]
 
             # Determine file path
@@ -262,7 +263,7 @@ class AsyncOperationsMixin:
             # Save to Redis cache
             await self._save_to_redis_cache(config_type, filtered_data)
 
-            logger.info(f"Saved {config_type} config asynchronously")
+            logger.info("Saved %s config asynchronously", config_type)
 
     async def get_config_value_async(
         self, config_type: str, key: str, default: Any = None

@@ -5,6 +5,9 @@
 """
 Microservice Architecture Evaluator for AutoBot
 Analyzes the current monolithic structure and provides recommendations for microservice decomposition
+
+NOTE: _generate_markdown_report (~147 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - report generator with formatted markdown output. Low priority.
 """
 
 import ast

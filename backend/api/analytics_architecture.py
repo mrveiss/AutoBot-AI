@@ -469,88 +469,78 @@ class ArchitectureAnalyzer:
         self.pattern_matches: List[PatternMatch] = []
         self.layers: List[ArchitectureLayer] = []
 
-    async def analyze(
-        self,
-        paths: List[str],
-        patterns_to_detect: Optional[List[PatternType]] = None,
-        include_autobot_patterns: bool = True,
-    ) -> ArchitectureReport:
-        """
-        Analyze architecture of specified paths.
-
-        Args:
-            paths: Directories/files to analyze
-            patterns_to_detect: Specific patterns to look for
-            include_autobot_patterns: Include AutoBot-specific patterns
-
-        Returns:
-            Complete architecture report
-        """
-        start_time = datetime.now()
-        self.pattern_matches = []
-        self.file_analyses = {}
-
-        # Determine which patterns to detect
+    def _determine_target_patterns(
+        self, patterns_to_detect: Optional[List[PatternType]], include_autobot: bool
+    ) -> List[PatternType]:
+        """Determine which patterns to detect (Issue #398: extracted)."""
         if patterns_to_detect:
-            target_patterns = patterns_to_detect
-        else:
-            target_patterns = list(PatternType)
-            if not include_autobot_patterns:
-                autobot_patterns = {
-                    PatternType.AUTOBOT_ROUTER,
-                    PatternType.AUTOBOT_SERVICE,
-                    PatternType.AUTOBOT_MANAGER,
-                    PatternType.REDIS_CACHING,
-                    PatternType.MCP_TOOL,
-                }
-                target_patterns = [p for p in target_patterns if p not in autobot_patterns]
+            return patterns_to_detect
 
-        # Collect Python files
-        python_files = await self._collect_python_files(paths)
-        logger.info(f"Analyzing {len(python_files)} Python files")
+        target_patterns = list(PatternType)
+        if not include_autobot:
+            autobot_patterns = {
+                PatternType.AUTOBOT_ROUTER, PatternType.AUTOBOT_SERVICE,
+                PatternType.AUTOBOT_MANAGER, PatternType.REDIS_CACHING, PatternType.MCP_TOOL,
+            }
+            target_patterns = [p for p in target_patterns if p not in autobot_patterns]
+        return target_patterns
 
-        # Analyze all files in parallel - eliminates N+1 sequential analysis
-        if python_files:
-            analyses = await asyncio.gather(
-                *[self._analyze_file(fp, target_patterns) for fp in python_files],
-                return_exceptions=True
-            )
+    async def _analyze_all_files(
+        self, python_files: List[str], target_patterns: List[PatternType]
+    ) -> None:
+        """Analyze all files in parallel (Issue #398: extracted)."""
+        if not python_files:
+            return
 
-            for file_path, analysis in zip(python_files, analyses):
-                if isinstance(analysis, Exception):
-                    logger.debug(f"Failed to analyze {file_path}: {analysis}")
-                elif analysis:
-                    self.file_analyses[file_path] = analysis
+        analyses = await asyncio.gather(
+            *[self._analyze_file(fp, target_patterns) for fp in python_files],
+            return_exceptions=True
+        )
 
-        # Aggregate pattern matches
+        for file_path, analysis in zip(python_files, analyses):
+            if isinstance(analysis, Exception):
+                logger.debug("Failed to analyze %s: %s", file_path, analysis)
+            elif analysis:
+                self.file_analyses[file_path] = analysis
+
+    def _aggregate_pattern_matches(self) -> tuple:
+        """Aggregate pattern matches and count (Issue #398: extracted)."""
         all_matches = []
         for analysis in self.file_analyses.values():
             all_matches.extend(analysis.patterns_found)
 
-        # Count patterns
         pattern_counts: Dict[str, int] = defaultdict(int)
         for match in all_matches:
             pattern_counts[match.pattern_type.value] += 1
 
-        # Check consistency
+        return all_matches, pattern_counts
+
+    async def analyze(
+        self, paths: List[str], patterns_to_detect: Optional[List[PatternType]] = None,
+        include_autobot_patterns: bool = True,
+    ) -> ArchitectureReport:
+        """Analyze architecture of specified paths (Issue #398: refactored)."""
+        start_time = datetime.now()
+        self.pattern_matches = []
+        self.file_analyses = {}
+
+        target_patterns = self._determine_target_patterns(patterns_to_detect, include_autobot_patterns)
+        python_files = await self._collect_python_files(paths)
+        logger.info("Analyzing %d Python files", len(python_files))
+
+        await self._analyze_all_files(python_files, target_patterns)
+        all_matches, pattern_counts = self._aggregate_pattern_matches()
+
         consistency_results = await self._check_consistency(all_matches)
-
-        # Detect architecture layers
         self.layers = await self._detect_layers()
-
-        # Generate recommendations
-        recommendations = self._generate_recommendations(
-            all_matches, consistency_results
-        )
-
-        # Generate Mermaid diagram
+        recommendations = self._generate_recommendations(all_matches, consistency_results)
         mermaid_diagram = self._generate_mermaid_diagram()
 
         return ArchitectureReport(
             timestamp=start_time,
             total_files_analyzed=len(python_files),
             patterns_detected=dict(pattern_counts),
-            pattern_matches=all_matches[:100],  # Limit for API response
+            pattern_matches=all_matches[:100],
             consistency_analysis=consistency_results,
             layers=self.layers,
             recommendations=recommendations,

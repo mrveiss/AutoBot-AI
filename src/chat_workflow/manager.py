@@ -89,7 +89,7 @@ class ChatWorkflowManager(
             self.redis_client = await get_redis_manager(async_client=True, database="main")
             logger.info("✅ Redis client initialized for conversation history")
         except Exception as redis_error:
-            logger.warning(f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence")
+            logger.warning("⚠️ Redis initialization failed: %s - continuing without persistence", redis_error)
             self.redis_client = None
 
     async def _init_knowledge_service(self) -> None:
@@ -108,7 +108,7 @@ class ChatWorkflowManager(
             else:
                 logger.warning("⚠️ Knowledge base not available - RAG disabled")
         except Exception as kb_error:
-            logger.warning(f"⚠️ Knowledge service initialization failed: {kb_error} - continuing without RAG")
+            logger.warning("⚠️ Knowledge service initialization failed: %s - continuing without RAG", kb_error)
             self.knowledge_service = None
 
     @error_boundary(component="chat_workflow_manager", function="initialize")
@@ -131,7 +131,7 @@ class ChatWorkflowManager(
                 return True
 
         except Exception as e:
-            logger.error(f"❌ Failed to initialize ChatWorkflowManager: {e}")
+            logger.error("❌ Failed to initialize ChatWorkflowManager: %s", e)
             return False
 
     # Issue #352: Maximum iterations for multi-step task continuation
@@ -231,8 +231,8 @@ class ChatWorkflowManager(
         # Issue #352: Debug logging for thought/planning detection
         if detected_type in _BLOCK_CONTENT_TYPES:
             logger.info(
-                f"[Issue #352] Detected message type: {detected_type} "
-                f"(accumulated len: {len(accumulated_content)})"
+                "[Issue #352] Detected message type: %s (accumulated len: %d)",
+                detected_type, len(accumulated_content)
             )
 
         return WorkflowMessage(
@@ -264,7 +264,7 @@ class ChatWorkflowManager(
         try:
             return json.loads(line_str)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse stream chunk: {e}")
+            logger.error("Failed to parse stream chunk: %s", e)
             return None
 
     def _handle_type_transition(
@@ -282,7 +282,8 @@ class ChatWorkflowManager(
         if new_type != current_message_type and current_message_type != "response":
             # Signal that current segment is complete
             logger.info(
-                f"[Issue #352] Message type transition: {current_message_type} → {new_type}"
+                "[Issue #352] Message type transition: %s → %s",
+                current_message_type, new_type
             )
             complete_msg = WorkflowMessage(
                 type="segment_complete",
@@ -332,13 +333,13 @@ class ChatWorkflowManager(
         has_planning = "[PLANNING]" in llm_response
         if has_thought or has_planning:
             logger.info(
-                f"[Issue #352] LLM response contains: "
-                f"THOUGHT={has_thought}, PLANNING={has_planning}"
+                "[Issue #352] LLM response contains: THOUGHT=%s, PLANNING=%s",
+                has_thought, has_planning
             )
         else:
             logger.debug(
-                f"[Issue #352] LLM response (no thought/planning tags): "
-                f"{llm_response[:200]}..."
+                "[Issue #352] LLM response (no thought/planning tags): %s...",
+                llm_response[:200]
             )
 
     async def _stream_llm_response(
@@ -483,10 +484,10 @@ class ChatWorkflowManager(
         async with await http_client.post(
             ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
         ) as response:
-            logger.info(f"[ChatWorkflowManager] Ollama response status: {response.status}")
+            logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
 
             if response.status != 200:
-                logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status}")
+                logger.error("[ChatWorkflowManager] Ollama request failed: %s", response.status)
                 yield WorkflowMessage(type="error", content=f"LLM service error: {response.status}", metadata={"error": True})
                 yield (None, None)
                 return
@@ -500,9 +501,9 @@ class ChatWorkflowManager(
                 if is_done:
                     break
 
-            logger.info(f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters (iteration {iteration})")
+            logger.info("[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)", len(llm_response), iteration)
             tool_calls = self._parse_tool_calls(llm_response)
-            logger.info(f"[Issue #352] Iteration {iteration}: Parsed {len(tool_calls)} tool calls")
+            logger.info("[Issue #352] Iteration %d: Parsed %d tool calls", iteration, len(tool_calls))
             yield (llm_response, tool_calls)
 
     async def _process_tool_results(
@@ -532,7 +533,7 @@ class ChatWorkflowManager(
                 new_results = tool_msg.metadata.get("execution_results", [])
                 new_execution_results.extend(new_results)
                 execution_history.extend(new_results)
-                logger.info(f"[ChatWorkflowManager] Collected {len(new_results)} execution results")
+                logger.info("[ChatWorkflowManager] Collected %d execution results", len(new_results))
                 continue
 
             if tool_msg.type in _TERMINAL_MESSAGE_TYPES:
@@ -596,7 +597,7 @@ class ChatWorkflowManager(
             return
 
         if not tool_calls:
-            logger.info(f"[Issue #352] No more tool calls - task complete after {iteration} iteration(s)")
+            logger.info("[Issue #352] No more tool calls - task complete after %d iteration(s)", iteration)
             yield (llm_response, tool_calls, False)
             return
 
@@ -621,7 +622,7 @@ class ChatWorkflowManager(
         self, error: Exception, workflow_messages: List[WorkflowMessage]
     ) -> WorkflowMessage:
         """Create and log LLM error message."""
-        logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {error}")
+        logger.error("[ChatWorkflowManager] Direct LLM call failed: %s", error)
         error_msg = WorkflowMessage(
             type="error",
             content=f"Failed to connect to LLM: {str(error)}",
@@ -643,8 +644,8 @@ class ChatWorkflowManager(
         Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
         """
         logger.info(
-            f"[ChatWorkflowManager] Continuation iteration "
-            f"{iteration}/{self.MAX_CONTINUATION_ITERATIONS}"
+            "[ChatWorkflowManager] Continuation iteration %d/%d",
+            iteration, self.MAX_CONTINUATION_ITERATIONS
         )
 
         llm_response = None
@@ -696,10 +697,10 @@ class ChatWorkflowManager(
             current_prompt = self._build_continuation_prompt(
                 ctx.message, execution_history, ctx.system_prompt
             )
-            logger.info(f"[Issue #352] Continuation prompt built: {len(current_prompt)} chars")
+            logger.info("[Issue #352] Continuation prompt built: %d chars", len(current_prompt))
 
         if iteration >= self.MAX_CONTINUATION_ITERATIONS:
-            logger.warning(f"[ChatWorkflowManager] Reached max continuation iterations ({self.MAX_CONTINUATION_ITERATIONS})")
+            logger.warning("[ChatWorkflowManager] Reached max continuation iterations (%d)", self.MAX_CONTINUATION_ITERATIONS)
 
         yield (all_llm_responses, execution_history, None)
 
@@ -755,8 +756,8 @@ class ChatWorkflowManager(
                     session_id=session_id,
                 )
                 logger.debug(
-                    f"Persisted WorkflowMessage to chat history: "
-                    f"type={message_type}, session={session_id}"
+                    "Persisted WorkflowMessage to chat history: type=%s, session=%s",
+                    message_type, session_id
                 )
 
             # Persist final assistant response
@@ -767,13 +768,14 @@ class ChatWorkflowManager(
                 session_id=session_id,
             )
             logger.info(
-                f"✅ Persisted complete conversation to chat history: "
-                f"session={session_id}, workflow_messages={len(workflow_messages)}"
+                "✅ Persisted complete conversation to chat history: session=%s, workflow_messages=%d",
+                session_id, len(workflow_messages)
             )
 
         except Exception as persist_error:
             logger.error(
-                f"Failed to persist WorkflowMessages to chat history: {persist_error}",
+                "Failed to persist WorkflowMessages to chat history: %s",
+                persist_error,
                 exc_info=True,
             )
 
@@ -791,9 +793,9 @@ class ChatWorkflowManager(
                 message_type="default",
                 session_id=session_id,
             )
-            logger.debug(f"✅ Persisted user message immediately: session={session_id}")
+            logger.debug("✅ Persisted user message immediately: session=%s", session_id)
         except Exception as persist_error:
-            logger.error(f"Failed to persist user message immediately: {persist_error}")
+            logger.error("Failed to persist user message immediately: %s", persist_error)
 
     async def _handle_exit_intent(
         self, session_id: str, workflow_messages: List[WorkflowMessage]
@@ -802,7 +804,7 @@ class ChatWorkflowManager(
         from src.chat_history import ChatHistoryManager
 
         logger.info(
-            f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
+            "[ChatWorkflowManager] User explicitly requested to exit conversation: %s", session_id
         )
         exit_msg = WorkflowMessage(
             type="response",
@@ -821,7 +823,7 @@ class ChatWorkflowManager(
                 session_id=session_id,
             )
         except Exception as persist_error:
-            logger.error(f"Failed to persist exit message: {persist_error}")
+            logger.error("Failed to persist exit message: %s", persist_error)
 
     async def _handle_slash_command(
         self, session_id: str, message: str, workflow_messages: List[WorkflowMessage]
@@ -830,7 +832,7 @@ class ChatWorkflowManager(
         from src.chat_history import ChatHistoryManager
 
         slash_handler = get_slash_command_handler()
-        logger.info(f"[ChatWorkflowManager] Processing slash command: {message[:50]}")
+        logger.info("[ChatWorkflowManager] Processing slash command: %s", message[:50])
         result = await slash_handler.execute(message)
 
         cmd_msg = WorkflowMessage(
@@ -855,7 +857,7 @@ class ChatWorkflowManager(
                 session_id=session_id,
             )
         except Exception as persist_error:
-            logger.error(f"Failed to persist slash command response: {persist_error}")
+            logger.error("Failed to persist slash command response: %s", persist_error)
 
     async def _execute_llm_workflow(
         self,
@@ -880,7 +882,7 @@ class ChatWorkflowManager(
         used_knowledge = llm_params.get("used_knowledge", False)
 
         logger.info(
-            f"[ChatWorkflowManager] Initial prompt length: {len(current_prompt)} characters"
+            "[ChatWorkflowManager] Initial prompt length: %d characters", len(current_prompt)
         )
 
         # Stage 3: Continuation loop for multi-step tasks (Issue #375: use context object)
@@ -965,7 +967,8 @@ class ChatWorkflowManager(
 
         except Exception as e:
             logger.error(
-                f"❌ Error processing message for session {session_id}: {e}",
+                "❌ Error processing message for session %s: %s",
+                session_id, e,
                 exc_info=True,
             )
             error_msg = WorkflowMessage(
@@ -989,8 +992,8 @@ class ChatWorkflowManager(
                 self._initialized = False
 
                 logger.info(
-                    f"✅ ChatWorkflowManager shutdown complete, cleaned up {session_count} sessions"
+                    "✅ ChatWorkflowManager shutdown complete, cleaned up %d sessions", session_count
                 )
 
         except Exception as e:
-            logger.error(f"❌ Error during ChatWorkflowManager shutdown: {e}")
+            logger.error("❌ Error during ChatWorkflowManager shutdown: %s", e)

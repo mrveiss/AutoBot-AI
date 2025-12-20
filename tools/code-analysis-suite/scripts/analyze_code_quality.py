@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Comprehensive Code Quality Analysis Dashboard
 Runs all analyzers and provides unified quality metrics and recommendations
+
+NOTE: run_comprehensive_quality_analysis (~145 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - analysis dashboard with sequential report generation. Low priority.
 """
 
 import asyncio

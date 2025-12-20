@@ -36,6 +36,123 @@ def set_analytics_dependencies(controller, state, hw_monitor):
 
 
 # ============================================================================
+# ALERT GENERATION HELPERS (Issue #398: extracted)
+# ============================================================================
+
+
+def _create_alert(
+    alert_type: str, severity: str, title: str, message: str, value: float = None, threshold: float = None, details=None
+) -> dict:
+    """Create standardized alert structure (Issue #398: extracted)."""
+    alert = {
+        "id": f"{alert_type}_{severity}_{int(time.time())}",
+        "type": alert_type,
+        "severity": severity,
+        "title": title,
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+    }
+    if value is not None:
+        alert["value"] = value
+    if threshold is not None:
+        alert["threshold"] = threshold
+    if details is not None:
+        alert["details"] = details
+    return alert
+
+
+def _check_cpu_alerts(cpu_percent: float, alerts: list) -> None:
+    """Check CPU thresholds and add alerts (Issue #398: extracted)."""
+    if cpu_percent > 90:
+        alerts.append(_create_alert("cpu", "critical", "High CPU Usage", f"CPU usage is at {cpu_percent:.1f}%", cpu_percent, 90))
+    elif cpu_percent > 75:
+        alerts.append(_create_alert("cpu", "warning", "Elevated CPU Usage", f"CPU usage is at {cpu_percent:.1f}%", cpu_percent, 75))
+
+
+def _check_memory_alerts(memory_percent: float, alerts: list) -> None:
+    """Check memory thresholds and add alerts (Issue #398: extracted)."""
+    if memory_percent > 90:
+        alerts.append(_create_alert("memory", "critical", "High Memory Usage", f"Memory usage is at {memory_percent:.1f}%", memory_percent, 90))
+
+
+def _check_gpu_alerts(gpu_util: float, alerts: list) -> None:
+    """Check GPU thresholds and add alerts (Issue #398: extracted)."""
+    if gpu_util > 95:
+        alerts.append(_create_alert("gpu", "warning", "High GPU Utilization", f"GPU utilization is at {gpu_util:.1f}%", gpu_util, 95))
+
+
+def _check_api_alerts(api_performance: dict, alerts: list) -> None:
+    """Check API performance and add alerts (Issue #398: extracted)."""
+    slow_endpoints = [ep for ep, data in api_performance.items() if data.get("avg_response_time", 0) > 5.0]
+    if slow_endpoints:
+        alerts.append(_create_alert("api_performance", "warning", "Slow API Endpoints", f"{len(slow_endpoints)} endpoints have high response times", details=slow_endpoints[:3]))
+
+
+# ============================================================================
+# RECOMMENDATION GENERATION HELPERS (Issue #398: extracted)
+# ============================================================================
+
+
+def _create_recommendation(rec_type: str, priority: str, title: str, description: str, impact: str, improvement: str, actions: list) -> dict:
+    """Create standardized recommendation structure (Issue #398: extracted)."""
+    return {
+        "type": rec_type,
+        "priority": priority,
+        "title": title,
+        "description": description,
+        "impact": impact,
+        "estimated_improvement": improvement,
+        "actions": actions,
+    }
+
+
+def _check_cpu_recommendations(cpu_percent: float, recommendations: list) -> None:
+    """Check CPU thresholds and add recommendations (Issue #398: extracted)."""
+    if cpu_percent > 80:
+        recommendations.append(_create_recommendation(
+            "cpu_optimization", "high", "Optimize CPU Usage",
+            "CPU usage is consistently high. Consider optimizing background processes.",
+            "High", "15-25% performance boost",
+            ["Review running processes and terminate unnecessary ones", "Optimize async operations to reduce CPU blocking", "Consider scaling horizontally with additional VMs"],
+        ))
+
+
+def _check_memory_recommendations(memory_percent: float, recommendations: list) -> None:
+    """Check memory thresholds and add recommendations (Issue #398: extracted)."""
+    if memory_percent > 80:
+        recommendations.append(_create_recommendation(
+            "memory_optimization", "medium", "Optimize Memory Usage",
+            "Memory usage is high. Consider memory optimization strategies.",
+            "Medium", "10-20% memory reduction",
+            ["Clear Redis caches for unused data", "Optimize knowledge base vector storage", "Implement memory pooling for frequent operations"],
+        ))
+
+
+def _check_api_recommendations(avg_response_time: float, recommendations: list) -> None:
+    """Check API response time and add recommendations (Issue #398: extracted)."""
+    if avg_response_time > 2.0:
+        recommendations.append(_create_recommendation(
+            "api_optimization", "high", "Optimize API Response Times",
+            f"Average API response time is {avg_response_time:.2f}s",
+            "High", "50-70% faster responses",
+            ["Implement response caching for frequently requested data", "Optimize database queries and indexing", "Add connection pooling for external services"],
+        ))
+
+
+def _check_code_quality_recommendations(cached_analysis: dict, recommendations: list) -> None:
+    """Check code quality and add recommendations (Issue #398: extracted)."""
+    if cached_analysis and "code_analysis" in cached_analysis:
+        complexity = cached_analysis["code_analysis"].get("complexity", 0)
+        if complexity > 7:
+            recommendations.append(_create_recommendation(
+                "code_quality", "medium", "Reduce Code Complexity",
+                f"Code complexity score is {complexity}/10",
+                "Medium", "Better maintainability and performance",
+                ["Refactor complex functions into smaller components", "Extract common patterns into utility functions", "Implement proper error handling patterns"],
+            ))
+
+
+# ============================================================================
 # PHASE 9 MONITORING DASHBOARD ENDPOINTS
 # ============================================================================
 
@@ -148,97 +265,15 @@ async def get_phase9_dashboard_data():
 )
 @router.get("/monitoring/phase9/alerts")
 async def get_phase9_alerts():
-    """Get Phase 9 monitoring alerts"""
+    """Get Phase 9 monitoring alerts (Issue #398: refactored)."""
     alerts = []
-
-    # Get current metrics for alert generation
     performance_data = await analytics_controller.collect_performance_metrics()
 
-    # CPU alerts
-    cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
-    if cpu_percent > 90:
-        alerts.append(
-            {
-                "id": f"cpu_high_{int(time.time())}",
-                "type": "cpu",
-                "severity": "critical",
-                "title": "High CPU Usage",
-                "message": f"CPU usage is at {cpu_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": cpu_percent,
-                "threshold": 90,
-            }
-        )
-    elif cpu_percent > 75:
-        alerts.append(
-            {
-                "id": f"cpu_warn_{int(time.time())}",
-                "type": "cpu",
-                "severity": "warning",
-                "title": "Elevated CPU Usage",
-                "message": f"CPU usage is at {cpu_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": cpu_percent,
-                "threshold": 75,
-            }
-        )
-
-    # Memory alerts
-    memory_percent = performance_data.get("system_performance", {}).get(
-        "memory_percent", 0
-    )
-    if memory_percent > 90:
-        alerts.append(
-            {
-                "id": f"memory_high_{int(time.time())}",
-                "type": "memory",
-                "severity": "critical",
-                "title": "High Memory Usage",
-                "message": f"Memory usage is at {memory_percent:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": memory_percent,
-                "threshold": 90,
-            }
-        )
-
-    # GPU alerts
-    gpu_util = performance_data.get("hardware_performance", {}).get(
-        "gpu_utilization", 0
-    )
-    if gpu_util > 95:
-        alerts.append(
-            {
-                "id": f"gpu_high_{int(time.time())}",
-                "type": "gpu",
-                "severity": "warning",
-                "title": "High GPU Utilization",
-                "message": f"GPU utilization is at {gpu_util:.1f}%",
-                "timestamp": datetime.now().isoformat(),
-                "value": gpu_util,
-                "threshold": 95,
-            }
-        )
-
-    # API performance alerts
-    api_performance = performance_data.get("api_performance", {})
-    slow_endpoints = [
-        endpoint
-        for endpoint, data in api_performance.items()
-        if data.get("avg_response_time", 0) > 5.0
-    ]
-
-    if slow_endpoints:
-        alerts.append(
-            {
-                "id": f"api_slow_{int(time.time())}",
-                "type": "api_performance",
-                "severity": "warning",
-                "title": "Slow API Endpoints",
-                "message": f"{len(slow_endpoints)} endpoints have high response times",
-                "timestamp": datetime.now().isoformat(),
-                "details": slow_endpoints[:3],
-            }
-        )
+    system_perf = performance_data.get("system_performance", {})
+    _check_cpu_alerts(system_perf.get("cpu_percent", 0), alerts)
+    _check_memory_alerts(system_perf.get("memory_percent", 0), alerts)
+    _check_gpu_alerts(performance_data.get("hardware_performance", {}).get("gpu_utilization", 0), alerts)
+    _check_api_alerts(performance_data.get("api_performance", {}), alerts)
 
     return alerts
 
@@ -250,97 +285,17 @@ async def get_phase9_alerts():
 )
 @router.get("/monitoring/phase9/optimization/recommendations")
 async def get_phase9_optimization_recommendations():
-    """Get Phase 9 optimization recommendations"""
+    """Get Phase 9 optimization recommendations (Issue #398: refactored)."""
     recommendations = []
 
-    # Get current performance data
     performance_data = await analytics_controller.collect_performance_metrics()
     communication_patterns = await analytics_controller.analyze_communication_patterns()
 
-    # CPU optimization recommendations
-    cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
-    if cpu_percent > 80:
-        recommendations.append(
-            {
-                "type": "cpu_optimization",
-                "priority": "high",
-                "title": "Optimize CPU Usage",
-                "description": (
-                    "CPU usage is consistently high. Consider optimizing background processes."
-                ),
-                "impact": "High",
-                "estimated_improvement": "15-25% performance boost",
-                "actions": [
-                    "Review running processes and terminate unnecessary ones",
-                    "Optimize async operations to reduce CPU blocking",
-                    "Consider scaling horizontally with additional VMs",
-                ],
-            }
-        )
-
-    # Memory optimization recommendations
-    memory_percent = performance_data.get("system_performance", {}).get(
-        "memory_percent", 0
-    )
-    if memory_percent > 80:
-        recommendations.append(
-            {
-                "type": "memory_optimization",
-                "priority": "medium",
-                "title": "Optimize Memory Usage",
-                "description": (
-                    "Memory usage is high. Consider memory optimization strategies."
-                ),
-                "impact": "Medium",
-                "estimated_improvement": "10-20% memory reduction",
-                "actions": [
-                    "Clear Redis caches for unused data",
-                    "Optimize knowledge base vector storage",
-                    "Implement memory pooling for frequent operations",
-                ],
-            }
-        )
-
-    # API optimization recommendations
-    if communication_patterns.get("avg_response_time", 0) > 2.0:
-        recommendations.append(
-            {
-                "type": "api_optimization",
-                "priority": "high",
-                "title": "Optimize API Response Times",
-                "description": (
-                    f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s"
-                ),
-                "impact": "High",
-                "estimated_improvement": "50-70% faster responses",
-                "actions": [
-                    "Implement response caching for frequently requested data",
-                    "Optimize database queries and indexing",
-                    "Add connection pooling for external services",
-                ],
-            }
-        )
-
-    # Code analysis recommendations
-    cached_analysis = analytics_state.get("code_analysis_cache")
-    if cached_analysis and "code_analysis" in cached_analysis:
-        complexity = cached_analysis["code_analysis"].get("complexity", 0)
-        if complexity > 7:
-            recommendations.append(
-                {
-                    "type": "code_quality",
-                    "priority": "medium",
-                    "title": "Reduce Code Complexity",
-                    "description": f"Code complexity score is {complexity}/10",
-                    "impact": "Medium",
-                    "estimated_improvement": "Better maintainability and performance",
-                    "actions": [
-                        "Refactor complex functions into smaller components",
-                        "Extract common patterns into utility functions",
-                        "Implement proper error handling patterns",
-                    ],
-                }
-            )
+    system_perf = performance_data.get("system_performance", {})
+    _check_cpu_recommendations(system_perf.get("cpu_percent", 0), recommendations)
+    _check_memory_recommendations(system_perf.get("memory_percent", 0), recommendations)
+    _check_api_recommendations(communication_patterns.get("avg_response_time", 0), recommendations)
+    _check_code_quality_recommendations(analytics_state.get("code_analysis_cache"), recommendations)
 
     return recommendations
 

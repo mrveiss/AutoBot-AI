@@ -69,7 +69,7 @@ class ToolHandlerMixin:
             self.terminal_tool = TerminalTool(agent_terminal_service=agent_service)
             logger.info("Terminal tool initialized successfully with singleton service")
         except Exception as e:
-            logger.error(f"Failed to initialize terminal tool: {e}")
+            logger.error("Failed to initialize terminal tool: %s", e)
             self.terminal_tool = None
 
     def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
@@ -85,7 +85,7 @@ class ToolHandlerMixin:
             List of tool call dictionaries
         """
         logger.debug(
-            f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}"
+            "[_parse_tool_calls] Searching for TOOL_CALL markers in text of length %d", len(text)
         )
 
         # Decode HTML entities (e.g., &quot; -> ")
@@ -93,8 +93,8 @@ class ToolHandlerMixin:
 
         has_tool_call = ('<TOOL_CALL' in text) or ('<tool_call' in text)
         logger.debug(
-            f"[_parse_tool_calls] Checking if '<TOOL_CALL' or "
-            f"'<tool_call' exists in text: {has_tool_call}"
+            "[_parse_tool_calls] Checking if '<TOOL_CALL' or '<tool_call' exists in text: %s",
+            has_tool_call
         )
 
         tool_calls = []
@@ -102,7 +102,7 @@ class ToolHandlerMixin:
         # Format: <TOOL_CALL name="..." params='...' OR params="...">...</TOOL_CALL>
         pattern = r'<tool_call\s+name="([^"]+)"\s+params=(["\'])({[^}]+})\2>([^<]*)</tool_call>'
 
-        logger.debug(f"[_parse_tool_calls] Using regex pattern: {pattern}")
+        logger.debug("[_parse_tool_calls] Using regex pattern: %s", pattern)
 
         matches = re.finditer(pattern, text, re.IGNORECASE)
         match_count = 0
@@ -120,17 +120,17 @@ class ToolHandlerMixin:
                     {"name": tool_name, "params": params, "description": description}
                 )
                 logger.debug(
-                    f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: "
-                    f"name={tool_name}, params={params}"
+                    "[_parse_tool_calls] Found TOOL_CALL #%d: name=%s, params=%s",
+                    match_count, tool_name, params
                 )
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse tool call params: {e}")
-                logger.error(f"Params string was: {params_str}")
+                logger.error("Failed to parse tool call params: %s", e)
+                logger.error("Params string was: %s", params_str)
                 continue
 
         logger.info(
-            f"[_parse_tool_calls] Total matches found: {match_count}, "
-            f"successfully parsed: {len(tool_calls)}"
+            "[_parse_tool_calls] Total matches found: %d, successfully parsed: %d",
+            match_count, len(tool_calls)
         )
         return tool_calls
 
@@ -188,12 +188,13 @@ class ToolHandlerMixin:
                 session_id=session_id,
             )
             logger.info(
-                f"✅ Persisted approval request immediately: session={session_id}, "
-                f"terminal={terminal_session_id}"
+                "✅ Persisted approval request immediately: session=%s, terminal=%s",
+                session_id, terminal_session_id
             )
         except Exception as persist_error:
             logger.error(
-                f"Failed to persist approval request immediately: {persist_error}",
+                "Failed to persist approval request immediately: %s",
+                persist_error,
                 exc_info=True,
             )
 
@@ -301,9 +302,10 @@ class ToolHandlerMixin:
         )
 
         # Poll for approval (Issue #332 - refactored loop)
-        logger.info(f"🔍 [APPROVAL POLLING] Waiting for approval of command: {command}")
+        logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)
         logger.info(
-            f"🔍 [APPROVAL POLLING] Chat session: {session_id}, Terminal session: {terminal_session_id}"
+            "🔍 [APPROVAL POLLING] Chat session: %s, Terminal session: %s",
+            session_id, terminal_session_id
         )
 
         max_wait_time = 3600
@@ -352,7 +354,7 @@ class ToolHandlerMixin:
                     break
 
             except Exception as check_error:
-                logger.error(f"Error checking approval status: {check_error}")
+                logger.error("Error checking approval status: %s", check_error)
 
         yield approval_result
 
@@ -515,7 +517,7 @@ class ToolHandlerMixin:
         host = tool_call["params"].get("host", "main")
         description = tool_call.get("description", "")
 
-        logger.info(f"[ChatWorkflowManager] Executing command: {command} on {host}")
+        logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
         result = await self._execute_terminal_command(
             session_id=session_id, command=command, host=host, description=description
@@ -523,7 +525,7 @@ class ToolHandlerMixin:
 
         if result.get("status") == "pending_approval":
             if not terminal_session_id:
-                logger.error(f"No terminal session found for conversation {session_id}")
+                logger.error("No terminal session found for conversation %s", session_id)
                 yield WorkflowMessage(
                     type="error",
                     content="Terminal session error - cannot request approval",

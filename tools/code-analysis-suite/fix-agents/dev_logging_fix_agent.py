@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Development Logging Fix Agent
 Replaces console.log statements with environment-aware logging
 that outputs to browser in development mode but is silent in production.
+
+NOTE: create_dev_logger_utility (~144 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - code generator producing utility module. Low priority.
 """
 
 import os

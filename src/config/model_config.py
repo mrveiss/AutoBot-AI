@@ -37,7 +37,7 @@ class ModelConfigMixin:
         # Only fall back to environment if config.yaml doesn't have the value
         env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
         if env_model:
-            logger.info(f"UNIFIED CONFIG: Selected model from environment: {env_model}")
+            logger.info("UNIFIED CONFIG: Selected model from environment: %s", env_model)
             return env_model
 
         # Final fallback - use centralized constant
@@ -49,7 +49,7 @@ class ModelConfigMixin:
 
     def update_llm_model(self, model_name: str) -> None:
         """Update the selected LLM model in config.yaml (GUI integration)"""
-        logger.info(f"UNIFIED CONFIG: Updating selected model to '{model_name}'")
+        logger.info("UNIFIED CONFIG: Updating selected model to '%s'", model_name)
 
         # Update the configuration in memory
         self.set_nested("backend.llm.local.providers.ollama.selected_model", model_name)
@@ -58,7 +58,7 @@ class ModelConfigMixin:
         self.save_settings()
         self.save_config_to_yaml()
 
-        logger.info(f"Model updated to '{model_name}' in unified configuration")
+        logger.info("Model updated to '%s' in unified configuration", model_name)
 
     def get_llm_config(self) -> Dict[str, Any]:
         """Get LLM configuration with correct model reading"""

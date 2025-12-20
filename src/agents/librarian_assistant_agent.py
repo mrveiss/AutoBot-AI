@@ -120,73 +120,52 @@ class LibrarianAssistantAgent:
         except Exception as e:
             logger.error(f"Error cleaning up Playwright: {e}")
 
-    async def search_web(
-        self, query: str, search_engine: str = "duckduckgo"
-    ) -> List[Dict[str, Any]]:
-        """Search the web for information using Playwright.
+    async def _setup_search_page(self, page, search_engine: str, query: str) -> None:
+        """Setup page for search (Issue #398: extracted)."""
+        await page.set_extra_http_headers({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            )
+        })
+        search_url_template = self.search_engines.get(search_engine, self.search_engines["duckduckgo"])
+        search_url = search_url_template.format(query=query.replace(" ", "+"))
+        logger.info("Searching with %s: %s", search_engine, query)
+        await page.goto(search_url, wait_until="domcontentloaded", timeout=10000)
+        await page.wait_for_timeout(2000)
 
-        Args:
-            query: Search query
-            search_engine: Which search engine to use
+    async def _extract_results_by_engine(self, page, search_engine: str) -> List[Dict[str, Any]]:
+        """Extract results based on search engine (Issue #398: extracted)."""
+        if search_engine == "duckduckgo":
+            return await self._extract_duckduckgo_results(page)
+        elif search_engine == "bing":
+            return await self._extract_bing_results(page)
+        elif search_engine == "google":
+            return await self._extract_google_results(page)
+        return []
 
-        Returns:
-            List of search results with URLs and content
-        """
-        if not self.enabled:
-            return []
-
-        if not await self._initialize_playwright():
+    async def search_web(self, query: str, search_engine: str = "duckduckgo") -> List[Dict[str, Any]]:
+        """Search the web for information (Issue #398: refactored)."""
+        if not self.enabled or not await self._initialize_playwright():
+            if not self.enabled:
+                return []
             logger.error("Cannot perform web search - Playwright not available")
             return []
 
-        results = []
         page = None
-
         try:
             page = await self.browser.new_page()
-
-            # Set user agent to avoid bot detection
-            await page.set_extra_http_headers(
-                {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                    )
-                }
-            )
-
-            # Get search URL
-            search_url_template = self.search_engines.get(
-                search_engine, self.search_engines["duckduckgo"]
-            )
-            search_url = search_url_template.format(query=query.replace(" ", "+"))
-
-            logger.info(f"Searching with {search_engine}: {query}")
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=10000)
-
-            # Wait for search results to load
-            await page.wait_for_timeout(2000)
-
-            # Extract search result links based on search engine
-            if search_engine == "duckduckgo":
-                results = await self._extract_duckduckgo_results(page)
-            elif search_engine == "bing":
-                results = await self._extract_bing_results(page)
-            elif search_engine == "google":
-                results = await self._extract_google_results(page)
-
-            # Limit results
+            await self._setup_search_page(page, search_engine, query)
+            results = await self._extract_results_by_engine(page, search_engine)
             results = results[: self.max_search_results]
-
-            logger.info(f"Found {len(results)} search results")
-
+            logger.info("Found %d search results", len(results))
+            return results
         except Exception as e:
-            logger.error(f"Error during web search: {e}")
+            logger.error("Error during web search: %s", e)
+            return []
         finally:
             if page:
                 await page.close()
-
-        return results
 
     async def _extract_single_ddg_result(self, element) -> Optional[Dict[str, Any]]:
         """Extract single DuckDuckGo result (Issue #334 - extracted helper)."""
@@ -305,107 +284,67 @@ class LibrarianAssistantAgent:
 
         return results
 
+    async def _get_page_metadata(self, page, url: str) -> Dict[str, Any]:
+        """Extract page metadata (Issue #398: extracted)."""
+        title = await page.title()
+        description = ""
+        try:
+            desc_element = await page.query_selector('meta[name="description"]')
+            if desc_element:
+                description = await desc_element.get_attribute("content") or ""
+        except Exception:
+            pass
+        domain = urlparse(url).netloc.lower()
+        is_trusted = any(trusted in domain for trusted in self.trusted_domains)
+        return {"title": title, "description": description, "domain": domain, "is_trusted": is_trusted}
+
+    def _build_content_result(self, url: str, metadata: Dict, content: str) -> Dict[str, Any]:
+        """Build content extraction result (Issue #398: extracted)."""
+        return {
+            "url": url,
+            "title": metadata["title"],
+            "description": metadata["description"],
+            "content": content[: self.max_content_length] if content else "",
+            "domain": metadata["domain"],
+            "is_trusted": metadata["is_trusted"],
+            "timestamp": datetime.now().isoformat(),
+            "content_length": len(content) if content else 0,
+        }
+
     async def extract_content(self, url: str) -> Optional[Dict[str, Any]]:
-        """Extract content from a web page.
-
-        Args:
-            url: URL to extract content from
-
-        Returns:
-            Dictionary containing extracted content and metadata
-        """
+        """Extract content from a web page (Issue #398: refactored)."""
         if not await self._initialize_playwright():
             return None
 
         page = None
         try:
             page = await self.browser.new_page()
-
-            # Set headers and navigate
-            await page.set_extra_http_headers(
-                {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    )
-                }
-            )
-
-            logger.info(f"Extracting content from: {url}")
-            response = await page.goto(
-                url, wait_until="domcontentloaded", timeout=15000
-            )
-
+            await page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            logger.info("Extracting content from: %s", url)
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
             if not response or response.status >= 400:
-                logger.error(
-                    f"Failed to load page: {url} (status: "
-                    f"{response.status if response else 'timeout'})"
-                )
+                logger.error("Failed to load page: %s (status: %s)", url, response.status if response else "timeout")
                 return None
-
-            # Wait for content to load
             await page.wait_for_timeout(2000)
-
-            # Extract page metadata
-            title = await page.title()
-
-            # Try to get meta description
-            description = ""
-            try:
-                desc_element = await page.query_selector('meta[name="description"]')
-                if desc_element:
-                    description = await desc_element.get_attribute("content") or ""
-            except Exception:
-                pass  # Meta description selector failed
-
-            # Extract main content
+            metadata = await self._get_page_metadata(page, url)
             content = await self._extract_main_content(page)
-
-            # Parse domain for trust assessment
-            domain = urlparse(url).netloc.lower()
-            is_trusted = any(trusted in domain for trusted in self.trusted_domains)
-
-            # Get timestamp
-            timestamp = datetime.now().isoformat()
-
-            result = {
-                "url": url,
-                "title": title,
-                "description": description,
-                "content": content[: self.max_content_length] if content else "",
-                "domain": domain,
-                "is_trusted": is_trusted,
-                "timestamp": timestamp,
-                "content_length": len(content) if content else 0,
-            }
-
-            logger.info(
-                f"Extracted {len(content) if content else 0} characters from {domain}"
-            )
-            return result
-
+            logger.info("Extracted %d characters from %s", len(content) if content else 0, metadata["domain"])
+            return self._build_content_result(url, metadata, content)
         except Exception as e:
-            logger.error(f"Error extracting content from {url}: {e}")
+            logger.error("Error extracting content from %s: %s", url, e)
             return None
         finally:
             if page:
                 await page.close()
 
-    async def _extract_main_content(self, page: Page) -> str:
-        """Extract main content from a web page."""
+    async def _try_content_selectors(self, page: Page) -> Optional[str]:
+        """Try content selectors to find main content (Issue #398: extracted)."""
         content_selectors = [
-            "main",
-            "article",
-            ".content",
-            ".main-content",
-            ".post-content",
-            ".entry-content",
-            "#content",
-            ".markdown-body",  # GitHub
-            ".mw-parser-output",  # Wikipedia
-            ".answer",  # Stack Overflow
+            "main", "article", ".content", ".main-content", ".post-content",
+            ".entry-content", "#content", ".markdown-body", ".mw-parser-output", ".answer",
         ]
-
-        # Try each selector to find the main content
         for selector in content_selectors:
             try:
                 element = await page.query_selector(selector)
@@ -415,171 +354,107 @@ class LibrarianAssistantAgent:
                         return content.strip()
             except Exception:
                 continue
+        return None
 
-        # Fallback to body content, cleaned up
-        try:
-            # Remove script, style, nav, header, footer elements
-            await page.evaluate(
-                """
-                () => {
-                    const elementsToRemove = document.querySelectorAll(
-                        'script, style, nav, header, footer, .nav, .navbar, ' +
-                        '.header, .footer, .sidebar'
-                    );
-                    elementsToRemove.forEach(el => el.remove());
-                }
-            """
-            )
-
-            body = await page.query_selector("body")
-            if body:
-                content = await body.inner_text()
-                # Clean up whitespace
-                content = re.sub(r"\n\s*\n", "\n\n", content)
-                content = re.sub(r" +", " ", content)
-                return content.strip()
-        except Exception as e:
-            logger.error(f"Error extracting body content: {e}")
-
+    async def _extract_body_fallback(self, page: Page) -> str:
+        """Extract and clean body content as fallback (Issue #398: extracted)."""
+        await page.evaluate("""() => {
+            const elementsToRemove = document.querySelectorAll(
+                'script, style, nav, header, footer, .nav, .navbar, .header, .footer, .sidebar'
+            );
+            elementsToRemove.forEach(el => el.remove());
+        }""")
+        body = await page.query_selector("body")
+        if body:
+            content = await body.inner_text()
+            content = re.sub(r"\n\s*\n", "\n\n", content)
+            content = re.sub(r" +", " ", content)
+            return content.strip()
         return ""
 
-    async def assess_content_quality(
-        self, content_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Assess the quality of extracted content using LLM.
-
-        Args:
-            content_data: Content data with text and metadata
-
-        Returns:
-            Quality assessment with score and reasoning
-        """
+    async def _extract_main_content(self, page: Page) -> str:
+        """Extract main content from a web page (Issue #398: refactored)."""
+        content = await self._try_content_selectors(page)
+        if content:
+            return content
         try:
-            prompt = """
-Please assess the quality and reliability of this web content for "
-"inclusion in a knowledge base:
+            return await self._extract_body_fallback(page)
+        except Exception as e:
+            logger.error("Error extracting body content: %s", e)
+            return ""
 
+    def _build_quality_prompt(self, content_data: Dict[str, Any]) -> str:
+        """Build quality assessment prompt (Issue #398: extracted)."""
+        return f"""Please assess the quality of this web content for knowledge base inclusion:
 Title: {content_data.get('title', 'N/A')}
 Domain: {content_data.get('domain', 'N/A')}
-Is Trusted Domain: {content_data.get('is_trusted', False)}
-Content Length: {content_data.get('content_length', 0)} characters
+Is Trusted: {content_data.get('is_trusted', False)}
+Content Length: {content_data.get('content_length', 0)} chars
+Content Sample: {content_data.get('content', '')[:500]}...
 
-Content Sample (first 500 chars):
-{content_data.get('content', '')[:500]}...
+Evaluate 0.0-1.0 based on: accuracy, completeness, credibility, clarity, usefulness.
+Respond in JSON: {{"score": 0.0-1.0, "reasoning": "...", "recommendation": "store|review|reject", "key_topics": [], "reliability_factors": {{"trusted_domain": bool, "content_quality": "high/medium/low", "information_density": "high/medium/low"}}}}"""
 
-Please evaluate on a scale of 0.0 to 1.0 based on:
-1. Factual accuracy and reliability
-2. Information completeness
-3. Source credibility
-4. Content structure and clarity
-5. Relevance and usefulness
+    def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str = None) -> Dict[str, Any]:
+        """Build fallback assessment (Issue #398: extracted)."""
+        if error_msg:
+            return {"score": 0.3, "reasoning": f"Error during assessment: {error_msg}",
+                    "recommendation": "review", "key_topics": [],
+                    "reliability_factors": {"trusted_domain": False, "content_quality": "unknown", "information_density": "unknown"}}
+        return {"score": 0.6 if content_data.get("is_trusted") else 0.4,
+                "reasoning": "Automatic assessment - LLM response could not be parsed",
+                "recommendation": "review", "key_topics": [],
+                "reliability_factors": {"trusted_domain": content_data.get("is_trusted", False),
+                                        "content_quality": "medium", "information_density": "medium"}}
 
-Respond in JSON format:
-{{
-    "score": 0.0-1.0,
-    "reasoning": "Brief explanation of the assessment",
-    "recommendation": "store|review|reject",
-    "key_topics": ["list", "o", "main", "topics"],
-    "reliability_factors": {{
-        "trusted_domain": true/false,
-        "content_quality": "high/medium/low",
-        "information_density": "high/medium/low"
-    }}
-}}
-"""
-
+    async def assess_content_quality(self, content_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess content quality using LLM (Issue #398: refactored)."""
+        try:
+            prompt = self._build_quality_prompt(content_data)
             response = await self.llm.chat([{"role": "user", "content": prompt}])
-
-            # Try to parse JSON response
             try:
                 assessment = json.loads(response)
-                # Ensure score is within valid range
-                score = max(0.0, min(1.0, float(assessment.get("score", 0.5))))
-                assessment["score"] = score
+                assessment["score"] = max(0.0, min(1.0, float(assessment.get("score", 0.5))))
                 return assessment
             except json.JSONDecodeError:
-                # Fallback assessment
-                logger.warning(
-                    "Could not parse quality assessment JSON, using fallback"
-                )
-                return {
-                    "score": 0.6 if content_data.get("is_trusted") else 0.4,
-                    "reasoning": (
-                        "Automatic assessment - LLM response could not be parsed"
-                    ),
-                    "recommendation": "review",
-                    "key_topics": [],
-                    "reliability_factors": {
-                        "trusted_domain": content_data.get("is_trusted", False),
-                        "content_quality": "medium",
-                        "information_density": "medium",
-                    },
-                }
-
+                logger.warning("Could not parse quality assessment JSON, using fallback")
+                return self._build_fallback_assessment(content_data)
         except Exception as e:
-            logger.error(f"Error assessing content quality: {e}")
-            return {
-                "score": 0.3,
-                "reasoning": f"Error during assessment: {str(e)}",
-                "recommendation": "review",
-                "key_topics": [],
-                "reliability_factors": {
-                    "trusted_domain": False,
-                    "content_quality": "unknown",
-                    "information_density": "unknown",
-                },
-            }
+            logger.error("Error assessing content quality: %s", e)
+            return self._build_fallback_assessment(content_data, str(e))
 
-    async def store_in_knowledge_base(
-        self, content_data: Dict[str, Any], assessment: Dict[str, Any]
-    ) -> bool:
-        """Store quality content in the knowledge base.
+    def _build_kb_metadata(self, content_data: Dict[str, Any], assessment: Dict[str, Any]) -> Dict[str, Any]:
+        """Build metadata for KB storage (Issue #398: extracted)."""
+        return {
+            "source": content_data.get("url", "web_research"),
+            "domain": content_data.get("domain", "unknown"),
+            "title": content_data.get("title", "Untitled"),
+            "quality_score": assessment.get("score", 0.0),
+            "recommendation": assessment.get("recommendation", "review"),
+            "key_topics": assessment.get("key_topics", []),
+            "is_trusted": content_data.get("is_trusted", False),
+            "stored_by": "librarian_assistant",
+            "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
+        }
 
-        Args:
-            content_data: Content data to store
-            assessment: Quality assessment results
-
-        Returns:
-            True if stored successfully
-        """
+    async def store_in_knowledge_base(self, content_data: Dict[str, Any], assessment: Dict[str, Any]) -> bool:
+        """Store quality content in knowledge base (Issue #398: refactored)."""
         try:
-            # Prepare document for storage
-            document_content = """
-Title: {content_data.get('title', 'Untitled')}
+            document_content = f"""Title: {content_data.get('title', 'Untitled')}
 Source: {content_data.get('url', 'Unknown')}
 Domain: {content_data.get('domain', 'Unknown')}
 Retrieved: {content_data.get('timestamp', 'Unknown')}
 
-{content_data.get('content', '')}
-"""
-
-            metadata = {
-                "source": content_data.get("url", "web_research"),
-                "domain": content_data.get("domain", "unknown"),
-                "title": content_data.get("title", "Untitled"),
-                "quality_score": assessment.get("score", 0.0),
-                "recommendation": assessment.get("recommendation", "review"),
-                "key_topics": assessment.get("key_topics", []),
-                "is_trusted": content_data.get("is_trusted", False),
-                "stored_by": "librarian_assistant",
-                "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
-            }
-
-            # Store in knowledge base
+{content_data.get('content', '')}"""
+            metadata = self._build_kb_metadata(content_data, assessment)
             success = self.knowledge_base.add_document(document_content, metadata)
-
             if success:
-                logger.info(
-                    f"Stored content from {content_data.get('domain')} in "
-                    "knowledge base"
-                )
-                return True
+                logger.info("Stored content from %s in knowledge base", content_data.get('domain'))
             else:
-                logger.error(f"Failed to store content from {content_data.get('url')}")
-                return False
-
+                logger.error("Failed to store content from %s", content_data.get('url'))
+            return success
         except Exception as e:
-            logger.error(f"Error storing content in knowledge base: {e}")
+            logger.error("Error storing content in knowledge base: %s", e)
             return False
 
     def _should_store_content(
@@ -625,73 +500,47 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             "quality_score": content.get("quality_assessment", {}).get("score", 0),
         }
 
-    async def research_query(
-        self, query: str, store_quality_content: bool = None
-    ) -> Dict[str, Any]:
-        """Research a query by searching the web and extracting content.
+    def _init_research_results(self, query: str) -> Dict[str, Any]:
+        """Initialize research results structure (Issue #398: extracted)."""
+        return {"query": query, "timestamp": datetime.now().isoformat(),
+                "search_results": [], "content_extracted": [], "stored_in_kb": [], "summary": "", "sources": []}
 
-        Args:
-            query: Research query
-            store_quality_content: Whether to auto-store quality content
+    async def _extract_and_summarize(
+        self, query: str, search_results: List, store_quality_content: bool, research_results: Dict
+    ) -> None:
+        """Extract content and summarize (Issue #398: extracted)."""
+        extracted_content = []
+        for result in search_results[:3]:
+            content = await self._process_single_search_result(result, store_quality_content, research_results["stored_in_kb"])
+            if content:
+                extracted_content.append(content)
+        research_results["content_extracted"] = extracted_content
+        if extracted_content:
+            research_results["summary"] = await self._create_research_summary(query, extracted_content)
+            research_results["sources"] = [self._build_source_entry(c) for c in extracted_content]
+        logger.info("Research completed: %d sources analyzed, %d stored in KB",
+                    len(extracted_content), len(research_results['stored_in_kb']))
 
-        Returns:
-            Research results with sources and assessments
-        """
+    async def research_query(self, query: str, store_quality_content: bool = None) -> Dict[str, Any]:
+        """Research a query by searching the web (Issue #398: refactored)."""
         if not self.enabled:
             return {"enabled": False, "message": "Librarian Assistant is disabled"}
-
         if store_quality_content is None:
             store_quality_content = self.auto_store_quality
-
-        research_results = {
-            "query": query,
-            "timestamp": datetime.now().isoformat(),
-            "search_results": [],
-            "content_extracted": [],
-            "stored_in_kb": [],
-            "summary": "",
-            "sources": [],
-        }
-
+        research_results = self._init_research_results(query)
         try:
-            logger.info(f"Researching query: {query}")
+            logger.info("Researching query: %s", query)
             search_results = await self.search_web(query)
             research_results["search_results"] = search_results
-
             if not search_results:
                 research_results["summary"] = "No search results found for the query."
                 return research_results
-
-            # Extract content from top 3 results
-            extracted_content = []
-            for result in search_results[:3]:
-                content = await self._process_single_search_result(
-                    result, store_quality_content, research_results["stored_in_kb"]
-                )
-                if content:
-                    extracted_content.append(content)
-
-            research_results["content_extracted"] = extracted_content
-
-            if extracted_content:
-                research_results["summary"] = await self._create_research_summary(
-                    query, extracted_content
-                )
-                research_results["sources"] = [
-                    self._build_source_entry(c) for c in extracted_content
-                ]
-
-            logger.info(
-                f"Research completed: {len(extracted_content)} sources analyzed, "
-                f"{len(research_results['stored_in_kb'])} stored in KB"
-            )
-
+            await self._extract_and_summarize(query, search_results, store_quality_content, research_results)
         except Exception as e:
-            logger.error(f"Error during research: {e}")
+            logger.error("Error during research: %s", e)
             research_results["error"] = str(e)
         finally:
             await self._cleanup_playwright()
-
         return research_results
 
     async def _create_research_summary(

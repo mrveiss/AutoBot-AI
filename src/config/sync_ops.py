@@ -92,9 +92,9 @@ class SyncOperationsMixin:
 
                 # Clear cache to force fresh load on next access
                 self._sync_cache_timestamp = None
-                logger.info(f"Settings saved to {self.settings_file} and cache cleared")
+                logger.info("Settings saved to %s and cache cleared", self.settings_file)
             except Exception as e:
-                logger.error(f"Failed to save settings: {e}")
+                logger.error("Failed to save settings: %s", e)
                 raise
 
     def save_config_to_yaml(self) -> None:
@@ -117,10 +117,11 @@ class SyncOperationsMixin:
                 # Clear cache to force fresh load on next access
                 self._sync_cache_timestamp = None
                 logger.info(
-                    f"Configuration saved to {self.base_config_file} and cache cleared"
+                    "Configuration saved to %s and cache cleared",
+                    self.base_config_file,
                 )
             except Exception as e:
-                logger.error(f"Failed to save YAML configuration: {e}")
+                logger.error("Failed to save YAML configuration: %s", e)
                 raise
 
     def reload(self) -> None:

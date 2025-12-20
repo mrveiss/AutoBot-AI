@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Analyze AutoBot codebase for architectural patterns and design quality
+
+NOTE: generate_architecture_recommendations (~155 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - analysis output generator with sequential logic. Low priority.
 """
 
 import asyncio

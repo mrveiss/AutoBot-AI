@@ -74,10 +74,10 @@ class LLMHandlerMixin:
             endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 return endpoint
-            logger.error(f"Invalid endpoint URL: {endpoint}, using config-based default")
+            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
-            logger.error(f"Failed to load Ollama endpoint from config: {e}")
+            logger.error("Failed to load Ollama endpoint from config: %s", e)
             return self._get_ollama_endpoint_fallback()
 
     def _get_system_prompt(self) -> str:
@@ -87,7 +87,7 @@ class LLMHandlerMixin:
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
             return prompt
         except Exception as e:
-            logger.error(f"Failed to load system prompt from file: {e}")
+            logger.error("Failed to load system prompt from file: %s", e)
             return """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
@@ -136,7 +136,7 @@ NEVER teach commands - ALWAYS execute them."""
                     session.metadata["rag_skipped_reason"] = query_intent.reasoning
             return knowledge_context, citations
         except Exception as e:
-            logger.warning(f"[RAG] Knowledge retrieval failed: {e}")
+            logger.warning("[RAG] Knowledge retrieval failed: %s", e)
             session.metadata["used_knowledge"] = False
             return "", []
 
@@ -157,12 +157,12 @@ NEVER teach commands - ALWAYS execute them."""
             default_model = global_config_manager.get_default_llm_model()
             selected = global_config_manager.get_nested("backend.llm.ollama.selected_model", default_model)
             if selected and isinstance(selected, str):
-                logger.info(f"Using LLM model from config: {selected}")
+                logger.info("Using LLM model from config: %s", selected)
                 return selected
-            logger.error(f"Invalid model selection: {selected}, using default")
+            logger.error("Invalid model selection: %s, using default", selected)
             return default_model
         except Exception as e:
-            logger.error(f"Failed to load model from config: {e}")
+            logger.error("Failed to load model from config: %s", e)
             import os
             return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
@@ -184,8 +184,8 @@ NEVER teach commands - ALWAYS execute them."""
         full_prompt = self._build_full_prompt(system_prompt, knowledge_context, conversation_context, message)
         selected_model = self._get_selected_model()
 
-        logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
-        logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
+        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
+        logger.info("[ChatWorkflowManager] Using model: %s", selected_model)
 
         return {
             "endpoint": ollama_endpoint,

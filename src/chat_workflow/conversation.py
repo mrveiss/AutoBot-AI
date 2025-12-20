@@ -45,12 +45,12 @@ class ConversationHandlerMixin:
             )
             if history_json:
                 logger.debug(
-                    f"Loaded conversation history from Redis for session {session_id}"
+                    "Loaded conversation history from Redis for session %s", session_id
                 )
                 return json.loads(history_json)
         except asyncio.TimeoutError:
             logger.warning(
-                f"Redis get timeout after 2s for session {session_id}, falling back to file"
+                "Redis get timeout after 2s for session %s, falling back to file", session_id
             )
         return None
 
@@ -68,7 +68,7 @@ class ConversationHandlerMixin:
                 return history
 
             logger.debug(
-                f"Loaded conversation history from file for session {session_id}"
+                "Loaded conversation history from file for session %s", session_id
             )
             # Repopulate Redis cache (non-blocking, fire-and-forget)
             if self.redis_client is not None:
@@ -79,7 +79,7 @@ class ConversationHandlerMixin:
             return history
 
         except Exception as e:
-            logger.error(f"Failed to load conversation history: {e}")
+            logger.error("Failed to load conversation history: %s", e)
             return []
 
     async def _save_conversation_history(
@@ -102,15 +102,15 @@ class ConversationHandlerMixin:
                     timeout=2.0,
                 )
                 logger.debug(
-                    f"Saved conversation history for session {session_id} to Redis"
+                    "Saved conversation history for session %s to Redis", session_id
                 )
             except asyncio.TimeoutError:
                 logger.warning(
-                    f"Redis set timeout after 2s for session {session_id} - data may not be cached"
+                    "Redis set timeout after 2s for session %s - data may not be cached", session_id
                 )
 
         except Exception as e:
-            logger.error(f"Failed to save conversation history to Redis: {e}")
+            logger.error("Failed to save conversation history to Redis: %s", e)
 
     def _get_transcript_path(self, session_id: str) -> Path:
         """Get file path for conversation transcript."""
@@ -155,9 +155,9 @@ class ConversationHandlerMixin:
         backup_path = transcript_path.with_suffix(".json.corrupted")
         try:
             await asyncio.to_thread(transcript_path.rename, backup_path)
-            logger.info(f"Backed up corrupted file to {backup_path}")
+            logger.info("Backed up corrupted file to %s", backup_path)
         except Exception as backup_err:
-            logger.warning(f"Could not backup corrupted file: {backup_err}")
+            logger.warning("Could not backup corrupted file: %s", backup_err)
 
     async def _write_transcript_atomic(
         self, transcript_path: Path, transcript: Dict, session_id: str
@@ -176,12 +176,12 @@ class ConversationHandlerMixin:
                 f"({transcript['message_count']} total messages)"
             )
         except asyncio.TimeoutError:
-            logger.warning(f"File write timeout after 5s for {transcript_path}")
+            logger.warning("File write timeout after 5s for %s", transcript_path)
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(temp_path.exists):
                 await asyncio.to_thread(temp_path.unlink)
         except OSError as os_err:
-            logger.error(f"Failed to write transcript file {transcript_path}: {os_err}")
+            logger.error("Failed to write transcript file %s: %s", transcript_path, os_err)
 
     async def _append_to_transcript(
         self, session_id: str, user_message: str, assistant_message: str
@@ -217,7 +217,7 @@ class ConversationHandlerMixin:
             await self._write_transcript_atomic(transcript_path, transcript, session_id)
 
         except Exception as e:
-            logger.error(f"Failed to append to transcript file: {e}")
+            logger.error("Failed to append to transcript file: %s", e)
 
     async def _load_transcript(self, session_id: str) -> List[Dict[str, str]]:
         """Load conversation history from transcript file (async with aiofiles)."""
@@ -248,11 +248,11 @@ class ConversationHandlerMixin:
                 )
                 return []
             except OSError as os_err:
-                logger.warning(f"Failed to read transcript file {transcript_path}: {os_err}")
+                logger.warning("Failed to read transcript file %s: %s", transcript_path, os_err)
                 return []
 
         except Exception as e:
-            logger.error(f"Failed to load transcript file: {e}")
+            logger.error("Failed to load transcript file: %s", e)
             return []
 
     async def _persist_conversation(

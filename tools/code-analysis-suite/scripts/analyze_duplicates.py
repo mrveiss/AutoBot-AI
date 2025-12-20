@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Analyze AutoBot codebase for duplicate functions and generate refactoring recommendations
+
+NOTE: create_command_utils_library (~200 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - code generator producing library module. Low priority.
 """
 
 import asyncio

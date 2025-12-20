@@ -91,88 +91,53 @@ class LLMFailsafeAgent:
         self._init_basic_responses()
         self._init_emergency_responses()
 
-    def _init_basic_responses(self):
-        """Initialize rule-based response system"""
-        self.basic_patterns = {
-            # Greetings
+    def _get_greeting_patterns(self) -> dict:
+        """Get greeting and help patterns (Issue #398: extracted)."""
+        return {
             r"hello|hi|hey|greetings": [
                 "Hello! I'm AutoBot. How can I help you today?",
                 "Hi there! What would you like me to assist you with?",
                 "Greetings! I'm ready to help with your tasks.",
             ],
-            # Help requests
             r"help|assist|support": [
-                (
-                    "I can help you with various tasks including:\n"
-                    "- System automation\n- Research and information gathering\n"
-                    "- File operations\n- Development tasks\n\n"
-                    "What specifically would you like help with?"
-                ),
-                (
-                    "I'm here to assist! You can ask me to help with "
-                    "automation, research, coding, or system tasks."
-                ),
+                "I can help with: System automation, Research, File operations, Development.\nWhat specifically would you like help with?",
+                "I'm here to assist! You can ask me to help with automation, research, coding, or system tasks.",
             ],
-            # Status queries
             r"status|health|working": [
-                (
-                    "I'm operational and ready to help! Primary LLM systems "
-                    "may be experiencing issues, but I can still assist you."
-                ),
+                "I'm operational and ready to help! Primary LLM systems may be experiencing issues, but I can still assist you.",
                 "System status: Basic operations functional. How can I help you today?",
             ],
-            # Simple questions
+        }
+
+    def _get_task_patterns(self) -> dict:
+        """Get task-related patterns (Issue #398: extracted)."""
+        return {
             r"what.*time|time|date": [
                 f"The current time is {time.strftime('%Y-%m-%d %H:%M:%S')}",
                 f"Current date and time: {time.strftime('%A, %B %d, %Y at %H:%M:%S')}",
             ],
-            # Math/calculations
             r"calculate|math|compute|\d+.*[\+\-\*\/].*\d+": [
-                (
-                    "I can help with calculations. Please provide the specific "
-                    "math problem you'd like me to solve."
-                ),
+                "I can help with calculations. Please provide the specific math problem you'd like me to solve.",
                 "For mathematical calculations, please specify the exact computation you need.",
             ],
-            # File operations
             r"file|directory|folder|list.*files": [
-                (
-                    "I can help with file operations including listing, reading, "
-                    "writing, and organizing files. What specific file task do you need?"
-                ),
-                (
-                    "File operations available: list files, read content, create files, "
-                    "organize directories. What would you like to do?"
-                ),
+                "I can help with file operations including listing, reading, writing, and organizing files. What specific file task do you need?",
+                "File operations available: list files, read content, create files, organize directories. What would you like to do?",
             ],
-            # System operations
             r"system|install|configure|setup": [
-                (
-                    "I can assist with system configuration, software installation, "
-                    "and setup tasks. Please specify what you'd like to install or configure."
-                ),
-                (
-                    "System operations available. What specific system task or "
-                    "installation do you need help with?"
-                ),
+                "I can assist with system configuration, software installation, and setup tasks. Please specify what you'd like to install or configure.",
+                "System operations available. What specific system task or installation do you need help with?",
             ],
-            # Default fallback
             r".*": [
-                (
-                    "I understand you need assistance. Due to system limitations, "
-                    "I'm operating in basic mode. Can you please rephrase your "
-                    "request more specifically?"
-                ),
-                (
-                    "I'm currently in basic operation mode. Please provide a clear, "
-                    "specific request and I'll do my best to help."
-                ),
-                (
-                    "I'm here to help! Could you please be more specific about "
-                    "what you need assistance with?"
-                ),
+                "I understand you need assistance. Due to system limitations, I'm operating in basic mode. Can you please rephrase your request more specifically?",
+                "I'm currently in basic operation mode. Please provide a clear, specific request and I'll do my best to help.",
+                "I'm here to help! Could you please be more specific about what you need assistance with?",
             ],
         }
+
+    def _init_basic_responses(self):
+        """Initialize rule-based response system (Issue #398: refactored)."""
+        self.basic_patterns = {**self._get_greeting_patterns(), **self._get_task_patterns()}
 
     def _init_emergency_responses(self):
         """Initialize emergency static responses"""
@@ -394,64 +359,48 @@ class LLMFailsafeAgent:
         self.tier_health[LLMTier.EMERGENCY] = True
         return LLMTier.EMERGENCY
 
+    def _build_llm_response(
+        self, response: str, tier: LLMTier, model: str, context: Any, start_time: float,
+        confidence: float = 0.9, warnings: list = None, extra_metadata: dict = None
+    ) -> LLMResponse:
+        """Build LLMResponse object (Issue #398: extracted)."""
+        response_time = time.time() - start_time
+        self._update_tier_stats(tier, response_time, success=True)
+        metadata = {"context": context}
+        if extra_metadata:
+            metadata.update(extra_metadata)
+        return LLMResponse(
+            content=response, tier_used=tier, model_used=model, confidence=confidence,
+            response_time=response_time, success=True, warnings=warnings or [], metadata=metadata
+        )
+
     async def _try_primary_llm(
         self, prompt: str, context: Optional[Dict[str, Any]], start_time: float
     ) -> LLMResponse:
-        """Try primary LLM communication"""
+        """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
-
         try:
-            # Import here to avoid circular imports
             from src.llm_interface import LLMInterface
-
             llm = LLMInterface()
-
-            # Try each primary model
             for model in self.primary_models:
                 try:
-                    # Create structured JSON messages with enhanced context
                     messages = self._create_structured_messages(prompt, context)
-                    response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
-                        response_task, timeout=self.timeouts[LLMTier.PRIMARY]
+                        llm.chat_completion(messages, llm_type="task"),
+                        timeout=self.timeouts[LLMTier.PRIMARY]
                     )
                     response = response_data.get("response", "")
-
-                    if response and len(response.strip()) > 0:
-                        response_time = time.time() - start_time
-                        self._update_tier_stats(
-                            LLMTier.PRIMARY, response_time, success=True
-                        )
-
-                        return LLMResponse(
-                            content=response,
-                            tier_used=LLMTier.PRIMARY,
-                            model_used=model,
-                            confidence=0.9,
-                            response_time=response_time,
-                            success=True,
-                            warnings=[],
-                            metadata={"context": context},
-                        )
-
+                    if response and response.strip():
+                        return self._build_llm_response(response, LLMTier.PRIMARY, model, context, start_time)
                 except asyncio.TimeoutError:
-                    self.logger.warning(f"Primary model {model} timed out")
-                    continue
+                    self.logger.warning("Primary model %s timed out", model)
                 except Exception as e:
-                    self.logger.warning(f"Primary model {model} failed: {e}")
-                    continue
-
-            # All primary models failed
+                    self.logger.warning("Primary model %s failed: %s", model, e)
             raise Exception("All primary models failed")
-
         except Exception as e:
-            self.logger.error(f"Primary LLM tier failed: {e}")
-            self._update_tier_stats(
-                LLMTier.PRIMARY, time.time() - start_time, success=False
-            )
+            self.logger.error("Primary LLM tier failed: %s", e)
+            self._update_tier_stats(LLMTier.PRIMARY, time.time() - start_time, success=False)
             self._mark_tier_unhealthy(LLMTier.PRIMARY)
-
-            # Fall back to secondary
             return await self._try_secondary_llm(prompt, context, start_time)
 
     async def _try_secondary_llm(

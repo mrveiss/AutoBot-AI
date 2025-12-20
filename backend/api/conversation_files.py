@@ -157,6 +157,40 @@ def get_security_layer(request: Request) -> SecurityLayer:
     return request.app.state.security_layer
 
 
+async def _authorize_file_operation(
+    request: Request, session_id: str, operation: str
+) -> dict:
+    """Authorize file operation and return user data (Issue #398: extracted)."""
+    has_permission, user_data = auth_middleware.check_file_permissions(request, operation)
+    if not has_permission:
+        raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
+    request.state.user = user_data
+    await validate_session_ownership(request, session_id, user_data)
+    return user_data
+
+
+def _get_required_file_manager(request: Request):
+    """Get file manager or raise 503 if unavailable (Issue #398: extracted)."""
+    file_manager = get_conversation_file_manager(request)
+    if not file_manager:
+        logger.error("ConversationFileManager not available")
+        raise HTTPException(status_code=503, detail="File management service temporarily unavailable")
+    return file_manager
+
+
+def _audit_file_operation(
+    request: Request, action: str, user_data: dict, session_id: str, details: dict
+) -> None:
+    """Log file operation to audit log (Issue #398: extracted)."""
+    security_layer = get_security_layer(request)
+    full_details = {
+        "session_id": session_id,
+        "ip": request.client.host if request.client else "unknown",
+        **details,
+    }
+    security_layer.audit_log(action=action, user=user_data.get("username", "unknown"), outcome="success", details=full_details)
+
+
 def get_conversation_file_manager(request: Request):
     """
     Get ConversationFileManager from app state.
@@ -321,82 +355,23 @@ async def _validate_and_read_upload_file(
 )
 @router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 async def upload_conversation_file(
-    request: Request,
-    session_id: str,
-    file: UploadFile = File(...),
-    description: Optional[str] = Form(None),
+    request: Request, session_id: str, file: UploadFile = File(...), description: Optional[str] = Form(None),
 ):
-    """
-    Upload a file to a specific conversation session
-
-    Args:
-        session_id: Conversation session ID
-        file: File to upload
-        description: Optional file description
-
-    Returns:
-        FileUploadResponse with upload details
-
-    Raises:
-        403: Insufficient permissions or not session owner
-        400: Invalid file or session
-        413: File too large
-        500: Server error
-    """
-    # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "upload"
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file upload"
-        )
-
-    # Store user data in request state
-    request.state.user = user_data
-
+    """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
-        # Validate session ownership
-        await validate_session_ownership(request, session_id, user_data)
-
-        # Issue #281: Use extracted helper for file validation
+        user_data = await _authorize_file_operation(request, session_id, "upload")
         content = await _validate_and_read_upload_file(file)
+        file_manager = _get_required_file_manager(request)
 
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
-
-        # Upload file through manager
         file_info_dict = await file_manager.upload_file(
-            session_id=session_id,
-            filename=file.filename,
-            content=content,
-            user_id=user_data.get("username"),
-            description=description,
+            session_id=session_id, filename=file.filename, content=content,
+            user_id=user_data.get("username"), description=description,
         )
-
-        # Convert to Pydantic model
         file_info = ConversationFileInfo(**file_info_dict)
 
-        # Audit log
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            action="conversation_file_upload",
-            user=user_data.get("username", "unknown"),
-            outcome="success",
-            details={
-                "session_id": session_id,
-                "filename": file.filename,
-                "file_id": file_info.file_id,
-                "size": len(content),
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
+        _audit_file_operation(request, "conversation_file_upload", user_data, session_id, {
+            "filename": file.filename, "file_id": file_info.file_id, "size": len(content),
+        })
 
         upload_id = (
             f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
@@ -751,89 +726,31 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
 async def transfer_conversation_files(
     request: Request, session_id: str, transfer_request: FileTransferRequest
 ):
-    """
-    Transfer files from conversation to knowledge base or shared storage
-
-    Args:
-        session_id: Conversation session ID
-        transfer_request: Transfer configuration (file IDs, destination, options)
-
-    Returns:
-        FileTransferResponse with transfer results
-
-    Raises:
-        403: Insufficient permissions or not session owner
-        400: Invalid transfer request
-        500: Server error
-    """
-    # Authenticate and authorize - transfers require upload permission to destination
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "upload"
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file transfer"
-        )
-
-    request.state.user = user_data
-
+    """Transfer files from conversation to knowledge base or shared storage (Issue #398: refactored)."""
     try:
-        # Validate session ownership
-        await validate_session_ownership(request, session_id, user_data)
+        user_data = await _authorize_file_operation(request, session_id, "upload")
+        file_manager = _get_required_file_manager(request)
 
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
-
-        # Execute transfer
         result = await file_manager.transfer_files(
-            session_id=session_id,
-            file_ids=transfer_request.file_ids,
-            destination=transfer_request.destination.value,
-            target_path=transfer_request.target_path,
-            copy=transfer_request.copy,
-            tags=transfer_request.tags,
-            user_id=user_data.get("username"),
+            session_id=session_id, file_ids=transfer_request.file_ids,
+            destination=transfer_request.destination.value, target_path=transfer_request.target_path,
+            copy=transfer_request.copy, tags=transfer_request.tags, user_id=user_data.get("username"),
         )
 
-        # Audit log
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            action="conversation_files_transfer",
-            user=user_data.get("username", "unknown"),
-            outcome="success",
-            details={
-                "session_id": session_id,
-                "destination": transfer_request.destination.value,
-                "file_count": len(transfer_request.file_ids),
-                "transferred": result["total_transferred"],
-                "failed": result["total_failed"],
-                "copy": transfer_request.copy,
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
+        _audit_file_operation(request, "conversation_files_transfer", user_data, session_id, {
+            "destination": transfer_request.destination.value, "file_count": len(transfer_request.file_ids),
+            "transferred": result["total_transferred"], "failed": result["total_failed"], "copy": transfer_request.copy,
+        })
 
         return FileTransferResponse(
             success=result["total_failed"] == 0,
-            message=(
-                f"Transferred {result['total_transferred']} files,"
-                f"{result['total_failed']} failed"
-            ),
-            transferred_files=result["transferred_files"],
-            failed_files=result["failed_files"],
-            total_transferred=result["total_transferred"],
-            total_failed=result["total_failed"],
+            message=f"Transferred {result['total_transferred']} files, {result['total_failed']} failed",
+            transferred_files=result["transferred_files"], failed_files=result["failed_files"],
+            total_transferred=result["total_transferred"], total_failed=result["total_failed"],
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error transferring conversation files: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error transferring files: {str(e)}"
-        )
+        logger.error("Error transferring conversation files: %s", e)
+        raise HTTPException(status_code=500, detail=f"Error transferring files: {str(e)}")

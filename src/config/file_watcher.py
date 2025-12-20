@@ -30,7 +30,7 @@ class FileWatcherMixin:
         """
         import time
 
-        logger.info(f"Config file {file_path} changed, reloading")
+        logger.info("Config file %s changed, reloading", file_path)
 
         # Update cache for main config
         if config_type == "main":
@@ -88,7 +88,7 @@ class FileWatcherMixin:
                     else:
                         callback(config_type, data)
                 except Exception as e:
-                    logger.error(f"Config callback error for {config_type}: {e}")
+                    logger.error("Config callback error for %s: %s", config_type, e)
 
     async def start_file_watcher(self, config_type: str) -> None:
         """Start watching config file for changes"""
@@ -120,11 +120,11 @@ class FileWatcherMixin:
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logger.error(f"File watcher error for {config_type}: {e}")
+                    logger.error("File watcher error for %s: %s", config_type, e)
                     await asyncio.sleep(FileWatcherConfig.ERROR_RETRY_INTERVAL_S)
 
         self._file_watchers[config_type] = asyncio.create_task(watch_file())
-        logger.info(f"Started file watcher for {config_type} config")
+        logger.info("Started file watcher for %s config", config_type)
 
     async def stop_file_watcher(self, config_type: str) -> None:
         """Stop watching config file"""
@@ -136,4 +136,4 @@ class FileWatcherMixin:
                 logger.debug("File watcher for %s cancelled", config_type)
 
             del self._file_watchers[config_type]
-            logger.info(f"Stopped file watcher for {config_type} config")
+            logger.info("Stopped file watcher for %s config", config_type)

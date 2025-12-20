@@ -5,6 +5,9 @@
 """
 Quick Microservice Analysis for AutoBot
 Provides a rapid assessment of microservice decomposition potential
+
+NOTE: _generate_markdown_report (~144 lines) is an ACCEPTABLE EXCEPTION
+per Issue #490 - report generator with formatted markdown output. Low priority.
 """
 
 import json

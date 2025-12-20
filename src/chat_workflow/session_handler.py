@@ -53,8 +53,8 @@ class SessionHandlerMixin:
                 )
 
                 logger.info(
-                    f"Created new workflow session: {session_id} with "
-                    f"{len(conversation_history)} messages from history"
+                    "Created new workflow session: %s with %d messages from history",
+                    session_id, len(conversation_history)
                 )
 
             # Update last activity
@@ -71,23 +71,23 @@ class SessionHandlerMixin:
         """
         if classification.intent != ConversationIntent.END:
             logger.debug(
-                f"Intent classified as: {classification.intent.value} "
-                f"(confidence: {classification.confidence:.2f})"
+                "Intent classified as: %s (confidence: %.2f)",
+                classification.intent.value, classification.confidence
             )
             return False
 
         if safety_check.is_safe_to_end:
             logger.info(
-                f"User wants to exit conversation - Intent: {classification.intent.value}, "
-                f"Confidence: {classification.confidence:.2f}, Reason: {classification.reasoning}"
+                "User wants to exit conversation - Intent: %s, Confidence: %.2f, Reason: %s",
+                classification.intent.value, classification.confidence, classification.reasoning
             )
             return True
 
         # Safety guard overrides END intent
         logger.info(
-            f"Exit intent detected but blocked by safety guards - {safety_check.reason}"
+            "Exit intent detected but blocked by safety guards - %s", safety_check.reason
         )
-        logger.info(f"Violated rules: {', '.join(safety_check.violated_rules)}")
+        logger.info("Violated rules: %s", ', '.join(safety_check.violated_rules))
         return False
 
     async def _get_or_create_terminal_session(self, session_id: str) -> Optional[str]:
@@ -103,7 +103,7 @@ class SessionHandlerMixin:
         if session_id in self.terminal_tool.active_sessions:
             terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
             logger.info(
-                f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
+                "Terminal session ID for conversation %s: %s", session_id, terminal_session_id
             )
             return terminal_session_id
 
@@ -120,7 +120,7 @@ class SessionHandlerMixin:
             terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
 
         logger.info(
-            f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
+            "Terminal session ID for conversation %s: %s", session_id, terminal_session_id
         )
         return terminal_session_id
 
@@ -136,14 +136,14 @@ class SessionHandlerMixin:
             Tuple of (session, terminal_session_id, should_exit)
         """
         logger.debug(
-            f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}"
+            "[ChatWorkflowManager] Starting process_message_stream for session=%s", session_id
         )
-        logger.debug(f"[ChatWorkflowManager] Message: {message[:100]}...")
+        logger.debug("[ChatWorkflowManager] Message: %s...", message[:100])
 
         session = await self.get_or_create_session(session_id)
         session.message_count += 1
         logger.debug(
-            f"[ChatWorkflowManager] Session message_count: {session.message_count}"
+            "[ChatWorkflowManager] Session message_count: %d", session.message_count
         )
 
         # Comprehensive intent classification with safety guards (Issue #159)
@@ -203,10 +203,10 @@ class SessionHandlerMixin:
             for session_id in sessions_to_remove:
                 del self.sessions[session_id]
                 removed_count += 1
-                logger.info(f"Cleaned up inactive session: {session_id}")
+                logger.info("Cleaned up inactive session: %s", session_id)
 
         if removed_count > 0:
-            logger.info(f"Cleaned up {removed_count} inactive sessions")
+            logger.info("Cleaned up %d inactive sessions", removed_count)
 
         return removed_count
 

@@ -153,167 +153,120 @@ class SystemCommandAgent:
 
         return None
 
-    async def install_tool(self, tool_info: dict, chat_id: str) -> Dict[str, Any]:
-        """Install a tool based on instructions from KB"""
-        tool_name = tool_info.get("name", "")
-        package_name = tool_info.get("package_name", tool_name)
+    async def _determine_install_command(
+        self, tool_info: dict, chat_id: str
+    ) -> tuple:
+        """Determine installation command (Issue #398: extracted)."""
+        package_name = tool_info.get("package_name", tool_info.get("name", ""))
         install_method = tool_info.get("install_method", "auto")
         custom_command = tool_info.get("custom_command", "")
 
-        # Check if already installed
-        check_result = await self.check_tool_installed(tool_name)
-        if check_result["installed"]:
-            return {
-                "status": "already_installed",
-                "message": f"{tool_name} is already installed",
-            }
-
-        # Determine installation command
         if custom_command:
-            install_command = custom_command
-        elif install_method == "auto":
-            # Detect package manager
+            return custom_command, None
+
+        if install_method == "auto":
             pm = await self.detect_package_manager()
             if not pm:
-                return {
-                    "status": "error",
-                    "message": "Could not detect package manager",
-                }
-
+                return None, {"status": "error", "message": "Could not detect package manager"}
             pm_info = self.PACKAGE_MANAGERS[pm]
-
-            # Update package manager first (optional)
             if tool_info.get("update_first", True):
-                update_cmd = pm_info["update"]
                 await self.execute_interactive_command(
-                    update_cmd, chat_id, description=f"Updating {pm} package lists"
+                    pm_info["update"], chat_id, description=f"Updating {pm} package lists"
                 )
+            return pm_info["install"].format(package=package_name), None
 
-            # Install the package
-            install_command = pm_info["install"].format(package=package_name)
-        else:
-            # Use specific package manager
-            pm_info = self.PACKAGE_MANAGERS.get(install_method)
-            if not pm_info:
-                return {
-                    "status": "error",
-                    "message": f"Unknown install method: {install_method}",
-                }
-            install_command = pm_info["install"].format(package=package_name)
+        pm_info = self.PACKAGE_MANAGERS.get(install_method)
+        if not pm_info:
+            return None, {"status": "error", "message": f"Unknown install method: {install_method}"}
+        return pm_info["install"].format(package=package_name), None
 
-        # Execute installation
-        result = await self.execute_interactive_command(
-            install_command,
-            chat_id,
-            description=f"Installing {tool_name}",
-            require_confirmation=False,  # User already approved installation
-        )
-
-        # Verify installation
-        if result["status"] == "success":
-            verify_result = await self.check_tool_installed(tool_name)
-            if verify_result["installed"]:
-                return {
-                    "status": "success",
-                    "message": f"{tool_name} installed successfully",
-                    "exit_code": result.get("exit_code", 0),
-                }
-            else:
-                return {
-                    "status": "warning",
-                    "message": (
-                        f"Installation completed but {tool_name} not found in PATH"
-                    ),
-                    "exit_code": result.get("exit_code", 0),
-                }
-        else:
+    async def _verify_installation(self, tool_name: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Verify tool installation success (Issue #398: extracted)."""
+        if result["status"] != "success":
             return result
+        verify_result = await self.check_tool_installed(tool_name)
+        if verify_result["installed"]:
+            return {"status": "success", "message": f"{tool_name} installed successfully",
+                    "exit_code": result.get("exit_code", 0)}
+        return {"status": "warning", "exit_code": result.get("exit_code", 0),
+                "message": f"Installation completed but {tool_name} not found in PATH"}
 
-    async def execute_interactive_command(
-        self,
-        command: str,
-        chat_id: str,
-        description: str = None,
-        require_confirmation: bool = True,
-        env: Dict[str, str] = None,
-        cwd: str = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        """Execute command with full terminal interaction"""
+    async def install_tool(self, tool_info: dict, chat_id: str) -> Dict[str, Any]:
+        """Install a tool based on instructions (Issue #398: refactored)."""
+        tool_name = tool_info.get("name", "")
+        check_result = await self.check_tool_installed(tool_name)
+        if check_result["installed"]:
+            return {"status": "already_installed", "message": f"{tool_name} is already installed"}
 
-        # Safety check
-        if require_confirmation and self._is_dangerous_command(command):
-            confirmed = await self._request_user_confirmation(command, chat_id)
-            if not confirmed:
-                return {"status": "cancelled", "message": "Command cancelled by user"}
+        install_command, error = await self._determine_install_command(tool_info, chat_id)
+        if error:
+            return error
 
-        # Log command execution
-        self._log_command(command, chat_id)
+        result = await self.execute_interactive_command(
+            install_command, chat_id, description=f"Installing {tool_name}",
+            require_confirmation=False
+        )
+        return await self._verify_installation(tool_name, result)
 
-        # Create or reuse terminal session
+    async def _publish_execution_event(
+        self, chat_id: str, command: str, status: str, description: str = None, result: dict = None
+    ) -> None:
+        """Publish command execution event (Issue #398: extracted)."""
+        event_data = {
+            "chat_id": chat_id, "command": command, "status": status,
+            "timestamp": datetime.now().isoformat(),
+        }
+        if status == "started":
+            event_data["description"] = description or f"Executing: {command}"
+        elif result:
+            event_data["exit_code"] = result["exit_code"]
+            event_data["duration"] = result["duration"]
+        await event_manager.publish("command_execution", event_data)
+
+    def _build_execution_result(self, result: dict) -> Dict[str, Any]:
+        """Build execution result dict (Issue #398: extracted)."""
+        exit_code = result["exit_code"]
+        return {
+            "status": "success" if exit_code == 0 else "error",
+            "exit_code": exit_code,
+            "duration": result["duration"],
+            "output_lines": result["line_count"],
+            "message": "Command completed successfully" if exit_code == 0 else f"Command failed with exit code {exit_code}",
+        }
+
+    def _get_or_create_terminal(self, chat_id: str) -> tuple:
+        """Get or create terminal session (Issue #398: extracted)."""
         session_id = f"{chat_id}_terminal"
         if session_id in self.active_sessions:
-            terminal = self.active_sessions[session_id]
-        else:
-            terminal = InteractiveTerminalAgent(chat_id)
-            self.active_sessions[session_id] = terminal
+            return self.active_sessions[session_id], session_id
+        terminal = InteractiveTerminalAgent(chat_id)
+        self.active_sessions[session_id] = terminal
+        return terminal, session_id
+
+    async def execute_interactive_command(
+        self, command: str, chat_id: str, description: str = None,
+        require_confirmation: bool = True, env: Dict[str, str] = None,
+        cwd: str = None, timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Execute command with terminal interaction (Issue #398: refactored)."""
+        if require_confirmation and self._is_dangerous_command(command):
+            if not await self._request_user_confirmation(command, chat_id):
+                return {"status": "cancelled", "message": "Command cancelled by user"}
+
+        self._log_command(command, chat_id)
+        terminal, session_id = self._get_or_create_terminal(chat_id)
 
         try:
-            # Notify start of execution
-            await event_manager.publish(
-                "command_execution",
-                {
-                    "chat_id": chat_id,
-                    "command": command,
-                    "description": description or f"Executing: {command}",
-                    "status": "started",
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
-            # Start command execution
+            await self._publish_execution_event(chat_id, command, "started", description)
             await terminal.start_session(command, env=env, cwd=cwd)
-
-            # Wait for completion or timeout
             result = await terminal.wait_for_completion(timeout=timeout)
-
-            # Notify completion
-            await event_manager.publish(
-                "command_execution",
-                {
-                    "chat_id": chat_id,
-                    "command": command,
-                    "status": "completed",
-                    "exit_code": result["exit_code"],
-                    "duration": result["duration"],
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
-            return {
-                "status": "success" if result["exit_code"] == 0 else "error",
-                "exit_code": result["exit_code"],
-                "duration": result["duration"],
-                "output_lines": result["line_count"],
-                "message": (
-                    "Command completed successfully"
-                    if result["exit_code"] == 0
-                    else f"Command failed with exit code {result['exit_code']}"
-                ),
-            }
-
+            await self._publish_execution_event(chat_id, command, "completed", result=result)
+            return self._build_execution_result(result)
         except Exception as e:
-            logger.error(f"Error executing command: {e}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"Command execution failed: {str(e)}",
-            }
+            logger.error("Error executing command: %s", e)
+            return {"status": "error", "error": str(e), "message": f"Command execution failed: {e}"}
         finally:
-            # Clean up session if it's a one-off command
-            if session_id in self.active_sessions and not self._is_persistent_session(
-                command
-            ):
+            if session_id in self.active_sessions and not self._is_persistent_session(command):
                 del self.active_sessions[session_id]
 
     async def execute_command_with_output(
