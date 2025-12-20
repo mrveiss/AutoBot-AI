@@ -79,87 +79,92 @@ class StandardizedAgent(BaseAgent):
         for action, handler in actions.items():
             self.register_action_handler(action, handler)
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
-        """
-        Standardized request processing with common patterns.
+    def _validate_action_and_handler(
+        self, request: AgentRequest
+    ) -> tuple[Optional[AgentResponse], Optional[ActionHandler], Optional[Callable]]:
+        """Validate action and get handler method (Issue #398: extracted).
 
-        This method implements the common structure used across all agents:
-        1. Extract and validate action/payload
-        2. Route to appropriate handler method
-        3. Handle errors consistently
-        4. Return standardized response
-        5. Track performance metrics
+        Returns:
+            (error_response, handler_config, handler_method) - error_response is set if validation fails
         """
+        if not request.action:
+            return (
+                self._create_error_response(request, "No action specified in request", "validation_error"),
+                None, None
+            )
+
+        if request.action not in self._action_handlers:
+            supported_actions = list(self._action_handlers.keys())
+            return (
+                self._create_error_response(
+                    request,
+                    f"Unsupported action '{request.action}'. Supported actions: {supported_actions}",
+                    "unsupported_action",
+                ),
+                None, None
+            )
+
+        handler_config = self._action_handlers[request.action]
+        validation_error = self._validate_request_params(request, handler_config)
+        if validation_error:
+            return (
+                self._create_error_response(request, validation_error, "validation_error"),
+                None, None
+            )
+
+        handler_method = getattr(self, handler_config.handler_method, None)
+        if not handler_method:
+            return (
+                self._create_error_response(
+                    request,
+                    f"Handler method '{handler_config.handler_method}' not found",
+                    "configuration_error",
+                ),
+                None, None
+            )
+
+        return None, handler_config, handler_method
+
+    def _build_success_response(
+        self, request: AgentRequest, result: Any, processing_time: float
+    ) -> AgentResponse:
+        """Build successful response (Issue #398: extracted)."""
+        return AgentResponse(
+            request_id=request.request_id,
+            agent_type=self.agent_type,
+            status="success",
+            result=result,
+            metadata={
+                "processing_time": processing_time,
+                "action": request.action,
+                "agent_stats": self.get_performance_stats(),
+            },
+        )
+
+    async def process_request(self, request: AgentRequest) -> AgentResponse:
+        """Standardized request processing (Issue #398: refactored to use helpers)."""
         start_time = time.time()
 
-        # Increment request count (thread-safe)
         async with self._stats_lock:
             self._request_count += 1
             self._last_request_time = start_time
 
         try:
-            self.logger.debug(
-                f"Processing request {request.request_id} with action: {request.action}"
-            )
+            self.logger.debug(f"Processing request {request.request_id} with action: {request.action}")
 
-            # Validate request
-            if not request.action:
-                return self._create_error_response(
-                    request, "No action specified in request", "validation_error"
-                )
+            # Validate and get handler (Issue #398: extracted)
+            error_response, handler_config, handler_method = self._validate_action_and_handler(request)
+            if error_response:
+                return error_response
 
-            # Check if action is supported
-            if request.action not in self._action_handlers:
-                supported_actions = list(self._action_handlers.keys())
-                return self._create_error_response(
-                    request,
-                    f"Unsupported action '{request.action}'. Supported actions: {supported_actions}",
-                    "unsupported_action",
-                )
-
-            # Get handler configuration
-            handler_config = self._action_handlers[request.action]
-
-            # Validate required parameters
-            validation_error = self._validate_request_params(request, handler_config)
-            if validation_error:
-                return self._create_error_response(
-                    request, validation_error, "validation_error"
-                )
-
-            # Get the handler method
-            handler_method = getattr(self, handler_config.handler_method, None)
-            if not handler_method:
-                return self._create_error_response(
-                    request,
-                    f"Handler method '{handler_config.handler_method}' not found",
-                    "configuration_error",
-                )
-
-            # Call the specific handler
             result = await self._call_handler_safely(handler_method, request)
 
-            # Track performance (thread-safe)
             processing_time = time.time() - start_time
             async with self._stats_lock:
                 self._total_processing_time += processing_time
 
-            self.logger.debug(
-                f"Request {request.request_id} processed successfully in {processing_time:.3f}s"
-            )
-
-            # Return successful response
-            return AgentResponse(
-                request_id=request.request_id,
-                agent_type=self.agent_type,
-                status="success",
-                result=result,
-                metadata={
-                    "processing_time": processing_time,
-                    "action": request.action,
-                    "agent_stats": self.get_performance_stats(),
-                },
-            )
+            self.logger.debug(f"Request {request.request_id} processed successfully in {processing_time:.3f}s")
+            return self._build_success_response(request, result, processing_time)
 
         except Exception as e:
             # Update error count (thread-safe)

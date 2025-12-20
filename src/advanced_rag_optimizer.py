@@ -408,105 +408,76 @@ class AdvancedRAGOptimizer:
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
         return diversified
 
+    def _ensure_cross_encoder_loaded(self) -> None:
+        """Lazy load cross-encoder model (Issue #398: extracted)."""
+        if hasattr(self, "_cross_encoder"):
+            return
+
+        try:
+            from sentence_transformers import CrossEncoder
+            model_name = getattr(self, "reranking_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+            logger.info("Loading cross-encoder model: %s", model_name)
+            self._cross_encoder = CrossEncoder(model_name)
+            logger.info("Cross-encoder model loaded successfully")
+        except ImportError:
+            logger.warning("sentence-transformers not available, using fallback reranking")
+            self._cross_encoder = None
+        except Exception as e:
+            logger.error("Failed to load cross-encoder model: %s", e)
+            self._cross_encoder = None
+
+    async def _apply_cross_encoder_scores(
+        self, query: str, results: List[SearchResult]
+    ) -> None:
+        """Apply cross-encoder scores to results (Issue #398: extracted)."""
+        pairs = [(query, result.content) for result in results]
+        cross_encoder_scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
+
+        for result, ce_score in zip(results, cross_encoder_scores):
+            result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
+
+        logger.debug(f"Cross-encoder reranking completed for {len(results)} results")
+
+    def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
+        """Apply term-based fallback reranking (Issue #398: extracted)."""
+        logger.debug("Using fallback term-based reranking")
+        query_lower = query.lower()
+        query_terms = query_lower.split()
+
+        for result in results:
+            content_lower = result.content.lower()
+            term_matches = sum(1 for term in query_terms if term in content_lower)
+            exact_match_bonus = 2 if query_lower in content_lower else 0
+            result.rerank_score = (
+                result.hybrid_score * 0.7
+                + (term_matches / len(query_terms)) * 0.2
+                + exact_match_bonus * 0.1
+            )
+
+    def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
+        """Sort and rank results after reranking (Issue #398: extracted)."""
+        results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
+        for i, result in enumerate(results):
+            result.relevance_rank = i + 1
+        logger.debug(f"Reranking completed: top score = {results[0].rerank_score:.3f}")
+        return results
+
     async def _rerank_with_cross_encoder(
         self, query: str, results: List[SearchResult]
     ) -> List[SearchResult]:
-        """
-        Rerank results using cross-encoder model for improved relevance.
-
-        Uses sentence-transformers cross-encoder which is specifically trained
-        for search result reranking tasks. This provides much better relevance
-        scoring than simple term matching.
-        """
+        """Rerank results using cross-encoder model (Issue #398: refactored)."""
         try:
-            # Lazy load cross-encoder model
-            if not hasattr(self, "_cross_encoder"):
-                try:
-                    from sentence_transformers import CrossEncoder
+            self._ensure_cross_encoder_loaded()
 
-                    model_name = getattr(
-                        self,
-                        "reranking_model",
-                        "cross-encoder/ms-marco-MiniLM-L-6-v2",
-                    )
-                    logger.info("Loading cross-encoder model: %s", model_name)
-                    self._cross_encoder = CrossEncoder(model_name)
-                    logger.info("Cross-encoder model loaded successfully")
-                except ImportError:
-                    logger.warning(
-                        "sentence-transformers not available, using fallback reranking"
-                    )
-                    self._cross_encoder = None
-                except Exception as e:
-                    logger.error("Failed to load cross-encoder model: %s", e)
-                    self._cross_encoder = None
-
-            # Use full cross-encoder model if available
             if self._cross_encoder is not None:
-                # Prepare query-document pairs for cross-encoder
-                pairs = [(query, result.content) for result in results]
-
-                # Get relevance scores from cross-encoder
-                # Run in thread pool to avoid blocking async event loop
-                cross_encoder_scores = await asyncio.to_thread(
-                    self._cross_encoder.predict, pairs
-                )
-
-                # Apply scores to results
-                for result, ce_score in zip(results, cross_encoder_scores):
-                    # Combine cross-encoder score with hybrid score
-                    # Cross-encoder gets 80% weight as it's more accurate
-                    result.rerank_score = (
-                        float(ce_score) * 0.8 + result.hybrid_score * 0.2
-                    )
-
-                logger.debug(
-                    f"Cross-encoder reranking completed with model for {len(results)} results"
-                )
-
+                await self._apply_cross_encoder_scores(query, results)
             else:
-                # Fallback to simple term-based reranking
-                logger.debug("Using fallback term-based reranking")
-                # Cache query.lower() outside loop (Issue #323)
-                query_lower = query.lower()
-                query_terms = query_lower.split()
+                self._apply_fallback_reranking(query, results)
 
-                for result in results:
-                    # Simple reranking based on query term frequency in content
-                    content_lower = result.content.lower()
-
-                    # Count query terms in content
-                    term_matches = sum(
-                        1 for term in query_terms if term in content_lower
-                    )
-
-                    # Bonus for exact query match
-                    exact_match_bonus = 2 if query_lower in content_lower else 0
-
-                    # Combine with existing hybrid score
-                    rerank_score = (
-                        result.hybrid_score * 0.7
-                        + (term_matches / len(query_terms)) * 0.2
-                        + exact_match_bonus * 0.1
-                    )
-
-                    result.rerank_score = rerank_score
-
-            # Sort by rerank score
-            results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
-
-            # Update ranks after reranking
-            for i, result in enumerate(results):
-                result.relevance_rank = i + 1
-
-            logger.debug(
-                f"Reranking completed: top score = {results[0].rerank_score:.3f}"
-            )
-            return results
+            return self._finalize_rerank_results(results)
 
         except Exception as e:
             logger.error("Reranking failed: %s", e)
-            # Return original results on error
             return results
 
     async def advanced_search(
