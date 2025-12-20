@@ -14,8 +14,13 @@ Endpoints:
 - POST /tags/search - Search facts by tags
 - GET /tags - List all tags
 - POST /tags/bulk - Bulk tag operations
+- PUT /tags/{tag_name} - Rename a tag globally (Issue #409)
+- DELETE /tags/{tag_name} - Delete a tag globally (Issue #409)
+- POST /tags/merge - Merge multiple tags into one (Issue #409)
+- GET /tags/{tag_name}/facts - Get all facts with a specific tag (Issue #409)
+- GET /tags/{tag_name}/info - Get tag information (Issue #409)
 
-Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split)
+Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD)
 """
 
 import logging
@@ -28,7 +33,10 @@ from backend.api.knowledge_models import (
     AddTagsRequest,
     BulkTagRequest,
     FactIdValidator,
+    GetFactsByTagRequest,
+    MergeTagsRequest,
     RemoveTagsRequest,
+    RenameTagRequest,
     SearchByTagsRequest,
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
@@ -359,3 +367,309 @@ async def bulk_tag_facts(
         "failed_count": result.get("failed_count", 0),
         "results": result.get("results", []),
     }
+
+
+# ===== TAG CRUD OPERATIONS (Issue #409) =====
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rename_tag",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.put("/tags/{tag_name}")
+async def rename_tag(
+    tag_name: str = Path(..., description="Current tag name to rename"),
+    request: RenameTagRequest = ...,
+    req: Request = None,
+):
+    """
+    Rename a tag globally across all facts.
+
+    Issue #409: Tag management CRUD operations.
+
+    Parameters:
+    - tag_name: Current name of the tag (path parameter)
+    - new_tag: New name for the tag (request body)
+
+    Returns:
+    - status: success or error
+    - old_tag: Previous tag name
+    - new_tag: New tag name
+    - affected_count: Number of facts updated
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    logger.info("Renaming tag '%s' to '%s'", tag_name, request.new_tag)
+
+    result = await kb.rename_tag(old_tag=tag_name, new_tag=request.new_tag)
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "old_tag": result.get("old_tag", tag_name),
+            "new_tag": result.get("new_tag", request.new_tag),
+            "affected_count": result.get("affected_count", 0),
+            "message": result.get("message", "Tag renamed successfully"),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
+        else:
+            raise HTTPException(status_code=400, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_tag_globally",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.delete("/tags/{tag_name}")
+async def delete_tag_globally(
+    tag_name: str = Path(..., description="Tag name to delete"),
+    req: Request = None,
+):
+    """
+    Delete a tag from all facts globally.
+
+    Issue #409: Tag management CRUD operations.
+
+    Parameters:
+    - tag_name: Name of the tag to delete
+
+    Returns:
+    - status: success or error
+    - tag: Deleted tag name
+    - affected_count: Number of facts that had the tag removed
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    logger.info("Deleting tag '%s' globally", tag_name)
+
+    result = await kb.delete_tag_globally(tag=tag_name)
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "affected_count": result.get("affected_count", 0),
+            "message": result.get("message", "Tag deleted successfully"),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
+        else:
+            raise HTTPException(status_code=500, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="merge_tags",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/tags/merge")
+async def merge_tags(
+    request: MergeTagsRequest,
+    req: Request = None,
+):
+    """
+    Merge multiple source tags into a single target tag.
+
+    Issue #409: Tag management CRUD operations.
+
+    All facts with any of the source tags will have those tags replaced
+    with the target tag. Source tags are deleted after merge.
+
+    Parameters:
+    - source_tags: List of tags to merge (will be removed)
+    - target_tag: Target tag to merge into
+
+    Returns:
+    - status: success or error
+    - source_tags: Tags that were merged
+    - target_tag: Target tag
+    - affected_count: Number of facts updated
+    """
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    logger.info(
+        "Merging tags %s into '%s'", request.source_tags, request.target_tag
+    )
+
+    result = await kb.merge_tags(
+        source_tags=request.source_tags,
+        target_tag=request.target_tag,
+    )
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "source_tags": result.get("source_tags", request.source_tags),
+            "target_tag": result.get("target_tag", request.target_tag),
+            "affected_count": result.get("affected_count", 0),
+            "message": result.get("message", "Tags merged successfully"),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        raise HTTPException(status_code=400, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_facts_by_tag",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/tags/{tag_name}/facts")
+async def get_facts_by_tag(
+    tag_name: str = Path(..., description="Tag name to get facts for"),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    include_content: bool = Query(default=False),
+    req: Request = None,
+):
+    """
+    Get all facts with a specific tag.
+
+    Issue #409: Tag management CRUD operations.
+
+    Parameters:
+    - tag_name: Tag to search for
+    - limit: Maximum number of facts to return (default: 50, max: 500)
+    - offset: Pagination offset (default: 0)
+    - include_content: Whether to include fact content (default: False)
+
+    Returns:
+    - status: success or error
+    - tag: Tag name searched
+    - facts: List of facts with the tag
+    - total_count: Total number of facts with this tag
+    - has_more: Whether more facts are available
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    result = await kb.get_facts_by_tag(
+        tag=tag_name,
+        limit=limit,
+        offset=offset,
+        include_content=include_content,
+    )
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "facts": result.get("facts", []),
+            "total_count": result.get("total_count", 0),
+            "returned_count": result.get("returned_count", 0),
+            "limit": limit,
+            "offset": offset,
+            "has_more": result.get("has_more", False),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tag_info",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/tags/{tag_name}/info")
+async def get_tag_info(
+    tag_name: str = Path(..., description="Tag name to get info for"),
+    req: Request = None,
+):
+    """
+    Get detailed information about a specific tag.
+
+    Issue #409: Tag management CRUD operations.
+
+    Parameters:
+    - tag_name: Tag to get information for
+
+    Returns:
+    - status: success or error
+    - tag: Tag name
+    - fact_count: Number of facts with this tag
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    result = await kb.get_tag_info(tag=tag_name)
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "fact_count": result.get("fact_count", 0),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
+        else:
+            raise HTTPException(status_code=500, detail=error_message)

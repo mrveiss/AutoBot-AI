@@ -407,6 +407,82 @@ class SearchByTagsRequest(BaseModel):
         return v
 
 
+# ===== TAG MANAGEMENT CRUD MODELS (Issue #409) =====
+
+
+class RenameTagRequest(BaseModel):
+    """Request model for renaming a tag globally."""
+
+    new_tag: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="New name for the tag",
+    )
+
+    @validator("new_tag")
+    def validate_new_tag(cls, v):
+        """Validate new tag format."""
+        v = v.lower().strip()
+        if not _LOWERCASE_TAG_RE.match(v):
+            raise ValueError(
+                "Invalid tag format: only lowercase alphanumeric, underscore, "
+                "and hyphen allowed"
+            )
+        if contains_path_traversal(v):
+            raise ValueError("Invalid characters in tag")
+        return v
+
+
+class MergeTagsRequest(BaseModel):
+    """Request model for merging multiple tags into one."""
+
+    source_tags: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=20,
+        description="Tags to merge (these will be removed)",
+    )
+    target_tag: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Target tag to merge into",
+    )
+
+    @validator("source_tags", each_item=True)
+    def validate_source_tag_item(cls, v):
+        """Validate each source tag."""
+        v = v.lower().strip()
+        if not _LOWERCASE_TAG_RE.match(v):
+            raise ValueError(f"Invalid tag format: {v}")
+        return v
+
+    @validator("target_tag")
+    def validate_target_tag(cls, v):
+        """Validate target tag format."""
+        v = v.lower().strip()
+        if not _LOWERCASE_TAG_RE.match(v):
+            raise ValueError(
+                "Invalid tag format: only lowercase alphanumeric, underscore, "
+                "and hyphen allowed"
+            )
+        if contains_path_traversal(v):
+            raise ValueError("Invalid characters in tag")
+        return v
+
+
+class GetFactsByTagRequest(BaseModel):
+    """Request model for getting facts by tag with pagination."""
+
+    limit: int = Field(default=50, ge=1, le=500, description="Max facts to return")
+    offset: int = Field(default=0, ge=0, description="Pagination offset")
+    include_content: bool = Field(
+        default=False,
+        description="Include fact content in response",
+    )
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -485,6 +561,10 @@ class DeduplicationRequest(BaseModel):
         le=1.0,
         description="Similarity threshold for detecting duplicates (0.5-1.0)",
     )
+    use_embeddings: bool = Field(
+        default=False,
+        description="Use vector embeddings for semantic similarity (Issue #417)",
+    )
     dry_run: bool = Field(
         default=True,
         description="If True, only report duplicates without merging",
@@ -497,11 +577,17 @@ class DeduplicationRequest(BaseModel):
         default=None,
         description="Limit deduplication to specific category",
     )
+    max_results: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum number of duplicate groups to return",
+    )
     max_comparisons: int = Field(
         default=10000,
         ge=100,
         le=100000,
-        description="Maximum number of comparisons to avoid timeout",
+        description="Maximum number of comparisons to avoid timeout (hash mode only)",
     )
 
     @validator("keep_strategy")
@@ -587,6 +673,87 @@ class CleanupRequest(BaseModel):
     )
 
 
+# ===== BACKUP AND RESTORE MODELS (Issue #419) =====
+
+
+class BackupRequest(BaseModel):
+    """Request model for creating knowledge base backups (Issue #419)"""
+
+    include_embeddings: bool = Field(
+        default=True,
+        description="Include vector embeddings in backup (larger file size)",
+    )
+    include_metadata: bool = Field(
+        default=True,
+        description="Include backup metadata (stats, categories)",
+    )
+    compression: bool = Field(
+        default=True,
+        description="Use gzip compression for backup file",
+    )
+    description: str = Field(
+        default="",
+        max_length=500,
+        description="Optional description for the backup",
+    )
+
+
+class RestoreRequest(BaseModel):
+    """Request model for restoring knowledge base from backup (Issue #419)"""
+
+    backup_file: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Path to backup file to restore",
+    )
+    overwrite_existing: bool = Field(
+        default=False,
+        description="Overwrite existing facts with backup data",
+    )
+    skip_duplicates: bool = Field(
+        default=True,
+        description="Skip facts that already exist",
+    )
+    restore_embeddings: bool = Field(
+        default=True,
+        description="Restore vector embeddings if available",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="Only validate backup, don't actually restore",
+    )
+
+    @validator("backup_file")
+    def validate_backup_file(cls, v):
+        """Validate backup file path (Issue #419)."""
+        # Prevent path traversal attempts
+        if contains_path_traversal(v):
+            raise ValueError("Path traversal not allowed in backup_file")
+        # Validate it looks like a backup file
+        if not v.endswith((".json", ".jsongz", ".json.gz")):
+            raise ValueError("Backup file must be .json or .json.gz format")
+        return v
+
+
+class DeleteBackupRequest(BaseModel):
+    """Request model for deleting a backup file (Issue #419)"""
+
+    backup_file: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Path to backup file to delete",
+    )
+
+    @validator("backup_file")
+    def validate_backup_file(cls, v):
+        """Validate backup file path (Issue #419)."""
+        if contains_path_traversal(v):
+            raise ValueError("Path traversal not allowed in backup_file")
+        return v
+
+
 class UpdateFactRequest(BaseModel):
     """Request model for updating a fact"""
 
@@ -629,6 +796,10 @@ __all__ = [
     "RemoveTagsRequest",
     "BulkTagRequest",
     "SearchByTagsRequest",
+    # Tag management CRUD (Issue #409)
+    "RenameTagRequest",
+    "MergeTagsRequest",
+    "GetFactsByTagRequest",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",
@@ -639,4 +810,8 @@ __all__ = [
     "BulkCategoryUpdateRequest",
     "CleanupRequest",
     "UpdateFactRequest",
+    # Backup and restore (Issue #419)
+    "BackupRequest",
+    "RestoreRequest",
+    "DeleteBackupRequest",
 ]
