@@ -59,18 +59,23 @@ class IndexMixin:
     ) -> Any:
         """Delete existing and create new collection with HNSW params."""
         logger.info(
-            f"Creating new collection '{target_name}' with HNSW params: "
-            f"construction_ef={self.hnsw_construction_ef}, "
-            f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+            "Creating new collection '%s' with HNSW params: "
+            "construction_ef=%d, search_ef=%d, M=%d",
+            target_name,
+            self.hnsw_construction_ef,
+            self.hnsw_search_ef,
+            self.hnsw_m,
         )
 
         # Issue #369: Wrap blocking delete_collection with asyncio.to_thread
         try:
             await asyncio.to_thread(chroma_client.delete_collection, name=target_name)
-            logger.info(f"Deleted existing collection: {target_name}")
+            logger.info("Deleted existing collection: %s", target_name)
         except Exception as e:
             logger.debug(
-                f"Collection {target_name} does not exist or could not be deleted: {e}"
+                "Collection %s does not exist or could not be deleted: %s",
+                target_name,
+                e,
             )
 
         # Issue #369: Wrap blocking create_collection with asyncio.to_thread
@@ -111,7 +116,7 @@ class IndexMixin:
             offset += batch_size
 
             if migrated % 10000 == 0:
-                logger.info(f"Migration progress: {migrated}/{old_count} vectors")
+                logger.info("Migration progress: %d/%d vectors", migrated, old_count)
 
         return migrated
 
@@ -123,7 +128,9 @@ class IndexMixin:
         hnsw_metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Build success result dictionary."""
-        logger.info(f"Migration complete: {migrated} vectors migrated to '{target_name}'")
+        logger.info(
+            "Migration complete: %d vectors migrated to '%s'", migrated, target_name
+        )
         return {
             "status": "success",
             "old_collection": self.chromadb_collection,
@@ -132,8 +139,9 @@ class IndexMixin:
             "migrated_count": migrated,
             "hnsw_params": hnsw_metadata,
             "message": (
-                f"Successfully migrated {migrated} vectors. "
-                f"To switch, update AUTOBOT_CHROMADB_COLLECTION={target_name}"
+                "Successfully migrated %d vectors. "
+                "To switch, update AUTOBOT_CHROMADB_COLLECTION=%s"
+                % (migrated, target_name)
             ),
         }
 
@@ -181,7 +189,7 @@ class IndexMixin:
                 return {"status": "skipped", "message": "No vectors to migrate", "old_count": 0}
 
             # Prepare target collection with HNSW params
-            target_name = new_collection_name or f"{self.chromadb_collection}_optimized"
+            target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
             hnsw_metadata = self._get_hnsw_metadata()
             new_collection = await self._prepare_target_collection(
                 chroma_client, target_name, hnsw_metadata
@@ -193,7 +201,7 @@ class IndexMixin:
             return self._build_success_result(target_name, old_count, migrated, hnsw_metadata)
 
         except Exception as e:
-            logger.error(f"ChromaDB index rebuild failed: {e}")
+            logger.error("ChromaDB index rebuild failed: %s", e)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -251,7 +259,7 @@ class IndexMixin:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get ChromaDB index info: {e}")
+            logger.error("Failed to get ChromaDB index info: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def rebuild_search_index(self) -> Dict[str, Any]:
@@ -279,7 +287,7 @@ class IndexMixin:
             }
 
         except Exception as e:
-            logger.error(f"Failed to rebuild search index: {e}")
+            logger.error("Failed to rebuild search index: %s", e)
             return {"status": "error", "message": str(e)}
 
     def ensure_initialized(self):

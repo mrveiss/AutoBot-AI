@@ -1296,57 +1296,45 @@ class BulkOperationsMixin:
 
     # ===== BACKUP AND RESTORE OPERATIONS (Issue #419) =====
 
-    async def create_backup(
-        self,
-        backup_dir: Optional[str] = None,
-        include_embeddings: bool = True,
-        include_metadata: bool = True,
-        compression: bool = True,
-        description: str = "",
+    def _build_backup_success_result(
+        self, backup_name: str, backup_file: str, facts: List, file_size: int,
+        include_embeddings: bool, compression: bool, created_at: str
     ) -> Dict[str, Any]:
-        """
-        Create a full backup of the knowledge base.
+        """Build successful backup result (Issue #398: extracted)."""
+        return {
+            "status": "success", "backup_file": backup_file, "backup_name": backup_name,
+            "facts_count": len(facts), "file_size": file_size,
+            "include_embeddings": include_embeddings, "compression": compression, "created_at": created_at,
+        }
 
-        Issue #419: Backup and restore functionality.
-        Issue #398: Refactored using extracted helpers.
-        """
+    async def create_backup(
+        self, backup_dir: Optional[str] = None, include_embeddings: bool = True,
+        include_metadata: bool = True, compression: bool = True, description: str = "",
+    ) -> Dict[str, Any]:
+        """Create a full backup of the knowledge base (Issue #398: refactored)."""
         import os
 
         try:
             backup_dir = self._get_backup_dir(backup_dir)
             os.makedirs(backup_dir, exist_ok=True)
 
-            backup_name, backup_file = self._generate_backup_path(
-                backup_dir, compression
-            )
+            backup_name, backup_file = self._generate_backup_path(backup_dir, compression)
             logger.info("Creating backup: %s", backup_file)
 
             facts = await self.get_all_facts()
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
 
-            backup_data = await self._build_backup_data(
-                facts, description, include_embeddings, include_metadata
-            )
-
+            backup_data = await self._build_backup_data(facts, description, include_embeddings, include_metadata)
             await self._write_backup_file(backup_file, backup_data, compression)
 
             file_size = os.path.getsize(backup_file)
-            logger.info(
-                "Backup created: %s (%d facts, %d bytes)",
-                backup_file, len(facts), file_size
-            )
+            logger.info("Backup created: %s (%d facts, %d bytes)", backup_file, len(facts), file_size)
 
-            return {
-                "status": "success",
-                "backup_file": backup_file,
-                "backup_name": backup_name,
-                "facts_count": len(facts),
-                "file_size": file_size,
-                "include_embeddings": include_embeddings,
-                "compression": compression,
-                "created_at": backup_data["created_at"],
-            }
+            return self._build_backup_success_result(
+                backup_name, backup_file, facts, file_size,
+                include_embeddings, compression, backup_data["created_at"]
+            )
 
         except Exception as e:
             logger.error("Backup failed: %s", e)

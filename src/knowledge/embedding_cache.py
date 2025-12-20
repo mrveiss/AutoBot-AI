@@ -77,7 +77,7 @@ class EmbeddingCache:
                 # Move to end (most recently used)
                 self._cache.move_to_end(key)
                 self._hits += 1
-                logger.debug(f"Embedding cache HIT for query: {query[:50]}...")
+                logger.debug("Embedding cache HIT for query: %s...", query[:50])
                 return self._cache[key]
 
             # Remove expired entry if exists

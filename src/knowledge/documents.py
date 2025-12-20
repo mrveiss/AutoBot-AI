@@ -69,7 +69,7 @@ class DocumentsMixin:
             logger.warning("Document addition timed out")
             return {"status": "timeout", "message": "Document addition timed out"}
         except Exception as e:
-            logger.error(f"Document addition failed: {e}")
+            logger.error("Document addition failed: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def _add_document_internal(
@@ -113,7 +113,7 @@ class DocumentsMixin:
             }
 
         except Exception as e:
-            logger.error(f"Export failed: {e}")
+            logger.error("Export failed: %s", e)
             return {"status": "error", "message": str(e)}
 
     def extract_category_names(self, facts: List[Dict[str, Any]]) -> List[str]:
@@ -163,7 +163,7 @@ class DocumentsMixin:
             return result
 
         except Exception as e:
-            logger.error(f"Failed to add document from file {file_path}: {e}")
+            logger.error("Failed to add document from file %s: %s", file_path, e)
             return {"status": "error", "message": str(e)}
 
     async def add_documents_from_directory(
@@ -191,7 +191,7 @@ class DocumentsMixin:
             # Find matching files
             # Issue #358 - use lambda to defer glob to thread
             files = await asyncio.to_thread(lambda: list(dir_path_obj.glob(pattern)))
-            logger.info(f"Found {len(files)} files matching pattern '{pattern}'")
+            logger.info("Found %d files matching pattern '%s'", len(files), pattern)
 
             # Process files in parallel with bounded concurrency
             semaphore = asyncio.Semaphore(10)  # Limit concurrent file operations
@@ -231,7 +231,7 @@ class DocumentsMixin:
             }
 
         except Exception as e:
-            logger.error(f"Failed to add documents from directory {dir_path}: {e}")
+            logger.error("Failed to add documents from directory %s: %s", dir_path, e)
             return {"status": "error", "message": str(e)}
 
     async def get_librarian(self) -> Dict[str, Any]:
@@ -250,7 +250,7 @@ class DocumentsMixin:
                 "categories": stats.get("categories", []),
             }
         except Exception as e:
-            logger.error(f"Failed to get librarian info: {e}")
+            logger.error("Failed to get librarian info: %s", e)
             return {"status": "error", "message": str(e)}
 
     # Method references needed from other mixins
