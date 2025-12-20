@@ -211,6 +211,40 @@ def generate_request_id() -> str:
 
 
 # ====================================================================
+# Helper Functions (Issue #398: Extracted to reduce method length)
+# ====================================================================
+
+
+async def _get_entity_name_by_id(
+    memory_graph: AutoBotMemoryGraph, entity_id: str
+) -> str:
+    """
+    Get entity name from ID. Issue #398: Extracted common pattern.
+
+    Args:
+        memory_graph: Memory graph instance
+        entity_id: Entity UUID
+
+    Returns:
+        Entity name
+
+    Raises:
+        HTTPException: If entity not found
+    """
+    entity = await memory_graph.get_entity(entity_id=entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+    return entity["name"]
+
+
+def _parse_tag_list(tags: Optional[str]) -> Optional[List[str]]:
+    """Parse comma-separated tags into list. Issue #398: Extracted."""
+    if not tags:
+        return None
+    return [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+
+# ====================================================================
 # Entity Management Endpoints
 # ====================================================================
 
@@ -479,31 +513,20 @@ async def add_observations(
 
     try:
         logger.info(f"[{request_id}] Adding observations to entity: {entity_id}")
+        entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
-        # First get the entity to retrieve its name
-        entity = await memory_graph.get_entity(entity_id=entity_id)
-        if entity is None:
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
-
-        entity_name = entity["name"]
-
-        # Add observations using entity name
         updated_entity = await memory_graph.add_observations(
             entity_name=entity_name, observations=observation_data.observations
         )
-
-        logger.info(
-            f"[{request_id}] Added {len(observation_data.observations)} observations to {entity_name}"
-        )
+        obs_count = len(observation_data.observations)
+        logger.info(f"[{request_id}] Added {obs_count} observations to {entity_name}")
 
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
                 "data": updated_entity,
-                "message": f"Added {len(observation_data.observations)} observations",
+                "message": f"Added {obs_count} observations",
                 "request_id": request_id,
             },
         )
@@ -551,25 +574,13 @@ async def delete_entity(
 
     try:
         logger.info(f"[{request_id}] Deleting entity: {entity_id}")
+        entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
-        # First get the entity to retrieve its name
-        entity = await memory_graph.get_entity(entity_id=entity_id)
-        if entity is None:
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
-
-        entity_name = entity["name"]
-
-        # Delete using entity name
         deleted = await memory_graph.delete_entity(
             entity_name=entity_name, cascade_relations=cascade_relations
         )
-
         if not deleted:
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
 
         logger.info(f"[{request_id}] Entity deleted: {entity_name}")
 
@@ -701,24 +712,14 @@ async def get_related_entities(
 
     try:
         logger.info(f"[{request_id}] Getting related entities for: {entity_id}")
+        entity_name = await _get_entity_name_by_id(memory_graph, entity_id)
 
-        # First get the entity to retrieve its name
-        entity = await memory_graph.get_entity(entity_id=entity_id)
-        if entity is None:
-            raise HTTPException(
-                status_code=404, detail=f"Entity not found: {entity_id}"
-            )
-
-        entity_name = entity["name"]
-
-        # Get related entities
         related = await memory_graph.get_related_entities(
             entity_name=entity_name,
             relation_type=relation_type,
             direction=direction,
             max_depth=max_depth,
         )
-
         logger.info(f"[{request_id}] Found {len(related)} related entities")
 
         return JSONResponse(
@@ -856,15 +857,10 @@ async def search_entities(
 
     try:
         logger.info(
-            f"[{request_id}] Searching entities: query='{query}', type={entity_type}, limit={limit}"
+            f"[{request_id}] Searching: query='{query}', type={entity_type}, limit={limit}"
         )
+        tag_list = _parse_tag_list(tags)
 
-        # Parse tags if provided
-        tag_list = None
-        if tags:
-            tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-
-        # Execute search
         entities = await memory_graph.search_entities(
             query=query,
             entity_type=entity_type,
@@ -872,7 +868,6 @@ async def search_entities(
             status=status,
             limit=limit,
         )
-
         logger.info(f"[{request_id}] Search returned {len(entities)} entities")
 
         return JSONResponse(
