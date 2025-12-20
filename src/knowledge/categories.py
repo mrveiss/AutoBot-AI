@@ -50,6 +50,32 @@ class CategoriesMixin:
     # CATEGORY CRUD OPERATIONS (Issue #411)
     # =========================================================================
 
+    async def _build_category_path(
+        self, name: str, parent_id: Optional[str]
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Build category path from name and parent (Issue #398: extracted).
+
+        Returns: (path, error_message) - error_message is None if successful
+        """
+        if parent_id:
+            parent_data = await self._get_category_data(parent_id)
+            if not parent_data:
+                return None, f"Parent category not found: {parent_id}"
+            return f"{parent_data.get('path', '')}/{name}", None
+        return name, None
+
+    async def _store_category(
+        self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]
+    ) -> None:
+        """Store category in Redis (Issue #398: extracted)."""
+        await self.aioredis_client.hset(f"category:{category_id}", mapping=category_data)
+        await self.aioredis_client.set(f"category:path:{category_data['path']}", category_id)
+
+        if parent_id:
+            await self.aioredis_client.sadd(f"category:children:{parent_id}", category_id)
+        else:
+            await self.aioredis_client.sadd("category:root", category_id)
+
     async def create_category(
         self,
         name: str,
@@ -58,79 +84,31 @@ class CategoriesMixin:
         icon: Optional[str] = None,
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Create a new category in the hierarchy.
-
-        Issue #411: Hierarchical category tree structure.
-
-        Args:
-            name: Category name (e.g., "python")
-            parent_id: Optional parent category ID (None = root category)
-            description: Optional category description
-            icon: Optional icon identifier
-            color: Optional hex color code
-
-        Returns:
-            Dict with success status and category data
-        """
+        """Create a new category in the hierarchy (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Validate and normalize name
             name = name.strip().lower().replace(" ", "-")
             if not name:
                 return {"success": False, "message": "Category name is required"}
 
-            # Generate category ID
-            category_id = str(uuid.uuid4())
+            path, error = await self._build_category_path(name, parent_id)
+            if error:
+                return {"success": False, "message": error}
 
-            # Build path
-            if parent_id:
-                # Verify parent exists
-                parent_data = await self._get_category_data(parent_id)
-                if not parent_data:
-                    return {"success": False, "message": f"Parent category not found: {parent_id}"}
-                parent_path = parent_data.get("path", "")
-                path = f"{parent_path}/{name}"
-            else:
-                path = name
-
-            # Check path uniqueness
-            existing_id = await self.aioredis_client.get(f"category:path:{path}")
-            if existing_id:
+            if await self.aioredis_client.get(f"category:path:{path}"):
                 return {"success": False, "message": f"Category path already exists: {path}"}
 
-            # Build category data
+            category_id = str(uuid.uuid4())
             now = datetime.now(timezone.utc).isoformat()
             category_data = {
-                "id": category_id,
-                "name": name,
-                "parent_id": parent_id or "",
-                "path": path,
-                "description": description or "",
-                "icon": icon or "",
-                "color": color or "",
-                "created_at": now,
-                "updated_at": now,
-                "fact_count": 0,
+                "id": category_id, "name": name, "parent_id": parent_id or "",
+                "path": path, "description": description or "", "icon": icon or "",
+                "color": color or "", "created_at": now, "updated_at": now, "fact_count": 0,
             }
 
-            # Store category hash
-            await self.aioredis_client.hset(
-                f"category:{category_id}",
-                mapping=category_data,
-            )
-
-            # Store path lookup
-            await self.aioredis_client.set(f"category:path:{path}", category_id)
-
-            # Update parent-child relationships
-            if parent_id:
-                await self.aioredis_client.sadd(f"category:children:{parent_id}", category_id)
-            else:
-                await self.aioredis_client.sadd("category:root", category_id)
-
+            await self._store_category(category_id, category_data, parent_id)
             logger.info("Created category '%s' (path: %s, id: %s)", name, path, category_id)
 
             return {
@@ -200,6 +178,32 @@ class CategoriesMixin:
             logger.error("Failed to get category by path '%s': %s", path, e)
             return {"success": False, "message": str(e)}
 
+    async def _handle_category_rename(
+        self, category_id: str, current: Dict[str, Any], new_name: str, updates: Dict[str, Any]
+    ) -> Optional[str]:
+        """Handle category rename and path update (Issue #398: extracted).
+
+        Returns: error message or None if successful
+        """
+        old_path = current["path"]
+        new_name = new_name.strip().lower().replace(" ", "-")
+
+        parent_id = current.get("parent_id", "")
+        if parent_id:
+            parent_data = await self._get_category_data(parent_id)
+            parent_path = parent_data.get("path", "") if parent_data else ""
+            new_path = f"{parent_path}/{new_name}"
+        else:
+            new_path = new_name
+
+        if await self.aioredis_client.get(f"category:path:{new_path}"):
+            return f"Category path already exists: {new_path}"
+
+        await self._update_category_path(category_id, old_path, new_path)
+        updates["name"] = new_name
+        updates["path"] = new_path
+        return None
+
     async def update_category(
         self,
         category_id: str,
@@ -208,60 +212,22 @@ class CategoriesMixin:
         icon: Optional[str] = None,
         color: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Update category metadata.
-
-        Issue #411: Category CRUD operations.
-
-        Note: Renaming updates the path and all child paths.
-
-        Args:
-            category_id: Category UUID
-            name: New name (triggers path update)
-            description: New description
-            icon: New icon identifier
-            color: New hex color code
-
-        Returns:
-            Dict with success status and updated category data
-        """
+        """Update category metadata (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Get current category data
             current = await self._get_category_data(category_id)
             if not current:
                 return {"success": False, "message": f"Category not found: {category_id}"}
 
-            updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            updates: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
 
-            # Handle rename (updates path)
             if name and name != current["name"]:
-                old_path = current["path"]
-                new_name = name.strip().lower().replace(" ", "-")
+                error = await self._handle_category_rename(category_id, current, name, updates)
+                if error:
+                    return {"success": False, "message": error}
 
-                # Build new path
-                parent_id = current.get("parent_id", "")
-                if parent_id:
-                    parent_data = await self._get_category_data(parent_id)
-                    parent_path = parent_data.get("path", "") if parent_data else ""
-                    new_path = f"{parent_path}/{new_name}"
-                else:
-                    new_path = new_name
-
-                # Check new path uniqueness
-                existing = await self.aioredis_client.get(f"category:path:{new_path}")
-                if existing:
-                    return {"success": False, "message": f"Category path already exists: {new_path}"}
-
-                # Update paths (this category and all descendants)
-                await self._update_category_path(category_id, old_path, new_path)
-
-                updates["name"] = new_name
-                updates["path"] = new_path
-
-            # Update other fields
             if description is not None:
                 updates["description"] = description
             if icon is not None:
@@ -269,18 +235,55 @@ class CategoriesMixin:
             if color is not None:
                 updates["color"] = color
 
-            # Apply updates
             await self.aioredis_client.hset(f"category:{category_id}", mapping=updates)
-
-            # Get updated data
             updated = await self._get_category_data(category_id)
 
             logger.info("Updated category '%s'", category_id)
-            return {"success": True, "category": updated, "message": "Category updated successfully"}
+            return {
+                "success": True,
+                "category": updated,
+                "message": "Category updated successfully",
+            }
 
         except Exception as e:
             logger.error("Failed to update category '%s': %s", category_id, e)
             return {"success": False, "message": str(e)}
+
+    async def _reassign_category_facts(
+        self, categories: List[str], reassign_to: Optional[str]
+    ) -> int:
+        """Reassign facts from categories being deleted (Issue #398: extracted)."""
+        count = 0
+        for cat_id in categories:
+            cat_facts = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
+            for fact_id in cat_facts:
+                if isinstance(fact_id, bytes):
+                    fact_id = fact_id.decode("utf-8")
+                if reassign_to:
+                    await self._assign_fact_to_category(fact_id, reassign_to)
+                else:
+                    await self._remove_fact_category(fact_id)
+                count += 1
+        return count
+
+    async def _delete_category_records(self, cat_id: str) -> None:
+        """Delete all Redis records for a category (Issue #398: extracted)."""
+        cat_data = await self._get_category_data(cat_id)
+        if not cat_data:
+            return
+
+        path = cat_data.get("path", "")
+        parent_id = cat_data.get("parent_id", "")
+
+        await self.aioredis_client.delete(f"category:path:{path}")
+        if parent_id:
+            await self.aioredis_client.srem(f"category:children:{parent_id}", cat_id)
+        else:
+            await self.aioredis_client.srem("category:root", cat_id)
+
+        await self.aioredis_client.delete(f"category:children:{cat_id}")
+        await self.aioredis_client.delete(f"category:facts:{cat_id}")
+        await self.aioredis_client.delete(f"category:{cat_id}")
 
     async def delete_category(
         self,
@@ -288,90 +291,40 @@ class CategoriesMixin:
         recursive: bool = False,
         reassign_to: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Delete a category.
-
-        Issue #411: Category deletion with child handling.
-
-        Args:
-            category_id: Category UUID to delete
-            recursive: If True, delete all descendants. If False, fail if has children.
-            reassign_to: Optional category ID to reassign facts to
-
-        Returns:
-            Dict with success status and deletion details
-        """
+        """Delete a category (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Get category data
             category = await self._get_category_data(category_id)
             if not category:
                 return {"success": False, "message": f"Category not found: {category_id}"}
 
-            # Check for children
             children = await self.aioredis_client.smembers(f"category:children:{category_id}")
             if children and not recursive:
                 return {
                     "success": False,
-                    "message": "Category has children. Use recursive=True to delete all descendants.",
+                    "message": "Category has children. Use recursive=True to delete.",
                 }
 
-            # Collect categories to delete
             categories_to_delete = [category_id]
             if recursive and children:
-                descendants = await self._get_all_descendants(category_id)
-                categories_to_delete.extend(descendants)
+                categories_to_delete.extend(await self._get_all_descendants(category_id))
 
-            # Reassign or orphan facts
-            facts_reassigned = 0
+            facts_reassigned = await self._reassign_category_facts(
+                categories_to_delete, reassign_to
+            )
+
             for cat_id in categories_to_delete:
-                cat_facts = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
-                for fact_id in cat_facts:
-                    if isinstance(fact_id, bytes):
-                        fact_id = fact_id.decode("utf-8")
-                    if reassign_to:
-                        await self._assign_fact_to_category(fact_id, reassign_to)
-                    else:
-                        # Remove category from fact metadata
-                        await self._remove_fact_category(fact_id)
-                    facts_reassigned += 1
-
-            # Delete categories
-            for cat_id in categories_to_delete:
-                cat_data = await self._get_category_data(cat_id)
-                if cat_data:
-                    path = cat_data.get("path", "")
-                    parent_id = cat_data.get("parent_id", "")
-
-                    # Delete path lookup
-                    await self.aioredis_client.delete(f"category:path:{path}")
-
-                    # Remove from parent's children
-                    if parent_id:
-                        await self.aioredis_client.srem(f"category:children:{parent_id}", cat_id)
-                    else:
-                        await self.aioredis_client.srem("category:root", cat_id)
-
-                    # Delete children set
-                    await self.aioredis_client.delete(f"category:children:{cat_id}")
-
-                    # Delete facts set
-                    await self.aioredis_client.delete(f"category:facts:{cat_id}")
-
-                    # Delete category hash
-                    await self.aioredis_client.delete(f"category:{cat_id}")
+                await self._delete_category_records(cat_id)
 
             logger.info(
                 "Deleted %d categories, reassigned %d facts",
-                len(categories_to_delete),
-                facts_reassigned,
+                len(categories_to_delete), facts_reassigned
             )
 
             return {
-                "success": True,
-                "deleted_count": len(categories_to_delete),
+                "success": True, "deleted_count": len(categories_to_delete),
                 "facts_reassigned": facts_reassigned,
                 "message": f"Deleted {len(categories_to_delete)} categories",
             }
@@ -579,6 +532,30 @@ class CategoriesMixin:
             logger.error("Failed to assign fact '%s' to category '%s': %s", fact_id, category_id, e)
             return {"success": False, "message": str(e)}
 
+    async def _gather_category_fact_ids(self, category_ids: List[str]) -> set:
+        """Gather all fact IDs from multiple categories (Issue #398: extracted)."""
+        all_ids: set = set()
+        for cat_id in category_ids:
+            fact_ids = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
+            for fid in fact_ids:
+                all_ids.add(fid.decode("utf-8") if isinstance(fid, bytes) else fid)
+        return all_ids
+
+    async def _load_fact_data(self, fact_ids: List[str]) -> List[Dict[str, Any]]:
+        """Load fact data for multiple fact IDs (Issue #398: extracted)."""
+        facts = []
+        for fid in fact_ids:
+            fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
+            if fact_data:
+                decoded = {
+                    (k.decode("utf-8") if isinstance(k, bytes) else k):
+                    (v.decode("utf-8") if isinstance(v, bytes) else v)
+                    for k, v in fact_data.items()
+                }
+                decoded["id"] = fid
+                facts.append(decoded)
+        return facts
+
     async def get_facts_in_category(
         self,
         category_id: str,
@@ -586,73 +563,30 @@ class CategoriesMixin:
         limit: int = 50,
         offset: int = 0,
     ) -> Dict[str, Any]:
-        """
-        Get all facts in a category.
-
-        Issue #411: Retrieve facts by category.
-
-        Args:
-            category_id: Category UUID
-            include_descendants: Include facts from child categories
-            limit: Maximum number of facts
-            offset: Pagination offset
-
-        Returns:
-            Dict with facts list
-        """
+        """Get all facts in a category (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            # Verify category exists
             category = await self._get_category_data(category_id)
             if not category:
                 return {"success": False, "message": f"Category not found: {category_id}"}
 
-            # Collect category IDs to query
             category_ids = [category_id]
             if include_descendants:
-                descendants = await self._get_all_descendants(category_id)
-                category_ids.extend(descendants)
+                category_ids.extend(await self._get_all_descendants(category_id))
 
-            # Gather all fact IDs
-            all_fact_ids = set()
-            for cat_id in category_ids:
-                fact_ids = await self.aioredis_client.smembers(f"category:facts:{cat_id}")
-                for fid in fact_ids:
-                    if isinstance(fid, bytes):
-                        fid = fid.decode("utf-8")
-                    all_fact_ids.add(fid)
-
+            all_fact_ids = await self._gather_category_fact_ids(category_ids)
             total_count = len(all_fact_ids)
 
-            # Apply pagination
-            fact_ids_list = sorted(list(all_fact_ids))
-            paginated_ids = fact_ids_list[offset : offset + limit]
-
-            # Get fact data
-            facts = []
-            for fid in paginated_ids:
-                fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
-                if fact_data:
-                    # Decode bytes
-                    decoded = {}
-                    for k, v in fact_data.items():
-                        key = k.decode("utf-8") if isinstance(k, bytes) else k
-                        val = v.decode("utf-8") if isinstance(v, bytes) else v
-                        decoded[key] = val
-                    decoded["id"] = fid
-                    facts.append(decoded)
+            paginated_ids = sorted(list(all_fact_ids))[offset : offset + limit]
+            facts = await self._load_fact_data(paginated_ids)
 
             return {
-                "success": True,
-                "category_id": category_id,
-                "category_path": category.get("path"),
-                "facts": facts,
-                "total_count": total_count,
-                "returned_count": len(facts),
-                "limit": limit,
-                "offset": offset,
+                "success": True, "category_id": category_id,
+                "category_path": category.get("path"), "facts": facts,
+                "total_count": total_count, "returned_count": len(facts),
+                "limit": limit, "offset": offset,
                 "has_more": offset + limit < total_count,
                 "include_descendants": include_descendants,
             }
