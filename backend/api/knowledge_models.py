@@ -483,6 +483,66 @@ class GetFactsByTagRequest(BaseModel):
     )
 
 
+# Issue #410: Pre-compiled regex for hex color validation
+_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+# Issue #410: Default tag colors for auto-assignment
+DEFAULT_TAG_COLORS = [
+    "#3B82F6",  # Blue
+    "#10B981",  # Green
+    "#F59E0B",  # Amber
+    "#EF4444",  # Red
+    "#8B5CF6",  # Purple
+    "#EC4899",  # Pink
+    "#06B6D4",  # Cyan
+    "#F97316",  # Orange
+]
+
+
+class UpdateTagStyleRequest(BaseModel):
+    """
+    Request model for updating tag styling (Issue #410).
+
+    Allows setting color and optional icon for visual tag customization.
+    """
+
+    color: Optional[str] = Field(
+        default=None,
+        min_length=7,
+        max_length=7,
+        description="Hex color code (e.g., '#3B82F6')",
+    )
+    icon: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Optional icon class (e.g., 'fas fa-code')",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Optional tag description",
+    )
+
+    @validator("color")
+    def validate_color(cls, v):
+        """Validate hex color format."""
+        if v is not None:
+            if not _HEX_COLOR_RE.match(v):
+                raise ValueError(
+                    f"Invalid color format: {v}. Use hex format like '#3B82F6'"
+                )
+        return v
+
+    @validator("icon")
+    def validate_icon(cls, v):
+        """Validate icon class format (basic sanitization)."""
+        if v is not None:
+            # Only allow alphanumeric, hyphens, and spaces (for icon classes)
+            if not re.match(r"^[a-zA-Z0-9\s\-]+$", v):
+                raise ValueError("Invalid icon format: only alphanumeric, spaces, hyphens")
+        return v
+
+
 # ===== BULK OPERATION MODELS (Issue #79) =====
 
 
@@ -800,6 +860,9 @@ __all__ = [
     "RenameTagRequest",
     "MergeTagsRequest",
     "GetFactsByTagRequest",
+    # Tag styling (Issue #410)
+    "UpdateTagStyleRequest",
+    "DEFAULT_TAG_COLORS",
     # Bulk operations
     "ExportFormat",
     "ExportFilters",

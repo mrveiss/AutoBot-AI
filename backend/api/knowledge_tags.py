@@ -19,8 +19,11 @@ Endpoints:
 - POST /tags/merge - Merge multiple tags into one (Issue #409)
 - GET /tags/{tag_name}/facts - Get all facts with a specific tag (Issue #409)
 - GET /tags/{tag_name}/info - Get tag information (Issue #409)
+- PATCH /tags/{tag_name}/style - Update tag styling (Issue #410)
+- GET /tags/{tag_name}/style - Get tag style (Issue #410)
+- DELETE /tags/{tag_name}/style - Reset tag style to defaults (Issue #410)
 
-Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD)
+Related Issues: #77 (Tags), #185 (Split), #209 (Knowledge split), #409 (Tag CRUD), #410 (Tag Styling)
 """
 
 import logging
@@ -33,11 +36,11 @@ from backend.api.knowledge_models import (
     AddTagsRequest,
     BulkTagRequest,
     FactIdValidator,
-    GetFactsByTagRequest,
     MergeTagsRequest,
     RemoveTagsRequest,
     RenameTagRequest,
     SearchByTagsRequest,
+    UpdateTagStyleRequest,
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -673,3 +676,193 @@ async def get_tag_info(
             raise HTTPException(status_code=404, detail=error_message)
         else:
             raise HTTPException(status_code=500, detail=error_message)
+
+
+# ===== TAG STYLING OPERATIONS (Issue #410) =====
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_tag_style",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.patch("/tags/{tag_name}/style")
+async def update_tag_style(
+    tag_name: str = Path(..., description="Tag name to update styling for"),
+    request: UpdateTagStyleRequest = ...,
+    req: Request = None,
+):
+    """
+    Update styling for a tag (color, icon, description).
+
+    Issue #410: Tag styling - colors and visual customization.
+
+    Parameters:
+    - tag_name: Name of the tag to style
+    - color: Hex color code (e.g., '#3B82F6')
+    - icon: Optional icon identifier
+    - description: Optional tag description
+
+    Returns:
+    - status: success or error
+    - tag: Tag name
+    - style: Updated style information
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    logger.info(
+        "Updating style for tag '%s': color=%s, icon=%s",
+        tag_name,
+        request.color,
+        request.icon,
+    )
+
+    result = await kb.update_tag_style(
+        tag=tag_name,
+        color=request.color,
+        icon=request.icon,
+        description=request.description,
+    )
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "style": result.get("style", {}),
+            "message": result.get("message", "Tag style updated successfully"),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
+        else:
+            raise HTTPException(status_code=400, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tag_style",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/tags/{tag_name}/style")
+async def get_tag_style(
+    tag_name: str = Path(..., description="Tag name to get styling for"),
+    req: Request = None,
+):
+    """
+    Get styling information for a tag.
+
+    Issue #410: Tag styling - colors and visual customization.
+
+    Returns default color if no custom style is set.
+
+    Parameters:
+    - tag_name: Name of the tag
+
+    Returns:
+    - status: success or error
+    - tag: Tag name
+    - style: Style information (color, icon, description, is_default)
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    result = await kb.get_tag_style(tag=tag_name)
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "style": {
+                "color": result.get("color"),
+                "icon": result.get("icon"),
+                "description": result.get("description"),
+                "is_default": result.get("is_default", True),
+            },
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        raise HTTPException(status_code=500, detail=error_message)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_tag_style",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.delete("/tags/{tag_name}/style")
+async def delete_tag_style(
+    tag_name: str = Path(..., description="Tag name to reset styling for"),
+    req: Request = None,
+):
+    """
+    Delete custom styling for a tag (reset to defaults).
+
+    Issue #410: Tag styling - colors and visual customization.
+
+    After deletion, the tag will use a deterministic default color.
+
+    Parameters:
+    - tag_name: Name of the tag
+
+    Returns:
+    - status: success or error
+    - tag: Tag name
+    - message: Confirmation message
+    """
+    # Validate tag format
+    tag_name = tag_name.lower().strip()
+    if not _TAG_PREFIX_RE.match(tag_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid tag format: only lowercase alphanumeric, hyphens, underscores",
+        )
+
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
+
+    logger.info("Deleting style for tag '%s'", tag_name)
+
+    result = await kb.delete_tag_style(tag=tag_name)
+
+    if result.get("success"):
+        return {
+            "status": "success",
+            "tag": result.get("tag", tag_name),
+            "message": result.get("message", "Tag style reset to defaults"),
+        }
+    else:
+        error_message = result.get("message", "Unknown error")
+        raise HTTPException(status_code=500, detail=error_message)

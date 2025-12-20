@@ -11,7 +11,7 @@ removing, searching, and managing tags on facts.
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     import aioredis
@@ -263,92 +263,70 @@ class TagsMixin:
             logger.error("Failed to list all tags: %s", e)
             return {"status": "error", "message": str(e)}
 
+    def _build_bulk_tag_result(
+        self, fact_id: str, result: Any, operation: str
+    ) -> tuple:
+        """Build single result for bulk tag operation (Issue #398: extracted)."""
+        if isinstance(result, Exception):
+            return False, {"fact_id": fact_id, "success": False, "error": str(result)}
+        if result.get("status") == "success":
+            tags_key = "tags_added" if operation == "add" else "tags_removed"
+            return True, {
+                "fact_id": fact_id, "success": True,
+                "tags_affected": result.get(tags_key, []),
+            }
+        return False, {
+            "fact_id": fact_id, "success": False,
+            "error": result.get("message", "Unknown error"),
+        }
+
+    def _determine_bulk_status(self, processed: int, failed: int) -> str:
+        """Determine overall bulk operation status (Issue #398: extracted)."""
+        if failed == 0:
+            return "success"
+        return "partial_success" if processed > 0 else "error"
+
     async def bulk_tag_facts(
         self, fact_ids: List[str], tags: List[str], operation: str = "add"
     ) -> Dict[str, Any]:
-        """
-        Add or remove tags from multiple facts in bulk.
-
-        Issue #420: Enhanced to support both add and remove operations.
-
-        Args:
-            fact_ids: List of fact IDs
-            tags: List of tags to add or remove
-            operation: "add" or "remove" (default: "add")
-
-        Returns:
-            Dict with status, counts, and per-fact results
-        """
+        """Add or remove tags from multiple facts (Issue #398: refactored)."""
         try:
-            # Validate operation
             if operation not in ("add", "remove"):
                 return {
                     "status": "error",
                     "message": f"Invalid operation: {operation}. Must be 'add' or 'remove'",
                 }
-
-            # Select the appropriate method based on operation
             tag_method = (
                 self.add_tags_to_fact if operation == "add"
                 else self.remove_tags_from_fact
             )
-
-            # Issue #370: Process all facts in parallel instead of sequentially
             results = await asyncio.gather(
                 *[tag_method(fact_id, tags) for fact_id in fact_ids],
                 return_exceptions=True,
             )
 
-            # Build detailed results
             processed_count = 0
             failed_count = 0
             per_fact_results = []
-
             for fact_id, result in zip(fact_ids, results):
-                if isinstance(result, Exception):
-                    failed_count += 1
-                    per_fact_results.append({
-                        "fact_id": fact_id,
-                        "success": False,
-                        "error": str(result),
-                    })
-                elif result.get("status") == "success":
+                success, detail = self._build_bulk_tag_result(fact_id, result, operation)
+                per_fact_results.append(detail)
+                if success:
                     processed_count += 1
-                    tags_key = "tags_added" if operation == "add" else "tags_removed"
-                    per_fact_results.append({
-                        "fact_id": fact_id,
-                        "success": True,
-                        "tags_affected": result.get(tags_key, []),
-                    })
                 else:
                     failed_count += 1
-                    per_fact_results.append({
-                        "fact_id": fact_id,
-                        "success": False,
-                        "error": result.get("message", "Unknown error"),
-                    })
-
-            # Determine overall status
-            if failed_count == 0:
-                status = "success"
-            elif processed_count > 0:
-                status = "partial_success"
-            else:
-                status = "error"
 
             logger.info(
                 "Bulk %s tags: %d/%d succeeded", operation, processed_count, len(fact_ids)
             )
-
             return {
-                "status": status,
+                "status": self._determine_bulk_status(processed_count, failed_count),
                 "operation": operation,
                 "processed_count": processed_count,
                 "failed_count": failed_count,
                 "total_facts": len(fact_ids),
                 "results": per_fact_results,
             }
-
         except Exception as e:
             logger.error("Bulk tag operation failed: %s", e)
             return {"status": "error", "message": str(e)}
@@ -774,6 +752,198 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get tag info for '%s': %s", tag, e)
+            return {"success": False, "message": str(e)}
+
+    # =========================================================================
+    # TAG STYLING OPERATIONS (Issue #410)
+    # =========================================================================
+
+    # Default tag colors for auto-assignment
+    _DEFAULT_TAG_COLORS = [
+        "#3B82F6",  # Blue
+        "#10B981",  # Green
+        "#F59E0B",  # Amber
+        "#EF4444",  # Red
+        "#8B5CF6",  # Purple
+        "#EC4899",  # Pink
+        "#06B6D4",  # Cyan
+        "#F97316",  # Orange
+    ]
+
+    async def update_tag_style(
+        self,
+        tag: str,
+        color: Optional[str] = None,
+        icon: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update tag styling (color, icon, description).
+
+        Issue #410: Tag styling - colors and visual customization.
+
+        Args:
+            tag: Tag name to update
+            color: Hex color code (e.g., '#3B82F6')
+            icon: Optional icon class (e.g., 'fas fa-code')
+            description: Optional tag description
+
+        Returns:
+            Dict with updated tag style info
+        """
+        try:
+            # Normalize tag
+            tag = tag.lower().strip()
+            if not tag:
+                return {"success": False, "message": "Tag cannot be empty"}
+
+            # Check if tag exists
+            tag_key = f"tag:{tag}"
+            exists = await asyncio.to_thread(self.redis_client.exists, tag_key)
+            if not exists:
+                return {"success": False, "message": f"Tag '{tag}' not found"}
+
+            # Build style data
+            style_key = f"tag_style:{tag}"
+            style_data = {}
+
+            if color is not None:
+                style_data["color"] = color
+            if icon is not None:
+                style_data["icon"] = icon
+            if description is not None:
+                style_data["description"] = description
+
+            if not style_data:
+                return {
+                    "success": False,
+                    "message": "No style updates provided",
+                }
+
+            # Update style in Redis hash
+            await asyncio.to_thread(self.redis_client.hset, style_key, mapping=style_data)
+
+            # Get updated style
+            updated_style = await self.get_tag_style(tag)
+
+            logger.info("Updated tag '%s' style: %s", tag, style_data)
+
+            return {
+                "success": True,
+                "tag": tag,
+                "style": updated_style.get("style", {}),
+                "message": "Tag style updated successfully",
+            }
+
+        except Exception as e:
+            logger.error("Failed to update tag '%s' style: %s", tag, e)
+            return {"success": False, "message": str(e)}
+
+    async def get_tag_style(self, tag: str) -> Dict[str, Any]:
+        """
+        Get tag styling information.
+
+        Issue #410: Tag styling - colors and visual customization.
+
+        Args:
+            tag: Tag name
+
+        Returns:
+            Dict with tag style (color, icon, description)
+        """
+        try:
+            # Normalize tag
+            tag = tag.lower().strip()
+            if not tag:
+                return {"success": False, "message": "Tag cannot be empty"}
+
+            style_key = f"tag_style:{tag}"
+            style_data = await asyncio.to_thread(self.redis_client.hgetall, style_key)
+
+            # Decode bytes if needed
+            style = {}
+            for key, value in style_data.items():
+                key_str = key.decode("utf-8") if isinstance(key, bytes) else key
+                value_str = value.decode("utf-8") if isinstance(value, bytes) else value
+                style[key_str] = value_str
+
+            # If no style exists, assign default color based on tag hash
+            if not style.get("color"):
+                # Deterministic color assignment based on tag name
+                color_index = hash(tag) % len(self._DEFAULT_TAG_COLORS)
+                style["color"] = self._DEFAULT_TAG_COLORS[color_index]
+
+            return {
+                "success": True,
+                "tag": tag,
+                "style": style,
+            }
+
+        except Exception as e:
+            logger.error("Failed to get tag '%s' style: %s", tag, e)
+            return {"success": False, "message": str(e)}
+
+    async def get_tag_with_style(self, tag: str) -> Dict[str, Any]:
+        """
+        Get complete tag information including style and usage.
+
+        Issue #410: Combines tag info and style for complete view.
+
+        Args:
+            tag: Tag name
+
+        Returns:
+            Dict with tag name, fact_count, and style
+        """
+        try:
+            # Get tag info (fact count)
+            tag_info = await self.get_tag_info(tag)
+            if not tag_info.get("success"):
+                return tag_info
+
+            # Get tag style
+            style_info = await self.get_tag_style(tag)
+
+            return {
+                "success": True,
+                "tag": tag,
+                "fact_count": tag_info.get("fact_count", 0),
+                "style": style_info.get("style", {}),
+            }
+
+        except Exception as e:
+            logger.error("Failed to get tag '%s' with style: %s", tag, e)
+            return {"success": False, "message": str(e)}
+
+    async def delete_tag_style(self, tag: str) -> Dict[str, Any]:
+        """
+        Delete tag styling (reset to defaults).
+
+        Issue #410: Remove custom styling for a tag.
+
+        Args:
+            tag: Tag name
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            tag = tag.lower().strip()
+            if not tag:
+                return {"success": False, "message": "Tag cannot be empty"}
+
+            style_key = f"tag_style:{tag}"
+            deleted = await asyncio.to_thread(self.redis_client.delete, style_key)
+
+            return {
+                "success": True,
+                "tag": tag,
+                "deleted": deleted > 0,
+                "message": "Tag style reset to defaults" if deleted else "No custom style existed",
+            }
+
+        except Exception as e:
+            logger.error("Failed to delete tag '%s' style: %s", tag, e)
             return {"success": False, "message": str(e)}
 
     # =========================================================================
