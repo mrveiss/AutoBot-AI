@@ -79,17 +79,35 @@ class StatsMixin:
                 logger.warning(f"Failed to get stat {field}: {e}")
         return 0
 
+    # Fields that contain metadata (timestamps) rather than integer counters
+    _METADATA_FIELDS = frozenset({"initialized_at", "last_corrected"})
+
     async def _get_all_stats(self) -> dict:
-        """Get all stats counters as dict (O(1))."""
+        """Get all stats counters as dict (O(1)).
+
+        Returns:
+            Dict with counter fields as integers. Metadata fields (initialized_at,
+            last_corrected) are excluded as they contain timestamp strings.
+        """
         if self.aioredis_client:
             try:
                 stats = await self.aioredis_client.hgetall(self._stats_key)
-                return {
-                    k.decode() if isinstance(k, bytes) else k: int(
-                        v.decode() if isinstance(v, bytes) else v
-                    )
-                    for k, v in stats.items()
-                }
+                result = {}
+                for k, v in stats.items():
+                    key = k.decode() if isinstance(k, bytes) else k
+                    # Skip metadata fields that contain timestamps, not counters
+                    if key in self._METADATA_FIELDS:
+                        continue
+                    value = v.decode() if isinstance(v, bytes) else v
+                    try:
+                        result[key] = int(value)
+                    except (ValueError, TypeError):
+                        # Log and skip fields that can't be converted to int
+                        logger.warning(
+                            f"Stats field '{key}' has non-integer value: {value!r}"
+                        )
+                        continue
+                return result
             except Exception as e:
                 logger.warning(f"Failed to get all stats: {e}")
         return {}
