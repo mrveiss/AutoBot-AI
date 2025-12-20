@@ -61,6 +61,81 @@ def _process_feature_health_result(
         )
 
 
+def _build_enterprise_feature_details(status: dict) -> dict:
+    """
+    Build enterprise feature details for validation response.
+
+    Issue #398: Extracted from validate_phase4_completion.
+    """
+    return {
+        "web_research_orchestration": {
+            "enabled": status["capabilities"]["research_orchestration"],
+            "description": "Advanced web research with librarian agents",
+            "impact": "Enhanced knowledge discovery and research capabilities",
+        },
+        "cross_vm_load_balancing": {
+            "enabled": status["capabilities"]["load_balancing"],
+            "description": "Intelligent load distribution across 6-VM infrastructure",
+            "impact": "Optimal resource utilization and performance",
+        },
+        "intelligent_task_routing": {
+            "enabled": status["capabilities"]["resource_optimization"],
+            "description": "NPU/GPU/CPU task routing based on requirements",
+            "impact": "Hardware-optimized task execution",
+        },
+        "comprehensive_health_monitoring": {
+            "enabled": status["capabilities"]["health_monitoring"],
+            "description": "End-to-end system health monitoring",
+            "impact": "Proactive issue detection and resolution",
+        },
+        "graceful_degradation": {
+            "enabled": status["capabilities"]["failover_recovery"],
+            "description": "Automatic failover and recovery mechanisms",
+            "impact": "High availability and fault tolerance",
+        },
+    }
+
+
+def _build_production_readiness() -> dict:
+    """Build production readiness section. Issue #398: Extracted."""
+    return {
+        "scalability": "Multi-VM distributed architecture",
+        "reliability": "99.9%+ availability with failover",
+        "performance": "Hardware-optimized task routing",
+        "monitoring": "Comprehensive health checks",
+        "deployment": "Zero-downtime deployment capability",
+        "security": "Enterprise-grade security implementation",
+    }
+
+
+def _build_transformation_summary() -> dict:
+    """Build transformation summary section. Issue #398: Extracted."""
+    return {
+        "from": "Basic AI assistant with limited capabilities",
+        "to": "Enterprise-grade autonomous AI platform",
+        "key_improvements": [
+            "Distributed 6-VM architecture for scalability",
+            "Advanced web research orchestration",
+            "Intelligent hardware-aware task routing",
+            "Comprehensive monitoring and health checks",
+            "Graceful degradation and automatic recovery",
+            "Zero-downtime deployment capabilities",
+            "Enterprise configuration management",
+        ],
+    }
+
+
+def _build_deployment_phases() -> list:
+    """Build deployment phase data. Issue #398: Extracted."""
+    return [
+        {"phase": "preparation", "status": "completed", "duration": "30s"},
+        {"phase": "blue_environment_update", "status": "completed", "duration": "120s"},
+        {"phase": "health_verification", "status": "completed", "duration": "60s"},
+        {"phase": "traffic_switching", "status": "completed", "duration": "15s"},
+        {"phase": "green_environment_cleanup", "status": "completed", "duration": "45s"},
+    ]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enterprise_status",
@@ -574,32 +649,10 @@ async def deploy_zero_downtime():
                 detail="Zero-downtime deployment feature must be enabled first",
             )
 
-        # Simulate zero-downtime deployment
+        # Issue #398: Use extracted helper for deployment phases
         deployment_result = {
             "deployment_strategy": "blue_green",
-            "deployment_phases": [
-                {"phase": "preparation", "status": "completed", "duration": "30s"},
-                {
-                    "phase": "blue_environment_update",
-                    "status": "completed",
-                    "duration": "120s",
-                },
-                {
-                    "phase": "health_verification",
-                    "status": "completed",
-                    "duration": "60s",
-                },
-                {
-                    "phase": "traffic_switching",
-                    "status": "completed",
-                    "duration": "15s",
-                },
-                {
-                    "phase": "green_environment_cleanup",
-                    "status": "completed",
-                    "duration": "45s",
-                },
-            ],
+            "deployment_phases": _build_deployment_phases(),
             "downtime": "0 seconds",
             "services_affected": list(manager.vm_topology.keys()),
             "rollback_available": True,
@@ -632,93 +685,41 @@ async def validate_phase4_completion():
     """
     Validate that Phase 4 enterprise features are properly implemented.
 
-    This endpoint provides comprehensive validation that AutoBot has
-    successfully transformed into an enterprise-grade AI platform.
+    Issue #398: Refactored with extracted helper methods.
     """
     try:
         manager = get_enterprise_manager()
         status = await manager.get_enterprise_status()
 
+        enabled_count = len(
+            [f for f in status["features"].values() if f["status"] == "enabled"]
+        )
+        total_count = len(status["features"])
+        completion_pct = (enabled_count / total_count) * 100
+
         validation_results = {
             "phase": "Phase 4 Final: Enterprise-Grade Features",
             "completion_status": "success",
             "validation_timestamp": status["timestamp"],
-            "enterprise_features": {
-                "web_research_orchestration": {
-                    "enabled": status["capabilities"]["research_orchestration"],
-                    "description": "Advanced web research with librarian agents",
-                    "impact": "Enhanced knowledge discovery and research capabilities",
-                },
-                "cross_vm_load_balancing": {
-                    "enabled": status["capabilities"]["load_balancing"],
-                    "description": (
-                        "Intelligent load distribution across 6-VM infrastructure"
-                    ),
-                    "impact": "Optimal resource utilization and performance",
-                },
-                "intelligent_task_routing": {
-                    "enabled": status["capabilities"]["resource_optimization"],
-                    "description": "NPU/GPU/CPU task routing based on requirements",
-                    "impact": "Hardware-optimized task execution",
-                },
-                "comprehensive_health_monitoring": {
-                    "enabled": status["capabilities"]["health_monitoring"],
-                    "description": "End-to-end system health monitoring",
-                    "impact": "Proactive issue detection and resolution",
-                },
-                "graceful_degradation": {
-                    "enabled": status["capabilities"]["failover_recovery"],
-                    "description": "Automatic failover and recovery mechanisms",
-                    "impact": "High availability and fault tolerance",
-                },
-            },
-            "production_readiness": {
-                "scalability": "Multi-VM distributed architecture",
-                "reliability": "99.9%+ availability with failover",
-                "performance": "Hardware-optimized task routing",
-                "monitoring": "Comprehensive health checks",
-                "deployment": "Zero-downtime deployment capability",
-                "security": "Enterprise-grade security implementation",
-            },
-            "transformation_summary": {
-                "from": "Basic AI assistant with limited capabilities",
-                "to": "Enterprise-grade autonomous AI platform",
-                "key_improvements": [
-                    "Distributed 6-VM architecture for scalability",
-                    "Advanced web research orchestration",
-                    "Intelligent hardware-aware task routing",
-                    "Comprehensive monitoring and health checks",
-                    "Graceful degradation and automatic recovery",
-                    "Zero-downtime deployment capabilities",
-                    "Enterprise configuration management",
-                ],
-            },
+            "enterprise_features": _build_enterprise_feature_details(status),
+            "production_readiness": _build_production_readiness(),
+            "transformation_summary": _build_transformation_summary(),
             "next_steps": [
                 "Monitor system performance for optimization opportunities",
                 "Conduct load testing to validate scalability",
                 "Implement additional enterprise features as needed",
                 "Consider advanced AI capabilities expansion",
             ],
+            "completion_percentage": f"{completion_pct:.1f}%",
+            "enterprise_grade": completion_pct >= 80,
         }
-
-        # Calculate overall completion percentage
-        enabled_features = len(
-            [f for f in status["features"].values() if f["status"] == "enabled"]
-        )
-        total_features = len(status["features"])
-        completion_percentage = (enabled_features / total_features) * 100
-
-        validation_results["completion_percentage"] = f"{completion_percentage:.1f}%"
-        validation_results["enterprise_grade"] = completion_percentage >= 80
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "validation": validation_results,
-                "message": (
-                    f"Phase 4 validation completed: {completion_percentage:.1f}% enterprise features enabled"
-                ),
+                "message": f"Phase 4 validation completed: {completion_pct:.1f}% enabled",
             },
         )
 
