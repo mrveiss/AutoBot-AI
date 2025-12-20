@@ -60,6 +60,13 @@ _URL_IN_QUOTES_RE = re.compile(r'[\'"`](https?://[^\'"` ]+)[\'"`]')
 _PORT_NUMBER_RE = re.compile(r"\b(80[0-9][0-9]|[1-9][0-9]{3,4})\b")
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
+# Issue #398: Pre-compiled regex patterns for JS/Vue analysis
+_JS_FUNCTION_RE = re.compile(
+    r"(?:function\s+(\w+)|(\w+)\s*[:=]\s*(?:async\s+)?function|"
+    r"\b(\w+)\s*\(.*?\)\s*\{|const\s+(\w+)\s*=\s*\(.*?\)\s*=>)"
+)
+_JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
+
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
@@ -77,6 +84,49 @@ _LOCAL_IP_PREFIXES = ("127.0.0.", "192.168.")
 
 # Issue #380: Module-level tuple for definition types (functions + classes)
 _DEFINITION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+# Issue #398: LLM prompt template for hardcode/debt detection
+_LLM_HARDCODE_DEBT_PROMPT = """Analyze this {language} code and identify:
+1. **Hardcoded values** that should be externalized
+2. **Technical debt** patterns
+
+HARDCODES to find:
+- API keys, tokens, secrets (even if obfuscated)
+- IP addresses, URLs, endpoints
+- Magic numbers (numeric constants without clear meaning)
+- Configuration values (timeouts, limits, thresholds)
+- File paths, database names
+- Business logic constants
+
+TECHNICAL DEBT to find:
+- TODO/FIXME/HACK comments indicating incomplete work
+- Deprecated patterns or anti-patterns
+- Code duplication or copy-paste code
+- Overly complex functions (cognitive complexity)
+- Missing error handling
+- Temporary workarounds or commented-out code
+- Hard-to-maintain patterns
+
+Code snippet (from {file_path}):
+```{language}
+{code_snippet}
+```
+
+Return ONLY valid JSON with this EXACT format:
+{{
+  "hardcodes": [
+    {{"type": "api_key|ip|url|magic_number|config|path", "value": "val",
+      "line": 0, "reason": "explanation", "severity": "high|medium|low"}}
+  ],
+  "technical_debt": [
+    {{"type": "todo|deprecated|duplication|complexity|error_handling",
+      "line": 0, "description": "what's wrong", "impact": "high|medium|low",
+      "suggestion": "how to fix"}}
+  ]
+}}
+
+If none found, return: {{"hardcodes": [], "technical_debt": []}}
+IMPORTANT: Return ONLY the JSON object, no other text."""
 
 
 def _check_import_from_lock(node: ast.ImportFrom) -> Tuple[bool, bool]:
@@ -716,16 +766,11 @@ def _detect_technical_debt_in_line(
     return debt_items, problem_items
 
 
-def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
-    """Run code intelligence analyzers and return problems found."""
-    global _anti_pattern_detector, _performance_analyzer, _bug_predictor
-
-    if not _analyzers_available:
-        return []
+def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
+    """Run anti-pattern detection (Issue #398: extracted)."""
+    global _anti_pattern_detector
 
     problems = []
-
-    # Anti-pattern detection
     try:
         if _anti_pattern_detector is None:
             _anti_pattern_detector = AntiPatternDetector()
@@ -740,8 +785,14 @@ def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
             })
     except Exception as e:
         logger.debug(f"Anti-pattern detection skipped for {file_path}: {e}")
+    return problems
 
-    # Performance analysis
+
+def _run_performance_analysis(file_path: str) -> List[Dict]:
+    """Run performance analysis (Issue #398: extracted)."""
+    global _performance_analyzer
+
+    problems = []
     try:
         if _performance_analyzer is None:
             _performance_analyzer = PerformanceAnalyzer()
@@ -756,8 +807,14 @@ def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
             })
     except Exception as e:
         logger.debug(f"Performance analysis skipped for {file_path}: {e}")
+    return problems
 
-    # Bug prediction
+
+def _run_bug_prediction(file_path: str) -> List[Dict]:
+    """Run bug prediction analysis (Issue #398: extracted)."""
+    global _bug_predictor
+
+    problems = []
     try:
         if _bug_predictor is None:
             project_root = Path(file_path).parent
@@ -787,7 +844,18 @@ def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
             })
     except Exception as e:
         logger.debug(f"Bug prediction skipped for {file_path}: {e}")
+    return problems
 
+
+def _run_code_intelligence_analyzers(file_path: str) -> List[Dict]:
+    """Run code intelligence analyzers (Issue #398: refactored)."""
+    if not _analyzers_available:
+        return []
+
+    problems = []
+    problems.extend(_run_anti_pattern_analysis(file_path))
+    problems.extend(_run_performance_analysis(file_path))
+    problems.extend(_run_bug_prediction(file_path))
     return problems
 
 
@@ -1025,7 +1093,9 @@ def _analyze_ast_nodes(tree: ast.AST) -> Tuple[List[Dict], List[Dict], List[str]
     return functions, classes, imports, problems
 
 
-def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+def _analyze_content_lines(
+    content: str, file_path: str
+) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
     Analyze content line-by-line for hardcodes and technical debt.
 
@@ -1054,88 +1124,39 @@ def _analyze_content_lines(content: str, file_path: str) -> Tuple[List[Dict], Li
 # =============================================================================
 
 
+def _parse_llm_json_response(result_text: str) -> Optional[Dict]:
+    """Parse JSON from LLM response text (Issue #398: extracted)."""
+    if result_text.startswith("{") and result_text.endswith("}"):
+        return json.loads(result_text)
+    # Try to find JSON object in response
+    json_match = _JSON_OBJECT_RE.search(result_text)
+    if json_match:
+        return json.loads(json_match.group())
+    return None
+
+
 async def detect_hardcodes_and_debt_with_llm(
     code_snippet: str, file_path: str, language: str = "python"
 ) -> Dict[str, List[Metadata]]:
     """
-    Use LLM to detect semantic hardcodes and technical debt that regex patterns might miss.
-
-    Detects:
-    - Obfuscated API keys/secrets
-    - Magic numbers that should be constants
-    - Configuration values that should be externalized
-    - Business logic hardcodes
-    - Technical debt patterns (TODO comments, deprecated patterns, code smells)
-    - Semantic patterns beyond simple regex
+    Use LLM to detect semantic hardcodes and technical debt (Issue #398: refactored).
 
     Returns:
         Dictionary with 'hardcodes' and 'technical_debt' keys
     """
+    empty_result: Dict[str, List[Metadata]] = {"hardcodes": [], "technical_debt": []}
     try:
         llm = LLMInterface()
-
-        prompt = """Analyze this {language} code and identify:
-1. **Hardcoded values** that should be externalized
-2. **Technical debt** patterns
-
-HARDCODES to find:
-- API keys, tokens, secrets (even if obfuscated)
-- IP addresses, URLs, endpoints
-- Magic numbers (numeric constants without clear meaning)
-- Configuration values (timeouts, limits, thresholds)
-- File paths, database names
-- Business logic constants
-
-TECHNICAL DEBT to find:
-- TODO/FIXME/HACK comments indicating incomplete work
-- Deprecated patterns or anti-patterns
-- Code duplication or copy-paste code
-- Overly complex functions (cognitive complexity)
-- Missing error handling
-- Temporary workarounds or commented-out code
-- Hard-to-maintain patterns
-
-Code snippet (from {file_path}):
-```{language}
-{code_snippet[:800]}
-```
-
-Return ONLY valid JSON with this EXACT format:
-{{
-  "hardcodes": [
-    {{"type": "api_key|ip|url|magic_number|config|path", "value": "val",
-      "line": 0, "reason": "explanation", "severity": "high|medium|low"}}
-  ],
-  "technical_debt": [
-    {{"type": "todo|deprecated|duplication|complexity|error_handling",
-      "line": 0, "description": "what's wrong", "impact": "high|medium|low",
-      "suggestion": "how to fix"}}
-  ]
-}}
-
-If none found, return: {{"hardcodes": [], "technical_debt": []}}
-IMPORTANT: Return ONLY the JSON object, no other text."""
-
+        prompt = _LLM_HARDCODE_DEBT_PROMPT.format(
+            language=language, file_path=file_path, code_snippet=code_snippet[:800]
+        )
         messages = [{"role": "user", "content": prompt}]
         response = await llm.chat_completion(messages, llm_type="task")
-        result_text = response.content.strip()
-
-        # Extract JSON from response
-        if result_text.startswith("{") and result_text.endswith("}"):
-            result = json.loads(result_text)
-            return result
-        else:
-            # Try to find JSON object in response
-            json_match = _JSON_OBJECT_RE.search(result_text)
-            if json_match:
-                result = json.loads(json_match.group())
-                return result
-
-        return {"hardcodes": [], "technical_debt": []}
-
+        result = _parse_llm_json_response(response.content.strip())
+        return result if result else empty_result
     except Exception as e:
         logger.debug(f"LLM analysis failed for {file_path}: {e}")
-        return {"hardcodes": [], "technical_debt": []}
+        return empty_result
 
 
 def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[Dict]:
@@ -1270,103 +1291,78 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
         return result
 
 
+def _extract_js_functions(line: str, line_num: int) -> List[Dict]:
+    """Extract function definitions from a JS/Vue line (Issue #398: extracted)."""
+    functions = []
+    for match in _JS_FUNCTION_RE.findall(line):
+        func_name = next((name for name in match if name), None)
+        if func_name and not func_name.startswith("_"):
+            functions.append({"name": func_name, "line": line_num, "type": "function"})
+    return functions
+
+
+def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
+    """Extract hardcoded values from a JS/Vue line (Issue #398: extracted)."""
+    hardcodes = []
+    context = line.strip()
+    # URLs
+    for url in _URL_IN_QUOTES_RE.findall(line):
+        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": context})
+    # API paths
+    for api_path in _JS_API_PATH_RE.findall(line):
+        hardcodes.append({
+            "type": "api_path", "value": api_path, "line": line_num, "context": context
+        })
+    # IP addresses (only VM/local IPs)
+    for ip in _IP_ADDRESS_RE.findall(line):
+        if ip.startswith(NetworkConstants.VM_IP_PREFIX) or ip.startswith(_LOCAL_IP_PREFIXES):
+            hardcodes.append({"type": "ip", "value": ip, "line": line_num, "context": context})
+    return hardcodes
+
+
+def _check_js_console_log(line: str, line_num: int) -> Optional[Dict]:
+    """Check for console.log debugging statements (Issue #398: extracted)."""
+    if "console.log" in line and not line.strip().startswith("//"):
+        return {
+            "type": "debug_code",
+            "severity": "low",
+            "line": line_num,
+            "description": "console.log statement found",
+            "suggestion": "Remove debug statements before production",
+        }
+    return None
+
+
+def _create_empty_js_analysis_result() -> Metadata:
+    """Create empty JS/Vue analysis result (Issue #398: extracted)."""
+    return {
+        "functions": [], "classes": [], "imports": [], "hardcodes": [], "problems": [],
+        "line_count": 0, "code_lines": 0, "comment_lines": 0,
+        "docstring_lines": 0, "blank_lines": 0,
+    }
+
+
 def analyze_javascript_vue_file(file_path: str) -> Metadata:
-    """Analyze JavaScript/Vue file for functions and hardcodes"""
+    """Analyze JavaScript/Vue file for functions and hardcodes (Issue #398: refactored)."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        lines = content.splitlines()
-        functions = []
-        hardcodes = []
-        problems = []
+        functions, hardcodes, problems = [], [], []
+        for i, line in enumerate(content.splitlines(), 1):
+            functions.extend(_extract_js_functions(line, i))
+            hardcodes.extend(_extract_js_hardcodes(line, i))
+            if problem := _check_js_console_log(line, i):
+                problems.append(problem)
 
-        # Simple regex-based analysis for JS/Vue
-        function_pattern = re.compile(
-            r"(?:function\s+(\w+)|(\w+)\s*[:=]\s*(?:async\s+)?function|"
-            r"\b(\w+)\s*\(.*?\)\s*\{|const\s+(\w+)\s*=\s*\(.*?\)\s*=>)"
-        )
-        url_pattern = re.compile(r'[\'"`](https?://[^\'"` ]+)[\'"`]')
-        api_pattern = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
-        ip_pattern = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
-
-        for i, line in enumerate(lines, 1):
-            # Find functions
-            func_matches = function_pattern.findall(line)
-            for match in func_matches:
-                func_name = next(name for name in match if name)
-                if func_name and not func_name.startswith("_"):
-                    functions.append({"name": func_name, "line": i, "type": "function"})
-
-            # Find URLs
-            url_matches = url_pattern.findall(line)
-            for url in url_matches:
-                hardcodes.append(
-                    {"type": "url", "value": url, "line": i, "context": line.strip()}
-                )
-
-            # Find API paths
-            api_matches = api_pattern.findall(line)
-            for api_path in api_matches:
-                hardcodes.append(
-                    {
-                        "type": "api_path",
-                        "value": api_path,
-                        "line": i,
-                        "context": line.strip(),
-                    }
-                )
-
-            # Find IP addresses
-            ip_matches = ip_pattern.findall(line)
-            for ip in ip_matches:
-                # Issue #380: Use module-level constant for local IP prefixes
-                if (
-                    ip.startswith(NetworkConstants.VM_IP_PREFIX)
-                    or ip.startswith(_LOCAL_IP_PREFIXES)
-                ):
-                    hardcodes.append(
-                        {"type": "ip", "value": ip, "line": i, "context": line.strip()}
-                    )
-
-            # Check for console.log (potential debugging leftover)
-            if "console.log" in line and not line.strip().startswith("//"):
-                problems.append(
-                    {
-                        "type": "debug_code",
-                        "severity": "low",
-                        "line": i,
-                        "description": "console.log statement found",
-                        "suggestion": "Remove debug statements before production",
-                    }
-                )
-
-        # Count line types (Issue #368)
         line_counts = _count_js_vue_line_types(content)
-
         return {
-            "functions": functions,
-            "classes": [],
-            "imports": [],
-            "hardcodes": hardcodes,
-            "problems": problems,
-            **line_counts,
+            "functions": functions, "classes": [], "imports": [],
+            "hardcodes": hardcodes, "problems": problems, **line_counts,
         }
-
     except Exception as e:
         logger.error(f"Error analyzing JS/Vue file {file_path}: {e}")
-        return {
-            "functions": [],
-            "classes": [],
-            "imports": [],
-            "hardcodes": [],
-            "problems": [],
-            "line_count": 0,
-            "code_lines": 0,
-            "comment_lines": 0,
-            "docstring_lines": 0,
-            "blank_lines": 0,
-        }
+        return _create_empty_js_analysis_result()
 
 
 def analyze_documentation_file(file_path: str) -> Metadata:
