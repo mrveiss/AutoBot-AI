@@ -62,7 +62,7 @@ class HardwareDetector:
             detected.add("intel_arc")
             detected.add("openvino")
         except Exception as e:
-            logger.debug(f"Intel Arc/NPU detection unavailable: {e}")
+            logger.debug("Intel Arc/NPU detection unavailable: %s", e)
 
         return detected
 

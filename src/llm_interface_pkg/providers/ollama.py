@@ -74,7 +74,7 @@ class OllamaProvider:
                 "AUTOBOT_OLLAMA_PORT environment variables must be set"
             )
         host_url = f"http://{ollama_host}:{ollama_port}"
-        logger.debug(f"[REQUEST] Using Ollama URL from environment: {host_url}")
+        logger.debug("[REQUEST] Using Ollama URL from environment: %s", host_url)
         return host_url
 
     def build_request_data(
@@ -121,7 +121,7 @@ class OllamaProvider:
         elif "response" in response:  # Alternative Ollama format
             return response.get("response", "")
         else:
-            logger.warning(f"Unexpected response structure: {response}")
+            logger.warning("Unexpected response structure: %s", response)
             return str(response)
 
     def build_response(
@@ -200,7 +200,7 @@ class OllamaProvider:
             Response dictionary with accumulated content
         """
         start_time = time.time()
-        logger.info(f"[{request_id}] Starting protected streaming for model {model}")
+        logger.info("[%s] Starting protected streaming for model %s", request_id, model)
 
         try:
             from src.utils.async_stream_processor import process_llm_stream
@@ -244,7 +244,7 @@ class OllamaProvider:
                     }
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"[{request_id}] Stream error after {duration:.2f}s: {e}")
+            logger.error("[%s] Stream error after %.2fs: %s", request_id, duration, e)
             raise
 
     async def non_streaming_request(
@@ -269,7 +269,7 @@ class OllamaProvider:
         data_copy = data.copy()
         data_copy["stream"] = False
 
-        logger.info(f"[{request_id}] Using non-streaming request")
+        logger.info("[%s] Using non-streaming request", request_id)
 
         async with self._get_session() as session:
             timeout = aiohttp.ClientTimeout(total=30.0)
@@ -338,7 +338,7 @@ class OllamaProvider:
         except Exception as e:
             if use_streaming:
                 self.streaming_manager.record_failure(model)
-                logger.error(f"Streaming REQUIRED but failed for {model}: {e}")
+                logger.error("Streaming REQUIRED but failed for %s: %s", model, e)
                 processing_time = time.time() - start_time
 
                 response = self.build_error_response(model, e)

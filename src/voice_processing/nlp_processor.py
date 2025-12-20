@@ -212,7 +212,7 @@ class NaturalLanguageProcessor:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Voice command analysis failed: {e}")
+                logger.error("Voice command analysis failed: %s", e)
                 raise
 
     async def _classify_command_type(

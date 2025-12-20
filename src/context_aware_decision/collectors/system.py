@@ -51,7 +51,7 @@ class SystemContextCollector:
             return system_elements
 
         except Exception as e:
-            logger.debug(f"System context collection failed: {e}")
+            logger.debug("System context collection failed: %s", e)
             return []
 
     def _create_takeover_status_context(self) -> ContextElement:

@@ -181,20 +181,20 @@ class IntelligentAgent:
                 "supported_categories": self.goal_processor.get_supported_categories(),
             }
 
-            logger.info(f"Agent initialized successfully in {initialization_time:.2f}s")
+            logger.info("Agent initialized successfully in %.2fs", initialization_time)
             # Issue #321: Use helper methods to reduce message chains
-            logger.info(f"OS: {self.state.get_os_type_value()}")
+            logger.info("OS: %s", self.state.get_os_type_value())
             distro_value = self.state.get_distro_value()
             if distro_value:
-                logger.info(f"Distribution: {distro_value}")
+                logger.info("Distribution: %s", distro_value)
             logger.info(
-                f"Total capabilities: {capabilities_info.get('total_count', 0)}"
+                "Total capabilities: %s", capabilities_info.get("total_count", 0)
             )
 
             return init_result
 
         except Exception as e:
-            logger.error(f"Agent initialization failed: {e}")
+            logger.error("Agent initialization failed: %s", e)
             return {
                 "status": "initialization_failed",
                 "error": str(e),
@@ -295,7 +295,7 @@ class IntelligentAgent:
             )
             return
 
-        logger.info(f"Processing natural language goal: {user_input}")
+        logger.info("Processing natural language goal: %s", user_input)
         # Issue #321: Use helper method to reduce message chains
         self.state.add_to_context("user_input", user_input, context=context or {})
 
@@ -322,7 +322,7 @@ class IntelligentAgent:
                     yield chunk
 
         except Exception as e:
-            logger.error(f"Error processing goal: {e}")
+            logger.error("Error processing goal: %s", e)
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.ERROR,
@@ -467,7 +467,7 @@ class IntelligentAgent:
                 )
 
         except Exception as e:
-            logger.error(f"Error in complex goal handling: {e}")
+            logger.error("Error in complex goal handling: %s", e)
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.ERROR,
@@ -661,7 +661,7 @@ OS-specific commands.
                 },
             )
         except Exception as e:
-            logger.warning(f"Failed to store system context in knowledge base: {e}")
+            logger.warning("Failed to store system context in knowledge base: %s", e)
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""

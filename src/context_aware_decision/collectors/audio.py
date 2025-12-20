@@ -50,7 +50,7 @@ class AudioContextCollector:
             return audio_elements
 
         except Exception as e:
-            logger.debug(f"Audio context collection failed: {e}")
+            logger.debug("Audio context collection failed: %s", e)
             return []
 
     def _create_voice_activity_context(

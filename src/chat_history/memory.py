@@ -47,8 +47,12 @@ class MemoryMixin:
             collected_objects = gc.collect()
 
             logger.info(
-                f"CHAT CLEANUP: Trimmed messages from {old_count} to {len(self.history)} "
-                f"(limit: {self.max_messages}), collected {collected_objects} objects"
+                "CHAT CLEANUP: Trimmed messages from %d to %d "
+                "(limit: %d), collected %d objects",
+                old_count,
+                len(self.history),
+                self.max_messages,
+                collected_objects,
             )
 
     def _periodic_memory_check(self):
@@ -67,8 +71,10 @@ class MemoryMixin:
         if message_count > self.max_messages * 0.8:  # 80% threshold warning
             logger.warning(
                 "MEMORY WARNING: Chat history approaching limit - "
-                f"{message_count}/{self.max_messages} messages "
-                f"({(message_count / self.max_messages) * 100:.1f}%)"
+                "%d/%d messages (%.1f%%)",
+                message_count,
+                self.max_messages,
+                (message_count / self.max_messages) * 100,
             )
 
         # Cleanup if needed
@@ -100,17 +106,19 @@ class MemoryMixin:
                 for file_path, _, filename in files_to_remove:
                     try:
                         await asyncio.to_thread(os.remove, file_path)
-                        logger.info(f"CLEANUP: Removed old session file: {filename}")
+                        logger.info("CLEANUP: Removed old session file: %s", filename)
                     except Exception as e:
-                        logger.error(f"Failed to remove session file {filename}: {e}")
+                        logger.error("Failed to remove session file %s: %s", filename, e)
 
                 logger.info(
-                    f"SESSION CLEANUP: Removed {len(files_to_remove)} old session files, "
-                    f"kept {self.max_session_files} most recent"
+                    "SESSION CLEANUP: Removed %d old session files, "
+                    "kept %d most recent",
+                    len(files_to_remove),
+                    self.max_session_files,
                 )
 
         except Exception as e:
-            logger.error(f"Error cleaning up session files: {e}")
+            logger.error("Error cleaning up session files: %s", e)
 
     async def clear_history(self):
         """
@@ -126,8 +134,9 @@ class MemoryMixin:
 
         await self._save_history()
         logger.info(
-            f"Chat history cleared: removed {old_count} messages, "
-            f"collected {collected_objects} objects"
+            "Chat history cleared: removed %d messages, collected %d objects",
+            old_count,
+            collected_objects,
         )
 
     def get_memory_stats(self) -> Dict[str, Any]:

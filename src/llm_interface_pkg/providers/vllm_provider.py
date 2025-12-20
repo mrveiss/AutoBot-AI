@@ -64,7 +64,7 @@ class VLLMProviderHandler:
 
             self._vllm_provider = VLLMProvider(vllm_config)
             await self._vllm_provider.initialize()
-            logger.info(f"vLLM provider initialized with model: {model_name}")
+            logger.info("vLLM provider initialized with model: %s", model_name)
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
@@ -109,7 +109,7 @@ class VLLMProviderHandler:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(f"vLLM request failed: {e}")
+            logger.error("vLLM request failed: %s", e)
             raise
 
     async def cleanup(self):
@@ -119,7 +119,7 @@ class VLLMProviderHandler:
                 await self._vllm_provider.cleanup()
                 logger.info("vLLM provider cleaned up successfully")
             except Exception as e:
-                logger.warning(f"Error cleaning up vLLM provider: {e}")
+                logger.warning("Error cleaning up vLLM provider: %s", e)
             finally:
                 self._vllm_provider = None
 

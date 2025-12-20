@@ -163,11 +163,12 @@ class OSDetector:
         )
 
         logger.info(
-            f"System detected: {os_type.value} "
-            f"({distro.value if distro else 'N/A'})"
+            "System detected: %s (%s)",
+            os_type.value,
+            distro.value if distro else "N/A",
         )
-        logger.info(f"User: {user} (root: {is_root})")
-        logger.info(f"Capabilities: {len(capabilities)} tools detected")
+        logger.info("User: %s (root: %s)", user, is_root)
+        logger.info("Capabilities: %d tools detected", len(capabilities))
 
         return self._os_info
 
@@ -242,7 +243,7 @@ class OSDetector:
             if distro:
                 return distro
         except Exception as e:
-            logger.warning(f"Error detecting Linux distribution: {e}")
+            logger.warning("Error detecting Linux distribution: %s", e)
 
         return LinuxDistro.UNKNOWN
 
@@ -257,7 +258,7 @@ class OSDetector:
                     content = (await f.read()).lower()
                     return "microsoft" in content or "wsl" in content
         except OSError as e:
-            logger.debug(f"Failed to read /proc/version: {e}")
+            logger.debug("Failed to read /proc/version: %s", e)
         except Exception:
             pass  # File read error, assume not WSL
 

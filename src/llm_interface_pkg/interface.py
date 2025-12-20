@@ -278,10 +278,10 @@ class LLMInterface:
             content = await read_file_async(file_path)
             return content.strip()
         except FileNotFoundError:
-            logger.error(f"Prompt file not found: {file_path}")
+            logger.error("Prompt file not found: %s", file_path)
             return ""
         except Exception as e:
-            logger.error(f"Error loading prompt from {file_path}: {e}")
+            logger.error("Error loading prompt from %s: %s", file_path, e)
             return ""
 
     def _resolve_includes(self, content: str, base_path: str) -> str:
@@ -297,7 +297,7 @@ class LLMInterface:
                     included_content, os.path.dirname(included_path)
                 )
             else:
-                logger.warning(f"Included file not found: {included_path}")
+                logger.warning("Included file not found: %s", included_path)
                 return f"<!-- MISSING: {included_file} -->"
 
         return re.sub(r"@include\s*\(([^)]+)\)", replace_include, content)
@@ -310,10 +310,10 @@ class LLMInterface:
                 content = f.read()
             return self._resolve_includes(content, base_dir).strip()
         except FileNotFoundError:
-            logger.error(f"Base prompt file not found: {base_file_path}")
+            logger.error("Base prompt file not found: %s", base_file_path)
             return ""
         except Exception as e:
-            logger.error(f"Error loading composite prompt from {base_file_path}: {e}")
+            logger.error("Error loading composite prompt from %s: %s", base_file_path, e)
             return ""
 
     @error_boundary(component="llm_interface", function="check_ollama_connection")
@@ -341,7 +341,7 @@ class LLMInterface:
 
             return await retry_network_operation(make_request)
         except Exception as e:
-            logger.error(f"Ollama connection check failed: {e}")
+            logger.error("Ollama connection check failed: %s", e)
             return False
 
     # Main chat completion method
@@ -388,7 +388,7 @@ class LLMInterface:
             if provider in self.provider_routing:
                 response = await self.provider_routing[provider](request)
             else:
-                logger.warning(f"Unknown provider {provider}, falling back to Ollama")
+                logger.warning("Unknown provider %s, falling back to Ollama", provider)
                 response = await self._handle_ollama_request(request)
 
             # Update metrics
@@ -409,7 +409,7 @@ class LLMInterface:
         except Exception as e:
             processing_time = time.time() - start_time
             self._update_metrics("unknown", processing_time, success=False)
-            logger.error(f"Chat completion error: {e}")
+            logger.error("Chat completion error: %s", e)
 
             return LLMResponse(
                 content=f"Error: {str(e)}",
@@ -537,7 +537,7 @@ class LLMInterface:
             )
             asyncio.create_task(analyzer.record_usage(usage_request))
         except Exception as e:
-            logger.debug(f"LLM usage tracking failed (non-critical): {e}")
+            logger.debug("LLM usage tracking failed (non-critical): %s", e)
 
     # Provider request handlers
     async def _handle_ollama_request(self, request: LLMRequest) -> LLMResponse:
@@ -557,7 +557,7 @@ class LLMInterface:
         try:
             return await self._vllm_handler.chat_completion(request)
         except Exception as e:
-            logger.error(f"vLLM request failed: {e}, falling back to Ollama")
+            logger.error("vLLM request failed: %s, falling back to Ollama", e)
             return await self._handle_ollama_request(request)
 
     async def _handle_mock_request(self, request: LLMRequest) -> LLMResponse:
@@ -588,7 +588,7 @@ class LLMInterface:
                         data = await response.json()
                         return [model["name"] for model in data.get("models", [])]
             except Exception as e:
-                logger.error(f"Failed to get Ollama models: {e}")
+                logger.error("Failed to get Ollama models: %s", e)
 
         return []
 
@@ -689,7 +689,7 @@ class LLMInterface:
         try:
             await self._vllm_handler.cleanup()
         except Exception as e:
-            logger.warning(f"Error cleaning up vLLM provider: {e}")
+            logger.warning("Error cleaning up vLLM provider: %s", e)
 
 
 __all__ = [

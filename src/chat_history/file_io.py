@@ -68,7 +68,7 @@ class FileIOMixin:
             # Atomic rename (cross-platform atomic operation)
             await asyncio.to_thread(os.replace, temp_path, file_path)
 
-            logger.debug(f"Atomic write completed: {file_path}")
+            logger.debug("Atomic write completed: %s", file_path)
 
         except Exception as e:
             # Cleanup temporary file on failure
@@ -81,7 +81,7 @@ class FileIOMixin:
                     f"Failed to cleanup temp file {temp_path}: {cleanup_error}"
                 )
 
-            logger.error(f"Atomic write failed for {file_path}: {e}")
+            logger.error("Atomic write failed for %s: %s", file_path, e)
             raise e
 
     async def _save_history(self):
@@ -98,9 +98,9 @@ class FileIOMixin:
             async with aiofiles.open(self.history_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(self.history, indent=2, ensure_ascii=False))
         except OSError as e:
-            logger.error(f"Failed to write chat history file {self.history_file}: {e}")
+            logger.error("Failed to write chat history file %s: %s", self.history_file, e)
         except Exception as e:
-            logger.error(f"Error saving chat history to {self.history_file}: {str(e)}")
+            logger.error("Error saving chat history to %s: %s", self.history_file, str(e))
 
         # Also save to Redis if enabled for fast access
         if self.use_redis and self.redis_client:
@@ -113,7 +113,7 @@ class FileIOMixin:
                     self.redis_client.expire, "autobot:chat_history", 86400
                 )  # 1 day TTL
             except Exception as e:
-                logger.error(f"Error saving chat history to Redis: {str(e)}")
+                logger.error("Error saving chat history to Redis: %s", str(e))
 
     async def export_session(
         self, session_id: str, format: str = "json"
@@ -150,9 +150,9 @@ class FileIOMixin:
                     lines.append(f"**{sender}** ({timestamp}):\n{text}\n")
                 return "\n".join(lines)
             else:
-                logger.error(f"Unsupported export format: {format}")
+                logger.error("Unsupported export format: %s", format)
                 return None
 
         except Exception as e:
-            logger.error(f"Error exporting session {session_id}: {e}")
+            logger.error("Error exporting session %s: %s", session_id, e)
             return None

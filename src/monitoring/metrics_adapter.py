@@ -85,7 +85,7 @@ class MetricsAdapter:
             try:
                 legacy.record_cpu_usage(cpu_percent)
             except Exception as e:
-                logger.debug(f"Legacy CPU recording failed: {e}")
+                logger.debug("Legacy CPU recording failed: %s", e)
 
     def record_system_memory(self, memory_percent: float):
         """Record memory usage to both systems"""
@@ -98,7 +98,7 @@ class MetricsAdapter:
             try:
                 legacy.record_memory_usage(memory_percent)
             except Exception as e:
-                logger.debug(f"Legacy memory recording failed: {e}")
+                logger.debug("Legacy memory recording failed: %s", e)
 
     def record_system_disk(self, mount_point: str, disk_percent: float):
         """Record disk usage to both systems"""
@@ -111,7 +111,7 @@ class MetricsAdapter:
             try:
                 legacy.record_disk_usage(mount_point, disk_percent)
             except Exception as e:
-                logger.debug(f"Legacy disk recording failed: {e}")
+                logger.debug("Legacy disk recording failed: %s", e)
 
     def record_network_bytes(self, direction: str, bytes_count: int):
         """Record network bytes to both systems"""
@@ -124,7 +124,7 @@ class MetricsAdapter:
             try:
                 legacy.record_network_bytes(direction, bytes_count)
             except Exception as e:
-                logger.debug(f"Legacy network recording failed: {e}")
+                logger.debug("Legacy network recording failed: %s", e)
 
     # Error Metrics
 
@@ -141,7 +141,7 @@ class MetricsAdapter:
             try:
                 legacy.record_error(category, component, error_code, **kwargs)
             except Exception as e:
-                logger.debug(f"Legacy error recording failed: {e}")
+                logger.debug("Legacy error recording failed: %s", e)
 
     def update_error_rate(self, component: str, time_window: str, rate: float):
         """Update error rate in both systems"""
@@ -167,7 +167,7 @@ class MetricsAdapter:
             try:
                 legacy.record_request(tool_name, success, payload_bytes)
             except Exception as e:
-                logger.debug(f"Legacy Claude API recording failed: {e}")
+                logger.debug("Legacy Claude API recording failed: %s", e)
 
     def record_claude_api_response_time(self, response_time_seconds: float):
         """Record Claude API response time to both systems"""
@@ -180,7 +180,7 @@ class MetricsAdapter:
             try:
                 legacy.record_response_time(response_time_seconds)
             except Exception as e:
-                logger.debug(f"Legacy Claude API response time recording failed: {e}")
+                logger.debug("Legacy Claude API response time recording failed: %s", e)
 
     def update_claude_api_rate_limit(self, remaining: int):
         """Update Claude API rate limit in both systems"""
@@ -193,7 +193,7 @@ class MetricsAdapter:
             try:
                 legacy.update_rate_limit(remaining)
             except Exception as e:
-                logger.debug(f"Legacy Claude API rate limit update failed: {e}")
+                logger.debug("Legacy Claude API rate limit update failed: %s", e)
 
     # Service Health Metrics
 

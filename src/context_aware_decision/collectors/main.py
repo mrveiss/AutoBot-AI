@@ -130,7 +130,7 @@ class ContextCollector:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Context collection failed: {e}")
+                logger.error("Context collection failed: %s", e)
                 raise
 
     async def _collect_historical_context(
@@ -163,7 +163,7 @@ class ContextCollector:
             return historical_elements
 
         except Exception as e:
-            logger.debug(f"Historical context collection failed: {e}")
+            logger.debug("Historical context collection failed: %s", e)
             return []
 
     async def _collect_environmental_context(self) -> List[ContextElement]:
@@ -183,7 +183,7 @@ class ContextCollector:
             return [temporal_context]
 
         except Exception as e:
-            logger.debug(f"Environmental context collection failed: {e}")
+            logger.debug("Environmental context collection failed: %s", e)
             return []
 
     def _check_resource_constraints(

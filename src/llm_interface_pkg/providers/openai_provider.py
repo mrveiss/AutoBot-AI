@@ -82,7 +82,7 @@ class OpenAIProvider:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(f"OpenAI completion error: {e}")
+            logger.error("OpenAI completion error: %s", e)
             raise
 
 

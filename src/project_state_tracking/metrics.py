@@ -31,7 +31,7 @@ async def get_redis_metric(
         return int(value) if value else default
 
     except Exception as e:
-        logger.debug(f"Redis metric fetch failed for {key}: {e}")
+        logger.debug("Redis metric fetch failed for %s: %s", key, e)
         return default
 
 
@@ -59,7 +59,7 @@ async def get_error_rate(
         return round(error_rate, 2)
 
     except Exception as e:
-        logger.warning(f"Error calculating error rate: {e}")
+        logger.warning("Error calculating error rate: %s", e)
         return 0.0
 
 
@@ -84,7 +84,7 @@ async def get_user_interactions_count(
         return total_interactions
 
     except Exception as e:
-        logger.warning(f"Error getting user interactions count: {e}")
+        logger.warning("Error getting user interactions count: %s", e)
         return fallback_count
 
 
@@ -109,7 +109,7 @@ async def get_api_calls_count(
         return total_calls
 
     except Exception as e:
-        logger.warning(f"Error getting API calls count: {e}")
+        logger.warning("Error getting API calls count: %s", e)
         return fallback_count
 
 
@@ -176,5 +176,5 @@ async def get_metrics_summary(
             },
         }
     except Exception as e:
-        logger.error(f"Error getting metrics summary: {e}")
+        logger.error("Error getting metrics summary: %s", e)
         return {"error": str(e)}

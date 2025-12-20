@@ -93,7 +93,7 @@ async def track_system_error(
         tracker = get_state_tracker()
         await tracker.track_error(error, context)
     except Exception as e:
-        logger.error(f"Failed to track system error: {e}")
+        logger.error("Failed to track system error: %s", e)
 
 
 async def track_api_request(
@@ -104,7 +104,7 @@ async def track_api_request(
         tracker = get_state_tracker()
         await tracker.track_api_call(endpoint, method, status_code)
     except Exception as e:
-        logger.error(f"Failed to track API request: {e}")
+        logger.error("Failed to track API request: %s", e)
 
 
 async def track_user_action(
@@ -117,7 +117,7 @@ async def track_user_action(
         tracker = get_state_tracker()
         await tracker.track_user_interaction(action_type, user_id, context)
     except Exception as e:
-        logger.error(f"Failed to track user action: {e}")
+        logger.error("Failed to track user action: %s", e)
 
 
 # ============================================================================

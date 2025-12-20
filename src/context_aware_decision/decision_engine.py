@@ -96,7 +96,7 @@ class DecisionEngine:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Decision making failed: {e}")
+                logger.error("Decision making failed: %s", e)
                 raise
 
     async def _decide_automation_action(self, context: DecisionContext) -> Decision:
@@ -250,11 +250,81 @@ class DecisionEngine:
         )
 
     async def _decide_task_prioritization(self, context: DecisionContext) -> Decision:
-        """Decide on task prioritization."""
-        # This would implement sophisticated task prioritization logic
-        # For now, return a placeholder decision
-        return await self._create_placeholder_decision(
-            context, "Task prioritization algorithm not fully implemented"
+        """Decide on task prioritization based on context elements and constraints."""
+
+        # Find tasks to prioritize in available actions
+        task_actions = [
+            action
+            for action in context.available_actions
+            if action.get("action_type") in ("task", "prioritization", "scheduling")
+        ]
+
+        if not task_actions:
+            return await self._create_no_action_decision(
+                context, "No tasks available for prioritization"
+            )
+
+        # Score tasks based on urgency, importance, and context
+        scored_tasks = []
+        for task in task_actions:
+            score = 0.5  # Base score
+
+            # Urgency factors
+            if task.get("urgent", False):
+                score += 0.3
+            if task.get("deadline"):
+                score += 0.2
+
+            # Importance factors
+            importance = task.get("importance", "medium")
+            if importance == "high":
+                score += 0.2
+            elif importance == "critical":
+                score += 0.4
+
+            # Dependencies - tasks with fewer blockers get priority
+            dependencies = task.get("dependencies", [])
+            if len(dependencies) == 0:
+                score += 0.1
+
+            scored_tasks.append((min(score, 1.0), task))
+
+        # Sort by score (highest first)
+        scored_tasks.sort(key=lambda x: x[0], reverse=True)
+        best_score, prioritized_task = scored_tasks[0]
+
+        confidence = best_score
+        confidence_level = self._determine_confidence_level(confidence)
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action={
+                "action_type": "prioritization",
+                "action": "prioritize_task",
+                "task": prioritized_task,
+                "priority_score": best_score,
+                "confidence": confidence,
+            },
+            alternative_actions=[task for _, task in scored_tasks[1:3]],
+            confidence=confidence,
+            confidence_level=confidence_level,
+            reasoning=f"Prioritized based on urgency, importance, and dependencies (score: {best_score:.2f})",
+            supporting_evidence=[
+                {"type": "prioritization_analysis", "tasks_considered": len(task_actions)}
+            ],
+            risk_assessment={"risk_level": "low", "factors": []},
+            expected_outcomes=[
+                {"outcome": "task_prioritized", "probability": confidence}
+            ],
+            monitoring_criteria=["task_execution_progress", "deadline_adherence"],
+            fallback_plan=None,
+            requires_approval=False,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={
+                "algorithm": "task_prioritization",
+                "total_tasks": len(task_actions),
+            },
         )
 
     async def _decide_risk_assessment(self, context: DecisionContext) -> Decision:
@@ -424,10 +494,123 @@ class DecisionEngine:
             )
 
     async def _decide_workflow_optimization(self, context: DecisionContext) -> Decision:
-        """Decide on workflow optimization actions."""
-        return await self._create_placeholder_decision(
-            context, "Workflow optimization algorithm not fully implemented"
+        """Decide on workflow optimization actions based on context analysis."""
+
+        # Find optimization opportunities in available actions
+        optimization_actions = [
+            action
+            for action in context.available_actions
+            if action.get("action_type") in ("optimization", "workflow", "efficiency")
+        ]
+
+        if not optimization_actions:
+            # Analyze context for implicit optimization opportunities
+            optimization_suggestions = self._analyze_workflow_for_optimization(context)
+            if not optimization_suggestions:
+                return await self._create_no_action_decision(
+                    context, "No workflow optimization opportunities identified"
+                )
+            optimization_actions = optimization_suggestions
+
+        # Score optimization actions
+        scored_optimizations = []
+        for opt in optimization_actions:
+            score = 0.5  # Base score
+
+            # Efficiency impact
+            efficiency_gain = opt.get("efficiency_gain", 0)
+            score += min(efficiency_gain / 100, 0.3)
+
+            # Risk level - lower risk = higher score
+            risk = opt.get("risk_level", "medium")
+            if risk == "low":
+                score += 0.2
+            elif risk == "high":
+                score -= 0.1
+
+            # Implementation complexity - simpler = higher score
+            complexity = opt.get("complexity", "medium")
+            if complexity == "low":
+                score += 0.1
+            elif complexity == "high":
+                score -= 0.1
+
+            scored_optimizations.append((min(max(score, 0.1), 1.0), opt))
+
+        # Sort by score
+        scored_optimizations.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_optimization = scored_optimizations[0]
+
+        confidence = best_score
+        confidence_level = self._determine_confidence_level(confidence)
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action={
+                "action_type": "optimization",
+                "action": "apply_workflow_optimization",
+                "optimization": best_optimization,
+                "optimization_score": best_score,
+                "confidence": confidence,
+            },
+            alternative_actions=[opt for _, opt in scored_optimizations[1:3]],
+            confidence=confidence,
+            confidence_level=confidence_level,
+            reasoning=f"Selected workflow optimization based on efficiency, risk, and complexity analysis (score: {best_score:.2f})",
+            supporting_evidence=[
+                {"type": "workflow_analysis", "optimizations_found": len(optimization_actions)}
+            ],
+            risk_assessment={"risk_level": best_optimization.get("risk_level", "low"), "factors": []},
+            expected_outcomes=[
+                {"outcome": "workflow_optimized", "probability": confidence},
+                {"outcome": "efficiency_improved", "probability": confidence * 0.8},
+            ],
+            monitoring_criteria=["workflow_performance", "efficiency_metrics"],
+            fallback_plan={"action": "revert_optimization"} if best_score < 0.6 else None,
+            requires_approval=best_score < 0.7,  # Low confidence optimizations need approval
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={
+                "algorithm": "workflow_optimization",
+                "optimizations_considered": len(optimization_actions),
+            },
         )
+
+    def _analyze_workflow_for_optimization(
+        self, context: DecisionContext
+    ) -> List[Dict[str, Any]]:
+        """Analyze context to find implicit optimization opportunities."""
+        opportunities = []
+
+        # Check for bottleneck patterns
+        context_elements = context.context_elements
+        for element in context_elements:
+            if element.element_type.value == "performance":
+                data = element.data
+                if data.get("bottleneck_detected"):
+                    opportunities.append({
+                        "action_type": "optimization",
+                        "action": "resolve_bottleneck",
+                        "target": data.get("bottleneck_location"),
+                        "efficiency_gain": 20,
+                        "risk_level": "medium",
+                        "complexity": "medium",
+                    })
+
+        # Check for parallel execution opportunities
+        for element in context_elements:
+            if element.element_type.value == "workflow":
+                data = element.data
+                if data.get("sequential_steps", 0) > 3:
+                    opportunities.append({
+                        "action_type": "optimization",
+                        "action": "parallelize_steps",
+                        "efficiency_gain": 30,
+                        "risk_level": "low",
+                        "complexity": "medium",
+                    })
+
+        return opportunities
 
     async def _decide_default(self, context: DecisionContext) -> Decision:
         """Default decision algorithm for unhandled decision types."""
@@ -462,35 +645,6 @@ class DecisionEngine:
             requires_approval=False,
             timestamp=self.time_provider.current_timestamp(),
             metadata={"algorithm": "no_action"},
-        )
-
-    async def _create_placeholder_decision(
-        self, context: DecisionContext, reason: str
-    ) -> Decision:
-        """Create a placeholder decision for unimplemented algorithms."""
-        placeholder_action = {
-            "action_type": "placeholder",
-            "action": "algorithm_not_implemented",
-            "reason": reason,
-            "confidence": 0.5,
-        }
-
-        return Decision(
-            decision_id=context.decision_id,
-            decision_type=context.decision_type,
-            chosen_action=placeholder_action,
-            alternative_actions=[],
-            confidence=0.5,
-            confidence_level=ConfidenceLevel.MEDIUM,
-            reasoning=reason,
-            supporting_evidence=[],
-            risk_assessment={"risk_level": "unknown", "factors": []},
-            expected_outcomes=[],
-            monitoring_criteria=[],
-            fallback_plan={"action": "request_human_guidance"},
-            requires_approval=True,  # Placeholder decisions should be reviewed
-            timestamp=self.time_provider.current_timestamp(),
-            metadata={"algorithm": "placeholder"},
         )
 
     async def _validate_decision(

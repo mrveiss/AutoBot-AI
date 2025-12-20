@@ -254,7 +254,7 @@ class GoalProcessor:
         """
         user_input_lower = user_input.lower().strip()
 
-        logger.info(f"Processing goal: {user_input}")
+        logger.info("Processing goal: %s", user_input)
 
         # Find matching intent
         best_match = None
@@ -491,7 +491,7 @@ class GoalProcessor:
             "risk": risk_level,
         }
 
-        logger.info(f"Added custom intent: {intent_name}")
+        logger.info("Added custom intent: %s", intent_name)
 
 
 if __name__ == "__main__":

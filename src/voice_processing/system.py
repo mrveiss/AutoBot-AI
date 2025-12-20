@@ -113,7 +113,7 @@ class VoiceProcessingSystem:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Voice command processing failed: {e}")
+                logger.error("Voice command processing failed: %s", e)
                 raise
 
     async def _generate_command_response(

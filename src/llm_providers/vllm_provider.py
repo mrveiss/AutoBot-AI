@@ -60,7 +60,7 @@ class VLLMProvider:
         self.dtype = config.get("dtype", "auto")
         self.enable_chunked_prefill = config.get("enable_chunked_prefill", True)
 
-        logger.info(f"vLLM provider configured for model: {self.model_name}")
+        logger.info("vLLM provider configured for model: %s", self.model_name)
 
     async def initialize(self):
         """Initialize the vLLM model"""
@@ -68,17 +68,17 @@ class VLLMProvider:
             return
 
         try:
-            logger.info(f"Initializing vLLM with model: {self.model_name}")
+            logger.info("Initializing vLLM with model: %s", self.model_name)
 
             # Initialize vLLM in a thread to avoid blocking
             loop = asyncio.get_event_loop()
             self.llm = await loop.run_in_executor(None, self._create_vllm_instance)
 
             self.is_initialized = True
-            logger.info(f"vLLM model {self.model_name} initialized successfully")
+            logger.info("vLLM model %s initialized successfully", self.model_name)
 
         except Exception as e:
-            logger.error(f"Failed to initialize vLLM model: {e}")
+            logger.error("Failed to initialize vLLM model: %s", e)
             raise
 
     def _create_vllm_instance(self) -> LLM:
@@ -151,7 +151,7 @@ class VLLMProvider:
                 raise RuntimeError("No output generated")
 
         except Exception as e:
-            logger.error(f"vLLM completion error: {e}")
+            logger.error("vLLM completion error: %s", e)
             raise
 
     def _generate_completion(self, prompt: str, sampling_params: SamplingParams):
@@ -223,9 +223,9 @@ class VLLMProvider:
                 destroy_model_parallel()
                 self.llm = None
                 self.is_initialized = False
-                logger.info(f"vLLM model {self.model_name} cleaned up")
+                logger.info("vLLM model %s cleaned up", self.model_name)
             except Exception as e:
-                logger.warning(f"Error during vLLM cleanup: {e}")
+                logger.warning("Error during vLLM cleanup: %s", e)
 
 
 class VLLMModelManager:
@@ -242,7 +242,7 @@ class VLLMModelManager:
     def register_model(self, model_id: str, config: Dict[str, Any]):
         """Register a model configuration"""
         self.model_configs[model_id] = config
-        logger.info(f"Registered vLLM model config: {model_id}")
+        logger.info("Registered vLLM model config: %s", model_id)
 
     async def load_model(self, model_id: str) -> VLLMProvider:
         """Load a model if not already loaded"""
@@ -257,7 +257,7 @@ class VLLMModelManager:
         await provider.initialize()
 
         self.models[model_id] = provider
-        logger.info(f"Loaded vLLM model: {model_id}")
+        logger.info("Loaded vLLM model: %s", model_id)
 
         return provider
 
@@ -266,7 +266,7 @@ class VLLMModelManager:
         if model_id in self.models:
             await self.models[model_id].cleanup()
             del self.models[model_id]
-            logger.info(f"Unloaded vLLM model: {model_id}")
+            logger.info("Unloaded vLLM model: %s", model_id)
 
     async def get_model(self, model_id: str) -> VLLMProvider:
         """Get a model, loading it if necessary"""

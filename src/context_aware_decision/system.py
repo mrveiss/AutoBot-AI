@@ -93,7 +93,7 @@ class ContextAwareDecisionSystem:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Contextual decision making failed: {e}")
+                logger.error("Contextual decision making failed: %s", e)
                 raise
 
     def _update_history(self, decision: Decision) -> None:
@@ -144,7 +144,7 @@ class ContextAwareDecisionSystem:
             )
 
         except Exception as e:
-            logger.error(f"Failed to store decision in memory: {e}")
+            logger.error("Failed to store decision in memory: %s", e)
 
     def get_decision_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get recent decision history."""

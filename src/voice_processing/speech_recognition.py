@@ -151,7 +151,7 @@ class SpeechRecognitionEngine:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Speech recognition failed: {e}")
+                logger.error("Speech recognition failed: %s", e)
                 raise
 
     def _evaluate_audio_quality(self, audio_input: AudioInput) -> SpeechQuality:
@@ -175,7 +175,7 @@ class SpeechRecognitionEngine:
         try:
             return self._evaluate_audio_quality(audio_input)
         except Exception as e:
-            logger.debug(f"Audio quality analysis failed: {e}")
+            logger.debug("Audio quality analysis failed: %s", e)
             return SpeechQuality.UNKNOWN
 
     async def _calculate_noise_level(self, audio_input: AudioInput) -> float:
@@ -189,7 +189,7 @@ class SpeechRecognitionEngine:
                 return 0.5  # Default noise level
 
         except Exception as e:
-            logger.debug(f"Noise level calculation failed: {e}")
+            logger.debug("Noise level calculation failed: %s", e)
             return 0.5
 
     def _try_google_recognition(
@@ -208,7 +208,7 @@ class SpeechRecognitionEngine:
                     "engine": "google",
                 })
         except Exception as e:
-            logger.debug(f"Google Speech Recognition failed: {e}")
+            logger.debug("Google Speech Recognition failed: %s", e)
         return results
 
     def _try_sphinx_recognition(self, audio_data) -> List[Dict[str, Any]]:
@@ -221,7 +221,7 @@ class SpeechRecognitionEngine:
                 "engine": "sphinx",
             }]
         except Exception as e:
-            logger.debug(f"Sphinx Recognition failed: {e}")
+            logger.debug("Sphinx Recognition failed: %s", e)
             return []
 
     async def _perform_speech_recognition(
@@ -261,7 +261,7 @@ class SpeechRecognitionEngine:
             }
 
         except Exception as e:
-            logger.error(f"Speech recognition processing failed: {e}")
+            logger.error("Speech recognition processing failed: %s", e)
             return empty_result
 
     def _convert_to_audio_data(self, audio_input: AudioInput):
@@ -288,7 +288,7 @@ class SpeechRecognitionEngine:
             return audio_data
 
         except Exception as e:
-            logger.error(f"Audio conversion failed: {e}")
+            logger.error("Audio conversion failed: %s", e)
             raise
 
     async def _detect_speech_segments(
@@ -310,5 +310,5 @@ class SpeechRecognitionEngine:
             return segments
 
         except Exception as e:
-            logger.debug(f"Speech segmentation failed: {e}")
+            logger.debug("Speech segmentation failed: %s", e)
             return []

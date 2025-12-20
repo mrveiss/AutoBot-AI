@@ -227,7 +227,7 @@ class SecurityRiskJudge(BaseLLMJudge):
             }
 
         except Exception as e:
-            logger.error(f"Error assessing file access risk: {e}")
+            logger.error("Error assessing file access risk: %s", e)
             return {
                 "risk_level": "unknown",
                 "should_allow": False,
@@ -284,7 +284,7 @@ class SecurityRiskJudge(BaseLLMJudge):
             }
 
         except Exception as e:
-            logger.error(f"Error evaluating network operation security: {e}")
+            logger.error("Error evaluating network operation security: %s", e)
             return {
                 "error": str(e),
                 "recommendation": "REJECT",

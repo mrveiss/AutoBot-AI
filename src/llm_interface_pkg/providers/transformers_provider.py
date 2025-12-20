@@ -55,7 +55,7 @@ class TransformersProvider:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(f"Transformers completion error: {e}")
+            logger.error("Transformers completion error: %s", e)
             raise
 
 

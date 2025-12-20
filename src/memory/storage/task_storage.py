@@ -128,7 +128,7 @@ class TaskStorage:
 
                 await conn.commit()
         except aiosqlite.Error as e:
-            logger.error(f"Failed to initialize task storage: {e}")
+            logger.error("Failed to initialize task storage: %s", e)
             raise RuntimeError(f"Task storage initialization failed: {e}")
 
     async def log_task(self, record: TaskExecutionRecord) -> str:
@@ -149,10 +149,10 @@ class TaskStorage:
                 )
                 await conn.commit()
 
-            logger.debug(f"Logged task: {record.task_id} ({record.status.value})")
+            logger.debug("Logged task: %s (%s)", record.task_id, record.status.value)
             return record.task_id
         except aiosqlite.Error as e:
-            logger.error(f"Failed to log task {record.task_id}: {e}")
+            logger.error("Failed to log task %s: %s", record.task_id, e)
             raise RuntimeError(f"Failed to log task: {e}")
 
     async def update_task(self, task_id: str, **updates) -> bool:
@@ -185,7 +185,7 @@ class TaskStorage:
                 await conn.commit()
                 return cursor.rowcount > 0
         except aiosqlite.Error as e:
-            logger.error(f"Failed to update task {task_id}: {e}")
+            logger.error("Failed to update task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to update task: {e}")
 
     async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
@@ -203,7 +203,7 @@ class TaskStorage:
 
                 return self._row_to_record(row)
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get task {task_id}: {e}")
+            logger.error("Failed to get task %s: %s", task_id, e)
             raise RuntimeError(f"Failed to get task: {e}")
 
     async def get_task_history(
@@ -255,7 +255,7 @@ class TaskStorage:
                 rows = await cursor.fetchall()
                 return [self._row_to_record(row) for row in rows]
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get task history: {e}")
+            logger.error("Failed to get task history: %s", e)
             raise RuntimeError(f"Failed to get task history: {e}")
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -295,7 +295,7 @@ class TaskStorage:
                     "by_priority": by_priority,
                 }
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get task stats: {e}")
+            logger.error("Failed to get task stats: %s", e)
             raise RuntimeError(f"Failed to get task stats: {e}")
 
     def _row_to_record(self, row: aiosqlite.Row) -> TaskExecutionRecord:

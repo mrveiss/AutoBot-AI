@@ -48,7 +48,7 @@ class TextToSpeechEngine:
             logger.warning("pyttsx3 not available, TTS will be limited")
             self.tts_engine = None
         except Exception as e:
-            logger.error(f"TTS engine initialization failed: {e}")
+            logger.error("TTS engine initialization failed: %s", e)
             self.tts_engine = None
 
     async def synthesize_speech(self, request: SpeechSynthesisRequest) -> bytes:
@@ -100,7 +100,7 @@ class TextToSpeechEngine:
 
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
-                logger.error(f"Speech synthesis failed: {e}")
+                logger.error("Speech synthesis failed: %s", e)
                 return b""
 
     async def _generate_wav_audio(self, text: str) -> bytes:
@@ -122,7 +122,7 @@ class TextToSpeechEngine:
                 async with aiofiles.open(temp_path, "rb") as audio_file:
                     audio_data = await audio_file.read()
             except OSError as e:
-                logger.error(f"Failed to read audio file {temp_path}: {e}")
+                logger.error("Failed to read audio file %s: %s", temp_path, e)
                 return b""
 
             # Clean up
@@ -131,7 +131,7 @@ class TextToSpeechEngine:
             return audio_data
 
         except Exception as e:
-            logger.error(f"WAV audio generation failed: {e}")
+            logger.error("WAV audio generation failed: %s", e)
             return b""
 
     async def _generate_default_audio(self, text: str) -> bytes:

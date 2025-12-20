@@ -149,7 +149,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             }
 
         except Exception as e:
-            logger.error(f"Error detecting agent conflicts: {e}")
+            logger.error("Error detecting agent conflicts: %s", e)
             return {
                 "has_conflicts": False,
                 "error": str(e),
@@ -234,7 +234,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             }
 
         except Exception as e:
-            logger.error(f"Error coordinating agent consensus: {e}")
+            logger.error("Error coordinating agent consensus: %s", e)
             return {
                 "consensus_response": None,
                 "error": str(e),

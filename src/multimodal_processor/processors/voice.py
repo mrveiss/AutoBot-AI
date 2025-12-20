@@ -66,7 +66,7 @@ class VoiceProcessor(BaseModalProcessor):
 
         # Initialize GPU device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.logger.info(f"VoiceProcessor initialized with device: {self.device}")
+        self.logger.info("VoiceProcessor initialized with device: %s", self.device)
 
         # Initialize audio models if available
         self.whisper_model = None
@@ -110,7 +110,7 @@ class VoiceProcessor(BaseModalProcessor):
 
             self.logger.info("Audio models loaded successfully")
         except Exception as e:
-            self.logger.error(f"Failed to load audio models: {e}")
+            self.logger.error("Failed to load audio models: %s", e)
             self.logger.info("VoiceProcessor will use placeholder implementation")
 
     def __del__(self):
@@ -120,7 +120,7 @@ class VoiceProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
         except Exception as e:
-            self.logger.debug(f"GPU cleanup skipped: {e}")
+            self.logger.debug("GPU cleanup skipped: %s", e)
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process audio input (voice commands, speech)"""
@@ -148,7 +148,7 @@ class VoiceProcessor(BaseModalProcessor):
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Voice processing failed: {e}")
+            self.logger.error("Voice processing failed: %s", e)
 
             return ProcessingResult(
                 result_id=f"voice_{input_data.input_id}",
@@ -314,7 +314,7 @@ class VoiceProcessor(BaseModalProcessor):
             return result
 
         except Exception as e:
-            self.logger.error(f"Error during GPU-accelerated audio processing: {e}")
+            self.logger.error("Error during GPU-accelerated audio processing: %s", e)
             # Clear GPU cache on error
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

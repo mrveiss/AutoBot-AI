@@ -221,7 +221,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             return is_good, judgment.overall_score, summary
 
         except Exception as e:
-            logger.error(f"Error in response quality assessment: {e}")
+            logger.error("Error in response quality assessment: %s", e)
             return False, 0.0, f"Assessment error: {str(e)}"
 
     async def get_improvement_feedback(
@@ -282,7 +282,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             }
 
         except Exception as e:
-            logger.error(f"Error generating improvement feedback: {e}")
+            logger.error("Error generating improvement feedback: %s", e)
             return {
                 "error": str(e),
                 "overall_assessment": {"score": 0.0, "recommendation": "ERROR"},
@@ -365,7 +365,7 @@ Focus on practical assessment that helps improve agent performance and user expe
             }
 
         except Exception as e:
-            logger.error(f"Error comparing agent responses: {e}")
+            logger.error("Error comparing agent responses: %s", e)
             return {
                 "error": str(e),
                 "best_response": None,

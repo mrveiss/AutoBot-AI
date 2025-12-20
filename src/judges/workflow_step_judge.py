@@ -218,7 +218,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                 return False, judgment.reasoning
 
         except Exception as e:
-            logger.error(f"Error in workflow step approval: {e}")
+            logger.error("Error in workflow step approval: %s", e)
             return False, f"Evaluation error: {str(e)}"
 
     async def suggest_improvements(
@@ -240,7 +240,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             return judgment.improvement_suggestions
 
         except Exception as e:
-            logger.error(f"Error getting improvement suggestions: {e}")
+            logger.error("Error getting improvement suggestions: %s", e)
             return [f"Error generating suggestions: {str(e)}"]
 
     async def compare_alternatives(
@@ -294,7 +294,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             }
 
         except Exception as e:
-            logger.error(f"Error comparing alternatives: {e}")
+            logger.error("Error comparing alternatives: %s", e)
             return {
                 "error": str(e),
                 "best_option": None,

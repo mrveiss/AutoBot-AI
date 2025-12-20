@@ -45,7 +45,7 @@ class ContextProcessor(BaseModalProcessor):
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Context processing failed: {e}")
+            self.logger.error("Context processing failed: %s", e)
 
             return ProcessingResult(
                 result_id=f"context_{input_data.input_id}",

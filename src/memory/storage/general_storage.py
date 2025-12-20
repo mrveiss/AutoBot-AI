@@ -69,7 +69,7 @@ class GeneralStorage:
 
                 await conn.commit()
         except aiosqlite.Error as e:
-            logger.error(f"Failed to initialize general storage: {e}")
+            logger.error("Failed to initialize general storage: %s", e)
             raise RuntimeError(f"General storage initialization failed: {e}")
 
     async def store(self, entry: MemoryEntry) -> int:
@@ -101,11 +101,11 @@ class GeneralStorage:
                 await conn.commit()
 
                 logger.debug(
-                    f"Stored memory entry: {category_value} (ID: {cursor.lastrowid})"
+                    "Stored memory entry: %s (ID: %s)", category_value, cursor.lastrowid
                 )
                 return cursor.lastrowid
         except aiosqlite.Error as e:
-            logger.error(f"Failed to store memory entry: {e}")
+            logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory entry: {e}")
 
     async def retrieve(
@@ -148,7 +148,7 @@ class GeneralStorage:
                 rows = await cursor.fetchall()
                 return [self._row_to_entry(row) for row in rows]
         except aiosqlite.Error as e:
-            logger.error(f"Failed to retrieve memory entries: {e}")
+            logger.error("Failed to retrieve memory entries: %s", e)
             raise RuntimeError(f"Failed to retrieve memory entries: {e}")
 
     async def search(self, query: str) -> List[MemoryEntry]:
@@ -169,7 +169,7 @@ class GeneralStorage:
                 rows = await cursor.fetchall()
                 return [self._row_to_entry(row) for row in rows]
         except aiosqlite.Error as e:
-            logger.error(f"Failed to search memory entries: {e}")
+            logger.error("Failed to search memory entries: %s", e)
             raise RuntimeError(f"Failed to search memory entries: {e}")
 
     async def cleanup_old(self, retention_days: int) -> int:
@@ -186,12 +186,12 @@ class GeneralStorage:
                 deleted = cursor.rowcount
                 if deleted > 0:
                     logger.info(
-                        f"Cleaned up {deleted} old memory entries (>{retention_days} days)"
+                        "Cleaned up %s old memory entries (>%s days)", deleted, retention_days
                     )
 
                 return deleted
         except aiosqlite.Error as e:
-            logger.error(f"Failed to cleanup old memory entries: {e}")
+            logger.error("Failed to cleanup old memory entries: %s", e)
             raise RuntimeError(f"Failed to cleanup old memory entries: {e}")
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -215,7 +215,7 @@ class GeneralStorage:
 
                 return {"total_entries": total, "by_category": by_category}
         except aiosqlite.Error as e:
-            logger.error(f"Failed to get storage stats: {e}")
+            logger.error("Failed to get storage stats: %s", e)
             raise RuntimeError(f"Failed to get storage stats: {e}")
 
     def _row_to_entry(self, row: aiosqlite.Row) -> MemoryEntry:

@@ -55,7 +55,7 @@ class LRUCacheManager:
             while len(self.cache) > self.max_size:
                 oldest_key = next(iter(self.cache))
                 self.cache.pop(oldest_key)
-                logger.debug(f"Evicted {oldest_key} from cache (LRU)")
+                logger.debug("Evicted %s from cache (LRU)", oldest_key)
 
     def evict(self, count: int) -> int:
         """Evict oldest N items (thread-safe)"""

@@ -148,7 +148,7 @@ class BaseLLMJudge:
             return judgment_result
 
         except Exception as e:
-            logger.error(f"Error in {self.judge_type} judgment: {e}")
+            logger.error("Error in %s judgment: %s", self.judge_type, e)
             return await self._create_error_judgment(subject, str(e))
 
     async def _prepare_judgment_prompt(
@@ -182,7 +182,7 @@ class BaseLLMJudge:
             return response
 
         except Exception as e:
-            logger.error(f"LLM evaluation failed: {e}")
+            logger.error("LLM evaluation failed: %s", e)
             raise
 
     def _get_system_prompt(self) -> str:
@@ -256,7 +256,7 @@ Be precise, objective, and helpful in your judgments."""
             )
 
         except Exception as e:
-            logger.error(f"Failed to parse LLM response: {e}")
+            logger.error("Failed to parse LLM response: %s", e)
             raise
 
     async def _log_judgment(self, judgment: JudgmentResult):
@@ -268,8 +268,8 @@ Be precise, objective, and helpful in your judgments."""
         )
 
         # Log detailed reasoning in debug mode
-        logger.debug(f"Judgment reasoning: {judgment.reasoning}")
-        logger.debug(f"Improvement suggestions: {judgment.improvement_suggestions}")
+        logger.debug("Judgment reasoning: %s", judgment.reasoning)
+        logger.debug("Improvement suggestions: %s", judgment.improvement_suggestions)
 
     async def _create_error_judgment(
         self, subject: Any, error_message: str

@@ -82,7 +82,7 @@ class ToolRegistry:
             result = await self.worker_node.execute_task(task)
             return result
         except Exception as e:
-            self.logger.error(f"Error executing task {task.get('task_id')}: {e}")
+            self.logger.error("Error executing task %s: %s", task.get('task_id'), e)
             return {"status": "error", "message": str(e)}
 
     # System Integration Tools
@@ -238,7 +238,7 @@ class ToolRegistry:
                 "status": "success",
             }
         except Exception as e:
-            self.logger.error(f"Error searching knowledge base: {e}")
+            self.logger.error("Error searching knowledge base: %s", e)
             return {
                 "tool_name": "search_knowledge_base",
                 "tool_args": {"query": query, "n_results": n_results},
@@ -275,7 +275,7 @@ class ToolRegistry:
                 "status": result.get("status", "success"),
             }
         except Exception as e:
-            self.logger.error(f"Error adding file to knowledge base: {e}")
+            self.logger.error("Error adding file to knowledge base: %s", e)
             return {
                 "tool_name": "add_file_to_knowledge_base",
                 "tool_args": {
@@ -308,7 +308,7 @@ class ToolRegistry:
                 "status": result.get("status", "success"),
             }
         except Exception as e:
-            self.logger.error(f"Error storing fact: {e}")
+            self.logger.error("Error storing fact: %s", e)
             return {
                 "tool_name": "store_fact",
                 "tool_args": {"content": content, "metadata": metadata},
@@ -349,7 +349,7 @@ class ToolRegistry:
                 "status": "success",
             }
         except Exception as e:
-            self.logger.error(f"Error getting facts: {e}")
+            self.logger.error("Error getting facts: %s", e)
             return {
                 "tool_name": "get_fact",
                 "tool_args": {"fact_id": fact_id, "query": query},

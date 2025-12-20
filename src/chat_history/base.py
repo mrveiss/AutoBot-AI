@@ -103,7 +103,9 @@ class ChatHistoryBase:
 
         logger.info(
             "PERFORMANCE: ChatHistoryManager initialized with memory protection - "
-            f"max_messages: {self.max_messages}, cleanup_threshold: {self.cleanup_threshold}"
+            "max_messages: %d, cleanup_threshold: %d",
+            self.max_messages,
+            self.cleanup_threshold,
         )
         logger.info("✅ Context window manager initialized with model-aware limits")
 
@@ -130,9 +132,9 @@ class ChatHistoryBase:
             try:
                 encryption_service = get_encryption_service()
                 key_info = encryption_service.get_key_info()
-                logger.info(f"Encryption service initialized: {key_info['algorithm']}")
+                logger.info("Encryption service initialized: %s", key_info['algorithm'])
             except Exception as e:
-                logger.error(f"Failed to initialize encryption service: {e}")
+                logger.error("Failed to initialize encryption service: %s", e)
                 self.encryption_enabled = False
         else:
             logger.info("Chat history encryption is DISABLED")
@@ -221,7 +223,8 @@ class ChatHistoryBase:
 
         except Exception as e:
             logger.warning(
-                f"⚠️ Failed to initialize Memory Graph (continuing without entity tracking): {e}"
+                "⚠️ Failed to initialize Memory Graph (continuing without entity tracking): %s",
+                e,
             )
             self.memory_graph = None
             self.memory_graph_enabled = False

@@ -98,7 +98,7 @@ class TerminalLogger:
                     chat_file, "w", encoding="utf-8"
                 ) as f:
                     await f.write(json.dumps(chat_data, indent=2))
-                logger.info(f"✅ Created chat.json for terminal session: {session_id}")
+                logger.info("✅ Created chat.json for terminal session: %s", session_id)
             except OSError as e:
                 logger.error(
                     f"❌ Failed to write chat.json file {chat_file}: {e}"
@@ -160,9 +160,9 @@ class TerminalLogger:
             async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
                 await f.write(log_line + "\n")
         except OSError as e:
-            logger.error(f"Failed to write to terminal log file {log_file}: {e}")
+            logger.error("Failed to write to terminal log file %s: %s", log_file, e)
         except Exception as e:
-            logger.error(f"Failed to log command to {log_file}: {e}")
+            logger.error("Failed to log command to %s: %s", log_file, e)
 
         # Update Redis cache if available
         if self.redis_client:
@@ -243,7 +243,7 @@ class TerminalLogger:
             )
 
         except Exception as e:
-            logger.error(f"Failed to cache command in Redis: {e}")
+            logger.error("Failed to cache command in Redis: %s", e)
 
     async def get_recent_commands(
         self, session_id: str, limit: int = 100
@@ -275,10 +275,10 @@ class TerminalLogger:
                     return [json.loads(cmd) for cmd in cached_commands]
 
             except Exception as e:
-                logger.error(f"Failed to read from Redis cache: {e}")
+                logger.error("Failed to read from Redis cache: %s", e)
 
         # Cache miss - read from file
-        logger.debug(f"Cache MISS for terminal commands: session {session_id}")
+        logger.debug("Cache MISS for terminal commands: session %s", session_id)
         return await self._read_from_file(session_id, limit)
 
     async def _read_from_file(
@@ -309,10 +309,10 @@ class TerminalLogger:
             return commands
 
         except OSError as e:
-            logger.error(f"Failed to read terminal log file {log_file}: {e}")
+            logger.error("Failed to read terminal log file %s: %s", log_file, e)
             return []
         except Exception as e:
-            logger.error(f"Failed to parse terminal log {log_file}: {e}")
+            logger.error("Failed to parse terminal log %s: %s", log_file, e)
             return []
 
     def _parse_log_line(self, line: str) -> Optional[Dict[str, Any]]:
@@ -354,7 +354,7 @@ class TerminalLogger:
             return entry
 
         except Exception as e:
-            logger.error(f"Failed to parse log line: {e}")
+            logger.error("Failed to parse log line: %s", e)
             return None
 
     async def _warm_cache(self, session_id: str, commands: List[Dict[str, Any]]):
@@ -379,7 +379,7 @@ class TerminalLogger:
             )
 
         except Exception as e:
-            logger.error(f"Failed to warm cache: {e}")
+            logger.error("Failed to warm cache: %s", e)
 
     async def get_session_statistics(self, session_id: str) -> Dict[str, Any]:
         """
@@ -437,9 +437,9 @@ class TerminalLogger:
                     self.redis_client.srem("chat:terminal:active", session_id),
                 )
 
-            logger.info(f"Cleared terminal logs for session {session_id}")
+            logger.info("Cleared terminal logs for session %s", session_id)
             return True
 
         except Exception as e:
-            logger.error(f"Failed to clear terminal logs for session {session_id}: {e}")
+            logger.error("Failed to clear terminal logs for session %s: %s", session_id, e)
             return False

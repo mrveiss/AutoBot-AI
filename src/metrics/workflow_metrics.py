@@ -136,10 +136,10 @@ class WorkflowMetricsCollector:
                 },
             )
 
-            logger.info(f"Started tracking workflow {workflow_id}")
+            logger.info("Started tracking workflow %s", workflow_id)
 
         except Exception as e:
-            logger.error(f"Failed to start workflow tracking: {e}")
+            logger.error("Failed to start workflow tracking: %s", e)
 
     def start_step_timing(self, workflow_id: str, step_id: str, agent_type: str):
         """Start timing a workflow step"""
@@ -153,7 +153,7 @@ class WorkflowMetricsCollector:
             }
 
         except Exception as e:
-            logger.error(f"Failed to start step timing: {e}")
+            logger.error("Failed to start step timing: %s", e)
 
     def end_step_timing(
         self, workflow_id: str, step_id: str, success: bool = True, error: str = None
@@ -207,7 +207,7 @@ class WorkflowMetricsCollector:
             del self.step_timers[workflow_id][step_id]
 
         except Exception as e:
-            logger.error(f"Failed to end step timing: {e}")
+            logger.error("Failed to end step timing: %s", e)
 
     def record_approval_wait_time(self, workflow_id: str, wait_time_ms: float):
         """Record time spent waiting for user approval"""
@@ -226,7 +226,7 @@ class WorkflowMetricsCollector:
             )
 
         except Exception as e:
-            logger.error(f"Failed to record approval wait time: {e}")
+            logger.error("Failed to record approval wait time: %s", e)
 
     def record_resource_usage(self, workflow_id: str, resource_data: Dict[str, Any]):
         """Record resource usage snapshot during workflow execution"""
@@ -255,13 +255,13 @@ class WorkflowMetricsCollector:
                     )
 
         except Exception as e:
-            logger.error(f"Failed to record resource usage: {e}")
+            logger.error("Failed to record resource usage: %s", e)
 
     def end_workflow_tracking(self, workflow_id: str, final_status: str):
         """Complete workflow tracking and generate final statistics"""
         try:
             if workflow_id not in self.active_workflows:
-                logger.warning(f"No active workflow found: {workflow_id}")
+                logger.warning("No active workflow found: %s", workflow_id)
                 return None
 
             workflow = self.active_workflows[workflow_id]
@@ -337,11 +337,11 @@ class WorkflowMetricsCollector:
             # Clean up active workflow
             del self.active_workflows[workflow_id]
 
-            logger.info(f"Completed tracking workflow {workflow_id}: {final_status}")
+            logger.info("Completed tracking workflow %s: %s", workflow_id, final_status)
             return stats
 
         except Exception as e:
-            logger.error(f"Failed to end workflow tracking: {e}")
+            logger.error("Failed to end workflow tracking: %s", e)
             return None
 
     def _record_metric(
@@ -368,7 +368,7 @@ class WorkflowMetricsCollector:
             self.metrics_history.append(metric)
 
         except Exception as e:
-            logger.error(f"Failed to record metric: {e}")
+            logger.error("Failed to record metric: %s", e)
 
     def _aggregate_resource_usage(
         self, snapshots: List[Dict[str, Any]]
@@ -393,7 +393,7 @@ class WorkflowMetricsCollector:
                 "snapshot_count": len(snapshots),
             }
         except Exception as e:
-            logger.error(f"Failed to aggregate resource usage: {e}")
+            logger.error("Failed to aggregate resource usage: %s", e)
             return {}
 
     def _update_aggregated_stats(self, stats: WorkflowExecutionStats):
@@ -436,7 +436,7 @@ class WorkflowMetricsCollector:
                 self.aggregated_stats["performance_trends"].pop(0)
 
         except Exception as e:
-            logger.error(f"Failed to update aggregated stats: {e}")
+            logger.error("Failed to update aggregated stats: %s", e)
 
     def get_workflow_stats(self, workflow_id: str) -> Optional[Dict[str, Any]]:
         """Get statistics for a specific workflow"""
@@ -482,7 +482,7 @@ class WorkflowMetricsCollector:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get workflow stats: {e}")
+            logger.error("Failed to get workflow stats: %s", e)
             return None
 
     def get_performance_summary(self, time_window_hours: int = 24) -> Dict[str, Any]:
@@ -532,7 +532,7 @@ class WorkflowMetricsCollector:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get performance summary: {e}")
+            logger.error("Failed to get performance summary: %s", e)
             return {"error": str(e)}
 
     def export_metrics(self, format: str = "json") -> str:
@@ -550,7 +550,7 @@ class WorkflowMetricsCollector:
                 return f"Unsupported export format: {format}"
 
         except Exception as e:
-            logger.error(f"Failed to export metrics: {e}")
+            logger.error("Failed to export metrics: %s", e)
             return f"Export failed: {str(e)}"
 
 

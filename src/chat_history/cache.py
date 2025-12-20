@@ -43,4 +43,4 @@ class CacheMixin:
                 json.dumps(chat_data, ensure_ascii=False),
             )
         except Exception as e:
-            logger.error(f"Failed to cache session data: {e}")
+            logger.error("Failed to cache session data: %s", e)

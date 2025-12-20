@@ -188,8 +188,8 @@ class StreamingCommandExecutor:
         process_id = str(uuid.uuid4())
         start_time = time.time()
 
-        logger.info(f"Executing command: {command}")
-        logger.info(f"Process ID: {process_id}")
+        logger.info("Executing command: %s", command)
+        logger.info("Process ID: %s", process_id)
 
         # Validate preconditions (Issue #315 - uses helper)
         error_chunk = self._validate_execution_preconditions(command)
@@ -288,7 +288,7 @@ class StreamingCommandExecutor:
                             yield chunk
 
                 except Exception as e:
-                    logger.warning(f"Error reading stdout: {e}")
+                    logger.warning("Error reading stdout: %s", e)
                     break
 
         async def read_stderr():
@@ -311,7 +311,7 @@ class StreamingCommandExecutor:
                         yield chunk
 
                 except Exception as e:
-                    logger.warning(f"Error reading stderr: {e}")
+                    logger.warning("Error reading stderr: %s", e)
                     break
 
         # Collect output from both streams
@@ -350,7 +350,7 @@ class StreamingCommandExecutor:
         try:
             return await task
         except Exception as e:
-            logger.warning(f"Error in stream task: {e}")
+            logger.warning("Error in stream task: %s", e)
             return []
 
     # -------------------------------------------------------------------------
@@ -425,7 +425,7 @@ class StreamingCommandExecutor:
                 if len(chunks) >= 10:  # Limit batch size
                     break
         except Exception as e:
-            logger.warning(f"Error collecting chunks: {e}")
+            logger.warning("Error collecting chunks: %s", e)
         return chunks
 
     async def _provide_progress_commentary(
@@ -468,7 +468,7 @@ class StreamingCommandExecutor:
             )
 
         except Exception as e:
-            logger.warning(f"Error generating progress commentary: {e}")
+            logger.warning("Error generating progress commentary: %s", e)
 
     async def _provide_completion_commentary(
         self, command: str, user_goal: str, execution_time: float
@@ -499,7 +499,7 @@ class StreamingCommandExecutor:
             )
 
         except Exception as e:
-            logger.warning(f"Error generating completion commentary: {e}")
+            logger.warning("Error generating completion commentary: %s", e)
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
@@ -545,11 +545,11 @@ class StreamingCommandExecutor:
                 process_info.process.kill()
 
             del self.active_processes[process_id]
-            logger.info(f"Killed process {process_id}")
+            logger.info("Killed process %s", process_id)
             return True
 
         except Exception as e:
-            logger.error(f"Error killing process {process_id}: {e}")
+            logger.error("Error killing process %s: %s", process_id, e)
             return False
 
     def kill_all_processes(self):
@@ -560,7 +560,7 @@ class StreamingCommandExecutor:
                 process_info.process.terminate()
                 del self.active_processes[process_id]
             except Exception as e:
-                logger.warning(f"Error killing process {process_id}: {e}")
+                logger.warning("Error killing process %s: %s", process_id, e)
 
         logger.info("All processes terminated")
 

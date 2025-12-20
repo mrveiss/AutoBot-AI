@@ -268,7 +268,7 @@ async def export_state_data_to_file(
         else:
             raise ValueError(f"Unsupported format: {format}")
 
-        logger.info(f"State data exported to {output_file}")
+        logger.info("State data exported to %s", output_file)
     except OSError as e:
-        logger.error(f"Failed to export state data to {output_file}: {e}")
+        logger.error("Failed to export state data to %s: %s", output_file, e)
         raise

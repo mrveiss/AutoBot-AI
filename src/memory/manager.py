@@ -120,7 +120,7 @@ class UnifiedMemoryManager:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        logger.info(f"Unified Memory Manager created at {self.db_path}")
+        logger.info("Unified Memory Manager created at %s", self.db_path)
 
     async def _ensure_initialized(self):
         """
@@ -586,7 +586,7 @@ class UnifiedMemoryManager:
             # Force garbage collection
             gc.collect()
 
-            logger.info(f"Cleanup completed: {cleanup_counts}")
+            logger.info("Cleanup completed: %s", cleanup_counts)
 
         return cleanup_counts
 

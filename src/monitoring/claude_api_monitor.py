@@ -270,7 +270,7 @@ class AlertManager:
                     try:
                         callback(alert)
                     except Exception as e:
-                        logger.error(f"Alert callback failed: {e}")
+                        logger.error("Alert callback failed: %s", e)
 
         return filtered_alerts
 
@@ -335,7 +335,7 @@ class ClaudeAPIMonitor:
             from src.monitoring.prometheus_metrics import get_metrics_manager
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
-            logger.warning(f"Prometheus metrics not available: {e}")
+            logger.warning("Prometheus metrics not available: %s", e)
             self.prometheus = None
 
         logger.info("ClaudeAPIMonitor initialized")
@@ -382,7 +382,7 @@ class ClaudeAPIMonitor:
         # Check for immediate alerts
         alerts = self.alert_manager.check_usage_alerts(self.usage_tracker)
         if alerts:
-            logger.info(f"Generated {len(alerts)} usage alerts")
+            logger.info("Generated %s usage alerts", len(alerts))
 
     def predict_rate_limit_risk(self) -> Dict[str, Any]:
         """Predict the risk of hitting rate limits"""

@@ -49,7 +49,7 @@ class MemoryMonitor:
                 "system_available_mb": system_memory.available / (1024 * 1024),
             }
         except Exception as e:
-            logger.error(f"Failed to get memory usage: {e}")
+            logger.error("Failed to get memory usage: %s", e)
             return None
 
     def should_cleanup(self, threshold: float = 0.8) -> bool:

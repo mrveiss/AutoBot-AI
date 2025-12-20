@@ -53,7 +53,7 @@ class SystemResourceMonitor:
                 self._store_resource_data(resource_data)
                 await asyncio.sleep(self.collection_interval)
             except Exception as e:
-                logger.error(f"System monitoring error: {e}")
+                logger.error("System monitoring error: %s", e)
                 await asyncio.sleep(self.collection_interval)
 
     def _collect_autobot_processes(self) -> List[Dict[str, Any]]:
@@ -166,7 +166,7 @@ class SystemResourceMonitor:
             )
 
         except Exception as e:
-            logger.error(f"Failed to collect system metrics: {e}")
+            logger.error("Failed to collect system metrics: %s", e)
             return {
                 "timestamp": datetime.now().isoformat(),
                 "error": str(e),
@@ -197,7 +197,7 @@ class SystemResourceMonitor:
                 "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
-            logger.error(f"Failed to get current metrics: {e}")
+            logger.error("Failed to get current metrics: %s", e)
             return {"error": str(e)}
 
     def get_resource_summary(self, minutes: int = 10) -> Dict[str, Any]:
@@ -290,7 +290,7 @@ class SystemResourceMonitor:
             }
 
         except Exception as e:
-            logger.error(f"Failed to generate resource summary: {e}")
+            logger.error("Failed to generate resource summary: %s", e)
             return {"error": str(e)}
 
     def check_resource_thresholds(self) -> Dict[str, Any]:
@@ -327,7 +327,7 @@ class SystemResourceMonitor:
             }
 
         except Exception as e:
-            logger.error(f"Failed to check resource thresholds: {e}")
+            logger.error("Failed to check resource thresholds: %s", e)
             return {"status": "error", "error": str(e)}
 
     def export_resource_data(self, format: str = "json") -> str:
@@ -350,7 +350,7 @@ class SystemResourceMonitor:
                 return f"Unsupported format: {format}"
 
         except Exception as e:
-            logger.error(f"Failed to export resource data: {e}")
+            logger.error("Failed to export resource data: %s", e)
             return f"Export failed: {str(e)}"
 
 

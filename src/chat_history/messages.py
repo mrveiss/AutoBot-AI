@@ -77,10 +77,10 @@ class MessagesMixin:
                 messages = await self.load_session(session_id)
                 messages.append(message)
                 await self.save_session(session_id, messages=messages)
-                logger.debug(f"Added message to session {session_id}")
+                logger.debug("Added message to session %s", session_id)
                 return
             except Exception as e:
-                logger.error(f"Error adding message to session {session_id}: {e}")
+                logger.error("Error adding message to session %s: %s", session_id, e)
                 # Fall through to add to default history
 
         # Otherwise add to default history
@@ -90,7 +90,7 @@ class MessagesMixin:
         self._periodic_memory_check()
 
         await self._save_history()
-        logger.debug(f"Added message from {sender} with type {message_type}")
+        logger.debug("Added message from %s with type %s", sender, message_type)
 
     def get_all_messages(self) -> List[Dict[str, Any]]:
         """Returns the entire chat history."""
@@ -228,7 +228,7 @@ class MessagesMixin:
             messages = await self.load_session(session_id)
 
             if not messages:
-                logger.warning(f"No messages found in session {session_id}")
+                logger.warning("No messages found in session %s", session_id)
                 return False
 
             # Get last message
@@ -254,10 +254,12 @@ class MessagesMixin:
             await self.save_session(session_id, messages=messages)
 
             logger.debug(
-                f"Added {tool_type} tool marker to last message in session {session_id}"
+                "Added %s tool marker to last message in session %s",
+                tool_type,
+                session_id,
             )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to add tool marker to session {session_id}: {e}")
+            logger.error("Failed to add tool marker to session %s: %s", session_id, e)
             return False

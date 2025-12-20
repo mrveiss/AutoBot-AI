@@ -213,7 +213,7 @@ class RedisCommunicationChannel(CommunicationChannel):
         """Start the communication channel"""
         self.is_active = True
         self.listener_task = asyncio.create_task(self._listen_for_messages())
-        logger.info(f"Redis communication channel {self.channel_id} started")
+        logger.info("Redis communication channel %s started", self.channel_id)
 
     async def _listen_for_messages(self):
         """Background task to listen for incoming messages"""
@@ -234,7 +234,7 @@ class RedisCommunicationChannel(CommunicationChannel):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error listening for messages: {e}")
+                logger.error("Error listening for messages: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def send(self, message: StandardMessage) -> bool:
@@ -254,13 +254,14 @@ class RedisCommunicationChannel(CommunicationChannel):
                     )
 
             logger.debug(
-                f"Message sent to channel {self.channel_id}: "
-                f"{message.header.message_id}"
+                "Message sent to channel %s: %s",
+                self.channel_id,
+                message.header.message_id,
             )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send message: {e}")
+            logger.error("Failed to send message: %s", e)
             return False
 
     async def receive(
@@ -278,7 +279,7 @@ class RedisCommunicationChannel(CommunicationChannel):
         except asyncio.TimeoutError:
             return None
         except Exception as e:
-            logger.error(f"Error receiving message: {e}")
+            logger.error("Error receiving message: %s", e)
             return None
 
     async def close(self):
@@ -290,7 +291,7 @@ class RedisCommunicationChannel(CommunicationChannel):
                 await self.listener_task
             except asyncio.CancelledError:
                 logger.debug("Listener task cancelled for channel %s", self.channel_id)
-        logger.info(f"Redis communication channel {self.channel_id} closed")
+        logger.info("Redis communication channel %s closed", self.channel_id)
 
 
 class DirectCommunicationChannel(CommunicationChannel):
@@ -309,12 +310,13 @@ class DirectCommunicationChannel(CommunicationChannel):
                 return False
             await self.message_queue.put(message)
             logger.debug(
-                f"Message sent directly to {self.channel_id}: "
-                f"{message.header.message_id}"
+                "Message sent directly to %s: %s",
+                self.channel_id,
+                message.header.message_id,
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send direct message: {e}")
+            logger.error("Failed to send direct message: %s", e)
             return False
 
     async def receive(
@@ -332,7 +334,7 @@ class DirectCommunicationChannel(CommunicationChannel):
         except asyncio.TimeoutError:
             return None
         except Exception as e:
-            logger.error(f"Error receiving direct message: {e}")
+            logger.error("Error receiving direct message: %s", e)
             return None
 
     async def close(self):
@@ -396,21 +398,21 @@ class AgentCommunicationProtocol:
                 future.cancel()
 
         logger.info(
-            f"Agent communication protocol stopped for "
-            f"{self.agent_identity.agent_id}"
+            "Agent communication protocol stopped for %s",
+            self.agent_identity.agent_id,
         )
 
     def add_channel(self, channel_id: str, channel: CommunicationChannel):
         """Add a communication channel"""
         self.channels[channel_id] = channel
-        logger.info(f"Added communication channel: {channel_id}")
+        logger.info("Added communication channel: %s", channel_id)
 
     def remove_channel(self, channel_id: str):
         """Remove a communication channel"""
         if channel_id in self.channels:
             channel = self.channels.pop(channel_id)
             asyncio.create_task(channel.close())
-            logger.info(f"Removed communication channel: {channel_id}")
+            logger.info("Removed communication channel: %s", channel_id)
 
     def register_message_handler(
         self,
@@ -421,7 +423,7 @@ class AgentCommunicationProtocol:
         if message_type not in self.message_handlers:
             self.message_handlers[message_type] = []
         self.message_handlers[message_type].append(handler)
-        logger.info(f"Registered handler for {message_type.value} messages")
+        logger.info("Registered handler for %s messages", message_type.value)
 
     async def send_message(
         self, message: StandardMessage, channel_id: Optional[str] = None
@@ -434,7 +436,7 @@ class AgentCommunicationProtocol:
         # Select channel
         if channel_id:
             if channel_id not in self.channels:
-                logger.error(f"Channel {channel_id} not found")
+                logger.error("Channel %s not found", channel_id)
                 return False
             channel = self.channels[channel_id]
         else:
@@ -482,12 +484,13 @@ class AgentCommunicationProtocol:
 
         except asyncio.TimeoutError:
             logger.error(
-                f"Request timeout after {timeout}s for correlation_id: "
-                f"{correlation_id}"
+                "Request timeout after %ss for correlation_id: %s",
+                timeout,
+                correlation_id,
             )
             return None
         except Exception as e:
-            logger.error(f"Error sending request: {e}")
+            logger.error("Error sending request: %s", e)
             return None
         finally:
             # Clean up
@@ -519,10 +522,12 @@ class AgentCommunicationProtocol:
                 if await channel.send(message):
                     sent_count += 1
             except Exception as e:
-                logger.error(f"Failed to broadcast to channel {channel_id}: {e}")
+                logger.error("Failed to broadcast to channel %s: %s", channel_id, e)
 
         logger.info(
-            f"Broadcasted message to {sent_count}/{len(self.channels)} channels"
+            "Broadcasted message to %s/%s channels",
+            sent_count,
+            len(self.channels),
         )
         return sent_count
 
@@ -547,15 +552,16 @@ class AgentCommunicationProtocol:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in message processor: {e}")
+                logger.error("Error in message processor: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
     async def _handle_message(self, message: StandardMessage, channel_id: str):
         """Handle an incoming message"""
 
         logger.debug(
-            f"Received {message.header.message_type.value} message: "
-            f"{message.header.message_id}"
+            "Received %s message: %s",
+            message.header.message_type.value,
+            message.header.message_id,
         )
 
         try:
@@ -581,7 +587,7 @@ class AgentCommunicationProtocol:
                         await self.send_response(response, message, channel_id)
 
                 except Exception as e:
-                    logger.error(f"Error in message handler: {e}")
+                    logger.error("Error in message handler: %s", e)
 
                     # Send error response for requests
                     if message.header.message_type == MessageType.REQUEST:
@@ -600,7 +606,7 @@ class AgentCommunicationProtocol:
                         await self.send_response(error_response, message, channel_id)
 
         except Exception as e:
-            logger.error(f"Error handling message {message.header.message_id}: {e}")
+            logger.error("Error handling message %s: %s", message.header.message_id, e)
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeat messages"""
@@ -630,7 +636,7 @@ class AgentCommunicationProtocol:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in heartbeat loop: {e}")
+                logger.error("Error in heartbeat loop: %s", e)
                 await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
 
@@ -651,7 +657,7 @@ class AgentCommunicationManager:
         """Register an agent with communication protocol"""
 
         if agent_identity.agent_id in self.protocols:
-            logger.warning(f"Agent {agent_identity.agent_id} already registered")
+            logger.warning("Agent %s already registered", agent_identity.agent_id)
             return self.protocols[agent_identity.agent_id]
 
         # Create protocol
@@ -672,7 +678,7 @@ class AgentCommunicationManager:
 
                 protocol.add_channel(channel_id, channel)
             else:
-                logger.error(f"Unknown channel type: {channel_type}")
+                logger.error("Unknown channel type: %s", channel_type)
 
         # Start the protocol
         await protocol.start()
@@ -690,7 +696,7 @@ class AgentCommunicationManager:
         if agent_id in self.protocols:
             protocol = self.protocols.pop(agent_id)
             await protocol.stop()
-            logger.info(f"Unregistered agent communication protocol: {agent_id}")
+            logger.info("Unregistered agent communication protocol: %s", agent_id)
 
     def get_protocol(self, agent_id: str) -> Optional[AgentCommunicationProtocol]:
         """Get communication protocol for an agent"""
@@ -737,7 +743,7 @@ async def send_agent_request(
     sender_protocol = manager.get_protocol(sender_id)
 
     if not sender_protocol:
-        logger.error(f"Sender agent {sender_id} not registered")
+        logger.error("Sender agent %s not registered", sender_id)
         return None
 
     # Create request message
@@ -752,10 +758,10 @@ async def send_agent_request(
     if response and response.header.message_type != MessageType.ERROR:
         return response.payload.content
     elif response and response.header.message_type == MessageType.ERROR:
-        logger.error(f"Agent request error: {response.payload.content}")
+        logger.error("Agent request error: %s", response.payload.content)
         return None
     else:
-        logger.error(f"No response from agent {recipient_id}")
+        logger.error("No response from agent %s", recipient_id)
         return None
 
 
@@ -766,7 +772,7 @@ async def broadcast_to_all_agents(sender_id: str, message_data: Any) -> int:
     sender_protocol = manager.get_protocol(sender_id)
 
     if not sender_protocol:
-        logger.error(f"Sender agent {sender_id} not registered")
+        logger.error("Sender agent %s not registered", sender_id)
         return 0
 
     # Create broadcast message

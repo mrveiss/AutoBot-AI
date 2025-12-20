@@ -43,7 +43,7 @@ class SecurityMixin:
         try:
             return encrypt_data(data)
         except Exception as e:
-            logger.error(f"Failed to encrypt chat data: {e}")
+            logger.error("Failed to encrypt chat data: %s", e)
             logger.warning(
                 "Falling back to unencrypted storage due to encryption failure"
             )
@@ -75,7 +75,7 @@ class SecurityMixin:
                 logger.debug("Loading legacy unencrypted chat data")
                 return json.loads(data_str)
         except Exception as e:
-            logger.error(f"Failed to decrypt chat data: {e}")
+            logger.error("Failed to decrypt chat data: %s", e)
             # Try as unencrypted JSON as fallback
             try:
                 return json.loads(data_str)

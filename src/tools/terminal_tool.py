@@ -91,7 +91,7 @@ class TerminalTool:
             return self._format_session_result(session, conversation_id)
 
         except Exception as e:
-            logger.error(f"Error creating terminal session: {e}", exc_info=True)
+            logger.error("Error creating terminal session: %s", e, exc_info=True)
             return {"status": "error", "error": str(e)}
 
     async def _create_new_session(self, conversation_id: str) -> str:
@@ -141,7 +141,7 @@ class TerminalTool:
             session_id = await self._restore_session_mapping_from_db(conversation_id)
 
         if not session_id:
-            logger.info(f"No terminal session for {conversation_id}. Auto-creating.")
+            logger.info("No terminal session for %s. Auto-creating.", conversation_id)
             return await self._create_new_session(conversation_id)
 
         session_info = await self.agent_terminal_service.get_session_info(session_id)
@@ -193,7 +193,7 @@ class TerminalTool:
             )
             return self._format_execution_result(result, command, description)
         except Exception as e:
-            logger.error(f"Error executing command: {e}", exc_info=True)
+            logger.error("Error executing command: %s", e, exc_info=True)
             return {"status": "error", "error": str(e), "command": command}
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
@@ -236,7 +236,7 @@ class TerminalTool:
             }
 
         except Exception as e:
-            logger.error(f"Error getting session info: {e}", exc_info=True)
+            logger.error("Error getting session info: %s", e, exc_info=True)
             return {
                 "status": "error",
                 "error": str(e),
@@ -299,7 +299,7 @@ class TerminalTool:
             }
 
         except Exception as e:
-            logger.error(f"Error getting user command history: {e}", exc_info=True)
+            logger.error("Error getting user command history: %s", e, exc_info=True)
             return {"status": "error", "error": str(e)}
 
     async def close_session(self, conversation_id: str) -> Dict[str, Any]:
@@ -347,7 +347,7 @@ class TerminalTool:
                 }
 
         except Exception as e:
-            logger.error(f"Error closing session: {e}", exc_info=True)
+            logger.error("Error closing session: %s", e, exc_info=True)
             return {
                 "status": "error",
                 "error": str(e),
@@ -382,11 +382,11 @@ class TerminalTool:
                 session_id = sessions[0].get("session_id")
                 if session_id:
                     self.active_sessions[conversation_id] = session_id
-                    logger.info(f"Restored session mapping from database: conversation={conversation_id}, session={session_id}")
+                    logger.info("Restored session mapping from database: conversation=%s, session=%s", conversation_id, session_id)
                     return session_id
 
         except Exception as e:
-            logger.debug(f"Failed to query database for session: {e}")
+            logger.debug("Failed to query database for session: %s", e)
 
         return None
 
@@ -404,7 +404,7 @@ class TerminalTool:
             timeout=aiohttp.ClientTimeout(total=10.0),
         ) as response:
             if response.status != 200:
-                logger.warning(f"Failed to fetch chat history for restoration: {response.status}")
+                logger.warning("Failed to fetch chat history for restoration: %s", response.status)
                 return []
 
             data = await response.json()
@@ -454,7 +454,7 @@ class TerminalTool:
             command_messages = await self._fetch_command_messages(conversation_id)
 
             if not command_messages:
-                logger.info(f"No command history to restore for {conversation_id}")
+                logger.info("No command history to restore for %s", conversation_id)
                 return
 
             # Issue #321: Use delegation method to reduce message chains
@@ -465,10 +465,10 @@ class TerminalTool:
                 self._write_history_to_pty(session, command_messages)
                 self.agent_terminal_service._write_to_pty(session, self._build_restoration_footer())
 
-            logger.info(f"Restored {len(command_messages)} command entries to terminal {session_id}")
+            logger.info("Restored %s command entries to terminal %s", len(command_messages), session_id)
 
         except Exception as e:
-            logger.error(f"Error restoring terminal history: {e}", exc_info=True)
+            logger.error("Error restoring terminal history: %s", e, exc_info=True)
 
     def _get_method_descriptions(self) -> Dict[str, Any]:
         """Get method descriptions for tool documentation."""

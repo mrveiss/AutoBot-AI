@@ -117,7 +117,7 @@ class SessionListingMixin:
                             }
                         )
                 except Exception as e:
-                    logger.error(f"Error reading chat file {filename}: {str(e)}")
+                    logger.error("Error reading chat file %s: %s", filename, str(e))
                     continue
 
             # Sort by last modified time (most recent first)
@@ -125,7 +125,7 @@ class SessionListingMixin:
             return sessions
 
         except Exception as e:
-            logger.error(f"Error listing chat sessions: {str(e)}")
+            logger.error("Error listing chat sessions: %s", str(e))
             return []
 
     async def _read_chat_file_metadata(
@@ -148,7 +148,7 @@ class SessionListingMixin:
                 message_count = len(messages) if isinstance(messages, list) else 0
                 return chat_name, message_count
         except Exception as read_err:
-            logger.debug(f"Could not read chat file content: {read_err}")
+            logger.debug("Could not read chat file content: %s", read_err)
             return None, 0
 
     async def _build_session_entry(
@@ -190,7 +190,7 @@ class SessionListingMixin:
                 "fast_mode": True,
             }
         except Exception as e:
-            logger.error(f"Error reading file stats for {filename}: {str(e)}")
+            logger.error("Error reading file stats for %s: %s", filename, str(e))
             return None
 
     async def list_sessions_fast(self) -> List[Dict[str, Any]]:
@@ -231,7 +231,7 @@ class SessionListingMixin:
             return sessions
 
         except Exception as e:
-            logger.error(f"Error listing chat sessions (fast mode): {str(e)}")
+            logger.error("Error listing chat sessions (fast mode): %s", str(e))
             return []
 
     def _extract_session_id_from_terminal_file(self, filename: str) -> str | None:
@@ -339,17 +339,18 @@ class SessionListingMixin:
                         orphaned_sessions_created += 1
                 except Exception as create_err:
                     logger.error(
-                        f"Failed to auto-create chat session for orphaned "
-                        f"{filename}: {create_err}"
+                        "Failed to auto-create chat session for orphaned %s: %s",
+                        filename,
+                        create_err,
                     )
 
             if orphaned_sessions_created > 0:
                 logger.info(
-                    f"✅ Auto-created {orphaned_sessions_created} chat sessions "
-                    f"for orphaned terminal files"
+                    "✅ Auto-created %s chat sessions for orphaned terminal files",
+                    orphaned_sessions_created,
                 )
 
         except Exception as e:
-            logger.error(f"Error recovering orphaned terminal sessions: {e}")
+            logger.error("Error recovering orphaned terminal sessions: %s", e)
 
         return sessions

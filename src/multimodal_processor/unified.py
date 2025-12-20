@@ -157,7 +157,7 @@ class UnifiedMultiModalProcessor:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Multi-modal processing failed: {e}")
+            self.logger.error("Multi-modal processing failed: %s", e)
 
             # Record failed processing
             self.performance_monitor.record_processing(
@@ -256,10 +256,10 @@ class UnifiedMultiModalProcessor:
             self.fusion_network.eval()
 
             self.logger.info(
-                f"Cross-modal fusion components initialized on {self.device}"
+                "Cross-modal fusion components initialized on %s", self.device
             )
         except Exception as e:
-            self.logger.error(f"Failed to initialize fusion components: {e}")
+            self.logger.error("Failed to initialize fusion components: %s", e)
 
     def _extract_embedding_from_result(
         self, result: ProcessingResult
@@ -424,7 +424,7 @@ class UnifiedMultiModalProcessor:
             }
 
         except Exception as e:
-            self.logger.error(f"Attention fusion failed: {e}")
+            self.logger.error("Attention fusion failed: %s", e)
             return self._simple_combination(results)
 
     def _simple_combination(self, results: List[ProcessingResult]) -> Dict[str, Any]:
@@ -501,7 +501,7 @@ class UnifiedMultiModalProcessor:
             )
 
         except Exception as e:
-            self.logger.warning(f"Failed to store processing result: {e}")
+            self.logger.warning("Failed to store processing result: %s", e)
 
     def _group_inputs_by_modality(
         self, inputs: List[MultiModalInput]
@@ -541,7 +541,7 @@ class UnifiedMultiModalProcessor:
 
         for i in range(0, len(group_inputs), batch_size):
             batch = group_inputs[i : i + batch_size]
-            self.logger.debug(f"Processing batch of {len(batch)} {modality} inputs")
+            self.logger.debug("Processing batch of %s %s inputs", len(batch), modality)
             batch_results = await self._process_single_batch(batch, modality)
             results.extend(batch_results)
 
@@ -578,7 +578,7 @@ class UnifiedMultiModalProcessor:
         if not inputs:
             return []
 
-        self.logger.info(f"Processing batch of {len(inputs)} inputs")
+        self.logger.info("Processing batch of %s inputs", len(inputs))
         start_time = time.time()
 
         # Auto-optimize performance before batch processing
@@ -609,7 +609,7 @@ class UnifiedMultiModalProcessor:
             return results
 
         except Exception as e:
-            self.logger.error(f"Batch processing failed: {e}")
+            self.logger.error("Batch processing failed: %s", e)
             return await self._fallback_individual_processing(inputs)
 
     async def _process_image_batch(
@@ -631,7 +631,7 @@ class UnifiedMultiModalProcessor:
                     results.append(result)
 
         except Exception as e:
-            self.logger.error(f"Image batch processing failed: {e}")
+            self.logger.error("Image batch processing failed: %s", e)
             # Fallback to individual processing
             for inp in batch:
                 try:
@@ -672,7 +672,7 @@ class UnifiedMultiModalProcessor:
                     results.append(result)
 
         except Exception as e:
-            self.logger.error(f"Audio batch processing failed: {e}")
+            self.logger.error("Audio batch processing failed: %s", e)
             # Fallback to individual processing
             for inp in batch:
                 try:

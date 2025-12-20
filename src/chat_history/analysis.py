@@ -100,7 +100,7 @@ class AnalysisMixin:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to extract conversation metadata: {e}")
+            logger.warning("Failed to extract conversation metadata: %s", e)
             return {
                 "topics": [],
                 "entity_mentions": [],

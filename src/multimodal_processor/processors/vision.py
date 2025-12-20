@@ -57,7 +57,7 @@ class VisionProcessor(BaseModalProcessor):
 
         # Initialize GPU device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.logger.info(f"VisionProcessor initialized with device: {self.device}")
+        self.logger.info("VisionProcessor initialized with device: %s", self.device)
 
         # Initialize vision models if available
         self.clip_model = None
@@ -118,7 +118,7 @@ class VisionProcessor(BaseModalProcessor):
 
             self.logger.info("Vision models loaded successfully")
         except Exception as e:
-            self.logger.error(f"Failed to load vision models: {e}")
+            self.logger.error("Failed to load vision models: %s", e)
             self.logger.info("VisionProcessor will use placeholder implementation")
 
     def __del__(self):
@@ -128,7 +128,7 @@ class VisionProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
         except Exception as e:
-            self.logger.debug(f"GPU cleanup skipped: {e}")
+            self.logger.debug("GPU cleanup skipped: %s", e)
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process visual input (images, screenshots, video)"""
@@ -158,7 +158,7 @@ class VisionProcessor(BaseModalProcessor):
 
         except Exception as e:
             processing_time = time.time() - start_time
-            self.logger.error(f"Vision processing failed: {e}")
+            self.logger.error("Vision processing failed: %s", e)
 
             return ProcessingResult(
                 result_id=f"vision_{input_data.input_id}",
@@ -341,7 +341,7 @@ class VisionProcessor(BaseModalProcessor):
             return result
 
         except Exception as e:
-            self.logger.error(f"Error during GPU-accelerated image processing: {e}")
+            self.logger.error("Error during GPU-accelerated image processing: %s", e)
             # Clear GPU cache on error
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

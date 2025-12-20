@@ -59,7 +59,7 @@ class VisualContextCollector:
             return visual_elements
 
         except Exception as e:
-            logger.debug(f"Visual context collection failed: {e}")
+            logger.debug("Visual context collection failed: %s", e)
             return []
 
     def _create_screen_context(self, screen_data: Dict[str, Any]) -> ContextElement:

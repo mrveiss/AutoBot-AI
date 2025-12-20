@@ -123,9 +123,9 @@ class EnhancedProjectStateTracker:
         try:
             self.state_history = load_snapshots_from_db(self.db_path, limit=100)
             load_milestones_from_db(self.db_path, self.milestones)
-            logger.info(f"Loaded {len(self.state_history)} state snapshots")
+            logger.info("Loaded %s state snapshots", len(self.state_history))
         except Exception as e:
-            logger.error(f"Error loading state: {e}")
+            logger.error("Error loading state: %s", e)
 
     async def capture_state_snapshot(self) -> StateSnapshot:
         """Capture current system state."""
@@ -210,7 +210,7 @@ class EnhancedProjectStateTracker:
             return snapshot
 
         except Exception as e:
-            logger.error(f"Error capturing state snapshot: {e}")
+            logger.error("Error capturing state snapshot: %s", e)
             raise
 
     async def _save_snapshot(self, snapshot: StateSnapshot):
@@ -245,7 +245,7 @@ class EnhancedProjectStateTracker:
             )
 
         except Exception as e:
-            logger.error(f"Error saving snapshot: {e}")
+            logger.error("Error saving snapshot: %s", e)
 
     async def record_state_change(
         self,
@@ -287,7 +287,7 @@ class EnhancedProjectStateTracker:
             )
 
         except Exception as e:
-            logger.error(f"Error recording state change: {e}")
+            logger.error("Error recording state change: %s", e)
 
         # Trigger snapshot if significant change
         if change_type in SIGNIFICANT_CHANGES:
@@ -322,7 +322,7 @@ class EnhancedProjectStateTracker:
             self._save_milestone(milestone_name, milestone),
         )
 
-        logger.info(f"🎉 Milestone achieved: {milestone.name}")
+        logger.info("🎉 Milestone achieved: %s", milestone.name)
 
     async def _save_milestone(self, name: str, milestone: ProjectMilestone):
         """Save milestone to database using asyncio.to_thread()."""
@@ -340,7 +340,7 @@ class EnhancedProjectStateTracker:
             )
 
         except Exception as e:
-            logger.error(f"Error saving milestone: {e}")
+            logger.error("Error saving milestone: %s", e)
 
     async def track_error(
         self, error: Exception, context: Optional[Dict[str, Any]] = None
@@ -367,10 +367,10 @@ class EnhancedProjectStateTracker:
                 },
             )
 
-            logger.debug(f"Error tracked: {type(error).__name__}")
+            logger.debug("Error tracked: %s", type(error).__name__)
 
         except Exception as e:
-            logger.error(f"Failed to track error: {e}")
+            logger.error("Failed to track error: %s", e)
 
     async def track_api_call(
         self, endpoint: str, method: str = "GET", response_status: Optional[int] = None
@@ -384,10 +384,10 @@ class EnhancedProjectStateTracker:
                 self.redis_client, endpoint, method, response_status
             )
 
-            logger.debug(f"API call tracked: {method} {endpoint} -> {response_status}")
+            logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
 
         except Exception as e:
-            logger.error(f"Failed to track API call: {e}")
+            logger.error("Failed to track API call: %s", e)
 
     async def track_user_interaction(
         self,
@@ -418,10 +418,10 @@ class EnhancedProjectStateTracker:
                     metadata={"tracking_source": "enhanced_state_tracker"},
                 )
 
-            logger.debug(f"User interaction tracked: {interaction_type} by {user_id}")
+            logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)
 
         except Exception as e:
-            logger.error(f"Failed to track user interaction: {e}")
+            logger.error("Failed to track user interaction: %s", e)
 
     async def get_metrics_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of tracked metrics."""
@@ -443,7 +443,7 @@ class EnhancedProjectStateTracker:
                     await asyncio.sleep(TimingConstants.HOURLY_INTERVAL)
                     await self.capture_state_snapshot()
                 except Exception as e:
-                    logger.error(f"Error in background tracking: {e}")
+                    logger.error("Error in background tracking: %s", e)
 
         asyncio.create_task(tracking_loop())
 

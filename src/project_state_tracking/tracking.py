@@ -40,7 +40,7 @@ async def track_error_to_redis(
             await pipe.execute()
 
     except Exception as e:
-        logger.error(f"Failed to track error to Redis: {e}")
+        logger.error("Failed to track error to Redis: %s", e)
 
 
 async def track_api_call_to_redis(
@@ -68,10 +68,10 @@ async def track_api_call_to_redis(
             await pipe.expire(endpoint_key, 86400)
             await pipe.execute()
 
-        logger.debug(f"API call tracked: {method} {endpoint} -> {response_status}")
+        logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
 
     except Exception as e:
-        logger.error(f"Failed to track API call to Redis: {e}")
+        logger.error("Failed to track API call to Redis: %s", e)
 
 
 async def track_user_interaction_to_redis(
@@ -99,10 +99,10 @@ async def track_user_interaction_to_redis(
             await pipe.expire(type_key, 86400)
             await pipe.execute()
 
-        logger.debug(f"User interaction tracked: {interaction_type} by {user_id}")
+        logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)
 
     except Exception as e:
-        logger.error(f"Failed to track user interaction to Redis: {e}")
+        logger.error("Failed to track user interaction to Redis: %s", e)
 
 
 def is_significant_interaction(interaction_type: str) -> bool:
@@ -133,7 +133,7 @@ def _handle_sync_error_tracking(
         else:
             _run_error_tracking(error, error_context)
     except Exception:
-        logger.error(f"Error in {func.__name__}: {error}")
+        logger.error("Error in %s: %s", func.__name__, error)
 
 
 def _schedule_error_tracking(
