@@ -109,7 +109,7 @@ class StatsMixin:
                         continue
                 return result
             except Exception as e:
-                logger.warning(f"Failed to get all stats: {e}")
+                logger.warning("Failed to get all stats: %s", e)
         return {}
 
     async def _initialize_stats_counters(self) -> None:
@@ -143,7 +143,7 @@ class StatsMixin:
                     chroma_collection = self.vector_store._collection
                     vector_count = chroma_collection.count()
                 except Exception as e:
-                    logger.debug(f"Could not get vector count: {e}")
+                    logger.debug("Could not get vector count: %s", e)
 
             # Initialize the counters
             await self.aioredis_client.hset(
@@ -158,12 +158,12 @@ class StatsMixin:
             )
 
             logger.info(
-                f"Stats counters initialized: facts={fact_count}, "
-                f"vectors={vector_count}"
+                "Stats counters initialized: facts=%d, vectors=%d",
+                fact_count, vector_count
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize stats counters: {e}")
+            logger.error("Failed to initialize stats counters: %s", e)
 
     async def _verify_stats_consistency(self, auto_correct: bool = True) -> dict:
         """
@@ -199,7 +199,7 @@ class StatsMixin:
                     chroma_collection = self.vector_store._collection
                     actual_vector_count = chroma_collection.count()
                 except Exception as e:
-                    logger.debug(f"Could not get actual vector count: {e}")
+                    logger.debug("Could not get actual vector count: %s", e)
 
             # Calculate drift
             fact_drift = actual_fact_count - stored_facts
@@ -220,8 +220,8 @@ class StatsMixin:
 
             if not is_consistent:
                 logger.warning(
-                    f"Stats counter drift detected: "
-                    f"facts={fact_drift:+d}, vectors={vector_drift:+d}"
+                    "Stats counter drift detected: facts=%+d, vectors=%+d",
+                    fact_drift, vector_drift
                 )
 
                 if auto_correct:
@@ -244,7 +244,7 @@ class StatsMixin:
             return result
 
         except Exception as e:
-            logger.error(f"Stats consistency check failed: {e}")
+            logger.error("Stats consistency check failed: %s", e)
             return {"status": "error", "message": str(e)}
 
     async def _get_fact_categories(self, fact_keys_sample: List[bytes]) -> List[str]:
@@ -269,7 +269,7 @@ class StatsMixin:
                 except (json.JSONDecodeError, TypeError):
                     continue
         except Exception as e:
-            logger.warning(f"Could not extract categories: {e}")
+            logger.warning("Could not extract categories: %s", e)
 
         return list(categories) if categories else ["general"]
 
@@ -286,10 +286,11 @@ class StatsMixin:
             stats["chromadb_collection"] = self.chromadb_collection
             stats["chromadb_path"] = self.chromadb_path
             logger.debug(
-                f"ChromaDB stats: {vector_count} vectors in collection '{self.chromadb_collection}'"
+                "ChromaDB stats: %d vectors in collection '%s'",
+                vector_count, self.chromadb_collection
             )
         except Exception as e:
-            logger.warning(f"Could not get ChromaDB stats: {e}")
+            logger.warning("Could not get ChromaDB stats: %s", e)
             stats["index_available"] = False
 
     async def _get_counts_with_fallback(self) -> tuple[int, int]:
@@ -299,7 +300,7 @@ class StatsMixin:
             if stat_counters:
                 return stat_counters.get("total_facts", 0), stat_counters.get("total_vectors", 0)
         except Exception as e:
-            logger.warning(f"Error getting stats counters: {e}")
+            logger.warning("Error getting stats counters: %s", e)
 
         # Fallback to ChromaDB count
         logger.warning("Stats counters not initialized, using ChromaDB fallback")
@@ -310,7 +311,7 @@ class StatsMixin:
             vector_count = chroma_collection.count()
             return 0, vector_count
         except Exception as e:
-            logger.error(f"Error getting ChromaDB count: {e}")
+            logger.error("Error getting ChromaDB count: %s", e)
             return 0, 0
 
     async def _sample_fact_keys(self, limit: int = 10) -> List[bytes]:
@@ -322,7 +323,7 @@ class StatsMixin:
                 if len(fact_keys) >= limit:
                     break
         except Exception as e:
-            logger.warning(f"Error sampling facts: {e}")
+            logger.warning("Error sampling facts: %s", e)
         return fact_keys
 
     async def _get_redis_memory_size(self) -> int:
@@ -331,7 +332,7 @@ class StatsMixin:
             info = await self.aioredis_client.info("memory")
             return info.get("used_memory", 0)
         except Exception as e:
-            logger.debug(f"Could not get Redis memory info: {e}")
+            logger.debug("Could not get Redis memory info: %s", e)
             return 0
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -362,7 +363,7 @@ class StatsMixin:
             if self.aioredis_client:
                 # Get counts using helper with fallback (Issue #315)
                 fact_count, vector_count = await self._get_counts_with_fallback()
-                logger.debug(f"O(1) stats lookup: facts={fact_count}, vectors={vector_count}")
+                logger.debug("O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count)
 
                 stats["total_facts"] = fact_count
                 stats["total_documents"] = vector_count
@@ -383,7 +384,7 @@ class StatsMixin:
             return stats
 
         except Exception as e:
-            logger.error(f"Error getting knowledge base stats: {e}")
+            logger.error("Error getting knowledge base stats: %s", e)
             return {
                 "total_documents": 0,
                 "total_chunks": 0,
@@ -409,7 +410,7 @@ class StatsMixin:
                 "peak_memory_mb": round(info.get("used_memory_peak", 0) / (1024 * 1024), 2),
             }
         except Exception as e:
-            logger.warning(f"Could not get memory stats: {e}")
+            logger.warning("Could not get memory stats: %s", e)
             return {}
 
     async def _get_recent_activity_stats(self) -> Dict[str, Any]:
@@ -431,7 +432,7 @@ class StatsMixin:
                 }
             }
         except Exception as e:
-            logger.warning(f"Could not get recent activity: {e}")
+            logger.warning("Could not get recent activity: %s", e)
             return {}
 
     async def _sample_fact_timestamps(self, fact_keys: List[str]) -> List[str]:
@@ -488,7 +489,7 @@ class StatsMixin:
             return detailed
 
         except Exception as e:
-            logger.error(f"Error generating detailed stats: {e}")
+            logger.error("Error generating detailed stats: %s", e)
             return {**basic_stats, "detailed_stats": False, "error": str(e)}
 
     async def _calc_all_quality_dimensions(
@@ -557,7 +558,7 @@ class StatsMixin:
             return metrics
 
         except Exception as e:
-            logger.error(f"Error calculating data quality metrics: {e}")
+            logger.error("Error calculating data quality metrics: %s", e)
             return {
                 "status": "error",
                 "message": str(e),
@@ -647,7 +648,7 @@ class StatsMixin:
             issues.append({
                 "type": "category_fragmentation",
                 "severity": "warning",
-                "message": f"Too many categories ({len(categories)}), consider consolidating",
+                "message": "Too many categories (%d), consider consolidating" % len(categories),
             })
 
         # Check for very small categories
@@ -659,7 +660,7 @@ class StatsMixin:
             issues.append({
                 "type": "sparse_categories",
                 "severity": "info",
-                "message": f"{len(small_categories)} categories have fewer than 3 facts",
+                "message": "%d categories have fewer than 3 facts" % len(small_categories),
             })
 
         # Check tag format consistency
@@ -676,7 +677,7 @@ class StatsMixin:
             issues.append({
                 "type": "tag_format_inconsistency",
                 "severity": "warning",
-                "message": f"{inconsistent_tags} tags have inconsistent format",
+                "message": "%d tags have inconsistent format" % inconsistent_tags,
             })
 
         # Calculate score
@@ -763,14 +764,14 @@ class StatsMixin:
             issues.append({
                 "type": "stale_data",
                 "severity": "warning",
-                "message": f"{age_buckets['older']} facts are over 1 year old",
+                "message": "%d facts are over 1 year old" % age_buckets["older"],
             })
 
         if age_buckets["unknown"] > total * 0.2:
             issues.append({
                 "type": "missing_timestamps",
                 "severity": "warning",
-                "message": f"{age_buckets['unknown']} facts have no timestamp",
+                "message": "%d facts have no timestamp" % age_buckets["unknown"],
             })
 
         recommendations = []
@@ -823,7 +824,7 @@ class StatsMixin:
         if duplicate_count > 0:
             recommendations.append({
                 "action": "remove_duplicates",
-                "description": f"Remove {duplicate_count} duplicate facts",
+                "description": "Remove %d duplicate facts" % duplicate_count,
                 "priority": "high" if duplicate_count > 10 else "medium",
             })
 
@@ -900,7 +901,7 @@ class StatsMixin:
         if invalid_count > 0:
             recommendations.append({
                 "action": "fix_invalid_facts",
-                "description": f"Fix {invalid_count} facts with validation issues",
+                "description": "Fix %d facts with validation issues" % invalid_count,
                 "priority": "critical" if invalid_count > 10 else "high",
             })
 
