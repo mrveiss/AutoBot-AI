@@ -86,6 +86,17 @@ class PerformanceMonitor:
         # Background monitoring task
         self.monitoring_task = None
 
+        # Metrics buffers for backward compatibility with monitoring API (Issue #427)
+        # These store recent metrics for status endpoint access
+        self.gpu_metrics_buffer: List[Any] = []
+        self.npu_metrics_buffer: List[Any] = []
+        self.multimodal_metrics_buffer: List[Any] = []
+        self.system_metrics_buffer: List[Any] = []
+        self.service_metrics_buffer: Dict[str, List[Any]] = {}
+
+        # Performance alerts buffer (Issue #427)
+        self.performance_alerts: List[Dict[str, Any]] = []
+
         self.logger.info("Performance Monitor initialized")
         self.logger.info(f"GPU Available: {self.gpu_available}")
         self.logger.info(f"NPU Available: {self.npu_available}")
@@ -175,6 +186,41 @@ class PerformanceMonitor:
                     f"Service metrics collection failed: {service_metrics}"
                 )
                 service_metrics = []
+
+            # Update metrics buffers for backward compatibility (Issue #427)
+            # Keep last 100 entries to prevent unbounded memory growth
+            max_buffer_size = 100
+            if gpu_metrics:
+                self.gpu_metrics_buffer.append(gpu_metrics)
+                if len(self.gpu_metrics_buffer) > max_buffer_size:
+                    self.gpu_metrics_buffer = self.gpu_metrics_buffer[-max_buffer_size:]
+            if npu_metrics:
+                self.npu_metrics_buffer.append(npu_metrics)
+                if len(self.npu_metrics_buffer) > max_buffer_size:
+                    self.npu_metrics_buffer = self.npu_metrics_buffer[-max_buffer_size:]
+            if multimodal_metrics:
+                self.multimodal_metrics_buffer.append(multimodal_metrics)
+                if len(self.multimodal_metrics_buffer) > max_buffer_size:
+                    self.multimodal_metrics_buffer = self.multimodal_metrics_buffer[
+                        -max_buffer_size:
+                    ]
+            if system_metrics:
+                self.system_metrics_buffer.append(system_metrics)
+                if len(self.system_metrics_buffer) > max_buffer_size:
+                    self.system_metrics_buffer = self.system_metrics_buffer[
+                        -max_buffer_size:
+                    ]
+            # Populate service_metrics_buffer by service name (Issue #427)
+            if service_metrics:
+                for service_metric in service_metrics:
+                    service_name = getattr(service_metric, "service_name", "unknown")
+                    if service_name not in self.service_metrics_buffer:
+                        self.service_metrics_buffer[service_name] = []
+                    self.service_metrics_buffer[service_name].append(service_metric)
+                    if len(self.service_metrics_buffer[service_name]) > max_buffer_size:
+                        self.service_metrics_buffer[service_name] = (
+                            self.service_metrics_buffer[service_name][-max_buffer_size:]
+                        )
 
             # Persist to Redis if available
             if self.redis_client:
@@ -269,6 +315,13 @@ class PerformanceMonitor:
         """Analyze metrics and generate performance alerts."""
         try:
             alerts = self._alert_analyzer.analyze_all(metrics)
+
+            # Update performance_alerts buffer for backward compatibility (Issue #427)
+            # Keep last 100 alerts to prevent unbounded memory growth
+            if alerts:
+                self.performance_alerts.extend(alerts)
+                if len(self.performance_alerts) > 100:
+                    self.performance_alerts = self.performance_alerts[-100:]
 
             # Store alerts in Redis
             if self.redis_client and alerts:
