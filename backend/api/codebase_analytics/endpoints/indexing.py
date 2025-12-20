@@ -42,6 +42,54 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _check_existing_task() -> Optional[JSONResponse]:
+    """Check if indexing task is already running (Issue #398: extracted)."""
+    if _current_indexing_task_id is not None:
+        existing_task = _active_tasks.get(_current_indexing_task_id)
+        if existing_task and not existing_task.done():
+            logger.info(f"🔒 Indexing already in progress: {_current_indexing_task_id}")
+            return JSONResponse({
+                "task_id": _current_indexing_task_id,
+                "status": "already_running",
+                "message": (
+                    f"Indexing is already in progress. Poll "
+                    f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
+                    "for progress."
+                ),
+            })
+    return None
+
+
+def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
+    """Validate request path and return resolved path (Issue #398: extracted)."""
+    if request and request.root_path:
+        target_path = Path(request.root_path)
+        if not target_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Path does not exist: {request.root_path}",
+            )
+        if not target_path.is_dir():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Path is not a directory: {request.root_path}",
+            )
+        return str(target_path.resolve())
+    return str(PATH.PROJECT_ROOT)
+
+
+def _create_cleanup_callback(task_id: str):
+    """Create cleanup callback for task completion (Issue #398: extracted)."""
+    def cleanup_task(t):
+        global _current_indexing_task_id
+        with _tasks_sync_lock:
+            _active_tasks.pop(task_id, None)
+            if _current_indexing_task_id == task_id:
+                _current_indexing_task_id = None
+        logger.info(f"🧹 Task {task_id} cleaned up")
+    return cleanup_task
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -50,102 +98,50 @@ router = APIRouter()
 @router.post("/index")
 async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
-    Start background indexing of a codebase path
+    Start background indexing of a codebase path (Issue #398: refactored).
 
-    Args:
-        request: Optional request body with root_path to index.
-                 If not provided or root_path is None, defaults to PROJECT_ROOT.
-
-    Returns immediately with a task_id that can be used to poll progress
-    via GET /api/analytics/codebase/index/status/{task_id}
-
-    Only one indexing task can run at a time - subsequent requests will
-    return the existing task's ID if one is already running.
+    Returns immediately with a task_id that can be used to poll progress.
+    Only one indexing task can run at a time.
     """
     global _current_indexing_task_id
 
     logger.info("✅ ENTRY: index_codebase endpoint called!")
 
-    # Check if there's already an indexing task running (under lock)
     async with _tasks_lock:
-        if _current_indexing_task_id is not None:
-            existing_task = _active_tasks.get(_current_indexing_task_id)
-            if existing_task and not existing_task.done():
-                current_task_id = _current_indexing_task_id
-                logger.info(
-                    f"🔒 Indexing already in progress: {current_task_id}"
-                )
-                return JSONResponse(
-                    {
-                        "task_id": current_task_id,
-                        "status": "already_running",
-                        "message": (
-                            "Indexing is already in progress. Poll "
-                            f"/api/analytics/codebase/index/status/{current_task_id} "
-                            "for progress."
-                        ),
-                    }
-                )
+        # Check for existing task
+        existing_response = _check_existing_task()
+        if existing_response:
+            return existing_response
 
-        # Get root_path from request or default to PROJECT_ROOT
-        if request and request.root_path:
-            target_path = Path(request.root_path)
-            # Validate path exists
-            if not target_path.exists():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Path does not exist: {request.root_path}",
-                )
-            if not target_path.is_dir():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Path is not a directory: {request.root_path}",
-                )
-            root_path = str(target_path.resolve())
-        else:
-            # Default to PROJECT_ROOT if no path provided
-            root_path = str(PATH.PROJECT_ROOT)
-
+        # Validate and get path
+        root_path = _validate_and_get_path(request)
         logger.info(f"📁 Indexing path = {root_path}")
 
-        # Generate unique task ID
+        # Generate unique task ID and start task
         task_id = str(uuid.uuid4())
         logger.info(f"🆔 Generated task_id = {task_id}")
 
-        # Set the current indexing task
         _current_indexing_task_id = task_id
 
-        # Add async background task using asyncio and store reference
         logger.info("🔄 About to create_task")
         task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
         logger.info(f"✅ Task created: {task}")
         _active_tasks[task_id] = task
         logger.info("💾 Task stored in _active_tasks")
 
-    # Clean up task reference when done
-    def cleanup_task(t):
-        """Remove completed task from active tasks registry."""
-        global _current_indexing_task_id
-        with _tasks_sync_lock:
-            _active_tasks.pop(task_id, None)
-            if _current_indexing_task_id == task_id:
-                _current_indexing_task_id = None
-        logger.info(f"🧹 Task {task_id} cleaned up")
-
-    task.add_done_callback(cleanup_task)
+    # Add cleanup callback
+    task.add_done_callback(_create_cleanup_callback(task_id))
     logger.info("🧹 Cleanup callback added")
 
     logger.info("📤 About to return JSONResponse")
-    return JSONResponse(
-        {
-            "task_id": task_id,
-            "status": "started",
-            "message": (
-                "Indexing started in background. Poll "
-                "/api/analytics/codebase/index/status/{task_id} for progress."
-            ),
-        }
-    )
+    return JSONResponse({
+        "task_id": task_id,
+        "status": "started",
+        "message": (
+            "Indexing started in background. Poll "
+            "/api/analytics/codebase/index/status/{task_id} for progress."
+        ),
+    })
 
 
 @with_error_handling(

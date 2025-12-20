@@ -616,28 +616,12 @@ async function loadHealthScore(): Promise<void> {
     const response = await fetch('/api/analytics/quality/health-score');
     if (response.ok) {
       healthScore.value = await response.json();
+    } else {
+      logger.warn('Failed to load health score: HTTP', response.status);
     }
   } catch (error) {
     logger.error('Failed to load health score:', error);
-    // Demo data
-    healthScore.value = {
-      overall: 73.5,
-      grade: 'C',
-      trend: 2.3,
-      breakdown: {
-        maintainability: 75.5,
-        reliability: 82.3,
-        security: 78.9,
-        performance: 71.2,
-        testability: 65.4,
-        documentation: 58.7,
-      },
-      recommendations: [
-        'Critical: Improve documentation (current score: 58.7)',
-        'Warning: Address testability issues (current score: 65.4)',
-        'Consider refactoring high-complexity modules',
-      ],
-    };
+    // Keep default empty state
   }
 }
 
@@ -646,17 +630,13 @@ async function loadMetrics(): Promise<void> {
     const response = await fetch('/api/analytics/quality/metrics');
     if (response.ok) {
       metrics.value = await response.json();
+    } else {
+      logger.warn('Failed to load metrics: HTTP', response.status);
+      metrics.value = [];
     }
   } catch (error) {
     logger.error('Failed to load metrics:', error);
-    metrics.value = [
-      { name: 'Maintainability', category: 'maintainability', value: 75.5, grade: 'C', trend: 1.2, weight: 0.25 },
-      { name: 'Reliability', category: 'reliability', value: 82.3, grade: 'B', trend: 0.8, weight: 0.20 },
-      { name: 'Security', category: 'security', value: 78.9, grade: 'C', trend: -0.5, weight: 0.20 },
-      { name: 'Performance', category: 'performance', value: 71.2, grade: 'C', trend: 2.1, weight: 0.15 },
-      { name: 'Testability', category: 'testability', value: 65.4, grade: 'D', trend: -1.2, weight: 0.10 },
-      { name: 'Documentation', category: 'documentation', value: 58.7, grade: 'F', trend: 3.5, weight: 0.10 },
-    ];
+    metrics.value = [];
   }
 }
 
@@ -665,15 +645,13 @@ async function loadPatterns(): Promise<void> {
     const response = await fetch('/api/analytics/quality/patterns');
     if (response.ok) {
       patterns.value = await response.json();
+    } else {
+      logger.warn('Failed to load patterns: HTTP', response.status);
+      patterns.value = [];
     }
   } catch (error) {
     logger.error('Failed to load patterns:', error);
-    patterns.value = [
-      { type: 'anti_pattern', display_name: 'Anti Patterns', count: 23, percentage: 26, severity: 'high' },
-      { type: 'code_smell', display_name: 'Code Smells', count: 45, percentage: 51, severity: 'medium' },
-      { type: 'security_vulnerability', display_name: 'Security Issues', count: 8, percentage: 9, severity: 'critical' },
-      { type: 'performance_issue', display_name: 'Performance Issues', count: 12, percentage: 14, severity: 'high' },
-    ];
+    patterns.value = [];
   }
 }
 
@@ -682,20 +660,12 @@ async function loadComplexity(): Promise<void> {
     const response = await fetch('/api/analytics/quality/complexity?top_n=5');
     if (response.ok) {
       complexity.value = await response.json();
+    } else {
+      logger.warn('Failed to load complexity: HTTP', response.status);
     }
   } catch (error) {
     logger.error('Failed to load complexity:', error);
-    complexity.value = {
-      averages: { cyclomatic: 4.2, cognitive: 6.8 },
-      maximums: { cyclomatic: 28, cognitive: 45 },
-      hotspots: [
-        { file: 'src/services/agent_service.py', complexity: 28, lines: 450 },
-        { file: 'src/core/workflow_engine.py', complexity: 24, lines: 380 },
-        { file: 'src/api/endpoints.py', complexity: 22, lines: 520 },
-        { file: 'src/utils/parser.py', complexity: 19, lines: 290 },
-        { file: 'backend/api/analytics.py', complexity: 18, lines: 340 },
-      ],
-    };
+    // Keep default empty state
   }
 }
 
@@ -705,19 +675,13 @@ async function loadTrends(): Promise<void> {
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
+    } else {
+      logger.warn('Failed to load trends: HTTP', response.status);
+      trendData.value = [];
     }
   } catch (error) {
     logger.error('Failed to load trends:', error);
-    // Generate demo trend data
-    const days = parseInt(selectedPeriod.value);
-    trendData.value = Array.from({ length: days }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - 1 - i));
-      return {
-        date: date.toISOString().split('T')[0],
-        score: 70 + Math.random() * 10,
-      };
-    });
+    trendData.value = [];
   }
 }
 
@@ -726,11 +690,13 @@ async function loadSnapshot(): Promise<void> {
     const response = await fetch('/api/analytics/quality/snapshot');
     if (response.ok) {
       const data = await response.json();
-      codebaseStats.value = data.codebase_stats || { files: 247, lines: 45230, issues: 88 };
+      codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
+    } else {
+      logger.warn('Failed to load snapshot: HTTP', response.status);
     }
   } catch (error) {
     logger.error('Failed to load snapshot:', error);
-    codebaseStats.value = { files: 247, lines: 45230, issues: 88 };
+    // Keep default empty state
   }
 }
 
@@ -740,19 +706,13 @@ async function drillDown(category: string): Promise<void> {
     const response = await fetch(`/api/analytics/quality/drill-down/${category}`);
     if (response.ok) {
       drillDownData.value = await response.json();
+    } else {
+      logger.warn('Failed to load drill-down data: HTTP', response.status);
+      drillDownData.value = { total_files: 0, total_issues: 0, average_score: 0, files: [] };
     }
   } catch (error) {
     logger.error('Failed to load drill-down data:', error);
-    drillDownData.value = {
-      total_files: 5,
-      total_issues: 43,
-      average_score: 71.6,
-      files: [
-        { path: 'src/services/agent_service.py', issues: 12, score: 65, top_issue: 'High cyclomatic complexity' },
-        { path: 'src/core/workflow_engine.py', issues: 8, score: 72, top_issue: 'Missing documentation' },
-        { path: 'src/api/endpoints.py', issues: 15, score: 58, top_issue: 'Code duplication detected' },
-      ],
-    };
+    drillDownData.value = { total_files: 0, total_issues: 0, average_score: 0, files: [] };
   }
 }
 

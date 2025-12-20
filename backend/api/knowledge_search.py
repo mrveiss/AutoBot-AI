@@ -119,6 +119,76 @@ def _build_search_response(
 
 
 # =============================================================================
+# Helper Functions for search_knowledge (Issue #398)
+# =============================================================================
+
+
+async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str) -> list:
+    """Execute search on knowledge base (Issue #398: extracted).
+
+    Handles different KB implementations with correct parameters.
+    """
+    kb_class_name = kb_to_use.__class__.__name__
+
+    if kb_class_name == "KnowledgeBaseV2":
+        return await kb_to_use.search(query=query, top_k=search_limit)
+    else:
+        return await kb_to_use.search(
+            query=query, similarity_top_k=search_limit, mode=mode
+        )
+
+
+async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
+    """Apply advanced reranking if available (Issue #398: extracted).
+
+    Returns response dict if successful, None if reranking failed.
+    """
+    if not ADVANCED_RAG_AVAILABLE or not results:
+        return None
+
+    try:
+        logger.info("Applying advanced reranking to search results")
+        rag_service = RAGService(kb_to_use)
+        await rag_service.initialize()
+        reranked_results = await rag_service.rerank_results(query, results)
+
+        return _build_search_response(
+            results=reranked_results,
+            query=query,
+            mode="reranked",
+            kb_implementation=kb_to_use.__class__.__name__,
+            reranking_applied=True,
+            reranking_method="cross-encoder",
+        )
+    except Exception as e:
+        logger.error(f"Advanced reranking failed: {e}, returning original results")
+        return None
+
+
+async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) -> dict | None:
+    """Apply RAG enhancement if available (Issue #398: extracted).
+
+    Returns response dict if successful, None if RAG failed.
+    """
+    if not RAG_AVAILABLE or not results:
+        return None
+
+    try:
+        rag_enhancement = await _enhance_search_with_rag(query, results)
+        return _build_search_response(
+            results=results,
+            query=query,
+            mode="rag_enhanced",
+            kb_implementation=kb_class_name,
+            rag_enhanced=True,
+            rag_analysis=rag_enhancement,
+        )
+    except Exception as e:
+        logger.error(f"RAG enhancement failed: {e}")
+        return None
+
+
+# =============================================================================
 # Helper Functions for rag_enhanced_search (Issue #281)
 # =============================================================================
 
@@ -308,11 +378,10 @@ async def _process_with_rag_agent(
 @router.post("/search")
 async def search_knowledge(request: dict, req: Request):
     """
-    Search knowledge base with optional RAG enhancement.
+    Search knowledge base with optional RAG enhancement (Issue #398: refactored).
     FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     if kb_to_use is None:
         return {
             "results": [],
@@ -320,96 +389,51 @@ async def search_knowledge(request: dict, req: Request):
             "message": "Knowledge base not initialized - please check logs for errors",
         }
 
+    # Parse request parameters
     query = request.get("query", "")
     top_k = request.get("top_k", 10)
-    limit = request.get("limit", 10)  # Also accept 'limit' for compatibility
+    limit = request.get("limit", 10)
     mode = request.get("mode", "auto")
-    use_rag = request.get("use_rag", False)  # Old RAG enhancement parameter
-    enable_reranking = request.get("enable_reranking", False)  # NEW: Advanced reranking
-
-    # Use limit if provided, otherwise use top_k
+    use_rag = request.get("use_rag", False)
+    enable_reranking = request.get("enable_reranking", False)
     search_limit = limit if request.get("limit") is not None else top_k
+    kb_class_name = kb_to_use.__class__.__name__
 
     logger.info(
         f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, "
         f"use_rag={use_rag}, enable_reranking={enable_reranking})"
     )
 
-    # Check if knowledge base is empty - fast check to avoid timeout
+    # Check if KB is empty
     try:
         stats = await kb_to_use.get_stats()
-        fact_count = stats.get("total_facts", 0)
-
-        if fact_count == 0:
+        if stats.get("total_facts", 0) == 0:
             logger.info("Knowledge base is empty - returning empty results immediately")
             return _build_search_response(
-                results=[],
-                query=query,
-                mode=mode,
-                kb_implementation=kb_to_use.__class__.__name__,
-                message=(
-                    "Knowledge base is empty - no documents to search. "
-                    "Add documents in the Manage tab."
-                ),
+                results=[], query=query, mode=mode, kb_implementation=kb_class_name,
+                message="Knowledge base is empty - no documents to search. "
+                        "Add documents in the Manage tab.",
             )
     except Exception as stats_err:
         logger.warning(f"Could not check KB stats: {stats_err}")
 
-    # FIXED: Check which knowledge base implementation we're using and call with correct parameters
-    kb_class_name = kb_to_use.__class__.__name__
+    # Execute search
+    results = await _execute_kb_search(kb_to_use, query, search_limit, mode)
 
-    if kb_class_name == "KnowledgeBaseV2":
-        # KnowledgeBaseV2 uses 'top_k' parameter
-        results = await kb_to_use.search(query=query, top_k=search_limit)
-    else:
-        # Original KnowledgeBase uses 'similarity_top_k' parameter
-        results = await kb_to_use.search(
-            query=query, similarity_top_k=search_limit, mode=mode
-        )
+    # Apply reranking if requested
+    if enable_reranking:
+        response = await _apply_reranking(query, results, kb_to_use)
+        if response:
+            return response
 
-    # Advanced reranking with cross-encoder if requested
-    if enable_reranking and ADVANCED_RAG_AVAILABLE and results:
-        try:
-            logger.info("Applying advanced reranking to search results")
-            rag_service = RAGService(kb_to_use)
-            await rag_service.initialize()
-
-            # Rerank results
-            reranked_results = await rag_service.rerank_results(query, results)
-
-            return _build_search_response(
-                results=reranked_results,
-                query=query,
-                mode=mode,
-                kb_implementation=kb_class_name,
-                reranking_applied=True,
-                reranking_method="cross-encoder",
-            )
-        except Exception as e:
-            logger.error(f"Advanced reranking failed: {e}, returning original results")
-            # Fall through to regular results
-
-    # Enhanced search with RAG if requested and available (legacy support)
-    if use_rag and RAG_AVAILABLE and results:
-        try:
-            rag_enhancement = await _enhance_search_with_rag(query, results)
-            return _build_search_response(
-                results=results,
-                query=query,
-                mode=mode,
-                kb_implementation=kb_class_name,
-                rag_enhanced=True,
-                rag_analysis=rag_enhancement,
-            )
-        except Exception as e:
-            logger.error(f"RAG enhancement failed: {e}")
-            # Continue with regular results if RAG fails
+    # Apply RAG enhancement if requested (legacy support)
+    if use_rag:
+        response = await _apply_rag_enhancement(query, results, kb_class_name)
+        if response:
+            return response
 
     return _build_search_response(
-        results=results,
-        query=query,
-        mode=mode,
-        kb_implementation=kb_class_name,
+        results=results, query=query, mode=mode, kb_implementation=kb_class_name
     )
 
 
@@ -646,6 +670,48 @@ async def similarity_search(request: dict, req: Request):
 # =============================================================================
 
 
+def _extract_search_v2_params(request: dict) -> dict:
+    """Extract enhanced_search_v2 parameters from request (Issue #398: extracted)."""
+    return {
+        "query": request.get("query", ""),
+        "limit": request.get("limit", 10),
+        "offset": request.get("offset", 0),
+        "category": request.get("category"),
+        "tags": request.get("tags"),
+        "tags_match_any": request.get("tags_match_any", False),
+        "mode": request.get("mode", "hybrid"),
+        "enable_reranking": request.get("enable_reranking", False),
+        "min_score": request.get("min_score", 0.0),
+        "enable_query_expansion": request.get("enable_query_expansion", False),
+        "enable_relevance_scoring": request.get("enable_relevance_scoring", False),
+        "enable_clustering": request.get("enable_clustering", False),
+        "track_analytics": request.get("track_analytics", True),
+        "created_after": request.get("created_after"),
+        "created_before": request.get("created_before"),
+        "exclude_terms": request.get("exclude_terms"),
+        "require_terms": request.get("require_terms"),
+        "exclude_sources": request.get("exclude_sources"),
+        "verified_only": request.get("verified_only", False),
+        "session_id": request.get("session_id"),
+    }
+
+
+async def _fallback_to_enhanced_search(kb_to_use, params: dict):
+    """Fallback to regular enhanced_search when v2 not available (Issue #398: extracted)."""
+    logger.warning("KB does not support enhanced_search_v2, using fallback")
+    return await kb_to_use.enhanced_search(
+        query=params["query"],
+        limit=params["limit"],
+        offset=params["offset"],
+        category=params["category"],
+        tags=params["tags"],
+        tags_match_any=params["tags_match_any"],
+        mode=params["mode"],
+        enable_reranking=params["enable_reranking"],
+        min_score=params["min_score"],
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search_v2",
@@ -654,44 +720,10 @@ async def similarity_search(request: dict, req: Request):
 @router.post("/enhanced_search_v2")
 async def enhanced_search_v2(request: dict, req: Request):
     """
-    Enhanced search v2 with Issue #78 improvements.
+    Enhanced search v2 with Issue #78 improvements (Issue #398: refactored).
 
-    Issue #78: Full search quality improvements including:
-    - Query expansion with synonyms and related terms
-    - Relevance scoring with recency, popularity, authority
-    - Advanced filtering (date ranges, exclusions)
-    - Result clustering by topic
-    - Search analytics tracking
-
-    Request body:
-    - query: Search query string (required)
-    - limit: Maximum results (default: 10)
-    - offset: Pagination offset (default: 0)
-    - category: Optional category filter
-    - tags: Optional list of tags
-    - tags_match_any: Match any tag vs all (default: False)
-    - mode: "semantic", "keyword", or "hybrid" (default: "hybrid")
-    - enable_reranking: Cross-encoder reranking (default: False)
-    - min_score: Minimum score threshold (default: 0.0)
-    - enable_query_expansion: Expand with synonyms (default: False)
-    - enable_relevance_scoring: Apply relevance boosting (default: False)
-    - enable_clustering: Cluster results by topic (default: False)
-    - track_analytics: Track search analytics (default: True)
-    - created_after: ISO datetime filter
-    - created_before: ISO datetime filter
-    - exclude_terms: Terms to exclude
-    - require_terms: Required terms
-    - exclude_sources: Sources to exclude
-    - verified_only: Only verified results (default: False)
-    - session_id: Session ID for analytics
-
-    Returns:
-    - success: Boolean status
-    - results: Search results
-    - total_count: Total matching results
-    - clusters: Topic clusters (if enabled)
-    - query_processed: Preprocessed query
-    - search_duration_ms: Search time in milliseconds
+    Features: Query expansion, relevance scoring, filtering, clustering, analytics.
+    See API documentation for full parameter list.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -703,53 +735,23 @@ async def enhanced_search_v2(request: dict, req: Request):
             "message": "Knowledge base not initialized",
         }
 
-    query = request.get("query", "")
+    # Extract parameters using helper
+    params = _extract_search_v2_params(request)
+    query = params["query"]
+
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
 
-    # Check if KB supports enhanced_search_v2
+    # Fallback if KB doesn't support enhanced_search_v2
     if not hasattr(kb_to_use, "enhanced_search_v2"):
-        # Fallback to regular enhanced_search
-        logger.warning("KB does not support enhanced_search_v2, using fallback")
-        return await kb_to_use.enhanced_search(
-            query=query,
-            limit=request.get("limit", 10),
-            offset=request.get("offset", 0),
-            category=request.get("category"),
-            tags=request.get("tags"),
-            tags_match_any=request.get("tags_match_any", False),
-            mode=request.get("mode", "hybrid"),
-            enable_reranking=request.get("enable_reranking", False),
-            min_score=request.get("min_score", 0.0),
-        )
+        return await _fallback_to_enhanced_search(kb_to_use, params)
 
     logger.info(
-        f"Enhanced search v2: '{query}' (expansion={request.get('enable_query_expansion')}, "
-        f"clustering={request.get('enable_clustering')}, relevance={request.get('enable_relevance_scoring')})"
+        f"Enhanced search v2: '{query}' (expansion={params['enable_query_expansion']}, "
+        f"clustering={params['enable_clustering']}, relevance={params['enable_relevance_scoring']})"
     )
 
-    return await kb_to_use.enhanced_search_v2(
-        query=query,
-        limit=request.get("limit", 10),
-        offset=request.get("offset", 0),
-        category=request.get("category"),
-        tags=request.get("tags"),
-        tags_match_any=request.get("tags_match_any", False),
-        mode=request.get("mode", "hybrid"),
-        enable_reranking=request.get("enable_reranking", False),
-        min_score=request.get("min_score", 0.0),
-        enable_query_expansion=request.get("enable_query_expansion", False),
-        enable_relevance_scoring=request.get("enable_relevance_scoring", False),
-        enable_clustering=request.get("enable_clustering", False),
-        track_analytics=request.get("track_analytics", True),
-        created_after=request.get("created_after"),
-        created_before=request.get("created_before"),
-        exclude_terms=request.get("exclude_terms"),
-        require_terms=request.get("require_terms"),
-        exclude_sources=request.get("exclude_sources"),
-        verified_only=request.get("verified_only", False),
-        session_id=request.get("session_id"),
-    )
+    return await kb_to_use.enhanced_search_v2(**params)
 
 
 @with_error_handling(

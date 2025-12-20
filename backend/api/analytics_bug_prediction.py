@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -523,6 +523,64 @@ def generate_demo_predictions() -> dict[str, Any]:
 # ============================================================================
 
 
+def _find_files_sync(path: str, include_pattern: str, limit: int) -> List[Path]:
+    """Find files matching pattern in directory (Issue #398: extracted)."""
+    result = []
+    try:
+        root = Path(path)
+        if root.is_dir():
+            result = list(root.rglob(include_pattern))[:limit]
+    except Exception as e:
+        logger.debug("Path traversal error: %s", e)
+    return result
+
+
+async def _analyze_single_file(
+    file_path: Path,
+    change_freq: Dict[str, int],
+    bug_history: Dict[str, int],
+) -> Dict[str, Any]:
+    """Analyze a single file for bug risk (Issue #398: extracted)."""
+    str_path = str(file_path)
+    rel_path = str_path.replace(str(Path.cwd()) + "/", "")
+
+    complexity = await analyze_file_complexity(str_path)
+    change_count = change_freq.get(rel_path, 0)
+    bug_count = bug_history.get(rel_path, 0)
+
+    file_stat = await asyncio.to_thread(file_path.stat)
+    factors = {
+        "complexity": complexity,
+        "change_frequency": min(100, change_count * 10),
+        "bug_history": min(100, bug_count * 15),
+        "test_coverage": 50,  # Would need actual coverage data
+        "file_size": min(100, file_stat.st_size / 500),
+    }
+
+    risk_score = sum(
+        factors.get(factor.value, 0) * weight
+        for factor, weight in RISK_WEIGHTS.items()
+        if factor.value in factors
+    )
+
+    return _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
+
+
+def _build_demo_response() -> Dict[str, Any]:
+    """Build demo response when no files found (Issue #398: extracted)."""
+    demo = generate_demo_predictions()
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "total_files": demo["total_files"],
+        "analyzed_files": len(demo["files"]),
+        "high_risk_count": demo["high_risk_count"],
+        "files": [
+            _build_file_risk_dict(f["file_path"], f["risk_score"], f["factors"])
+            for f in demo["files"]
+        ],
+    }
+
+
 @router.get("/analyze")
 async def analyze_codebase(
     path: str = Query(".", description="Path to analyze"),
@@ -530,81 +588,28 @@ async def analyze_codebase(
     limit: int = Query(50, ge=1, le=200),
 ) -> dict[str, Any]:
     """
-    Analyze codebase for bug risk.
+    Analyze codebase for bug risk (Issue #398: refactored).
 
     Returns risk assessment for all files matching the pattern.
     """
     try:
-        # Get git data
         bug_history = await get_git_bug_history()
         change_freq = await get_file_change_frequency()
 
-        # Find files to analyze
-        # Issue #358 - wrap blocking operations in sync helper
-        def _find_files_sync():
-            result = []
-            try:
-                root = Path(path)
-                if root.is_dir():
-                    result = list(root.rglob(include_pattern))[:limit]
-            except Exception as e:
-                logger.debug("Path traversal error: %s", e)
-            return result
-
-        files_to_analyze = await asyncio.to_thread(_find_files_sync)
+        files_to_analyze = await asyncio.to_thread(
+            _find_files_sync, path, include_pattern, limit
+        )
 
         if not files_to_analyze:
-            # Return demo data if no files found (Issue #281: uses _build_file_risk_dict)
-            demo = generate_demo_predictions()
-            return {
-                "timestamp": datetime.now().isoformat(),
-                "total_files": demo["total_files"],
-                "analyzed_files": len(demo["files"]),
-                "high_risk_count": demo["high_risk_count"],
-                "files": [
-                    _build_file_risk_dict(
-                        f["file_path"], f["risk_score"], f["factors"]
-                    )
-                    for f in demo["files"]
-                ],
-            }
+            return _build_demo_response()
 
-        # Analyze each file
-        analyzed_files = []
-        for file_path in files_to_analyze:
-            str_path = str(file_path)
-            rel_path = str_path.replace(str(Path.cwd()) + "/", "")
+        # Analyze each file using extracted helper
+        analyzed_files = [
+            await _analyze_single_file(fp, change_freq, bug_history)
+            for fp in files_to_analyze
+        ]
 
-            # Calculate risk factors
-            complexity = await analyze_file_complexity(str_path)
-            change_count = change_freq.get(rel_path, 0)
-            bug_count = bug_history.get(rel_path, 0)
-
-            # Issue #358 - avoid blocking
-            file_stat = await asyncio.to_thread(file_path.stat)
-            factors = {
-                "complexity": complexity,
-                "change_frequency": min(100, change_count * 10),
-                "bug_history": min(100, bug_count * 15),
-                "test_coverage": 50,  # Would need actual coverage data
-                "file_size": min(100, file_stat.st_size / 500),
-            }
-
-            # Calculate weighted risk score
-            risk_score = sum(
-                factors.get(factor.value, 0) * weight
-                for factor, weight in RISK_WEIGHTS.items()
-                if factor.value in factors
-            )
-
-            # Issue #281: Uses _build_file_risk_dict helper
-            analyzed_files.append(
-                _build_file_risk_dict(rel_path, risk_score, factors, bug_count)
-            )
-
-        # Sort by risk score
         analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
-
         high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
         return {

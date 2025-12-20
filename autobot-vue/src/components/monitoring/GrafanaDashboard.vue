@@ -59,7 +59,22 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
-type DashboardType = 'overview' | 'system' | 'workflow' | 'errors' | 'claude' | 'github'
+// Issue #469: Added 'performance' dashboard type for GPU/NPU metrics
+// Issue #472: Added new dashboard types for comprehensive monitoring
+type DashboardType =
+  | 'overview'
+  | 'system'
+  | 'workflow'
+  | 'errors'
+  | 'claude'
+  | 'github'
+  | 'performance'
+  | 'api-health'
+  | 'multi-machine'
+  | 'knowledge-base'
+  | 'llm-providers'
+  | 'redis'
+  | 'websocket'
 
 interface Props {
   dashboard: DashboardType
@@ -90,23 +105,41 @@ const emit = defineEmits<{
 }>()
 
 // Dashboard ID mappings
+// Issue #469: Added performance dashboard for GPU/NPU metrics
+// Issue #472: Added new dashboard IDs for comprehensive monitoring
 const dashboardIds: Record<DashboardType, string> = {
   overview: 'autobot-overview',
   system: 'autobot-system',
   workflow: 'autobot-workflow',
   errors: 'autobot-errors',
   claude: 'autobot-claude-api',
-  github: 'autobot-github'
+  github: 'autobot-github',
+  performance: 'autobot-performance',
+  'api-health': 'autobot-api-health',
+  'multi-machine': 'autobot-multi-machine',
+  'knowledge-base': 'autobot-knowledge-base',
+  'llm-providers': 'autobot-llm-providers',
+  redis: 'autobot-redis',
+  websocket: 'autobot-websocket'
 }
 
 // Dashboard titles
+// Issue #469: Added performance dashboard title
+// Issue #472: Added new dashboard titles for comprehensive monitoring
 const dashboardTitles: Record<DashboardType, string> = {
   overview: 'AutoBot Overview',
   system: 'System Metrics',
   workflow: 'Workflow Metrics',
   errors: 'Error Metrics',
   claude: 'Claude API Metrics',
-  github: 'GitHub Metrics'
+  github: 'GitHub Metrics',
+  performance: 'GPU/NPU Performance',
+  'api-health': 'API Health',
+  'multi-machine': 'Multi-Machine Health',
+  'knowledge-base': 'Knowledge Base',
+  'llm-providers': 'LLM Providers',
+  redis: 'Redis Performance',
+  websocket: 'WebSocket Metrics'
 }
 
 // State

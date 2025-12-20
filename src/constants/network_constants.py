@@ -74,6 +74,11 @@ class NetworkConstants:
     NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (primary on main machine)
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port
 
+    # Issue #474: Monitoring stack ports (Prometheus/Grafana on Redis VM)
+    PROMETHEUS_PORT: int = 9090
+    ALERTMANAGER_PORT: int = 9093
+    GRAFANA_PORT: int = 3000  # Note: Same as BROWSER_SERVICE_PORT but on different VM
+
     # Development ports
     DEV_FRONTEND_PORT: int = 5173
     DEV_BACKEND_PORT: int = 8001
@@ -215,6 +220,17 @@ class ServiceURLs:
     )
     NPU_WORKER_WINDOWS_SERVICE: str = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
+    )
+
+    # Issue #474: Monitoring stack services (hosted on Redis VM)
+    PROMETHEUS_API: str = (
+        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}"
+    )
+    ALERTMANAGER_API: str = (
+        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}"
+    )
+    GRAFANA_URL: str = (
+        f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}"
     )
 
 

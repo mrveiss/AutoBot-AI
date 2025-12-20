@@ -187,51 +187,45 @@ def _generate_category_section(
     return lines
 
 
-def _generate_markdown_report(
+def _calculate_category_counts(by_category: Dict[str, List[Dict]]) -> Dict[str, int]:
+    """Calculate issue counts by category type (Issue #398: extracted)."""
+    return {
+        "code": (
+            len(by_category[FILE_CATEGORY_CODE]) +
+            len(by_category[FILE_CATEGORY_CONFIG]) +
+            len(by_category[FILE_CATEGORY_TEST])
+        ),
+        "backup": len(by_category[FILE_CATEGORY_BACKUP]),
+        "archive": len(by_category[FILE_CATEGORY_ARCHIVE]),
+        "other": (
+            len(by_category[FILE_CATEGORY_DOCS]) +
+            len(by_category[FILE_CATEGORY_LOGS]) +
+            len(by_category[FILE_CATEGORY_DATA]) +
+            len(by_category[FILE_CATEGORY_ASSETS])
+        ),
+    }
+
+
+def _calculate_severity_and_type_counts(
     problems: List[Dict],
-    analyzed_path: Optional[str] = None,
-) -> str:
-    """
-    Generate a Markdown report from problems list.
-
-    Problems are separated by file category:
-    - Code/Config issues are shown first (priority - need to fix)
-    - Backup/Archive issues shown separately (informational - may not need to fix)
-    - Docs/Logs issues shown at the end (usually not critical)
-    """
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    path_info = analyzed_path or "Unknown"
-
-    # Separate problems by category
-    by_category = _separate_by_category(problems)
-
-    # Calculate counts
-    total_count = len(problems)
-    code_count = (
-        len(by_category[FILE_CATEGORY_CODE]) +
-        len(by_category[FILE_CATEGORY_CONFIG]) +
-        len(by_category[FILE_CATEGORY_TEST])
-    )
-    backup_count = len(by_category[FILE_CATEGORY_BACKUP])
-    archive_count = len(by_category[FILE_CATEGORY_ARCHIVE])
-    other_count = (
-        len(by_category[FILE_CATEGORY_DOCS]) +
-        len(by_category[FILE_CATEGORY_LOGS]) +
-        len(by_category[FILE_CATEGORY_DATA]) +
-        len(by_category[FILE_CATEGORY_ASSETS])
-    )
-
-    # Calculate severity stats for summary (all problems)
-    severity_counts = {}
-    type_counts = {}
+) -> tuple[Dict[str, int], Dict[str, int]]:
+    """Calculate severity and type counts from problems (Issue #398: extracted)."""
+    severity_counts: Dict[str, int] = {}
+    type_counts: Dict[str, int] = {}
     for p in problems:
         sev = p.get("severity", "low").lower()
         ptype = p.get("type", "unknown")
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
         type_counts[ptype] = type_counts.get(ptype, 0) + 1
+    return severity_counts, type_counts
 
-    # Build report header
-    lines = [
+
+def _build_report_header(
+    path_info: str, total_count: int, counts: Dict[str, int]
+) -> List[str]:
+    """Build the report header with category counts table (Issue #398: extracted)."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return [
         "# Code Analysis Report",
         "",
         f"**Generated:** {now}",
@@ -240,13 +234,21 @@ def _generate_markdown_report(
         "",
         "| Category | Issues |",
         "|----------|--------|",
-        f"| 📄 Code & Config | {code_count} |",
-        f"| 📦 Backup Files | {backup_count} |",
-        f"| 🗄️ Archived Files | {archive_count} |",
-        f"| 📝 Docs & Logs | {other_count} |",
+        f"| 📄 Code & Config | {counts['code']} |",
+        f"| 📦 Backup Files | {counts['backup']} |",
+        f"| 🗄️ Archived Files | {counts['archive']} |",
+        f"| 📝 Docs & Logs | {counts['other']} |",
         "",
         "---",
         "",
+    ]
+
+
+def _build_summary_section(
+    severity_counts: Dict[str, int], type_counts: Dict[str, int]
+) -> List[str]:
+    """Build the summary section with severity and type tables (Issue #398: extracted)."""
+    lines = [
         "## Summary",
         "",
         "### By Severity (All Files)",
@@ -269,17 +271,18 @@ def _generate_markdown_report(
         "|------------|-------|",
     ])
 
-    # Sort types by count descending
     sorted_types = sorted(type_counts.items(), key=lambda x: -x[1])
     for ptype, count in sorted_types:
         display_type = ptype.replace("_", " ").title()
         lines.append(f"| {display_type} | {count} |")
 
-    lines.extend([
-        "",
-        "---",
-        "",
-    ])
+    lines.extend(["", "---", ""])
+    return lines
+
+
+def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
+    """Build all issue category sections (Issue #398: extracted)."""
+    lines = []
 
     # Section 1: Code, Config & Test Issues (PRIORITY - must fix)
     code_problems = (
@@ -294,8 +297,7 @@ def _generate_markdown_report(
             "📄 Code, Configuration & Test Issues",
             note="**Priority:** These issues should be fixed.",
         ))
-        lines.append("---")
-        lines.append("")
+        lines.extend(["---", ""])
 
     # Section 2: Backup File Issues (informational)
     if by_category[FILE_CATEGORY_BACKUP]:
@@ -303,10 +305,10 @@ def _generate_markdown_report(
             by_category[FILE_CATEGORY_BACKUP],
             FILE_CATEGORY_BACKUP,
             "📦 Backup File Issues",
-            note="**Note:** These are backup files kept for rollback. Fix only if restoring these files.",
+            note="**Note:** These are backup files kept for rollback. "
+                 "Fix only if restoring these files.",
         ))
-        lines.append("---")
-        lines.append("")
+        lines.extend(["---", ""])
 
     # Section 3: Archive File Issues (informational)
     if by_category[FILE_CATEGORY_ARCHIVE]:
@@ -314,10 +316,10 @@ def _generate_markdown_report(
             by_category[FILE_CATEGORY_ARCHIVE],
             FILE_CATEGORY_ARCHIVE,
             "🗄️ Archived File Issues",
-            note="**Note:** These are archived/deprecated files. Usually do not require fixes.",
+            note="**Note:** These are archived/deprecated files. "
+                 "Usually do not require fixes.",
         ))
-        lines.append("---")
-        lines.append("")
+        lines.extend(["---", ""])
 
     # Section 4: Docs & Logs Issues (informational)
     docs_logs = by_category[FILE_CATEGORY_DOCS] + by_category[FILE_CATEGORY_LOGS]
@@ -328,13 +330,35 @@ def _generate_markdown_report(
             "📝 Documentation & Log File Issues",
             note="**Note:** Issues in documentation or log files.",
         ))
-        lines.append("---")
-        lines.append("")
+        lines.extend(["---", ""])
 
-    # Footer
-    lines.extend([
-        "*Report generated by AutoBot Code Analysis*",
-    ])
+    return lines
+
+
+def _generate_markdown_report(
+    problems: List[Dict],
+    analyzed_path: Optional[str] = None,
+) -> str:
+    """
+    Generate a Markdown report from problems list (Issue #398: refactored).
+
+    Problems are separated by file category:
+    - Code/Config issues are shown first (priority - need to fix)
+    - Backup/Archive issues shown separately (informational - may not need to fix)
+    - Docs/Logs issues shown at the end (usually not critical)
+    """
+    path_info = analyzed_path or "Unknown"
+    by_category = _separate_by_category(problems)
+
+    # Calculate statistics
+    counts = _calculate_category_counts(by_category)
+    severity_counts, type_counts = _calculate_severity_and_type_counts(problems)
+
+    # Build report sections
+    lines = _build_report_header(path_info, len(problems), counts)
+    lines.extend(_build_summary_section(severity_counts, type_counts))
+    lines.extend(_build_issue_sections(by_category))
+    lines.append("*Report generated by AutoBot Code Analysis*")
 
     return "\n".join(lines)
 

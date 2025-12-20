@@ -24,12 +24,30 @@ Navigate: **AutoBot UI → Monitoring → Dashboards**
 
 ## 📊 Available Dashboards
 
-1. **AutoBot Overview** - System-wide health snapshot
-2. **System Metrics** - CPU, memory, disk, load
-3. **Workflow Execution** - Task tracking and performance
-4. **Error Tracking** - Error rates and patterns
-5. **Claude API** - LLM API usage and limits
-6. **GitHub Integration** - GitHub API metrics
+### Core Dashboards
+
+- **AutoBot Overview** - System-wide health snapshot
+- **System Metrics** - CPU, memory, disk, load
+- **Workflow Execution** - Task tracking and performance
+- **Error Tracking** - Error rates and patterns
+- **API Health** - API endpoint health and latency
+
+### Integration Dashboards
+
+- **Claude API** - Claude API usage and limits
+- **GitHub Integration** - GitHub API metrics
+- **LLM Providers** - All LLM providers (OpenAI, Anthropic, Ollama)
+
+### Infrastructure Dashboards
+
+- **Multi-Machine Health** - 6-VM infrastructure status
+- **Redis Performance** - Redis operations, pool, memory
+- **WebSocket Metrics** - Real-time connection stats
+- **GPU/NPU Performance** - Hardware acceleration metrics
+
+### Data Dashboards
+
+- **Knowledge Base** - Vector store, search, embeddings
 
 ---
 
@@ -165,24 +183,51 @@ ssh autobot@172.16.168.23 'sudo systemctl daemon-reload && sudo systemctl restar
 ### Key Metrics to Monitor
 
 **System Health**:
+
 - `autobot_cpu_usage_percent` - CPU utilization
 - `autobot_memory_usage_percent` - Memory usage
 - `autobot_load_average_1m` - System load
 
 **Workflow Performance**:
+
 - `autobot_workflow_executions_total` - Total workflows
 - `autobot_active_workflows` - Currently running
 - `autobot_workflow_duration_seconds` - Execution time
 
 **Error Rates**:
+
 - `autobot_errors_total` - Total errors by category
 - `autobot_timeout_total` - Timeout events
 - `rate(autobot_errors_total[5m])` - Error rate per second
 
 **API Usage**:
+
 - `autobot_claude_api_requests_total` - Claude API calls
 - `autobot_claude_api_rate_limit_remaining` - Rate limit
 - `autobot_github_api_operations_total` - GitHub operations
+
+**LLM Providers** (Issue #470):
+
+- `autobot_llm_requests_total` - LLM requests by provider
+- `autobot_llm_tokens_total` - Token usage
+- `autobot_llm_request_latency_seconds` - Response time
+
+**Knowledge Base** (Issue #470):
+
+- `autobot_knowledge_search_latency_seconds` - Search performance
+- `autobot_knowledge_cache_hits_total` - Cache effectiveness
+- `autobot_knowledge_vectors_total` - Vector count
+
+**WebSocket** (Issue #470):
+
+- `autobot_websocket_connections_active` - Active connections
+- `autobot_websocket_messages_sent_total` - Message throughput
+
+**Redis** (Issue #470):
+
+- `autobot_redis_operations_total` - Operation counts
+- `autobot_redis_operation_latency_seconds` - Latency
+- `autobot_redis_memory_used_bytes` - Memory usage
 
 ### PromQL Quick Examples
 

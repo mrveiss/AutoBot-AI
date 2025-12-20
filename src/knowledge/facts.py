@@ -331,66 +331,47 @@ class FactsMixin:
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
+    async def _get_fact_for_vectorization(
+        self, fact_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get and decode fact data for vectorization (Issue #398: extracted)."""
+        fact_key = "fact:%s" % fact_id
+        fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
+
+        if not fact_data:
+            return None
+
+        decoded = _decode_redis_hash(fact_data)
+        content = decoded.get("content", "")
+        if not content:
+            return {"error": "Fact has no content"}
+
+        metadata = decoded.get("_parsed_metadata", {})
+        metadata["fact_id"] = fact_id
+
+        return {"content": content, "metadata": metadata}
+
     async def vectorize_existing_fact(self, fact_id: str) -> Dict[str, Any]:
-        """
-        Vectorize an existing fact that wasn't vectorized during initial storage.
-
-        Args:
-            fact_id: ID of the fact to vectorize
-
-        Returns:
-            Dict with status
-        """
+        """Vectorize an existing fact (Issue #398: refactored)."""
         self.ensure_initialized()
 
         try:
-            # Get fact from Redis
-            fact_key = "fact:%s" % fact_id
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
+            fact_info = await self._get_fact_for_vectorization(fact_id)
 
-            if not fact_data:
+            if fact_info is None:
                 return {"status": "error", "message": "Fact not found"}
+            if "error" in fact_info:
+                return {"status": "error", "message": fact_info["error"]}
 
-            # Decode data
-            decoded = {}
-            for key, value in fact_data.items():
-                k = key.decode("utf-8") if isinstance(key, bytes) else key
-                v = value.decode("utf-8") if isinstance(value, bytes) else value
-                decoded[k] = v
+            if not self.vector_store:
+                return {"status": "error", "message": "Vector store not available"}
 
-            content = decoded.get("content", "")
-            if not content:
-                return {"status": "error", "message": "Fact has no content"}
-
-            # Parse metadata
-            metadata = {}
-            if "metadata" in decoded:
-                try:
-                    metadata = json.loads(decoded["metadata"])
-                except json.JSONDecodeError:
-                    pass
-
-            metadata["fact_id"] = fact_id
-
-            # Import sanitization utility
-            from src.knowledge.utils import (
-                sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
+            await self._vectorize_fact_in_chromadb(
+                fact_id, fact_info["content"], fact_info["metadata"]
             )
 
-            # Sanitize metadata
-            sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
-
-            # Vectorize
-            if self.vector_store:
-                doc = Document(
-                    text=content, doc_id=fact_id, metadata=sanitized_metadata
-                )
-                await asyncio.to_thread(self.vector_store.add, [doc])
-
-                logger.info("Vectorized existing fact %s", fact_id)
-                return {"status": "success", "message": "Fact vectorized successfully"}
-            else:
-                return {"status": "error", "message": "Vector store not available"}
+            logger.info("Vectorized existing fact %s", fact_id)
+            return {"status": "success", "message": "Fact vectorized successfully"}
 
         except Exception as e:
             logger.error("Failed to vectorize fact %s: %s", fact_id, e)

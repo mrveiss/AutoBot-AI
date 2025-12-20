@@ -34,8 +34,9 @@ class WebResearchAssistant:
         self.search_cache = {}  # Cache for recent searches
         self._cache_lock = asyncio.Lock()  # Lock for search_cache access
         self.quality_threshold = 0.7  # Minimum quality score for KB storage
+        # Enable advanced research by default when available
         self.use_advanced_research = ADVANCED_RESEARCH_AVAILABLE and self.config.get(
-            "enable_advanced_research", False
+            "enable_advanced_research", True
         )
         self.advanced_researcher = None
 
@@ -163,66 +164,40 @@ class WebResearchAssistant:
 
     async def _perform_web_search(self, query: str) -> List[Dict[str, Any]]:
         """
-        Perform actual web search (placeholder implementation)
-        In a real implementation, this would use search APIs
+        Perform actual web search using AdvancedWebResearcher.
+        Falls back to the advanced researcher even in basic mode.
         """
-        # Simulate search delay
-        await asyncio.sleep(0.5)
+        try:
+            # Initialize advanced researcher if not already done
+            if not self.advanced_researcher:
+                self.advanced_researcher = AdvancedWebResearcher(self.config)
+                await self.advanced_researcher.initialize()
 
-        # Return mock search results based on query content
-        if "network scan" in query.lower() or "nmap" in query.lower():
-            return [
-                {
-                    "title": "Network Scanning with Nmap - Complete Guide",
-                    "url": "https://example.com/nmap-guide",
-                    "snippet": (
-                        "Comprehensive guide to network scanning using Nmap, "
-                        "including installation, basic commands, and advanced "
-                        "techniques..."
-                    ),
-                    "domain": "example.com",
-                    "content": self._get_nmap_content(),
-                },
-                {
-                    "title": "Top Network Scanning Tools for Linux",
-                    "url": "https://security.example.com/network-tools",
-                    "snippet": (
-                        "Review of the best network scanning tools including "
-                        "Nmap, Masscan, and Zmap for penetration testing..."
-                    ),
-                    "domain": "security.example.com",
-                    "content": self._get_network_tools_content(),
-                },
-            ]
-        elif "forensics" in query.lower() or "steganography" in query.lower():
-            return [
-                {
-                    "title": "Digital Forensics Tools and Techniques",
-                    "url": "https://forensics.example.com/tools",
-                    "snippet": (
-                        "Overview of digital forensics tools including binwalk, "
-                        "foremost, and steghide for evidence analysis..."
-                    ),
-                    "domain": "forensics.example.com",
-                    "content": self._get_forensics_content(),
-                }
-            ]
-        else:
-            # Generic placeholder results
-            return [
-                {
-                    "title": f"Information about {query}",
-                    "url": "https://example.com/info",
-                    "snippet": (
-                        f"General information and resources related to {query}..."
-                    ),
-                    "domain": "example.com",
-                    "content": (
-                        f"This is general content about {query}. "
-                        "It includes basic information and common use cases."
-                    ),
-                }
-            ]
+            # Use advanced researcher for actual web search
+            search_results = await self.advanced_researcher.search_web(query, max_results=5)
+
+            if search_results.get("status") == "success":
+                # Convert to list format expected by _process_search_results
+                results = []
+                for result in search_results.get("results", []):
+                    results.append({
+                        "title": result.get("title", ""),
+                        "url": result.get("url", ""),
+                        "snippet": result.get("snippet", ""),
+                        "domain": result.get("domain", ""),
+                        "content": result.get("content", result.get("snippet", "")),
+                    })
+                return results
+            else:
+                logger.warning(
+                    "Web search returned non-success status: %s",
+                    search_results.get("error", "Unknown error")
+                )
+                return []
+
+        except Exception as e:
+            logger.error("Web search failed: %s", str(e))
+            return []
 
     async def _process_search_results(
         self, search_results: List[Dict[str, Any]], query: str
@@ -353,75 +328,6 @@ class WebResearchAssistant:
             summary_parts.append(f"({len(sources) - 3} additional sources found)")
 
         return "\n\n".join(summary_parts)
-
-    def _get_nmap_content(self) -> str:
-        """Mock nmap content"""
-        return """
-        Nmap (Network Mapper) is a powerful network discovery and \
-security auditing tool.
-
-        Installation:
-        - Ubuntu/Debian: sudo apt-get install nmap
-        - CentOS/RHEL: sudo yum install nmap
-        - Arch: sudo pacman -S nmap
-
-        Basic Usage:
-        - nmap target - Basic scan
-        - nmap -sS target - SYN scan (stealth)
-        - nmap -sV target - Service version detection
-        - nmap -O target - OS detection
-        - nmap -A target - Aggressive scan
-
-        Common Options:
-        - -p: Specify ports (e.g., -p 80,443 or -p-)
-        - -sU: UDP scan
-        - -T: Timing template (0-5)
-        - -oA: Output in all formats
-
-        Advanced Features:
-        - NSE scripts for vulnerability detection
-        - Firewall evasion techniques
-        - Custom packet crafting
-        """
-
-    def _get_network_tools_content(self) -> str:
-        """Mock network tools content"""
-        return """
-        Top Network Scanning Tools for Security Professionals:
-
-        1. Nmap - The gold standard for network discovery
-        2. Masscan - Ultra-fast port scanner
-        3. Zmap - Internet-wide network scanner
-        4. Netcat - Network Swiss Army knife
-        5. Wireshark - Network protocol analyzer
-
-        Each tool has specific use cases and advantages for different
-        types of network analysis and security assessments.
-        """
-
-    def _get_forensics_content(self) -> str:
-        """Mock forensics content"""
-        return """
-        Digital Forensics Tools Overview:
-
-        File Analysis:
-        - binwalk: Firmware and file system analysis
-        - foremost: File carving and recovery
-        - scalpel: Advanced file carving
-
-        Steganography:
-        - steghide: Hide/extract data in images
-        - outguess: JPEG steganography
-        - stegsolve: Image analysis tool
-
-        Memory Analysis:
-        - volatility: Memory dump analysis framework
-        - rekall: Advanced memory analysis
-
-        Network Forensics:
-        - tcpdump: Packet capture
-        - wireshark: Packet analysis
-        """
 
     async def search_and_store_knowledge(
         self, query: str, knowledge_base

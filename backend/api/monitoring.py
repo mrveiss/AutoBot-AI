@@ -11,7 +11,9 @@ import asyncio
 import json
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 from backend.type_defs.common import Metadata
 from fastapi import (
@@ -49,9 +51,97 @@ from backend.api.monitoring_utils import (
     _identify_bottlenecks,
 )
 
+# Issue #474: Import ServiceURLs for AlertManager integration
+from src.constants.network_constants import ServiceURLs
+
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 
 logger = logging.getLogger(__name__)
+
+# Issue #474: AlertManager API timeout and cache
+_ALERTMANAGER_TIMEOUT = 5.0  # seconds
+_alertmanager_cache: Dict[str, Any] = {"alerts": [], "timestamp": 0, "ttl": 10}
+
+
+async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
+    """Fetch active alerts from Prometheus AlertManager.
+
+    Issue #474: Provides real-time alert data from AlertManager.
+
+    Returns:
+        List of active alerts in frontend-compatible format.
+    """
+    current_time = time.time()
+
+    # Return cached data if still valid
+    if current_time - _alertmanager_cache["timestamp"] < _alertmanager_cache["ttl"]:
+        return _alertmanager_cache["alerts"]
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # AlertManager v2 API for active alerts
+            url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
+            async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
+                if response.status == 200:
+                    raw_alerts = await response.json()
+                    formatted_alerts = _format_alertmanager_alerts(raw_alerts)
+                    _alertmanager_cache["alerts"] = formatted_alerts
+                    _alertmanager_cache["timestamp"] = current_time
+                    return formatted_alerts
+                else:
+                    logger.warning(
+                        "AlertManager returned status %d", response.status
+                    )
+                    return _alertmanager_cache["alerts"]  # Return stale cache
+    except asyncio.TimeoutError:
+        logger.warning("AlertManager request timed out")
+        return _alertmanager_cache["alerts"]
+    except aiohttp.ClientError as e:
+        logger.warning("AlertManager connection error: %s", e)
+        return _alertmanager_cache["alerts"]
+    except Exception as e:
+        logger.error("Failed to fetch AlertManager alerts: %s", e)
+        return _alertmanager_cache["alerts"]
+
+
+def _format_alertmanager_alerts(raw_alerts: List[Dict]) -> List[Dict[str, Any]]:
+    """Convert AlertManager alert format to frontend-compatible format.
+
+    Issue #474: Transforms AlertManager API response to match frontend expectations.
+    """
+    formatted = []
+    for alert in raw_alerts:
+        labels = alert.get("labels", {})
+        annotations = alert.get("annotations", {})
+
+        # Map AlertManager severity to frontend format
+        severity = labels.get("severity", "medium")
+        if severity == "warning":
+            severity = "warning"
+        elif severity in ("critical", "error"):
+            severity = "critical"
+        elif severity in ("info", "low"):
+            severity = "info"
+
+        formatted.append({
+            "timestamp": time.time(),  # Current time for sorting
+            "starts_at": alert.get("startsAt", ""),
+            "ends_at": alert.get("endsAt"),
+            "severity": severity,
+            "category": labels.get("component", labels.get("alertname", "system")),
+            "message": annotations.get("summary", labels.get("alertname", "Alert")),
+            "description": annotations.get("description", ""),
+            "recommendation": annotations.get("recommendation", "Check system logs"),
+            "alertname": labels.get("alertname", ""),
+            "fingerprint": alert.get("fingerprint", ""),
+            "status": alert.get("status", {}).get("state", "active"),
+            "labels": labels,
+            "source": "alertmanager",
+        })
+
+    return formatted
+
+
 router = APIRouter(tags=["AutoBot Monitoring"])
 
 # Performance optimization: O(1) lookup for critical service statuses (Issue #326)
@@ -487,15 +577,74 @@ async def get_performance_alerts(
 )
 @router.get("/alerts/check")
 async def check_alerts():
-    """Check for performance alerts"""
-    alerts = list(phase9_monitor.performance_alerts)
+    """Check for performance alerts.
+
+    Issue #474: Now includes alerts from both phase9_monitor (legacy) and
+    Prometheus AlertManager (preferred). AlertManager alerts take precedence
+    and include richer metadata from the Prometheus alerting rules.
+    """
+    # Get legacy performance alerts
+    legacy_alerts = list(phase9_monitor.performance_alerts)
+    for alert in legacy_alerts:
+        alert["source"] = "phase9_monitor"
+
+    # Issue #474: Fetch AlertManager alerts
+    alertmanager_alerts = await _fetch_alertmanager_alerts()
+
+    # Combine alerts (AlertManager first, then legacy)
+    all_alerts = alertmanager_alerts + legacy_alerts
 
     return {
         "timestamp": time.time(),
+        "alerts": all_alerts,
+        "total_count": len(all_alerts),
+        "critical_count": sum(1 for a in all_alerts if a.get("severity") == "critical"),
+        "warning_count": sum(1 for a in all_alerts if a.get("severity") == "warning"),
+        "high_count": sum(1 for a in all_alerts if a.get("severity") == "high"),
+        "sources": {
+            "alertmanager": len(alertmanager_alerts),
+            "phase9_monitor": len(legacy_alerts),
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_alertmanager_alerts",
+    error_code_prefix="MONITORING",
+)
+@router.get("/alerts/alertmanager")
+async def get_alertmanager_alerts():
+    """Get alerts directly from Prometheus AlertManager.
+
+    Issue #474: Direct access to AlertManager alerts with full metadata.
+    This is the preferred endpoint for alert queries as it uses the
+    Prometheus alerting stack rather than legacy monitoring.
+    """
+    alerts = await _fetch_alertmanager_alerts()
+
+    # Group by severity
+    by_severity = {"critical": [], "high": [], "warning": [], "info": []}
+    for alert in alerts:
+        severity = alert.get("severity", "info")
+        if severity in by_severity:
+            by_severity[severity].append(alert)
+        else:
+            by_severity["info"].append(alert)
+
+    return {
+        "timestamp": time.time(),
+        "source": "alertmanager",
+        "alertmanager_url": ServiceURLs.ALERTMANAGER_API,
         "alerts": alerts,
         "total_count": len(alerts),
-        "critical_count": sum(1 for a in alerts if a.get("severity") == "critical"),
-        "warning_count": sum(1 for a in alerts if a.get("severity") == "warning"),
+        "by_severity": {
+            "critical": len(by_severity["critical"]),
+            "high": len(by_severity["high"]),
+            "warning": len(by_severity["warning"]),
+            "info": len(by_severity["info"]),
+        },
+        "active_alerts": by_severity,
     }
 
 

@@ -462,110 +462,131 @@ class LearningPipeline:
             "timestamp": self.last_retrain.isoformat(),
         }
 
+    def _generate_active_pattern_insight(
+        self, recent_patterns: List["PatternStats"]
+    ) -> Optional[Insight]:
+        """Generate insight for most active pattern (Issue #398: extracted)."""
+        if not recent_patterns:
+            return None
+
+        most_active = max(recent_patterns, key=lambda p: p.detections)
+        if most_active.detections <= 10:
+            return None
+
+        return self._create_insight(
+            id_prefix="trend",
+            pattern_id=most_active.pattern_id,
+            insight_type=InsightType.PATTERN_EVOLUTION,
+            title=f"Active Pattern: {most_active.pattern_id}",
+            description=f"Pattern '{most_active.pattern_id}' has been detected "
+            f"{most_active.detections} times recently.",
+            confidence=0.8,
+            data={
+                "pattern_id": most_active.pattern_id,
+                "detections": most_active.detections,
+            },
+            recommendations=[
+                "Review pattern detection rules",
+                "Consider if this pattern is over-triggering",
+            ],
+        )
+
+    def _generate_false_positive_insight(
+        self, pattern: "PatternStats"
+    ) -> Optional[Insight]:
+        """Generate insight for high false positive pattern (Issue #398: extracted)."""
+        total = pattern.true_positives + pattern.false_positives
+        fp_rate = pattern.false_positives / total if total > 0 else 0
+
+        if fp_rate <= 0.3:
+            return None
+
+        return self._create_insight(
+            id_prefix="fp",
+            pattern_id=pattern.pattern_id,
+            insight_type=InsightType.FALSE_POSITIVE_TREND,
+            title=f"High False Positives: {pattern.pattern_id}",
+            description=f"Pattern '{pattern.pattern_id}' has a {fp_rate:.1%} "
+            f"false positive rate ({pattern.false_positives} FPs).",
+            confidence=0.9,
+            data={
+                "pattern_id": pattern.pattern_id,
+                "false_positive_rate": fp_rate,
+                "false_positives": pattern.false_positives,
+            },
+            recommendations=[
+                "Review and tighten pattern detection rules",
+                "Consider adding more specific indicators",
+                "Analyze false positive examples for commonalities",
+            ],
+        )
+
+    def _generate_accuracy_improvement_insight(self) -> Optional[Insight]:
+        """Generate insight for accuracy improvement (Issue #398: extracted)."""
+        if len(self.accuracy_history) < 2:
+            return None
+
+        first_acc = self.accuracy_history[0][1]
+        current_acc = self.accuracy_history[-1][1]
+        improvement = current_acc - first_acc
+
+        if improvement <= 0.05:
+            return None
+
+        return self._create_insight(
+            id_prefix="improvement",
+            pattern_id=None,
+            insight_type=InsightType.PERFORMANCE_IMPROVEMENT,
+            title="Accuracy Improvement Detected",
+            description=f"Overall pattern detection accuracy improved by "
+            f"{improvement:.1%} from {first_acc:.1%} to {current_acc:.1%}.",
+            confidence=0.95,
+            data={
+                "initial_accuracy": first_acc,
+                "current_accuracy": current_acc,
+                "improvement": improvement,
+            },
+            recommendations=[
+                "Continue collecting feedback",
+                "Consider expanding to more patterns",
+            ],
+            expires_days=30,
+        )
+
     async def generate_insights(self) -> List[Insight]:
         """
-        Generate insights from learning data.
+        Generate insights from learning data (Issue #398: refactored).
 
-        Issue #281: Refactored to use _create_insight helper for Insight creation.
+        Issue #281: Uses _create_insight helper for Insight creation.
+        Issue #398: Extracted insight generators into separate methods.
         """
         new_insights = []
         now = datetime.now()
 
-        # Insight 1: New pattern trends
+        # Insight 1: Active pattern trends
         recent_patterns = [
             p
             for p in self.pattern_stats.values()
             if p.last_detected
             and (now - p.last_detected).seconds < THRESHOLDS["anomaly_detection_window"]
         ]
-
-        if recent_patterns:
-            most_active = max(recent_patterns, key=lambda p: p.detections)
-            if most_active.detections > 10:
-                # Issue #281: Uses _create_insight helper
-                insight = self._create_insight(
-                    id_prefix="trend",
-                    pattern_id=most_active.pattern_id,
-                    insight_type=InsightType.PATTERN_EVOLUTION,
-                    title=f"Active Pattern: {most_active.pattern_id}",
-                    description=f"Pattern '{most_active.pattern_id}' has been detected "
-                    f"{most_active.detections} times recently.",
-                    confidence=0.8,
-                    data={
-                        "pattern_id": most_active.pattern_id,
-                        "detections": most_active.detections,
-                    },
-                    recommendations=[
-                        "Review pattern detection rules",
-                        "Consider if this pattern is over-triggering",
-                    ],
-                )
-                new_insights.append(insight)
+        insight = self._generate_active_pattern_insight(recent_patterns)
+        if insight:
+            new_insights.append(insight)
 
         # Insight 2: False positive trends
         high_fp_patterns = [
             p for p in self.pattern_stats.values() if p.false_positives > 5
         ]
-
         for pattern in high_fp_patterns[:3]:
-            fp_rate = (
-                pattern.false_positives
-                / (pattern.true_positives + pattern.false_positives)
-                if (pattern.true_positives + pattern.false_positives) > 0
-                else 0
-            )
-
-            if fp_rate > 0.3:
-                # Issue #281: Uses _create_insight helper
-                insight = self._create_insight(
-                    id_prefix="fp",
-                    pattern_id=pattern.pattern_id,
-                    insight_type=InsightType.FALSE_POSITIVE_TREND,
-                    title=f"High False Positives: {pattern.pattern_id}",
-                    description=f"Pattern '{pattern.pattern_id}' has a {fp_rate:.1%} "
-                    f"false positive rate ({pattern.false_positives} FPs).",
-                    confidence=0.9,
-                    data={
-                        "pattern_id": pattern.pattern_id,
-                        "false_positive_rate": fp_rate,
-                        "false_positives": pattern.false_positives,
-                    },
-                    recommendations=[
-                        "Review and tighten pattern detection rules",
-                        "Consider adding more specific indicators",
-                        "Analyze false positive examples for commonalities",
-                    ],
-                )
+            insight = self._generate_false_positive_insight(pattern)
+            if insight:
                 new_insights.append(insight)
 
-        # Insight 3: Overall accuracy improvement
-        if len(self.accuracy_history) >= 2:
-            first_acc = self.accuracy_history[0][1]
-            current_acc = self.accuracy_history[-1][1]
-            improvement = current_acc - first_acc
-
-            if improvement > 0.05:
-                # Issue #281: Uses _create_insight helper
-                insight = self._create_insight(
-                    id_prefix="improvement",
-                    pattern_id=None,
-                    insight_type=InsightType.PERFORMANCE_IMPROVEMENT,
-                    title="Accuracy Improvement Detected",
-                    description=f"Overall pattern detection accuracy improved by "
-                    f"{improvement:.1%} from {first_acc:.1%} to {current_acc:.1%}.",
-                    confidence=0.95,
-                    data={
-                        "initial_accuracy": first_acc,
-                        "current_accuracy": current_acc,
-                        "improvement": improvement,
-                    },
-                    recommendations=[
-                        "Continue collecting feedback",
-                        "Consider expanding to more patterns",
-                    ],
-                    expires_days=30,
-                )
-                new_insights.append(insight)
+        # Insight 3: Accuracy improvement
+        insight = self._generate_accuracy_improvement_insight()
+        if insight:
+            new_insights.append(insight)
 
         self.insights.extend(new_insights)
         return new_insights

@@ -480,6 +480,7 @@ interface Summary {
 
 // State
 const loading = ref(false);
+const loadError = ref<string | null>(null);
 const summary = ref<Summary>({
   total_items: 0,
   total_hours: 0,
@@ -680,18 +681,14 @@ async function loadSummary(): Promise<void> {
     const response = await fetch('/api/analytics/debt/summary');
     if (response.ok) {
       summary.value = await response.json();
+      loadError.value = null;
+    } else {
+      logger.warn('Failed to load summary: HTTP', response.status);
+      loadError.value = `Failed to load summary (HTTP ${response.status})`;
     }
   } catch (error) {
     logger.error('Failed to load summary:', error);
-    // Use demo data
-    summary.value = {
-      total_items: 42,
-      total_hours: 126.5,
-      estimated_cost: 12650,
-      critical_count: 8,
-      health_score: 72,
-      trend: -5.2,
-    };
+    loadError.value = 'Failed to connect to analytics API';
   }
 }
 
@@ -701,18 +698,13 @@ async function loadCategoryBreakdown(): Promise<void> {
     if (response.ok) {
       const data = await response.json();
       categoryBreakdown.value = data.by_category || [];
+    } else {
+      logger.warn('Failed to load category breakdown: HTTP', response.status);
+      categoryBreakdown.value = [];
     }
   } catch (error) {
     logger.error('Failed to load category breakdown:', error);
-    // Use demo data
-    categoryBreakdown.value = [
-      { category: 'code_complexity', count: 12, total_hours: 24, avg_severity: 'high' },
-      { category: 'missing_tests', count: 8, total_hours: 16, avg_severity: 'medium' },
-      { category: 'anti_patterns', count: 7, total_hours: 21, avg_severity: 'high' },
-      { category: 'hardcoded_values', count: 6, total_hours: 9, avg_severity: 'medium' },
-      { category: 'code_duplication', count: 5, total_hours: 7.5, avg_severity: 'low' },
-      { category: 'missing_docs', count: 4, total_hours: 4, avg_severity: 'low' },
-    ];
+    categoryBreakdown.value = [];
   }
 }
 
@@ -721,11 +713,13 @@ async function loadRoiPriorities(): Promise<void> {
     const response = await fetch('/api/analytics/debt/roi-priorities?limit=10');
     if (response.ok) {
       roiPriorities.value = await response.json();
+    } else {
+      logger.warn('Failed to load ROI priorities: HTTP', response.status);
+      roiPriorities.value = [];
     }
   } catch (error) {
     logger.error('Failed to load ROI priorities:', error);
-    // Use demo data
-    roiPriorities.value = generateDemoDebtItems().slice(0, 10);
+    roiPriorities.value = [];
   }
 }
 
@@ -735,11 +729,13 @@ async function loadDebtItems(): Promise<void> {
     if (response.ok) {
       const data = await response.json();
       allDebtItems.value = data.items || [];
+    } else {
+      logger.warn('Failed to load debt items: HTTP', response.status);
+      allDebtItems.value = [];
     }
   } catch (error) {
     logger.error('Failed to load debt items:', error);
-    // Use demo data
-    allDebtItems.value = generateDemoDebtItems();
+    allDebtItems.value = [];
   }
 }
 
@@ -748,68 +744,14 @@ async function loadTrends(): Promise<void> {
     const response = await fetch(`/api/analytics/debt/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       trendData.value = await response.json();
+    } else {
+      logger.warn('Failed to load trends: HTTP', response.status);
+      trendData.value = [];
     }
   } catch (error) {
     logger.error('Failed to load trends:', error);
-    // Use demo data
-    trendData.value = generateDemoTrends();
+    trendData.value = [];
   }
-}
-
-function generateDemoDebtItems(): DebtItem[] {
-  const items: DebtItem[] = [];
-  const categories = Object.keys(categoryColors);
-  const severities = ['critical', 'high', 'medium', 'low'];
-  const files = [
-    'src/services/auth_service.py',
-    'src/api/endpoints.py',
-    'src/utils/helpers.py',
-    'src/models/user.py',
-    'src/core/config.py',
-    'backend/api/analytics.py',
-    'src/workers/task_runner.py',
-  ];
-
-  for (let i = 0; i < 42; i++) {
-    const category = categories[Math.floor(Math.random() * categories.length)];
-    const severity = severities[Math.floor(Math.random() * severities.length)];
-    const hours = Math.round((Math.random() * 4 + 0.5) * 10) / 10;
-    const impact = Math.floor(Math.random() * 10) + 1;
-
-    items.push({
-      id: `debt-${i}`,
-      file_path: files[Math.floor(Math.random() * files.length)],
-      line_number: Math.floor(Math.random() * 500) + 1,
-      category,
-      severity,
-      description: `${formatCategoryName(category)} issue detected`,
-      estimated_hours: hours,
-      impact_score: impact,
-      roi_score: impact / hours,
-      created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-  }
-
-  return items.sort((a, b) => b.roi_score - a.roi_score);
-}
-
-function generateDemoTrends(): TrendPoint[] {
-  const trends: TrendPoint[] = [];
-  const days = selectedPeriod.value === '7d' ? 7 : selectedPeriod.value === '30d' ? 30 : 90;
-
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-
-    trends.push({
-      date: date.toISOString().split('T')[0],
-      total_items: Math.floor(35 + Math.random() * 15),
-      total_hours: Math.floor(100 + Math.random() * 50),
-      by_category: {},
-    });
-  }
-
-  return trends;
 }
 
 async function exportReport(): Promise<void> {

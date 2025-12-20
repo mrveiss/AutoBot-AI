@@ -119,7 +119,8 @@ class VisionProcessor(BaseModalProcessor):
             self.logger.info("Vision models loaded successfully")
         except Exception as e:
             self.logger.error("Failed to load vision models: %s", e)
-            self.logger.info("VisionProcessor will use placeholder implementation")
+            # Issue #466: Will raise error on process() - no placeholder fallback
+            self.logger.warning("VisionProcessor will raise errors when processing - models unavailable")
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -272,22 +273,17 @@ class VisionProcessor(BaseModalProcessor):
         """Process single image with GPU-accelerated CLIP and BLIP-2 models"""
 
         # Guard clause: Check if models are available (Issue #315 - early return)
+        # Issue #466: Raise error instead of returning placeholder data
         if (
             not VISION_MODELS_AVAILABLE
             or self.clip_model is None
             or self.blip_model is None
         ):
-            self.logger.warning(
-                "Vision models not available, using placeholder implementation"
+            self.logger.error("Vision models not available - cannot process image")
+            raise RuntimeError(
+                "Vision processing unavailable: Required models (CLIP, BLIP) are not loaded. "
+                "Ensure vision models are installed and GPU/NPU resources are available."
             )
-            return {
-                "type": "image_analysis",
-                "elements_detected": [],
-                "text_detected": "",
-                "caption": "Vision models not loaded",
-                "confidence": 0.0,
-                "processing_device": "cpu",
-            }
 
         try:
             # Prepare image (Issue #315 - extracted method)
@@ -357,5 +353,9 @@ class VisionProcessor(BaseModalProcessor):
 
     async def _process_video(self, input_data: MultiModalInput) -> Dict[str, Any]:
         """Process video input"""
-        # Placeholder for video processing logic
-        return {"type": "video_analysis", "frames_processed": 0, "confidence": 0.7}
+        # Issue #466: Raise error instead of returning placeholder data
+        # Video processing requires model implementation with NPU integration
+        raise NotImplementedError(
+            "Video processing not yet implemented. "
+            "This feature requires NPU Worker VM integration for frame-by-frame analysis."
+        )

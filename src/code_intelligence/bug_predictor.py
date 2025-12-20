@@ -154,7 +154,8 @@ class PredictionResult:
     analyzed_files: int
     high_risk_count: int
     predicted_bugs: int
-    accuracy_score: float
+    # Issue #468: accuracy_score is Optional - None when no historical data available
+    accuracy_score: Optional[float]
     risk_distribution: dict[str, int]
     file_assessments: list[FileRiskAssessment]
     top_risk_factors: list[tuple[str, float]]
@@ -167,7 +168,9 @@ class PredictionResult:
             "analyzed_files": self.analyzed_files,
             "high_risk_count": self.high_risk_count,
             "predicted_bugs": self.predicted_bugs,
-            "accuracy_score": round(self.accuracy_score, 1),
+            # Issue #468: Return None if no historical accuracy data, otherwise round
+            "accuracy_score": round(self.accuracy_score, 1) if self.accuracy_score is not None else None,
+            "accuracy_available": self.accuracy_score is not None,
             "risk_distribution": self.risk_distribution,
             "files": [fa.to_dict() for fa in self.file_assessments],
             "top_risk_factors": [
@@ -474,7 +477,9 @@ class BugPredictor:
             analyzed_files=len(assessments),
             high_risk_count=high_risk_count,
             predicted_bugs=predicted_bugs,
-            accuracy_score=72.5,  # Placeholder - would need historical data
+            # Issue #468: Return None - historical accuracy tracking not yet implemented
+            # To get real accuracy: store predictions, track outcomes, calculate metrics
+            accuracy_score=None,
             risk_distribution=risk_dist,
             file_assessments=assessments,
             top_risk_factors=top_factors,

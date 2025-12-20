@@ -395,103 +395,96 @@ class DecisionEngine:
                 metadata={"algorithm": "risk_assessment"},
             )
 
-    async def _decide_human_escalation(self, context: DecisionContext) -> Decision:
-        """Decide whether to escalate to human."""
-        escalation_actions = [
-            action
-            for action in context.available_actions
-            if action.get("action_type") == "escalation"
-        ]
+    def _analyze_escalation_urgency(self, context: DecisionContext) -> List[str]:
+        """Analyze context elements to determine escalation urgency factors (Issue #398: extracted).
 
-        # Analyze context to determine escalation urgency
+        Returns:
+            List of urgency factor strings that triggered escalation need
+        """
         urgency_factors = []
 
         # Check for active takeovers
-        if any(
-            "takeover" in ce.metadata.get("type", "") for ce in context.context_elements
-        ):
+        if any("takeover" in ce.metadata.get("type", "") for ce in context.context_elements):
             urgency_factors.append("existing_takeover")
 
         # Check for high risk factors
-        high_risk_factors = [
-            rf for rf in context.risk_factors if rf.get("severity") == "high"
-        ]
-        if high_risk_factors:
+        if any(rf.get("severity") == "high" for rf in context.risk_factors):
             urgency_factors.append("high_risk_detected")
 
-        # Check for low confidence context
-        low_confidence_elements = [
-            ce for ce in context.context_elements if ce.confidence < 0.5
-        ]
-        if len(low_confidence_elements) > len(context.context_elements) * 0.4:
+        # Check for low confidence context (>40% of elements have low confidence)
+        low_confidence_count = sum(1 for ce in context.context_elements if ce.confidence < 0.5)
+        if context.context_elements and low_confidence_count > len(context.context_elements) * 0.4:
             urgency_factors.append("low_confidence_context")
 
+        return urgency_factors
+
+    def _create_escalation_decision(self, context: DecisionContext, urgency_factors: List[str]) -> Decision:
+        """Create decision for immediate escalation (Issue #398: extracted)."""
+        escalation_action = {
+            "action_type": "escalation",
+            "action": "request_immediate_takeover",
+            "trigger": "critical_decision_point",
+            "urgency_factors": urgency_factors,
+            "confidence": 0.95,
+        }
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action=escalation_action,
+            alternative_actions=[],
+            confidence=0.95,
+            confidence_level=ConfidenceLevel.VERY_HIGH,
+            reasoning=f"Immediate escalation required due to: {', '.join(urgency_factors)}",
+            supporting_evidence=[{"type": "urgency_analysis", "factors": urgency_factors}],
+            risk_assessment={"risk_level": "high", "immediate_action_required": True},
+            expected_outcomes=[{"outcome": "human_takeover_initiated", "probability": 0.95}],
+            monitoring_criteria=["takeover_response_time", "human_operator_availability"],
+            fallback_plan={"action": "pause_all_operations"},
+            requires_approval=False,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={"algorithm": "escalation_urgency_analysis"},
+        )
+
+    def _create_continue_autonomous_decision(self, context: DecisionContext, escalation_actions: List[Dict]) -> Decision:
+        """Create decision to continue autonomous operation (Issue #398: extracted)."""
+        continue_action = {
+            "action_type": "monitoring",
+            "action": "continue_autonomous_operation",
+            "confidence": 0.8,
+        }
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action=continue_action,
+            alternative_actions=escalation_actions,
+            confidence=0.8,
+            confidence_level=ConfidenceLevel.HIGH,
+            reasoning="No immediate escalation factors detected",
+            supporting_evidence=[{"type": "escalation_analysis", "urgency_factors": []}],
+            risk_assessment={"risk_level": "low", "escalation_needed": False},
+            expected_outcomes=[{"outcome": "continued_autonomous_operation", "probability": 0.8}],
+            monitoring_criteria=["context_changes", "risk_factor_evolution"],
+            fallback_plan={"action": "request_human_review"},
+            requires_approval=False,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={"algorithm": "escalation_analysis"},
+        )
+
+    async def _decide_human_escalation(self, context: DecisionContext) -> Decision:
+        """Decide whether to escalate to human (Issue #398: refactored to use helpers)."""
+        escalation_actions = [
+            action for action in context.available_actions
+            if action.get("action_type") == "escalation"
+        ]
+
+        urgency_factors = self._analyze_escalation_urgency(context)
+
         if urgency_factors:
-            # Escalate immediately
-            escalation_action = {
-                "action_type": "escalation",
-                "action": "request_immediate_takeover",
-                "trigger": "critical_decision_point",
-                "urgency_factors": urgency_factors,
-                "confidence": 0.95,
-            }
-
-            return Decision(
-                decision_id=context.decision_id,
-                decision_type=context.decision_type,
-                chosen_action=escalation_action,
-                alternative_actions=[],
-                confidence=0.95,
-                confidence_level=ConfidenceLevel.VERY_HIGH,
-                reasoning=f"Immediate escalation required due to: {', '.join(urgency_factors)}",
-                supporting_evidence=[
-                    {"type": "urgency_analysis", "factors": urgency_factors}
-                ],
-                risk_assessment={
-                    "risk_level": "high",
-                    "immediate_action_required": True,
-                },
-                expected_outcomes=[
-                    {"outcome": "human_takeover_initiated", "probability": 0.95}
-                ],
-                monitoring_criteria=[
-                    "takeover_response_time",
-                    "human_operator_availability",
-                ],
-                fallback_plan={"action": "pause_all_operations"},
-                requires_approval=False,  # Emergency escalation doesn't require approval
-                timestamp=self.time_provider.current_timestamp(),
-                metadata={"algorithm": "escalation_urgency_analysis"},
-            )
+            return self._create_escalation_decision(context, urgency_factors)
         else:
-            # No immediate escalation needed
-            continue_action = {
-                "action_type": "monitoring",
-                "action": "continue_autonomous_operation",
-                "confidence": 0.8,
-            }
-
-            return Decision(
-                decision_id=context.decision_id,
-                decision_type=context.decision_type,
-                chosen_action=continue_action,
-                alternative_actions=escalation_actions,
-                confidence=0.8,
-                confidence_level=ConfidenceLevel.HIGH,
-                reasoning="No immediate escalation factors detected",
-                supporting_evidence=[
-                    {"type": "escalation_analysis", "urgency_factors": []}
-                ],
-                risk_assessment={"risk_level": "low", "escalation_needed": False},
-                expected_outcomes=[
-                    {"outcome": "continued_autonomous_operation", "probability": 0.8}
-                ],
-                monitoring_criteria=["context_changes", "risk_factor_evolution"],
-                fallback_plan={"action": "request_human_review"},
-                requires_approval=False,
-                timestamp=self.time_provider.current_timestamp(),
-                metadata={"algorithm": "escalation_analysis"},
-            )
+            return self._create_continue_autonomous_decision(context, escalation_actions)
 
     async def _decide_workflow_optimization(self, context: DecisionContext) -> Decision:
         """Decide on workflow optimization actions based on context analysis."""

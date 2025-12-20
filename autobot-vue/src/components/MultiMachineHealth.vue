@@ -3,20 +3,40 @@
     <div class="flex items-center justify-between mb-6">
       <h3 class="text-lg font-semibold text-gray-900">Infrastructure Health</h3>
       <div class="flex items-center space-x-3">
+        <!-- Issue #472: View Toggle - Custom vs Grafana -->
+        <div class="flex items-center space-x-1 bg-gray-100 rounded-lg p-0.5">
+          <button
+            @click="viewMode = 'custom'"
+            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+            :class="viewMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <i class="fas fa-th-large mr-1"></i>
+            Custom
+          </button>
+          <button
+            @click="viewMode = 'grafana'"
+            class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+            :class="viewMode === 'grafana' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <i class="fas fa-chart-line mr-1"></i>
+            Grafana
+          </button>
+        </div>
+
         <span class="text-xs text-gray-500">
           Last check: {{ lastCheckTime }}
         </span>
-        <button 
-          @click="refreshAll" 
+        <button
+          @click="refreshAll"
           :disabled="isRefreshing"
           class="text-gray-400 hover:text-gray-600 transition-colors"
           title="Refresh all machines"
         >
           <i :class="isRefreshing ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
         </button>
-        
+
         <!-- Overall Status Badge -->
-        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
              :class="overallStatusClass">
           <span class="w-2 h-2 rounded-full mr-1" :class="overallStatusDotClass"></span>
           {{ overallStatus }}
@@ -24,8 +44,43 @@
       </div>
     </div>
 
+    <!-- Issue #472: Grafana Dashboard View -->
+    <div v-if="viewMode === 'grafana'" class="grafana-container">
+      <GrafanaDashboard
+        dashboard="multi-machine"
+        :height="700"
+        :show-controls="true"
+        theme="dark"
+      />
+    </div>
+
+    <!-- Custom View (Original) -->
+    <div v-else>
+
+    <!-- Issue #465: Error State Display -->
+    <div v-if="apiError" class="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+      <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-red-500 text-2xl mr-4"></i>
+        <div class="flex-1">
+          <h4 class="font-semibold text-red-800">Infrastructure Data Unavailable</h4>
+          <p class="text-sm text-red-600 mt-1">{{ apiError }}</p>
+          <p v-if="retryCount < maxRetries" class="text-xs text-red-500 mt-2">
+            Retrying automatically... ({{ retryCount }}/{{ maxRetries }})
+          </p>
+        </div>
+        <button
+          @click="refreshAll"
+          :disabled="isRefreshing"
+          class="ml-4 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+        >
+          <i :class="isRefreshing ? 'fas fa-spinner fa-spin' : 'fas fa-redo'" class="mr-2"></i>
+          Retry Now
+        </button>
+      </div>
+    </div>
+
     <!-- Machine Cards Grid - 6 machines layout -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div v-if="machines.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <!-- Machine Card -->
       <div 
         v-for="machine in machines" 
@@ -172,6 +227,7 @@
         </div>
       </div>
     </div>
+    </div><!-- End Custom View -->
 
     <!-- Service Details Modal -->
     <div v-if="selectedService" class="fixed inset-0 z-50 overflow-y-auto">
@@ -232,6 +288,7 @@ import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
 
 const logger = createLogger('MultiMachineHealth')
 import ServiceItem from './ServiceItem.vue'
+import GrafanaDashboard from './monitoring/GrafanaDashboard.vue'
 import appConfig from '@/config/AppConfig.js'
 
 interface Machine {
@@ -279,6 +336,12 @@ const serviceMonitor = useServiceMonitor()
 const isRefreshing = ref(false)
 const selectedService = ref<{ machine: Machine, service: Service } | null>(null)
 const lastCheckTime = ref('Never')
+// Issue #472: View mode toggle - 'custom' or 'grafana'
+const viewMode = ref<'custom' | 'grafana'>('custom')
+// Issue #465: Track API error state - no mock data fallback
+const apiError = ref<string | null>(null)
+const retryCount = ref(0)
+const maxRetries = 3
 let refreshInterval: number | null = null
 
 // Initialize machine configurations from centralized AppConfig
@@ -509,9 +572,9 @@ const showServiceDetails = (machine: Machine, service: Service) => {
 const refreshAll = async () => {
   isRefreshing.value = true
   lastCheckTime.value = new Date().toLocaleTimeString()
-  
+
   try {
-    // Fetch real infrastructure data from API
+    // Issue #465: Fetch real infrastructure data from API - no mock fallback
     const response = await fetch('/api/infrastructure/status')
     if (response.ok) {
       const data = await response.json()
@@ -526,16 +589,30 @@ const refreshAll = async () => {
             support: machine.services.support || []
           }
         }))
+        // Clear error state on success
+        apiError.value = null
+        retryCount.value = 0
       }
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
   } catch (error) {
     logger.error('Failed to fetch infrastructure status:', error)
-    // Keep mock data on error
+    // Issue #465: Clear machines and show error state - no mock data
+    machines.value = []
+    apiError.value = error instanceof Error ? error.message : 'Failed to connect to backend'
+    retryCount.value++
+
+    // Schedule retry if under max attempts
+    if (retryCount.value < maxRetries) {
+      logger.info(`Scheduling retry ${retryCount.value}/${maxRetries}`)
+      setTimeout(() => refreshAll(), 5000 * retryCount.value)
+    }
   }
-  
+
   // Also refresh service monitor for compatibility
   await serviceMonitor.refresh()
-  
+
   setTimeout(() => {
     isRefreshing.value = false
   }, 1000)
@@ -577,5 +654,12 @@ onUnmounted(() => {
 <style scoped>
 .multi-machine-health {
   /* Component styles if needed */
+}
+
+/* Issue #472: Grafana container styling */
+.grafana-container {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
 }
 </style>

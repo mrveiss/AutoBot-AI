@@ -4,6 +4,8 @@
 """
 Service Monitoring API
 Comprehensive monitoring of all AutoBot services
+
+Issue #471: Added Prometheus metrics integration
 """
 
 import asyncio
@@ -23,11 +25,15 @@ from pydantic import BaseModel
 # Import unified configuration system - NO HARDCODED VALUES
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.constants.path_constants import PATH
+from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
+
+# Issue #471: Get metrics manager for Prometheus integration
+_metrics = get_metrics_manager()
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -274,7 +280,10 @@ class ServiceMonitor:
         # Services now run on VMs via systemd, not Docker containers
 
     async def check_backend_api(self) -> ServiceStatus:
-        """Check backend API health (Issue #398: refactored with helpers)."""
+        """Check backend API health (Issue #398: refactored with helpers).
+
+        Issue #471: Now emits Prometheus metrics for backend API health.
+        """
         import aiohttp
 
         start_time = time.time()
@@ -287,6 +296,12 @@ class ServiceMonitor:
             )
             async with await self._http_client.get(backend_url, timeout=timeout) as response:
                 response_time = int((time.time() - start_time) * 1000)
+                response_time_seconds = response_time / 1000.0
+
+                # Issue #471: Emit Prometheus metrics
+                _metrics.update_service_health("backend_api", 1.0 if response.status == 200 else 0.5)
+                _metrics.record_service_response_time("backend_api", response_time_seconds)
+                _metrics.update_service_status("backend_api", "online" if response.status == 200 else "warning")
 
                 if response.status == 200:
                     data = await response.json()
@@ -305,27 +320,53 @@ class ServiceMonitor:
                 )
         except asyncio.TimeoutError:
             logger.warning(f"Backend API health check timed out: {backend_url}")
+            # Issue #471: Record failure metrics
+            _metrics.update_service_health("backend_api", 0.0)
+            _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", "Connection timed out")
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"Backend API connection refused: {backend_url} - {e}")
+            _metrics.update_service_health("backend_api", 0.0)
+            _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", "Connection refused")
         except aiohttp.ClientError as e:
             logger.warning(f"Backend API HTTP error: {e}")
+            _metrics.update_service_health("backend_api", 0.0)
+            _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", f"HTTP error: {str(e)[:50]}")
         except Exception as e:
             logger.error(f"Backend API check unexpected error: {e}", exc_info=True)
+            _metrics.update_service_health("backend_api", 0.0)
+            _metrics.update_service_status("backend_api", "error")
             return _service_error_status("Backend API", str(e)[:100])
 
     def check_redis(self) -> ServiceStatus:
-        """Check Redis database"""
+        """Check Redis database.
+
+        Issue #471: Now emits Prometheus metrics for Redis health.
+        """
         try:
             start_time = time.time()
             self.redis_client.ping()
             response_time = int((time.time() - start_time) * 1000)
+            response_time_seconds = response_time / 1000.0
 
             info = self.redis_client.info()
             memory_used = info.get("used_memory_human", "Unknown")
             connected_clients = info.get("connected_clients", 0)
+
+            # Issue #471: Emit Prometheus metrics
+            _metrics.update_service_health("redis", 1.0)
+            _metrics.record_service_response_time("redis", response_time_seconds)
+            _metrics.update_service_status("redis", "online")
+            _metrics.set_redis_server_available("main", True)
+
+            # Also update Redis-specific metrics
+            used_bytes = info.get("used_memory", 0)
+            peak_bytes = info.get("used_memory_peak", 0)
+            frag_ratio = info.get("mem_fragmentation_ratio", 1.0)
+            _metrics.update_redis_memory_stats("main", used_bytes, peak_bytes, frag_ratio)
+            _metrics.set_redis_key_count("main", info.get("db0", {}).get("keys", 0) if isinstance(info.get("db0"), dict) else 0)
 
             return ServiceStatus(
                 name="Redis Database",
@@ -342,6 +383,10 @@ class ServiceMonitor:
                 },
             )
         except redis.ConnectionError:
+            # Issue #471: Record failure metrics
+            _metrics.update_service_health("redis", 0.0)
+            _metrics.update_service_status("redis", "error")
+            _metrics.set_redis_server_available("main", False)
             return ServiceStatus(
                 name="Redis Database",
                 status="error",
@@ -351,6 +396,8 @@ class ServiceMonitor:
                 category="database",
             )
         except Exception as e:
+            _metrics.update_service_health("redis", 0.5)
+            _metrics.update_service_status("redis", "warning")
             return ServiceStatus(
                 name="Redis Database",
                 status="warning",
@@ -385,7 +432,10 @@ class ServiceMonitor:
         return services
 
     async def check_llm_services(self) -> List[ServiceStatus]:
-        """Check LLM service availability (Issue #398: refactored with helpers)."""
+        """Check LLM service availability (Issue #398: refactored with helpers).
+
+        Issue #471: Now emits Prometheus metrics for LLM service health.
+        """
         import aiohttp
 
         llm_url = config.get_service_url("backend", "/api/llm/status/comprehensive")
@@ -398,9 +448,20 @@ class ServiceMonitor:
             )
             async with await self._http_client.get(llm_url, timeout=timeout) as response:
                 response_time = int((time.time() - start_time) * 1000)
+                response_time_seconds = response_time / 1000.0
+
+                # Issue #471: Emit Prometheus metrics
+                _metrics.update_service_health("llm_manager", 1.0 if response.status == 200 else 0.5)
+                _metrics.record_service_response_time("llm_manager", response_time_seconds)
+                _metrics.update_service_status("llm_manager", "online" if response.status == 200 else "warning")
 
                 if response.status == 200:
                     data = await response.json()
+                    # Update LLM provider availability metrics
+                    providers = data.get("providers", {})
+                    for provider, status in providers.items():
+                        if isinstance(status, dict):
+                            _metrics.set_llm_provider_available(provider, status.get("available", False))
                     return [ServiceStatus(
                         name="LLM Manager",
                         status="online",
@@ -416,27 +477,38 @@ class ServiceMonitor:
                 )]
         except asyncio.TimeoutError:
             logger.warning(f"LLM service check timed out: {llm_url}")
+            _metrics.update_service_health("llm_manager", 0.0)
+            _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", "Connection timed out", icon="fas fa-brain", category="ai"
             )]
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"LLM service connection refused: {llm_url} - {e}")
+            _metrics.update_service_health("llm_manager", 0.0)
+            _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", "Connection refused", icon="fas fa-brain", category="ai"
             )]
         except aiohttp.ClientError as e:
             logger.warning(f"LLM service HTTP error: {e}")
+            _metrics.update_service_health("llm_manager", 0.0)
+            _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", f"HTTP error: {str(e)[:50]}", icon="fas fa-brain", category="ai"
             )]
         except Exception as e:
             logger.error(f"LLM service check unexpected error: {e}", exc_info=True)
+            _metrics.update_service_health("llm_manager", 0.0)
+            _metrics.update_service_status("llm_manager", "error")
             return [_service_error_status(
                 "LLM Manager", str(e)[:50], icon="fas fa-brain", category="ai"
             )]
 
     async def check_knowledge_base(self) -> ServiceStatus:
-        """Check knowledge base status (Issue #398: refactored with helpers)."""
+        """Check knowledge base status (Issue #398: refactored with helpers).
+
+        Issue #471: Now emits Prometheus metrics for knowledge base health.
+        """
         import aiohttp
 
         start_time = time.time()
@@ -449,10 +521,22 @@ class ServiceMonitor:
             )
             async with await self._http_client.get(kb_url, timeout=timeout) as response:
                 response_time = int((time.time() - start_time) * 1000)
+                response_time_seconds = response_time / 1000.0
+
+                # Issue #471: Emit Prometheus metrics
+                _metrics.update_service_health("knowledge_base", 1.0 if response.status == 200 else 0.5)
+                _metrics.record_service_response_time("knowledge_base", response_time_seconds)
+                _metrics.update_service_status("knowledge_base", "online" if response.status == 200 else "warning")
 
                 if response.status == 200:
                     data = await response.json()
                     total_docs = data.get("total_documents", 0)
+                    total_vectors = data.get("total_vectors", 0)
+
+                    # Update knowledge base specific metrics
+                    _metrics.set_document_count(total_docs, "default", "all")
+                    _metrics.set_vector_count(total_vectors, "default")
+
                     return ServiceStatus(
                         name="Knowledge Base",
                         status="online",
@@ -469,21 +553,29 @@ class ServiceMonitor:
                 )
         except asyncio.TimeoutError:
             logger.warning(f"Knowledge base check timed out: {kb_url}")
+            _metrics.update_service_health("knowledge_base", 0.0)
+            _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", "Connection timed out", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientConnectorError as e:
             logger.warning(f"Knowledge base connection refused: {kb_url} - {e}")
+            _metrics.update_service_health("knowledge_base", 0.0)
+            _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", "Connection refused", icon="fas fa-database", category="knowledge"
             )
         except aiohttp.ClientError as e:
             logger.warning(f"Knowledge base HTTP error: {e}")
+            _metrics.update_service_health("knowledge_base", 0.0)
+            _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", f"HTTP error: {str(e)[:50]}", icon="fas fa-database", category="knowledge"
             )
         except Exception as e:
             logger.error(f"Knowledge base check unexpected error: {e}", exc_info=True)
+            _metrics.update_service_health("knowledge_base", 0.0)
+            _metrics.update_service_status("knowledge_base", "error")
             return _service_error_status(
                 "Knowledge Base", str(e)[:50], icon="fas fa-database", category="knowledge"
             )

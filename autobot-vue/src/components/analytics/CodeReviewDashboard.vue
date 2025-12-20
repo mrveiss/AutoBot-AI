@@ -576,9 +576,9 @@ async function runAnalysis() {
     await loadHistory()
   } catch (error: unknown) {
     logger.error('Analysis failed:', error)
-    // Use demo data on error
-    loadDemoData()
-    showToast('Using demo data - API unavailable', 'warning')
+    issues.value = []
+    hasAnalyzed.value = false
+    showToast('Analysis failed - please check backend connection', 'error')
   } finally {
     loading.value = false
   }
@@ -588,8 +588,9 @@ async function loadHistory() {
   try {
     const response = await api.get('/api/code-review/history')
     reviewHistory.value = response.data.reviews || []
-  } catch {
-    reviewHistory.value = getDemoHistory()
+  } catch (error) {
+    logger.warn('Failed to load review history:', error)
+    reviewHistory.value = []
   }
 }
 
@@ -610,8 +611,9 @@ async function loadPatterns() {
   try {
     const response = await api.get('/api/code-review/patterns')
     patterns.value = response.data.patterns || []
-  } catch {
-    patterns.value = getDemoPatterns()
+  } catch (error) {
+    logger.warn('Failed to load patterns:', error)
+    patterns.value = []
   }
 }
 
@@ -622,8 +624,8 @@ async function togglePattern(pattern: Pattern) {
       pattern_id: pattern.id,
       enabled: pattern.enabled
     })
-  } catch {
-    // Revert on error
+  } catch (error) {
+    logger.warn('Failed to toggle pattern:', error)
     pattern.enabled = !pattern.enabled
   }
 }
@@ -637,7 +639,8 @@ async function markResolved(issue: ReviewIssue) {
     issues.value = issues.value.filter(i => i.id !== issue.id)
     selectedIssue.value = null
     showToast('Issue marked as resolved', 'success')
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to mark issue resolved:', error)
     showToast('Failed to update issue', 'error')
   }
 }
@@ -651,116 +654,10 @@ async function markFalsePositive(issue: ReviewIssue) {
     issues.value = issues.value.filter(i => i.id !== issue.id)
     selectedIssue.value = null
     showToast('Marked as false positive', 'info')
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to mark issue as false positive:', error)
     showToast('Failed to update issue', 'error')
   }
-}
-
-// Demo data
-function loadDemoData() {
-  issues.value = [
-    {
-      id: '1',
-      code: 'SEC001',
-      name: 'Hardcoded Secret',
-      category: 'security',
-      severity: 'critical',
-      file: 'src/config/database.py',
-      line: 42,
-      column: 15,
-      message: 'Detected hardcoded password in configuration file',
-      suggestion: 'Use environment variables or a secrets manager',
-      snippet: 'password = "admin123"  # TODO: move to env'
-    },
-    {
-      id: '2',
-      code: 'PERF001',
-      name: 'N+1 Query Pattern',
-      category: 'performance',
-      severity: 'high',
-      file: 'src/services/users.py',
-      line: 87,
-      column: 8,
-      message: 'Potential N+1 query detected in loop',
-      suggestion: 'Use eager loading or batch queries',
-      snippet: 'for user in users:\n    orders = db.query(Order).filter_by(user_id=user.id)'
-    },
-    {
-      id: '3',
-      code: 'BUG001',
-      name: 'Empty Exception Handler',
-      category: 'bugs',
-      severity: 'medium',
-      file: 'src/utils/parser.py',
-      line: 156,
-      column: 4,
-      message: 'Empty except block silently swallows errors',
-      suggestion: 'Add proper error handling or re-raise',
-      snippet: 'except Exception:\n    pass'
-    },
-    {
-      id: '4',
-      code: 'DOC001',
-      name: 'Missing Docstring',
-      category: 'documentation',
-      severity: 'low',
-      file: 'src/api/endpoints.py',
-      line: 23,
-      column: 1,
-      message: 'Public function missing docstring',
-      suggestion: 'Add a docstring describing the function purpose'
-    },
-    {
-      id: '5',
-      code: 'BP001',
-      name: 'Print Statement',
-      category: 'style',
-      severity: 'low',
-      file: 'src/handlers/events.py',
-      line: 78,
-      column: 5,
-      message: 'Print statement found in production code',
-      suggestion: 'Replace with proper logging',
-      snippet: 'print(f"Event received: {event}")'
-    }
-  ]
-  hasAnalyzed.value = true
-}
-
-function getDemoHistory(): ReviewHistory[] {
-  return [
-    {
-      id: '1',
-      path: 'src/api/',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      total: 12,
-      critical: 1,
-      high: 3,
-      medium: 5,
-      low: 3
-    },
-    {
-      id: '2',
-      path: 'src/services/',
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-      total: 8,
-      critical: 0,
-      high: 2,
-      medium: 4,
-      low: 2
-    }
-  ]
-}
-
-function getDemoPatterns(): Pattern[] {
-  return [
-    { id: 'SEC001', name: 'Hardcoded Secret', category: 'security', severity: 'critical', enabled: true },
-    { id: 'SEC002', name: 'SQL Injection Risk', category: 'security', severity: 'critical', enabled: true },
-    { id: 'PERF001', name: 'N+1 Query Pattern', category: 'performance', severity: 'high', enabled: true },
-    { id: 'BUG001', name: 'Empty Exception Handler', category: 'bugs', severity: 'medium', enabled: true },
-    { id: 'DOC001', name: 'Missing Docstring', category: 'documentation', severity: 'low', enabled: true },
-    { id: 'BP001', name: 'Print Statement', category: 'style', severity: 'low', enabled: false }
-  ]
 }
 
 onMounted(() => {

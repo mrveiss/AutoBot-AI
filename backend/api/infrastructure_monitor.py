@@ -7,6 +7,8 @@ Monitors multiple machines and their service hierarchies
 
 Refactored to fix Feature Envy code smells by applying "Tell, Don't Ask" principle.
 Data classes now own their behavior, and specialized collectors handle data gathering.
+
+Issue #471: Added Prometheus metrics integration for infrastructure monitoring.
 """
 
 import asyncio
@@ -24,6 +26,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config_manager import UnifiedConfigManager
@@ -32,6 +35,9 @@ from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Issue #471: Get metrics manager for Prometheus integration
+_metrics = get_metrics_manager()
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -911,7 +917,10 @@ class InfrastructureMonitor:
         )
 
     async def get_infrastructure_status(self) -> List[MachineInfo]:
-        """Get complete infrastructure status"""
+        """Get complete infrastructure status.
+
+        Issue #471: Now emits Prometheus metrics for infrastructure health.
+        """
         tasks = [
             self.monitor_vm0(),
             self.monitor_vm1(),
@@ -927,6 +936,19 @@ class InfrastructureMonitor:
         for result in results:
             if isinstance(result, MachineInfo):
                 machines.append(result)
+                # Issue #471: Emit service health metrics for each machine
+                health_score = 1.0 if result.status == "healthy" else (0.5 if result.status == "warning" else 0.0)
+                _metrics.update_service_health(f"machine_{result.id}", health_score)
+                _metrics.update_service_status(f"machine_{result.id}", result.status)
+
+                # Update system metrics if stats available
+                if result.stats:
+                    if result.stats.cpu_usage is not None:
+                        _metrics.update_system_cpu(result.stats.cpu_usage)
+                    if result.stats.memory_percent is not None:
+                        _metrics.update_system_memory(result.stats.memory_percent)
+                    if result.stats.disk_percent is not None:
+                        _metrics.update_system_disk("/", result.stats.disk_percent)
             else:
                 logger.error(f"Error monitoring machine: {result}")
 

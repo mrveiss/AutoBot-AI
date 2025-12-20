@@ -506,29 +506,12 @@ async function loadSummary(): Promise<void> {
     const response = await fetch('/api/analytics/bug-prediction/summary');
     if (response.ok) {
       summary.value = await response.json();
+    } else {
+      logger.warn('Failed to load summary: HTTP', response.status);
     }
   } catch (error) {
     logger.error('Failed to load summary:', error);
-    // Demo data
-    summary.value = {
-      total_files_analyzed: 247,
-      high_risk_files: 3,
-      predicted_bugs_next_sprint: 8,
-      model_accuracy: 72.5,
-      top_risk_factors: [
-        { factor: 'Bug History', total_score: 350, average: 50 },
-        { factor: 'Complexity', total_score: 320, average: 45.7 },
-        { factor: 'Change Frequency', total_score: 280, average: 40 },
-        { factor: 'Test Coverage', total_score: 250, average: 35.7 },
-        { factor: 'File Size', total_score: 180, average: 25.7 },
-      ],
-      recommendations: [
-        'Focus testing efforts on 3 high-risk files',
-        'Reduce complexity in src/services/agent_service.py',
-        'Increase test coverage for frequently changed files',
-        'Review bug patterns in workflow_engine.py',
-      ],
-    };
+    // Keep default empty summary state
   }
 }
 
@@ -537,41 +520,13 @@ async function loadHighRiskFiles(): Promise<void> {
     const response = await fetch('/api/analytics/bug-prediction/high-risk?threshold=60&limit=10');
     if (response.ok) {
       highRiskFiles.value = await response.json();
+    } else {
+      logger.warn('Failed to load high risk files: HTTP', response.status);
+      highRiskFiles.value = [];
     }
   } catch (error) {
     logger.error('Failed to load high risk files:', error);
-    highRiskFiles.value = [
-      {
-        file_path: 'src/services/agent_service.py',
-        risk_score: 78.5,
-        risk_level: 'high',
-        factors: { complexity: 85, change_frequency: 72, bug_history: 80 },
-        bug_count_history: 12,
-        last_bug_date: '2025-01-15',
-        prevention_tips: ['Break down complex functions', 'Add regression tests'],
-        suggested_tests: ['Add boundary tests', 'Test error handling'],
-      },
-      {
-        file_path: 'src/core/workflow_engine.py',
-        risk_score: 72.3,
-        risk_level: 'high',
-        factors: { complexity: 78, change_frequency: 65, bug_history: 75 },
-        bug_count_history: 8,
-        last_bug_date: '2025-01-10',
-        prevention_tips: ['Review recent changes', 'Add inline comments'],
-        suggested_tests: ['Add integration tests'],
-      },
-      {
-        file_path: 'src/api/endpoints.py',
-        risk_score: 68.1,
-        risk_level: 'high',
-        factors: { complexity: 60, change_frequency: 85, bug_history: 55 },
-        bug_count_history: 6,
-        last_bug_date: '2025-01-08',
-        prevention_tips: ['Stabilize module', 'Add regression tests'],
-        suggested_tests: ['Test new endpoints'],
-      },
-    ];
+    highRiskFiles.value = [];
   }
 }
 
@@ -581,16 +536,13 @@ async function loadHeatmap(): Promise<void> {
     if (response.ok) {
       const data = await response.json();
       heatmapData.value = data.data || [];
+    } else {
+      logger.warn('Failed to load heatmap: HTTP', response.status);
+      heatmapData.value = [];
     }
   } catch (error) {
     logger.error('Failed to load heatmap:', error);
-    heatmapData.value = [
-      { name: 'src', value: 65, file_count: 150, risk_level: 'high' },
-      { name: 'backend', value: 52, file_count: 45, risk_level: 'medium' },
-      { name: 'tests', value: 25, file_count: 30, risk_level: 'low' },
-      { name: 'scripts', value: 35, file_count: 15, risk_level: 'low' },
-      { name: 'docs', value: 12, file_count: 7, risk_level: 'minimal' },
-    ];
+    heatmapData.value = [];
   }
 }
 
@@ -600,21 +552,13 @@ async function loadTrends(): Promise<void> {
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
+    } else {
+      logger.warn('Failed to load trends: HTTP', response.status);
+      trendData.value = [];
     }
   } catch (error) {
     logger.error('Failed to load trends:', error);
-    // Generate demo trend data
-    const days = parseInt(selectedPeriod.value);
-    trendData.value = Array.from({ length: Math.min(days, 30) }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - 1 - i));
-      return {
-        date: date.toISOString().split('T')[0],
-        accuracy: 65 + Math.random() * 20,
-        predicted_bugs: Math.floor(5 + Math.random() * 10),
-        actual_bugs: Math.floor(4 + Math.random() * 8),
-      };
-    });
+    trendData.value = [];
   }
 }
 
@@ -626,19 +570,13 @@ async function loadFactors(): Promise<void> {
       riskFactors.value = Object.fromEntries(
         data.factors.map((f: any) => [f.name, f.weight])
       );
+    } else {
+      logger.warn('Failed to load factors: HTTP', response.status);
+      riskFactors.value = {};
     }
   } catch (error) {
     logger.error('Failed to load factors:', error);
-    riskFactors.value = {
-      complexity: 0.20,
-      change_frequency: 0.20,
-      bug_history: 0.25,
-      test_coverage: 0.15,
-      code_age: 0.05,
-      author_experience: 0.05,
-      file_size: 0.05,
-      dependency_count: 0.05,
-    };
+    riskFactors.value = {};
   }
 }
 

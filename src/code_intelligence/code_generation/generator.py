@@ -18,8 +18,6 @@ from .diff import DiffGenerator
 from .prompts import PromptTemplateManager
 from .types import (
     CODE_BLOCK_RE,
-    DEF_FUNCTION_RE,
-    TYPE_HINT_SUB_RE,
     CodeContext,
     GeneratedCode,
     GenerationStatus,
@@ -32,6 +30,16 @@ from .types import (
 from .validator import CodeValidator
 
 logger = logging.getLogger(__name__)
+
+# LLM Interface availability
+try:
+    from src.llm_interface import LLMInterface
+
+    LLM_INTERFACE_AVAILABLE = True
+except ImportError:
+    LLM_INTERFACE_AVAILABLE = False
+    LLMInterface = None
+    logger.warning("LLMInterface not available - code generation will fail without LLM client")
 
 
 class LLMCodeGenerator:
@@ -55,14 +63,30 @@ class LLMCodeGenerator:
         Initialize the LLM Code Generator.
 
         Args:
-            llm_client: Optional LLM client (uses mock if not provided)
+            llm_client: LLM client instance (LLMInterface or compatible).
+                        If not provided, will attempt to create LLMInterface.
             model_name: Model to use for generation
             temperature: Sampling temperature (lower = more deterministic)
             max_tokens: Maximum tokens in response
             validate_output: Whether to validate generated code
             preserve_behavior: Whether to check behavior preservation
+
+        Raises:
+            RuntimeError: If LLM client is not provided and LLMInterface is unavailable
         """
-        self.llm_client = llm_client
+        # If no client provided, try to create one
+        if llm_client is None:
+            if LLM_INTERFACE_AVAILABLE:
+                logger.info("Creating LLMInterface for code generation")
+                self.llm_client = LLMInterface()
+            else:
+                raise RuntimeError(
+                    "LLM client is required for code generation. "
+                    "Either provide an llm_client parameter or ensure LLMInterface is available."
+                )
+        else:
+            self.llm_client = llm_client
+
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -219,10 +243,7 @@ class LLMCodeGenerator:
         try:
             # Format the prompt and call LLM
             system_prompt, user_prompt = self._format_prompt(request)
-            if self.llm_client:
-                generated_text = await self._call_llm(system_prompt, user_prompt)
-            else:
-                generated_text = self._mock_generate(request)
+            generated_text = await self._call_llm(system_prompt, user_prompt)
 
             generation_time = (time.time() - start_time) * 1000
             code = self._extract_code(generated_text)
@@ -285,8 +306,18 @@ class LLMCodeGenerator:
             {"role": "user", "content": user_prompt},
         ]
 
-        # Use the LLM client if available
-        if hasattr(self.llm_client, "chat"):
+        # Use LLMInterface's chat_completion method (standard AutoBot API)
+        if hasattr(self.llm_client, "chat_completion"):
+            response = await self.llm_client.chat_completion(
+                messages=messages,
+                llm_type="task",  # Use task-optimized settings
+                model_name=self.model_name,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+            )
+            return response.content
+        # Fallback for custom clients with chat method
+        elif hasattr(self.llm_client, "chat"):
             response = await self.llm_client.chat(
                 messages=messages,
                 model=self.model_name,
@@ -294,6 +325,7 @@ class LLMCodeGenerator:
                 max_tokens=self.max_tokens,
             )
             return response.content
+        # Fallback for clients with generate method
         elif hasattr(self.llm_client, "generate"):
             response = await self.llm_client.generate(
                 prompt=f"{system_prompt}\n\n{user_prompt}",
@@ -302,34 +334,10 @@ class LLMCodeGenerator:
             )
             return response.content
         else:
-            raise ValueError("LLM client does not have chat or generate method")
-
-    def _mock_generate(self, request: RefactoringRequest) -> str:
-        """Generate mock response for testing."""
-        code = request.context.code_snippet
-
-        if request.refactoring_type == RefactoringType.ADD_DOCSTRING:
-            # Add a simple docstring
-            lines = code.splitlines()
-            result = []
-            for line in lines:
-                result.append(line)
-                if line.strip().startswith("def "):
-                    # Extract function name
-                    match = DEF_FUNCTION_RE.match(line)
-                    if match:
-                        func_name = match.group(1)
-                        indent = len(line) - len(line.lstrip()) + 4
-                        docstring = f'{" " * indent}"""Docstring for {func_name}."""'
-                        result.append(docstring)
-            return "```python\n" + "\n".join(result) + "\n```"
-
-        elif request.refactoring_type == RefactoringType.ADD_TYPE_HINTS:
-            # Simple type hint addition (mock)
-            code = TYPE_HINT_SUB_RE.sub(r"def \1(\2) -> None:", code)
-            return "```python\n" + code + "\n```"
-
-        return "```python\n" + code + "\n```"
+            raise ValueError(
+                "LLM client must have chat_completion, chat, or generate method. "
+                f"Client type: {type(self.llm_client).__name__}"
+            )
 
     def _extract_code(self, response: str) -> str:
         """Extract code from LLM response."""

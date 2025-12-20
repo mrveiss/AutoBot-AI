@@ -135,6 +135,7 @@ export default {
     const showReportModal = ref(false);
     const projectStatus = ref(null);
     const allPhases = ref({});
+    const detailedPhases = ref({}); // Stores detailed phase info with capabilities
     const validationReport = ref('');
     const lastValidated = ref(null);
 
@@ -149,23 +150,23 @@ export default {
     });
 
     const currentPhaseCapabilities = computed(() => {
-      // This would need to be fetched from the detailed phases API
-      // For now, return mock data based on phase completion
-      if (!currentPhaseDetails.value) return [];
+      // Fetch real capabilities from detailed phases API
+      if (!projectStatus.value) return [];
 
-      const totalCaps = currentPhaseDetails.value.capabilities;
-      const implementedCaps = currentPhaseDetails.value.implemented_capabilities;
-      const mockCapabilities = [];
+      const currentPhaseName = projectStatus.value.current_phase;
+      const phaseDetails = detailedPhases.value[currentPhaseName];
 
-      for (let i = 0; i < totalCaps; i++) {
-        mockCapabilities.push({
-          name: `capability_${i + 1}`,
-          description: `Phase capability ${i + 1}`,
-          implemented: i < implementedCaps
-        });
+      if (phaseDetails && Array.isArray(phaseDetails.capabilities)) {
+        // Return real capability data from API
+        return phaseDetails.capabilities.map(cap => ({
+          name: cap.name,
+          description: cap.description || `Capability: ${cap.name}`,
+          implemented: cap.implemented
+        }));
       }
 
-      return mockCapabilities;
+      // Return empty array if no capabilities loaded yet
+      return [];
     });
 
     const nextPhase = computed(() => {
@@ -177,6 +178,22 @@ export default {
       isExpanded.value = !isExpanded.value;
     };
 
+    const loadDetailedPhases = async () => {
+      // Issue #463: Fetch real capability data from /api/project/phases
+      try {
+        const response = await apiService.get('/api/project/phases');
+        if (response && response.phases) {
+          // Store detailed phase info with capabilities
+          detailedPhases.value = response.phases;
+          logger.debug('Loaded detailed phases with capabilities:', Object.keys(response.phases));
+        }
+      } catch (error) {
+        logger.warn('Failed to load detailed phases:', error.message);
+        // Keep detailedPhases empty - computed property will return empty array
+        detailedPhases.value = {};
+      }
+    };
+
     const refreshStatus = async () => {
       isLoading.value = true;
       try {
@@ -186,38 +203,15 @@ export default {
           projectStatus.value = response;
           allPhases.value = response.phases;
           lastValidated.value = new Date();
+          // Load detailed phases with real capability data
+          await loadDetailedPhases();
         }
       } catch (error) {
-        logger.warn('Project status API not available, using fallback:', error.message);
-        // Provide fallback status when API is not available
-        projectStatus.value = {
-          current_phase: 'Advanced AI Features',
-          total_phases: 10,
-          completed_phases: 9,
-          active_phases: 1,
-          overall_completion: 90.0,
-          next_suggested_phase: 'Production Readiness',
-          phases: {
-            'Advanced AI Features': {
-              name: 'Advanced AI Features',
-              completion: 100.0,
-              is_active: false,
-              is_completed: true,
-              capabilities: 8,
-              implemented_capabilities: 8
-            },
-            'Production Readiness': {
-              name: 'Production Readiness',
-              completion: 0.0,
-              is_active: true,
-              is_completed: false,
-              capabilities: 6,
-              implemented_capabilities: 0
-            }
-          }
-        };
-        allPhases.value = projectStatus.value.phases;
-        lastValidated.value = new Date();
+        logger.warn('Project status API not available:', error.message);
+        // Clear data when API unavailable - no mock fallback per Issue #450
+        projectStatus.value = null;
+        allPhases.value = {};
+        detailedPhases.value = {};
       } finally {
         isLoading.value = false;
       }

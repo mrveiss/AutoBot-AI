@@ -5,9 +5,20 @@
 """
 Monitoring Alerts API endpoints
 Provides REST API for managing alerts and notifications
+
+DEPRECATED (Issue #474): This module is deprecated in favor of Prometheus AlertManager.
+All alert rules have been migrated to config/prometheus/alertmanager_rules.yml.
+This module will be REMOVED in Phase 5.
+
+Use instead:
+    - GET /api/monitoring/alerts/alertmanager - Fetch AlertManager alerts
+    - GET /api/monitoring/alerts/check - Combined alerts (includes AlertManager)
+    - AlertManager UI: http://172.16.168.23:9093
+    - Grafana Alerts: http://172.16.168.23:3000/alerting
 """
 
 import logging
+import warnings
 from datetime import datetime
 from typing import List, Optional
 
@@ -27,6 +38,14 @@ from src.utils.monitoring_alerts import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Issue #474: Deprecation warning for this module
+warnings.warn(
+    "backend.api.monitoring_alerts is deprecated. Use /api/monitoring/alerts/alertmanager "
+    "or Prometheus AlertManager directly. This module will be removed in Phase 5.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 # Issue #380: Module-level frozenset for valid alert operators
 _VALID_ALERT_OPERATORS = frozenset({"gt", "gte", "lt", "lte", "eq"})

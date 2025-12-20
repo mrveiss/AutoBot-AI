@@ -1,6 +1,26 @@
 # AutoBot Performance Monitoring System
 
-## Overview
+> **⚠️ DEPRECATED (Issue #469)**
+>
+> This legacy monitoring directory is deprecated as of Issue #469 - Prometheus/Grafana consolidation.
+>
+> **Use instead:**
+> - **Prometheus Metrics**: `src/monitoring/prometheus_metrics.py` with domain-specific recorders
+> - **Grafana Dashboards**: `config/grafana/dashboards/` (9 dashboards including autobot-performance.json)
+> - **Frontend Integration**: `autobot-vue/src/composables/usePrometheusMetrics.ts`
+> - **Backend API**: `/api/monitoring/metrics` endpoint
+>
+> **Scheduled for removal**: v3.0
+>
+> **Migration complete**: All metrics now flow through Prometheus with:
+> - `PerformanceMetricsRecorder` for GPU/NPU/Performance metrics
+> - Real-time alerts via `autobot_performance_alerts_total`
+> - Multi-modal processing via `autobot_multimodal_processing_seconds`
+> - Full Grafana visualization at `config/grafana/dashboards/autobot-performance.json`
+
+---
+
+## Overview (Legacy Documentation)
 
 The AutoBot Performance Monitoring System is a comprehensive, enterprise-grade monitoring solution designed specifically for AutoBot's distributed architecture across 6 VMs. It provides real-time performance monitoring, automated optimization, benchmarking capabilities, and intelligent alerting.
 

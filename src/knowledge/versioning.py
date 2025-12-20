@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     import aioredis
@@ -110,40 +110,31 @@ class VersioningMixin:
             logger.error("Failed to create version for %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
-    async def get_version(
-        self, fact_id: str, version: int = None
-    ) -> Dict[str, Any]:
-        """
-        Get a specific version of a fact.
+    async def _find_version_by_number(
+        self, version_list_key: str, version: int
+    ) -> str:
+        """Find specific version JSON by version number (Issue #398: extracted)."""
+        all_versions = await asyncio.to_thread(
+            self.redis_client.lrange, version_list_key, 0, -1
+        )
+        for v in all_versions:
+            v_str = v.decode() if isinstance(v, bytes) else v
+            v_data = json.loads(v_str)
+            if v_data.get("version") == version:
+                return v_str
+        return None
 
-        Args:
-            fact_id: Fact ID
-            version: Version number (None = latest)
-
-        Returns:
-            Dict with version data
-        """
+    async def get_version(self, fact_id: str, version: int = None) -> Dict[str, Any]:
+        """Get a specific version of a fact (Issue #398: refactored)."""
         try:
             version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
 
             if version is None:
-                # Get latest version (index 0)
                 version_json = await asyncio.to_thread(
                     self.redis_client.lindex, version_list_key, 0
                 )
             else:
-                # Find specific version
-                all_versions = await asyncio.to_thread(
-                    self.redis_client.lrange, version_list_key, 0, -1
-                )
-
-                version_json = None
-                for v in all_versions:
-                    v_str = v.decode() if isinstance(v, bytes) else v
-                    v_data = json.loads(v_str)
-                    if v_data.get("version") == version:
-                        version_json = v_str
-                        break
+                version_json = await self._find_version_by_number(version_list_key, version)
 
             if not version_json:
                 return {
@@ -154,10 +145,9 @@ class VersioningMixin:
             if isinstance(version_json, bytes):
                 version_json = version_json.decode()
 
-            version_data = json.loads(version_json)
             return {
                 "status": "success",
-                "version": version_data,
+                "version": json.loads(version_json),
                 "fact_id": fact_id,
             }
 
@@ -165,51 +155,38 @@ class VersioningMixin:
             logger.error("Failed to get version for %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
-    async def list_versions(
-        self, fact_id: str, limit: int = 10
-    ) -> Dict[str, Any]:
-        """
-        List version history for a fact.
+    def _parse_version_summary(self, v_raw: bytes) -> Dict[str, Any]:
+        """Parse version data into summary format (Issue #398: extracted)."""
+        v_str = v_raw.decode() if isinstance(v_raw, bytes) else v_raw
+        v_data = json.loads(v_str)
+        return {
+            "version": v_data.get("version"),
+            "created_at": v_data.get("created_at"),
+            "created_by": v_data.get("created_by"),
+            "change_summary": v_data.get("change_summary"),
+            "content_length": len(v_data.get("content", "")),
+        }
 
-        Args:
-            fact_id: Fact ID
-            limit: Maximum versions to return
+    async def _get_total_version_count(self, fact_id: str) -> int:
+        """Get total version count from metadata (Issue #398: extracted)."""
+        version_meta_key = f"{self.VERSION_META}{fact_id}"
+        meta = await asyncio.to_thread(self.redis_client.hgetall, version_meta_key)
+        if meta:
+            total_str = meta.get(b"total_versions") or meta.get("total_versions")
+            if total_str:
+                return int(total_str.decode() if isinstance(total_str, bytes) else total_str)
+        return 0
 
-        Returns:
-            Dict with list of versions (newest first)
-        """
+    async def list_versions(self, fact_id: str, limit: int = 10) -> Dict[str, Any]:
+        """List version history for a fact (Issue #398: refactored)."""
         try:
             version_list_key = f"{self.VERSION_PREFIX}{fact_id}"
             versions_raw = await asyncio.to_thread(
                 self.redis_client.lrange, version_list_key, 0, limit - 1
             )
 
-            versions = []
-            for v in versions_raw:
-                v_str = v.decode() if isinstance(v, bytes) else v
-                v_data = json.loads(v_str)
-                # Include summary info, not full content
-                versions.append({
-                    "version": v_data.get("version"),
-                    "created_at": v_data.get("created_at"),
-                    "created_by": v_data.get("created_by"),
-                    "change_summary": v_data.get("change_summary"),
-                    "content_length": len(v_data.get("content", "")),
-                })
-
-            # Get metadata
-            version_meta_key = f"{self.VERSION_META}{fact_id}"
-            meta = await asyncio.to_thread(
-                self.redis_client.hgetall, version_meta_key
-            )
-
-            total_versions = 0
-            if meta:
-                total_str = meta.get(b"total_versions") or meta.get("total_versions")
-                if total_str:
-                    total_versions = int(
-                        total_str.decode() if isinstance(total_str, bytes) else total_str
-                    )
+            versions = [self._parse_version_summary(v) for v in versions_raw]
+            total_versions = await self._get_total_version_count(fact_id)
 
             return {
                 "status": "success",
@@ -222,50 +199,37 @@ class VersioningMixin:
             logger.error("Failed to list versions for %s: %s", fact_id, e)
             return {"status": "error", "message": str(e), "versions": []}
 
+    async def _apply_version_to_fact(
+        self, fact_id: str, target_version: Dict[str, Any]
+    ) -> bool:
+        """Apply version content to fact (Issue #398: extracted)."""
+        fact_key = f"fact:{fact_id}"
+        exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
+        if not exists:
+            return False
+        await asyncio.to_thread(
+            self.redis_client.hset,
+            fact_key,
+            mapping={
+                "content": target_version["content"],
+                "metadata": json.dumps(target_version.get("metadata", {})),
+            },
+        )
+        return True
+
     async def revert_to_version(
-        self,
-        fact_id: str,
-        version: int,
-        created_by: str = None,
+        self, fact_id: str, version: int, created_by: str = None
     ) -> Dict[str, Any]:
-        """
-        Revert a fact to a previous version.
-
-        Creates a new version with the content from the specified version.
-
-        Args:
-            fact_id: Fact ID to revert
-            version: Version number to revert to
-            created_by: User/agent performing revert
-
-        Returns:
-            Dict with revert result
-        """
+        """Revert a fact to a previous version (Issue #398: refactored)."""
         try:
-            # Get the target version
             result = await self.get_version(fact_id, version)
             if result.get("status") != "success":
                 return result
 
             target_version = result["version"]
-
-            # Get current fact
-            fact_key = f"fact:{fact_id}"
-            exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
-            if not exists:
+            if not await self._apply_version_to_fact(fact_id, target_version):
                 return {"status": "error", "message": "Fact not found"}
 
-            # Update fact with version content
-            await asyncio.to_thread(
-                self.redis_client.hset,
-                fact_key,
-                mapping={
-                    "content": target_version["content"],
-                    "metadata": json.dumps(target_version.get("metadata", {})),
-                },
-            )
-
-            # Create new version for the revert
             revert_summary = f"Reverted to version {version}"
             if target_version.get("change_summary"):
                 revert_summary += f": {target_version['change_summary']}"
@@ -290,22 +254,56 @@ class VersioningMixin:
             logger.error("Failed to revert %s to version %d: %s", fact_id, version, e)
             return {"status": "error", "message": str(e)}
 
+    def _compare_metadata(
+        self, meta_a: Dict, meta_b: Dict
+    ) -> Dict[str, List[str]]:
+        """Compare metadata between two versions (Issue #398: extracted)."""
+        added_keys = set(meta_b.keys()) - set(meta_a.keys())
+        removed_keys = set(meta_a.keys()) - set(meta_b.keys())
+        modified_keys = {
+            k for k in meta_a.keys() & meta_b.keys() if meta_a[k] != meta_b[k]
+        }
+        return {
+            "metadata_added": list(added_keys),
+            "metadata_removed": list(removed_keys),
+            "metadata_modified": list(modified_keys),
+        }
+
+    def _build_version_comparison_result(
+        self, fact_id: str, version_a: int, version_b: int,
+        v_a: Dict, v_b: Dict
+    ) -> Dict[str, Any]:
+        """Build comparison result structure (Issue #398: extracted)."""
+        content_a = v_a.get("content", "")
+        content_b = v_b.get("content", "")
+        meta_changes = self._compare_metadata(
+            v_a.get("metadata", {}), v_b.get("metadata", {})
+        )
+        return {
+            "status": "success",
+            "fact_id": fact_id,
+            "version_a": {
+                "version": version_a,
+                "created_at": v_a.get("created_at"),
+                "content_length": len(content_a),
+            },
+            "version_b": {
+                "version": version_b,
+                "created_at": v_b.get("created_at"),
+                "content_length": len(content_b),
+            },
+            "changes": {
+                "content_changed": content_a != content_b,
+                "length_diff": len(content_b) - len(content_a),
+                **meta_changes,
+            },
+        }
+
     async def compare_versions(
         self, fact_id: str, version_a: int, version_b: int
     ) -> Dict[str, Any]:
-        """
-        Compare two versions of a fact.
-
-        Args:
-            fact_id: Fact ID
-            version_a: First version number
-            version_b: Second version number
-
-        Returns:
-            Dict with comparison details
-        """
+        """Compare two versions of a fact (Issue #398: refactored)."""
         try:
-            # Get both versions
             result_a = await self.get_version(fact_id, version_a)
             result_b = await self.get_version(fact_id, version_b)
 
@@ -314,49 +312,10 @@ class VersioningMixin:
             if result_b.get("status") != "success":
                 return result_b
 
-            v_a = result_a["version"]
-            v_b = result_b["version"]
-
-            # Compare content
-            content_a = v_a.get("content", "")
-            content_b = v_b.get("content", "")
-
-            # Simple diff info
-            content_changed = content_a != content_b
-            length_diff = len(content_b) - len(content_a)
-
-            # Compare metadata
-            meta_a = v_a.get("metadata", {})
-            meta_b = v_b.get("metadata", {})
-
-            added_keys = set(meta_b.keys()) - set(meta_a.keys())
-            removed_keys = set(meta_a.keys()) - set(meta_b.keys())
-            modified_keys = {
-                k for k in meta_a.keys() & meta_b.keys()
-                if meta_a[k] != meta_b[k]
-            }
-
-            return {
-                "status": "success",
-                "fact_id": fact_id,
-                "version_a": {
-                    "version": version_a,
-                    "created_at": v_a.get("created_at"),
-                    "content_length": len(content_a),
-                },
-                "version_b": {
-                    "version": version_b,
-                    "created_at": v_b.get("created_at"),
-                    "content_length": len(content_b),
-                },
-                "changes": {
-                    "content_changed": content_changed,
-                    "length_diff": length_diff,
-                    "metadata_added": list(added_keys),
-                    "metadata_removed": list(removed_keys),
-                    "metadata_modified": list(modified_keys),
-                },
-            }
+            return self._build_version_comparison_result(
+                fact_id, version_a, version_b,
+                result_a["version"], result_b["version"]
+            )
 
         except Exception as e:
             logger.error("Failed to compare versions for %s: %s", fact_id, e)

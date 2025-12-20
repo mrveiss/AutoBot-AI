@@ -10,11 +10,12 @@ Provides web research capabilities for multi-agent workflows
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from src.agents.advanced_web_research import AdvancedWebResearcher
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_logger
@@ -60,55 +61,39 @@ class ResearchAgent:
     """
     Research Agent that performs web research for complex queries.
 
-    This agent simulates Playwright-based web scraping and research
-    capabilities that would be available in the Docker container.
+    This agent uses Playwright-based web scraping through the AdvancedWebResearcher
+    to provide real web research capabilities.
     """
 
     def __init__(self):
-        """Initialize research agent with FastAPI app and mock data."""
+        """Initialize research agent with FastAPI app and real web research."""
         self.app = FastAPI(title="AutoBot Research Agent", version="1.0.0")
         self._http_client = get_http_client()  # Use singleton HTTP client
+        self._web_researcher = None  # Lazy-initialized AdvancedWebResearcher
 
         # Setup routes
         self.setup_routes()
 
-        # Mock data for demonstration (in real implementation, this would use Playwright)
-        self.mock_research_data = {
-            "network scanning tools": {
-                "nmap": {
-                    "title": "Nmap - Network Discovery and Security Auditing",
-                    "url": "https://nmap.org/",
-                    "content": (
-                        "Nmap is a free and open source utility for network "
-                        "discovery and security auditing. Features include host "
-                        "discovery, port scanning, version detection, OS detection."
-                    ),
-                    "installation": "sudo apt-get install nmap",
-                    "usage": "nmap -sS -O target_ip",
-                },
-                "masscan": {
-                    "title": "Masscan - Fast Port Scanner",
-                    "url": "https://github.com/robertdavidgraham/masscan",
-                    "content": (
-                        "Masscan is a TCP port scanner that can scan the entire "
-                        "Internet in under 6 minutes. It's designed to be fast "
-                        "and efficient for large-scale scanning."
-                    ),
-                    "installation": "sudo apt-get install masscan",
-                    "usage": "masscan -p1-65535 <target_network> --rate=1000",
-                },
-                "zmap": {
-                    "title": "ZMap - Fast Internet-wide Network Scanner",
-                    "url": "https://zmap.io/",
-                    "content": (
-                        "ZMap is a fast single packet network scanner designed "
-                        "for Internet-wide network surveys. It can scan the "
-                        "entire Internet in about 45 minutes."
-                    ),
-                    "installation": "sudo apt-get install zmap",
-                    "usage": "zmap -p 443 -o results.txt",
-                },
-            }
+        # Tool information database (static reference data, not mock research results)
+        self._tool_reference_data = {
+            "nmap": {
+                "installation": "sudo apt-get install nmap",
+                "usage": "nmap -sS -O target_ip",
+                "verification": "nmap --version",
+                "prerequisites": ["sudo privileges", "network access"],
+            },
+            "masscan": {
+                "installation": "sudo apt-get install masscan",
+                "usage": "masscan -p1-65535 <target_network> --rate=1000",
+                "verification": "masscan --version",
+                "prerequisites": ["sudo privileges", "build-essential (if compiling from source)"],
+            },
+            "zmap": {
+                "installation": "sudo apt-get install zmap",
+                "usage": "zmap -p 443 -o results.txt",
+                "verification": "zmap --version",
+                "prerequisites": ["sudo privileges", "libgmp3-dev libpcap-dev"],
+            },
         }
 
     def setup_routes(self):
@@ -134,19 +119,39 @@ class ResearchAgent:
             """Get detailed installation guide for a specific tool by name."""
             return await self.get_tool_installation_guide(tool_name)
 
+    async def _get_web_researcher(self) -> AdvancedWebResearcher:
+        """Get or initialize the web researcher (lazy initialization)."""
+        if self._web_researcher is None:
+            self._web_researcher = AdvancedWebResearcher({"headless": True})
+            await self._web_researcher.initialize()
+        return self._web_researcher
+
     async def perform_research(self, request: ResearchRequest) -> ResearchResponse:
-        """Perform web research based on the request parameters."""
+        """Perform web research based on the request parameters using Playwright."""
         start_time = time.time()
 
         logger.info(
-            f"Starting research for query: '{request.query}' with focus: '{request.focus}'"
+            "Starting research for query: '%s' with focus: '%s'",
+            request.query, request.focus
         )
 
         try:
-            # In real implementation, this would use Playwright to scrape web pages
-            results = await self._mock_web_research(
-                request.query, request.focus, request.max_results
-            )
+            # Use real Playwright-based web research
+            researcher = await self._get_web_researcher()
+            search_results = await researcher.search_web(request.query, request.max_results)
+
+            # Convert search results to ResearchResult format
+            results = []
+            if search_results.get("status") == "success":
+                for item in search_results.get("results", []):
+                    result = ResearchResult(
+                        title=item.get("title", ""),
+                        url=item.get("url", ""),
+                        content=item.get("snippet", item.get("content", "")),
+                        relevance_score=item.get("relevance_score", 0.8),
+                        source_type=item.get("search_engine", "web"),
+                    )
+                    results.append(result)
 
             # Generate summary
             summary = self._generate_research_summary(results, request.query)
@@ -163,182 +168,137 @@ class ResearchAgent:
             )
 
         except Exception as e:
-            logger.error(f"Research failed for query '{request.query}': {str(e)}")
+            logger.error("Research failed for query '%s': %s", request.query, str(e))
             raise HTTPException(status_code=500, detail=f"Research failed: {str(e)}")
 
     async def research_specific_tools(self, request: ResearchRequest) -> Dict[str, Any]:
         """Research specific tools with installation and usage information."""
         query_lower = request.query.lower()
 
-        # Check if this matches our mock data
-        if "network scanning" in query_lower or "network scan" in query_lower:
-            tools_data = self.mock_research_data["network scanning tools"]
+        # Perform real web research for tool information
+        try:
+            researcher = await self._get_web_researcher()
+            search_results = await researcher.search_web(request.query, request.max_results)
 
             research_results = []
-            for tool_name, tool_info in tools_data.items():
-                result = ResearchResult(
-                    title=tool_info["title"],
-                    url=tool_info["url"],
-                    content=tool_info["content"],
-                    relevance_score=0.95,
-                    source_type="official",
-                )
-                research_results.append(result)
+            if search_results.get("status") == "success":
+                for item in search_results.get("results", []):
+                    result = ResearchResult(
+                        title=item.get("title", ""),
+                        url=item.get("url", ""),
+                        content=item.get("snippet", item.get("content", "")),
+                        relevance_score=item.get("relevance_score", 0.8),
+                        source_type=item.get("search_engine", "web"),
+                    )
+                    research_results.append(result)
+
+            # Enhance with tool reference data if we have it
+            tools_found = []
+            detailed_info = {}
+            for tool_name, tool_info in self._tool_reference_data.items():
+                if tool_name in query_lower:
+                    tools_found.append(tool_name)
+                    detailed_info[tool_name] = tool_info
 
             return {
                 "success": True,
-                "tools_found": list(tools_data.keys()),
-                "detailed_info": tools_data,
-                "research_results": [r.dict() for r in research_results],
-                "recommendation": (
-                    "nmap is the most versatile and widely-used network scanning tool"
-                ),
-                "summary": (
-                    f"Found {len(tools_data)} network scanning tools: "
-                    f"{', '.join(tools_data.keys())}. Recommendation: nmap is "
-                    f"the most versatile and widely-used network scanning tool."
-                ),
+                "tools_found": tools_found,
+                "detailed_info": detailed_info,
+                "research_results": [r.model_dump() for r in research_results],
+                "web_search_results": search_results.get("results", []),
+                "summary": self._generate_research_summary(research_results, request.query),
             }
 
-        # Fallback to general research
-        return await self.perform_research(request)
+        except Exception as e:
+            logger.error("Tool research failed: %s", str(e))
+            # Fallback to general research
+            return await self.perform_research(request)
 
     async def get_tool_installation_guide(self, tool_name: str) -> Dict[str, Any]:
         """Get detailed installation guide for a specific tool."""
         tool_lower = tool_name.lower()
 
-        # Check mock data
-        for category_data in self.mock_research_data.values():
-            if tool_lower in category_data:
-                tool_info = category_data[tool_lower]
+        # Check tool reference data
+        if tool_lower in self._tool_reference_data:
+            tool_info = self._tool_reference_data[tool_lower]
+
+            # Also perform web research for additional context
+            try:
+                researcher = await self._get_web_researcher()
+                search_results = await researcher.search_web(
+                    f"{tool_name} installation guide", max_results=3
+                )
+                web_results = search_results.get("results", []) if search_results.get("status") == "success" else []
+            except Exception:
+                web_results = []
+
+            return {
+                "success": True,
+                "tool_name": tool_name,
+                "installation_command": tool_info.get("installation", "Not available"),
+                "usage_example": tool_info.get("usage", "Not available"),
+                "prerequisites": tool_info.get("prerequisites", ["sudo privileges"]),
+                "verification_command": tool_info.get("verification", f"{tool_name} --version"),
+                "web_resources": web_results,
+            }
+
+        # Tool not in reference data - search web for installation info
+        try:
+            researcher = await self._get_web_researcher()
+            search_results = await researcher.search_web(
+                f"{tool_name} installation guide", max_results=5
+            )
+
+            if search_results.get("status") == "success" and search_results.get("results"):
                 return {
                     "success": True,
                     "tool_name": tool_name,
-                    "installation_command": tool_info.get(
-                        "installation", "Not available"
-                    ),
-                    "usage_example": tool_info.get("usage", "Not available"),
-                    "description": tool_info.get("content", ""),
-                    "official_url": tool_info.get("url", ""),
-                    "prerequisites": self._get_tool_prerequisites(tool_name),
-                    "verification_command": self._get_verification_command(tool_name),
+                    "installation_command": "See web resources below",
+                    "usage_example": "See web resources below",
+                    "prerequisites": ["sudo privileges"],
+                    "verification_command": f"{tool_name} --version",
+                    "web_resources": search_results.get("results", []),
+                    "note": "Tool not in reference database, showing web search results",
                 }
+        except Exception as e:
+            logger.error("Failed to search for tool installation: %s", str(e))
 
-        # Tool not found in mock data
         return {
             "success": False,
             "tool_name": tool_name,
-            "error": "Tool information not available in research database",
+            "error": "Tool information not available and web search failed",
         }
-
-    def _get_tool_prerequisites(self, tool_name: str) -> List[str]:
-        """Get prerequisites for tool installation."""
-        prereqs = {
-            "nmap": ["sudo privileges", "network access"],
-            "masscan": [
-                "sudo privileges",
-                "build-essential (if compiling from source)",
-            ],
-            "zmap": ["sudo privileges", "libgmp3-dev libpcap-dev"],
-        }
-        return prereqs.get(tool_name.lower(), ["sudo privileges"])
 
     def _get_verification_command(self, tool_name: str) -> str:
         """Get command to verify tool installation."""
-        verification = {
-            "nmap": "nmap --version",
-            "masscan": "masscan --version",
-            "zmap": "zmap --version",
-        }
-        return verification.get(tool_name.lower(), f"{tool_name} --version")
-
-    async def _mock_web_research(
-        self, query: str, focus: str, max_results: int
-    ) -> List[ResearchResult]:
-        """Mock web research that simulates Playwright scraping."""
-        # Simulate research delay
-        await asyncio.sleep(0.5)
-
-        results = []
-
-        # Generate mock results based on query
-        if "network scan" in query.lower():
-            base_results = [
-                ResearchResult(
-                    title="Top Network Scanning Tools 2024",
-                    url="https://example.com/network-tools-2024",
-                    content=(
-                        "Comprehensive guide to network scanning tools including Nmap, Masscan,"
-                        "and Zmap with installation instructions and usage examples."
-                    ),
-                    relevance_score=0.95,
-                    source_type="tutorial",
-                ),
-                ResearchResult(
-                    title="Nmap Official Documentation",
-                    url="https://nmap.org/book/",
-                    content=(
-                        "Official documentation for Nmap network scanner "
-                        "including installation guide, command reference, "
-                        "and scripting examples."
-                    ),
-                    relevance_score=0.92,
-                    source_type="documentation",
-                ),
-                ResearchResult(
-                    title="Network Security Scanning Best Practices",
-                    url="https://example.com/security-scanning-practices",
-                    content=(
-                        "Best practices for ethical network scanning,"
-                        "including legal considerations and responsible disclosure."
-                    ),
-                    relevance_score=0.88,
-                    source_type="tutorial",
-                ),
-            ]
-            results.extend(base_results[:max_results])
-        else:
-            # Generic research results
-            for i in range(min(max_results, 3)):
-                result = ResearchResult(
-                    title=f"Research Result {i+1} for '{query}'",
-                    url=f"https://example.com/result-{i+1}",
-                    content=(
-                        f"Mock research content related to '{query}' with "
-                        f"{focus} focus. This would contain actual web-scraped "
-                        f"content in the real implementation."
-                    ),
-                    relevance_score=0.85 - (i * 0.05),
-                    source_type="general",
-                )
-                results.append(result)
-
-        return results
+        tool_lower = tool_name.lower()
+        if tool_lower in self._tool_reference_data:
+            return self._tool_reference_data[tool_lower].get("verification", f"{tool_name} --version")
+        return f"{tool_name} --version"
 
     def _generate_research_summary(
         self, results: List[ResearchResult], query: str
     ) -> str:
-        """Generate a summary of research results."""
+        """Generate a summary of research results from web search."""
         if not results:
             return f"No relevant results found for '{query}'"
 
         high_quality_results = [r for r in results if r.relevance_score > 0.8]
+        source_types = set(r.source_type for r in results if r.source_type)
 
-        if "network scan" in query.lower():
-            return (
-                f"Found {len(results)} relevant resources about network "
-                f"scanning tools. Key tools identified include Nmap (most "
-                f"popular), Masscan (fastest), and Zmap (Internet-scale). "
-                f"All tools have detailed installation guides and usage "
-                f"examples available. Nmap is recommended for beginners due "
-                f"to its comprehensive documentation and versatility."
-            )
-
-        return (
+        summary = (
             f"Research completed for '{query}' with {len(results)} results found. "
-            f"{len(high_quality_results)} high-quality sources identified. "
-            f"Results include {', '.join(set(r.source_type for r in results))} sources."
+            f"{len(high_quality_results)} high-quality sources identified."
         )
+
+        if source_types:
+            summary += f" Results from: {', '.join(source_types)}."
+
+        if results:
+            top_result = results[0]
+            summary += f" Top result: '{top_result.title}'"
+
+        return summary
 
     async def start_server(
         self, host: str = NetworkConstants.BIND_ALL_INTERFACES, port: int = 8005

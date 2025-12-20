@@ -166,63 +166,55 @@ class DocumentsMixin:
             logger.error("Failed to add document from file %s: %s", file_path, e)
             return {"status": "error", "message": str(e)}
 
+    async def _validate_directory(self, dir_path: str) -> Optional[Path]:
+        """Validate directory exists and is accessible (Issue #398: extracted)."""
+        dir_path_obj = Path(dir_path)
+        exists = await asyncio.to_thread(dir_path_obj.exists)
+        is_dir = await asyncio.to_thread(dir_path_obj.is_dir) if exists else False
+        return dir_path_obj if exists and is_dir else None
+
+    async def _process_file_with_semaphore(
+        self, semaphore: asyncio.Semaphore, file_path: Path, category: str
+    ) -> Dict[str, Any]:
+        """Process single file with semaphore-controlled concurrency (Issue #398: extracted)."""
+        async with semaphore:
+            try:
+                return await self.add_document_from_file(str(file_path), category=category)
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+    def _count_results(self, results: List[Any]) -> tuple:
+        """Count success and error results (Issue #398: extracted)."""
+        success_count = 0
+        error_count = 0
+        for result in results:
+            if isinstance(result, Exception):
+                error_count += 1
+            elif result.get("status") == "success":
+                success_count += 1
+            else:
+                error_count += 1
+        return success_count, error_count
+
     async def add_documents_from_directory(
         self, dir_path: str, category: str = "general", pattern: str = "*.txt"
     ) -> Dict[str, Any]:
-        """
-        Add all documents from a directory matching pattern.
-
-        Args:
-            dir_path: Directory path
-            category: Category for documents
-            pattern: File pattern (e.g., "*.txt", "*.md")
-
-        Returns:
-            Dict with status and counts
-        """
+        """Add documents from directory matching pattern (Issue #398: refactored)."""
         try:
-            dir_path_obj = Path(dir_path)
-            # Issue #358 - avoid blocking
-            exists = await asyncio.to_thread(dir_path_obj.exists)
-            is_dir = await asyncio.to_thread(dir_path_obj.is_dir) if exists else False
-            if not exists or not is_dir:
+            dir_path_obj = await self._validate_directory(dir_path)
+            if not dir_path_obj:
                 return {"status": "error", "message": "Directory not found"}
 
-            # Find matching files
-            # Issue #358 - use lambda to defer glob to thread
             files = await asyncio.to_thread(lambda: list(dir_path_obj.glob(pattern)))
             logger.info("Found %d files matching pattern '%s'", len(files), pattern)
 
-            # Process files in parallel with bounded concurrency
-            semaphore = asyncio.Semaphore(10)  # Limit concurrent file operations
-
-            async def process_file(file_path: Path) -> Dict[str, Any]:
-                """Process single file with semaphore-controlled concurrency."""
-                async with semaphore:
-                    try:
-                        return await self.add_document_from_file(
-                            str(file_path), category=category
-                        )
-                    except Exception as e:
-                        return {"status": "error", "message": str(e)}
-
-            # Process all files in parallel
+            semaphore = asyncio.Semaphore(10)
             results = await asyncio.gather(
-                *[process_file(file_path) for file_path in files],
+                *[self._process_file_with_semaphore(semaphore, f, category) for f in files],
                 return_exceptions=True
             )
 
-            # Count results
-            success_count = 0
-            error_count = 0
-            for result in results:
-                if isinstance(result, Exception):
-                    error_count += 1
-                elif result.get("status") == "success":
-                    success_count += 1
-                else:
-                    error_count += 1
-
+            success_count, error_count = self._count_results(results)
             return {
                 "status": "success",
                 "total_files": len(files),

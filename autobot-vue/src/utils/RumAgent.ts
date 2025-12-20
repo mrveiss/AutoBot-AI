@@ -1,7 +1,69 @@
 /**
  * Real User Monitoring (RUM) Agent for Development Mode
  * Tracks performance, errors, and user interactions for debugging
+ *
+ * Issue #476: Added Prometheus metrics export via /api/rum/metrics endpoint.
  */
+
+// Issue #476: Prometheus metrics payload interfaces
+interface PrometheusPageMetrics {
+  page: string
+  load_time_seconds?: number
+  fcp_seconds?: number
+  lcp_seconds?: number
+  tti_seconds?: number
+  dom_loaded_seconds?: number
+}
+
+interface PrometheusApiCallMetric {
+  endpoint: string
+  method: string
+  status: string
+  latency_seconds: number
+  is_slow: boolean
+  is_timeout: boolean
+  error_type?: string
+}
+
+interface PrometheusJsErrorMetric {
+  error_type: string
+  page: string
+  is_rejection: boolean
+  component?: string
+}
+
+interface PrometheusSessionMetric {
+  event: string
+  duration_seconds?: number
+}
+
+interface PrometheusWebSocketMetric {
+  event: string
+  direction?: string
+  event_type?: string
+}
+
+interface PrometheusResourceMetric {
+  resource_type: string
+  load_time_seconds: number
+  is_slow: boolean
+}
+
+interface PrometheusCriticalIssueMetric {
+  issue_type: string
+}
+
+interface PrometheusRumMetrics {
+  session_id: string
+  timestamp: string
+  page_metrics?: PrometheusPageMetrics
+  api_calls?: PrometheusApiCallMetric[]
+  js_errors?: PrometheusJsErrorMetric[]
+  session?: PrometheusSessionMetric
+  websocket_events?: PrometheusWebSocketMetric[]
+  resources?: PrometheusResourceMetric[]
+  critical_issues?: PrometheusCriticalIssueMetric[]
+}
 
 interface ApiCall {
   timestamp: string
@@ -72,6 +134,16 @@ class RumAgent {
     verySlowApiCall: number
     timeoutThreshold: number
   }
+  // Issue #476: Prometheus metrics export configuration
+  private prometheusEnabled: boolean
+  private prometheusEndpoint: string
+  private prometheusReportInterval: number
+  private lastPrometheusReport: number
+  private pendingApiCalls: PrometheusApiCallMetric[]
+  private pendingJsErrors: PrometheusJsErrorMetric[]
+  private pendingWsEvents: PrometheusWebSocketMetric[]
+  private pendingResources: PrometheusResourceMetric[]
+  private pendingCriticalIssues: PrometheusCriticalIssueMetric[]
 
   constructor() {
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('rum_enabled') === 'true'
@@ -91,7 +163,18 @@ class RumAgent {
       verySlowApiCall: 5000, // ms
       timeoutThreshold: 30000 // ms
     }
-    
+
+    // Issue #476: Initialize Prometheus metrics export
+    this.prometheusEnabled = localStorage.getItem('rum_prometheus_enabled') !== 'false'
+    this.prometheusEndpoint = '/api/rum/metrics'
+    this.prometheusReportInterval = 30000 // 30 seconds
+    this.lastPrometheusReport = 0
+    this.pendingApiCalls = []
+    this.pendingJsErrors = []
+    this.pendingWsEvents = []
+    this.pendingResources = []
+    this.pendingCriticalIssues = []
+
     if (this.isEnabled) {
       this.initialize()
     }
@@ -102,12 +185,23 @@ class RumAgent {
   }
 
   private initialize(): void {
-    
+
     this.monitorPagePerformance()
     this.monitorResourceTimings()
     this.monitorErrors()
     this.setupPeriodicReporting()
-    
+
+    // Issue #476: Setup Prometheus metrics reporting
+    if (this.prometheusEnabled) {
+      this.setupPrometheusReporting()
+      // Report session start
+      this.sendPrometheusMetrics({
+        session_id: this.sessionId,
+        timestamp: new Date().toISOString(),
+        session: { event: 'start' }
+      })
+    }
+
     this.logMetric('session_start', {
       sessionId: this.sessionId,
       userAgent: navigator.userAgent,
@@ -122,7 +216,7 @@ class RumAgent {
     const isTimeout = duration > this.thresholds.timeoutThreshold
     const isSlow = duration > this.thresholds.slowApiCall
     const isVerySlow = duration > this.thresholds.verySlowApiCall
-    
+
     const apiCall: ApiCall = {
       timestamp: new Date().toISOString(),
       method,
@@ -135,9 +229,27 @@ class RumAgent {
       isVerySlow,
       sessionId: this.sessionId
     }
-    
+
     this.metrics.apiCalls.push(apiCall)
-    
+
+    // Issue #476: Queue for Prometheus reporting
+    if (this.prometheusEnabled) {
+      const statusStr = typeof status === 'number'
+        ? (status >= 200 && status < 400 ? 'success' : 'error')
+        : String(status)
+      const errorType = error ? 'network' : (isTimeout ? 'timeout' : undefined)
+
+      this.pendingApiCalls.push({
+        endpoint: this.normalizeEndpoint(url),
+        method,
+        status: isTimeout ? 'timeout' : statusStr,
+        latency_seconds: duration / 1000,
+        is_slow: isSlow || isVerySlow,
+        is_timeout: isTimeout,
+        error_type: errorType
+      })
+    }
+
     // Log performance issues immediately
     if (isTimeout) {
       console.error('🚨 API TIMEOUT:', apiCall)
@@ -148,8 +260,25 @@ class RumAgent {
       console.warn('⚠️ SLOW API:', apiCall)
     } else {
     }
-    
+
     return apiCall
+  }
+
+  // Issue #476: Normalize endpoint to prevent high cardinality
+  private normalizeEndpoint(url: string): string {
+    try {
+      const urlObj = new URL(url, window.location.origin)
+      let path = urlObj.pathname
+      // Remove query parameters
+      path = path.split('?')[0]
+      // Replace numeric IDs with placeholder
+      path = path.replace(/\/\d+/g, '/{id}')
+      // Replace UUIDs with placeholder
+      path = path.replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '/{uuid}')
+      return path
+    } catch {
+      return url
+    }
   }
 
   // WebSocket Monitoring
@@ -160,9 +289,18 @@ class RumAgent {
       data,
       sessionId: this.sessionId
     }
-    
+
     this.metrics.webSocketEvents.push(wsEvent)
-    
+
+    // Issue #476: Queue for Prometheus reporting
+    if (this.prometheusEnabled) {
+      this.pendingWsEvents.push({
+        event,
+        direction: data.direction,
+        event_type: data.type || data.event_type
+      })
+    }
+
     if (event === 'error' || event === 'close') {
       console.warn('🔌 WebSocket Issue:', wsEvent)
     } else {
@@ -215,15 +353,35 @@ class RumAgent {
       url: window.location.href,
       userAgent: navigator.userAgent
     }
-    
+
     this.metrics.errors.push(error)
-    
+
+    // Issue #476: Queue for Prometheus reporting
+    if (this.prometheusEnabled) {
+      const isRejection = type === 'unhandled_promise_rejection'
+      const page = this.getCurrentPage()
+      this.pendingJsErrors.push({
+        error_type: type,
+        page,
+        is_rejection: isRejection,
+        component: errorData.component
+      })
+    }
+
     // Reduce noise from expected network errors during backend connection attempts
     if (type !== 'network_error' && type !== 'http_error') {
       console.error('💥 Error Tracked:', error)
     }
-    
+
     this.reportCriticalIssue('error', error)
+  }
+
+  // Issue #476: Get current page name for metrics
+  private getCurrentPage(): string {
+    const path = window.location.pathname
+    // Extract meaningful page name from path
+    const parts = path.split('/').filter(p => p)
+    return parts.length > 0 ? parts.join('/') : 'home'
   }
 
   // Page Performance Monitoring
@@ -239,9 +397,51 @@ class RumAgent {
             firstPaint: this.getFirstPaint(),
             timestamp: new Date().toISOString()
           }
+
+          // Issue #476: Send page metrics to Prometheus immediately
+          if (this.prometheusEnabled) {
+            const page = this.getCurrentPage()
+            const loadTime = perfData.loadEventEnd - perfData.fetchStart
+            const fcpTime = this.getFirstContentfulPaint()
+            const lcpTime = this.getLargestContentfulPaint()
+
+            this.sendPrometheusMetrics({
+              session_id: this.sessionId,
+              timestamp: new Date().toISOString(),
+              page_metrics: {
+                page,
+                load_time_seconds: loadTime / 1000,
+                fcp_seconds: fcpTime ? fcpTime / 1000 : undefined,
+                lcp_seconds: lcpTime ? lcpTime / 1000 : undefined,
+                tti_seconds: perfData.domInteractive ? (perfData.domInteractive - perfData.fetchStart) / 1000 : undefined,
+                dom_loaded_seconds: (perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart) / 1000
+              }
+            })
+          }
         }
       }, 0)
     })
+  }
+
+  // Issue #476: Get First Contentful Paint
+  private getFirstContentfulPaint(): number | null {
+    const paintEntries = performance.getEntriesByType('paint')
+    const fcp = paintEntries.find(entry => entry.name === 'first-contentful-paint')
+    return fcp ? fcp.startTime : null
+  }
+
+  // Issue #476: Get Largest Contentful Paint
+  private getLargestContentfulPaint(): number | null {
+    // LCP requires PerformanceObserver, use cached value if available
+    try {
+      const lcpEntries = performance.getEntriesByType('largest-contentful-paint')
+      if (lcpEntries.length > 0) {
+        return (lcpEntries[lcpEntries.length - 1] as PerformanceEntry).startTime
+      }
+    } catch {
+      // LCP not available
+    }
+    return null
   }
 
   private getFirstPaint(): number | null {
@@ -261,10 +461,31 @@ class RumAgent {
             size: (entry as PerformanceResourceTiming).transferSize,
             timestamp: new Date().toISOString()
           })
+
+          // Issue #476: Queue for Prometheus reporting
+          if (this.prometheusEnabled) {
+            const resourceType = this.getResourceType(entry.name)
+            this.pendingResources.push({
+              resource_type: resourceType,
+              load_time_seconds: entry.duration / 1000,
+              is_slow: true
+            })
+          }
         }
       }
     })
     observer.observe({ entryTypes: ['resource'] })
+  }
+
+  // Issue #476: Determine resource type from URL
+  private getResourceType(url: string): string {
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.match(/\.(js|mjs|cjs)(\?|$)/)) return 'script'
+    if (lowerUrl.match(/\.(css)(\?|$)/)) return 'stylesheet'
+    if (lowerUrl.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)(\?|$)/)) return 'image'
+    if (lowerUrl.match(/\.(woff|woff2|ttf|otf|eot)(\?|$)/)) return 'font'
+    if (lowerUrl.match(/\.(mp4|webm|ogg|mp3|wav)(\?|$)/)) return 'media'
+    return 'other'
   }
 
   // Generic metric logging
@@ -288,12 +509,19 @@ class RumAgent {
       sessionId: this.sessionId,
       data
     }
-    
+
     // Store in localStorage for persistence
     const criticalIssues = JSON.parse(localStorage.getItem('rum_critical_issues') || '[]')
     criticalIssues.push(issue)
     localStorage.setItem('rum_critical_issues', JSON.stringify(criticalIssues.slice(-50)))
-    
+
+    // Issue #476: Queue for Prometheus reporting
+    if (this.prometheusEnabled) {
+      this.pendingCriticalIssues.push({
+        issue_type: type
+      })
+    }
+
     // Reduce excessive logging for known network issues
     if (issue.type !== 'network_error' && issue.type !== 'http_error') {
       console.error('🚨🚨🚨 CRITICAL ISSUE:', issue)
@@ -305,6 +533,106 @@ class RumAgent {
     setInterval(() => {
       this.generateReport()
     }, 30000) // Every 30 seconds
+  }
+
+  // Issue #476: Setup Prometheus metrics reporting
+  private setupPrometheusReporting(): void {
+    // Send metrics periodically
+    setInterval(() => {
+      this.flushPrometheusMetrics()
+    }, this.prometheusReportInterval)
+
+    // Send session end metrics on page unload
+    window.addEventListener('beforeunload', () => {
+      const sessionDuration = (performance.now() - this.startTime) / 1000
+      this.sendPrometheusMetrics({
+        session_id: this.sessionId,
+        timestamp: new Date().toISOString(),
+        session: {
+          event: 'end',
+          duration_seconds: sessionDuration
+        }
+      })
+    })
+  }
+
+  // Issue #476: Flush pending metrics to backend
+  private flushPrometheusMetrics(): void {
+    // Only send if there are pending metrics
+    const hasPending =
+      this.pendingApiCalls.length > 0 ||
+      this.pendingJsErrors.length > 0 ||
+      this.pendingWsEvents.length > 0 ||
+      this.pendingResources.length > 0 ||
+      this.pendingCriticalIssues.length > 0
+
+    if (!hasPending) return
+
+    const metrics: PrometheusRumMetrics = {
+      session_id: this.sessionId,
+      timestamp: new Date().toISOString()
+    }
+
+    // Move pending metrics to payload and clear
+    if (this.pendingApiCalls.length > 0) {
+      metrics.api_calls = [...this.pendingApiCalls]
+      this.pendingApiCalls = []
+    }
+
+    if (this.pendingJsErrors.length > 0) {
+      metrics.js_errors = [...this.pendingJsErrors]
+      this.pendingJsErrors = []
+    }
+
+    if (this.pendingWsEvents.length > 0) {
+      metrics.websocket_events = [...this.pendingWsEvents]
+      this.pendingWsEvents = []
+    }
+
+    if (this.pendingResources.length > 0) {
+      metrics.resources = [...this.pendingResources]
+      this.pendingResources = []
+    }
+
+    if (this.pendingCriticalIssues.length > 0) {
+      metrics.critical_issues = [...this.pendingCriticalIssues]
+      this.pendingCriticalIssues = []
+    }
+
+    this.sendPrometheusMetrics(metrics)
+  }
+
+  // Issue #476: Send metrics to backend
+  private sendPrometheusMetrics(metrics: PrometheusRumMetrics): void {
+    // Use sendBeacon for reliability (works during page unload)
+    const useBeacon = navigator.sendBeacon && document.visibilityState === 'hidden'
+
+    if (useBeacon) {
+      const blob = new Blob([JSON.stringify(metrics)], { type: 'application/json' })
+      navigator.sendBeacon(this.prometheusEndpoint, blob)
+    } else {
+      // Use fetch with keepalive for better reliability
+      fetch(this.prometheusEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(metrics),
+        keepalive: true
+      }).catch(() => {
+        // Silently ignore errors to not disrupt user experience
+        // Metrics will be collected in next batch
+      })
+    }
+  }
+
+  // Issue #476: Enable/disable Prometheus reporting
+  enablePrometheusReporting(): void {
+    this.prometheusEnabled = true
+    localStorage.setItem('rum_prometheus_enabled', 'true')
+  }
+
+  disablePrometheusReporting(): void {
+    this.prometheusEnabled = false
+    localStorage.setItem('rum_prometheus_enabled', 'false')
   }
 
   generateReport(): Record<string, any> {

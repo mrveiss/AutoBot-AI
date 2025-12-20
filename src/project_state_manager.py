@@ -792,25 +792,31 @@ class ProjectStateManager:
         ):
             return _project_status_cache["data"]
 
-        # If no cache, return basic status without expensive operations
+        # Issue #467: Calculate real values from phase info (no placeholders)
+        # These properties are already loaded in memory, so they're fast to access
         total_phases = len(self.phases)
+
+        # Calculate real completion from stored phase info
+        completed_phases = sum(1 for info in self.phases.values() if info.is_completed)
+        active_phases = sum(1 for info in self.phases.values() if info.is_active)
+        overall_completion = sum(info.completion_percentage for info in self.phases.values()) / total_phases if total_phases > 0 else 0.0
 
         return {
             "current_phase": self.current_phase.value,
             "total_phases": total_phases,
-            "completed_phases": 0,  # Skip expensive calculation
-            "active_phases": 1,  # Assume current phase is active
-            "overall_completion": 0.6,  # Placeholder
-            "next_suggested_phase": None,
-            "last_validation": None,
+            "completed_phases": completed_phases,
+            "active_phases": active_phases,
+            "overall_completion": overall_completion,
+            "next_suggested_phase": None,  # Skip expensive suggestion
+            "last_validation": None,  # Skip expensive lookup
             "phases": {
                 phase.value: {
                     "name": info.name,
-                    "completion": 0.5,  # Placeholder
-                    "is_active": phase == self.current_phase,
-                    "is_completed": False,  # Skip expensive check
+                    "completion": info.completion_percentage,
+                    "is_active": info.is_active,
+                    "is_completed": info.is_completed,
                     "capabilities": len(info.capabilities),
-                    "implemented_capabilities": len(info.capabilities) // 2,  # Estimate
+                    "implemented_capabilities": sum(1 for cap in info.capabilities if cap.implemented),
                 }
                 for phase, info in self.phases.items()
             },

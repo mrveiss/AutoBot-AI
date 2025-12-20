@@ -64,11 +64,47 @@ class FactExtractionService:
 
         logger.info("Fact Extraction Service initialized")
 
+    async def _apply_fact_processing(self, extraction_result) -> None:
+        """Apply deduplication and entity resolution to extracted facts (Issue #398: extracted).
+
+        Args:
+            extraction_result: Result object with facts list (modified in place)
+        """
+        if self.enable_deduplication:
+            original_count = len(extraction_result.facts)
+            extraction_result.facts = await self._deduplicate_facts(extraction_result.facts)
+            logger.info(f"Deduplication: {original_count} -> {len(extraction_result.facts)} facts")
+
+        if self.enable_entity_resolution:
+            extraction_result.facts = await entity_resolver.resolve_facts_entities(extraction_result.facts)
+            logger.info(f"Entity resolution: {len(extraction_result.facts)} facts processed")
+
+    def _build_extraction_result(self, extraction_result, storage_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the final extraction result dictionary (Issue #398: extracted).
+
+        Args:
+            extraction_result: Extraction result with facts and metadata
+            storage_results: Results from storing facts
+
+        Returns:
+            Complete result dictionary
+        """
+        return {
+            "status": "success",
+            "facts_extracted": len(extraction_result.facts),
+            "facts_stored": storage_results["stored_count"],
+            "storage_errors": storage_results["error_count"],
+            "processing_time": extraction_result.processing_time,
+            "average_confidence": extraction_result.average_confidence,
+            "fact_type_distribution": extraction_result.fact_type_distribution,
+            "temporal_type_distribution": extraction_result.temporal_type_distribution,
+            "extraction_metadata": extraction_result.extraction_metadata,
+        }
+
     async def extract_and_store_facts(
         self, content: str, source: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """
-        Extract facts from content and store them in the knowledge base.
+        """Extract facts from content and store them (Issue #398: refactored).
 
         Args:
             content: Text content to process
@@ -81,84 +117,35 @@ class FactExtractionService:
         try:
             logger.info(f"Starting fact extraction for source: {source}")
 
-            # Extract facts using the extraction agent
             extraction_result = await self.extraction_agent.extract_facts_from_text(
-                content=content,
-                source=source,
-                context=str(metadata) if metadata else None,
+                content=content, source=source, context=str(metadata) if metadata else None
             )
 
             if not extraction_result.facts:
                 logger.warning(f"No facts extracted from source: {source}")
                 return {
-                    "status": "success",
-                    "facts_extracted": 0,
-                    "facts_stored": 0,
+                    "status": "success", "facts_extracted": 0, "facts_stored": 0,
                     "processing_time": extraction_result.processing_time,
                     "message": "No facts found in content",
                 }
 
-            # Deduplicate facts if enabled
-            if self.enable_deduplication:
-                deduplicated_facts = await self._deduplicate_facts(
-                    extraction_result.facts
-                )
-                logger.info(
-                    f"Deduplication: {len(extraction_result.facts)} -> "
-                    f"{len(deduplicated_facts)} facts"
-                )
-                extraction_result.facts = deduplicated_facts
+            # Apply processing steps (Issue #398: uses helper)
+            await self._apply_fact_processing(extraction_result)
 
-            # Resolve entities if enabled
-            if self.enable_entity_resolution:
-                resolved_facts = await entity_resolver.resolve_facts_entities(
-                    extraction_result.facts
-                )
-                logger.info(
-                    f"Entity resolution: {len(extraction_result.facts)} "
-                    f"facts processed"
-                )
-                extraction_result.facts = resolved_facts
-
-            # Store facts in Redis and knowledge base
+            # Store facts and handle post-processing
             storage_results = await self._store_facts(extraction_result.facts, metadata)
 
-            # Check for contradictions and invalidate conflicting facts
             if self.enable_temporal_invalidation and extraction_result.facts:
                 await self._handle_temporal_invalidation(extraction_result.facts)
 
-            # Update extraction history
-            await self._record_extraction_history(
-                source, extraction_result, storage_results
-            )
+            await self._record_extraction_history(source, extraction_result, storage_results)
 
-            logger.info(
-                f"Completed fact extraction: {len(extraction_result.facts)} "
-                f"facts stored"
-            )
-
-            return {
-                "status": "success",
-                "facts_extracted": len(extraction_result.facts),
-                "facts_stored": storage_results["stored_count"],
-                "storage_errors": storage_results["error_count"],
-                "processing_time": extraction_result.processing_time,
-                "average_confidence": extraction_result.average_confidence,
-                "fact_type_distribution": extraction_result.fact_type_distribution,
-                "temporal_type_distribution": (
-                    extraction_result.temporal_type_distribution
-                ),
-                "extraction_metadata": extraction_result.extraction_metadata,
-            }
+            logger.info(f"Completed fact extraction: {len(extraction_result.facts)} facts stored")
+            return self._build_extraction_result(extraction_result, storage_results)
 
         except Exception as e:
             logger.error(f"Error in fact extraction and storage: {e}")
-            return {
-                "status": "error",
-                "message": str(e),
-                "facts_extracted": 0,
-                "facts_stored": 0,
-            }
+            return {"status": "error", "message": str(e), "facts_extracted": 0, "facts_stored": 0}
 
     async def extract_facts_from_chunks(
         self,

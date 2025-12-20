@@ -8,6 +8,7 @@ Contains the main PerformanceMonitor class that coordinates metric collection,
 analysis, and storage using the extracted component modules.
 
 Extracted from performance_monitor.py as part of Issue #381 refactoring.
+Extended with Prometheus integration as part of Issue #469.
 """
 
 import asyncio
@@ -15,7 +16,7 @@ import json
 import logging
 import time
 from dataclasses import asdict
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from src.utils.performance_monitoring.types import (
     DEFAULT_COLLECTION_INTERVAL,
@@ -35,6 +36,9 @@ from src.utils.performance_monitoring.analyzers import (
     RecommendationGenerator,
 )
 from src.utils.performance_monitoring.decorator import set_redis_client
+
+# Issue #469: Import Prometheus metrics manager
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +100,9 @@ class PerformanceMonitor:
 
         # Performance alerts buffer (Issue #427)
         self.performance_alerts: List[Dict[str, Any]] = []
+
+        # Issue #469: Prometheus metrics manager for unified monitoring
+        self._prometheus = get_metrics_manager()
 
         self.logger.info("Performance Monitor initialized")
         self.logger.info(f"GPU Available: {self.gpu_available}")
@@ -234,6 +241,11 @@ class PerformanceMonitor:
                     }
                 )
 
+            # Issue #469: Push metrics to Prometheus for unified monitoring
+            self._push_to_prometheus(
+                gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
+            )
+
             return {
                 "timestamp": time.time(),
                 "gpu": asdict(gpu_metrics) if gpu_metrics else None,
@@ -284,6 +296,80 @@ class PerformanceMonitor:
 
         except Exception as e:
             self.logger.error(f"Error persisting metrics to Redis: {e}")
+
+    def _push_to_prometheus(
+        self, gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
+    ):
+        """
+        Push collected metrics to Prometheus for unified monitoring.
+
+        Issue #469: Consolidates all monitoring to Prometheus/Grafana stack.
+        This ensures GPU/NPU/Performance metrics are available via the
+        standard Prometheus endpoint at /api/monitoring/metrics.
+        """
+        try:
+            # GPU Metrics
+            if gpu_metrics:
+                self._prometheus.set_gpu_available(True)
+                self._prometheus.update_gpu_metrics(
+                    gpu_id="0",
+                    gpu_name=getattr(gpu_metrics, "name", "NVIDIA GPU"),
+                    utilization=getattr(gpu_metrics, "utilization_percent", 0),
+                    memory_utilization=getattr(
+                        gpu_metrics, "memory_utilization_percent", 0
+                    ),
+                    temperature=getattr(gpu_metrics, "temperature_celsius", 0),
+                    power_watts=getattr(gpu_metrics, "power_draw_watts", 0),
+                )
+
+                # Record throttling events if detected
+                if getattr(gpu_metrics, "thermal_throttling", False):
+                    self._prometheus.record_gpu_throttling("0", "thermal")
+                if getattr(gpu_metrics, "power_throttling", False):
+                    self._prometheus.record_gpu_throttling("0", "power")
+            else:
+                self._prometheus.set_gpu_available(False)
+
+            # NPU Metrics
+            if npu_metrics:
+                self._prometheus.set_npu_available(
+                    getattr(npu_metrics, "hardware_detected", False)
+                )
+                self._prometheus.set_npu_wsl_limitation(
+                    getattr(npu_metrics, "wsl_limitation", False)
+                )
+                self._prometheus.update_npu_metrics(
+                    utilization=getattr(npu_metrics, "utilization_percent", 0),
+                    acceleration_ratio=getattr(npu_metrics, "acceleration_ratio", 0),
+                )
+            else:
+                self._prometheus.set_npu_available(False)
+
+            # System metrics are already pushed via SystemMetricsRecorder
+            # No need to duplicate here
+
+            # Multimodal metrics - record processing times
+            if multimodal_metrics:
+                text_time = getattr(multimodal_metrics, "text_processing_time_ms", 0)
+                if text_time > 0:
+                    self._prometheus.record_multimodal_processing(
+                        "text", text_time / 1000, True
+                    )
+
+                image_time = getattr(multimodal_metrics, "image_processing_time_ms", 0)
+                if image_time > 0:
+                    self._prometheus.record_multimodal_processing(
+                        "vision", image_time / 1000, True
+                    )
+
+                audio_time = getattr(multimodal_metrics, "audio_processing_time_ms", 0)
+                if audio_time > 0:
+                    self._prometheus.record_multimodal_processing(
+                        "audio", audio_time / 1000, True
+                    )
+
+        except Exception as e:
+            self.logger.debug(f"Error pushing metrics to Prometheus: {e}")
 
     async def start_monitoring(self):
         """Start continuous performance monitoring."""
@@ -336,6 +422,21 @@ class PerformanceMonitor:
                     await asyncio.to_thread(_store_alerts)
                 except Exception as e:
                     self.logger.debug(f"Could not store alerts in Redis: {e}")
+
+            # Issue #469: Push alerts to Prometheus for unified monitoring
+            if alerts:
+                for alert in alerts:
+                    category = alert.get("category", "unknown")
+                    severity = alert.get("severity", "info")
+                    self._prometheus.record_performance_alert(category, severity)
+
+            # Update active alert counts in Prometheus
+            critical_count = sum(1 for a in self.performance_alerts if a.get("severity") == "critical")
+            warning_count = sum(1 for a in self.performance_alerts if a.get("severity") == "warning")
+            info_count = sum(1 for a in self.performance_alerts if a.get("severity") == "info")
+            self._prometheus.update_active_alerts("critical", critical_count)
+            self._prometheus.update_active_alerts("warning", warning_count)
+            self._prometheus.update_active_alerts("info", info_count)
 
             # Get callbacks under lock
             async with self._lock:

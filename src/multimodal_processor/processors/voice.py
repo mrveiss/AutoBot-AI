@@ -111,7 +111,8 @@ class VoiceProcessor(BaseModalProcessor):
             self.logger.info("Audio models loaded successfully")
         except Exception as e:
             self.logger.error("Failed to load audio models: %s", e)
-            self.logger.info("VoiceProcessor will use placeholder implementation")
+            # Issue #466: Will raise error on process() - no placeholder fallback
+            self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -251,21 +252,17 @@ class VoiceProcessor(BaseModalProcessor):
         """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models"""
 
         # Guard clause: Check if models are available (Issue #315 - early return)
+        # Issue #466: Raise error instead of returning placeholder data
         if (
             not AUDIO_MODELS_AVAILABLE
             or self.whisper_model is None
             or self.wav2vec_model is None
         ):
-            self.logger.warning(
-                "Audio models not available, using placeholder implementation"
+            self.logger.error("Audio models not available - cannot process voice")
+            raise RuntimeError(
+                "Voice processing unavailable: Required models (Whisper, Wav2Vec2) are not loaded. "
+                "Ensure audio models are installed and GPU/NPU resources are available."
             )
-            return {
-                "type": "voice_command",
-                "transcribed_text": "",
-                "command_type": "unknown",
-                "confidence": 0.0,
-                "processing_device": "cpu",
-            }
 
         try:
             # Prepare audio data (Issue #315 - extracted method)

@@ -465,6 +465,81 @@ async def get_multimodal_stats():
         }
 
 
+def _create_text_input(text: str, intent: str) -> MultiModalInput:
+    """Create MultiModalInput for text data (Issue #398: extracted)."""
+    return MultiModalInput(
+        input_id=f"text_{int(time.time() * 1000)}",
+        modality_type=ModalityType.TEXT,
+        intent=_get_processing_intent(intent),
+        data=text,
+    )
+
+
+async def _create_image_input(image_file: UploadFile, intent: str) -> MultiModalInput:
+    """Create MultiModalInput for image file (Issue #398: extracted)."""
+    image_data = await image_file.read()
+    return MultiModalInput(
+        input_id=f"image_{int(time.time() * 1000)}",
+        modality_type=ModalityType.IMAGE,
+        intent=_get_processing_intent(intent),
+        data=image_data,
+        metadata={"filename": image_file.filename},
+    )
+
+
+async def _create_audio_input(audio_file: UploadFile, intent: str) -> MultiModalInput:
+    """Create MultiModalInput for audio file (Issue #398: extracted)."""
+    audio_data = await audio_file.read()
+    return MultiModalInput(
+        input_id=f"audio_{int(time.time() * 1000)}",
+        modality_type=ModalityType.AUDIO,
+        intent=_get_processing_intent(intent),
+        data=audio_data,
+        metadata={"filename": audio_file.filename},
+    )
+
+
+async def _collect_modal_inputs(
+    text: Optional[str],
+    image_file: Optional[UploadFile],
+    audio_file: Optional[UploadFile],
+    intent: str,
+) -> List[MultiModalInput]:
+    """Collect all modal inputs from form data (Issue #398: extracted)."""
+    inputs = []
+
+    if text:
+        inputs.append(_create_text_input(text, intent))
+
+    if image_file:
+        inputs.append(await _create_image_input(image_file, intent))
+
+    if audio_file:
+        inputs.append(await _create_audio_input(audio_file, intent))
+
+    return inputs
+
+
+def _create_combined_input(
+    text: Optional[str],
+    image_file: Optional[UploadFile],
+    audio_file: Optional[UploadFile],
+    intent: str,
+) -> MultiModalInput:
+    """Create combined MultiModalInput for fusion (Issue #398: extracted)."""
+    return MultiModalInput(
+        input_id=f"combined_{int(time.time() * 1000)}",
+        modality_type=ModalityType.COMBINED,
+        intent=_get_processing_intent(intent),
+        data="",  # Not used for combined
+        metadata={
+            "image": image_file.filename if image_file else None,
+            "audio": audio_file.filename if audio_file else None,
+            "text_preview": text[:100] if text else None,
+        },
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
@@ -477,45 +552,12 @@ async def combine_multimodal_inputs(
     audio_file: Optional[UploadFile] = File(default=None),
     intent: str = Form(default="decision_making"),
 ):
-    """Combine multiple modalities using attention-based fusion."""
+    """Combine multiple modalities using attention-based fusion (Issue #398: refactored)."""
     start_time = time.time()
 
     try:
-        inputs = []
-
-        # Process text input
-        if text:
-            text_input = MultiModalInput(
-                input_id=f"text_{int(time.time() * 1000)}",
-                modality_type=ModalityType.TEXT,
-                intent=_get_processing_intent(intent),
-                data=text,
-            )
-            inputs.append(text_input)
-
-        # Process image input
-        if image_file:
-            image_data = await image_file.read()
-            image_input = MultiModalInput(
-                input_id=f"image_{int(time.time() * 1000)}",
-                modality_type=ModalityType.IMAGE,
-                intent=_get_processing_intent(intent),
-                data=image_data,
-                metadata={"filename": image_file.filename},
-            )
-            inputs.append(image_input)
-
-        # Process audio input
-        if audio_file:
-            audio_data = await audio_file.read()
-            audio_input = MultiModalInput(
-                input_id=f"audio_{int(time.time() * 1000)}",
-                modality_type=ModalityType.AUDIO,
-                intent=_get_processing_intent(intent),
-                data=audio_data,
-                metadata={"filename": audio_file.filename},
-            )
-            inputs.append(audio_input)
+        # Collect all modal inputs using helper
+        inputs = await _collect_modal_inputs(text, image_file, audio_file, intent)
 
         if not inputs:
             raise HTTPException(
@@ -523,25 +565,10 @@ async def combine_multimodal_inputs(
             )
 
         # Process all inputs
-        results = []
-        for modal_input in inputs:
-            result = await unified_processor.process(modal_input)
-            results.append(result)
+        results = [await unified_processor.process(modal_input) for modal_input in inputs]
 
-        # Create combined input for fusion
-        combined_input = MultiModalInput(
-            input_id=f"combined_{int(time.time() * 1000)}",
-            modality_type=ModalityType.COMBINED,
-            intent=_get_processing_intent(intent),
-            data="",  # Not used for combined
-            metadata={
-                "image": image_file.filename if image_file else None,
-                "audio": audio_file.filename if audio_file else None,
-                "text_preview": text[:100] if text else None,
-            },
-        )
-
-        # Use the internal _process_combined method
+        # Create combined input and process fusion
+        combined_input = _create_combined_input(text, image_file, audio_file, intent)
         fusion_result = await unified_processor._process_combined(combined_input)
 
         processing_time = time.time() - start_time
@@ -550,11 +577,7 @@ async def combine_multimodal_inputs(
             "success": fusion_result.success,
             "fusion_result": fusion_result.result_data,
             "individual_results": [
-                {
-                    "modality": r.modality_type.value,
-                    "confidence": r.confidence,
-                    "data": r.result_data,
-                }
+                {"modality": r.modality_type.value, "confidence": r.confidence, "data": r.result_data}
                 for r in results
             ],
             "processing_time": processing_time,

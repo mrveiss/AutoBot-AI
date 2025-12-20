@@ -7,7 +7,8 @@
  * Provides real-time access to Prometheus metrics from the backend monitoring API.
  * Supports automatic polling, WebSocket real-time updates, and parsed metric data.
  *
- * Issue #76: Replace monitoring dashboard mockup data with real backend metrics
+ * All metrics are fetched from real backend endpoints - no mock data.
+ * Resolved: Issue #76 - Replaced mockup data with real backend metrics
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -37,6 +38,10 @@ export interface GPUMetrics {
   temperature_celsius: number
   power_watts: number
   name?: string
+  // Issue #469: Extended fields for Prometheus metrics
+  gpu_id?: string
+  thermal_throttling?: boolean
+  power_throttling?: boolean
 }
 
 export interface NPUMetrics {
@@ -45,6 +50,25 @@ export interface NPUMetrics {
   acceleration_ratio: number
   inference_count: number
   wsl_limitation?: boolean
+  // Issue #469: Extended fields for Prometheus metrics
+  hardware_detected?: boolean
+  driver_available?: boolean
+  openvino_support?: boolean
+}
+
+// Issue #469: Performance metrics from Prometheus
+export interface PerformanceScores {
+  performance_score: number
+  health_score: number
+  bottlenecks: string[]
+}
+
+export interface MultiModalMetrics {
+  text_processing_ms: number
+  image_processing_ms: number
+  audio_processing_ms: number
+  operations_total: number
+  success_rate: number
 }
 
 export interface ServiceHealth {
@@ -67,19 +91,41 @@ export interface ServicesSummary {
   services: ServiceHealth[]
 }
 
+/**
+ * Performance alert from monitoring system.
+ * Issue #474: Extended to support AlertManager fields.
+ */
 export interface PerformanceAlert {
   category: string
-  severity: 'info' | 'warning' | 'critical'
+  severity: 'info' | 'warning' | 'critical' | 'high'
   message: string
   recommendation: string
   timestamp: number
+  // Issue #474: AlertManager-specific fields (optional for backward compatibility)
+  source?: 'alertmanager' | 'phase9_monitor'
+  alertname?: string
+  fingerprint?: string
+  description?: string
+  starts_at?: string
+  ends_at?: string | null
+  status?: string
+  labels?: Record<string, string>
 }
 
+/**
+ * Alert summary from backend.
+ * Issue #474: Extended to include high_count and source breakdown.
+ */
 export interface AlertsSummary {
   total_count: number
   critical_count: number
   warning_count: number
+  high_count?: number  // Issue #474: Added for AlertManager severity
   alerts: PerformanceAlert[]
+  sources?: {
+    alertmanager: number
+    phase9_monitor: number
+  }
 }
 
 export interface OptimizationRecommendation {
@@ -665,6 +711,9 @@ export function useServiceHealth(pollInterval = 15000) {
 /**
  * Composable for alert monitoring
  * Optimized for alert notifications and summaries
+ *
+ * Issue #474: Now fetches alerts from both Prometheus AlertManager and legacy
+ * phase9_monitor. AlertManager alerts include richer metadata.
  */
 export function useAlerts(pollInterval = 30000) {
   const api = useApi()
@@ -672,9 +721,15 @@ export function useAlerts(pollInterval = 30000) {
   const alerts = ref<PerformanceAlert[]>([])
   const criticalCount = ref(0)
   const warningCount = ref(0)
+  const highCount = ref(0)  // Issue #474: Added for AlertManager 'high' severity
   const totalCount = ref(0)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  // Issue #474: Track alert sources
+  const sources = ref<{ alertmanager: number; phase9_monitor: number }>({
+    alertmanager: 0,
+    phase9_monitor: 0
+  })
 
   let interval: ReturnType<typeof setInterval> | null = null
 
@@ -687,7 +742,12 @@ export function useAlerts(pollInterval = 30000) {
         alerts.value = data.alerts || []
         criticalCount.value = data.critical_count
         warningCount.value = data.warning_count
+        highCount.value = data.high_count || 0  // Issue #474
         totalCount.value = data.total_count
+        // Issue #474: Track sources
+        if (data.sources) {
+          sources.value = data.sources
+        }
         error.value = null
       }
     } catch (err) {
@@ -699,7 +759,12 @@ export function useAlerts(pollInterval = 30000) {
 
   const hasCritical = computed(() => criticalCount.value > 0)
   const hasWarning = computed(() => warningCount.value > 0)
+  const hasHigh = computed(() => highCount.value > 0)  // Issue #474
   const hasAlerts = computed(() => totalCount.value > 0)
+  // Issue #474: Computed for AlertManager-specific alerts
+  const alertmanagerAlerts = computed(() =>
+    alerts.value.filter(a => a.source === 'alertmanager')
+  )
 
   function startPolling() {
     if (interval) return
@@ -726,10 +791,14 @@ export function useAlerts(pollInterval = 30000) {
     alerts,
     criticalCount,
     warningCount,
+    highCount,  // Issue #474
     totalCount,
     hasCritical,
     hasWarning,
+    hasHigh,  // Issue #474
     hasAlerts,
+    alertmanagerAlerts,  // Issue #474
+    sources,  // Issue #474
     isLoading,
     error,
     fetch,

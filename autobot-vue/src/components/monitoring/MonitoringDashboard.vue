@@ -1,3 +1,13 @@
+<!--
+  AutoBot - AI-Powered Automation Platform
+  Copyright (c) 2025 mrveiss
+  Author: mrveiss
+
+  MonitoringDashboard.vue - Performance Monitoring Dashboard
+
+  Issue #469: Refactored to use Prometheus metrics composable and Grafana embeds.
+  Replaces legacy custom JSON API calls with unified Prometheus/Grafana integration.
+-->
 <template>
   <div class="phase9-monitoring-dashboard">
     <!-- Header -->
@@ -5,38 +15,46 @@
       <div class="header-title">
         <h1>
           <i class="fas fa-tachometer-alt"></i>
-          Phase 9 Performance Monitoring
+          Performance Monitoring
         </h1>
         <p class="subtitle">Real-time GPU/NPU utilization & Multi-modal AI performance</p>
       </div>
-      
+
       <div class="monitoring-controls">
         <BaseButton
           @click="toggleMonitoring"
           :variant="monitoringActive ? 'danger' : 'success'"
-          :disabled="loading"
+          :disabled="isLoading"
         >
           <i :class="monitoringActive ? 'fas fa-stop' : 'fas fa-play'"></i>
           {{ monitoringActive ? 'Stop' : 'Start' }} Monitoring
         </BaseButton>
 
-        <BaseButton variant="secondary" @click="refreshDashboard" :loading="loading">
+        <BaseButton variant="secondary" @click="refresh" :loading="isLoading">
           <i class="fas fa-sync"></i>
           Refresh
         </BaseButton>
-        
+
         <div class="status-indicator">
-          <span :class="['status-dot', connectionStatus]"></span>
+          <span :class="['status-dot', connectionStatusClass]"></span>
           {{ connectionStatusText }}
+        </div>
+
+        <!-- Issue #469: Data source toggle -->
+        <div class="data-source-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" v-model="useGrafanaEmbed" />
+            <span>Grafana View</span>
+          </label>
         </div>
       </div>
     </div>
 
     <!-- Alert Banner -->
     <BaseAlert
-      v-if="criticalAlerts.length > 0"
+      v-if="hasCriticalAlerts"
       variant="critical"
-      :message="`${criticalAlerts.length} critical performance alert(s) detected`"
+      :message="`${criticalAlertCount} critical performance alert(s) detected`"
     >
       <template #actions>
         <BaseButton variant="outline" size="sm" @click="showAlertsModal = true" class="btn-outline-light">
@@ -45,267 +63,267 @@
       </template>
     </BaseAlert>
 
-    <!-- Performance Overview Cards -->
-    <div class="performance-overview">
-      <div class="row">
-        <!-- Overall Health Card -->
-        <div class="col-md-3">
-          <BasePanel variant="elevated" size="small">
-            <template #header>
-              <h5>
-                <i class="fas fa-heartbeat"></i>
-                Overall Health
-              </h5>
-            </template>
-            <div class="overall-health">
-              <div :class="['health-score', overallHealth]">
-                {{ overallHealthText }}
-              </div>
-              <div class="performance-score">
-                Score: {{ performanceScore }}/100
-              </div>
-            </div>
-          </BasePanel>
-        </div>
-
-        <!-- GPU Card -->
-        <div class="col-md-3">
-          <BasePanel variant="elevated" size="small">
-            <template #header>
-              <h5>
-                <i class="fas fa-microchip"></i>
-                NVIDIA RTX 4070
-              </h5>
-            </template>
-            <div v-if="gpuMetrics">
-              <div class="metric-row">
-                <span>Utilization</span>
-                <span class="metric-value">{{ gpuMetrics.utilization_percent }}%</span>
-              </div>
-              <div class="metric-row">
-                <span>Memory</span>
-                <span class="metric-value">{{ gpuMetrics.memory_utilization_percent }}%</span>
-              </div>
-              <div class="metric-row">
-                <span>Temperature</span>
-                <span class="metric-value">{{ gpuMetrics.temperature_c }}°C</span>
-              </div>
-              <div class="metric-row">
-                <span>Power</span>
-                <span class="metric-value">{{ gpuMetrics.power_draw_w }}W</span>
-              </div>
-            </div>
-            <EmptyState
-              v-else
-              icon="fas fa-microchip"
-              message="GPU not available"
-              compact
-            />
-          </BasePanel>
-        </div>
-
-        <!-- NPU Card -->
-        <div class="col-md-3">
-          <BasePanel variant="elevated" size="small">
-            <template #header>
-              <h5>
-                <i class="fas fa-brain"></i>
-                Intel NPU
-              </h5>
-            </template>
-            <div v-if="npuMetrics">
-              <div class="metric-row">
-                <span>Utilization</span>
-                <span class="metric-value">{{ npuMetrics.utilization_percent }}%</span>
-              </div>
-              <div class="metric-row">
-                <span>Acceleration</span>
-                <span class="metric-value">{{ npuMetrics.acceleration_ratio }}x</span>
-              </div>
-              <div class="metric-row">
-                <span>Inferences</span>
-                <span class="metric-value">{{ npuMetrics.inference_count }}</span>
-              </div>
-              <div class="metric-row">
-                <span>Avg Time</span>
-                <span class="metric-value">{{ npuMetrics.average_inference_time_ms }}ms</span>
-              </div>
-            </div>
-            <EmptyState
-              v-else
-              icon="fas fa-microchip"
-              message="NPU not available"
-              compact
-            />
-          </BasePanel>
-        </div>
-
-        <!-- System Card -->
-        <div class="col-md-3">
-          <BasePanel variant="elevated" size="small">
-            <template #header>
-              <h5>
-                <i class="fas fa-server"></i>
-                System (22-core)
-              </h5>
-            </template>
-            <div v-if="systemMetrics">
-              <div class="metric-row">
-                <span>CPU Usage</span>
-                <span class="metric-value">{{ Math.round(systemMetrics.cpu?.percent_overall || 0) }}%</span>
-              </div>
-              <div class="metric-row">
-                <span>Memory</span>
-                <span class="metric-value">{{ systemMetrics.memory?.percent || 0 }}%</span>
-              </div>
-              <div class="metric-row">
-                <span>Load Avg</span>
-                <span class="metric-value">{{ systemMetrics.cpu?.load_average?.[0]?.toFixed(2) || '0.00' }}</span>
-              </div>
-              <div class="metric-row">
-                <span>Network</span>
-                <span class="metric-value">{{ Math.round((systemMetrics.network?.bytes_sent || 0) / 1024 / 1024) }}MB sent</span>
-              </div>
-            </div>
-            <EmptyState
-              v-else
-              icon="fas fa-server"
-              message="System data unavailable"
-              compact
-            />
-          </BasePanel>
-        </div>
-      </div>
+    <!-- Grafana Embed View (Issue #469) -->
+    <div v-if="useGrafanaEmbed" class="grafana-view">
+      <GrafanaDashboard
+        dashboard="performance"
+        :height="800"
+        :showControls="true"
+      />
     </div>
 
-    <!-- Performance Charts -->
-    <div class="performance-charts">
-      <div class="row">
-        <!-- GPU Utilization Chart -->
-        <div class="col-md-6">
-          <BasePanel variant="bordered" size="medium">
-            <template #header>
-              <div class="chart-header-content">
-                <h5>GPU Utilization Timeline</h5>
-                <div class="chart-controls">
-                  <select v-model="gpuTimeRange" @change="updateGpuChart" class="form-select form-select-sm">
-                    <option value="5">Last 5 minutes</option>
-                    <option value="15">Last 15 minutes</option>
-                    <option value="60">Last hour</option>
-                  </select>
+    <!-- Native Vue View with Prometheus Data -->
+    <div v-else>
+      <!-- Performance Overview Cards -->
+      <div class="performance-overview">
+        <div class="row">
+          <!-- Overall Health Card -->
+          <div class="col-md-3">
+            <BasePanel variant="elevated" size="small">
+              <template #header>
+                <h5>
+                  <i class="fas fa-heartbeat"></i>
+                  Overall Health
+                </h5>
+              </template>
+              <div class="overall-health">
+                <div :class="['health-score', systemHealthClass]">
+                  {{ systemHealthText }}
+                </div>
+                <div class="performance-score">
+                  Score: {{ healthScore }}/100
                 </div>
               </div>
-            </template>
-            <div class="chart-container">
-              <canvas ref="gpuChart" id="gpuUtilizationChart"></canvas>
-            </div>
-          </BasePanel>
-        </div>
+            </BasePanel>
+          </div>
 
-        <!-- System Performance Chart -->
-        <div class="col-md-6">
-          <BasePanel variant="bordered" size="medium">
-            <template #header>
-              <div class="chart-header-content">
+          <!-- GPU Card -->
+          <div class="col-md-3">
+            <BasePanel variant="elevated" size="small">
+              <template #header>
+                <h5>
+                  <i class="fas fa-microchip"></i>
+                  {{ gpuName }}
+                </h5>
+              </template>
+              <div v-if="gpuDetails?.available">
+                <div class="metric-row">
+                  <span>Utilization</span>
+                  <span class="metric-value">{{ gpuDetails.utilization_percent }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Memory</span>
+                  <span class="metric-value">{{ gpuDetails.memory_utilization_percent }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Temperature</span>
+                  <span class="metric-value">{{ gpuDetails.temperature_celsius }}°C</span>
+                </div>
+                <div class="metric-row">
+                  <span>Power</span>
+                  <span class="metric-value">{{ gpuDetails.power_watts }}W</span>
+                </div>
+                <div v-if="gpuDetails.thermal_throttling" class="throttle-warning">
+                  <i class="fas fa-exclamation-triangle"></i> Thermal Throttling
+                </div>
+              </div>
+              <EmptyState
+                v-else
+                icon="fas fa-microchip"
+                message="GPU not available"
+                compact
+              />
+            </BasePanel>
+          </div>
+
+          <!-- NPU Card -->
+          <div class="col-md-3">
+            <BasePanel variant="elevated" size="small">
+              <template #header>
+                <h5>
+                  <i class="fas fa-brain"></i>
+                  Intel NPU
+                </h5>
+              </template>
+              <div v-if="npuDetails?.available">
+                <div class="metric-row">
+                  <span>Utilization</span>
+                  <span class="metric-value">{{ npuDetails.utilization_percent }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Acceleration</span>
+                  <span class="metric-value">{{ npuDetails.acceleration_ratio }}x</span>
+                </div>
+                <div class="metric-row">
+                  <span>Inferences</span>
+                  <span class="metric-value">{{ npuDetails.inference_count }}</span>
+                </div>
+                <div v-if="npuDetails.wsl_limitation" class="wsl-warning">
+                  <i class="fas fa-info-circle"></i> WSL Limitation Active
+                </div>
+              </div>
+              <EmptyState
+                v-else
+                icon="fas fa-brain"
+                message="NPU not available"
+                compact
+              />
+            </BasePanel>
+          </div>
+
+          <!-- System Card -->
+          <div class="col-md-3">
+            <BasePanel variant="elevated" size="small">
+              <template #header>
+                <h5>
+                  <i class="fas fa-server"></i>
+                  System (22-core)
+                </h5>
+              </template>
+              <div v-if="dashboard?.system_metrics">
+                <div class="metric-row">
+                  <span>CPU Usage</span>
+                  <span class="metric-value">{{ Math.round(cpuUsage) }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Memory</span>
+                  <span class="metric-value">{{ Math.round(memoryUsage) }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Disk</span>
+                  <span class="metric-value">{{ Math.round(diskUsage) }}%</span>
+                </div>
+                <div class="metric-row">
+                  <span>Processes</span>
+                  <span class="metric-value">{{ dashboard.system_metrics.process_count || 0 }}</span>
+                </div>
+              </div>
+              <EmptyState
+                v-else
+                icon="fas fa-server"
+                message="System data unavailable"
+                compact
+              />
+            </BasePanel>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Charts - Grafana Embeds -->
+      <div class="performance-charts">
+        <div class="row">
+          <!-- GPU Utilization Chart - Grafana Panel -->
+          <div class="col-md-6">
+            <BasePanel variant="bordered" size="medium">
+              <template #header>
+                <h5>GPU Performance Timeline</h5>
+              </template>
+              <GrafanaDashboard
+                dashboard="performance"
+                :height="300"
+                :showControls="false"
+              />
+            </BasePanel>
+          </div>
+
+          <!-- System Performance Chart - Grafana Panel -->
+          <div class="col-md-6">
+            <BasePanel variant="bordered" size="medium">
+              <template #header>
                 <h5>System Performance Timeline</h5>
-                <div class="chart-controls">
-                  <select v-model="systemTimeRange" @change="updateSystemChart" class="form-select form-select-sm">
-                    <option value="5">Last 5 minutes</option>
-                    <option value="15">Last 15 minutes</option>
-                    <option value="60">Last hour</option>
-                  </select>
-                </div>
-              </div>
-            </template>
-            <div class="chart-container">
-              <canvas ref="systemChart" id="systemPerformanceChart"></canvas>
-            </div>
-          </BasePanel>
-        </div>
-      </div>
-    </div>
-
-    <!-- Service Health -->
-    <div class="service-health">
-      <div class="section-header">
-        <h4>
-          <i class="fas fa-network-wired"></i>
-          Distributed Services Health
-        </h4>
-      </div>
-      
-      <div class="services-grid">
-        <div 
-          v-for="service in services" 
-          :key="service.name"
-          :class="['service-card', service.status]"
-        >
-          <div class="service-header">
-            <span class="service-name">{{ service.name }}</span>
-            <span :class="['service-status', service.status]">
-              <i :class="getStatusIcon(service.status)"></i>
-              {{ service.status }}
-            </span>
-          </div>
-          <div class="service-details">
-            <div class="detail-row">
-              <span>Response Time</span>
-              <span>{{ service.response_time_ms }}ms</span>
-            </div>
-            <div class="detail-row">
-              <span>Health Score</span>
-              <span>{{ service.health_score }}/100</span>
-            </div>
-            <div class="detail-row">
-              <span>Endpoint</span>
-              <span>{{ service.host }}:{{ service.port }}</span>
-            </div>
+              </template>
+              <GrafanaDashboard
+                dashboard="system"
+                :height="300"
+                :showControls="false"
+              />
+            </BasePanel>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Optimization Recommendations -->
-    <BasePanel variant="bordered" size="medium">
-      <template #header>
-        <div class="section-header-content">
+      <!-- Service Health -->
+      <div class="service-health">
+        <div class="section-header">
           <h4>
-            <i class="fas fa-lightbulb"></i>
-            Performance Optimization Recommendations
+            <i class="fas fa-network-wired"></i>
+            Distributed Services Health
           </h4>
-          <BaseButton variant="outline" size="sm" @click="refreshRecommendations" class="btn-outline-primary">
-            <i class="fas fa-sync"></i>
-            Refresh
-          </BaseButton>
         </div>
-      </template>
 
-      <div v-if="recommendations.length > 0" class="recommendations-list">
-        <div
-          v-for="rec in recommendations"
-          :key="rec.category + rec.recommendation"
-          :class="['recommendation-card', rec.priority]"
-        >
-          <div class="rec-header">
-            <StatusBadge :variant="getPriorityVariant(rec.priority)" size="small">{{ rec.priority }}</StatusBadge>
-            <span class="category">{{ rec.category.toUpperCase() }}</span>
-          </div>
-          <div class="rec-content">
-            <p class="recommendation">{{ rec.recommendation }}</p>
-            <p class="action">
-              <strong>Action:</strong> {{ rec.action }}
-            </p>
-            <p class="expected-improvement">
-              <strong>Expected:</strong> {{ rec.expected_improvement }}
-            </p>
+        <div class="services-grid">
+          <div
+            v-for="service in servicesList"
+            :key="service.name"
+            :class="['service-card', service.status]"
+          >
+            <div class="service-header">
+              <span class="service-name">{{ service.name }}</span>
+              <span :class="['service-status', service.status]">
+                <i :class="getStatusIcon(service.status)"></i>
+                {{ service.status }}
+              </span>
+            </div>
+            <div class="service-details">
+              <div class="detail-row">
+                <span>Response Time</span>
+                <span>{{ service.response_time_ms }}ms</span>
+              </div>
+              <div class="detail-row">
+                <span>Health Score</span>
+                <span>{{ service.health_score }}/100</span>
+              </div>
+              <div class="detail-row">
+                <span>Endpoint</span>
+                <span>{{ service.host }}:{{ service.port }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div v-else class="no-recommendations">
-        <i class="fas fa-check-circle"></i>
-        No optimization recommendations at this time. System performing optimally!
-      </div>
-    </BasePanel>
+
+      <!-- Optimization Recommendations -->
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <div class="section-header-content">
+            <h4>
+              <i class="fas fa-lightbulb"></i>
+              Performance Optimization Recommendations
+            </h4>
+            <BaseButton variant="outline" size="sm" @click="fetchRecommendations" class="btn-outline-primary">
+              <i class="fas fa-sync"></i>
+              Refresh
+            </BaseButton>
+          </div>
+        </template>
+
+        <div v-if="recommendations.length > 0" class="recommendations-list">
+          <div
+            v-for="rec in recommendations"
+            :key="rec.category + rec.recommendation"
+            :class="['recommendation-card', rec.priority]"
+          >
+            <div class="rec-header">
+              <StatusBadge :variant="getPriorityVariant(rec.priority)" size="small">{{ rec.priority }}</StatusBadge>
+              <span class="category">{{ rec.category.toUpperCase() }}</span>
+            </div>
+            <div class="rec-content">
+              <p class="recommendation">{{ rec.recommendation }}</p>
+              <p class="action">
+                <strong>Action:</strong> {{ rec.action }}
+              </p>
+              <p class="expected-improvement">
+                <strong>Expected:</strong> {{ rec.expected_improvement }}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div v-else class="no-recommendations">
+          <i class="fas fa-check-circle"></i>
+          No optimization recommendations at this time. System performing optimally!
+        </div>
+      </BasePanel>
+    </div>
 
     <!-- Performance Alerts Modal -->
     <BaseModal
@@ -314,9 +332,9 @@
       size="large"
       scrollable
     >
-      <div v-if="allAlerts.length > 0" class="alerts-list">
+      <div v-if="alertsList.length > 0" class="alerts-list">
         <div
-          v-for="alert in allAlerts"
+          v-for="alert in alertsList"
           :key="alert.timestamp"
           :class="['alert-item', alert.severity]"
         >
@@ -339,767 +357,188 @@
   </div>
 </template>
 
-<script>
-import { Chart, registerables } from 'chart.js'
-import 'chartjs-adapter-date-fns'
+<script setup lang="ts">
+// AutoBot - AI-Powered Automation Platform
+// Copyright (c) 2025 mrveiss
+// Author: mrveiss
+/**
+ * MonitoringDashboard Component
+ *
+ * Issue #469: Refactored to use Prometheus metrics composable.
+ * - Uses usePrometheusMetrics for all data fetching
+ * - Embeds Grafana dashboards for visualization
+ * - Removes legacy custom JSON API calls
+ */
+
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
 import { getStatusIcon as getStatusIconUtil } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 
-// Create scoped logger for MonitoringDashboard
-const logger = createLogger('MonitoringDashboard')
+// Components
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
+import GrafanaDashboard from './GrafanaDashboard.vue'
 
-Chart.register(...registerables)
+// Create scoped logger
+const logger = createLogger('MonitoringDashboard')
 
-export default {
-  name: 'MonitoringDashboard',
-  components: {
-    EmptyState,
-    StatusBadge,
-    BaseButton,
-    BaseAlert,
-    BaseModal,
-    BasePanel
-  },
-  data() {
-    return {
-      loading: false,
-      monitoringActive: false,
-      connectionStatus: 'disconnected', // connected, disconnected, connecting
-      showAlertsModal: false,
-      
-      // Dashboard data
-      dashboardData: null,
-      gpuMetrics: null,
-      npuMetrics: null,
-      systemMetrics: null,
-      services: [],
-      recommendations: [],
-      allAlerts: [],
-      
-      // Chart configurations
-      gpuTimeRange: '15',
-      systemTimeRange: '15',
-      gpuChart: null,
-      systemChart: null,
-      
-      // WebSocket connection
-      websocket: null,
-      reconnectInterval: null,
-      
-      // Update intervals
-      dashboardUpdateInterval: null,
-      chartsUpdateInterval: null
+// Issue #469: Use Prometheus metrics composable for all data
+const {
+  dashboard,
+  services,
+  alerts,
+  recommendations,
+  gpuDetails,
+  npuDetails,
+  isLoading,
+  error,
+  isConnected,
+  systemHealth,
+  cpuUsage,
+  memoryUsage,
+  diskUsage,
+  gpuUsage,
+  npuUsage,
+  healthScore,
+  activeAlertCount,
+  fetchAll,
+  fetchRecommendations,
+  connectWebSocket,
+  disconnectWebSocket,
+  refresh
+} = usePrometheusMetrics({
+  autoFetch: true,
+  pollInterval: 30000,
+  useWebSocket: false
+})
+
+// Local state
+const monitoringActive = ref(false)
+const showAlertsModal = ref(false)
+const useGrafanaEmbed = ref(false)
+
+// Computed properties
+const connectionStatusClass = computed(() => {
+  if (isConnected.value) return 'connected'
+  if (isLoading.value) return 'connecting'
+  return 'disconnected'
+})
+
+const connectionStatusText = computed(() => {
+  if (isConnected.value) return 'Connected'
+  if (isLoading.value) return 'Connecting...'
+  return 'Disconnected'
+})
+
+const systemHealthClass = computed(() => {
+  return systemHealth.value || 'unknown'
+})
+
+const systemHealthText = computed(() => {
+  const health = systemHealth.value
+  switch (health) {
+    case 'healthy': return 'Healthy'
+    case 'degraded': return 'Warning'
+    case 'critical': return 'Critical'
+    default: return 'Unknown'
+  }
+})
+
+const gpuName = computed(() => {
+  return gpuDetails.value?.name || 'NVIDIA RTX 4070'
+})
+
+const servicesList = computed(() => {
+  return services.value?.services || []
+})
+
+const alertsList = computed(() => {
+  return alerts.value?.alerts || []
+})
+
+const hasCriticalAlerts = computed(() => {
+  return (alerts.value?.critical_count || 0) > 0
+})
+
+const criticalAlertCount = computed(() => {
+  return alerts.value?.critical_count || 0
+})
+
+// Methods
+async function toggleMonitoring() {
+  try {
+    const endpoint = monitoringActive.value ? 'stop' : 'start'
+    const response = await fetch(`/api/monitoring/${endpoint}`, {
+      method: 'POST'
+    })
+
+    if (response.ok) {
+      monitoringActive.value = !monitoringActive.value
+
+      if (monitoringActive.value) {
+        connectWebSocket()
+      } else {
+        disconnectWebSocket()
+      }
     }
-  },
-  
-  computed: {
-    connectionStatusText() {
-      switch (this.connectionStatus) {
-        case 'connected': return 'Connected'
-        case 'connecting': return 'Connecting...'
-        default: return 'Disconnected'
-      }
-    },
-    
-    overallHealth() {
-      return this.dashboardData?.analysis?.overall_health || 'unknown'
-    },
-    
-    overallHealthText() {
-      const health = this.overallHealth
-      switch (health) {
-        case 'healthy': return 'Healthy'
-        case 'warning': return 'Warning'
-        case 'critical': return 'Critical'
-        default: return 'Unknown'
-      }
-    },
-    
-    performanceScore() {
-      return this.dashboardData?.analysis?.performance_score || 0
-    },
-    
-    criticalAlerts() {
-      return this.allAlerts.filter(alert => alert.severity === 'critical')
-    }
-  },
-  
-  async mounted() {
-    await this.initializeDashboard()
-    this.setupWebSocket()
-    this.startPeriodicUpdates()
-  },
-  
-  beforeUnmount() {
-    this.cleanup()
-  },
-  
-  methods: {
-    async initializeDashboard() {
-      this.loading = true
-      try {
-        // Check monitoring status (may fail if monitoring service not available)
-        try {
-          const statusResponse = await fetch('/api/monitoring/status')
-          if (statusResponse.ok) {
-            const status = await statusResponse.json()
-            this.monitoringActive = status.active
-          }
-        } catch (statusError) {
-          logger.warn('Monitoring status unavailable, using fallback data:', statusError)
-          this.monitoringActive = false
-        }
-
-        // Load dashboard data (will fetch from multiple sources)
-        await this.refreshDashboard()
-
-        // Initialize charts
-        this.$nextTick(() => {
-          this.initializeCharts()
-        })
-
-      } catch (error) {
-        logger.error('Failed to initialize dashboard:', error)
-        this.$toast.error('Failed to initialize performance monitoring dashboard')
-      } finally {
-        this.loading = false
-      }
-    },
-    
-    async refreshDashboard() {
-      try {
-        // Fetch data from multiple sources in parallel for better performance
-        const [dashboardResponse, resourcesResponse, servicesResponse, alertsResponse] = await Promise.all([
-          fetch('/api/monitoring/dashboard/overview').catch(err => {
-            logger.warn('Dashboard overview fetch failed:', err.message)
-            return null
-          }),
-          fetch('/api/service-monitor/resources').catch(err => {
-            logger.warn('Resources fetch failed:', err.message)
-            return null
-          }),
-          fetch('/api/service-monitor/services').catch(err => {
-            logger.warn('Services fetch failed:', err.message)
-            return null
-          }),
-          fetch('/api/monitoring/alerts/check').catch(err => {
-            logger.warn('Alerts fetch failed:', err.message)
-            return null
-          })
-        ])
-
-        // Process monitoring dashboard data (may have GPU/NPU data when active)
-        if (dashboardResponse && dashboardResponse.ok) {
-          try {
-            this.dashboardData = await dashboardResponse.json()
-            // Extract GPU/NPU metrics from monitoring system
-            this.gpuMetrics = this.dashboardData.gpu || this.dashboardData.gpu_status || null
-            this.npuMetrics = this.dashboardData.npu || this.dashboardData.npu_status || null
-          } catch (parseErr) {
-            logger.error('Failed to parse dashboard response:', parseErr)
-          }
-        }
-
-        // Process real-time system resources (ALWAYS available)
-        if (resourcesResponse && resourcesResponse.ok) {
-          try {
-            const resources = await resourcesResponse.json()
-
-            // Map service-monitor resources to expected systemMetrics format
-            // Use actual load_average from backend (not estimated)
-            this.systemMetrics = {
-              cpu: {
-                percent_overall: resources.cpu?.usage_percent || 0,
-                load_average: resources.cpu?.load_average || [0, 0, 0]
-              },
-              memory: {
-                percent: resources.memory?.percent || 0,
-                total_gb: resources.memory?.total || 0,
-                available_gb: resources.memory?.available || 0,
-                used_gb: resources.memory?.used || 0
-              },
-              disk: {
-                percent: resources.disk?.percent || 0,
-                total_gb: resources.disk?.total || 0,
-                free_gb: resources.disk?.free || 0,
-                used_gb: resources.disk?.used || 0
-              },
-              network: {
-                bytes_sent: resources.network?.bytes_sent || 0,
-                bytes_recv: resources.network?.bytes_recv || 0,
-                packets_sent: resources.network?.packets_sent || 0,
-                packets_recv: resources.network?.packets_recv || 0
-              }
-            }
-          } catch (parseErr) {
-            logger.error('Failed to parse resources response:', parseErr)
-          }
-        }
-
-        // Process real-time services status (ALWAYS available)
-        if (servicesResponse && servicesResponse.ok) {
-          try {
-            const servicesData = await servicesResponse.json()
-            // Normalize services to array format consistently
-            this.services = this.normalizeServicesData(servicesData.services || servicesData || [])
-          } catch (parseErr) {
-            logger.error('Failed to parse services response:', parseErr)
-          }
-        }
-
-        // Process alerts
-        if (alertsResponse && alertsResponse.ok) {
-          try {
-            const alertsData = await alertsResponse.json()
-            this.allAlerts = alertsData.alerts || []
-          } catch (parseErr) {
-            logger.error('Failed to parse alerts response:', parseErr)
-          }
-        }
-
-        // Get recommendations
-        await this.refreshRecommendations()
-
-      } catch (error) {
-        logger.error('Failed to refresh dashboard:', error)
-        this.$toast.error('Failed to refresh dashboard data')
-      }
-    },
-
-    /**
-     * Normalize services data to consistent array format
-     * Handles both array and object inputs from different API endpoints
-     */
-    normalizeServicesData(servicesInput) {
-      if (!servicesInput) return []
-
-      // Convert object to array if needed
-      const servicesArray = Array.isArray(servicesInput)
-        ? servicesInput
-        : Object.values(servicesInput)
-
-      return servicesArray.map(svc => ({
-        name: svc.name || svc.service_name || 'Unknown',
-        status: this.normalizeServiceStatus(svc.status),
-        host: svc.host || 'localhost',
-        port: svc.port || 0,
-        response_time_ms: svc.response_time_ms || svc.latency_ms || 0,
-        health_score: svc.health_score || (svc.status === 'online' || svc.status === 'healthy' ? 100 : 0)
-      }))
-    },
-
-    /**
-     * Normalize service status to expected values
-     */
-    normalizeServiceStatus(status) {
-      const statusMap = {
-        'online': 'healthy',
-        'healthy': 'healthy',
-        'offline': 'offline',
-        'degraded': 'degraded',
-        'warning': 'degraded',
-        'critical': 'critical'
-      }
-      return statusMap[status] || 'offline'
-    },
-    
-    async refreshRecommendations() {
-      try {
-        const response = await fetch('/api/monitoring/optimization/recommendations')
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-        this.recommendations = await response.json()
-      } catch (error) {
-        logger.error('Failed to get recommendations:', error)
-        this.$toast.warning('Failed to load optimization recommendations')
-      }
-    },
-    
-    async toggleMonitoring() {
-      this.loading = true
-      try {
-        const endpoint = this.monitoringActive ? 'stop' : 'start'
-        const response = await fetch(`/api/monitoring/${endpoint}`, {
-          method: 'POST'
-        })
-        
-        if (response.ok) {
-          this.monitoringActive = !this.monitoringActive
-          this.$toast.success(`Monitoring ${this.monitoringActive ? 'started' : 'stopped'}`)
-          
-          if (this.monitoringActive) {
-            this.setupWebSocket()
-          } else {
-            this.closeWebSocket()
-          }
-        } else {
-          throw new Error('Failed to toggle monitoring')
-        }
-      } catch (error) {
-        logger.error('Failed to toggle monitoring:', error)
-        this.$toast.error('Failed to toggle monitoring')
-      } finally {
-        this.loading = false
-      }
-    },
-    
-    setupWebSocket() {
-      if (this.websocket) {
-        this.websocket.close()
-      }
-      
-      this.connectionStatus = 'connecting'
-      
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${protocol}//${window.location.host}/api/monitoring/realtime`
-      
-      this.websocket = new WebSocket(wsUrl)
-      
-      this.websocket.onopen = () => {
-        this.connectionStatus = 'connected'
-        this.$toast.success('Real-time monitoring connected')
-        
-        // Clear reconnect interval if it exists
-        if (this.reconnectInterval) {
-          clearInterval(this.reconnectInterval)
-          this.reconnectInterval = null
-        }
-      }
-      
-      this.websocket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          this.handleWebSocketMessage(message)
-        } catch (error) {
-          logger.error('Failed to parse WebSocket message:', error)
-        }
-      }
-      
-      this.websocket.onclose = () => {
-        this.connectionStatus = 'disconnected'
-        
-        // Attempt to reconnect if monitoring is active
-        if (this.monitoringActive && !this.reconnectInterval) {
-          this.reconnectInterval = setInterval(() => {
-            this.setupWebSocket()
-          }, 5000)
-        }
-      }
-      
-      this.websocket.onerror = (error) => {
-        logger.error('WebSocket error:', error)
-        this.connectionStatus = 'disconnected'
-      }
-    },
-    
-    closeWebSocket() {
-      if (this.websocket) {
-        this.websocket.close()
-        this.websocket = null
-      }
-      
-      if (this.reconnectInterval) {
-        clearInterval(this.reconnectInterval)
-        this.reconnectInterval = null
-      }
-      
-      this.connectionStatus = 'disconnected'
-    },
-    
-    handleWebSocketMessage(message) {
-      switch (message.type) {
-        case 'performance_update':
-          this.updateDashboardFromWebSocket(message.data)
-          break
-          
-        case 'performance_alerts':
-          this.handleNewAlerts(message.alerts)
-          break
-          
-        case 'metrics_response':
-          // Handle requested metrics
-          break
-      }
-    },
-    
-    updateDashboardFromWebSocket(data) {
-      this.dashboardData = data
-      this.gpuMetrics = data.gpu || data.gpu_status || null
-      this.npuMetrics = data.npu || data.npu_status || null
-
-      // Map system resources to expected format
-      if (data.system_resources || data.system) {
-        const sys = data.system_resources || data.system
-        this.systemMetrics = {
-          cpu: {
-            percent_overall: sys.cpu_usage_percent || sys.cpu?.percent_overall || 0,
-            // Use actual load_average from backend, fallback to cpu_load_1m if available
-            load_average: sys.cpu?.load_average || (sys.cpu_load_1m ? [sys.cpu_load_1m, 0, 0] : [0, 0, 0])
-          },
-          memory: {
-            percent: sys.memory_usage_percent || sys.memory?.percent || 0
-          },
-          network: {
-            bytes_sent: sys.network?.bytes_sent || 0
-          }
-        }
-      }
-
-      // Map services to expected format using shared normalizer
-      if (data.services_status || data.services) {
-        const services = data.services_status || data.services
-        this.services = this.normalizeServicesData(services)
-      }
-
-      // Update charts with new data
-      this.updateChartData()
-    },
-    
-    handleNewAlerts(alerts) {
-      // Add new alerts to the beginning of the list
-      this.allAlerts.unshift(...alerts)
-      
-      // Keep only the last 100 alerts
-      this.allAlerts = this.allAlerts.slice(0, 100)
-      
-      // Show toast for critical alerts
-      const criticalAlerts = alerts.filter(alert => alert.severity === 'critical')
-      if (criticalAlerts.length > 0) {
-        this.$toast.error(`${criticalAlerts.length} critical performance alert(s)`)
-      }
-    },
-    
-    initializeCharts() {
-      this.initializeGpuChart()
-      this.initializeSystemChart()
-    },
-    
-    initializeGpuChart() {
-      const ctx = this.$refs.gpuChart?.getContext('2d')
-      if (!ctx) return
-      
-      this.gpuChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: 'GPU Utilization (%)',
-              data: [],
-              borderColor: '#00d4aa',
-              backgroundColor: 'rgba(0, 212, 170, 0.1)',
-              tension: 0.1
-            },
-            {
-              label: 'Memory Utilization (%)',
-              data: [],
-              borderColor: '#ffa726',
-              backgroundColor: 'rgba(255, 167, 38, 0.1)',
-              tension: 0.1
-            },
-            {
-              label: 'Temperature (°C)',
-              data: [],
-              borderColor: '#f44336',
-              backgroundColor: 'rgba(244, 67, 54, 0.1)',
-              tension: 0.1,
-              yAxisID: 'y1'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          scales: {
-            x: {
-              type: 'time',
-              time: {
-                displayFormats: {
-                  minute: 'HH:mm'
-                }
-              }
-            },
-            y: {
-              type: 'linear',
-              display: true,
-              position: 'left',
-              max: 100,
-              min: 0
-            },
-            y1: {
-              type: 'linear',
-              display: true,
-              position: 'right',
-              max: 100,
-              min: 0,
-              grid: {
-                drawOnChartArea: false,
-              },
-            }
-          },
-          plugins: {
-            legend: {
-              position: 'top',
-            },
-            title: {
-              display: false
-            }
-          }
-        }
-      })
-    },
-    
-    initializeSystemChart() {
-      const ctx = this.$refs.systemChart?.getContext('2d')
-      if (!ctx) return
-      
-      this.systemChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: [],
-          datasets: [
-            {
-              label: 'CPU Usage (%)',
-              data: [],
-              borderColor: '#2196f3',
-              backgroundColor: 'rgba(33, 150, 243, 0.1)',
-              tension: 0.1
-            },
-            {
-              label: 'Memory Usage (%)',
-              data: [],
-              borderColor: '#9c27b0',
-              backgroundColor: 'rgba(156, 39, 176, 0.1)',
-              tension: 0.1
-            },
-            {
-              label: 'Load Average',
-              data: [],
-              borderColor: '#ff9800',
-              backgroundColor: 'rgba(255, 152, 0, 0.1)',
-              tension: 0.1,
-              yAxisID: 'y1'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          scales: {
-            x: {
-              type: 'time',
-              time: {
-                displayFormats: {
-                  minute: 'HH:mm'
-                }
-              }
-            },
-            y: {
-              type: 'linear',
-              display: true,
-              position: 'left',
-              max: 100,
-              min: 0
-            },
-            y1: {
-              type: 'linear',
-              display: true,
-              position: 'right',
-              max: 25,
-              min: 0,
-              grid: {
-                drawOnChartArea: false,
-              },
-            }
-          },
-          plugins: {
-            legend: {
-              position: 'top',
-            },
-            title: {
-              display: false
-            }
-          }
-        }
-      })
-    },
-    
-    async updateGpuChart() {
-      await this.updateChartWithHistoricalData('gpu', this.gpuTimeRange, this.gpuChart)
-    },
-    
-    async updateSystemChart() {
-      await this.updateChartWithHistoricalData('system', this.systemTimeRange, this.systemChart)
-    },
-    
-    async updateChartWithHistoricalData(category, timeRange, chart) {
-      if (!chart) return
-
-      try {
-        const response = await fetch('/api/monitoring/metrics/query', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            categories: [category],
-            time_range_minutes: parseInt(timeRange),
-            include_trends: false,
-            include_alerts: false
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`Metrics query failed: HTTP ${response.status}`)
-        }
-        const data = await response.json()
-        const metrics = data.metrics[category] || []
-        
-        // Update chart data
-        const labels = metrics.map(m => new Date(m.timestamp * 1000))
-        
-        if (category === 'gpu') {
-          chart.data.labels = labels
-          chart.data.datasets[0].data = metrics.map(m => m.utilization_percent)
-          chart.data.datasets[1].data = metrics.map(m => m.memory_utilization_percent)
-          chart.data.datasets[2].data = metrics.map(m => m.temperature_celsius)
-        } else if (category === 'system') {
-          chart.data.labels = labels
-          chart.data.datasets[0].data = metrics.map(m => m.cpu_usage_percent)
-          chart.data.datasets[1].data = metrics.map(m => m.memory_usage_percent)
-          chart.data.datasets[2].data = metrics.map(m => m.cpu_load_1m)
-        }
-        
-        chart.update('none')
-
-      } catch (error) {
-        logger.error(`Failed to update ${category} chart:`, error)
-        this.$toast.warning(`Failed to update ${category} chart data`)
-      }
-    },
-    
-    updateChartData() {
-      // Add new data points to charts if they exist
-      if (this.gpuChart && this.gpuMetrics) {
-        const timestamp = new Date()
-        this.gpuChart.data.labels.push(timestamp)
-        this.gpuChart.data.datasets[0].data.push(this.gpuMetrics.utilization_percent)
-        this.gpuChart.data.datasets[1].data.push(this.gpuMetrics.memory_utilization_percent)
-        this.gpuChart.data.datasets[2].data.push(this.gpuMetrics.temperature_c)
-        
-        // Keep only last 50 data points
-        if (this.gpuChart.data.labels.length > 50) {
-          this.gpuChart.data.labels.shift()
-          this.gpuChart.data.datasets.forEach(dataset => dataset.data.shift())
-        }
-        
-        this.gpuChart.update('none')
-      }
-      
-      if (this.systemChart && this.systemMetrics) {
-        const timestamp = new Date()
-        this.systemChart.data.labels.push(timestamp)
-        this.systemChart.data.datasets[0].data.push(this.systemMetrics.cpu?.percent_overall || 0)
-        this.systemChart.data.datasets[1].data.push(this.systemMetrics.memory?.percent || 0)
-        this.systemChart.data.datasets[2].data.push(this.systemMetrics.cpu?.load_average?.[0] || 0)
-        
-        // Keep only last 50 data points
-        if (this.systemChart.data.labels.length > 50) {
-          this.systemChart.data.labels.shift()
-          this.systemChart.data.datasets.forEach(dataset => dataset.data.shift())
-        }
-        
-        this.systemChart.update('none')
-      }
-    },
-    
-    startPeriodicUpdates() {
-      // Update dashboard every 30 seconds if not using WebSocket
-      this.dashboardUpdateInterval = setInterval(() => {
-        if (this.connectionStatus !== 'connected') {
-          this.refreshDashboard()
-        }
-      }, 30000)
-      
-      // Update charts every 10 seconds
-      this.chartsUpdateInterval = setInterval(() => {
-        if (this.connectionStatus !== 'connected') {
-          this.updateChartData()
-        }
-      }, 10000)
-    },
-    
-    cleanup() {
-      this.closeWebSocket()
-      
-      if (this.dashboardUpdateInterval) {
-        clearInterval(this.dashboardUpdateInterval)
-      }
-      
-      if (this.chartsUpdateInterval) {
-        clearInterval(this.chartsUpdateInterval)
-      }
-      
-      if (this.gpuChart) {
-        this.gpuChart.destroy()
-      }
-      
-      if (this.systemChart) {
-        this.systemChart.destroy()
-      }
-    },
-    
-    // Icon mapping centralized in @/utils/iconMappings
-    getStatusIcon(status) {
-      // Map component-specific statuses to standard statuses
-      const statusMap = {
-        'healthy': 'healthy',
-        'degraded': 'warning',
-        'critical': 'error',
-        'offline': 'offline'
-      }
-
-      const mappedStatus = statusMap[status] || status
-      return getStatusIconUtil(mappedStatus)
-    },
-    
-    formatTimestamp(timestamp) {
-      return new Date(timestamp * 1000).toLocaleString()
-    },
-
-    getPriorityVariant(priority) {
-      const variantMap = {
-        'high': 'danger',
-        'medium': 'warning',
-        'low': 'info'
-      }
-      return variantMap[priority] || 'secondary'
-    },
-
-    getSeverityVariant(severity) {
-      const variantMap = {
-        'critical': 'danger',
-        'warning': 'warning'
-      }
-      return variantMap[severity] || 'secondary'
-    }
+  } catch (err) {
+    logger.error('Failed to toggle monitoring:', err)
   }
 }
+
+function getStatusIcon(status: string): string {
+  const statusMap: Record<string, string> = {
+    'healthy': 'healthy',
+    'degraded': 'warning',
+    'critical': 'error',
+    'offline': 'offline'
+  }
+  return getStatusIconUtil(statusMap[status] || status)
+}
+
+function formatTimestamp(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleString()
+}
+
+function getPriorityVariant(priority: string): string {
+  const variantMap: Record<string, string> = {
+    'high': 'danger',
+    'medium': 'warning',
+    'low': 'info'
+  }
+  return variantMap[priority] || 'secondary'
+}
+
+function getSeverityVariant(severity: string): string {
+  const variantMap: Record<string, string> = {
+    'critical': 'danger',
+    'warning': 'warning'
+  }
+  return variantMap[severity] || 'secondary'
+}
+
+// Lifecycle
+onMounted(async () => {
+  try {
+    // Check initial monitoring status
+    const statusResponse = await fetch('/api/monitoring/status')
+    if (statusResponse.ok) {
+      const status = await statusResponse.json()
+      monitoringActive.value = status.active
+    }
+  } catch (err) {
+    logger.warn('Could not check monitoring status:', err)
+  }
+})
+
+onUnmounted(() => {
+  disconnectWebSocket()
+})
 </script>
 
 <style scoped>
@@ -1138,6 +577,25 @@ export default {
   gap: 15px;
 }
 
+.data-source-toggle {
+  margin-left: 10px;
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.toggle-label input {
+  cursor: pointer;
+}
+
 .status-indicator {
   display: flex;
   align-items: center;
@@ -1171,6 +629,13 @@ export default {
   100% { opacity: 1; }
 }
 
+.grafana-view {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
 .performance-overview {
   margin-bottom: 30px;
 }
@@ -1182,7 +647,7 @@ export default {
 }
 
 .health-score.healthy { color: #4caf50; }
-.health-score.warning { color: #ff9800; }
+.health-score.degraded { color: #ff9800; }
 .health-score.critical { color: #f44336; }
 .health-score.unknown { color: #666; }
 
@@ -1203,26 +668,26 @@ export default {
   color: #333;
 }
 
+.throttle-warning,
+.wsl-warning {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.throttle-warning {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.wsl-warning {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 .performance-charts {
   margin-bottom: 30px;
-}
-
-.chart-header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.chart-header-content h5 {
-  margin: 0;
-  color: #333;
-  font-size: 1em;
-}
-
-.chart-container {
-  padding: 20px;
-  height: 300px;
 }
 
 .service-health {
@@ -1413,19 +878,6 @@ export default {
   display: block;
 }
 
-.form-select {
-  padding: 4px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
-  font-size: 0.9em;
-}
-
-.form-select-sm {
-  padding: 2px 6px;
-  font-size: 0.8em;
-}
-
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -1451,18 +903,18 @@ export default {
     flex: 0 0 100%;
     max-width: 100%;
   }
-  
+
   .dashboard-header {
     flex-direction: column;
     gap: 15px;
     text-align: center;
   }
-  
+
   .monitoring-controls {
     flex-wrap: wrap;
     justify-content: center;
   }
-  
+
   .services-grid {
     grid-template-columns: 1fr;
   }

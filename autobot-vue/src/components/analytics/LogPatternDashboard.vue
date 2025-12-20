@@ -360,7 +360,8 @@ const formatTimestamp = (timestamp: string): string => {
   try {
     const date = new Date(timestamp)
     return date.toLocaleString()
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to parse timestamp:', error)
     return timestamp
   }
 }

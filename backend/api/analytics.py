@@ -13,6 +13,7 @@ import logging
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Tuple
 
 import httpx
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
@@ -142,6 +143,56 @@ async def get_dashboard_overview():
     return overview
 
 
+async def _check_redis_db(db) -> Tuple[str, str]:
+    """Check connectivity for a single Redis database (Issue #398: extracted)."""
+    try:
+        redis_conn = await analytics_controller.get_redis_connection(db)
+        if redis_conn:
+            await redis_conn.ping()
+            return db.name, "connected"
+        return db.name, "failed"
+    except Exception as e:
+        return db.name, f"error: {str(e)}"
+
+
+async def _check_service(
+    client, service_name: str, service_url: str
+) -> Tuple[str, Dict[str, Any]]:
+    """Check connectivity for a single service (Issue #398: extracted)."""
+    try:
+        start_time = time.time()
+        response = await client.get(f"{service_url}/health")
+        response_time = time.time() - start_time
+        return service_name, {
+            "status": "healthy" if response.status_code == 200 else "unhealthy",
+            "response_time": response_time,
+            "status_code": response.status_code,
+        }
+    except Exception as e:
+        return service_name, {"status": "unreachable", "error": str(e)}
+
+
+def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
+    """Generate resource alerts based on thresholds (Issue #398: extracted)."""
+    alerts = []
+
+    if "cpu" in system_resources and system_resources["cpu"]["percent_overall"] > 90:
+        alerts.append({
+            "type": "cpu_high",
+            "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
+            "severity": "warning",
+        })
+
+    if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
+        alerts.append({
+            "type": "memory_high",
+            "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
+            "severity": "warning",
+        })
+
+    return alerts
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_system_health",
@@ -149,11 +200,9 @@ async def get_dashboard_overview():
 )
 @router.get("/system/health-detailed")
 async def get_detailed_system_health():
-    """Get detailed system health with enhanced analytics"""
-    # Get base system health from existing monitor
+    """Get detailed system health with enhanced analytics (Issue #398: refactored)."""
     base_health = await hardware_monitor.get_system_health()
 
-    # Add analytics-specific health checks
     detailed_health = {
         "base_health": base_health,
         "analytics_health": {
@@ -167,19 +216,8 @@ async def get_detailed_system_health():
     }
 
     # Issue #370: Check Redis connectivity for all databases in parallel
-    async def check_redis_db(db):
-        """Check connectivity for a single Redis database."""
-        try:
-            redis_conn = await analytics_controller.get_redis_connection(db)
-            if redis_conn:
-                await redis_conn.ping()
-                return db.name, "connected"
-            return db.name, "failed"
-        except Exception as e:
-            return db.name, f"error: {str(e)}"
-
     redis_results = await asyncio.gather(
-        *[check_redis_db(db) for db in RedisDatabase],
+        *[_check_redis_db(db) for db in RedisDatabase],
         return_exceptions=True
     )
     for result in redis_results:
@@ -194,23 +232,9 @@ async def get_detailed_system_health():
         "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
     }
 
-    async def check_service(client, service_name, service_url):
-        """Check connectivity for a single service."""
-        try:
-            start_time = time.time()
-            response = await client.get(f"{service_url}/health")
-            response_time = time.time() - start_time
-            return service_name, {
-                "status": "healthy" if response.status_code == 200 else "unhealthy",
-                "response_time": response_time,
-                "status_code": response.status_code,
-            }
-        except Exception as e:
-            return service_name, {"status": "unreachable", "error": str(e)}
-
     async with httpx.AsyncClient(timeout=5.0) as client:
         service_results = await asyncio.gather(
-            *[check_service(client, name, url) for name, url in services.items()],
+            *[_check_service(client, name, url) for name, url in services.items()],
             return_exceptions=True
         )
         for result in service_results:
@@ -218,32 +242,11 @@ async def get_detailed_system_health():
                 continue
             service_name, status = result
             detailed_health["service_connectivity"][service_name] = status
-        # Redis connectivity already checked above
         detailed_health["service_connectivity"]["redis"] = "checked_via_redis"
 
-    # Resource alerts
+    # Resource alerts using helper
     system_resources = hardware_monitor.get_system_resources()
-    if "cpu" in system_resources and system_resources["cpu"]["percent_overall"] > 90:
-        detailed_health["resource_alerts"].append(
-            {
-                "type": "cpu_high",
-                "message": (
-                    f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%"
-                ),
-                "severity": "warning",
-            }
-        )
-
-    if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
-        detailed_health["resource_alerts"].append(
-            {
-                "type": "memory_high",
-                "message": (
-                    f"Memory usage at {system_resources['memory']['percent']:.1f}%"
-                ),
-                "severity": "warning",
-            }
-        )
+    detailed_health["resource_alerts"] = _check_resource_alerts(system_resources)
 
     return detailed_health
 

@@ -392,6 +392,60 @@ async def get_pattern_evolution(
         )
 
 
+def _fetch_trend_snapshots_sync(
+    redis_client, start_ts: float, end_ts: float
+) -> List[Dict]:
+    """Fetch snapshots from Redis within timestamp range (Issue #398: extracted)."""
+    keys = redis_client.zrangebyscore(
+        f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+    )
+    results = []
+    for key in keys:
+        if isinstance(key, bytes):
+            key = key.decode("utf-8")
+        snapshot_json = redis_client.get(key)
+        if snapshot_json:
+            if isinstance(snapshot_json, bytes):
+                snapshot_json = snapshot_json.decode("utf-8")
+            results.append(json.loads(snapshot_json))
+    return results
+
+
+def _calculate_metric_trend(snapshots: List[Dict], metric: str) -> Optional[Dict]:
+    """Calculate trend data for a single metric (Issue #398: extracted)."""
+    values = [s.get(metric, 0) for s in snapshots if metric in s]
+    if len(values) < 2:
+        return None
+
+    first_value = values[0]
+    last_value = values[-1]
+    change = last_value - first_value
+    percent_change = (change / first_value * 100) if first_value > 0 else 0
+
+    return {
+        "first_value": first_value,
+        "last_value": last_value,
+        "change": round(change, 2),
+        "percent_change": round(percent_change, 2),
+        "direction": (
+            "improving" if change > 0 else "declining" if change < 0 else "stable"
+        ),
+        "data_points": len(values),
+    }
+
+
+# Quality metrics to track for trends
+_TREND_METRICS = [
+    "overall_score",
+    "maintainability",
+    "testability",
+    "documentation",
+    "complexity",
+    "security",
+    "performance",
+]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quality_trends",
@@ -405,6 +459,7 @@ async def get_quality_trends(
     Get quality trend analysis showing improvement/degradation over time.
 
     Calculates trend direction, velocity, and predictions.
+    Issue #398: Refactored to use extracted helpers.
     """
     redis_client = get_evolution_redis()
 
@@ -418,27 +473,13 @@ async def get_quality_trends(
         )
 
     try:
-        # Get snapshots for the period
         end_ts = datetime.now().timestamp()
         start_ts = (datetime.now() - timedelta(days=days)).timestamp()
 
         # Issue #361 - run Redis ops in thread pool to avoid blocking
-        def _fetch_trend_snapshots():
-            keys = redis_client.zrangebyscore(
-                f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
-            )
-            results = []
-            for key in keys:
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                snapshot_json = redis_client.get(key)
-                if snapshot_json:
-                    if isinstance(snapshot_json, bytes):
-                        snapshot_json = snapshot_json.decode("utf-8")
-                    results.append(json.loads(snapshot_json))
-            return results
-
-        snapshots = await asyncio.to_thread(_fetch_trend_snapshots)
+        snapshots = await asyncio.to_thread(
+            _fetch_trend_snapshots_sync, redis_client, start_ts, end_ts
+        )
 
         if len(snapshots) < 2:
             return JSONResponse(
@@ -449,39 +490,14 @@ async def get_quality_trends(
                 }
             )
 
-        # Sort by timestamp
         snapshots.sort(key=lambda x: x.get("timestamp", ""))
 
-        # Calculate trends for each metric
-        metrics = [
-            "overall_score",
-            "maintainability",
-            "testability",
-            "documentation",
-            "complexity",
-            "security",
-            "performance",
-        ]
-
+        # Calculate trends for each metric using helper
         trends = {}
-        for metric in metrics:
-            values = [s.get(metric, 0) for s in snapshots if metric in s]
-            if len(values) >= 2:
-                first_value = values[0]
-                last_value = values[-1]
-                change = last_value - first_value
-                percent_change = (change / first_value * 100) if first_value > 0 else 0
-
-                trends[metric] = {
-                    "first_value": first_value,
-                    "last_value": last_value,
-                    "change": round(change, 2),
-                    "percent_change": round(percent_change, 2),
-                    "direction": (
-                        "improving" if change > 0 else "declining" if change < 0 else "stable"
-                    ),
-                    "data_points": len(values),
-                }
+        for metric in _TREND_METRICS:
+            trend_data = _calculate_metric_trend(snapshots, metric)
+            if trend_data:
+                trends[metric] = trend_data
 
         return JSONResponse(
             {

@@ -21,6 +21,95 @@ logger = logging.getLogger(__name__)
 _DEPLOYMENT_LOGGABLE_EVENTS = frozenset({"runner_on_ok", "runner_on_failed", "runner_on_unreachable"})
 
 
+def _create_deployment_event_callback(task, ip_address: str, role: str):
+    """Create event callback for real-time deployment monitoring (Issue #398: extracted).
+
+    Args:
+        task: Celery task instance for state updates
+        ip_address: Host IP address
+        role: Ansible role being deployed
+
+    Returns:
+        Callback function for Ansible event handling
+    """
+    def event_callback(event):
+        """Publish Ansible events to Celery state for real-time monitoring."""
+        event_type = event.get("event", "unknown")
+        task.update_state(
+            state="PROGRESS",
+            meta={
+                "event_type": event_type,
+                "event_data": event.get("event_data", {}),
+                "host": ip_address,
+                "role": role,
+                "stdout": event.get("stdout", ""),
+            },
+        )
+        if event_type in _DEPLOYMENT_LOGGABLE_EVENTS:
+            logger.info(f"Deployment event [{ip_address}]: {event_type}")
+    return event_callback
+
+
+def _build_ansible_inventory(role: str, ip_address: str, ssh_user: str, ssh_key_path: str, ssh_port: int) -> dict:
+    """Build Ansible inventory dictionary (Issue #398: extracted).
+
+    Args:
+        role: Ansible role name
+        ip_address: Target host IP
+        ssh_user: SSH username
+        ssh_key_path: Path to SSH private key
+        ssh_port: SSH port number
+
+    Returns:
+        Ansible inventory dictionary
+    """
+    return {
+        role: {
+            "hosts": [ip_address],
+            "vars": {
+                "ansible_user": ssh_user,
+                "ansible_ssh_private_key_file": ssh_key_path,
+                "ansible_port": ssh_port,
+                "ansible_python_interpreter": "/usr/bin/python3",
+            },
+        }
+    }
+
+
+def _build_deployment_result(status: str, ip_address: str, role: str, runner=None, error: str = None) -> dict:
+    """Build deployment result dictionary (Issue #398: extracted).
+
+    Args:
+        status: 'success' or 'failed'
+        ip_address: Host IP address
+        role: Deployed role
+        runner: Ansible runner object (for failure details)
+        error: Optional error message
+
+    Returns:
+        Deployment result dictionary
+    """
+    if status == "success":
+        return {
+            "status": "success",
+            "host": ip_address,
+            "role": role,
+            "message": f"Successfully deployed {role} to {ip_address}",
+        }
+    else:
+        result = {
+            "status": "failed",
+            "host": ip_address,
+            "role": role,
+        }
+        if error:
+            result["error"] = error
+        if runner:
+            result["error"] = f"Ansible playbook failed with return code {runner.rc}"
+            result["return_code"] = runner.rc
+        return result
+
+
 @celery_app.task(bind=True, name="tasks.deploy_host")
 def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
     """
@@ -56,8 +145,7 @@ def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
 
 
 async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
-    """
-    Async implementation of host deployment
+    """Async implementation of host deployment (Issue #398: refactored to use helpers).
 
     Args:
         task: Celery task instance
@@ -80,51 +168,13 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
 
     logger.info(f"Starting deployment for host {ip_address} with role {role}")
 
-    # Event callback for real-time updates
-    def event_callback(event):
-        """Publish Ansible events to Celery state for real-time monitoring"""
-        event_type = event.get("event", "unknown")
+    # Issue #398: Use extracted helpers
+    event_callback = _create_deployment_event_callback(task, ip_address, role)
+    inventory = _build_ansible_inventory(role, ip_address, ssh_user, ssh_key_path, ssh_port)
+    extra_vars = {"role_name": role, "target_host": ip_address, "force_redeploy": force_redeploy}
 
-        # Update task state with event data
-        task.update_state(
-            state="PROGRESS",
-            meta={
-                "event_type": event_type,
-                "event_data": event.get("event_data", {}),
-                "host": ip_address,
-                "role": role,
-                "stdout": event.get("stdout", ""),
-            },
-        )
-
-        # Log important events (Issue #380: use module-level constant)
-        if event_type in _DEPLOYMENT_LOGGABLE_EVENTS:
-            logger.info(f"Deployment event [{ip_address}]: {event_type}")
-
-    # Generate Ansible inventory
-    inventory = {
-        role: {
-            "hosts": [ip_address],
-            "vars": {
-                "ansible_user": ssh_user,
-                "ansible_ssh_private_key_file": ssh_key_path,
-                "ansible_port": ssh_port,
-                "ansible_python_interpreter": "/usr/bin/python3",
-            },
-        }
-    }
-
-    # Extra variables for playbook
-    extra_vars = {
-        "role_name": role,
-        "target_host": ip_address,
-        "force_redeploy": force_redeploy,
-    }
-
-    # Execute playbook
     try:
         playbook_path = await executor.get_playbook_path("deploy_role.yml")
-
         runner = await executor.run_playbook(
             playbook_path=playbook_path,
             inventory=inventory,
@@ -135,22 +185,11 @@ async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
 
         if runner.status == "successful":
             logger.info(f"Deployment successful: {ip_address} (role: {role})")
-            return {
-                "status": "success",
-                "host": ip_address,
-                "role": role,
-                "message": f"Successfully deployed {role} to {ip_address}",
-            }
+            return _build_deployment_result("success", ip_address, role)
         else:
             logger.error(f"Deployment failed: {ip_address} (role: {role})")
             logger.error(f"Return code: {runner.rc}")
-            return {
-                "status": "failed",
-                "host": ip_address,
-                "role": role,
-                "error": f"Ansible playbook failed with return code {runner.rc}",
-                "return_code": runner.rc,
-            }
+            return _build_deployment_result("failed", ip_address, role, runner=runner)
 
     except Exception as e:
         logger.exception(f"Deployment exception for {ip_address}: {e}")

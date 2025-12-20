@@ -5,6 +5,8 @@
 """
 Multi-Modal Performance Monitor
 GPU memory management, batch processing optimization, and performance monitoring for RTX 4070
+
+Issue #473: Added Prometheus metrics integration for unified monitoring.
 """
 
 import logging
@@ -16,6 +18,7 @@ from typing import Any, Dict, List
 import numpy as np
 import psutil
 
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 try:
     import torch
@@ -27,6 +30,9 @@ except ImportError:
     torch = None
 
 logger = logging.getLogger(__name__)
+
+# Issue #473: Get metrics manager for Prometheus integration
+_metrics = get_metrics_manager()
 
 
 @dataclass
@@ -204,7 +210,10 @@ class MultiModalPerformanceMonitor:
             return False
 
     async def monitor_processing_performance(self) -> Dict[str, Any]:
-        """Monitor comprehensive processing performance metrics (thread-safe)"""
+        """Monitor comprehensive processing performance metrics (thread-safe).
+
+        Issue #473: Now also emits Prometheus metrics for system/GPU monitoring.
+        """
         try:
             timestamp = time.time()
 
@@ -214,6 +223,22 @@ class MultiModalPerformanceMonitor:
             # CPU and system metrics
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
+
+            # Issue #473: Emit Prometheus system metrics
+            _metrics.update_system_cpu(cpu_percent)
+            _metrics.update_system_memory(memory.percent)
+
+            # Issue #473: Emit GPU metrics to Prometheus if available
+            if gpu_stats and self.gpu_available:
+                _metrics.set_gpu_available(True)
+                _metrics.update_gpu_metrics(
+                    gpu_id="0",
+                    gpu_name=gpu_stats.get("device_name", "Unknown GPU"),
+                    utilization=gpu_stats.get("utilization_percent", 0),
+                    memory_utilization=gpu_stats.get("utilization_percent", 0),
+                    temperature=0,  # Not available from torch
+                    power_watts=0,  # Not available from torch
+                )
 
             # Processing time statistics (uses lock internally)
             processing_stats = self._get_processing_time_stats()
@@ -339,7 +364,10 @@ class MultiModalPerformanceMonitor:
     def record_processing(
         self, modality: str, processing_time: float, items_processed: int = 1
     ):
-        """Record processing completion for performance tracking (thread-safe)"""
+        """Record processing completion for performance tracking (thread-safe).
+
+        Issue #473: Now also emits Prometheus metrics for multi-modal processing.
+        """
         timestamp = time.time()
 
         # Update shared state under lock
@@ -350,6 +378,9 @@ class MultiModalPerformanceMonitor:
             # Record throughput
             for _ in range(items_processed):
                 self.throughput_history[modality].append((timestamp, 1))
+
+        # Issue #473: Emit Prometheus metrics for multi-modal processing
+        _metrics.record_multimodal_processing(modality, processing_time, success=True)
 
     def get_optimal_batch_size(self, modality: str) -> int:
         """Get the optimal batch size for a given modality (thread-safe)"""

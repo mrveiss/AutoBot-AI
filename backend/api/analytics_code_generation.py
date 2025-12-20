@@ -32,6 +32,16 @@ from pydantic import BaseModel, Field
 
 from src.utils.redis_client import RedisDatabase, get_redis_client
 
+# LLM Interface for real code generation
+try:
+    from src.llm_interface import LLMInterface
+
+    LLM_INTERFACE_AVAILABLE = True
+except ImportError:
+    LLM_INTERFACE_AVAILABLE = False
+    LLMInterface = None
+    logging.warning("LLMInterface not available - code generation will fail")
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -502,10 +512,11 @@ class CodeGenerationEngine:
     """Engine for LLM-powered code generation and refactoring"""
 
     def __init__(self):
-        """Initialize code generation engine with Redis storage keys."""
+        """Initialize code generation engine with Redis storage and LLM client."""
         self._redis = None
         self._versions_key = "autobot:code_generation:versions"
         self._stats_key = "autobot:code_generation:stats"
+        self._llm_client = None  # Lazy-initialized LLM client
 
     async def _get_redis(self):
         """Get Redis client lazily"""
@@ -515,6 +526,18 @@ class CodeGenerationEngine:
                 database=RedisDatabase.MAIN
             )
         return self._redis
+
+    def _get_llm_client(self) -> "LLMInterface":
+        """Get or create LLM client lazily."""
+        if self._llm_client is None:
+            if not LLM_INTERFACE_AVAILABLE:
+                raise RuntimeError(
+                    "LLM Interface is not available. "
+                    "Code generation requires LLM connectivity."
+                )
+            self._llm_client = LLMInterface()
+            logger.info("LLMInterface initialized for code generation")
+        return self._llm_client
 
     def _generate_version_id(self, code: str) -> str:
         """Generate unique version ID from code content"""
@@ -575,138 +598,47 @@ class CodeGenerationEngine:
         Call LLM for code generation/refactoring.
         Returns (response, tokens_used)
 
-        Note: This is a simulation. In production, this would call actual LLM APIs.
+        Uses AutoBot's LLMInterface for real LLM calls.
         """
-        # Simulate LLM response for demonstration
-        # In production, this would use the actual LLM providers
+        try:
+            llm_client = self._get_llm_client()
 
-        # Simulate processing time
-        await self._simulate_llm_processing()
-
-        # Generate mock response based on prompt content
-        if "type hint" in prompt.lower():
-            response = self._mock_type_hints_response(prompt)
-        elif "docstring" in prompt.lower():
-            response = self._mock_docstrings_response(prompt)
-        elif "simplify" in prompt.lower():
-            response = self._mock_simplify_response(prompt)
-        else:
-            response = self._mock_general_response(prompt)
-
-        # Estimate tokens (rough approximation)
-        tokens_used = len(prompt.split()) + len(response.split())
-
-        return response, tokens_used
-
-    async def _simulate_llm_processing(self):
-        """Simulate LLM processing delay"""
-        import asyncio
-        await asyncio.sleep(0.1)  # Minimal delay for demonstration
-
-    def _mock_type_hints_response(self, prompt: str) -> str:
-        """Generate mock type hints response"""
-        # Extract code from prompt
-        code_match = _PYTHON_CODE_BLOCK_RE.search(prompt)
-        if not code_match:
-            return "# No code found to add type hints"
-
-        code = code_match.group(1)
-        # Simple transformation: add basic type hints
-        lines = code.split("\n")
-        result = []
-
-        for line in lines:
-            # Add return type hints to functions
-            func_match = _FUNC_SIGNATURE_RE.match(line)
-            if func_match:
-                indent, name, args = func_match.groups()
-                result.append(f"{indent}def {name}({args}) -> None:")
+            # Build messages for chat completion
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
             else:
-                result.append(line)
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "You are an expert code generation and refactoring assistant. "
+                        "Generate clean, well-documented, type-annotated code. "
+                        "Always wrap code in appropriate markdown code blocks."
+                    )
+                })
+            messages.append({"role": "user", "content": prompt})
 
-        return "\n".join(result)
+            # Call LLM via chat_completion
+            response = await llm_client.chat_completion(
+                messages=messages,
+                llm_type="task",  # Use task-optimized model
+                temperature=0.2,  # Lower temperature for code generation
+                max_tokens=4096,
+            )
 
-    def _mock_docstrings_response(self, prompt: str) -> str:
-        """Generate mock docstrings response"""
-        code_match = _OPT_PYTHON_BLOCK_RE.search(prompt)
-        if not code_match:
-            return "# No code found to add docstrings"
+            response_text = response.content
 
-        code = code_match.group(1)
-        lines = code.split("\n")
-        result = []
+            # Estimate tokens from response metrics or approximate
+            tokens_used = getattr(response, "tokens_used", None)
+            if tokens_used is None:
+                # Approximate: ~4 chars per token
+                tokens_used = (len(prompt) + len(response_text)) // 4
 
-        for i, line in enumerate(lines):
-            result.append(line)
-            # Add docstring after function definition
-            func_match = _FUNC_WITH_RETURN_RE.match(line)
-            if func_match:
-                indent = func_match.group(1)
-                name = func_match.group(2)
-                result.append(f'{indent}    """')
-                result.append(f"{indent}    {name.replace('_', ' ').title()} function.")
-                result.append(f'{indent}    """')
+            return response_text, tokens_used
 
-        return "\n".join(result)
-
-    def _mock_simplify_response(self, prompt: str) -> str:
-        """Generate mock simplify response"""
-        code_match = _OPT_PYTHON_BLOCK_RE.search(prompt)
-        if not code_match:
-            return "# No code found to simplify"
-
-        # Return code with comments about simplification
-        code = code_match.group(1)
-        return f"# Simplified version\n{code}"
-
-    def _mock_general_response(self, prompt: str) -> str:
-        """Generate mock general refactoring response"""
-        code_match = _MULTI_LANG_BLOCK_RE.search(prompt)
-        if not code_match:
-            # Check if it's a generation request
-            if "generate" in prompt.lower():
-                return self._mock_code_generation(prompt)
-            return "# No code found to refactor"
-
-        code = code_match.group(1)
-        return f"# Refactored code\n{code}"
-
-    def _mock_code_generation(self, prompt: str) -> str:
-        """Generate mock code based on description"""
-        if "function" in prompt.lower():
-            return '''def example_function(param: str) -> str:
-    """
-    Example generated function.
-
-    Args:
-        param: Input parameter
-
-    Returns:
-        Processed result
-    """
-    return f"Processed: {param}"
-'''
-        elif "class" in prompt.lower():
-            return '''class ExampleClass:
-    """Example generated class."""
-
-    def __init__(self, name: str) -> None:
-        """Initialize the class."""
-        self.name = name
-
-    def process(self) -> str:
-        """Process and return result."""
-        return f"Processing {self.name}"
-'''
-        else:
-            return '''# Generated code based on description
-def main() -> None:
-    """Main entry point."""
-    print("Hello from generated code!")
-
-if __name__ == "__main__":
-    main()
-'''
+        except Exception as e:
+            logger.error("LLM call failed: %s", str(e))
+            raise RuntimeError(f"LLM code generation failed: {str(e)}")
 
     async def generate_code(
         self,

@@ -4,17 +4,21 @@
 """
 RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.
+
+Issue #476: Added /metrics endpoint for Prometheus integration.
 """
 
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -145,6 +149,95 @@ class RumConfig(BaseModel):
     debug_mode: bool = False
     log_to_backend: bool = True
     log_level: str = "info"
+
+
+# Issue #476: RUM Metrics models for Prometheus integration
+class PageMetrics(BaseModel):
+    """Page performance metrics from frontend."""
+
+    page: str
+    load_time_seconds: Optional[float] = None
+    fcp_seconds: Optional[float] = None  # First Contentful Paint
+    lcp_seconds: Optional[float] = None  # Largest Contentful Paint
+    tti_seconds: Optional[float] = None  # Time to Interactive
+    dom_loaded_seconds: Optional[float] = None
+
+
+class ApiCallMetric(BaseModel):
+    """Frontend API call metric."""
+
+    endpoint: str
+    method: str
+    status: str  # success, error, timeout
+    latency_seconds: float
+    is_slow: bool = False
+    is_timeout: bool = False
+    error_type: Optional[str] = None  # network, http, timeout
+
+
+class JsErrorMetric(BaseModel):
+    """JavaScript error metric."""
+
+    error_type: str  # syntax, reference, type, etc.
+    page: str
+    is_rejection: bool = False  # True for unhandled Promise rejections
+    component: Optional[str] = None  # Vue component name if applicable
+
+
+class UserActionMetric(BaseModel):
+    """User action/interaction metric."""
+
+    action_type: str  # click, submit, navigation, etc.
+    page: str
+    form_name: Optional[str] = None
+    form_status: Optional[str] = None  # success, validation_error, server_error
+
+
+class SessionMetric(BaseModel):
+    """Session metric."""
+
+    event: str  # start, end
+    duration_seconds: Optional[float] = None
+
+
+class WebSocketMetric(BaseModel):
+    """WebSocket event metric from frontend."""
+
+    event: str  # connect, disconnect, error, reconnect
+    direction: Optional[str] = None  # sent, received
+    event_type: Optional[str] = None  # message type
+
+
+class ResourceMetric(BaseModel):
+    """Resource load metric."""
+
+    resource_type: str  # script, stylesheet, image, font
+    load_time_seconds: float
+    is_slow: bool = False
+
+
+class CriticalIssueMetric(BaseModel):
+    """Critical issue from frontend."""
+
+    issue_type: str  # api_timeout, error, crash
+
+
+class RumMetrics(BaseModel):
+    """
+    Batch of RUM metrics from frontend.
+    Issue #476: Used for Prometheus metrics export.
+    """
+
+    session_id: str
+    timestamp: str
+    page_metrics: Optional[PageMetrics] = None
+    api_calls: Optional[List[ApiCallMetric]] = None
+    js_errors: Optional[List[JsErrorMetric]] = None
+    user_actions: Optional[List[UserActionMetric]] = None
+    session: Optional[SessionMetric] = None
+    websocket_events: Optional[List[WebSocketMetric]] = None
+    resources: Optional[List[ResourceMetric]] = None
+    critical_issues: Optional[List[CriticalIssueMetric]] = None
 
 
 def setup_rum_logger():
@@ -440,3 +533,184 @@ def format_rum_log_message(event_data: Metadata) -> str:
 
     # Default format for unknown types
     return f"SESSION={session_id} URL={url} {event_type.upper()}: {data}"
+
+
+# =============================================================================
+# Issue #476: Prometheus Metrics Endpoint
+# =============================================================================
+
+
+def _process_page_metrics(metrics_manager, page_metrics: PageMetrics) -> None:
+    """Process page performance metrics."""
+    if page_metrics.load_time_seconds is not None:
+        metrics_manager.record_frontend_page_load(
+            page_metrics.page, page_metrics.load_time_seconds
+        )
+    if page_metrics.fcp_seconds is not None:
+        metrics_manager.record_frontend_fcp(page_metrics.page, page_metrics.fcp_seconds)
+    if page_metrics.lcp_seconds is not None:
+        metrics_manager.record_frontend_lcp(page_metrics.page, page_metrics.lcp_seconds)
+    if page_metrics.tti_seconds is not None:
+        metrics_manager.record_frontend_tti(page_metrics.page, page_metrics.tti_seconds)
+    if page_metrics.dom_loaded_seconds is not None:
+        metrics_manager.record_frontend_dom_loaded(
+            page_metrics.page, page_metrics.dom_loaded_seconds
+        )
+
+
+def _process_api_calls(metrics_manager, api_calls: List[ApiCallMetric]) -> None:
+    """Process API call metrics."""
+    for call in api_calls:
+        metrics_manager.record_frontend_api_request(
+            endpoint=call.endpoint,
+            method=call.method,
+            status=call.status,
+            latency_seconds=call.latency_seconds,
+            is_slow=call.is_slow,
+            is_timeout=call.is_timeout,
+        )
+        if call.error_type:
+            metrics_manager.record_frontend_api_error(
+                call.endpoint, call.method, call.error_type
+            )
+
+
+def _process_js_errors(metrics_manager, js_errors: List[JsErrorMetric]) -> None:
+    """Process JavaScript error metrics."""
+    for error in js_errors:
+        if error.is_rejection:
+            metrics_manager.record_frontend_unhandled_rejection(error.page)
+        else:
+            metrics_manager.record_frontend_js_error(error.error_type, error.page)
+        if error.component:
+            metrics_manager.record_frontend_component_error(
+                error.component, error.error_type
+            )
+
+
+def _process_user_actions(
+    metrics_manager, user_actions: List[UserActionMetric]
+) -> None:
+    """Process user action metrics."""
+    for action in user_actions:
+        metrics_manager.record_frontend_user_action(action.action_type, action.page)
+        if action.form_name and action.form_status:
+            metrics_manager.record_frontend_form_submission(
+                action.form_name, action.form_status
+            )
+
+
+def _process_session_metric(metrics_manager, session: SessionMetric) -> None:
+    """Process session metrics."""
+    if session.event == "start":
+        metrics_manager.record_frontend_session_start()
+    elif session.event == "end" and session.duration_seconds is not None:
+        metrics_manager.record_frontend_session_duration(session.duration_seconds)
+
+
+def _process_websocket_events(
+    metrics_manager, websocket_events: List[WebSocketMetric]
+) -> None:
+    """Process WebSocket event metrics."""
+    for ws_event in websocket_events:
+        metrics_manager.record_frontend_ws_event(ws_event.event)
+        if ws_event.direction and ws_event.event_type:
+            metrics_manager.record_frontend_ws_message(
+                ws_event.direction, ws_event.event_type
+            )
+
+
+def _process_resources(metrics_manager, resources: List[ResourceMetric]) -> None:
+    """Process resource load metrics."""
+    for resource in resources:
+        metrics_manager.record_frontend_resource_load(
+            resource.resource_type, resource.load_time_seconds
+        )
+        if resource.is_slow:
+            metrics_manager.record_frontend_slow_resource(resource.resource_type)
+
+
+def _process_critical_issues(
+    metrics_manager, critical_issues: List[CriticalIssueMetric]
+) -> None:
+    """Process critical issue metrics."""
+    for issue in critical_issues:
+        metrics_manager.record_frontend_critical_issue(issue.issue_type)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_rum_metrics",
+    error_code_prefix="RUM",
+)
+@router.post("/metrics")
+async def receive_rum_metrics(metrics: RumMetrics):
+    """
+    Receive RUM metrics from frontend and record them to Prometheus.
+
+    Issue #476: This endpoint receives batched RUM metrics from the frontend
+    and records them to the Prometheus metrics system for monitoring.
+    """
+    try:
+        metrics_manager = get_metrics_manager()
+        recorded_count = 0
+
+        # Process page performance metrics
+        if metrics.page_metrics:
+            _process_page_metrics(metrics_manager, metrics.page_metrics)
+            recorded_count += 1
+
+        # Process API call metrics
+        if metrics.api_calls:
+            _process_api_calls(metrics_manager, metrics.api_calls)
+            recorded_count += len(metrics.api_calls)
+
+        # Process JavaScript error metrics
+        if metrics.js_errors:
+            _process_js_errors(metrics_manager, metrics.js_errors)
+            recorded_count += len(metrics.js_errors)
+
+        # Process user action metrics
+        if metrics.user_actions:
+            _process_user_actions(metrics_manager, metrics.user_actions)
+            recorded_count += len(metrics.user_actions)
+
+        # Process session metrics
+        if metrics.session:
+            _process_session_metric(metrics_manager, metrics.session)
+            recorded_count += 1
+
+        # Process WebSocket events
+        if metrics.websocket_events:
+            _process_websocket_events(metrics_manager, metrics.websocket_events)
+            recorded_count += len(metrics.websocket_events)
+
+        # Process resource load metrics
+        if metrics.resources:
+            _process_resources(metrics_manager, metrics.resources)
+            recorded_count += len(metrics.resources)
+
+        # Process critical issues
+        if metrics.critical_issues:
+            _process_critical_issues(metrics_manager, metrics.critical_issues)
+            recorded_count += len(metrics.critical_issues)
+
+        logger.debug(
+            f"Recorded {recorded_count} RUM metrics from session {metrics.session_id}"
+        )
+
+        return {
+            "status": "success",
+            "message": "RUM metrics recorded to Prometheus",
+            "session_id": metrics.session_id,
+            "metrics_recorded": recorded_count,
+        }
+
+    except Exception as e:
+        logger.error(f"Error recording RUM metrics: {str(e)}")
+        # Don't raise HTTP exception to avoid disrupting user experience
+        return {
+            "status": "error",
+            "message": f"Failed to record RUM metrics: {str(e)}",
+            "session_id": metrics.session_id,
+        }

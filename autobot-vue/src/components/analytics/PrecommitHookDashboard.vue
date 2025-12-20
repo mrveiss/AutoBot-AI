@@ -471,7 +471,8 @@ async function loadStatus() {
   try {
     const response = await api.get('/api/precommit/status')
     hookStatus.value = response.data
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to load status:', error)
     hookStatus.value = { installed: false }
   }
 }
@@ -480,8 +481,9 @@ async function loadChecks() {
   try {
     const response = await api.get('/api/precommit/checks')
     checks.value = response.data
-  } catch {
-    checks.value = getDemoChecks()
+  } catch (error) {
+    logger.warn('Failed to load checks:', error)
+    checks.value = []
   }
 }
 
@@ -489,7 +491,8 @@ async function loadHistory() {
   try {
     const response = await api.get('/api/precommit/history')
     checkHistory.value = response.data
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to load history:', error)
     checkHistory.value = []
   }
 }
@@ -498,8 +501,9 @@ async function loadSummary() {
   try {
     const response = await api.get('/api/precommit/summary')
     summary.value = response.data
-  } catch {
-    summary.value = getDemoSummary()
+  } catch (error) {
+    logger.warn('Failed to load summary:', error)
+    // Keep default empty summary state
   }
 }
 
@@ -544,10 +548,9 @@ async function runCheck() {
     } else {
       showToast(`Found ${response.data.failed_checks} issues`, 'warning')
     }
-  } catch {
-    // Use demo data
-    lastResult.value = getDemoResult()
-    showToast('Using demo data - API unavailable', 'warning')
+  } catch (error) {
+    logger.error('Failed to run check:', error)
+    showToast('Failed to run pre-commit check', 'error')
   } finally {
     checking.value = false
   }
@@ -560,7 +563,8 @@ async function toggleCheck(check: Check) {
       params: { enabled: newState }
     })
     check.enabled = newState
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to toggle check:', error)
     check.enabled = !newState
     showToast('Failed to update check', 'error')
   }
@@ -568,90 +572,6 @@ async function toggleCheck(check: Check) {
 
 function showHistoryDetail(run: CommitCheckResult) {
   lastResult.value = run
-}
-
-// Demo data
-function getDemoChecks(): Check[] {
-  return [
-    { id: 'SEC001', name: 'Hardcoded Password', category: 'security', severity: 'block', enabled: true },
-    { id: 'SEC002', name: 'API Key Exposure', category: 'security', severity: 'block', enabled: true },
-    { id: 'SEC003', name: 'Private Key in Code', category: 'security', severity: 'block', enabled: true },
-    { id: 'SEC004', name: 'Hardcoded IP Address', category: 'security', severity: 'warn', enabled: true },
-    { id: 'DBG001', name: 'Console.log Statement', category: 'debug', severity: 'warn', enabled: true },
-    { id: 'DBG002', name: 'Print Statement', category: 'debug', severity: 'warn', enabled: true },
-    { id: 'DBG003', name: 'Debugger Statement', category: 'debug', severity: 'block', enabled: true },
-    { id: 'DBG004', name: 'TODO/FIXME Comment', category: 'debug', severity: 'info', enabled: false },
-    { id: 'QUA001', name: 'Empty Except Block', category: 'quality', severity: 'warn', enabled: true },
-    { id: 'QUA002', name: 'Magic Number', category: 'quality', severity: 'info', enabled: false },
-    { id: 'STY001', name: 'Trailing Whitespace', category: 'style', severity: 'info', enabled: true },
-    { id: 'DOC001', name: 'Missing Docstring', category: 'docs', severity: 'info', enabled: false }
-  ]
-}
-
-function getDemoResult(): CommitCheckResult {
-  return {
-    passed: false,
-    total_checks: 24,
-    passed_checks: 21,
-    failed_checks: 3,
-    warnings: 2,
-    blocked: true,
-    duration_ms: 42,
-    files_checked: ['src/config.py', 'src/utils/helper.js'],
-    timestamp: new Date().toISOString(),
-    results: [
-      {
-        check_id: 'SEC001',
-        name: 'Hardcoded Password',
-        category: 'security',
-        severity: 'block',
-        passed: false,
-        message: 'Detected hardcoded password',
-        file: 'src/config.py',
-        line: 15,
-        snippet: '15: password = "admin123"',
-        suggestion: 'Use environment variables or secrets manager'
-      },
-      {
-        check_id: 'DBG001',
-        name: 'Console.log Statement',
-        category: 'debug',
-        severity: 'warn',
-        passed: false,
-        message: 'Console statement found',
-        file: 'src/utils/helper.js',
-        line: 42,
-        snippet: '42: console.log("debug")',
-        suggestion: 'Remove console statements before committing'
-      },
-      {
-        check_id: 'DBG004',
-        name: 'TODO/FIXME Comment',
-        category: 'debug',
-        severity: 'info',
-        passed: false,
-        message: 'TODO/FIXME comment found',
-        file: 'src/config.py',
-        line: 8,
-        suggestion: 'Consider addressing before committing'
-      }
-    ]
-  }
-}
-
-function getDemoSummary(): Summary {
-  return {
-    total_runs: 47,
-    pass_rate: 85.1,
-    average_duration_ms: 38,
-    common_issues: [
-      { check_id: 'DBG001', count: 12, name: 'Console.log' },
-      { check_id: 'SEC004', count: 8, name: 'Hardcoded IP' },
-      { check_id: 'STY001', count: 6, name: 'Trailing Whitespace' }
-    ],
-    checks_enabled: 10,
-    total_checks: 12
-  }
 }
 
 onMounted(() => {

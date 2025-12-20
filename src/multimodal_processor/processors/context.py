@@ -61,10 +61,9 @@ class ContextProcessor(BaseModalProcessor):
 
     async def _process_context(self, input_data: MultiModalInput) -> Dict[str, Any]:
         """Process contextual information"""
-        # Placeholder for context processing logic
-        return {
-            "type": "context_decision",
-            "decision": "continue",
-            "reasoning": "Based on current context",
-            "confidence": 0.9,
-        }
+        # Issue #466: Raise error instead of returning placeholder data
+        # Context processing requires proper LLM integration with contextual analysis
+        raise NotImplementedError(
+            "Context processing not yet implemented. "
+            "This feature requires LLM integration for contextual decision making."
+        )

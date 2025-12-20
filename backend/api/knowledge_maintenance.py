@@ -83,37 +83,17 @@ def _group_fact_by_category_title(fact_info: dict, fact_groups: dict) -> None:
 # ===== DEDUPLICATION ENDPOINTS =====
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="deduplicate_facts",
-    error_code_prefix="KNOWLEDGE",
-)
-@router.post("/deduplicate")
-async def deduplicate_facts(req: Request, dry_run: bool = True):
-    """
-    Remove duplicate facts based on category + title.
-    Keeps the oldest fact and removes newer duplicates.
-
-    Args:
-        dry_run: If True, only report duplicates without deleting (default: True)
+async def _scan_all_facts(kb) -> tuple[dict, int]:
+    """Scan all facts and group by category+title (Issue #398: extracted).
 
     Returns:
-        Report of duplicates found and removed
+        Tuple of (fact_groups dict, total_facts count)
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb is None:
-        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
-
-    logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
-
-    # Use SCAN to iterate through all fact keys
-    fact_groups = {}  # category:title -> list of (fact_id, created_at, fact_key)
+    fact_groups = {}
     cursor = 0
     total_facts = 0
 
     while True:
-        # Issue #361 - run Redis ops in thread pool to avoid blocking
         def _scan_and_fetch():
             cur, scanned_keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
             if not scanned_keys:
@@ -128,7 +108,6 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
         cursor, keys, results = await asyncio.to_thread(_scan_and_fetch)
 
         if keys:
-            # Group facts by category+title (Issue #315: uses helper for reduced nesting)
             for i in range(0, len(results), 2):
                 fact_info = _process_fact_metadata(
                     results[i], keys[i // 2], results[i + 1]
@@ -140,49 +119,92 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
         if cursor == 0:
             break
 
-    logger.info(
-        f"Scanned {total_facts} facts, found {len(fact_groups)} unique category+title combinations"
-    )
+    return fact_groups, total_facts
 
-    # Find duplicates
+
+def _find_duplicates_in_groups(fact_groups: dict) -> tuple[list, list]:
+    """Find duplicates in fact groups, keep oldest (Issue #398: extracted).
+
+    Returns:
+        Tuple of (duplicates_found list, facts_to_delete list)
+    """
     duplicates_found = []
     facts_to_delete = []
 
     for group_key, facts in fact_groups.items():
-        if len(facts) > 1:
-            # Sort by created_at to keep the oldest
-            facts.sort(key=lambda x: x["created_at"])
+        if len(facts) <= 1:
+            continue
 
-            # Keep first (oldest), mark rest for deletion
-            kept_fact = facts[0]
-            duplicate_facts = facts[1:]
+        facts.sort(key=lambda x: x["created_at"])
+        kept_fact = facts[0]
+        duplicate_facts = facts[1:]
 
-            duplicates_found.append(
-                {
-                    "category": kept_fact["category"],
-                    "title": kept_fact["title"],
-                    "total_copies": len(facts),
-                    "kept_fact_id": kept_fact["fact_id"],
-                    "kept_created_at": kept_fact["created_at"],
-                    "removed_count": len(duplicate_facts),
-                    "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
-                }
-            )
+        duplicates_found.append({
+            "category": kept_fact["category"],
+            "title": kept_fact["title"],
+            "total_copies": len(facts),
+            "kept_fact_id": kept_fact["fact_id"],
+            "kept_created_at": kept_fact["created_at"],
+            "removed_count": len(duplicate_facts),
+            "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
+        })
 
-            facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
+        facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
+
+    return duplicates_found, facts_to_delete
+
+
+async def _delete_facts_in_batches(kb, facts_to_delete: list, batch_size: int = 100) -> int:
+    """Delete facts in batches (Issue #398: extracted).
+
+    Returns:
+        Number of facts deleted
+    """
+    deleted_count = 0
+    for i in range(0, len(facts_to_delete), batch_size):
+        batch = facts_to_delete[i : i + batch_size]
+        await asyncio.to_thread(kb.redis_client.delete, *batch)
+        deleted_count += len(batch)
+    return deleted_count
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="deduplicate_facts",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/deduplicate")
+async def deduplicate_facts(req: Request, dry_run: bool = True):
+    """
+    Remove duplicate facts based on category + title (Issue #398: refactored).
+    Keeps the oldest fact and removes newer duplicates.
+
+    Args:
+        dry_run: If True, only report duplicates without deleting (default: True)
+
+    Returns:
+        Report of duplicates found and removed
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
+
+    logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
+
+    # Scan and group facts
+    fact_groups, total_facts = await _scan_all_facts(kb)
+    logger.info(
+        f"Scanned {total_facts} facts, found {len(fact_groups)} unique combinations"
+    )
+
+    # Find duplicates
+    duplicates_found, facts_to_delete = _find_duplicates_in_groups(fact_groups)
 
     # Delete duplicates if not dry run
     deleted_count = 0
     if not dry_run and facts_to_delete:
         logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
-
-        # Delete in batches (Issue #361 - avoid blocking)
-        batch_size = 100
-        for i in range(0, len(facts_to_delete), batch_size):
-            batch = facts_to_delete[i : i + batch_size]
-            await asyncio.to_thread(kb.redis_client.delete, *batch)
-            deleted_count += len(batch)
-
+        deleted_count = await _delete_facts_in_batches(kb, facts_to_delete)
         logger.info(f"Deleted {deleted_count} duplicate facts")
 
     return {
@@ -193,7 +215,7 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
         "duplicate_groups_found": len(duplicates_found),
         "total_duplicates": len(facts_to_delete),
         "deleted_count": deleted_count,
-        "duplicates": duplicates_found[:50],  # Return first 50 for preview
+        "duplicates": duplicates_found[:50],
     }
 
 

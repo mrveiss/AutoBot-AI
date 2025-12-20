@@ -355,6 +355,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('PerformanceAnalysisDashboard')
 
 // Types
 interface PerformanceIssue {
@@ -531,9 +534,9 @@ async function runAnalysis() {
     }
 
     await loadHotspots()
-  } catch {
-    lastResult.value = getDemoResult()
-    showToast('Using demo data - API unavailable', 'warning')
+  } catch (error) {
+    logger.error('Failed to run analysis:', error)
+    showToast('Failed to run performance analysis', 'error')
   } finally {
     loading.value = false
   }
@@ -543,8 +546,9 @@ async function loadPatterns() {
   try {
     const response = await api.get('/api/performance/patterns')
     patterns.value = response.data
-  } catch {
-    patterns.value = getDemoPatterns()
+  } catch (error) {
+    logger.warn('Failed to load patterns:', error)
+    patterns.value = []
   }
 }
 
@@ -552,8 +556,9 @@ async function loadHotspots() {
   try {
     const response = await api.get('/api/performance/hotspots')
     hotspots.value = response.data
-  } catch {
-    hotspots.value = getDemoHotspots()
+  } catch (error) {
+    logger.warn('Failed to load hotspots:', error)
+    hotspots.value = []
   }
 }
 
@@ -564,131 +569,10 @@ async function togglePattern(pattern: Pattern) {
       params: { enabled: newState }
     })
     pattern.enabled = newState
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to toggle pattern:', error)
     pattern.enabled = !newState
   }
-}
-
-// Demo data
-function getDemoResult(): AnalysisResult {
-  return {
-    total_issues: 7,
-    critical_count: 2,
-    high_count: 4,
-    medium_count: 1,
-    low_count: 0,
-    files_analyzed: 12,
-    duration_ms: 156,
-    timestamp: new Date().toISOString(),
-    score: 65,
-    issues: [
-      {
-        id: '1',
-        pattern_id: 'PERF-Q001',
-        name: 'N+1 Query Pattern',
-        category: 'query',
-        impact: 'critical',
-        file: 'src/services/users.py',
-        line: 45,
-        description: 'Database query inside loop - causes N+1 query problem',
-        suggestion: 'Use eager loading, batch queries, or SELECT ... IN (...)',
-        code_snippet: '44: for user in users:\n45:     orders = db.query(Order).filter_by(user_id=user.id)',
-        estimated_impact: '100 users = 101 queries'
-      },
-      {
-        id: '2',
-        pattern_id: 'PERF-A001',
-        name: 'Sync Call in Async Function',
-        category: 'async',
-        impact: 'critical',
-        file: 'src/api/endpoints.py',
-        line: 78,
-        description: 'Blocking synchronous call in async function blocks event loop',
-        suggestion: 'Use async version or run_in_executor()',
-        code_snippet: '77: async def fetch_data():\n78:     response = requests.get(url)'
-      },
-      {
-        id: '3',
-        pattern_id: 'PERF-L001',
-        name: 'Nested Loop O(n²)',
-        category: 'loop',
-        impact: 'high',
-        file: 'src/utils/matcher.py',
-        line: 23,
-        description: 'Nested loops with O(n²) complexity',
-        suggestion: 'Consider using dict/set for O(1) lookup',
-        estimated_impact: 'O(n²)'
-      },
-      {
-        id: '4',
-        pattern_id: 'PERF-C001',
-        name: 'Repeated Redis GET in Loop',
-        category: 'cache',
-        impact: 'high',
-        file: 'src/cache/session.py',
-        line: 56,
-        description: 'Multiple Redis GET calls in loop',
-        suggestion: 'Use MGET for batch retrieval or pipeline',
-        code_snippet: '55: for key in keys:\n56:     value = redis.get(key)'
-      },
-      {
-        id: '5',
-        pattern_id: 'PERF-M001',
-        name: 'Global Mutable Default',
-        category: 'memory',
-        impact: 'high',
-        file: 'src/handlers/events.py',
-        line: 12,
-        description: 'Mutable default argument causes shared state bug',
-        suggestion: 'Use None default and create mutable in function body',
-        code_snippet: '12: def process_items(items=[]):'
-      },
-      {
-        id: '6',
-        pattern_id: 'PERF-A002',
-        name: 'Sequential Awaits',
-        category: 'async',
-        impact: 'high',
-        file: 'src/services/aggregator.py',
-        line: 34,
-        description: 'Multiple awaits that could run concurrently',
-        suggestion: 'Use asyncio.gather() for concurrent execution',
-        code_snippet: '34:     user = await get_user(id)\n35:     orders = await get_orders(id)'
-      },
-      {
-        id: '7',
-        pattern_id: 'PERF-L002',
-        name: 'List Concatenation in Loop',
-        category: 'loop',
-        impact: 'medium',
-        file: 'src/utils/collector.py',
-        line: 67,
-        description: 'Repeated list concatenation in loop is O(n²)',
-        suggestion: 'Use list.append() or list comprehension'
-      }
-    ]
-  }
-}
-
-function getDemoPatterns(): Pattern[] {
-  return [
-    { id: 'PERF-Q001', name: 'N+1 Query Pattern', category: 'query', impact: 'critical', enabled: true },
-    { id: 'PERF-Q002', name: 'Unbounded Query', category: 'query', impact: 'high', enabled: true },
-    { id: 'PERF-L001', name: 'Nested Loop O(n²)', category: 'loop', impact: 'high', enabled: true },
-    { id: 'PERF-L002', name: 'List Concatenation in Loop', category: 'loop', impact: 'medium', enabled: true },
-    { id: 'PERF-A001', name: 'Sync Call in Async Function', category: 'async', impact: 'critical', enabled: true },
-    { id: 'PERF-A002', name: 'Sequential Awaits', category: 'async', impact: 'high', enabled: true },
-    { id: 'PERF-C001', name: 'Repeated Redis GET in Loop', category: 'cache', impact: 'high', enabled: true },
-    { id: 'PERF-M001', name: 'Global Mutable Default', category: 'memory', impact: 'high', enabled: true }
-  ]
-}
-
-function getDemoHotspots(): Hotspot[] {
-  return [
-    { file: 'src/services/users.py', issue_count: 3, critical_count: 1, high_count: 2 },
-    { file: 'src/api/endpoints.py', issue_count: 2, critical_count: 1, high_count: 1 },
-    { file: 'src/cache/session.py', issue_count: 2, critical_count: 0, high_count: 2 }
-  ]
 }
 
 onMounted(() => {

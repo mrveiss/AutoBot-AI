@@ -55,65 +55,44 @@ class SuggestionsMixin:
     DEFAULT_MIN_CONFIDENCE = 0.3  # Minimum confidence to include
     DEFAULT_AUTO_APPLY_THRESHOLD = 0.85  # Auto-apply if >= this confidence
 
+    def _validate_content(self, content: str) -> Dict[str, Any]:
+        """Validate content input for suggestions (Issue #398: extracted)."""
+        if not content or not content.strip():
+            return {"success": False, "suggestions": [], "error": "Content is required"}
+        return None
+
+    def _no_similar_docs_response(self) -> Dict[str, Any]:
+        """Return response when no similar docs found (Issue #398: extracted)."""
+        return {
+            "success": True,
+            "suggestions": [],
+            "similar_docs_analyzed": 0,
+            "message": "No similar documents found for analysis",
+        }
+
     async def suggest_tags(
-        self,
-        content: str,
-        limit: int = 5,
-        min_confidence: float = 0.3,
-        similarity_limit: int = 20,
+        self, content: str, limit: int = 5, min_confidence: float = 0.3,
+        similarity_limit: int = 20
     ) -> Dict[str, Any]:
-        """
-        Suggest tags for content based on similar documents.
-
-        Args:
-            content: Document text to analyze
-            limit: Maximum number of tag suggestions to return
-            min_confidence: Minimum confidence score to include (0.0-1.0)
-            similarity_limit: Number of similar documents to analyze
-
-        Returns:
-            Dict with:
-                - success: bool
-                - suggestions: List of {tag, confidence, source_count}
-                - similar_docs_analyzed: int
-        """
+        """Suggest tags for content based on similar documents (Issue #398: refactored)."""
         self.ensure_initialized()
 
-        if not content or not content.strip():
-            return {
-                "success": False,
-                "suggestions": [],
-                "error": "Content is required",
-            }
+        error_response = self._validate_content(content)
+        if error_response:
+            return error_response
 
         try:
-            # Find similar documents
-            similar_docs = await self._find_similar_documents(
-                content, similarity_limit
-            )
-
+            similar_docs = await self._find_similar_documents(content, similarity_limit)
             if not similar_docs:
-                return {
-                    "success": True,
-                    "suggestions": [],
-                    "similar_docs_analyzed": 0,
-                    "message": "No similar documents found for analysis",
-                }
+                return self._no_similar_docs_response()
 
-            # Extract and weight tags
             tag_scores = await self._extract_weighted_tags(similar_docs)
-
-            # Build suggestions list
-            suggestions = self._build_suggestions_list(
-                tag_scores, limit, min_confidence
-            )
+            suggestions = self._build_suggestions_list(tag_scores, limit, min_confidence)
 
             logger.info(
                 "Generated %d tag suggestions from %d similar documents",
-                len(suggestions),
-                len(similar_docs),
+                len(suggestions), len(similar_docs),
             )
-
             return {
                 "success": True,
                 "suggestions": suggestions,
@@ -122,71 +101,33 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest tags: %s", e)
-            return {
-                "success": False,
-                "suggestions": [],
-                "error": str(e),
-            }
+            return {"success": False, "suggestions": [], "error": str(e)}
 
     async def suggest_categories(
-        self,
-        content: str,
-        limit: int = 3,
-        min_confidence: float = 0.3,
-        similarity_limit: int = 20,
+        self, content: str, limit: int = 3, min_confidence: float = 0.3,
+        similarity_limit: int = 20
     ) -> Dict[str, Any]:
-        """
-        Suggest categories for content based on similar documents.
-
-        Args:
-            content: Document text to analyze
-            limit: Maximum number of category suggestions to return
-            min_confidence: Minimum confidence score to include (0.0-1.0)
-            similarity_limit: Number of similar documents to analyze
-
-        Returns:
-            Dict with:
-                - success: bool
-                - suggestions: List of {category_path, confidence, source_count}
-                - similar_docs_analyzed: int
-        """
+        """Suggest categories based on similar documents (Issue #398: refactored)."""
         self.ensure_initialized()
 
-        if not content or not content.strip():
-            return {
-                "success": False,
-                "suggestions": [],
-                "error": "Content is required",
-            }
+        error_response = self._validate_content(content)
+        if error_response:
+            return error_response
 
         try:
-            # Find similar documents
-            similar_docs = await self._find_similar_documents(
-                content, similarity_limit
-            )
-
+            similar_docs = await self._find_similar_documents(content, similarity_limit)
             if not similar_docs:
-                return {
-                    "success": True,
-                    "suggestions": [],
-                    "similar_docs_analyzed": 0,
-                    "message": "No similar documents found for analysis",
-                }
+                return self._no_similar_docs_response()
 
-            # Extract and weight categories
             category_scores = await self._extract_weighted_categories(similar_docs)
-
-            # Build suggestions list
             suggestions = self._build_category_suggestions_list(
                 category_scores, limit, min_confidence
             )
 
             logger.info(
                 "Generated %d category suggestions from %d similar documents",
-                len(suggestions),
-                len(similar_docs),
+                len(suggestions), len(similar_docs),
             )
-
             return {
                 "success": True,
                 "suggestions": suggestions,
@@ -195,11 +136,7 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest categories: %s", e)
-            return {
-                "success": False,
-                "suggestions": [],
-                "error": str(e),
-            }
+            return {"success": False, "suggestions": [], "error": str(e)}
 
     def _empty_suggestion_response(self, error: str = None) -> Dict[str, Any]:
         """Build empty suggestion response (Issue #398: extracted)."""

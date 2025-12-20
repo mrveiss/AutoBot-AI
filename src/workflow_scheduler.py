@@ -392,6 +392,36 @@ class WorkflowScheduler:
         # Save state before stopping
         self._save_workflows()
 
+    def _parse_schedule_params(
+        self, scheduled_time: Union[datetime, str],
+        priority: Union[WorkflowPriority, str],
+        complexity: Union[TaskComplexity, str]
+    ) -> tuple:
+        """Parse and normalize schedule parameters (Issue #398: extracted).
+
+        Args:
+            scheduled_time: Time as datetime or string
+            priority: Priority as enum or string
+            complexity: Complexity as enum or string
+
+        Returns:
+            Tuple of (parsed_time, parsed_priority, parsed_complexity)
+        """
+        # Parse scheduled time
+        if isinstance(scheduled_time, str):
+            try:
+                scheduled_time = datetime.fromisoformat(scheduled_time)
+            except ValueError:
+                scheduled_time = self._parse_time_string(scheduled_time)
+
+        # Parse priority and complexity
+        if isinstance(priority, str):
+            priority = WorkflowPriority[priority.upper()]
+        if isinstance(complexity, str):
+            complexity = TaskComplexity(complexity.lower())
+
+        return scheduled_time, priority, complexity
+
     def schedule_workflow(
         self,
         request: Optional[WorkflowScheduleRequest] = None,
@@ -408,16 +438,9 @@ class WorkflowScheduler:
         user_id: Optional[str] = None,
         **kwargs,
     ) -> str:
-        """
-        Schedule a workflow for future execution.
+        """Schedule a workflow for future execution (Issue #398: refactored).
 
         Issue #319: Supports both request object and individual parameters.
-
-        Args:
-            request: WorkflowScheduleRequest object (preferred, reduces param count)
-            user_message: Message for workflow (legacy, use request instead)
-            scheduled_time: When to execute (legacy, use request instead)
-            ... other params for backwards compatibility
 
         Returns:
             Workflow ID string
@@ -434,37 +457,18 @@ class WorkflowScheduler:
             tags = request.tags
             dependencies = request.dependencies
             user_id = request.user_id
-            # Include additional fields from request
-            kwargs.setdefault(
-                "estimated_duration_minutes", request.estimated_duration_minutes
-            )
+            kwargs.setdefault("estimated_duration_minutes", request.estimated_duration_minutes)
             kwargs.setdefault("timeout_minutes", request.timeout_minutes)
             kwargs.setdefault("max_retries", request.max_retries)
         elif user_message is None or scheduled_time is None:
-            raise ValueError(
-                "Either 'request' object or 'user_message' and 'scheduled_time' required"
-            )
+            raise ValueError("Either 'request' object or 'user_message' and 'scheduled_time' required")
 
-        # Parse scheduled time
-        if isinstance(scheduled_time, str):
-            try:
-                scheduled_time = datetime.fromisoformat(scheduled_time)
-            except ValueError:
-                # Try parsing common formats
-                scheduled_time = self._parse_time_string(scheduled_time)
+        # Issue #398: Use helper for parameter parsing
+        scheduled_time, priority, complexity = self._parse_schedule_params(
+            scheduled_time, priority, complexity
+        )
 
-        # Parse priority
-        if isinstance(priority, str):
-            priority = WorkflowPriority[priority.upper()]
-
-        # Parse complexity
-        if isinstance(complexity, str):
-            complexity = TaskComplexity(complexity.lower())
-
-        # Generate workflow ID
         workflow_id = str(uuid4())
-
-        # Create scheduled workflow
         workflow = ScheduledWorkflow(
             id=workflow_id,
             name=f"Workflow {workflow_id[:8]}",
@@ -485,7 +489,6 @@ class WorkflowScheduler:
 
         self.scheduled_workflows[workflow_id] = workflow
         self._save_workflows()
-
         return workflow_id
 
     def cancel_workflow(self, workflow_id: str) -> bool:

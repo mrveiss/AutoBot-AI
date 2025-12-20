@@ -2,11 +2,61 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2025-12-05
+**Last Updated:** 2025-12-20
 
 ---
 
-## ✅ RECENT UPDATES (2025-12-05)
+## ✅ RECENT UPDATES (2025-12-20)
+
+### Issue #469: Prometheus/Grafana Monitoring Consolidation
+
+**Status:** ✅ Complete (2025-12-20)
+**GitHub Issue:** #469 - Migrate all monitoring to unified Prometheus/Grafana dashboard integration
+
+**Achievement:**
+- ✅ **New PerformanceMetricsRecorder** - GPU/NPU/Performance metrics now in Prometheus format
+- ✅ **Grafana Dashboard** - New `autobot-performance.json` with GPU/NPU visualization
+- ✅ **Backend Integration** - PerformanceMonitor now pushes metrics to Prometheus
+- ✅ **Frontend Types** - Extended TypeScript types for new metrics
+- ✅ **Legacy Deprecation** - `/monitoring/` directory marked for v3.0 removal
+
+**New Prometheus Metrics:**
+- `autobot_gpu_utilization_percent` - GPU utilization
+- `autobot_gpu_temperature_celsius` - GPU temperature
+- `autobot_gpu_power_watts` - GPU power consumption
+- `autobot_gpu_throttling_events_total` - GPU throttling events
+- `autobot_npu_utilization_percent` - NPU utilization
+- `autobot_npu_acceleration_ratio` - NPU acceleration speedup
+- `autobot_performance_score` - Overall performance score (0-100)
+- `autobot_health_score` - System health score (0-100)
+- `autobot_active_alerts_count` - Active alerts by severity
+- `autobot_multimodal_processing_seconds` - Multi-modal processing histogram
+
+**Grafana Dashboards (now 9 total):**
+1. AutoBot Overview
+2. System Metrics
+3. Workflow Execution
+4. Error Tracking
+5. Claude API
+6. GitHub Integration
+7. API Health
+8. Multi-Machine
+9. **GPU/NPU Performance** (NEW - Issue #469)
+
+**Files Created/Modified:**
+- `src/monitoring/metrics/performance.py` - New PerformanceMetricsRecorder
+- `src/monitoring/prometheus_metrics.py` - Added performance delegation methods
+- `src/utils/performance_monitoring/monitor.py` - Added Prometheus integration
+- `config/grafana/dashboards/autobot-performance.json` - New dashboard
+- `autobot-vue/src/composables/usePrometheusMetrics.ts` - Extended types
+
+**Legacy Code Deprecated:**
+- `/monitoring/` directory - Scheduled for removal in v3.0
+- `claude_api_monitor.py` - Already deprecated (Issue #348)
+
+---
+
+## ✅ PREVIOUS UPDATES (2025-12-05)
 
 ### EPIC #80 COMPLETE: Unified Monitoring with Prometheus + Grafana
 

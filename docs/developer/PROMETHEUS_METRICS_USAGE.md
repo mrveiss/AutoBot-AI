@@ -412,8 +412,297 @@ If you see warnings about high cardinality:
 - Gauges need to be explicitly set after restart
 - Consider persisting metric state if needed
 
+### 5. Knowledge Base Metrics
+
+Track document storage, vector embeddings, and search operations.
+
+#### Available Metrics
+
+- `autobot_knowledge_documents_total` - Total documents in knowledge base (labels: collection, document_type)
+- `autobot_knowledge_vectors_total` - Total vector embeddings (labels: collection)
+- `autobot_knowledge_search_requests_total` - Total search requests (labels: search_type, collection)
+- `autobot_knowledge_search_latency_seconds` - Search latency histogram (labels: search_type, collection)
+- `autobot_knowledge_search_results_count` - Number of results returned (labels: search_type)
+- `autobot_knowledge_cache_hits_total` - Cache hits (labels: cache_type)
+- `autobot_knowledge_cache_misses_total` - Cache misses (labels: cache_type)
+- `autobot_knowledge_embedding_latency_seconds` - Embedding generation time (labels: model)
+
+#### Usage Example
+
+```python
+from src.monitoring.prometheus_metrics import get_metrics_manager
+import time
+
+metrics = get_metrics_manager()
+
+# Record search operation
+start_time = time.time()
+results = await knowledge_base.search(query, collection="docs")
+duration = time.time() - start_time
+
+metrics.record_search(
+    search_type="semantic",
+    collection="docs",
+    latency_seconds=duration,
+    results_count=len(results)
+)
+
+# Record cache hit/miss
+if cached:
+    metrics.record_cache_hit(cache_type="embedding")
+else:
+    metrics.record_cache_miss(cache_type="embedding")
+
+# Update document counts
+metrics.set_document_count(
+    count=1500,
+    collection="docs",
+    document_type="markdown"
+)
+```
+
+### 6. LLM Provider Metrics
+
+Track LLM API requests, token usage, costs, and errors.
+
+#### Available Metrics
+
+- `autobot_llm_requests_total` - Total LLM requests (labels: provider, model, request_type)
+- `autobot_llm_tokens_total` - Token usage (labels: provider, model, token_type)
+- `autobot_llm_cost_dollars_total` - Estimated cost (labels: provider, model, cost_type)
+- `autobot_llm_request_latency_seconds` - Request latency histogram (labels: provider, model)
+- `autobot_llm_errors_total` - Error count (labels: provider, error_type)
+- `autobot_llm_rate_limit_remaining` - Rate limit remaining (labels: provider)
+- `autobot_llm_provider_availability` - Provider status 0/1 (labels: provider)
+
+#### Usage Example
+
+```python
+from src.monitoring.prometheus_metrics import get_metrics_manager
+import time
+
+metrics = get_metrics_manager()
+
+# Record LLM request
+start_time = time.time()
+try:
+    response = await llm_client.complete(prompt)
+    duration = time.time() - start_time
+
+    metrics.record_llm_request(
+        provider="openai",
+        model="gpt-4",
+        request_type="completion",
+        status="success",
+        latency=duration
+    )
+
+    metrics.record_llm_tokens(
+        provider="openai",
+        model="gpt-4",
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens
+    )
+
+    # Record estimated cost
+    metrics.record_llm_cost(
+        provider="openai",
+        model="gpt-4",
+        cost_dollars=0.03
+    )
+
+except RateLimitError:
+    metrics.record_llm_error(
+        provider="openai",
+        error_type="rate_limit"
+    )
+
+# Update rate limit status
+metrics.set_llm_rate_limit(
+    provider="openai",
+    remaining=450
+)
+
+# Update provider availability
+metrics.set_llm_provider_availability(
+    provider="openai",
+    available=True
+)
+```
+
+### 7. WebSocket Metrics
+
+Track WebSocket connections, messages, and latency.
+
+#### Available Metrics
+
+- `autobot_websocket_connections_active` - Active connections gauge (labels: namespace)
+- `autobot_websocket_connections_total` - Total connections (labels: namespace, status)
+- `autobot_websocket_messages_sent_total` - Messages sent (labels: namespace, event_type)
+- `autobot_websocket_messages_received_total` - Messages received (labels: namespace, event_type)
+- `autobot_websocket_message_latency_seconds` - Message latency histogram (labels: namespace)
+- `autobot_websocket_errors_total` - Connection errors (labels: namespace, error_type)
+- `autobot_websocket_rooms_active` - Active rooms gauge (labels: namespace)
+
+#### Usage Example
+
+```python
+from src.monitoring.prometheus_metrics import get_metrics_manager
+
+metrics = get_metrics_manager()
+
+# Record connection
+metrics.record_websocket_connection(
+    namespace="/chat",
+    status="connected"
+)
+
+# Update active connections
+metrics.set_websocket_active_connections(
+    namespace="/chat",
+    count=45
+)
+
+# Record message
+metrics.record_websocket_message(
+    namespace="/chat",
+    event_type="chat_message",
+    direction="sent",
+    latency_seconds=0.005
+)
+
+# Record error
+metrics.record_websocket_error(
+    namespace="/chat",
+    error_type="disconnect"
+)
+```
+
+### 8. Redis Metrics
+
+Track Redis operations, connection pool, and performance.
+
+#### Available Metrics
+
+- `autobot_redis_operations_total` - Total operations (labels: database, operation, status)
+- `autobot_redis_operation_latency_seconds` - Operation latency histogram (labels: database, operation)
+- `autobot_redis_connections_active` - Active connections gauge (labels: database)
+- `autobot_redis_pool_size` - Connection pool size gauge (labels: database)
+- `autobot_redis_pool_available` - Available pool connections gauge (labels: database)
+- `autobot_redis_memory_used_bytes` - Memory usage gauge (labels: database)
+- `autobot_redis_keys_total` - Total keys gauge (labels: database)
+- `autobot_redis_pubsub_messages_total` - Pub/sub messages (labels: database, direction)
+
+#### Usage Example
+
+```python
+from src.monitoring.prometheus_metrics import get_metrics_manager
+import time
+
+metrics = get_metrics_manager()
+
+# Record Redis operation
+start_time = time.time()
+try:
+    result = await redis.get(key)
+    duration = time.time() - start_time
+
+    metrics.record_redis_operation(
+        database="main",
+        operation="get",
+        status="success",
+        latency=duration
+    )
+except RedisError:
+    metrics.record_redis_operation(
+        database="main",
+        operation="get",
+        status="error",
+        latency=time.time() - start_time
+    )
+
+# Update connection pool stats
+metrics.set_redis_pool_stats(
+    database="main",
+    active=10,
+    available=5,
+    pool_size=15
+)
+
+# Update memory usage
+metrics.set_redis_memory(
+    database="main",
+    bytes_used=104857600  # 100MB
+)
+
+# Record pub/sub message
+metrics.record_redis_pubsub(
+    database="main",
+    direction="published"
+)
+```
+
+## Grafana Dashboards
+
+### Available Dashboards
+
+| Dashboard | Type | Description |
+|-----------|------|-------------|
+| AutoBot Overview | overview | System-wide health |
+| System Metrics | system | CPU, memory, disk |
+| Workflow Execution | workflow | Workflow metrics |
+| Error Tracking | errors | Error rates |
+| Claude API | claude | Claude API usage |
+| GitHub Integration | github | GitHub metrics |
+| GPU/NPU Performance | performance | Hardware acceleration |
+| API Health | api-health | API endpoint health |
+| Multi-Machine | multi-machine | Infrastructure health |
+| Knowledge Base | knowledge-base | Vector store metrics |
+| LLM Providers | llm-providers | LLM API metrics |
+| Redis | redis | Redis performance |
+| WebSocket | websocket | Real-time connections |
+
+### Sample Queries for New Metrics
+
+**Knowledge Base Search Latency (p95):**
+```promql
+histogram_quantile(0.95,
+  rate(autobot_knowledge_search_latency_seconds_bucket[5m])
+)
+```
+
+**LLM Request Rate by Provider:**
+```promql
+sum(rate(autobot_llm_requests_total[5m])) by (provider)
+```
+
+**LLM Token Usage:**
+```promql
+sum(increase(autobot_llm_tokens_total[1h])) by (provider, token_type)
+```
+
+**WebSocket Active Connections:**
+```promql
+sum(autobot_websocket_connections_active) by (namespace)
+```
+
+**Redis Operation Latency:**
+```promql
+histogram_quantile(0.99,
+  rate(autobot_redis_operation_latency_seconds_bucket[5m])
+) by (database, operation)
+```
+
+**Cache Hit Ratio:**
+```promql
+sum(rate(autobot_knowledge_cache_hits_total[5m]))
+/
+(sum(rate(autobot_knowledge_cache_hits_total[5m])) + sum(rate(autobot_knowledge_cache_misses_total[5m])))
+```
+
 ## See Also
 
+- [Monitoring Architecture](../architecture/MONITORING_ARCHITECTURE.md) - Full architecture documentation
 - [Prometheus Documentation](https://prometheus.io/docs/)
 - [Grafana Dashboards](https://grafana.com/docs/)
 - [Metric Naming Best Practices](https://prometheus.io/docs/practices/naming/)
