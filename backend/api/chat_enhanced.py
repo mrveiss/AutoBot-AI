@@ -463,6 +463,106 @@ async def enhanced_chat(
         )
 
 
+# ====================================================================
+# Streaming Helpers (Issue #486: extracted from stream_enhanced_chat)
+# ====================================================================
+
+
+def _format_sse_event(data: dict) -> str:
+    """Format data as Server-Sent Event (Issue #486: extracted helper)."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
+async def _stream_ai_stack_response(
+    message: EnhancedChatMessage,
+    session_id: str,
+    chat_history_manager,
+    request_id: str,
+    preferences: Optional[ChatPreferences],
+):
+    """Stream AI Stack enhanced response in chunks (Issue #486: extracted)."""
+    try:
+        response_data = await process_enhanced_chat_message(
+            message, chat_history_manager, None, {}, request_id, preferences
+        )
+
+        content = response_data.get("content", "")
+        chunk_size = 50
+
+        for i in range(0, len(content), chunk_size):
+            chunk = content[i : i + chunk_size]
+            yield _format_sse_event({
+                "type": "chunk",
+                "content": chunk,
+                "session_id": session_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+            await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
+
+        yield _format_sse_event({
+            "type": "metadata",
+            "metadata": response_data.get("metadata", {}),
+            "sources": response_data.get("knowledge_sources"),
+            "session_id": session_id,
+        })
+
+    except Exception as e:
+        logger.error("Enhanced streaming error: %s", e)
+        yield _format_sse_event({
+            "type": "error",
+            "message": "Error generating enhanced response",
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+
+def _stream_fallback_response(session_id: str):
+    """Stream fallback response when AI Stack not enabled (Issue #486: extracted)."""
+    fallback_msg = (
+        "Thank you for your message. Enhanced streaming requires AI Stack "
+        "integration."
+    )
+    return _format_sse_event({
+        "type": "chunk",
+        "content": fallback_msg,
+        "session_id": session_id,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+
+
+async def _generate_enhanced_stream(
+    message: EnhancedChatMessage,
+    request: Request,
+    request_id: str,
+    preferences: Optional[ChatPreferences],
+):
+    """Generate streaming response with AI Stack integration (Issue #486: extracted)."""
+    try:
+        session_id = message.session_id or generate_chat_session_id()
+        yield _format_sse_event({
+            "type": "start", "session_id": session_id, "enhanced": True
+        })
+
+        chat_history_manager = get_chat_history_manager(request)
+
+        if message.use_ai_stack:
+            async for event in _stream_ai_stack_response(
+                message, session_id, chat_history_manager, request_id, preferences
+            ):
+                yield event
+        else:
+            yield _stream_fallback_response(session_id)
+
+        yield _format_sse_event({"type": "end"})
+
+    except Exception as e:
+        logger.error("Streaming error: %s", e)
+        yield _format_sse_event({
+            "type": "error",
+            "message": "Error in enhanced streaming",
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_enhanced_chat",
@@ -475,95 +575,15 @@ async def stream_enhanced_chat(
     preferences: Optional[ChatPreferences] = None,
 ):
     """
-    Stream enhanced chat response for real-time communication.
+    Stream enhanced chat response for real-time communication (Issue #486: refactored).
 
     Provides real-time streaming of AI Stack enhanced responses
     with knowledge base integration.
     """
     request_id = generate_request_id()
 
-    async def generate_enhanced_stream():
-        """Generate streaming response with AI Stack and knowledge integration."""
-        try:
-            # Initial setup
-            session_id = message.session_id or generate_chat_session_id()
-
-            # Send initial message acknowledgment
-            yield f"data: {json.dumps({'type': 'start', 'session_id': session_id, 'enhanced': True})}\n\n"
-
-            # Get chat history manager
-            chat_history_manager = get_chat_history_manager(request)
-
-            if message.use_ai_stack:
-                try:
-                    # For streaming, we'll process and send response in chunks
-                    # Note: process_enhanced_chat_message handles AI client internally
-                    response_data = await process_enhanced_chat_message(
-                        message, chat_history_manager, None, {}, request_id, preferences
-                    )
-
-                    # Stream the response content in chunks
-                    content = response_data.get("content", "")
-                    chunk_size = 50  # Characters per chunk
-
-                    for i in range(0, len(content), chunk_size):
-                        chunk = content[i : i + chunk_size]
-                        chunk_data = {
-                            "type": "chunk",
-                            "content": chunk,
-                            "session_id": session_id,
-                            "timestamp": datetime.utcnow().isoformat(),
-                        }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
-                        # Small delay between chunks for streaming UX
-                        await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
-
-                    # Send metadata and sources at the end
-                    metadata_data = {
-                        "type": "metadata",
-                        "metadata": response_data.get("metadata", {}),
-                        "sources": response_data.get("knowledge_sources"),
-                        "session_id": session_id,
-                    }
-                    yield f"data: {json.dumps(metadata_data)}\n\n"
-
-                except Exception as e:
-                    logger.error(f"Enhanced streaming error: {e}")
-                    error_data = {
-                        "type": "error",
-                        "message": "Error generating enhanced response",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    }
-                    yield f"data: {json.dumps(error_data)}\n\n"
-            else:
-                # Basic streaming fallback
-                fallback_response = (
-                    "Thank you for your message. Enhanced streaming requires AI Stack"
-                    "integration."
-                )
-
-                chunk_data = {
-                    "type": "chunk",
-                    "content": fallback_response,
-                    "session_id": session_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-
-            # Send completion signal
-            yield f"data: {json.dumps({'type': 'end'})}\n\n"
-
-        except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            error_data = {
-                "type": "error",
-                "message": "Error in enhanced streaming",
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-
     return StreamingResponse(
-        generate_enhanced_stream(),
+        _generate_enhanced_stream(message, request, request_id, preferences),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

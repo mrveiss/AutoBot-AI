@@ -209,6 +209,66 @@ async def get_optimal_agents_for_goal(
 # ====================================================================
 
 
+async def _select_agents_for_goal(ai_client, payload, available_agents: list) -> list:
+    """Select agents for goal execution (Issue #398: extracted).
+
+    Args:
+        ai_client: AI Stack client instance
+        payload: Goal payload with optional agent specification
+        available_agents: List of available agent names
+
+    Returns:
+        List of selected agent names
+
+    Raises:
+        HTTPException: If no specified agents are available
+    """
+    if payload.agents:
+        selected = [agent for agent in payload.agents if agent in available_agents]
+        if not selected:
+            raise HTTPException(
+                status_code=400,
+                detail=f"None of the specified agents are available. Available: {available_agents}",
+            )
+        return selected
+    return await get_optimal_agents_for_goal(payload.goal, available_agents)
+
+
+async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
+    """Enhance context with knowledge base results (Issue #398: extracted).
+
+    Args:
+        payload: Goal payload with context and KB settings
+        knowledge_base: Knowledge base instance or None
+
+    Returns:
+        Enhanced context string or original context
+    """
+    if not (payload.use_knowledge_base and knowledge_base):
+        return payload.context
+
+    try:
+        kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
+        if kb_results:
+            kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
+            return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
+    except Exception as e:
+        logger.warning(f"Knowledge base context enhancement failed: {e}")
+    return payload.context
+
+
+def _determine_coordination_mode(payload, selected_agents: list) -> str:
+    """Determine coordination mode for multi-agent execution (Issue #398: extracted)."""
+    if payload.coordination_mode != "intelligent":
+        return payload.coordination_mode
+
+    if len(selected_agents) == 1:
+        return "single"
+    elif any(word in payload.goal.lower() for word in COORDINATION_KEYWORDS):
+        return "sequential"
+    return "parallel"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_enhanced_goal",
@@ -221,12 +281,7 @@ async def execute_enhanced_goal(
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
 ):
-    """
-    Execute goal using enhanced AI Stack multi-agent coordination.
-
-    This endpoint provides intelligent agent selection, task coordination,
-    and knowledge base integration for superior goal achievement.
-    """
+    """Execute goal using enhanced AI Stack multi-agent coordination (Issue #398: refactored)."""
     ai_client = await get_ai_stack_client()
 
     # Get available agents
@@ -235,55 +290,15 @@ async def execute_enhanced_goal(
         available_agents = agents_info.get("agents", [])
     except Exception as e:
         logger.warning(f"Could not get agent list: {e}")
-        available_agents = list(_FALLBACK_AGENTS)  # Issue #380: use module constant
+        available_agents = list(_FALLBACK_AGENTS)
 
-    # Determine which agents to use
-    if payload.agents:
-        # Use specified agents (filtered by availability)
-        selected_agents = [
-            agent for agent in payload.agents if agent in available_agents
-        ]
-        if not selected_agents:
-            raise HTTPException(
-                status_code=400,
-                detail=f"None of the specified agents are available. Available: {available_agents}",
-            )
-    else:
-        # Intelligently select agents based on goal
-        selected_agents = await get_optimal_agents_for_goal(
-            payload.goal, available_agents
-        )
+    # Issue #398: Use extracted helpers
+    selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
+    enhanced_context = await _enhance_context_with_kb(payload, knowledge_base)
+    coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
-    # Enhance context with knowledge base if requested
-    enhanced_context = payload.context
-    if payload.use_knowledge_base and knowledge_base:
-        try:
-            kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
-            if kb_results:
-                kb_context = "\n".join(
-                    [f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]]
-                )
-                enhanced_context = (
-                    f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
-                )
-        except Exception as e:
-            logger.warning(f"Knowledge base context enhancement failed: {e}")
-
-    # Execute multi-agent goal
     execution_start = datetime.utcnow()
 
-    if payload.coordination_mode == "intelligent":
-        # Use intelligent coordination based on goal complexity
-        if len(selected_agents) == 1:
-            coordination_mode = "single"
-        elif any(word in payload.goal.lower() for word in COORDINATION_KEYWORDS):
-            coordination_mode = "sequential"
-        else:
-            coordination_mode = "parallel"
-    else:
-        coordination_mode = payload.coordination_mode
-
-    # Execute using AI Stack multi-agent orchestration
     try:
         result = await ai_client.multi_agent_query(
             query=payload.goal,
@@ -291,22 +306,19 @@ async def execute_enhanced_goal(
             coordination_mode=coordination_mode,
         )
 
-        execution_end = datetime.utcnow()
-        execution_time = (execution_end - execution_start).total_seconds()
+        execution_time = (datetime.utcnow() - execution_start).total_seconds()
 
-        return create_success_response(
-            {
-                "goal": payload.goal,
-                "agents_used": selected_agents,
-                "coordination_mode": coordination_mode,
-                "execution_time": execution_time,
-                "priority": payload.priority,
-                "result": result,
-                "enhanced_context_used": enhanced_context is not None,
-                "knowledge_base_integrated": payload.use_knowledge_base,
-                "timestamp": execution_end.isoformat(),
-            }
-        )
+        return create_success_response({
+            "goal": payload.goal,
+            "agents_used": selected_agents,
+            "coordination_mode": coordination_mode,
+            "execution_time": execution_time,
+            "priority": payload.priority,
+            "result": result,
+            "enhanced_context_used": enhanced_context is not None,
+            "knowledge_base_integrated": payload.use_knowledge_base,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Enhanced goal execution")

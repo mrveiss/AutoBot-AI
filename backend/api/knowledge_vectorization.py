@@ -386,8 +386,83 @@ async def _process_single_fact_safe(
             kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
         )
     except Exception as e:
-        logger.error(f"Error processing fact {fact_key}: {e}")
+        logger.error("Error processing fact %s: %s", fact_key, e)
         return False, False, None
+
+
+async def _process_batch(
+    kb, batch: list, batch_num: int, total_batches: int, skip_existing: bool
+) -> tuple:
+    """
+    Process a single batch of facts for vectorization (Issue #486: extracted).
+
+    Returns:
+        Tuple of (success_count, failed_count, skipped_count, processed_facts)
+    """
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+    processed_facts = []
+
+    logger.info("Processing batch %d/%d (%d facts)", batch_num + 1, total_batches, len(batch))
+
+    try:
+        all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(
+            kb, batch, skip_existing
+        )
+    except RedisError as e:
+        logger.error("Redis error in batch %d: %s", batch_num + 1, e)
+        return 0, len(batch), 0, []
+
+    for fact_key, fact_data, fact_id in zip(batch, all_fact_data, fact_ids):
+        success, skipped, result_entry = await _process_single_fact_safe(
+            kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
+        )
+        if success:
+            success_count += 1
+            if result_entry:
+                processed_facts.append(result_entry)
+        elif skipped:
+            skipped_count += 1
+        else:
+            failed_count += 1
+
+    return success_count, failed_count, skipped_count, processed_facts
+
+
+async def _process_all_batches(
+    kb, fact_keys: list, batch_size: int, batch_delay: float, skip_existing: bool
+) -> tuple:
+    """
+    Process all batches of facts for vectorization (Issue #486: extracted).
+
+    Returns:
+        Tuple of (total_success, total_failed, total_skipped, all_processed_facts, total_batches)
+    """
+    total_success = 0
+    total_failed = 0
+    total_skipped = 0
+    all_processed_facts = []
+
+    total_batches = (len(fact_keys) + batch_size - 1) // batch_size
+
+    for batch_num in range(total_batches):
+        start_idx = batch_num * batch_size
+        end_idx = min(start_idx + batch_size, len(fact_keys))
+        batch = fact_keys[start_idx:end_idx]
+
+        success, failed, skipped, processed = await _process_batch(
+            kb, batch, batch_num, total_batches, skip_existing
+        )
+        total_success += success
+        total_failed += failed
+        total_skipped += skipped
+        all_processed_facts.extend(processed)
+
+        if batch_num < total_batches - 1:
+            await asyncio.sleep(batch_delay)
+
+    return total_success, total_failed, total_skipped, all_processed_facts, total_batches
 
 
 @router.post("/vectorize_facts")
@@ -398,99 +473,47 @@ async def vectorize_existing_facts(
     skip_existing: bool = True,
 ):
     """
-    Generate vector embeddings for facts in Redis using batched processing.
+    Generate vector embeddings for facts in Redis (Issue #486: refactored).
 
     Args:
         batch_size: Number of facts to process per batch (default: 50)
         batch_delay: Delay in seconds between batches (default: 0.5)
         skip_existing: Skip facts that already have vectors (default: True)
-
-    This prevents resource lockup by processing facts in manageable batches
-    and can be run periodically to vectorize new facts.
     """
     kb = await get_or_create_knowledge_base(req.app)
 
     if not kb:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    # Get all fact keys from Redis
     fact_keys = await kb._scan_redis_keys_async("fact:*")
 
     if not fact_keys:
         return {
             "status": "success",
             "message": "No facts found to vectorize",
-            "processed": 0,
-            "success": 0,
-            "failed": 0,
-            "skipped": 0,
+            "processed": 0, "success": 0, "failed": 0, "skipped": 0,
         }
 
     logger.info(
-        f"Starting batched vectorization of {len(fact_keys)} facts "
-        f"(batch_size={batch_size}, delay={batch_delay}s)"
+        "Starting batched vectorization of %d facts (batch_size=%d, delay=%ss)",
+        len(fact_keys), batch_size, batch_delay
     )
 
-    success_count = 0
-    failed_count = 0
-    skipped_count = 0
-    processed_facts = []
+    success, failed, skipped, processed_facts, total_batches = await _process_all_batches(
+        kb, fact_keys, batch_size, batch_delay, skip_existing
+    )
 
-    total_batches = (len(fact_keys) + batch_size - 1) // batch_size
-
-    # Process in batches
-    for batch_num in range(total_batches):
-        start_idx = batch_num * batch_size
-        end_idx = min(start_idx + batch_size, len(fact_keys))
-        batch = fact_keys[start_idx:end_idx]
-
-        logger.info(
-            f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
-        )
-
-        # Fetch batch data (extracted helper reduces nesting)
-        try:
-            all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(
-                kb, batch, skip_existing
-            )
-        except RedisError as e:
-            logger.error(f"Redis error in batch {batch_num + 1}: {e}")
-            failed_count += len(batch)
-            continue
-
-        # Process each fact in batch (Issue #315: simplified result handling)
-        for fact_key, fact_data, fact_id in zip(batch, all_fact_data, fact_ids):
-            success, skipped, result_entry = await _process_single_fact_safe(
-                kb, fact_key, fact_data, fact_id, skip_existing, vector_exists
-            )
-            if success:
-                success_count += 1
-                if result_entry:
-                    processed_facts.append(result_entry)
-            elif skipped:
-                skipped_count += 1
-            else:
-                failed_count += 1
-
-        # Delay between batches to prevent resource exhaustion
-        if batch_num < total_batches - 1:
-            await asyncio.sleep(batch_delay)
-
-    # KnowledgeBaseV2 automatically indexes during add_document - no rebuild needed
     logger.info("Batched vectorization complete - index updated automatically")
 
     return {
         "status": "success",
-        "message": (
-            f"Vectorization complete: {success_count} successful, "
-            f"{failed_count} failed, {skipped_count} skipped"
-        ),
+        "message": f"Vectorization complete: {success} successful, {failed} failed, {skipped} skipped",
         "processed": len(fact_keys),
-        "success": success_count,
-        "failed": failed_count,
-        "skipped": skipped_count,
+        "success": success,
+        "failed": failed,
+        "skipped": skipped,
         "batches": total_batches,
-        "details": processed_facts[:10],  # Return first 10 for reference
+        "details": processed_facts[:10],
     }
 
 

@@ -270,65 +270,50 @@ class FactsMixin:
 
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
+    def _prepare_fact_metadata(
+        self, fact_id: str, metadata: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Prepare metadata with system fields for new fact (Issue #398: extracted)."""
+        if metadata is None:
+            metadata = {}
+        metadata["fact_id"] = fact_id
+        metadata["timestamp"] = datetime.now().isoformat()
+        metadata["embedding_model"] = self.embedding_model_name
+        return metadata
+
+    async def _store_and_vectorize_fact(
+        self, fact_id: str, content: str, metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Store fact in Redis, vectorize, and update stats (Issue #398: extracted)."""
+        await self._store_fact_in_redis(fact_id, content, metadata)
+        await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
+        await asyncio.gather(
+            self._increment_stat("total_facts"),
+            self._increment_stat("total_vectors"),
+        )
+        return {"status": "success", "fact_id": fact_id, "action": "created"}
+
     async def store_fact(
         self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None
     ) -> Dict[str, Any]:
-        """
-        Store a new fact in Redis and vectorize it in ChromaDB.
-
-        Issue #281: Refactored from 113 lines to use extracted helper methods.
-
-        Args:
-            content: Fact content text
-            metadata: Optional metadata dict
-            fact_id: Optional custom fact ID
-
-        Returns:
-            Dict with status and fact_id
-        """
+        """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content provided"}
 
         try:
-            # Generate fact ID if not provided
-            if not fact_id:
-                fact_id = str(uuid.uuid4())
+            fact_id = fact_id or str(uuid.uuid4())
+            metadata = self._prepare_fact_metadata(fact_id, metadata)
 
-            # Prepare metadata
-            if metadata is None:
-                metadata = {}
-
-            # Add system metadata
-            metadata["fact_id"] = fact_id
-            metadata["timestamp"] = datetime.now().isoformat()
-            metadata["embedding_model"] = self.embedding_model_name
-
-            # Issue #281: uses helper for duplicate checking
             duplicate_result = await self._check_for_duplicates(content, metadata)
             if duplicate_result:
                 return duplicate_result
 
-            # Issue #281: uses helper for Redis storage
-            await self._store_fact_in_redis(fact_id, content, metadata)
-
-            # Issue #281: uses helper for ChromaDB vectorization
-            await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
-
-            # Issue #379: Increment stats counters in parallel (Issue #71)
-            await asyncio.gather(
-                self._increment_stat("total_facts"),
-                self._increment_stat("total_vectors"),
-            )
-
-            return {"status": "success", "fact_id": fact_id, "action": "created"}
+            return await self._store_and_vectorize_fact(fact_id, content, metadata)
 
         except Exception as e:
             logger.error("Failed to store fact: %s", e)
-            import traceback
-
-            logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
     async def _get_fact_for_vectorization(

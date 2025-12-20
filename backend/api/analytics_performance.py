@@ -450,81 +450,84 @@ def analyze_with_regex(
 # ============================================================================
 
 
+async def _get_files_to_analyze(target_path: Path) -> list[Path]:
+    """Get list of Python files to analyze (Issue #398: extracted).
+
+    Args:
+        target_path: Target file or directory path
+
+    Returns:
+        List of Python file paths to analyze
+    """
+    is_file = await asyncio.to_thread(target_path.is_file)
+    if is_file:
+        return [target_path]
+
+    is_dir = await asyncio.to_thread(target_path.is_dir)
+    if is_dir:
+        all_py_files = await asyncio.to_thread(lambda: list(target_path.rglob("*.py")))
+        return all_py_files[:100]  # Limit files
+
+    return []  # Demo mode
+
+
+def _deduplicate_issues(issues: list[PerformanceIssue]) -> list[PerformanceIssue]:
+    """Remove duplicate issues by file/line/pattern (Issue #398: extracted)."""
+    seen = set()
+    unique = []
+    for issue in issues:
+        key = (issue.file, issue.line, issue.pattern_id)
+        if key not in seen:
+            seen.add(key)
+            unique.append(issue)
+    return unique
+
+
+def _calculate_analysis_score(issues: list[PerformanceIssue]) -> tuple[int, int, int, int, int]:
+    """Calculate issue counts and performance score (Issue #398: extracted).
+
+    Returns:
+        Tuple of (critical, high, medium, low, score)
+    """
+    critical = sum(1 for i in issues if i.impact == ImpactLevel.CRITICAL)
+    high = sum(1 for i in issues if i.impact == ImpactLevel.HIGH)
+    medium = sum(1 for i in issues if i.impact == ImpactLevel.MEDIUM)
+    low = sum(1 for i in issues if i.impact == ImpactLevel.LOW)
+
+    deductions = critical * 20 + high * 10 + medium * 5 + low * 2
+    score = max(0, 100 - min(100, deductions))
+
+    return critical, high, medium, low, score
+
+
 @router.get("/analyze")
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
 ) -> PerformanceAnalysisResult:
-    """
-    Analyze code for performance anti-patterns.
-
-    Scans the specified path for performance issues using both
-    regex patterns and AST analysis.
-    """
+    """Analyze code for performance anti-patterns (Issue #398: refactored)."""
     start_time = datetime.now()
 
-    # Find Python files
-    target_path = Path(path)
-    files_to_analyze: list[Path] = []
-
-    # Issue #358 - avoid blocking
-    is_file = await asyncio.to_thread(target_path.is_file)
-    is_dir = await asyncio.to_thread(target_path.is_dir) if not is_file else False
-
-    if is_file:
-        files_to_analyze = [target_path]
-    elif is_dir:
-        # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
-        all_py_files = await asyncio.to_thread(lambda: list(target_path.rglob("*.py")))
-        files_to_analyze = all_py_files[:100]  # Limit files
-    else:
-        # Demo mode
-        files_to_analyze = []
+    # Issue #398: Use extracted helper
+    files_to_analyze = await _get_files_to_analyze(Path(path))
 
     all_issues: list[PerformanceIssue] = []
-
     for filepath in files_to_analyze:
         try:
-            # Issue #358 - avoid blocking
             content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
-
-            # Regex analysis
-            regex_issues = analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS)
-            all_issues.extend(regex_issues)
-
-            # AST analysis
+            all_issues.extend(analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS))
             if include_ast:
-                ast_issues = analyze_with_ast(str(filepath), content)
-                all_issues.extend(ast_issues)
-
+                all_issues.extend(analyze_with_ast(str(filepath), content))
         except Exception as e:
             logger.warning(f"Failed to analyze {filepath}: {e}")
 
-    # If no files found, use demo data
+    # Use demo data if no files found
     if not files_to_analyze:
         all_issues = get_demo_issues()
 
-    # Remove duplicates (same file/line/pattern)
-    seen = set()
-    unique_issues = []
-    for issue in all_issues:
-        key = (issue.file, issue.line, issue.pattern_id)
-        if key not in seen:
-            seen.add(key)
-            unique_issues.append(issue)
-
-    all_issues = unique_issues
-
-    # Calculate statistics
-    duration_ms = (datetime.now() - start_time).total_seconds() * 1000
-    critical = sum(1 for i in all_issues if i.impact == ImpactLevel.CRITICAL)
-    high = sum(1 for i in all_issues if i.impact == ImpactLevel.HIGH)
-    medium = sum(1 for i in all_issues if i.impact == ImpactLevel.MEDIUM)
-    low = sum(1 for i in all_issues if i.impact == ImpactLevel.LOW)
-
-    # Calculate score (100 = perfect, deduct for issues)
-    deductions = critical * 20 + high * 10 + medium * 5 + low * 2
-    score = max(0, 100 - min(100, deductions))
+    # Issue #398: Use extracted helpers
+    all_issues = _deduplicate_issues(all_issues)
+    critical, high, medium, low, score = _calculate_analysis_score(all_issues)
 
     result = PerformanceAnalysisResult(
         total_issues=len(all_issues),
@@ -533,13 +536,12 @@ async def analyze_path(
         medium_count=medium,
         low_count=low,
         issues=all_issues,
-        files_analyzed=len(files_to_analyze) or 5,  # Demo count
-        duration_ms=round(duration_ms, 2),
+        files_analyzed=len(files_to_analyze) or 5,
+        duration_ms=round((datetime.now() - start_time).total_seconds() * 1000, 2),
         timestamp=datetime.now().isoformat(),
         score=score,
     )
 
-    # Store in history (thread-safe)
     async with _analysis_history_lock:
         _analysis_history.insert(0, result)
         if len(_analysis_history) > 50:

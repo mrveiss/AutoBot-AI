@@ -122,6 +122,28 @@ class SearchMixin:
             )
         return self._hybrid_searcher
 
+    def _validate_search_inputs(self, query: str) -> Optional[List[Dict[str, Any]]]:
+        """Validate search inputs, return empty list if invalid (Issue #398: extracted)."""
+        if not query.strip():
+            return []
+        if not self.vector_store:
+            logger.warning("Vector store not available for search")
+            return []
+        return None  # Valid inputs
+
+    async def _execute_vector_search(
+        self, query: str, similarity_top_k: int
+    ) -> List[Dict[str, Any]]:
+        """Execute vector search and deduplicate results (Issue #398: extracted)."""
+        query_embedding = await self._get_query_embedding(query)
+        results_data = await self._query_chromadb(query_embedding, similarity_top_k)
+        results = self._deduplicate_results(results_data, similarity_top_k)
+        logger.info(
+            "ChromaDB search returned %d unique documents for query: %s...",
+            len(results), query[:50],
+        )
+        return results
+
     async def search(
         self,
         query: str,
@@ -130,57 +152,18 @@ class SearchMixin:
         filters: Optional[Dict[str, Any]] = None,
         mode: str = "auto",
     ) -> List[Dict[str, Any]]:
-        """
-        Search the knowledge base with multiple search modes.
-
-        Issue #281: Refactored from 147 lines to use extracted helper methods.
-
-        Args:
-            query: Search query
-            top_k: Number of results to return (alias for similarity_top_k)
-            similarity_top_k: Number of results to return (takes precedence over top_k)
-            filters: Optional filters to apply
-            mode: Search mode ("vector" for semantic, "text" for keyword, "auto" for hybrid)
-
-        Returns:
-            List of search results with content and metadata
-        """
+        """Search the knowledge base (Issue #398: refactored)."""
         self.ensure_initialized()
+        similarity_top_k = similarity_top_k or top_k
 
-        # Handle parameter aliases
-        if similarity_top_k is None:
-            similarity_top_k = top_k
-
-        if not query.strip():
-            return []
-
-        if not self.vector_store:
-            logger.warning("Vector store not available for search")
-            return []
+        invalid_result = self._validate_search_inputs(query)
+        if invalid_result is not None:
+            return invalid_result
 
         try:
-            # Step 1: Get query embedding (with caching)
-            query_embedding = await self._get_query_embedding(query)
-
-            # Step 2: Query ChromaDB
-            results_data = await self._query_chromadb(query_embedding, similarity_top_k)
-
-            # Step 3: Deduplicate and format results
-            results = self._deduplicate_results(results_data, similarity_top_k)
-
-            logger.info(
-                "ChromaDB direct search returned %d unique documents "
-                "(deduplicated) for query: %s...",
-                len(results),
-                query[:50],
-            )
-            return results
-
+            return await self._execute_vector_search(query, similarity_top_k)
         except Exception as e:
             logger.error("Knowledge base search failed: %s", e)
-            import traceback
-
-            logger.error(traceback.format_exc())
             return []
 
     async def _get_query_embedding(self, query: str) -> List[float]:
