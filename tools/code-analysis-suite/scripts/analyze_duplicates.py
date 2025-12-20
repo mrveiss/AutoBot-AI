@@ -5,56 +5,24 @@ Analyze AutoBot codebase for duplicate functions and generate refactoring recomm
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from src.code_analyzer import CodeAnalyzer
 
+logger = logging.getLogger(__name__)
 
-async def analyze_command_execution_duplicates():
-    """Specifically analyze command execution related duplicates"""
+# Command execution function names to search for (Issue #398: extracted data)
+COMMAND_FUNCTION_NAMES = [
+    "execute_command", "run_command", "execute_shell_command",
+    "run_shell_command", "_run_command", "execute_command_with_output",
+    "execute_interactive_command"
+]
 
-    print("Starting code analysis for command execution duplicates...")
 
-    analyzer = CodeAnalyzer(use_npu=False)  # NPU not needed for this analysis
-
-    # Run fresh analysis
-    results = await analyzer.analyze_codebase(
-        root_path=".",
-        patterns=["src/**/*.py", "backend/**/*.py"]
-    )
-
-    # Filter for command execution related functions
-    command_functions = [
-        "execute_command", "run_command", "execute_shell_command",
-        "run_shell_command", "_run_command", "execute_command_with_output",
-        "execute_interactive_command"
-    ]
-
-    print("\n=== Command Execution Duplicate Analysis ===\n")
-
-    # Find command execution duplicates
-    command_duplicates = []
-    for group in results['duplicate_details']:
-        for func in group['functions']:
-            if any(cmd in func['name'].lower() for cmd in command_functions):
-                command_duplicates.append(group)
-                break
-
-    if command_duplicates:
-        print(f"Found {len(command_duplicates)} groups of duplicate command execution functions:\n")
-
-        for i, group in enumerate(command_duplicates, 1):
-            print(f"{i}. Similarity: {group['similarity_score']:.0%}")
-            print(f"   Potential lines saved: {group['estimated_lines_saved']}")
-            print("   Duplicate functions:")
-            for func in group['functions']:
-                print(f"   - {func['file']}:{func['line_range']} - {func['name']}")
-            print()
-
-    # Generate refactoring plan
-    print("\n=== Refactoring Plan for Command Execution ===\n")
-
-    refactoring_plan = {
+def _get_refactoring_plan() -> dict:
+    """Return the refactoring plan for command execution (Issue #398: extracted)."""
+    return {
         "phase1": {
             "title": "Consolidate Basic Command Execution",
             "actions": [
@@ -81,32 +49,87 @@ async def analyze_command_execution_duplicates():
         }
     }
 
-    for phase, details in refactoring_plan.items():
-        print(f"{phase.upper()}: {details['title']}")
-        for action in details['actions']:
-            print(f"  {action}")
-        print()
 
-    # Save detailed report
+def _find_command_duplicates(results: dict) -> list:
+    """Find duplicate groups containing command execution functions (Issue #398: extracted)."""
+    command_duplicates = []
+    for group in results.get('duplicate_details', []):
+        for func in group.get('functions', []):
+            if any(cmd in func.get('name', '').lower() for cmd in COMMAND_FUNCTION_NAMES):
+                command_duplicates.append(group)
+                break
+    return command_duplicates
+
+
+def _print_duplicate_analysis(command_duplicates: list) -> None:
+    """Print command execution duplicate analysis (Issue #398: extracted)."""
+    logger.info("=== Command Execution Duplicate Analysis ===")
+    if not command_duplicates:
+        logger.info("No command execution duplicates found")
+        return
+
+    logger.info(f"Found {len(command_duplicates)} groups of duplicate command execution functions:")
+    for i, group in enumerate(command_duplicates, 1):
+        logger.info(f"{i}. Similarity: {group['similarity_score']:.0%}")
+        logger.info(f"   Potential lines saved: {group['estimated_lines_saved']}")
+        logger.info("   Duplicate functions:")
+        for func in group['functions']:
+            logger.info(f"   - {func['file']}:{func['line_range']} - {func['name']}")
+
+
+def _print_refactoring_plan(refactoring_plan: dict) -> None:
+    """Print the refactoring plan (Issue #398: extracted)."""
+    logger.info("=== Refactoring Plan for Command Execution ===")
+    for phase, details in refactoring_plan.items():
+        logger.info(f"{phase.upper()}: {details['title']}")
+        for action in details['actions']:
+            logger.info(f"  {action}")
+
+
+def _save_analysis_report(results: dict, command_duplicates: list, refactoring_plan: dict) -> Path:
+    """Save detailed analysis report to JSON file (Issue #398: extracted)."""
     report_path = Path("code_analysis_report.json")
-    with open(report_path, 'w') as f:
+    with open(report_path, 'w', encoding='utf-8') as f:
         json.dump({
             "full_results": results,
             "command_duplicates": command_duplicates,
             "refactoring_plan": refactoring_plan
         }, f, indent=2, default=str)
+    return report_path
 
-    print(f"\nDetailed report saved to: {report_path}")
 
-    # Generate migration script outline
-    print("\n=== Migration Script Outline ===\n")
-    print("1. Update imports in all files:")
-    print("   from src.utils.command_utils import execute_shell_command")
-    print("\n2. Replace function calls:")
-    print("   # Before: await self._run_command(cmd)")
-    print("   # After:  result = await execute_shell_command(cmd)")
-    print("\n3. Handle return format differences:")
-    print("   # Standardize to: result['stdout'], result['stderr'], result['status']")
+def _print_migration_outline() -> None:
+    """Print migration script outline (Issue #398: extracted)."""
+    logger.info("=== Migration Script Outline ===")
+    logger.info("1. Update imports in all files:")
+    logger.info("   from src.utils.command_utils import execute_shell_command")
+    logger.info("2. Replace function calls:")
+    logger.info("   # Before: await self._run_command(cmd)")
+    logger.info("   # After:  result = await execute_shell_command(cmd)")
+    logger.info("3. Handle return format differences:")
+    logger.info("   # Standardize to: result['stdout'], result['stderr'], result['status']")
+
+
+async def analyze_command_execution_duplicates():
+    """Analyze command execution duplicates and generate report (Issue #398: refactored)."""
+    logger.info("Starting code analysis for command execution duplicates...")
+
+    analyzer = CodeAnalyzer(use_npu=False)
+    results = await analyzer.analyze_codebase(
+        root_path=".",
+        patterns=["src/**/*.py", "backend/**/*.py"]
+    )
+
+    command_duplicates = _find_command_duplicates(results)
+    _print_duplicate_analysis(command_duplicates)
+
+    refactoring_plan = _get_refactoring_plan()
+    _print_refactoring_plan(refactoring_plan)
+
+    report_path = _save_analysis_report(results, command_duplicates, refactoring_plan)
+    logger.info(f"Detailed report saved to: {report_path}")
+
+    _print_migration_outline()
 
     return results
 
@@ -309,8 +332,8 @@ run_command_sync = execute_shell_command_sync
 
     # Save the consolidated library
     lib_path = Path("src/utils/command_utils_consolidated.py")
-    lib_path.write_text(library_content)
-    print(f"Created consolidated command utilities at: {lib_path}")
+    lib_path.write_text(library_content, encoding='utf-8')
+    logger.info(f"Created consolidated command utilities at: {lib_path}")
 
 
 async def main():
@@ -322,11 +345,11 @@ async def main():
     # Create consolidated library
     await create_command_utils_library()
 
-    print("\n=== Analysis Complete ===")
-    print("Next steps:")
-    print("1. Review code_analysis_report.json for detailed findings")
-    print("2. Implement refactoring plan phase by phase")
-    print("3. Run tests after each phase to ensure nothing breaks")
+    logger.info("=== Analysis Complete ===")
+    logger.info("Next steps:")
+    logger.info("1. Review code_analysis_report.json for detailed findings")
+    logger.info("2. Implement refactoring plan phase by phase")
+    logger.info("3. Run tests after each phase to ensure nothing breaks")
 
 
 if __name__ == "__main__":
