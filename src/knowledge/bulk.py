@@ -25,6 +25,77 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# ===== Helper functions for date filtering (Issue #398: extracted) =====
+
+
+def _parse_date_bound(date_str: Optional[str], is_end_date: bool = False) -> Optional[datetime]:
+    """
+    Parse a date string to datetime.
+
+    Issue #398: Extracted from _apply_date_filter.
+
+    Args:
+        date_str: Date string in YYYY-MM-DD format
+        is_end_date: If True, set time to end of day
+
+    Returns:
+        Parsed datetime or None if invalid
+    """
+    if not date_str:
+        return None
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if is_end_date:
+            dt = dt.replace(hour=23, minute=59, second=59)
+        return dt
+    except ValueError:
+        logger.warning("Invalid date format: %s", date_str)
+        return None
+
+
+def _parse_fact_timestamp(timestamp_str: Any) -> Optional[datetime]:
+    """
+    Parse fact timestamp to datetime.
+
+    Issue #398: Extracted from _apply_date_filter.
+
+    Args:
+        timestamp_str: Timestamp string (ISO format or YYYY-MM-DD)
+
+    Returns:
+        Parsed datetime or None if invalid
+    """
+    if not timestamp_str or not isinstance(timestamp_str, str):
+        return None
+    try:
+        if "T" in timestamp_str:
+            return datetime.fromisoformat(
+                timestamp_str.replace("Z", "+00:00").split("+")[0]
+            )
+        return datetime.strptime(timestamp_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_tags(tags: Any) -> List[str]:
+    """
+    Normalize tags to list of lowercase strings.
+
+    Issue #398: Extracted from _validate_fact_for_import.
+
+    Args:
+        tags: Tags as string, list, or other
+
+    Returns:
+        Normalized list of tag strings
+    """
+    if isinstance(tags, str):
+        return [t.strip().lower() for t in tags.split(",") if t.strip()]
+    elif isinstance(tags, list):
+        return [str(t).strip().lower() for t in tags if t and str(t).strip()]
+    return []
+
+
 def _write_file_sync(filepath: str, content: str) -> None:
     """Write content to file synchronously with proper resource management (Issue #358)."""
     with open(filepath, "w", encoding="utf-8") as f:
@@ -219,6 +290,7 @@ class BulkOperationsMixin:
         Filter facts by date range.
 
         Issue #415: Date filtering for export.
+        Issue #398: Refactored using extracted helpers.
 
         Args:
             facts: List of facts to filter
@@ -231,65 +303,46 @@ class BulkOperationsMixin:
         if not date_from and not date_to:
             return facts
 
-        # Parse date bounds
-        from_dt = None
-        to_dt = None
-
-        if date_from:
-            try:
-                from_dt = datetime.strptime(date_from, "%Y-%m-%d")
-            except ValueError:
-                logger.warning("Invalid date_from format: %s", date_from)
-
-        if date_to:
-            try:
-                # Add 1 day to include the entire end date
-                to_dt = datetime.strptime(date_to, "%Y-%m-%d")
-                to_dt = to_dt.replace(hour=23, minute=59, second=59)
-            except ValueError:
-                logger.warning("Invalid date_to format: %s", date_to)
+        from_dt = _parse_date_bound(date_from, is_end_date=False)
+        to_dt = _parse_date_bound(date_to, is_end_date=True)
 
         if not from_dt and not to_dt:
             return facts
 
+        return self._filter_facts_by_date_range(facts, from_dt, to_dt)
+
+    def _filter_facts_by_date_range(
+        self,
+        facts: List[Dict[str, Any]],
+        from_dt: Optional[datetime],
+        to_dt: Optional[datetime],
+    ) -> List[Dict[str, Any]]:
+        """
+        Filter facts by parsed date range.
+
+        Issue #398: Extracted from _apply_date_filter.
+        """
         filtered = []
         for fact in facts:
-            # Try to get timestamp from fact or metadata
             timestamp_str = fact.get("timestamp") or fact.get(
                 "metadata", {}
             ).get("created_at")
 
             if not timestamp_str:
-                # If no timestamp, include fact (don't filter out)
                 filtered.append(fact)
                 continue
 
-            try:
-                # Parse ISO format timestamp
-                if isinstance(timestamp_str, str):
-                    # Handle various ISO formats
-                    if "T" in timestamp_str:
-                        fact_dt = datetime.fromisoformat(
-                            timestamp_str.replace("Z", "+00:00").split("+")[0]
-                        )
-                    else:
-                        fact_dt = datetime.strptime(timestamp_str, "%Y-%m-%d")
-                else:
-                    filtered.append(fact)
-                    continue
-
-                # Apply date range filter
-                if from_dt and fact_dt < from_dt:
-                    continue
-                if to_dt and fact_dt > to_dt:
-                    continue
-
+            fact_dt = _parse_fact_timestamp(timestamp_str)
+            if fact_dt is None:
                 filtered.append(fact)
+                continue
 
-            except (ValueError, TypeError) as e:
-                logger.debug("Could not parse timestamp %s: %s", timestamp_str, e)
-                # Include fact if timestamp parsing fails
-                filtered.append(fact)
+            if from_dt and fact_dt < from_dt:
+                continue
+            if to_dt and fact_dt > to_dt:
+                continue
+
+            filtered.append(fact)
 
         return filtered
 
@@ -624,48 +677,18 @@ class BulkOperationsMixin:
             Dict with validation result and normalized fact
         """
         errors = []
+        content, content_errors = self._validate_content(
+            fact_data, min_content_length, max_content_length
+        )
+        errors.extend(content_errors)
 
-        # Validate content exists and has proper length
-        content = fact_data.get("content", "")
-        if not content or not isinstance(content, str):
-            errors.append("Missing or invalid content field")
-        elif len(content) < min_content_length:
-            errors.append(f"Content too short (min: {min_content_length} chars)")
-        elif len(content) > max_content_length:
-            errors.append(f"Content too long (max: {max_content_length} chars)")
+        metadata, metadata_errors = self._normalize_metadata(
+            fact_data, default_category
+        )
+        errors.extend(metadata_errors)
 
-        # Validate and normalize metadata
-        metadata = fact_data.get("metadata", {})
-        if not isinstance(metadata, dict):
-            metadata = {}
-            errors.append("Invalid metadata format, using default")
+        fact_id = self._normalize_fact_id(fact_data)
 
-        # Ensure category exists
-        if not metadata.get("category"):
-            metadata["category"] = default_category
-
-        # Validate and normalize tags
-        tags = metadata.get("tags", [])
-        if isinstance(tags, str):
-            # Handle comma-separated string
-            tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
-        elif isinstance(tags, list):
-            # Normalize list of tags
-            tags = [
-                str(t).strip().lower()
-                for t in tags
-                if t and str(t).strip()
-            ]
-        else:
-            tags = []
-        metadata["tags"] = tags
-
-        # Validate fact_id if provided
-        fact_id = fact_data.get("fact_id")
-        if fact_id and not isinstance(fact_id, str):
-            fact_id = str(fact_id)
-
-        # Build normalized fact
         normalized_fact = {
             "content": content if isinstance(content, str) else "",
             "metadata": metadata,
@@ -680,6 +703,64 @@ class BulkOperationsMixin:
             "normalized_fact": normalized_fact if not errors else None,
         }
 
+    def _validate_content(
+        self,
+        fact_data: Dict[str, Any],
+        min_length: int,
+        max_length: int,
+    ) -> tuple:
+        """
+        Validate content field.
+
+        Issue #398: Extracted from _validate_fact_for_import.
+        """
+        errors = []
+        content = fact_data.get("content", "")
+
+        if not content or not isinstance(content, str):
+            errors.append("Missing or invalid content field")
+        elif len(content) < min_length:
+            errors.append(f"Content too short (min: {min_length} chars)")
+        elif len(content) > max_length:
+            errors.append(f"Content too long (max: {max_length} chars)")
+
+        return content, errors
+
+    def _normalize_metadata(
+        self,
+        fact_data: Dict[str, Any],
+        default_category: str,
+    ) -> tuple:
+        """
+        Normalize metadata with category and tags.
+
+        Issue #398: Extracted from _validate_fact_for_import.
+        """
+        errors = []
+        metadata = fact_data.get("metadata", {})
+
+        if not isinstance(metadata, dict):
+            metadata = {}
+            errors.append("Invalid metadata format, using default")
+
+        if not metadata.get("category"):
+            metadata["category"] = default_category
+
+        metadata["tags"] = _normalize_tags(metadata.get("tags", []))
+
+        return metadata, errors
+
+    def _normalize_fact_id(self, fact_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Normalize fact_id to string.
+
+        Issue #398: Extracted from _validate_fact_for_import.
+        """
+        fact_id = fact_data.get("fact_id")
+        if fact_id and not isinstance(fact_id, str):
+            return str(fact_id)
+        return fact_id
+
     async def _import_valid_facts(
         self,
         facts: List[Dict[str, Any]],
@@ -690,6 +771,7 @@ class BulkOperationsMixin:
         Import validated facts using parallel processing.
 
         Issue #416: Enhanced import with overwrite mode and per-fact tracking.
+        Issue #398: Refactored using extracted helpers.
 
         Args:
             facts: List of validated facts to import
@@ -699,73 +781,113 @@ class BulkOperationsMixin:
         Returns:
             Dict with import counts and per-fact results
         """
-        # Process all facts in parallel with bounded concurrency
         semaphore = asyncio.Semaphore(50)
 
-        async def store_single_fact(fact_data: Dict[str, Any]) -> Dict[str, Any]:
-            """Store a single fact with error handling."""
-            async with semaphore:
-                try:
-                    fact_id = fact_data.get("fact_id")
-
-                    # Check if fact exists (for duplicate/overwrite handling)
-                    if fact_id:
-                        exists = await self._fact_exists(fact_id)
-
-                        if exists:
-                            if overwrite_existing:
-                                # Update existing fact
-                                result = await self.update_fact(
-                                    fact_id,
-                                    content=fact_data.get("content"),
-                                    metadata=fact_data.get("metadata"),
-                                )
-                                return {
-                                    "fact_id": fact_id,
-                                    "action": "updated",
-                                    "status": result.get("status", "error"),
-                                }
-                            elif skip_duplicates:
-                                return {
-                                    "fact_id": fact_id,
-                                    "action": "skipped",
-                                    "status": "duplicate",
-                                }
-                            else:
-                                return {
-                                    "fact_id": fact_id,
-                                    "action": "error",
-                                    "status": "error",
-                                    "message": "Fact already exists",
-                                }
-
-                    # Store new fact
-                    result = await self.store_fact(
-                        content=fact_data.get("content", ""),
-                        metadata=fact_data.get("metadata", {}),
-                        fact_id=fact_id,
-                    )
-
-                    return {
-                        "fact_id": result.get("fact_id", fact_id),
-                        "action": "imported",
-                        "status": result.get("status", "error"),
-                    }
-
-                except Exception as e:
-                    return {
-                        "fact_id": fact_data.get("fact_id"),
-                        "action": "error",
-                        "status": "error",
-                        "message": str(e),
-                    }
-
         results = await asyncio.gather(
-            *[store_single_fact(fact) for fact in facts],
+            *[
+                self._store_single_import_fact(
+                    fact, semaphore, skip_duplicates, overwrite_existing
+                )
+                for fact in facts
+            ],
             return_exceptions=True,
         )
 
-        # Count results
+        return self._count_import_results(results)
+
+    async def _store_single_import_fact(
+        self,
+        fact_data: Dict[str, Any],
+        semaphore: asyncio.Semaphore,
+        skip_duplicates: bool,
+        overwrite_existing: bool,
+    ) -> Dict[str, Any]:
+        """
+        Store a single fact during import.
+
+        Issue #398: Extracted from _import_valid_facts.
+        """
+        async with semaphore:
+            try:
+                fact_id = fact_data.get("fact_id")
+
+                if fact_id:
+                    existing_result = await self._handle_existing_fact(
+                        fact_id, fact_data, skip_duplicates, overwrite_existing
+                    )
+                    if existing_result:
+                        return existing_result
+
+                result = await self.store_fact(
+                    content=fact_data.get("content", ""),
+                    metadata=fact_data.get("metadata", {}),
+                    fact_id=fact_id,
+                )
+
+                return {
+                    "fact_id": result.get("fact_id", fact_id),
+                    "action": "imported",
+                    "status": result.get("status", "error"),
+                }
+
+            except Exception as e:
+                return {
+                    "fact_id": fact_data.get("fact_id"),
+                    "action": "error",
+                    "status": "error",
+                    "message": str(e),
+                }
+
+    async def _handle_existing_fact(
+        self,
+        fact_id: str,
+        fact_data: Dict[str, Any],
+        skip_duplicates: bool,
+        overwrite_existing: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Handle import when fact already exists.
+
+        Issue #398: Extracted from _import_valid_facts.
+
+        Returns:
+            Result dict if handled, None to continue with new store.
+        """
+        exists = await self._fact_exists(fact_id)
+        if not exists:
+            return None
+
+        if overwrite_existing:
+            result = await self.update_fact(
+                fact_id,
+                content=fact_data.get("content"),
+                metadata=fact_data.get("metadata"),
+            )
+            return {
+                "fact_id": fact_id,
+                "action": "updated",
+                "status": result.get("status", "error"),
+            }
+        elif skip_duplicates:
+            return {
+                "fact_id": fact_id,
+                "action": "skipped",
+                "status": "duplicate",
+            }
+        else:
+            return {
+                "fact_id": fact_id,
+                "action": "error",
+                "status": "error",
+                "message": "Fact already exists",
+            }
+
+    def _count_import_results(self, results: List[Any]) -> Dict[str, Any]:
+        """
+        Count import results by action type.
+
+        Issue #398: Extracted from _import_valid_facts.
+        """
         imported = 0
         skipped = 0
         updated = 0
@@ -940,103 +1062,145 @@ class BulkOperationsMixin:
         Find semantic duplicates using vector embeddings.
 
         Issue #417: Embedding-based similarity detection.
-
-        Uses cosine similarity between fact embeddings to find
-        semantically similar content that may not be exact matches.
+        Issue #398: Refactored using extracted helpers.
         """
         if not hasattr(self, "vector_store") or self.vector_store is None:
             logger.warning("Vector store not available, falling back to hash")
             return self._find_duplicates_by_hash(facts)
 
         try:
-            # Get fact IDs
             fact_ids = [f.get("fact_id") for f in facts if f.get("fact_id")]
-
             if len(fact_ids) < 2:
                 return []
 
-            # Retrieve embeddings from ChromaDB
-            result = await asyncio.to_thread(
-                self.vector_store.get,
-                ids=fact_ids,
-                include=["embeddings"],
-            )
-
-            if not result or not result.get("embeddings"):
-                logger.warning("No embeddings found, falling back to hash")
+            embeddings_map = await self._fetch_embeddings_map(fact_ids)
+            if not embeddings_map:
                 return self._find_duplicates_by_hash(facts)
 
-            # Build ID to embedding map
-            embeddings_map = {}
-            for fact_id, embedding in zip(result["ids"], result["embeddings"]):
-                embeddings_map[fact_id] = embedding
-
-            # Build fact info map
-            fact_info = {
-                f.get("fact_id"): {
-                    "fact_id": f.get("fact_id"),
-                    "content_preview": f.get("content", "")[:100],
-                    "category": f.get("metadata", {}).get("category"),
-                }
-                for f in facts
-            }
-
-            # Calculate pairwise similarities
-            duplicate_groups = []
-            processed_pairs = set()
-
-            for i, fact_id1 in enumerate(fact_ids):
-                if fact_id1 not in embeddings_map:
-                    continue
-
-                similar_facts = []
-                emb1 = embeddings_map[fact_id1]
-
-                for fact_id2 in fact_ids[i + 1:]:
-                    if fact_id2 not in embeddings_map:
-                        continue
-
-                    pair_key = tuple(sorted([fact_id1, fact_id2]))
-                    if pair_key in processed_pairs:
-                        continue
-                    processed_pairs.add(pair_key)
-
-                    emb2 = embeddings_map[fact_id2]
-                    similarity = self._cosine_similarity(emb1, emb2)
-
-                    if similarity >= similarity_threshold:
-                        similar_facts.append({
-                            "fact_id": fact_id2,
-                            "similarity": round(similarity, 4),
-                            **fact_info.get(fact_id2, {}),
-                        })
-
-                if similar_facts:
-                    duplicate_groups.append({
-                        "primary_fact": fact_info.get(fact_id1, {"fact_id": fact_id1}),
-                        "similar_facts": sorted(
-                            similar_facts,
-                            key=lambda x: x["similarity"],
-                            reverse=True,
-                        ),
-                        "max_similarity": max(f["similarity"] for f in similar_facts),
-                        "reason": "semantic_similarity",
-                    })
-
-                    if len(duplicate_groups) >= max_results:
-                        break
-
-            # Sort by max similarity
-            duplicate_groups.sort(
-                key=lambda x: x["max_similarity"],
-                reverse=True,
+            fact_info = self._build_fact_info_map(facts)
+            duplicate_groups = self._find_similar_pairs(
+                fact_ids, embeddings_map, fact_info, similarity_threshold, max_results
             )
 
+            duplicate_groups.sort(key=lambda x: x["max_similarity"], reverse=True)
             return duplicate_groups
 
         except Exception as e:
             logger.error("Embedding-based duplicate detection failed: %s", e)
             return self._find_duplicates_by_hash(facts)
+
+    async def _fetch_embeddings_map(
+        self, fact_ids: List[str]
+    ) -> Dict[str, List[float]]:
+        """
+        Fetch embeddings from vector store.
+
+        Issue #398: Extracted from _find_duplicates_by_embedding.
+        """
+        result = await asyncio.to_thread(
+            self.vector_store.get,
+            ids=fact_ids,
+            include=["embeddings"],
+        )
+
+        if not result or not result.get("embeddings"):
+            logger.warning("No embeddings found, falling back to hash")
+            return {}
+
+        return dict(zip(result["ids"], result["embeddings"]))
+
+    def _build_fact_info_map(
+        self, facts: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Build fact info lookup map.
+
+        Issue #398: Extracted from _find_duplicates_by_embedding.
+        """
+        return {
+            f.get("fact_id"): {
+                "fact_id": f.get("fact_id"),
+                "content_preview": f.get("content", "")[:100],
+                "category": f.get("metadata", {}).get("category"),
+            }
+            for f in facts
+        }
+
+    def _find_similar_pairs(
+        self,
+        fact_ids: List[str],
+        embeddings_map: Dict[str, List[float]],
+        fact_info: Dict[str, Dict[str, Any]],
+        threshold: float,
+        max_results: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find similar fact pairs using cosine similarity.
+
+        Issue #398: Extracted from _find_duplicates_by_embedding.
+        """
+        duplicate_groups = []
+        processed_pairs: set = set()
+
+        for i, fact_id1 in enumerate(fact_ids):
+            if fact_id1 not in embeddings_map:
+                continue
+
+            similar_facts = self._find_similar_to_fact(
+                fact_id1, fact_ids[i + 1:], embeddings_map, fact_info,
+                threshold, processed_pairs
+            )
+
+            if similar_facts:
+                duplicate_groups.append({
+                    "primary_fact": fact_info.get(fact_id1, {"fact_id": fact_id1}),
+                    "similar_facts": sorted(
+                        similar_facts, key=lambda x: x["similarity"], reverse=True
+                    ),
+                    "max_similarity": max(f["similarity"] for f in similar_facts),
+                    "reason": "semantic_similarity",
+                })
+
+                if len(duplicate_groups) >= max_results:
+                    break
+
+        return duplicate_groups
+
+    def _find_similar_to_fact(
+        self,
+        fact_id1: str,
+        other_ids: List[str],
+        embeddings_map: Dict[str, List[float]],
+        fact_info: Dict[str, Dict[str, Any]],
+        threshold: float,
+        processed_pairs: set,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find facts similar to a given fact.
+
+        Issue #398: Extracted from _find_duplicates_by_embedding.
+        """
+        similar_facts = []
+        emb1 = embeddings_map[fact_id1]
+
+        for fact_id2 in other_ids:
+            if fact_id2 not in embeddings_map:
+                continue
+
+            pair_key = tuple(sorted([fact_id1, fact_id2]))
+            if pair_key in processed_pairs:
+                continue
+            processed_pairs.add(pair_key)
+
+            similarity = self._cosine_similarity(emb1, embeddings_map[fact_id2])
+            if similarity >= threshold:
+                similar_facts.append({
+                    "fact_id": fact_id2,
+                    "similarity": round(similarity, 4),
+                    **fact_info.get(fact_id2, {}),
+                })
+
+        return similar_facts
 
     def _cosine_similarity(
         self, vec1: List[float], vec2: List[float]
@@ -1236,86 +1400,33 @@ class BulkOperationsMixin:
         Create a full backup of the knowledge base.
 
         Issue #419: Backup and restore functionality.
-
-        Args:
-            backup_dir: Directory to store backup (default: backups/)
-            include_embeddings: Include vector embeddings (default: True)
-            include_metadata: Include backup metadata (default: True)
-            compression: Use gzip compression (default: True)
-            description: Optional description for the backup
-
-        Returns:
-            Dict with backup status and file path
+        Issue #398: Refactored using extracted helpers.
         """
         import os
-        from pathlib import Path
 
         try:
-            # Set default backup directory
-            if not backup_dir:
-                project_root = Path(__file__).parent.parent.parent
-                backup_dir = str(project_root / "backups" / "knowledge")
-
-            # Ensure backup directory exists
+            backup_dir = self._get_backup_dir(backup_dir)
             os.makedirs(backup_dir, exist_ok=True)
 
-            # Generate backup filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_name = f"kb_backup_{timestamp}"
-            backup_file = os.path.join(
-                backup_dir,
-                f"{backup_name}.json{'gz' if compression else ''}",
+            backup_name, backup_file = self._generate_backup_path(
+                backup_dir, compression
             )
+            logger.info("Creating backup: %s", backup_file)
 
-            logger.info(f"Creating backup: {backup_file}")
-
-            # Get all facts
             facts = await self.get_all_facts()
-
-            # Include embeddings if requested
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
 
-            # Build backup data structure
-            backup_data = {
-                "version": "1.0",
-                "created_at": datetime.now().isoformat(),
-                "description": description,
-                "facts_count": len(facts),
-                "include_embeddings": include_embeddings,
-                "facts": facts,
-            }
+            backup_data = await self._build_backup_data(
+                facts, description, include_embeddings, include_metadata
+            )
 
-            # Add metadata if requested
-            if include_metadata:
-                try:
-                    stats = await self.get_stats()
-                    backup_data["metadata"] = {
-                        "total_facts": stats.get("total_facts", 0),
-                        "total_vectors": stats.get("total_vectors", 0),
-                        "categories": stats.get("categories", []),
-                        "db_size": stats.get("db_size", 0),
-                    }
-                except Exception as e:
-                    logger.warning(f"Could not include metadata: {e}")
-                    backup_data["metadata"] = {}
+            await self._write_backup_file(backup_file, backup_data, compression)
 
-            # Serialize to JSON
-            json_data = json.dumps(backup_data, ensure_ascii=False, indent=2)
-
-            # Write to file (with optional compression)
-            if compression:
-                await asyncio.to_thread(
-                    self._write_gzip_file, backup_file, json_data
-                )
-            else:
-                await asyncio.to_thread(_write_file_sync, backup_file, json_data)
-
-            # Get file size
             file_size = os.path.getsize(backup_file)
-
             logger.info(
-                f"Backup created: {backup_file} ({len(facts)} facts, {file_size} bytes)"
+                "Backup created: %s (%d facts, %d bytes)",
+                backup_file, len(facts), file_size
             )
 
             return {
@@ -1330,8 +1441,94 @@ class BulkOperationsMixin:
             }
 
         except Exception as e:
-            logger.error(f"Backup failed: {e}")
+            logger.error("Backup failed: %s", e)
             return {"status": "error", "message": str(e)}
+
+    def _get_backup_dir(self, backup_dir: Optional[str]) -> str:
+        """
+        Get backup directory path.
+
+        Issue #398: Extracted from create_backup.
+        """
+        if backup_dir:
+            return backup_dir
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent.parent
+        return str(project_root / "backups" / "knowledge")
+
+    def _generate_backup_path(
+        self, backup_dir: str, compression: bool
+    ) -> tuple:
+        """
+        Generate backup filename and path.
+
+        Issue #398: Extracted from create_backup.
+        """
+        import os
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"kb_backup_{timestamp}"
+        ext = ".jsongz" if compression else ".json"
+        backup_file = os.path.join(backup_dir, f"{backup_name}{ext}")
+        return backup_name, backup_file
+
+    async def _build_backup_data(
+        self,
+        facts: List[Dict[str, Any]],
+        description: str,
+        include_embeddings: bool,
+        include_metadata: bool,
+    ) -> Dict[str, Any]:
+        """
+        Build backup data structure.
+
+        Issue #398: Extracted from create_backup.
+        """
+        backup_data = {
+            "version": "1.0",
+            "created_at": datetime.now().isoformat(),
+            "description": description,
+            "facts_count": len(facts),
+            "include_embeddings": include_embeddings,
+            "facts": facts,
+        }
+
+        if include_metadata:
+            backup_data["metadata"] = await self._get_backup_metadata()
+
+        return backup_data
+
+    async def _get_backup_metadata(self) -> Dict[str, Any]:
+        """
+        Get metadata for backup.
+
+        Issue #398: Extracted from create_backup.
+        """
+        try:
+            stats = await self.get_stats()
+            return {
+                "total_facts": stats.get("total_facts", 0),
+                "total_vectors": stats.get("total_vectors", 0),
+                "categories": stats.get("categories", []),
+                "db_size": stats.get("db_size", 0),
+            }
+        except Exception as e:
+            logger.warning("Could not include metadata: %s", e)
+            return {}
+
+    async def _write_backup_file(
+        self, backup_file: str, backup_data: Dict[str, Any], compression: bool
+    ) -> None:
+        """
+        Write backup data to file.
+
+        Issue #398: Extracted from create_backup.
+        """
+        json_data = json.dumps(backup_data, ensure_ascii=False, indent=2)
+
+        if compression:
+            await asyncio.to_thread(self._write_gzip_file, backup_file, json_data)
+        else:
+            await asyncio.to_thread(_write_file_sync, backup_file, json_data)
 
     def _write_gzip_file(self, filepath: str, content: str) -> None:
         """Write content to gzip-compressed file (Issue #419)."""
@@ -1359,98 +1556,124 @@ class BulkOperationsMixin:
         Restore knowledge base from a backup file.
 
         Issue #419: Backup and restore functionality.
-
-        Args:
-            backup_file: Path to backup file
-            overwrite_existing: Overwrite existing facts (default: False)
-            skip_duplicates: Skip duplicate facts (default: True)
-            restore_embeddings: Restore vector embeddings (default: True)
-            dry_run: Only validate, don't actually restore (default: True)
-
-        Returns:
-            Dict with restore status and counts
+        Issue #398: Refactored using extracted helpers.
         """
         import os
 
         try:
-            # Validate backup file exists
             if not os.path.exists(backup_file):
-                return {"status": "error", "message": f"Backup file not found: {backup_file}"}
-
-            logger.info(f"Restoring from backup: {backup_file} (dry_run={dry_run})")
-
-            # Read backup file
-            if backup_file.endswith(".gz") or backup_file.endswith(".jsongz"):
-                content = await asyncio.to_thread(
-                    self._read_gzip_file, backup_file
-                )
-            else:
-                content = await asyncio.to_thread(_read_file_sync, backup_file)
-
-            # Parse backup data
-            backup_data = json.loads(content)
-
-            # Validate backup format
-            if "version" not in backup_data or "facts" not in backup_data:
-                return {"status": "error", "message": "Invalid backup format"}
-
-            facts = backup_data.get("facts", [])
-            backup_version = backup_data.get("version", "unknown")
-            backup_created_at = backup_data.get("created_at", "unknown")
-            backup_embeddings = backup_data.get("include_embeddings", False)
-
-            logger.info(
-                f"Backup info: version={backup_version}, "
-                f"facts={len(facts)}, created_at={backup_created_at}"
-            )
-
-            # If dry run, just validate and return preview
-            if dry_run:
                 return {
-                    "status": "success",
-                    "mode": "dry_run",
-                    "backup_version": backup_version,
-                    "backup_created_at": backup_created_at,
-                    "total_facts_in_backup": len(facts),
-                    "has_embeddings": backup_embeddings,
-                    "metadata": backup_data.get("metadata", {}),
-                    "preview": [
-                        {
-                            "fact_id": f.get("fact_id"),
-                            "content_preview": f.get("content", "")[:100],
-                            "category": f.get("metadata", {}).get("category"),
-                        }
-                        for f in facts[:10]
-                    ],
+                    "status": "error",
+                    "message": f"Backup file not found: {backup_file}"
                 }
 
-            # Perform actual restore
+            logger.info("Restoring from backup: %s (dry_run=%s)", backup_file, dry_run)
+
+            backup_data = await self._read_backup_file(backup_file)
+            validation = self._validate_backup_data(backup_data)
+            if validation:
+                return validation
+
+            if dry_run:
+                return self._build_dry_run_response(backup_data)
+
             results = await self._restore_facts_from_backup(
-                facts,
+                backup_data.get("facts", []),
                 overwrite_existing,
                 skip_duplicates,
-                restore_embeddings and backup_embeddings,
+                restore_embeddings and backup_data.get("include_embeddings", False),
             )
 
-            return {
-                "status": "success",
-                "mode": "restore",
-                "backup_version": backup_version,
-                "backup_created_at": backup_created_at,
-                "total_facts_in_backup": len(facts),
-                "restored": results["restored"],
-                "skipped": results["skipped"],
-                "updated": results["updated"],
-                "errors": results["errors"],
-                "embeddings_restored": results.get("embeddings_restored", 0),
-            }
+            return self._build_restore_response(backup_data, results)
 
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid backup JSON: {e}")
+            logger.error("Invalid backup JSON: %s", e)
             return {"status": "error", "message": f"Invalid backup JSON: {e}"}
         except Exception as e:
-            logger.error(f"Restore failed: {e}")
+            logger.error("Restore failed: %s", e)
             return {"status": "error", "message": str(e)}
+
+    async def _read_backup_file(self, backup_file: str) -> Dict[str, Any]:
+        """
+        Read and parse backup file.
+
+        Issue #398: Extracted from restore_backup.
+        """
+        if backup_file.endswith(".gz") or backup_file.endswith(".jsongz"):
+            content = await asyncio.to_thread(self._read_gzip_file, backup_file)
+        else:
+            content = await asyncio.to_thread(_read_file_sync, backup_file)
+        return json.loads(content)
+
+    def _validate_backup_data(
+        self, backup_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Validate backup data format.
+
+        Issue #398: Extracted from restore_backup.
+
+        Returns:
+            Error dict if invalid, None if valid.
+        """
+        if "version" not in backup_data or "facts" not in backup_data:
+            return {"status": "error", "message": "Invalid backup format"}
+
+        logger.info(
+            "Backup info: version=%s, facts=%d, created_at=%s",
+            backup_data.get("version", "unknown"),
+            len(backup_data.get("facts", [])),
+            backup_data.get("created_at", "unknown"),
+        )
+        return None
+
+    def _build_dry_run_response(
+        self, backup_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build dry run response with preview.
+
+        Issue #398: Extracted from restore_backup.
+        """
+        facts = backup_data.get("facts", [])
+        return {
+            "status": "success",
+            "mode": "dry_run",
+            "backup_version": backup_data.get("version", "unknown"),
+            "backup_created_at": backup_data.get("created_at", "unknown"),
+            "total_facts_in_backup": len(facts),
+            "has_embeddings": backup_data.get("include_embeddings", False),
+            "metadata": backup_data.get("metadata", {}),
+            "preview": [
+                {
+                    "fact_id": f.get("fact_id"),
+                    "content_preview": f.get("content", "")[:100],
+                    "category": f.get("metadata", {}).get("category"),
+                }
+                for f in facts[:10]
+            ],
+        }
+
+    def _build_restore_response(
+        self, backup_data: Dict[str, Any], results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build restore response.
+
+        Issue #398: Extracted from restore_backup.
+        """
+        return {
+            "status": "success",
+            "mode": "restore",
+            "backup_version": backup_data.get("version", "unknown"),
+            "backup_created_at": backup_data.get("created_at", "unknown"),
+            "total_facts_in_backup": len(backup_data.get("facts", [])),
+            "restored": results["restored"],
+            "skipped": results["skipped"],
+            "updated": results["updated"],
+            "errors": results["errors"],
+            "embeddings_restored": results.get("embeddings_restored", 0),
+        }
 
     async def _restore_facts_from_backup(
         self,
@@ -1463,8 +1686,140 @@ class BulkOperationsMixin:
         Restore facts from backup data.
 
         Issue #419: Helper for backup restore.
+        Issue #398: Refactored using extracted helpers.
         """
         semaphore = asyncio.Semaphore(50)
+
+        restore_results = await asyncio.gather(
+            *[
+                self._restore_single_backup_fact(
+                    fact, semaphore, overwrite_existing,
+                    skip_duplicates, restore_embeddings
+                )
+                for fact in facts
+            ],
+            return_exceptions=True,
+        )
+
+        return self._count_restore_results(restore_results)
+
+    async def _restore_single_backup_fact(
+        self,
+        fact_data: Dict[str, Any],
+        semaphore: asyncio.Semaphore,
+        overwrite_existing: bool,
+        skip_duplicates: bool,
+        restore_embeddings: bool,
+    ) -> Dict[str, Any]:
+        """
+        Restore a single fact from backup.
+
+        Issue #398: Extracted from _restore_facts_from_backup.
+        """
+        async with semaphore:
+            try:
+                fact_id = fact_data.get("fact_id")
+                content = fact_data.get("content", "")
+                metadata = fact_data.get("metadata", {})
+
+                if not content:
+                    return {"action": "error", "reason": "empty_content"}
+
+                if fact_id:
+                    existing_result = await self._handle_existing_restore(
+                        fact_id, content, metadata, overwrite_existing, skip_duplicates
+                    )
+                    if existing_result:
+                        return existing_result
+
+                return await self._store_restored_fact(
+                    fact_data, content, metadata, fact_id, restore_embeddings
+                )
+
+            except Exception as e:
+                return {"action": "error", "reason": str(e)}
+
+    async def _handle_existing_restore(
+        self,
+        fact_id: str,
+        content: str,
+        metadata: Dict[str, Any],
+        overwrite_existing: bool,
+        skip_duplicates: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Handle restore when fact exists.
+
+        Issue #398: Extracted from _restore_single_backup_fact.
+        """
+        exists = await self._fact_exists(fact_id)
+        if not exists:
+            return None
+
+        if overwrite_existing:
+            result = await self.update_fact(fact_id, content=content, metadata=metadata)
+            if result.get("status") == "success":
+                return {"action": "updated"}
+            return {"action": "error", "reason": "update_failed"}
+
+        if skip_duplicates:
+            return {"action": "skipped", "reason": "duplicate"}
+
+        return {"action": "error", "reason": "already_exists"}
+
+    async def _store_restored_fact(
+        self,
+        fact_data: Dict[str, Any],
+        content: str,
+        metadata: Dict[str, Any],
+        fact_id: Optional[str],
+        restore_embeddings: bool,
+    ) -> Dict[str, Any]:
+        """
+        Store a restored fact and optionally its embedding.
+
+        Issue #398: Extracted from _restore_single_backup_fact.
+        """
+        result = await self.store_fact(content=content, metadata=metadata, fact_id=fact_id)
+
+        if result.get("status") != "success":
+            return {"action": "error", "reason": "store_failed"}
+
+        embedding = fact_data.get("embedding")
+        if restore_embeddings and embedding and self.vector_store:
+            return await self._restore_fact_embedding(
+                result.get("fact_id", fact_id), content, embedding
+            )
+
+        return {"action": "restored", "embedding": False}
+
+    async def _restore_fact_embedding(
+        self, fact_id: str, content: str, embedding: List[float]
+    ) -> Dict[str, Any]:
+        """
+        Restore embedding for a fact.
+
+        Issue #398: Extracted from _store_restored_fact.
+        """
+        try:
+            await asyncio.to_thread(
+                self.vector_store.upsert,
+                ids=[fact_id],
+                embeddings=[embedding],
+                metadatas=[{"content": content[:1000]}],
+                documents=[content[:1000]],
+            )
+            return {"action": "restored", "embedding": True}
+        except Exception as e:
+            logger.warning("Embedding restore failed: %s", e)
+            return {"action": "restored", "embedding": False}
+
+    def _count_restore_results(self, restore_results: List[Any]) -> Dict[str, Any]:
+        """
+        Count restore results by action type.
+
+        Issue #398: Extracted from _restore_facts_from_backup.
+        """
         results = {
             "restored": 0,
             "skipped": 0,
@@ -1473,77 +1828,6 @@ class BulkOperationsMixin:
             "embeddings_restored": 0,
         }
 
-        async def restore_single_fact(fact_data: Dict[str, Any]) -> Dict[str, str]:
-            """Restore a single fact."""
-            async with semaphore:
-                try:
-                    fact_id = fact_data.get("fact_id")
-                    content = fact_data.get("content", "")
-                    metadata = fact_data.get("metadata", {})
-                    embedding = fact_data.get("embedding")
-
-                    if not content:
-                        return {"action": "error", "reason": "empty_content"}
-
-                    # Check if fact exists
-                    if fact_id:
-                        exists = await self._fact_exists(fact_id)
-
-                        if exists:
-                            if overwrite_existing:
-                                # Update existing fact
-                                result = await self.update_fact(
-                                    fact_id,
-                                    content=content,
-                                    metadata=metadata,
-                                )
-                                if result.get("status") == "success":
-                                    return {"action": "updated"}
-                                return {"action": "error", "reason": "update_failed"}
-
-                            elif skip_duplicates:
-                                return {"action": "skipped", "reason": "duplicate"}
-                            else:
-                                return {"action": "error", "reason": "already_exists"}
-
-                    # Store new fact
-                    result = await self.store_fact(
-                        content=content,
-                        metadata=metadata,
-                        fact_id=fact_id,
-                    )
-
-                    if result.get("status") == "success":
-                        # Restore embedding if available and requested
-                        if restore_embeddings and embedding and self.vector_store:
-                            try:
-                                new_fact_id = result.get("fact_id", fact_id)
-                                await asyncio.to_thread(
-                                    self.vector_store.upsert,
-                                    ids=[new_fact_id],
-                                    embeddings=[embedding],
-                                    metadatas=[{"content": content[:1000]}],
-                                    documents=[content[:1000]],
-                                )
-                                return {"action": "restored", "embedding": True}
-                            except Exception as e:
-                                logger.warning(f"Embedding restore failed: {e}")
-                                return {"action": "restored", "embedding": False}
-
-                        return {"action": "restored", "embedding": False}
-
-                    return {"action": "error", "reason": "store_failed"}
-
-                except Exception as e:
-                    return {"action": "error", "reason": str(e)}
-
-        # Process all facts in parallel
-        restore_results = await asyncio.gather(
-            *[restore_single_fact(fact) for fact in facts],
-            return_exceptions=True,
-        )
-
-        # Count results
         for result in restore_results:
             if isinstance(result, Exception):
                 results["errors"] += 1

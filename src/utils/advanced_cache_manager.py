@@ -112,7 +112,7 @@ class AdvancedCacheManager:
                 self._redis_client_initialized = True
                 logger.debug("Async Redis client initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize async Redis client: {e}")
+                logger.error("Failed to initialize async Redis client: %s", e)
                 self.redis_client = None
                 self._redis_client_initialized = True  # Prevent retry loops
 
@@ -150,16 +150,16 @@ class AdvancedCacheManager:
                 await self._update_stats(data_type, hit=True)
 
                 data = json.loads(cached_data)
-                logger.debug(f"Cache HIT for {data_type}:{key}")
+                logger.debug("Cache HIT for %s:%s", data_type, key)
                 return data
             else:
                 # Update miss statistics
                 await self._update_stats(data_type, hit=False)
-                logger.debug(f"Cache MISS for {data_type}:{key}")
+                logger.debug("Cache MISS for %s:%s", data_type, key)
                 return None
 
         except Exception as e:
-            logger.error(f"Error getting cached data for {data_type}:{key}: {e}")
+            logger.error("Error getting cached data for %s:%s: %s", data_type, key, e)
             return None
 
     async def set(
@@ -193,11 +193,11 @@ class AdvancedCacheManager:
             serialized_data = json.dumps(cache_entry, default=str)
             await self.redis_client.setex(cache_key, ttl, serialized_data)
 
-            logger.debug(f"Cache SET for {data_type}:{key} (TTL: {ttl}s)")
+            logger.debug("Cache SET for %s:%s (TTL: %ds)", data_type, key, ttl)
             return True
 
         except Exception as e:
-            logger.error(f"Error setting cached data for {data_type}:{key}: {e}")
+            logger.error("Error setting cached data for %s:%s: %s", data_type, key, e)
             return False
 
     async def get_or_compute(
@@ -232,7 +232,7 @@ class AdvancedCacheManager:
             return computed_data
 
         except Exception as e:
-            logger.error(f"Error computing data for {data_type}:{key}: {e}")
+            logger.error("Error computing data for %s:%s: %s", data_type, key, e)
             raise
 
     async def invalidate(
@@ -258,13 +258,13 @@ class AdvancedCacheManager:
             if keys:
                 deleted_count = await self.redis_client.delete(*keys)
                 logger.info(
-                    f"Cache INVALIDATE: {deleted_count} keys deleted for {data_type}"
+                    "Cache INVALIDATE: %d keys deleted for %s", deleted_count, data_type
                 )
                 return deleted_count
             return 0
 
         except Exception as e:
-            logger.error(f"Error invalidating cache for {data_type}: {e}")
+            logger.error("Error invalidating cache for %s: %s", data_type, e)
             return 0
 
     async def _update_stats(self, data_type: str, hit: bool):
@@ -291,7 +291,7 @@ class AdvancedCacheManager:
             await pipe.execute()
 
         except Exception as e:
-            logger.error(f"Error updating cache stats for {data_type}: {e}")
+            logger.error("Error updating cache stats for %s: %s", data_type, e)
 
     async def _get_single_type_stats(self, data_type: str) -> Dict[str, Any]:
         """Get stats for a specific data type (Issue #315: extracted).
@@ -398,7 +398,7 @@ class AdvancedCacheManager:
             return await self._get_global_stats()
 
         except Exception as e:
-            logger.error(f"Error getting cache stats: {e}")
+            logger.error("Error getting cache stats: %s", e)
             return {"status": "error", "error": str(e)}
 
     async def warm_cache(self, data_type: str, warm_data: Dict[str, Any]):
@@ -414,11 +414,11 @@ class AdvancedCacheManager:
                 if success:
                     warmed_count += 1
 
-            logger.info(f"Cache WARM: {warmed_count} entries warmed for {data_type}")
+            logger.info("Cache WARM: %d entries warmed for %s", warmed_count, data_type)
             return warmed_count > 0
 
         except Exception as e:
-            logger.error(f"Error warming cache for {data_type}: {e}")
+            logger.error("Error warming cache for %s: %s", data_type, e)
             return False
 
     # =========================================================================
@@ -449,10 +449,10 @@ class AdvancedCacheManager:
         result = await self.get("knowledge_queries", cache_key)
 
         if result and "data" in result:
-            logger.debug(f"Knowledge cache HIT for query: '{query}' (top_k={top_k})")
+            logger.debug("Knowledge cache HIT for query: '%s' (top_k=%d)", query, top_k)
             return result["data"]
 
-        logger.debug(f"Knowledge cache MISS for query: '{query}'")
+        logger.debug("Knowledge cache MISS for query: '%s'", query)
         return None
 
     async def cache_knowledge_results(
@@ -478,7 +478,7 @@ class AdvancedCacheManager:
             # Manage cache size for knowledge queries
             await self._manage_cache_size("knowledge_queries")
             logger.debug(
-                f"Cached {len(results)} knowledge results for query: '{query}'"
+                "Cached %d knowledge results for query: '%s'", len(results), query
             )
 
         return success
@@ -552,7 +552,7 @@ class AdvancedCacheManager:
 
         deleted_count = await self.redis_client.delete(*keys_to_remove)
         logger.info(
-            f"LRU eviction: Removed {deleted_count} old entries from {data_type} cache"
+            "LRU eviction: Removed %d old entries from %s cache", deleted_count, data_type
         )
         return deleted_count
 
@@ -580,7 +580,7 @@ class AdvancedCacheManager:
             await self._evict_excess_keys(keys_with_time, config.max_size, data_type)
 
         except Exception as e:
-            logger.error(f"Error managing cache size for {data_type}: {e}")
+            logger.error("Error managing cache size for %s: %s", data_type, e)
 
     # =========================================================================
     # BACKWARD COMPATIBILITY METHODS (from backend/utils/cache_manager.py)
@@ -822,15 +822,15 @@ class SimpleCacheManager:
             if keys:
                 deleted_count = await self._cache.redis_client.delete(*keys)
                 logger.info(
-                    f"Cache CLEAR: {deleted_count} keys deleted for pattern: {pattern}"
+                    "Cache CLEAR: %d keys deleted for pattern: %s", deleted_count, pattern
                 )
                 return deleted_count
             else:
-                logger.debug(f"Cache CLEAR: No keys found for pattern: {pattern}")
+                logger.debug("Cache CLEAR: No keys found for pattern: %s", pattern)
                 return 0
 
         except Exception as e:
-            logger.error(f"Error clearing cache for pattern {pattern}: {e}")
+            logger.error("Error clearing cache for pattern %s: %s", pattern, e)
             return 0
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -865,7 +865,7 @@ class SimpleCacheManager:
             }
 
         except Exception as e:
-            logger.error(f"Error getting cache stats: {e}")
+            logger.error("Error getting cache stats: %s", e)
             return {"status": "error", "error": str(e)}
 
     def cache_response(self, cache_key: str = None, ttl: int = None):
@@ -916,22 +916,22 @@ class SimpleCacheManager:
                 try:
                     cached_result = await self.get(key)
                     if cached_result is not None:
-                        logger.debug(f"Cache HIT: {key} - serving from cache")
+                        logger.debug("Cache HIT: %s - serving from cache", key)
                         return cached_result
                 except Exception as e:
-                    logger.error(f"Cache retrieval error for key {key}: {e}")
+                    logger.error("Cache retrieval error for key %s: %s", key, e)
 
                 # Execute function and cache result
-                logger.debug(f"Cache MISS: {key} - executing function")
+                logger.debug("Cache MISS: %s - executing function", key)
                 result = await func(*args, **kwargs)
 
                 # Cache successful responses
                 if self._is_cacheable_response(result):
                     try:
                         await self.set(key, result, actual_ttl)
-                        logger.debug(f"Cache SET: {key} - cached for {actual_ttl}s")
+                        logger.debug("Cache SET: %s - cached for %ds", key, actual_ttl)
                     except Exception as e:
-                        logger.error(f"Cache storage error for key {key}: {e}")
+                        logger.error("Cache storage error for key %s: %s", key, e)
 
                 return result
 
@@ -1007,7 +1007,7 @@ def cache_function(cache_key: str = None, ttl: int = 300):
                 if cached_result is not None:
                     return cached_result
             except Exception as e:
-                logger.error(f"Cache retrieval error for key {key}: {e}")
+                logger.error("Cache retrieval error for key %s: %s", key, e)
 
             # Execute and cache
             result = await func(*args, **kwargs)
@@ -1016,7 +1016,7 @@ def cache_function(cache_key: str = None, ttl: int = 300):
                 try:
                     await cache_manager.set(key, result, ttl)
                 except Exception as e:
-                    logger.error(f"Cache storage error for key {key}: {e}")
+                    logger.error("Cache storage error for key %s: %s", key, e)
 
             return result
 

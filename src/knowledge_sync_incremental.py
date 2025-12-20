@@ -53,7 +53,7 @@ async def _delete_fact_safe(kb: "KnowledgeBase", fact_id: str) -> bool:
         await kb.delete_fact(fact_id)
         return True
     except Exception as e:
-        logger.warning(f"Failed to delete fact {fact_id}: {e}")
+        logger.warning("Failed to delete fact %s: %s", fact_id, e)
         return False
 
 
@@ -73,10 +73,10 @@ async def _read_file_content(file_path: Path) -> Optional[str]:
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             return await f.read()
     except OSError as e:
-        logger.warning(f"Failed to read file {file_path}: {e}")
+        logger.warning("Failed to read file %s: %s", file_path, e)
         return None
     except Exception as e:
-        logger.warning(f"Failed to analyze {file_path}: {e}")
+        logger.warning("Failed to analyze %s: %s", file_path, e)
         return None
 
 
@@ -92,18 +92,18 @@ def _classify_file_change(
     Returns: 'changed', 'timestamp', 'new', or None for no action needed.
     """
     if str_path not in file_metadata:
-        logger.debug(f"New file: {relative_path}")
+        logger.debug("New file: %s", relative_path)
         return "new"
 
     existing_metadata = file_metadata[str_path]
 
     if existing_metadata.content_hash != current_hash:
-        logger.debug(f"Content changed: {relative_path}")
+        logger.debug("Content changed: %s", relative_path)
         return "changed"
 
     if existing_metadata.modified_time != file_stat.st_mtime:
         existing_metadata.modified_time = file_stat.st_mtime
-        logger.debug(f"Timestamp updated: {relative_path}")
+        logger.debug("Timestamp updated: %s", relative_path)
         return "timestamp"
 
     return None
@@ -234,8 +234,8 @@ class IncrementalKnowledgeSync:
         ]
 
         logger.info("IncrementalKnowledgeSync initialized")
-        logger.info(f"Project root: {self.project_root}")
-        logger.info(f"Sync patterns: {self.doc_patterns}")
+        logger.info("Project root: %s", self.project_root)
+        logger.info("Sync patterns: %s", self.doc_patterns)
 
     async def initialize(self):
         """Initialize knowledge base and components."""
@@ -255,7 +255,7 @@ class IncrementalKnowledgeSync:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize: {e}")
+            logger.error("Failed to initialize: %s", e)
             return False
 
     async def _load_sync_state(self):
@@ -273,15 +273,15 @@ class IncrementalKnowledgeSync:
                     for path, metadata_dict in data.items():
                         self.file_metadata[path] = FileMetadata(**metadata_dict)
 
-                    logger.info(f"Loaded metadata for {len(self.file_metadata)} files")
+                    logger.info("Loaded metadata for %d files", len(self.file_metadata))
             else:
                 logger.info("No existing sync state found")
 
         except OSError as e:
-            logger.warning(f"Failed to read sync state file {self.file_metadata_path}: {e}")
+            logger.warning("Failed to read sync state file %s: %s", self.file_metadata_path, e)
             self.file_metadata = {}
         except Exception as e:
-            logger.warning(f"Failed to load sync state: {e}")
+            logger.warning("Failed to load sync state: %s", e)
             self.file_metadata = {}
 
     async def _save_sync_state(self):
@@ -303,12 +303,12 @@ class IncrementalKnowledgeSync:
             ) as f:
                 await f.write(json.dumps(data, indent=2))
 
-            logger.info(f"Saved metadata for {len(self.file_metadata)} files")
+            logger.info("Saved metadata for %d files", len(self.file_metadata))
 
         except OSError as e:
-            logger.error(f"Failed to write sync state file {self.file_metadata_path}: {e}")
+            logger.error("Failed to write sync state file %s: %s", self.file_metadata_path, e)
         except Exception as e:
-            logger.error(f"Failed to save sync state: {e}")
+            logger.error("Failed to save sync state: %s", e)
 
     def _compute_content_hash(self, content: str) -> str:
         """Compute SHA-256 hash of file content for change detection."""
@@ -338,7 +338,7 @@ class IncrementalKnowledgeSync:
 
         # Remove duplicates and sort
         unique_files = sorted(list(set(all_files)))
-        logger.info(f"Found {len(unique_files)} files to analyze")
+        logger.info("Found %d files to analyze", len(unique_files))
 
         return unique_files
 
@@ -391,7 +391,7 @@ class IncrementalKnowledgeSync:
             if stored_path not in current_files:
                 removed_files.append(stored_path)
                 logger.debug(
-                    f"Removed file: {Path(stored_path).relative_to(self.project_root)}"
+                    "Removed file: %s", Path(stored_path).relative_to(self.project_root)
                 )
 
         return changed_files + new_files, removed_files, new_files
@@ -406,7 +406,7 @@ class IncrementalKnowledgeSync:
                 content = await f.read()
 
             if not content.strip():
-                logger.warning(f"Empty file: {relative_path}")
+                logger.warning("Empty file: %s", relative_path)
                 return None
 
             # Issue #358 - avoid blocking
@@ -477,15 +477,15 @@ class IncrementalKnowledgeSync:
             )
 
             logger.info(
-                f"Processed: {relative_path} → {len(chunks)} chunks in {processing_time:.3f}s"
+                "Processed: %s → %d chunks in %.3fs", relative_path, len(chunks), processing_time
             )
             return metadata
 
         except OSError as e:
-            logger.error(f"Failed to read file {file_path}: {e}")
+            logger.error("Failed to read file %s: %s", file_path, e)
             return None
         except Exception as e:
-            logger.error(f"Failed to process {file_path}: {e}")
+            logger.error("Failed to process %s: %s", file_path, e)
             return None
 
     def _get_category_keywords(self) -> dict:
@@ -536,7 +536,7 @@ class IncrementalKnowledgeSync:
             del self.file_metadata[file_path]
 
             logger.info(
-                f"Removed knowledge for: {Path(file_path).relative_to(self.project_root)}"
+                "Removed knowledge for: %s", Path(file_path).relative_to(self.project_root)
             )
 
     def _update_metadata_from_results(
@@ -551,7 +551,7 @@ class IncrementalKnowledgeSync:
                 self.file_metadata[str(file_path)] = result
                 metrics.total_chunks_processed += result.chunk_count
             elif isinstance(result, Exception):
-                logger.error(f"Failed to process {file_path}: {result}")
+                logger.error("Failed to process %s: %s", file_path, result)
 
     async def _invalidate_expired_knowledge(self):
         """Remove knowledge that has exceeded TTL."""
@@ -567,7 +567,7 @@ class IncrementalKnowledgeSync:
                 expired_files.append(file_path)
 
         if expired_files:
-            logger.info(f"Invalidating {len(expired_files)} expired knowledge entries")
+            logger.info("Invalidating %d expired knowledge entries", len(expired_files))
             await self._remove_obsolete_knowledge(expired_files)
 
     async def perform_incremental_sync(self) -> SyncMetrics:
@@ -612,7 +612,7 @@ class IncrementalKnowledgeSync:
             # Step 4: Process changed/new files with GPU acceleration
             if changed_files:
                 logger.info(
-                    f"Processing {len(changed_files)} changed files with GPU acceleration..."
+                    "Processing %d changed files with GPU acceleration...", len(changed_files)
                 )
 
                 # Process files in parallel batches for maximum performance
@@ -643,14 +643,14 @@ class IncrementalKnowledgeSync:
             await self._save_sync_summary(metrics)
 
             logger.info("=== Incremental Sync Completed ===")
-            logger.info(f"Total time: {total_time:.3f}s")
-            logger.info(f"Chunks processed: {metrics.total_chunks_processed}")
-            logger.info(f"Performance: {metrics.avg_chunks_per_second:.1f} chunks/sec")
+            logger.info("Total time: %.3fs", total_time)
+            logger.info("Chunks processed: %d", metrics.total_chunks_processed)
+            logger.info("Performance: %.1f chunks/sec", metrics.avg_chunks_per_second)
 
             return metrics
 
         except Exception as e:
-            logger.error(f"Incremental sync failed: {e}")
+            logger.error("Incremental sync failed: %s", e)
             raise
 
     async def _save_sync_summary(self, metrics: SyncMetrics):
@@ -674,9 +674,9 @@ class IncrementalKnowledgeSync:
                 await f.write(json.dumps(summary, indent=2))
 
         except OSError as e:
-            logger.warning(f"Failed to write sync summary to {summary_path}: {e}")
+            logger.warning("Failed to write sync summary to %s: %s", summary_path, e)
         except Exception as e:
-            logger.warning(f"Failed to save sync summary: {e}")
+            logger.warning("Failed to save sync summary: %s", e)
 
     async def background_sync_daemon(self, check_interval_minutes: int = 15):
         """
@@ -685,7 +685,7 @@ class IncrementalKnowledgeSync:
         Runs without blocking user operations.
         """
         logger.info(
-            f"Starting background sync daemon (check every {check_interval_minutes} minutes)"
+            "Starting background sync daemon (check every %d minutes)", check_interval_minutes
         )
 
         while True:
@@ -704,7 +704,7 @@ class IncrementalKnowledgeSync:
                     logger.debug("Background sync - no changes detected")
 
             except Exception as e:
-                logger.error(f"Background sync error: {e}")
+                logger.error("Background sync error: %s", e)
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
 
     def get_sync_status(self) -> Dict[str, Any]:

@@ -94,7 +94,7 @@ class AutoBotSemanticChunker:
         # Initialize embedding model placeholder - will be loaded lazily
         self._embedding_model = None
 
-        logger.info(f"SemanticChunker initialized with model: {embedding_model}")
+        logger.info("SemanticChunker initialized with model: %s", embedding_model)
 
     def _get_adaptive_batch_params(
         self, num_sentences: int, cpu_load: float, cpu_count: int, has_gpu: bool
@@ -146,7 +146,7 @@ class AutoBotSemanticChunker:
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             gpu_name = torch.cuda.get_device_name(0) if gpu_count > 0 else "Unknown"
-            logger.info(f"Using CUDA GPU: {gpu_name} (device count: {gpu_count})")
+            logger.info("Using CUDA GPU: %s (device count: %d)", gpu_name, gpu_count)
             return "cuda"
 
         logger.info("CUDA not available, using CPU for embeddings")
@@ -177,11 +177,11 @@ class AutoBotSemanticChunker:
             return model
 
         except Exception as tensor_error:
-            logger.warning(f"FP16 conversion failed: {tensor_error}, trying FP32")
+            logger.warning("FP16 conversion failed: %s, trying FP32", tensor_error)
             try:
                 return model.to(device, dtype=torch.float32)
             except Exception as precision_error:
-                logger.warning(f"Could not enable FP16: {precision_error}, using FP32")
+                logger.warning("Could not enable FP16: %s, using FP32", precision_error)
                 return model.to(device)
 
     def _load_model_with_retry(self, device: str):
@@ -212,10 +212,10 @@ class AutoBotSemanticChunker:
                     raise
 
                 if attempt >= max_retries - 1:
-                    logger.error(f"Max retries exceeded for HuggingFace rate limiting: {load_error}")
+                    logger.error("Max retries exceeded for HuggingFace rate limiting: %s", load_error)
                     raise
 
-                logger.warning(f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s...")
+                logger.warning("HuggingFace rate limit hit (attempt %d), retrying in %ds...", attempt + 1, retry_delay)
 
         raise RuntimeError("Model loading failed after retries")
 
@@ -225,13 +225,13 @@ class AutoBotSemanticChunker:
 
         try:
             actual_device = next(model.parameters()).device
-            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+            logger.info("Embedding model '%s' loaded on device: %s", self.embedding_model_name, actual_device)
 
             model = self._apply_gpu_precision(model, device)
             return model
 
         except Exception as model_load_error:
-            logger.warning(f"Failed to optimize model '{self.embedding_model_name}' on {device}: {model_load_error}")
+            logger.warning("Failed to optimize model '%s' on %s: %s", self.embedding_model_name, device, model_load_error)
 
             if device != "cpu":
                 logger.info("Attempting fallback to CPU...")
@@ -256,12 +256,12 @@ class AutoBotSemanticChunker:
 
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                logger.info(f"Loading embedding model '{self.embedding_model_name}' in background thread...")
+                logger.info("Loading embedding model '%s' in background thread...", self.embedding_model_name)
                 self._embedding_model = await loop.run_in_executor(executor, load_model)
                 logger.info("Embedding model loading completed")
 
         except Exception as e:
-            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
+            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
             await self._try_fallback_models()
 
     async def _try_fallback_models(self):
@@ -272,12 +272,12 @@ class AutoBotSemanticChunker:
 
         for model_name in fallback_models:
             try:
-                logger.info(f"Attempting fallback model loading on CPU: {model_name}")
+                logger.info("Attempting fallback model loading on CPU: %s", model_name)
                 self._embedding_model = SentenceTransformer(model_name)
-                logger.warning(f"Fallback to {model_name} embedding model on CPU")
+                logger.warning("Fallback to %s embedding model on CPU", model_name)
                 return
             except Exception as fallback_error:
-                logger.error(f"Failed to load fallback model {model_name}: {fallback_error}")
+                logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
 
         raise RuntimeError("Could not initialize any embedding model")
 
@@ -297,10 +297,10 @@ class AutoBotSemanticChunker:
                 else:
                     self._embedding_model = self._embedding_model.to(device)
             except Exception as device_error:
-                logger.warning(f"Failed to move model to GPU: {device_error}, using CPU")
+                logger.warning("Failed to move model to GPU: %s, using CPU", device_error)
                 device = "cpu"
 
-        logger.warning(f"Fallback to all-mpnet-base-v2 embedding model on {device}")
+        logger.warning("Fallback to all-mpnet-base-v2 embedding model on %s", device)
 
     def _sync_initialize_model(self):
         """Synchronous model initialization for fallback cases (blocking)."""
@@ -314,18 +314,18 @@ class AutoBotSemanticChunker:
             self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
 
             actual_device = next(self._embedding_model.parameters()).device
-            logger.info(f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}")
+            logger.info("Embedding model '%s' loaded on device: %s", self.embedding_model_name, actual_device)
 
             self._embedding_model = self._apply_gpu_precision(self._embedding_model, device)
 
         except Exception as e:
-            logger.error(f"Failed to load embedding model {self.embedding_model_name}: {e}")
+            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
             try:
                 import torch
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._sync_try_fallback_models(device)
             except Exception as fallback_error:
-                logger.error(f"Failed to load fallback model: {fallback_error}")
+                logger.error("Failed to load fallback model: %s", fallback_error)
                 raise RuntimeError("Could not initialize any embedding model")
 
     def _split_into_sentences(self, text: str) -> List[str]:
@@ -440,7 +440,7 @@ class AutoBotSemanticChunker:
                 # Log progress for large batches
                 if len(sentences) > 20:
                     progress = min(100, int((i + batch_size) / len(sentences) * 100))
-                    logger.debug(f"Embedding progress: {progress}%")
+                    logger.debug("Embedding progress: %d%%", progress)
 
             # Combine all batch results
             if len(all_embeddings) == 1:
@@ -449,7 +449,7 @@ class AutoBotSemanticChunker:
                 return np.vstack(all_embeddings)
 
         except Exception as e:
-            logger.error(f"Error computing sentence embeddings: {e}")
+            logger.error("Error computing sentence embeddings: %s", e)
             # Return zero embeddings as fallback
             try:
                 dim = self._embedding_model.get_sentence_embedding_dimension()
@@ -714,7 +714,7 @@ class AutoBotSemanticChunker:
 
             return np.mean(similarities) if similarities else 1.0
         except Exception as e:
-            logger.error(f"Error calculating chunk coherence: {e}")
+            logger.error("Error calculating chunk coherence: %s", e)
             return 0.5  # Default neutral score
 
     async def chunk_text(
@@ -731,7 +731,7 @@ class AutoBotSemanticChunker:
             List of SemanticChunk objects
         """
         try:
-            logger.info(f"Starting semantic chunking of text ({len(text)} characters)")
+            logger.info("Starting semantic chunking of text (%d characters)", len(text))
 
             # Step 1: Split into sentences
             sentences = self._split_into_sentences(text)
@@ -747,7 +747,7 @@ class AutoBotSemanticChunker:
                 )
                 return [chunk]
 
-            logger.debug(f"Split text into {len(sentences)} sentences")
+            logger.debug("Split text into %d sentences", len(sentences))
 
             # Step 2: Compute sentence embeddings asynchronously
             embeddings = await self._compute_sentence_embeddings_async(sentences)
@@ -758,7 +758,7 @@ class AutoBotSemanticChunker:
             # Step 4: Find chunk boundaries
             boundaries = self._find_chunk_boundaries(distances)
 
-            logger.debug(f"Found {len(boundaries)} semantic boundaries")
+            logger.debug("Found %d semantic boundaries", len(boundaries))
 
             # Step 5: Create chunks
             chunks = self._create_chunks_with_boundaries(
@@ -787,7 +787,7 @@ class AutoBotSemanticChunker:
             return chunks
 
         except Exception as e:
-            logger.error(f"Error in semantic chunking: {e}")
+            logger.error("Error in semantic chunking: %s", e)
             # Fallback to simple sentence-based chunking
             return await self._fallback_chunking(text, metadata)
 

@@ -320,22 +320,24 @@ class LogNotificationChannel(AlertNotificationChannel):
         try:
             emoji = self._SEVERITY_EMOJI.get(alert.severity, "⚠️")
             logger.warning(
-                f"{emoji} ALERT [{alert.severity.value.upper()}] {alert.get_log_message()}"
+                "%s ALERT [%s] %s",
+                emoji, alert.severity.value.upper(), alert.get_log_message()
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send log alert: {e}")
+            logger.error("Failed to send log alert: %s", e)
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
         """Log the alert recovery to the application logger."""
         try:
             logger.info(
-                f"✅ RESOLVED [{alert.severity.value.upper()}] {alert.rule_name}: Alert resolved"
+                "✅ RESOLVED [%s] %s: Alert resolved",
+                alert.severity.value.upper(), alert.rule_name
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send log recovery: {e}")
+            logger.error("Failed to send log recovery: %s", e)
             return False
 
 
@@ -360,7 +362,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
                     "Redis client initialization returned None (Redis disabled?)"
                 )
         except Exception as e:
-            logger.warning(f"Could not initialize Redis for alerts: {e}")
+            logger.warning("Could not initialize Redis for alerts: %s", e)
 
     async def send_alert(self, alert: Alert) -> bool:
         """Publish alert to Redis channel (Issue #372 - uses model method)."""
@@ -376,7 +378,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send Redis alert: {e}")
+            logger.error("Failed to send Redis alert: %s", e)
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
@@ -396,7 +398,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send Redis recovery: {e}")
+            logger.error("Failed to send Redis recovery: %s", e)
             return False
 
 
@@ -423,7 +425,7 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send WebSocket alert: {e}")
+            logger.error("Failed to send WebSocket alert: %s", e)
             return False
 
     async def send_recovery(self, alert: Alert) -> bool:
@@ -437,7 +439,7 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to send WebSocket recovery: {e}")
+            logger.error("Failed to send WebSocket recovery: %s", e)
             return False
 
 
@@ -479,7 +481,7 @@ class MonitoringAlertsManager:
                     "Redis client initialization returned None (Redis disabled?)"
                 )
         except Exception as e:
-            logger.warning(f"Could not initialize Redis for alert storage: {e}")
+            logger.warning("Could not initialize Redis for alert storage: %s", e)
 
     def _setup_default_channels(self):
         """Setup default notification channels"""
@@ -516,7 +518,7 @@ class MonitoringAlertsManager:
         for rule in default_rules:
             self.alert_rules[rule.id] = rule
 
-        logger.info(f"Loaded {len(default_rules)} default alert rules")
+        logger.info("Loaded %d default alert rules", len(default_rules))
 
     def _get_cpu_alert_rules(self) -> List[AlertRule]:
         """Get CPU usage alert rules (Issue #281 - extracted helper)."""
@@ -657,7 +659,7 @@ class MonitoringAlertsManager:
         """Add or update an alert rule (thread-safe)"""
         async with self._lock:
             self.alert_rules[rule.id] = rule
-        logger.info(f"Added alert rule: {rule.name} ({rule.id})")
+        logger.info("Added alert rule: %s (%s)", rule.name, rule.id)
 
     async def remove_alert_rule(self, rule_id: str):
         """Remove an alert rule (thread-safe)"""
@@ -667,7 +669,7 @@ class MonitoringAlertsManager:
             rule = self.alert_rules.pop(rule_id)
             has_active_alert = rule_id in self.active_alerts
 
-        logger.info(f"Removed alert rule: {rule.name} ({rule_id})")
+        logger.info("Removed alert rule: %s (%s)", rule.name, rule_id)
 
         # Also resolve any active alerts for this rule (outside lock)
         if has_active_alert:
@@ -677,7 +679,7 @@ class MonitoringAlertsManager:
         """Add a notification channel (thread-safe)"""
         async with self._lock:
             self.notification_channels[channel.name] = channel
-        logger.info(f"Added notification channel: {channel.name}")
+        logger.info("Added notification channel: %s", channel.name)
 
     async def set_websocket_manager(self, websocket_manager):
         """Set WebSocket manager for real-time notifications (thread-safe)"""
@@ -704,7 +706,7 @@ class MonitoringAlertsManager:
         """Evaluate if condition is met based on operator (Issue #315 - uses dispatch)"""
         evaluator = self._OPERATOR_DISPATCH.get(operator)
         if evaluator is None:
-            logger.warning(f"Unknown operator: {operator}")
+            logger.warning("Unknown operator: %s", operator)
             return False
         return evaluator(current_value, threshold)
 
@@ -721,7 +723,7 @@ class MonitoringAlertsManager:
 
             return _convert_status_to_numeric(current)
         except (KeyError, ValueError, TypeError) as e:
-            logger.debug(f"Could not get value for path {path}: {e}")
+            logger.debug("Could not get value for path %s: %s", path, e)
             return None
 
     def _traverse_path_key(self, current: Any, key: str) -> Any:
@@ -827,7 +829,7 @@ class MonitoringAlertsManager:
                     self.redis_client.expire, f"alert:{rule.id}", 86400 * 7
                 )  # 7 days
             except Exception as e:
-                logger.warning(f"Could not store alert in Redis: {e}")
+                logger.warning("Could not store alert in Redis: %s", e)
 
         # Send notifications
         await self._send_alert_notifications(alert)
@@ -841,7 +843,7 @@ class MonitoringAlertsManager:
                 self._alert_rate_limits[rule.id] = current_time
 
         if should_log:
-            logger.warning(f"🚨 Alert created: {alert.rule_name} - {alert.message}")
+            logger.warning("🚨 Alert created: %s - %s", alert.rule_name, alert.message)
 
         return alert
 
@@ -874,12 +876,12 @@ class MonitoringAlertsManager:
                     },
                 )
             except Exception as e:
-                logger.warning(f"Could not update alert in Redis: {e}")
+                logger.warning("Could not update alert in Redis: %s", e)
 
         # Send recovery notifications (outside lock)
         await self._send_recovery_notifications(alert_copy)
 
-        logger.info(f"✅ Alert resolved: {alert_copy.rule_name}")
+        logger.info("✅ Alert resolved: %s", alert_copy.rule_name)
 
     async def _send_alert_notifications(self, alert: Alert):
         """Send alert to all enabled notification channels (thread-safe)"""
@@ -896,11 +898,11 @@ class MonitoringAlertsManager:
             try:
                 success = await channel.send_alert(alert)
                 if success:
-                    logger.debug(f"Alert sent via {channel_name}")
+                    logger.debug("Alert sent via %s", channel_name)
                 else:
-                    logger.warning(f"Failed to send alert via {channel_name}")
+                    logger.warning("Failed to send alert via %s", channel_name)
             except Exception as e:
-                logger.error(f"Error sending alert via {channel_name}: {e}")
+                logger.error("Error sending alert via %s: %s", channel_name, e)
 
     async def _send_recovery_notifications(self, alert: Alert):
         """Send recovery notification to all enabled notification channels (thread-safe)"""
@@ -917,11 +919,11 @@ class MonitoringAlertsManager:
             try:
                 success = await channel.send_recovery(alert)
                 if success:
-                    logger.debug(f"Recovery sent via {channel_name}")
+                    logger.debug("Recovery sent via %s", channel_name)
                 else:
-                    logger.warning(f"Failed to send recovery via {channel_name}")
+                    logger.warning("Failed to send recovery via %s", channel_name)
             except Exception as e:
-                logger.error(f"Error sending recovery via {channel_name}: {e}")
+                logger.error("Error sending recovery via %s: %s", channel_name, e)
 
     async def _handle_condition_met(
         self, rule_id: str, rule, current_value: Any
@@ -966,7 +968,7 @@ class MonitoringAlertsManager:
                     infrastructure_data, rule.metric_path
                 )
                 if current_value is None:
-                    logger.debug(f"No value found for metric path: {rule.metric_path}")
+                    logger.debug("No value found for metric path: %s", rule.metric_path)
                     continue
 
                 condition_met = self._evaluate_operator(
@@ -979,7 +981,7 @@ class MonitoringAlertsManager:
                     await self._handle_condition_not_met(rule_id)
 
             except Exception as e:
-                logger.error(f"Error checking rule {rule_id}: {e}")
+                logger.error("Error checking rule %s: %s", rule_id, e)
 
     async def start_monitoring(self):
         """Start the monitoring loop"""
@@ -1045,7 +1047,7 @@ class MonitoringAlertsManager:
                 await asyncio.sleep(self.check_interval)
 
             except Exception as e:
-                logger.error(f"Error in monitoring loop: {e}")
+                logger.error("Error in monitoring loop: %s", e)
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)  # Wait longer on error
 
     def stop_monitoring(self):
@@ -1098,10 +1100,10 @@ class MonitoringAlertsManager:
                 )
             except Exception as e:
                 logger.warning(
-                    f"Could not update alert acknowledgment in Redis: {e}"
+                    "Could not update alert acknowledgment in Redis: %s", e
                 )
 
-        logger.info(f"👤 Alert acknowledged: {alert_rule_name} by {acknowledged_by}")
+        logger.info("👤 Alert acknowledged: %s by %s", alert_rule_name, acknowledged_by)
         return True
 
 

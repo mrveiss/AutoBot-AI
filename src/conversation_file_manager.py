@@ -159,8 +159,9 @@ class ConversationFileManager:
         self._lock = asyncio.Lock()
 
         logger.info(
-            f"ConversationFileManager initialized - storage: {self.storage_dir}, "
-            f"db: {self.db_path} (database will be created during initialize() call)"
+            "ConversationFileManager initialized - storage: %s, "
+            "db: %s (database will be created during initialize() call)",
+            self.storage_dir, self.db_path
         )
 
     def _initialize_schema(self) -> None:
@@ -176,7 +177,7 @@ class ConversationFileManager:
         schema_path = _PROJECT_ROOT / "database/schemas/conversation_files_schema.sql"
 
         if not schema_path.exists():
-            logger.warning(f"Schema file not found at {schema_path}")
+            logger.warning("Schema file not found at %s", schema_path)
             return
 
         # Ensure database directory exists
@@ -195,7 +196,7 @@ class ConversationFileManager:
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
-            logger.error(f"❌ Failed to initialize schema: {e}")
+            logger.error("Failed to initialize schema: %s", e)
             raise RuntimeError(f"Database schema initialization failed: {e}")
 
         finally:
@@ -352,16 +353,16 @@ class ConversationFileManager:
             # Store as JSON with TTL
             await redis_db.set(cache_key, json.dumps(file_list), ex=self.CACHE_TTL)
 
-            logger.debug(f"Cached {len(file_list)} files for session {session_id}")
+            logger.debug("Cached %d files for session %s", len(file_list), session_id)
 
         except (RedisConnectionError, RedisTimeoutError) as e:
-            logger.warning(f"Redis connection/timeout error caching session files: {e}")
+            logger.warning("Redis connection/timeout error caching session files: %s", e)
             # Non-critical failure, continue without cache
         except RedisError as e:
-            logger.warning(f"Redis error caching session files: {e}")
+            logger.warning("Redis error caching session files: %s", e)
             # Non-critical failure, continue without cache
         except Exception as e:
-            logger.error(f"Unexpected error caching session files: {e}")
+            logger.error("Unexpected error caching session files: %s", e)
             # Non-critical failure, continue without cache
 
     async def _invalidate_session_cache(self, session_id: str) -> None:
@@ -376,14 +377,14 @@ class ConversationFileManager:
             cache_key = f"{self.CACHE_KEY_PREFIX}{session_id}"
             await redis_db.delete(cache_key)
 
-            logger.debug(f"Invalidated cache for session {session_id}")
+            logger.debug("Invalidated cache for session %s", session_id)
 
         except (RedisConnectionError, RedisTimeoutError) as e:
-            logger.warning(f"Redis connection/timeout error invalidating cache: {e}")
+            logger.warning("Redis connection/timeout error invalidating cache: %s", e)
         except RedisError as e:
-            logger.warning(f"Redis error invalidating cache: {e}")
+            logger.warning("Redis error invalidating cache: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected error invalidating cache: {e}")
+            logger.error("Unexpected error invalidating cache: %s", e)
 
     def _validate_file_size(self, file_content: bytes) -> int:
         """Validate file size and return size in bytes."""
@@ -429,7 +430,8 @@ class ConversationFileManager:
         existing_path = Path(existing_file["file_path"])
 
         logger.info(
-            f"File with hash {file_info.file_hash[:8]}... already exists, creating association only"
+            "File with hash %s... already exists, creating association only",
+            file_info.file_hash[:8]
         )
 
         await self._create_file_association(
@@ -463,7 +465,7 @@ class ConversationFileManager:
             async with aiofiles.open(file_path, "wb") as f:
                 await f.write(file_content)
         except OSError as e:
-            logger.error(f"Failed to write file to disk {file_path}: {e}")
+            logger.error("Failed to write file to disk %s: %s", file_path, e)
             raise RuntimeError(f"Failed to write file to disk: {e}")
 
     async def _insert_file_record(self, connection, file_info: FileInfo) -> None:
@@ -500,7 +502,7 @@ class ConversationFileManager:
     ) -> Dict[str, Any]:
         """Store a new file to disk and database (Issue #375: uses FileInfo dataclass)."""
         await self._write_file_to_disk(file_info.file_path, file_content)
-        logger.info(f"Stored file: {file_info.stored_filename} ({file_info.file_size} bytes)")
+        logger.info("Stored file: %s (%d bytes)", file_info.stored_filename, file_info.file_size)
 
         await self._insert_file_record(connection, file_info)
         await self._create_file_association(
@@ -512,8 +514,9 @@ class ConversationFileManager:
 
         await connection.commit()
         logger.info(
-            f"Added file {file_info.file_id} to session {file_info.session_id}: "
-            f"{file_info.original_filename} ({file_info.file_size} bytes)"
+            "Added file %s to session %s: %s (%d bytes)",
+            file_info.file_id, file_info.session_id,
+            file_info.original_filename, file_info.file_size
         )
         await self._invalidate_session_cache(file_info.session_id)
 
@@ -560,7 +563,7 @@ class ConversationFileManager:
                 await connection.rollback()
                 if await asyncio.to_thread(file_path.exists):
                     await asyncio.to_thread(file_path.unlink)
-                logger.error(f"Error adding file: {e}")
+                logger.error("Error adding file: %s", e)
                 raise RuntimeError(f"Failed to add file: {e}")
             finally:
                 await connection.close()
@@ -623,14 +626,14 @@ class ConversationFileManager:
             files = await self._get_paginated_files(connection, session_id, page_size, offset)
 
             logger.info(
-                f"Listed {len(files)} files for session {session_id} "
-                f"(page {page}/{(total_files + page_size - 1) // page_size})"
+                "Listed %d files for session %s (page %d/%d)",
+                len(files), session_id, page, (total_files + page_size - 1) // page_size
             )
 
             return {"files": files, "total_files": total_files, "total_size": total_size}
 
         except Exception as e:
-            logger.error(f"Error listing files: {e}")
+            logger.error("Error listing files: %s", e)
             raise RuntimeError(f"Failed to list files: {e}")
 
         finally:
@@ -644,14 +647,14 @@ class ConversationFileManager:
             cached_data = await redis_db.get(cache_key)
 
             if cached_data:
-                logger.debug(f"Cache hit for session {session_id}")
+                logger.debug("Cache hit for session %s", session_id)
                 return json.loads(cached_data)
         except (RedisConnectionError, RedisTimeoutError) as e:
-            logger.warning(f"Redis connection/timeout error during cache lookup: {e}")
+            logger.warning("Redis connection/timeout error during cache lookup: %s", e)
         except RedisError as e:
-            logger.warning(f"Redis error during cache lookup: {e}")
+            logger.warning("Redis error during cache lookup: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected error during cache lookup: {e}")
+            logger.error("Unexpected error during cache lookup: %s", e)
         return None
 
     async def _query_session_files_from_db(
@@ -688,10 +691,10 @@ class ConversationFileManager:
             files = await self._query_session_files_from_db(connection, session_id, include_deleted)
             if not include_deleted:
                 await self._cache_session_files(session_id, files)
-            logger.info(f"Retrieved {len(files)} files for session {session_id}")
+            logger.info("Retrieved %d files for session %s", len(files), session_id)
             return files
         except Exception as e:
-            logger.error(f"Error retrieving session files: {e}")
+            logger.error("Error retrieving session files: %s", e)
             return []
         finally:
             await connection.close()
@@ -704,7 +707,7 @@ class ConversationFileManager:
         # Issue #358 - avoid blocking
         if await asyncio.to_thread(file_path.exists):
             await asyncio.to_thread(file_path.unlink)
-            logger.info(f"Hard deleted file: {file_path}")
+            logger.info("Hard deleted file: %s", file_path)
 
     async def _soft_delete_file(self, connection, file_id: str) -> None:
         """Soft delete a file by marking as deleted (Issue #315 - extracted helper)."""
@@ -716,7 +719,7 @@ class ConversationFileManager:
             """,
             (file_id,),
         )
-        logger.info(f"Soft deleted file: {file_id}")
+        logger.info("Soft deleted file: %s", file_id)
 
     async def _get_session_file_ids(self, connection, session_id: str) -> List:
         """Get all file records for a session."""
@@ -748,7 +751,7 @@ class ConversationFileManager:
                 file_path = Path(file_row["file_path"])
                 if await asyncio.to_thread(file_path.exists):
                     await asyncio.to_thread(file_path.unlink)
-                    logger.info(f"Hard deleted file: {file_path}")
+                    logger.info("Hard deleted file: %s", file_path)
 
             # Issue #397: Batch SQL delete using IN clause
             placeholders = ",".join("?" * len(file_ids))
@@ -767,7 +770,7 @@ class ConversationFileManager:
                 """,
                 file_ids,
             )
-            logger.info(f"Soft deleted {len(file_ids)} files in batch")
+            logger.info("Soft deleted %d files in batch", len(file_ids))
 
         return len(file_ids)
 
@@ -780,11 +783,11 @@ class ConversationFileManager:
                 deleted_count = await self._delete_files_batch(connection, files, hard_delete)
                 await connection.commit()
                 await self._invalidate_session_cache(session_id)
-                logger.info(f"Deleted {deleted_count} files from session {session_id} (hard_delete={hard_delete})")
+                logger.info("Deleted %d files from session %s (hard_delete=%s)", deleted_count, session_id, hard_delete)
                 return deleted_count
             except Exception as e:
                 await connection.rollback()
-                logger.error(f"Error deleting session files: {e}")
+                logger.error("Error deleting session files: %s", e)
                 raise RuntimeError(f"Failed to delete session files: {e}")
             finally:
                 await connection.close()
@@ -825,7 +828,7 @@ class ConversationFileManager:
             await connection.commit()
 
         except Exception as e:
-            logger.warning(f"Failed to log file access: {e}")
+            logger.warning("Failed to log file access: %s", e)
 
         finally:
             await connection.close()
@@ -872,11 +875,11 @@ class ConversationFileManager:
             # Verify schema version
             version = await self.get_schema_version()
             logger.info(
-                f"✅ Conversation files database initialized (schema version: {version})"
+                "Conversation files database initialized (schema version: %s)", version
             )
 
         except Exception as e:
-            logger.error(f"❌ Failed to initialize conversation files database: {e}")
+            logger.error("Failed to initialize conversation files database: %s", e)
             raise RuntimeError(f"Database initialization failed: {e}")
 
     def _query_schema_version_sync(self) -> str:
@@ -899,7 +902,7 @@ class ConversationFileManager:
         try:
             return await asyncio.to_thread(self._query_schema_version_sync)
         except Exception as e:
-            logger.warning(f"Failed to get schema version: {e}")
+            logger.warning("Failed to get schema version: %s", e)
             return "unknown"
 
     async def _get_active_file_stats(self, connection) -> tuple:

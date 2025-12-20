@@ -77,7 +77,7 @@ class MCPManualService:
 
         # MCP tools are available directly in this environment
         self.mcp_available = MCP_AVAILABLE
-        logger.info(f"MCP tools available: {self.mcp_available}")
+        logger.info("MCP tools available: %s", self.mcp_available)
 
         # Initialize command manual manager if available
         self.command_manager = None
@@ -86,7 +86,7 @@ class MCPManualService:
                 self.command_manager = CommandManualManager()
                 logger.info("CommandManualManager initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize CommandManualManager: {e}")
+                logger.error("Failed to initialize CommandManualManager: %s", e)
                 self.command_manager = None
 
         logger.info("MCPManualService initialized")
@@ -110,7 +110,7 @@ class MCPManualService:
                 command = self._extract_command_from_query(query)
 
             if command:
-                logger.info(f"Looking up manual for command: {command}")
+                logger.info("Looking up manual for command: %s", command)
 
                 # Try different lookup strategies
                 manual_info = await self._lookup_command_manual(command)
@@ -127,7 +127,7 @@ class MCPManualService:
             return doc_info
 
         except Exception as e:
-            logger.error(f"Manual lookup failed for '{query}': {e}")
+            logger.error("Manual lookup failed for '%s': %s", query, e)
             return None
 
     def _extract_command_from_query(self, query: str) -> Optional[str]:
@@ -204,7 +204,7 @@ class MCPManualService:
             return None
 
         except Exception as e:
-            logger.error(f"Manual lookup failed for command '{command}': {e}")
+            logger.error("Manual lookup failed for command '%s': %s", command, e)
             return None
 
     async def _lookup_command_help(self, command: str) -> Optional[Dict[str, Any]]:
@@ -234,7 +234,7 @@ class MCPManualService:
             return None
 
         except Exception as e:
-            logger.error(f"Help lookup failed for command '{command}': {e}")
+            logger.error("Help lookup failed for command '%s': %s", command, e)
             return None
 
     async def _search_documentation(self, query: str) -> Optional[Dict[str, Any]]:
@@ -253,7 +253,7 @@ class MCPManualService:
             return doc_data
 
         except Exception as e:
-            logger.error(f"Documentation search failed for '{query}': {e}")
+            logger.error("Documentation search failed for '%s': %s", query, e)
             return None
 
     async def _real_manual_lookup(self, command: str) -> Optional[Dict[str, Any]]:
@@ -272,7 +272,7 @@ class MCPManualService:
             return await self._try_execute_and_parse_man(command)
 
         except Exception as e:
-            logger.error(f"Real manual lookup failed for command '{command}': {e}")
+            logger.error("Real manual lookup failed for command '%s': %s", command, e)
             # Fallback to mock data for critical commands
             return await self._fallback_manual_lookup(command)
 
@@ -316,7 +316,7 @@ class MCPManualService:
             try:
                 self.command_manager.store_manual(manual_data)
             except Exception as e:
-                logger.warning(f"Failed to store manual for {command}: {e}")
+                logger.warning("Failed to store manual for %s: %s", command, e)
 
         return {
             "name": command,
@@ -339,7 +339,7 @@ class MCPManualService:
             return result if result else None
 
         except Exception as e:
-            logger.error(f"Failed to execute man command for '{command}': {e}")
+            logger.error("Failed to execute man command for '%s': %s", command, e)
             return None
 
     async def _run_subprocess(self, cmd: List[str]) -> Optional[str]:
@@ -355,7 +355,7 @@ class MCPManualService:
                     process.communicate(), timeout=10.0
                 )
             except asyncio.TimeoutError:
-                logger.warning(f"Command {' '.join(cmd)} timed out")
+                logger.warning("Command %s timed out", ' '.join(cmd))
                 process.kill()
                 await process.wait()
                 return None
@@ -364,12 +364,12 @@ class MCPManualService:
                 return stdout.decode("utf-8", errors="ignore")
             else:
                 logger.warning(
-                    f"Command {' '.join(cmd)} failed with return code {process.returncode}"
+                    "Command %s failed with return code %d", ' '.join(cmd), process.returncode
                 )
                 return None
 
         except Exception as e:
-            logger.error(f"Subprocess execution failed: {e}")
+            logger.error("Subprocess execution failed: %s", e)
             return None
 
     def _parse_manual_text(self, command: str, manual_text: str):
@@ -378,7 +378,7 @@ class MCPManualService:
             try:
                 return self.command_manager._parse_manual_text(command, manual_text)
             except Exception as e:
-                logger.warning(f"Failed to parse manual text: {e}")
+                logger.warning("Failed to parse manual text: %s", e)
         return None
 
     def _extract_description(self, command: str, manual_text: str) -> str:
@@ -479,7 +479,7 @@ class MCPManualService:
             return None
 
         except Exception as e:
-            logger.error(f"Real help lookup failed for command '{command}': {e}")
+            logger.error("Real help lookup failed for command '%s': %s", command, e)
             return await self._fallback_help_lookup(command)
 
     async def _execute_help_command(self, cmd_args: List[str]) -> Optional[str]:
@@ -491,7 +491,7 @@ class MCPManualService:
         try:
             # Validate command arguments for safety
             if not self._is_safe_command(cmd_args):
-                logger.warning(f"Unsafe command rejected: {' '.join(cmd_args)}")
+                logger.warning("Unsafe command rejected: %s", ' '.join(cmd_args))
                 return None
 
             # Execute help command directly with timeout for safety
@@ -499,7 +499,7 @@ class MCPManualService:
             return result if result else None
 
         except Exception as e:
-            logger.error(f"Failed to execute help command {' '.join(cmd_args)}: {e}")
+            logger.error("Failed to execute help command %s: %s", ' '.join(cmd_args), e)
             return None
 
     def _is_safe_command(self, cmd_args: List[str]) -> bool:
@@ -646,7 +646,7 @@ class MCPManualService:
             }
 
         except Exception as e:
-            logger.error(f"Real documentation search failed for '{query}': {e}")
+            logger.error("Real documentation search failed for '%s': %s", query, e)
             return await self._fallback_documentation_search(query)
 
     async def _get_documentation_sources(self) -> List[Dict[str, Any]]:
@@ -676,7 +676,7 @@ class MCPManualService:
                         )
                 except Exception as e:
                     # Directory doesn't exist or not accessible
-                    logger.debug(f"Documentation directory {doc_dir} not accessible: {e}")
+                    logger.debug("Documentation directory %s not accessible: %s", doc_dir, e)
 
         # Add AutoBot specific documentation
         autobot_docs = [
@@ -726,7 +726,7 @@ class MCPManualService:
                 file_results = await self._search_file_content(query, file_path)
                 results.extend(file_results)
         except Exception as e:
-            logger.warning(f"Failed to search directory {dir_path}: {e}")
+            logger.warning("Failed to search directory %s: %s", dir_path, e)
         return results
 
     async def _search_documentation_source(
@@ -755,7 +755,7 @@ class MCPManualService:
             return await self._search_file_content(query, source_name)
 
         except Exception as e:
-            logger.warning(f"Failed to search documentation source {source['name']}: {e}")
+            logger.warning("Failed to search documentation source %s: %s", source['name'], e)
 
         return results
 
@@ -816,7 +816,7 @@ class MCPManualService:
             return await self._read_and_search_file(query, file_path)
 
         except Exception as e:
-            logger.warning(f"Failed to search file {file_path}: {e}")
+            logger.warning("Failed to search file %s: %s", file_path, e)
             return []
 
     async def _read_and_search_file(
@@ -843,10 +843,10 @@ class MCPManualService:
             ) as f:
                 return await f.read()
         except (UnicodeDecodeError, OSError) as e:
-            logger.debug(f"UTF-8 read failed for {file_path}: {e}")
+            logger.debug("UTF-8 read failed for %s: %s", file_path, e)
             return None
         except Exception as e:
-            logger.debug(f"Skipping unreadable file {file_path}: {e}")
+            logger.debug("Skipping unreadable file %s: %s", file_path, e)
             return None
 
     async def _try_read_file_latin1(self, file_path: str) -> Optional[str]:
@@ -857,7 +857,7 @@ class MCPManualService:
             ) as f:
                 return await f.read()
         except (OSError, Exception) as e:
-            logger.debug(f"Latin-1 read failed for {file_path}: {e}")
+            logger.debug("Latin-1 read failed for %s: %s", file_path, e)
             return None
 
     def _find_query_matches(
@@ -940,7 +940,7 @@ class MCPManualService:
                     )
 
         except Exception as e:
-            logger.warning(f"Failed to search command manuals: {e}")
+            logger.warning("Failed to search command manuals: %s", e)
 
         return results
 
@@ -969,7 +969,7 @@ class MCPManualService:
                     )
 
         except Exception as e:
-            logger.warning(f"Failed to search info files for {query}: {e}")
+            logger.warning("Failed to search info files for %s: %s", query, e)
 
         return results
 
