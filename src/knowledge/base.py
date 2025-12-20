@@ -169,7 +169,7 @@ class KnowledgeBaseCore:
                 return True
 
             except Exception as e:
-                logger.error(f"Knowledge base initialization failed: {e}")
+                logger.error("Knowledge base initialization failed: %s", e)
                 await self._cleanup_on_failure()
                 return False
 
@@ -205,7 +205,7 @@ class KnowledgeBaseCore:
 
             if stored_model:
                 embed_model_name = stored_model
-                logger.info(f"Using stored embedding model: {embed_model_name}")
+                logger.info("Using stored embedding model: %s", embed_model_name)
             else:
                 # Default to nomic-embed-text (768 dimensions)
                 embed_model_name = "nomic-embed-text"
@@ -222,10 +222,10 @@ class KnowledgeBaseCore:
             )
 
             self.llama_index_configured = True
-            logger.info(f"LlamaIndex configured with Ollama at {ollama_url}")
+            logger.info("LlamaIndex configured with Ollama at %s", ollama_url)
 
         except Exception as e:
-            logger.warning(f"Could not configure LlamaIndex with Ollama: {e}")
+            logger.warning("Could not configure LlamaIndex with Ollama: %s", e)
             self.llama_index_configured = False
 
     async def _init_redis_connections(self):
@@ -243,7 +243,8 @@ class KnowledgeBaseCore:
             # Test sync connection
             await asyncio.to_thread(self.redis_client.ping)
             logger.info(
-                f"Knowledge Base Redis sync client connected (database {self.redis_db})"
+                "Knowledge Base Redis sync client connected (database %d)",
+                self.redis_db
             )
 
             # Get async Redis client using pool manager
@@ -256,7 +257,7 @@ class KnowledgeBaseCore:
             logger.info("Knowledge Base async Redis client connected successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Redis connections: {e}")
+            logger.error("Failed to initialize Redis connections: %s", e)
             raise
 
     async def _init_vector_store(self):
@@ -269,7 +270,7 @@ class KnowledgeBaseCore:
             # Create ChromaDB directory if it doesn't exist
             chroma_path = Path(self.chromadb_path)
 
-            logger.info(f"Initializing ChromaDB at path: {chroma_path}")
+            logger.info("Initializing ChromaDB at path: %s", chroma_path)
 
             # Create ChromaDB persistent client with telemetry disabled
             # Note: Client creation is fast, doesn't need to_thread wrapper
@@ -287,9 +288,10 @@ class KnowledgeBaseCore:
             }
 
             logger.info(
-                f"Creating ChromaDB collection with optimized HNSW params: "
-                f"space={self.hnsw_space}, construction_ef={self.hnsw_construction_ef}, "
-                f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+                "Creating ChromaDB collection with optimized HNSW params: "
+                "space=%s, construction_ef=%d, search_ef=%d, M=%d",
+                self.hnsw_space, self.hnsw_construction_ef,
+                self.hnsw_search_ef, self.hnsw_m
             )
 
             # Issue #369: Wrap blocking get_or_create_collection with asyncio.to_thread
@@ -307,12 +309,13 @@ class KnowledgeBaseCore:
             self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
             logger.info(
-                f"ChromaDB vector store initialized: collection='{self.chromadb_collection}'"
+                "ChromaDB vector store initialized: collection='%s'",
+                self.chromadb_collection
             )
 
             # Issue #369: Wrap blocking count() operation with asyncio.to_thread
             collection_count = await asyncio.to_thread(chroma_collection.count)
-            logger.info(f"ChromaDB collection contains {collection_count} vectors")
+            logger.info("ChromaDB collection contains %d vectors", collection_count)
 
             # Skip eager index creation to prevent blocking during initialization
             # with 545K+ vectors. Index will be created lazily on first use.
@@ -321,7 +324,7 @@ class KnowledgeBaseCore:
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB vector store: {e}")
+            logger.error("Failed to initialize ChromaDB vector store: %s", e)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -362,7 +365,7 @@ class KnowledgeBaseCore:
             # from the migration process
 
         except Exception as e:
-            logger.error(f"Failed to create initial vector index: {e}")
+            logger.error("Failed to create initial vector index: %s", e)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -386,7 +389,7 @@ class KnowledgeBaseCore:
             logger.info("Cleanup completed after initialization failure")
 
         except Exception as e:
-            logger.warning(f"Error during cleanup: {e}")
+            logger.warning("Error during cleanup: %s", e)
 
     # ============================================================================
     # V1 COMPATIBILITY METHODS
@@ -438,7 +441,7 @@ class KnowledgeBaseCore:
             else:
                 return "no_client"
         except Exception as e:
-            logger.error(f"Redis ping failed: {e}")
+            logger.error("Redis ping failed: %s", e)
             return "error"
 
     def _scan_redis_keys(self, pattern: str) -> List[str]:
@@ -455,7 +458,7 @@ class KnowledgeBaseCore:
                     keys.append(str(key))
             return keys
         except Exception as e:
-            logger.error(f"Error scanning Redis keys: {e}")
+            logger.error("Error scanning Redis keys: %s", e)
             return []
 
     async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
@@ -472,14 +475,14 @@ class KnowledgeBaseCore:
                 else:
                     keys.append(str(key))
 
-            logger.debug(f"Scanned {len(keys)} keys matching pattern '{pattern}'")
+            logger.debug("Scanned %d keys matching pattern '%s'", len(keys), pattern)
             return keys
 
         except redis.RedisError as e:
-            logger.error(f"Redis error scanning keys with pattern '{pattern}': {e}")
+            logger.error("Redis error scanning keys with pattern '%s': %s", pattern, e)
             return []
         except Exception as e:
-            logger.exception(f"Unexpected error scanning Redis keys: {e}")
+            logger.exception("Unexpected error scanning Redis keys: %s", e)
             return []
 
     def _count_facts(self) -> int:
@@ -488,7 +491,7 @@ class KnowledgeBaseCore:
             fact_keys = self._scan_redis_keys("fact:*")
             return len(fact_keys)
         except Exception as e:
-            logger.error(f"Error counting facts: {e}")
+            logger.error("Error counting facts: %s", e)
             return 0
 
     async def _detect_stored_embedding_model(self) -> Optional[str]:
@@ -506,7 +509,7 @@ class KnowledgeBaseCore:
                 if model:
                     return model
         except Exception as e:
-            logger.debug(f"Could not detect stored embedding model: {e}")
+            logger.debug("Could not detect stored embedding model: %s", e)
 
         return None
 
@@ -531,7 +534,7 @@ class KnowledgeBaseCore:
             logger.info("Knowledge base connections closed successfully")
 
         except Exception as e:
-            logger.error(f"Error closing knowledge base connections: {e}")
+            logger.error("Error closing knowledge base connections: %s", e)
 
     def __del__(self):
         """Destructor to ensure cleanup"""

@@ -54,9 +54,9 @@ class StatsMixin:
         if self.aioredis_client:
             try:
                 await self.aioredis_client.hincrby(self._stats_key, field, amount)
-                logger.debug(f"Incremented {field} by {amount}")
+                logger.debug("Incremented %s by %d", field, amount)
             except Exception as e:
-                logger.warning(f"Failed to increment stat {field}: {e}")
+                logger.warning("Failed to increment stat %s: %s", field, e)
 
     async def _decrement_stat(self, field: str, amount: int = 1) -> None:
         """Atomically decrement a stats counter field (prevents negative values)."""
@@ -64,9 +64,9 @@ class StatsMixin:
             try:
                 # Use hincrby with negative value for atomic decrement
                 await self.aioredis_client.hincrby(self._stats_key, field, -amount)
-                logger.debug(f"Decremented {field} by {amount}")
+                logger.debug("Decremented %s by %d", field, amount)
             except Exception as e:
-                logger.warning(f"Failed to decrement stat {field}: {e}")
+                logger.warning("Failed to decrement stat %s: %s", field, e)
 
     async def _get_stat(self, field: str) -> int:
         """Get a single stats counter value (O(1))."""
@@ -76,7 +76,7 @@ class StatsMixin:
                 if value is not None:
                     return int(value)
             except Exception as e:
-                logger.warning(f"Failed to get stat {field}: {e}")
+                logger.warning("Failed to get stat %s: %s", field, e)
         return 0
 
     # Fields that contain metadata (timestamps) rather than integer counters
@@ -104,7 +104,7 @@ class StatsMixin:
                     except (ValueError, TypeError):
                         # Log and skip fields that can't be converted to int
                         logger.warning(
-                            f"Stats field '{key}' has non-integer value: {value!r}"
+                            "Stats field '%s' has non-integer value: %r", key, value
                         )
                         continue
                 return result
@@ -491,15 +491,44 @@ class StatsMixin:
             logger.error(f"Error generating detailed stats: {e}")
             return {**basic_stats, "detailed_stats": False, "error": str(e)}
 
+    async def _calc_all_quality_dimensions(
+        self, facts: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calculate all quality dimensions (Issue #398: extracted helper)."""
+        return {
+            "completeness": await self._calc_completeness_score(facts),
+            "consistency": await self._calc_consistency_score(facts),
+            "freshness": await self._calc_freshness_score(facts),
+            "uniqueness": await self._calc_uniqueness_score(facts),
+            "validity": await self._calc_validity_score(facts),
+        }
+
+    def _calc_overall_quality_score(self, dimensions: Dict[str, Any]) -> float:
+        """Calculate weighted overall quality score (Issue #398: extracted helper)."""
+        weights = {
+            "completeness": 0.25,
+            "consistency": 0.20,
+            "freshness": 0.15,
+            "uniqueness": 0.20,
+            "validity": 0.20,
+        }
+        return round(sum(dimensions[dim]["score"] * weights[dim] for dim in weights), 1)
+
+    def _build_quality_summary(
+        self, facts: List[Dict[str, Any]], issues: List[Dict]
+    ) -> Dict[str, Any]:
+        """Build quality metrics summary (Issue #398: extracted helper)."""
+        return {
+            "total_facts": len(facts),
+            "facts_with_issues": len(set(
+                i.get("fact_id") for i in issues if i.get("fact_id")
+            )),
+            "critical_issues": len([i for i in issues if i.get("severity") == "critical"]),
+            "warnings": len([i for i in issues if i.get("severity") == "warning"]),
+        }
+
     async def get_data_quality_metrics(self) -> Dict[str, Any]:
-        """
-        Get comprehensive data quality metrics for the knowledge base.
-
-        Issue #418: Data quality metrics and health dashboard.
-
-        Returns:
-            Dict with quality scores, issues, and recommendations
-        """
+        """Get data quality metrics (Issue #398: refactored with helpers)."""
         try:
             metrics = {
                 "status": "success",
@@ -510,68 +539,20 @@ class StatsMixin:
                 "recommendations": [],
             }
 
-            # Get all facts for analysis
             facts = await self.get_all_facts()
-
             if not facts:
                 metrics["overall_score"] = 100.0
                 metrics["message"] = "No facts to analyze"
                 return metrics
 
-            # Calculate quality dimensions
-            completeness = await self._calc_completeness_score(facts)
-            consistency = await self._calc_consistency_score(facts)
-            freshness = await self._calc_freshness_score(facts)
-            uniqueness = await self._calc_uniqueness_score(facts)
-            validity = await self._calc_validity_score(facts)
+            metrics["dimensions"] = await self._calc_all_quality_dimensions(facts)
+            metrics["overall_score"] = self._calc_overall_quality_score(metrics["dimensions"])
 
-            metrics["dimensions"] = {
-                "completeness": completeness,
-                "consistency": consistency,
-                "freshness": freshness,
-                "uniqueness": uniqueness,
-                "validity": validity,
-            }
-
-            # Calculate overall score (weighted average)
-            weights = {
-                "completeness": 0.25,
-                "consistency": 0.20,
-                "freshness": 0.15,
-                "uniqueness": 0.20,
-                "validity": 0.20,
-            }
-
-            overall = sum(
-                metrics["dimensions"][dim]["score"] * weights[dim]
-                for dim in weights
-            )
-            metrics["overall_score"] = round(overall, 1)
-
-            # Collect issues and recommendations
-            for dim_name, dim_data in metrics["dimensions"].items():
+            for dim_data in metrics["dimensions"].values():
                 metrics["issues"].extend(dim_data.get("issues", []))
-                metrics["recommendations"].extend(
-                    dim_data.get("recommendations", [])
-                )
+                metrics["recommendations"].extend(dim_data.get("recommendations", []))
 
-            # Add summary statistics
-            metrics["summary"] = {
-                "total_facts": len(facts),
-                "facts_with_issues": len(set(
-                    issue.get("fact_id")
-                    for issue in metrics["issues"]
-                    if issue.get("fact_id")
-                )),
-                "critical_issues": len([
-                    i for i in metrics["issues"]
-                    if i.get("severity") == "critical"
-                ]),
-                "warnings": len([
-                    i for i in metrics["issues"]
-                    if i.get("severity") == "warning"
-                ]),
-            }
+            metrics["summary"] = self._build_quality_summary(facts, metrics["issues"])
 
             return metrics
 
