@@ -572,24 +572,7 @@ async def process_chat_message(
     config: Metadata,
     request_id: str,
 ) -> Metadata:
-    """
-    Process a chat message and generate response.
-
-    Issue #281: Refactored from 149 lines to use extracted helper methods.
-
-    Args:
-        message: Chat message to process
-        chat_history_manager: Chat history manager instance
-        llm_service: LLM service instance
-        memory_interface: Memory interface instance
-        knowledge_base: Knowledge base instance
-        config: Configuration metadata
-        request_id: Request ID for tracking
-
-    Returns:
-        Response metadata dict
-    """
-    # Validate session ID (Issue #281: uses helper)
+    """Process a chat message and generate response (Issue #398: refactored)."""
     _validate_session_id(message.session_id)
 
     # Get or create session
@@ -634,64 +617,50 @@ async def process_chat_message(
 # ====================================================================
 
 
+async def _generate_llm_stream(
+    message: ChatMessage,
+    chat_history_manager,
+    llm_service,
+    request_id: str,
+):
+    """Generate LLM streaming response chunks (Issue #398: extracted)."""
+    try:
+        session_id = message.session_id or generate_chat_session_id()
+        yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
+
+        if hasattr(llm_service, "stream_response"):
+            async for chunk in llm_service.stream_response(message.content, session_id):
+                chunk_data = {
+                    "type": "chunk",
+                    "content": chunk.get("content", ""),
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+        else:
+            response_data = await process_chat_message(
+                message, chat_history_manager, llm_service, None, None, {}, request_id
+            )
+            yield f"data: {json.dumps({'type': 'complete', **response_data})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'end'})}\n\n"
+
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        error_data = {
+            "type": "error",
+            "message": "Error generating response",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        yield f"data: {json.dumps(error_data)}\n\n"
+
+
 async def stream_chat_response(
     message: ChatMessage, chat_history_manager, llm_service, request_id: str
 ) -> StreamingResponse:
-    """Stream chat response for real-time communication"""
-
-    async def generate_stream():
-        """
-        Generate streaming response chunks for real-time chat communication.
-
-        Yields:
-            str: Server-sent events (SSE) formatted data chunks
-        """
-        try:
-            # Initial setup
-            session_id = message.session_id or generate_chat_session_id()
-
-            # Send initial message acknowledgment
-            yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
-
-            # Process message and stream response
-            if hasattr(llm_service, "stream_response"):
-                async for chunk in llm_service.stream_response(
-                    message.content, session_id
-                ):
-                    chunk_data = {
-                        "type": "chunk",
-                        "content": chunk.get("content", ""),
-                        "session_id": session_id,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-            else:
-                # Fallback to non-streaming
-                response_data = await process_chat_message(
-                    message,
-                    chat_history_manager,
-                    llm_service,
-                    None,
-                    None,
-                    {},
-                    request_id,
-                )
-                yield f"data: {json.dumps({'type': 'complete', **response_data})}\n\n"
-
-            # Send completion signal
-            yield f"data: {json.dumps({'type': 'end'})}\n\n"
-
-        except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            error_data = {
-                "type": "error",
-                "message": "Error generating response",
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-
+    """Stream chat response for real-time communication (Issue #398: refactored)."""
     return StreamingResponse(
-        generate_stream(),
+        _generate_llm_stream(message, chat_history_manager, llm_service, request_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -893,24 +862,13 @@ async def chat_statistics(request: Request):
 
 # MISSING ENDPOINTS FOR FRONTEND COMPATIBILITY
 
+# ====================================================================
+# Chat Message Streaming Helpers (Issue #398 - Extract from long methods)
+# ====================================================================
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="send_chat_message_by_id",
-    error_code_prefix="CHAT",
-)
-@router.post("/chats/{chat_id}/message")
-async def send_chat_message_by_id(
-    chat_id: str,
-    request_data: dict,
-    request: Request,
-    ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
-):
-    """Send message to specific chat by ID (frontend compatibility endpoint)"""
-    request_id = generate_request_id()
-    log_request_context(request, "send_chat_message_by_id", request_id)
 
-    # Extract message from request data
+def _validate_chat_message(request_data: dict) -> str:
+    """Validate and extract message from request data (Issue #398: extracted)."""
     message = request_data.get("message", "")
     if not message:
         (
@@ -921,11 +879,13 @@ async def send_chat_message_by_id(
             get_error_code,
         ) = get_exceptions_lazy()
         raise ValidationError("Message content is required")
+    return message
 
-    # Get dependencies from request state with lazy initialization
-    chat_history_manager = get_chat_history_manager(request)
-    chat_workflow_manager = await get_chat_workflow_manager(request)
 
+def _validate_chat_services(
+    chat_history_manager, chat_workflow_manager
+) -> None:
+    """Validate that chat services are available (Issue #398: extracted)."""
     if not chat_history_manager or not chat_workflow_manager:
         (
             AutoBotError,
@@ -942,72 +902,124 @@ async def send_chat_message_by_id(
             },
         )
 
-    # Process the message using ChatWorkflowManager and stream response
-    async def generate_stream():
-        """
-        Generate streaming workflow response for chat message processing.
 
-        Yields:
-            str: Server-sent events (SSE) formatted workflow message chunks
-        """
-        try:
-            logger.debug(
-                f"[{request_id}] Starting stream generation for chat_id={chat_id}"
-            )
+async def _stream_chat_workflow_messages(
+    chat_workflow_manager, chat_id: str, message: str, context: dict, request_id: str
+):
+    """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
+    try:
+        logger.debug(f"[{request_id}] Starting stream for chat_id={chat_id}")
+        yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
 
-            # Send initial acknowledgment
-            start_evt = {'type': 'start', 'session_id': chat_id, 'request_id': request_id}
-            yield f"data: {json.dumps(start_evt)}\n\n"
-            logger.debug(f"[{request_id}] Sent start event")
+        logger.debug(f"[{request_id}] Processing message: {message[:50]}...")
+        message_count = 0
+        async for msg in chat_workflow_manager.process_message_stream(
+            session_id=chat_id, message=message, context=context
+        ):
+            message_count += 1
+            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
+            logger.debug(f"[{request_id}] Message {message_count}: {msg_data}")
+            yield f"data: {json.dumps(msg_data)}\n\n"
 
-            # Process message and stream workflow messages as they arrive
-            msg_preview = message[:50]
-            logger.debug(
-                f"[{request_id}] Calling chat_workflow_manager.process_message_stream() "
-                f"with message: {msg_preview}..."
-            )
+        logger.debug(f"[{request_id}] Stream complete: {message_count} messages")
+        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
-            message_count = 0
-            async for msg in chat_workflow_manager.process_message_stream(
-                session_id=chat_id,
-                message=message,
-                context=request_data.get("context", {}),
-            ):
-                message_count += 1
-                logger.debug(
-                    f"[{request_id}] Processing message {message_count}: type={type(msg)}"
-                )
-                msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-                logger.debug(f"[{request_id}] Message data: {msg_data}")
-                yield f"data: {json.dumps(msg_data)}\n\n"
-                logger.debug(f"[{request_id}] Sent message {message_count}")
+    except Exception as e:
+        logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
+        yield f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
 
-            logger.debug(
-                f"[{request_id}] Got {message_count} messages from workflow manager"
-            )
 
-            # Send completion signal
-            logger.debug(f"[{request_id}] Sending end event")
-            yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-            logger.debug(f"[{request_id}] Stream generation completed")
-
-        except Exception as e:
-            logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
-            error_data = {
-                "type": "error",
-                "content": f"Error processing message: {str(e)}",
-                "request_id": request_id,
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-
+def _create_streaming_response(generator):
+    """Create a StreamingResponse with SSE headers (Issue #398: extracted)."""
     return StreamingResponse(
-        generate_stream(),
+        generator,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+async def _stream_direct_response(
+    chat_workflow_manager,
+    chat_id: str,
+    message: str,
+    remember_choice: bool,
+    request_id: str,
+):
+    """Stream direct response for approvals/denials (Issue #398: extracted)."""
+    try:
+        start_evt = {'type': 'start', 'session_id': chat_id, 'request_id': request_id}
+        yield f"data: {json.dumps(start_evt)}\n\n"
+
+        async for msg in chat_workflow_manager.process_message_stream(
+            session_id=chat_id,
+            message=message,
+            context={"remember_choice": remember_choice},
+        ):
+            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
+            yield f"data: {json.dumps(msg_data)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
+
+    except Exception as e:
+        logger.error(f"[{request_id}] Direct response streaming error: {e}", exc_info=True)
+        error_data = {
+            "type": "error",
+            "content": f"Error processing command approval: {str(e)}",
+            "request_id": request_id,
+        }
+        yield f"data: {json.dumps(error_data)}\n\n"
+
+
+def _validate_workflow_manager(chat_workflow_manager) -> None:
+    """Validate workflow manager is available (Issue #398: extracted)."""
+    if not chat_workflow_manager:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError(
+            "Workflow manager not available",
+            details={"initialization_error": "Lazy initialization failed"},
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_chat_message_by_id",
+    error_code_prefix="CHAT",
+)
+@router.post("/chats/{chat_id}/message")
+async def send_chat_message_by_id(
+    chat_id: str,
+    request_data: dict,
+    request: Request,
+    ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
+):
+    """Send message to specific chat by ID (Issue #398: refactored)."""
+    request_id = generate_request_id()
+    log_request_context(request, "send_chat_message_by_id", request_id)
+
+    message = _validate_chat_message(request_data)
+
+    chat_history_manager = get_chat_history_manager(request)
+    chat_workflow_manager = await get_chat_workflow_manager(request)
+    _validate_chat_services(chat_history_manager, chat_workflow_manager)
+
+    return _create_streaming_response(
+        _stream_chat_workflow_messages(
+            chat_workflow_manager,
+            chat_id,
+            message,
+            request_data.get("context", {}),
+            request_id,
+        )
     )
 
 
@@ -1060,6 +1072,25 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     return final_merged
 
 
+async def _merge_chat_messages(
+    chat_history_manager, chat_id: str, new_messages: List[Dict], request_id: str
+) -> List[Dict]:
+    """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted)."""
+    try:
+        existing_messages = await chat_history_manager.load_session(chat_id)
+        merged_messages = await merge_messages(existing_messages, new_messages)
+        logger.info(
+            f"[{request_id}] Merged {len(existing_messages)} existing + "
+            f"{len(new_messages)} new = {len(merged_messages)} total messages"
+        )
+        return merged_messages
+    except Exception as merge_error:
+        logger.warning(
+            f"[{request_id}] Message merge failed, using new messages only: {merge_error}"
+        )
+        return new_messages
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_chat_by_id",
@@ -1072,13 +1103,11 @@ async def save_chat_by_id(
     request: Request,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
-    """Save chat session by ID (frontend compatibility endpoint)"""
+    """Save chat session by ID (Issue #398: refactored)."""
     request_id = generate_request_id()
     log_request_context(request, "save_chat_by_id", request_id)
 
-    # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-
     if not chat_history_manager:
         return create_error_response(
             error_code="SERVICE_UNAVAILABLE",
@@ -1087,34 +1116,13 @@ async def save_chat_by_id(
             status_code=503,
         )
 
-    # CRITICAL FIX: Merge messages to prevent race condition
-    # Load existing messages from file/cache to preserve backend-added messages
     save_data = request_data.get("data", {})
-    new_messages = save_data.get("messages", [])
+    merged_messages = await _merge_chat_messages(
+        chat_history_manager, chat_id, save_data.get("messages", []), request_id
+    )
 
-    try:
-        # Load existing messages to check for backend-added terminal messages
-        existing_messages = await chat_history_manager.load_session(chat_id)
-
-        # Merge with deduplication to preserve backend-added messages
-        merged_messages = await merge_messages(existing_messages, new_messages)
-
-        logger.info(
-            f"[{request_id}] Merged {len(existing_messages)} existing + "
-            f"{len(new_messages)} new = {len(merged_messages)} total messages"
-        )
-    except Exception as merge_error:
-        # Fallback to new messages only if merge fails
-        logger.warning(
-            f"[{request_id}] Message merge failed, using new messages only: {merge_error}"
-        ),
-        merged_messages = new_messages
-
-    # Save the merged chat session
     result = await chat_history_manager.save_session(
-        session_id=chat_id,
-        messages=merged_messages,
-        name=save_data.get("name", ""),
+        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
     )
 
     return JSONResponse(
@@ -1180,76 +1188,15 @@ async def send_direct_chat_response(
     chat_id: str = Body(...),
     remember_choice: bool = Body(default=False),
 ):
-    """
-    Send direct user response to chat (for command approvals, etc.)
-    This endpoint accepts 'yes' or 'no' responses to system prompts
-    """
+    """Send direct user response to chat (Issue #398: refactored)."""
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
 
-    # Get ChatWorkflowManager from app state with lazy initialization
     chat_workflow_manager = await get_chat_workflow_manager(request)
+    _validate_workflow_manager(chat_workflow_manager)
 
-    if not chat_workflow_manager:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise InternalError(
-            "Workflow manager not available",
-            details={"initialization_error": "Lazy initialization failed"},
+    return _create_streaming_response(
+        _stream_direct_response(
+            chat_workflow_manager, chat_id, message, remember_choice, request_id
         )
-
-    # Stream the response (command approval/denial response)
-    async def generate_stream():
-        """
-        Generate streaming response for direct chat interactions (approvals/denials).
-
-        Yields:
-            str: Server-sent events (SSE) formatted response chunks
-        """
-        try:
-            # Send start event
-            start_evt = {
-                'type': 'start',
-                'session_id': chat_id,
-                'request_id': request_id
-            }
-            yield f"data: {json.dumps(start_evt)}\n\n"
-
-            # Process the approval/denial message through workflow
-            async for msg in chat_workflow_manager.process_message_stream(
-                session_id=chat_id,
-                message=message,  # "yes" or "no"
-                context={"remember_choice": remember_choice},
-            ):
-                msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-                yield f"data: {json.dumps(msg_data)}\n\n"
-
-            # Send completion
-            yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-
-        except Exception as e:
-            logger.error(
-                f"[{request_id}] Direct response streaming error: {e}",
-                exc_info=True,
-            ),
-            error_data = {
-                "type": "error",
-                "content": f"Error processing command approval: {str(e)}",
-                "request_id": request_id,
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-
-    return StreamingResponse(
-        generate_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
     )
