@@ -40,6 +40,24 @@
         {{ isScanning ? 'Scanning...' : 'Scan Now' }}
       </BaseButton>
 
+      <!-- Issue #425: Man Page Section Filter -->
+      <div class="section-filter">
+        <label class="filter-label">
+          <i class="fas fa-book"></i>
+          Section:
+        </label>
+        <select v-model="selectedSections" multiple class="section-select">
+          <option value="1">1 - User Commands</option>
+          <option value="2">2 - System Calls</option>
+          <option value="3">3 - Library Functions</option>
+          <option value="4">4 - Special Files</option>
+          <option value="5">5 - File Formats</option>
+          <option value="6">6 - Games</option>
+          <option value="7">7 - Miscellaneous</option>
+          <option value="8">8 - System Admin</option>
+        </select>
+      </div>
+
       <div class="auto-refresh-toggle">
         <label class="toggle-label">
           <input
@@ -221,14 +239,35 @@ const {
 const autoRefreshEnabled = ref(false)
 const autoVectorizeEnabled = ref(false)
 const activeFilter = ref<'all' | 'added' | 'updated' | 'removed'>('all')
+// Issue #425: Section filter for man pages
+const selectedSections = ref<string[]>(['1', '8'])  // Default: User Commands and System Admin
 
 // Computed
 const filteredChanges = computed(() => {
-  if (activeFilter.value === 'all') {
-    return recentChanges.value
+  let changes = recentChanges.value
+
+  // Issue #425: Filter by change type
+  if (activeFilter.value !== 'all') {
+    changes = changes.filter(change => change.change_type === activeFilter.value)
   }
-  return recentChanges.value.filter(change => change.change_type === activeFilter.value)
+
+  // Issue #425: Filter by man page section if sections are selected
+  if (selectedSections.value.length > 0 && selectedSections.value.length < 8) {
+    changes = changes.filter(change => {
+      // Check if this is a man page change with section metadata
+      const section = (change as DocumentChangeWithSection).section
+      if (!section) return true  // Non-man-page changes pass through
+      return selectedSections.value.includes(section)
+    })
+  }
+
+  return changes
 })
+
+// Issue #425: Extended type for man page changes
+interface DocumentChangeWithSection extends DocumentChange {
+  section?: string
+}
 
 // Methods
 const handleScanNow = async () => {
@@ -351,6 +390,39 @@ onUnmounted(() => {
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
+}
+
+/* Issue #425: Section filter styles */
+.section-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.section-select {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #374151;
+  min-width: 180px;
+  max-height: 100px;
+}
+
+.section-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .auto-refresh-toggle {

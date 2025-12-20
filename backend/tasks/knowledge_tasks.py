@@ -5,8 +5,11 @@
 Knowledge Base Background Tasks for AutoBot
 
 Celery tasks for long-running knowledge base operations with progress tracking.
+
+Issue #424: Added periodic task for incremental man page updates.
 """
 
+import asyncio
 import logging
 import subprocess
 import sys
@@ -170,3 +173,295 @@ def reindex_knowledge_base(self) -> Metadata:
             "error": str(e),
             "message": f"Reindex failed: {str(e)}",
         }
+
+
+# =========================================================================
+# Issue #424: Periodic Man Page Update Task
+# =========================================================================
+
+
+def _run_async_in_loop(coro):
+    """Run async coroutine in a new event loop (helper for Celery tasks)."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+async def _scan_man_page_changes_async(machine_id: str, limit: int | None = None) -> dict:
+    """
+    Async implementation of man page change scanning.
+
+    Issue #424: Core logic for incremental man page updates.
+
+    Args:
+        machine_id: Host identifier for change tracking
+        limit: Optional limit on pages to process
+
+    Returns:
+        Dict with scan results and storage statistics
+    """
+    from src.utils.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
+    from src.knowledge import get_knowledge_base
+
+    try:
+        # Get system context
+        try:
+            from src.utils.system_context import get_system_context
+            system_context = get_system_context()
+        except ImportError:
+            system_context = {"machine_id": machine_id}
+
+        # Get Redis client and scanner
+        redis_client = get_redis_client(async_client=False, database="main")
+        scanner = FastDocumentScanner(redis_client)
+
+        # Scan for changes with parsing
+        scan_result = scanner.scan_and_parse_changes(
+            machine_id=machine_id,
+            limit=limit,
+            system_context=system_context,
+        )
+
+        # Get knowledge base
+        kb = await get_knowledge_base()
+
+        # Store parsed content
+        items_added = 0
+        items_failed = 0
+
+        for parsed in scan_result.get("parsed_content", []):
+            try:
+                result = await kb.store_fact(
+                    content=parsed.get("content", ""),
+                    metadata=parsed.get("metadata", {}),
+                )
+                if result and result.get("status") == "success":
+                    items_added += 1
+                else:
+                    items_failed += 1
+            except Exception as e:
+                logger.error(f"Error storing parsed man page: {e}")
+                items_failed += 1
+
+        return {
+            "status": "success",
+            "machine_id": machine_id,
+            "scan_duration_seconds": scan_result.get("scan_duration_seconds", 0),
+            "summary": scan_result.get("summary", {}),
+            "items_stored": items_added,
+            "items_failed": items_failed,
+            "parsed_count": scan_result.get("parsed_count", 0),
+        }
+
+    except Exception as e:
+        logger.error(f"Man page change scan failed: {e}")
+        return {
+            "status": "failed",
+            "error": str(e),
+            "items_stored": 0,
+        }
+
+
+@celery_app.task(bind=True, name="tasks.scan_man_page_changes")
+def scan_man_page_changes(self, limit: int | None = None) -> Metadata:
+    """
+    Scan for changed man pages and update knowledge base.
+
+    Issue #424: Celery task for incremental man page updates.
+
+    This task detects man pages that have been added, updated, or removed
+    since the last scan using metadata-based change detection (fast).
+
+    Args:
+        self: Celery task instance (bound for progress updates)
+        limit: Optional limit on number of changes to process
+
+    Returns:
+        Dict with scan results:
+            - status: 'success' or 'failed'
+            - items_stored: Number of man pages stored
+            - summary: Change summary (added/updated/removed counts)
+    """
+    import socket
+
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": 0,
+                "total": 100,
+                "status": "Scanning for man page changes...",
+            },
+        )
+
+        machine_id = socket.gethostname()
+        logger.info(f"Starting man page change scan for {machine_id}...")
+
+        # Run async scan in event loop
+        result = _run_async_in_loop(
+            _scan_man_page_changes_async(machine_id, limit)
+        )
+
+        if result.get("status") == "success":
+            summary = result.get("summary", {})
+            logger.info(
+                f"Man page scan complete: {result.get('items_stored', 0)} stored, "
+                f"added={summary.get('added', 0)}, updated={summary.get('updated', 0)}"
+            )
+        else:
+            logger.error(f"Man page scan failed: {result.get('error')}")
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Man page change scan task failed: {e}")
+        return {
+            "status": "failed",
+            "error": str(e),
+            "message": f"Scan failed: {str(e)}",
+        }
+
+
+@celery_app.task(bind=True, name="tasks.full_man_page_index")
+def full_man_page_index(
+    self,
+    limit: int | None = None,
+    sections: list[str] | None = None,
+) -> Metadata:
+    """
+    Perform a full index of all system man pages.
+
+    Issue #424: Celery task for complete man page indexing.
+
+    This is a longer-running operation that indexes all man pages (or a subset).
+    Use for initial population or periodic full refresh.
+
+    Args:
+        self: Celery task instance
+        limit: Optional limit on pages to process
+        sections: Optional filter to specific sections (e.g., ["1", "8"])
+
+    Returns:
+        Dict with indexing results
+    """
+    import socket
+
+    try:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": 0,
+                "total": 100,
+                "status": "Starting full man page index...",
+            },
+        )
+
+        machine_id = socket.gethostname()
+        logger.info(
+            f"Starting full man page index for {machine_id} "
+            f"(limit={limit}, sections={sections})..."
+        )
+
+        # Run the async indexing
+        async def _full_index():
+            from src.utils.redis_client import get_redis_client
+            from backend.services.fast_document_scanner import FastDocumentScanner
+            from src.knowledge import get_knowledge_base
+            from src.constants.threshold_constants import TimingConstants
+
+            # Get system context
+            try:
+                from src.utils.system_context import get_system_context
+                system_context = get_system_context()
+            except ImportError:
+                system_context = {"machine_id": machine_id}
+
+            # Get scanner and KB
+            redis_client = get_redis_client(async_client=False, database="main")
+            scanner = FastDocumentScanner(redis_client)
+            kb = await get_knowledge_base()
+
+            # Get all man pages
+            man_pages = scanner.get_all_man_pages_for_indexing(
+                limit=limit,
+                sections=sections,
+                system_context=system_context,
+            )
+
+            items_added = 0
+            items_failed = 0
+
+            for man_page in man_pages:
+                try:
+                    content = man_page.get("content", "")
+                    metadata = man_page.get("metadata", {})
+
+                    if not content:
+                        items_failed += 1
+                        continue
+
+                    result = await kb.store_fact(
+                        content=content,
+                        metadata=metadata,
+                    )
+
+                    if result and result.get("status") == "success":
+                        items_added += 1
+                    else:
+                        items_failed += 1
+
+                except Exception as e:
+                    logger.error(f"Error storing man page: {e}")
+                    items_failed += 1
+
+                await asyncio.sleep(TimingConstants.MICRO_DELAY)
+
+            return {
+                "status": "success",
+                "items_added": items_added,
+                "items_failed": items_failed,
+                "total_scanned": len(man_pages),
+                "machine_id": machine_id,
+            }
+
+        result = _run_async_in_loop(_full_index())
+
+        logger.info(
+            f"Full man page index complete: {result.get('items_added', 0)} added, "
+            f"{result.get('items_failed', 0)} failed"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"Full man page index task failed: {e}")
+        return {
+            "status": "failed",
+            "error": str(e),
+            "message": f"Index failed: {str(e)}",
+        }
+
+
+# =========================================================================
+# Periodic Task Beat Schedule (add to celery_app.conf.beat_schedule)
+# =========================================================================
+#
+# To enable periodic man page scanning, add to backend/celery_app.py:
+#
+# celery_app.conf.beat_schedule = {
+#     'scan-man-pages-hourly': {
+#         'task': 'tasks.scan_man_page_changes',
+#         'schedule': crontab(minute=0),  # Every hour
+#         'args': (100,),  # Limit to 100 changes per run
+#     },
+#     'full-man-page-index-weekly': {
+#         'task': 'tasks.full_man_page_index',
+#         'schedule': crontab(day_of_week='sunday', hour=3, minute=0),
+#         'kwargs': {'sections': ['1', '8']},  # User commands and admin
+#     },
+# }
+# =========================================================================

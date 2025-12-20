@@ -912,3 +912,278 @@ async def populate_autobot_docs(request: dict, req: Request):
 
     logger.info(f"AutoBot docs completed: {items_added} added, {items_skipped} skipped, {items_failed} failed")
     return _build_population_response(items_added, items_skipped, items_failed, len(doc_files), force_reindex)
+
+
+# =========================================================================
+# Issue #423: Scan Man Pages Endpoint with Structured Parsing
+# =========================================================================
+
+
+async def _scan_and_store_man_pages(
+    kb_to_use,
+    machine_id: str,
+    limit: int | None,
+    sections: list[str] | None,
+    system_context: dict | None,
+) -> dict:
+    """
+    Background task to scan and store man pages using FastDocumentScanner.
+
+    Issue #423: Uses ManPageParser for structured content extraction.
+
+    Args:
+        kb_to_use: Knowledge base instance
+        machine_id: Host identifier for change tracking
+        limit: Max pages to process
+        sections: Filter to specific sections
+        system_context: System context for metadata
+
+    Returns:
+        Dict with scan results and storage statistics
+    """
+    from src.utils.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
+
+    try:
+        # Get Redis client for scanner
+        redis_client = get_redis_client(async_client=False, database="main")
+        scanner = FastDocumentScanner(redis_client)
+
+        # Get man pages for indexing
+        logger.info(f"Scanning man pages (limit={limit}, sections={sections})...")
+        man_pages = scanner.get_all_man_pages_for_indexing(
+            limit=limit,
+            sections=sections,
+            system_context=system_context,
+        )
+
+        if not man_pages:
+            return {
+                "status": "success",
+                "message": "No man pages found to index",
+                "items_added": 0,
+                "items_failed": 0,
+            }
+
+        # Store each man page in knowledge base
+        items_added = 0
+        items_failed = 0
+
+        for man_page in man_pages:
+            try:
+                content = man_page.get("content", "")
+                metadata = man_page.get("metadata", {})
+
+                if not content:
+                    items_failed += 1
+                    continue
+
+                # Store in knowledge base
+                result = await kb_to_use.store_fact(
+                    content=content,
+                    metadata=metadata,
+                )
+
+                if result and result.get("status") == "success":
+                    items_added += 1
+                else:
+                    items_failed += 1
+
+            except Exception as e:
+                logger.error(f"Error storing man page {man_page.get('command')}: {e}")
+                items_failed += 1
+
+            # Micro delay to prevent overwhelming the system
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
+
+        logger.info(f"Man page scan complete: {items_added} added, {items_failed} failed")
+
+        return {
+            "status": "success",
+            "message": f"Indexed {items_added} man pages ({items_failed} failed)",
+            "items_added": items_added,
+            "items_failed": items_failed,
+            "total_scanned": len(man_pages),
+            "machine_id": machine_id,
+        }
+
+    except Exception as e:
+        logger.error(f"Man page scan failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "items_added": 0,
+            "items_failed": 0,
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scan_man_pages",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/scan_man_pages")
+async def scan_man_pages(
+    request: dict,
+    req: Request,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Scan and index system man pages with structured content extraction.
+
+    Issue #423: Enhanced endpoint using ManPageParser and FastDocumentScanner.
+
+    Request body:
+        {
+            "limit": 100,           # Optional: max pages to process
+            "sections": ["1", "8"], # Optional: filter to specific sections
+            "background": true,     # Optional: run in background (default: true)
+            "force": false          # Optional: force re-scan (default: false)
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Man page scan started in background",
+            "background": true,
+            "machine_id": "kali-main"
+        }
+    """
+    import socket
+
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "items_added": 0,
+        }
+
+    # Parse request parameters
+    limit = request.get("limit") if request else None
+    sections = request.get("sections") if request else None
+    run_background = request.get("background", True) if request else True
+
+    # Get machine ID for tracking
+    machine_id = socket.gethostname()
+
+    # Get system context for metadata
+    try:
+        from src.utils.system_context import get_system_context
+        system_context = get_system_context()
+    except ImportError:
+        system_context = {"machine_id": machine_id}
+
+    if run_background:
+        # Start background task
+        background_tasks.add_task(
+            _scan_and_store_man_pages,
+            kb_to_use,
+            machine_id,
+            limit,
+            sections,
+            system_context,
+        )
+
+        return {
+            "status": "success",
+            "message": "Man page scan started in background",
+            "background": True,
+            "machine_id": machine_id,
+            "limit": limit,
+            "sections": sections,
+        }
+    else:
+        # Run synchronously (for testing/small scans)
+        result = await _scan_and_store_man_pages(
+            kb_to_use,
+            machine_id,
+            limit,
+            sections,
+            system_context,
+        )
+        result["background"] = False
+        return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scan_man_pages_changes",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/scan_man_pages_changes")
+async def scan_man_pages_changes(
+    request: dict,
+    req: Request,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Scan for changed man pages only (incremental update).
+
+    Issue #423: Uses FastDocumentScanner's change detection.
+
+    Request body:
+        {
+            "limit": 50,            # Optional: max changes to process
+            "background": true      # Optional: run in background
+        }
+
+    Returns:
+        Scan results with added/updated/removed counts
+    """
+    import socket
+
+    from src.utils.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
+
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized",
+        }
+
+    limit = request.get("limit") if request else None
+    machine_id = socket.gethostname()
+
+    # Get Redis client and scanner
+    redis_client = get_redis_client(async_client=False, database="main")
+    scanner = FastDocumentScanner(redis_client)
+
+    # Get system context
+    try:
+        from src.utils.system_context import get_system_context
+        system_context = get_system_context()
+    except ImportError:
+        system_context = {"machine_id": machine_id}
+
+    # Scan for changes with parsing
+    scan_result = scanner.scan_and_parse_changes(
+        machine_id=machine_id,
+        limit=limit,
+        system_context=system_context,
+    )
+
+    # Store parsed content in knowledge base
+    items_added = 0
+    for parsed in scan_result.get("parsed_content", []):
+        try:
+            result = await kb_to_use.store_fact(
+                content=parsed.get("content", ""),
+                metadata=parsed.get("metadata", {}),
+            )
+            if result and result.get("status") == "success":
+                items_added += 1
+        except Exception as e:
+            logger.error(f"Error storing parsed man page: {e}")
+
+    return {
+        "status": "success",
+        "machine_id": machine_id,
+        "scan_duration_seconds": scan_result.get("scan_duration_seconds", 0),
+        "summary": scan_result.get("summary", {}),
+        "items_stored": items_added,
+        "parsed_count": scan_result.get("parsed_count", 0),
+    }

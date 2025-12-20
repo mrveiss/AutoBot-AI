@@ -4,6 +4,8 @@
 """
 Fast Document Scanner - Optimized Change Detection
 Uses file metadata instead of content reading for 100x speed improvement
+
+Enhanced for Issue #422: Integration with ManPageParser for structured content extraction.
 """
 
 import gzip
@@ -12,7 +14,10 @@ import os
 import subprocess
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Dict, List, Optional
+
+from backend.services.man_page_parser import ManPageContent, ManPageParser
 
 logger = logging.getLogger(__name__)
 
@@ -407,3 +412,215 @@ class FastDocumentScanner:
                     f"Failed to read man page for {command}: {subprocess_error}"
                 )
                 return None
+
+    # =========================================================================
+    # Issue #422: Enhanced methods for ManPageParser integration
+    # =========================================================================
+
+    def get_parsed_man_page(
+        self, file_path: str, command: str, section: Optional[str] = None
+    ) -> Optional[ManPageContent]:
+        """
+        Get parsed man page content with structured extraction.
+
+        Issue #422: Integrates with ManPageParser for structured content.
+
+        Args:
+            file_path: Absolute path to man page file
+            command: Command name
+            section: Man page section (1-8), auto-detected if None
+
+        Returns:
+            ManPageContent with structured sections, or None if failed
+        """
+        parser = ManPageParser()
+
+        try:
+            # Try direct file parsing first (faster)
+            result = parser.parse_man_page(Path(file_path))
+
+            if result.parse_success:
+                return result
+
+            # Fallback to subprocess parsing
+            logger.debug(f"File parsing failed for {command}, trying subprocess")
+            return parser.parse_man_page_with_subprocess(command, section or "1")
+
+        except Exception as e:
+            logger.error(f"Failed to parse man page for {command}: {e}")
+            return None
+
+    def get_man_page_for_storage(
+        self,
+        file_path: str,
+        command: str,
+        section: Optional[str] = None,
+        system_context: Optional[Dict] = None,
+    ) -> Optional[Dict]:
+        """
+        Get man page content and metadata ready for knowledge base storage.
+
+        Issue #422: Provides structured content for KB integration.
+
+        Args:
+            file_path: Absolute path to man page file
+            command: Command name
+            section: Man page section (1-8)
+            system_context: Optional system context for metadata
+
+        Returns:
+            Dict with 'content' and 'metadata' keys, or None if failed
+        """
+        parsed = self.get_parsed_man_page(file_path, command, section)
+
+        if parsed is None or not parsed.parse_success:
+            return None
+
+        return {
+            "content": parsed.get_structured_content(),
+            "metadata": parsed.get_metadata_for_storage(system_context),
+            "raw_content": parsed.raw_content,
+            "parse_method": parsed.parse_method,
+        }
+
+    def scan_and_parse_changes(
+        self,
+        machine_id: str,
+        limit: Optional[int] = None,
+        system_context: Optional[Dict] = None,
+    ) -> Dict:
+        """
+        Scan for changes and parse affected man pages.
+
+        Issue #422: Combines change detection with structured parsing.
+
+        Args:
+            machine_id: Host identifier
+            limit: Max documents to process
+            system_context: Optional system context for metadata
+
+        Returns:
+            Dict with scan results and parsed content for each change
+        """
+        # First, get changes using fast metadata scan
+        scan_result = self.scan_for_changes(
+            machine_id=machine_id,
+            scan_type="manpages",
+            limit=limit,
+        )
+
+        # Parse content for added/updated documents
+        parsed_content = []
+
+        changes = scan_result.get("changes", {})
+        for change_type in ["added", "updated"]:
+            for change in changes.get(change_type, []):
+                file_path = change.get("file_path")
+                command = change.get("command")
+
+                if not file_path or not command:
+                    continue
+
+                # Extract section from file path
+                section = self._extract_section_from_path(file_path)
+
+                # Parse the man page
+                storage_data = self.get_man_page_for_storage(
+                    file_path=file_path,
+                    command=command,
+                    section=section,
+                    system_context=system_context,
+                )
+
+                if storage_data:
+                    parsed_content.append({
+                        "command": command,
+                        "section": section,
+                        "change_type": change_type,
+                        "file_path": file_path,
+                        **storage_data,
+                    })
+
+        scan_result["parsed_content"] = parsed_content
+        scan_result["parsed_count"] = len(parsed_content)
+
+        return scan_result
+
+    def _extract_section_from_path(self, file_path: str) -> str:
+        """
+        Extract section number from man page file path.
+
+        Issue #422: Helper for section extraction.
+
+        Args:
+            file_path: Path like /usr/share/man/man1/ls.1.gz
+
+        Returns:
+            Section number as string (default "1")
+        """
+        path = Path(file_path)
+        parent_name = path.parent.name
+
+        # Extract from parent directory name (man1, man8, etc.)
+        if parent_name.startswith("man") and len(parent_name) > 3:
+            section = parent_name[3:]
+            if section.isdigit():
+                return section
+
+        return "1"
+
+    def get_all_man_pages_for_indexing(
+        self,
+        limit: Optional[int] = None,
+        sections: Optional[List[str]] = None,
+        system_context: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """
+        Get all man pages for bulk indexing into knowledge base.
+
+        Issue #422: Provides comprehensive man page data for initial population.
+
+        Args:
+            limit: Max pages to return (None = all)
+            sections: Filter to specific sections (e.g., ["1", "8"])
+            system_context: Optional system context for metadata
+
+        Returns:
+            List of dicts with content and metadata for each man page
+        """
+        command_files = self._get_man_page_paths()
+        results = []
+        count = 0
+
+        for command, file_paths in command_files.items():
+            if limit and count >= limit:
+                break
+
+            for file_path in file_paths:
+                section = self._extract_section_from_path(file_path)
+
+                # Filter by section if specified
+                if sections and section not in sections:
+                    continue
+
+                storage_data = self.get_man_page_for_storage(
+                    file_path=file_path,
+                    command=command,
+                    section=section,
+                    system_context=system_context,
+                )
+
+                if storage_data:
+                    results.append({
+                        "command": command,
+                        "section": section,
+                        "file_path": file_path,
+                        **storage_data,
+                    })
+                    count += 1
+
+                    if limit and count >= limit:
+                        break
+
+        logger.info(f"Prepared {len(results)} man pages for indexing")
+        return results
