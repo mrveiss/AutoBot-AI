@@ -7,6 +7,7 @@ Provides interactive charts, alerts, and system status overview.
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -16,209 +17,104 @@ from aiohttp import web, WSMsgType
 from src.constants.network_constants import NetworkConstants
 
 from performance_monitor import PerformanceMonitor
+
+logger = logging.getLogger(__name__)
 from src.utils.html_dashboard_utils import (
     get_dark_theme_css,
     create_dashboard_header,
     create_metric_card,
 )
 
-class PerformanceDashboard:
-    """Real-time performance dashboard for AutoBot distributed system."""
 
-    def __init__(self, port: int = 9090):
-        self.port = port
-        self.app = web.Application()
-        self.monitor = PerformanceMonitor()
-        self.websocket_connections = set()
-        self.redis_client = None
-        self.setup_routes()
-        self.setup_templates()
+# ============================================================================
+# Dashboard Template Helper Functions (Issue #398: extracted)
+# ============================================================================
 
-    def setup_routes(self):
-        """Set up HTTP routes for the dashboard."""
-        self.app.router.add_get('/', self.dashboard_home)
-        self.app.router.add_get('/api/metrics/current', self.get_current_metrics)
-        self.app.router.add_get('/api/metrics/history', self.get_metrics_history)
-        self.app.router.add_get('/api/system/status', self.get_system_status)
-        self.app.router.add_get('/api/alerts', self.get_alerts)
-        self.app.router.add_get('/ws', self.websocket_handler)
-        self.app.router.add_static('/static', Path(__file__).parent / 'static')
 
-    def setup_templates(self):
-        """Set up Jinja2 templates for HTML rendering."""
-        template_dir = Path(__file__).parent / 'templates'
-        template_dir.mkdir(exist_ok=True)
-        aiohttp_jinja2.setup(self.app, loader=jinja2.FileSystemLoader(str(template_dir)))
-
-        # Create dashboard HTML template if it doesn't exist
-        self.create_dashboard_template()
-
-    def create_dashboard_template(self):
-        """Create the main dashboard HTML template."""
-        template_path = Path(__file__).parent / 'templates' / 'dashboard.html'
-        template_path.parent.mkdir(exist_ok=True)
-
-        # Generate dashboard components using utility functions
-        header_html = create_dashboard_header(
-            title="🤖 AutoBot Performance Dashboard",
-            status="healthy",
-            theme="dark"
-        )
-
-        dark_theme_css = get_dark_theme_css()
-
-        # Generate metric cards
-        metric_cards = "\n".join([
-            create_metric_card("CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"),
-            create_metric_card("Memory Usage", "--%", '<span id="memory-available">--GB</span> available', "memory-usage"),
-            create_metric_card("GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"),
-            create_metric_card("Active Services", "--/--", "Distributed across 6 VMs", "active-services"),
-        ])
-
-        html_content = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoBot Performance Dashboard</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-{dark_theme_css}
-        .services-grid {{
+def _get_dashboard_additional_css() -> str:
+    """Return additional CSS styles for the dashboard template (Issue #398: extracted)."""
+    return """        .services-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
-        }}
-        .service-card {{
+        }
+        .service-card {
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1rem;
-        }}
-        .service-name {{
+        }
+        .service-name {
             font-weight: 600;
             margin-bottom: 0.5rem;
-        }}
-        .service-status {{
+        }
+        .service-status {
             display: flex;
             align-items: center;
             gap: 0.5rem;
             margin-bottom: 0.5rem;
-        }}
-        .status-dot {{
+        }
+        .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-        }}
-        .status-up {{ background: #238636; }}
-        .status-down {{ background: #da3633; }}
-        .alerts-section {{
+        }
+        .status-up { background: #238636; }
+        .status-down { background: #da3633; }
+        .alerts-section {
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1.5rem;
-        }}
-        .alert-item {{
+        }
+        .alert-item {
             padding: 0.75rem;
             margin-bottom: 0.5rem;
             border-radius: 0.375rem;
             background: #3d1a00;
             border-left: 3px solid #d29922;
-        }}
-        .alert-item.critical {{
+        }
+        .alert-item.critical {
             background: #4c1519;
             border-left-color: #da3633;
-        }}
-        .vm-grid {{
+        }
+        .vm-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
-        }}
-        .vm-card {{
+        }
+        .vm-card {
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1rem;
-        }}
-        .vm-name {{
+        }
+        .vm-name {
             font-weight: 600;
             margin-bottom: 0.5rem;
             color: #58a6ff;
-        }}
-        .vm-ip {{
+        }
+        .vm-ip {
             font-family: monospace;
             font-size: 0.875rem;
             color: #8b949e;
             margin-bottom: 0.5rem;
-        }}
-        .vm-metrics {{
+        }
+        .vm-metrics {
             font-size: 0.875rem;
-        }}
-        .vm-metric {{
+        }
+        .vm-metric {
             display: flex;
             justify-content: space-between;
             margin-bottom: 0.25rem;
-        }}
-    </style>
-</head>
-<body>
-{header_html}
+        }"""
 
-    <div class="container">
-        <div id="loading" class="loading">
-            <div>Loading performance data...</div>
-        </div>
 
-        <div id="dashboard-content" style="display: none;">
-            <!-- System Overview Cards -->
-            <div class="metrics-grid">
-{metric_cards}
-            </div>
-
-            <!-- VM Status Grid -->
-            <div class="vm-grid" id="vm-status-grid">
-                <!-- VM cards will be populated by JavaScript -->
-            </div>
-
-            <!-- Performance Charts -->
-            <div class="chart-container">
-                <h3 style="margin-bottom: 1rem; color: #58a6ff;">System Performance Over Time</h3>
-                <div id="performance-chart" style="height: 400px;"></div>
-            </div>
-
-            <!-- Services Status -->
-            <h3 style="margin-bottom: 1rem; color: #58a6ff;">Service Status</h3>
-            <div class="services-grid" id="services-grid">
-                <!-- Service cards will be populated by JavaScript -->
-            </div>
-
-            <!-- Database Performance Chart -->
-            <div class="chart-container">
-                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Database Performance</h3>
-                <div id="database-chart" style="height: 300px;"></div>
-            </div>
-
-            <!-- Inter-VM Communication Chart -->
-            <div class="chart-container">
-                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Inter-VM Communication</h3>
-                <div id="intervm-chart" style="height: 300px;"></div>
-            </div>
-
-            <!-- Alerts Section -->
-            <div class="alerts-section">
-                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Performance Alerts</h3>
-                <div id="alerts-container">
-                    <div style="color: #8b949e; text-align: center; padding: 1rem;">
-                        No active alerts
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
+def _get_dashboard_javascript() -> str:
+    """Return JavaScript for the dashboard template (Issue #398: extracted)."""
+    return """    <script>
         class AutoBotDashboard {
             constructor() {
                 this.ws = null;
@@ -480,15 +376,152 @@ class PerformanceDashboard:
         document.addEventListener('DOMContentLoaded', () => {
             new AutoBotDashboard();
         });
-    </script>
+    </script>"""
+
+
+def _get_dashboard_html_body(header_html: str, metric_cards: str) -> str:
+    """Return the HTML body section for the dashboard (Issue #398: extracted)."""
+    return f"""{header_html}
+
+    <div class="container">
+        <div id="loading" class="loading">
+            <div>Loading performance data...</div>
+        </div>
+
+        <div id="dashboard-content" style="display: none;">
+            <!-- System Overview Cards -->
+            <div class="metrics-grid">
+{metric_cards}
+            </div>
+
+            <!-- VM Status Grid -->
+            <div class="vm-grid" id="vm-status-grid">
+                <!-- VM cards will be populated by JavaScript -->
+            </div>
+
+            <!-- Performance Charts -->
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem; color: #58a6ff;">System Performance Over Time</h3>
+                <div id="performance-chart" style="height: 400px;"></div>
+            </div>
+
+            <!-- Services Status -->
+            <h3 style="margin-bottom: 1rem; color: #58a6ff;">Service Status</h3>
+            <div class="services-grid" id="services-grid">
+                <!-- Service cards will be populated by JavaScript -->
+            </div>
+
+            <!-- Database Performance Chart -->
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Database Performance</h3>
+                <div id="database-chart" style="height: 300px;"></div>
+            </div>
+
+            <!-- Inter-VM Communication Chart -->
+            <div class="chart-container">
+                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Inter-VM Communication</h3>
+                <div id="intervm-chart" style="height: 300px;"></div>
+            </div>
+
+            <!-- Alerts Section -->
+            <div class="alerts-section">
+                <h3 style="margin-bottom: 1rem; color: #58a6ff;">Performance Alerts</h3>
+                <div id="alerts-container">
+                    <div style="color: #8b949e; text-align: center; padding: 1rem;">
+                        No active alerts
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>"""
+
+
+def _build_dashboard_html(
+    dark_theme_css: str,
+    additional_css: str,
+    body_html: str,
+    javascript: str
+) -> str:
+    """Build the complete dashboard HTML template (Issue #398: extracted)."""
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoBot Performance Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+{dark_theme_css}
+{additional_css}
+    </style>
+</head>
+<body>
+{body_html}
+
+{javascript}
 </body>
-</html>'''.format(
-            dark_theme_css=dark_theme_css,
-            header_html=header_html,
-            metric_cards=metric_cards
+</html>'''
+
+class PerformanceDashboard:
+    """Real-time performance dashboard for AutoBot distributed system."""
+
+    def __init__(self, port: int = 9090):
+        self.port = port
+        self.app = web.Application()
+        self.monitor = PerformanceMonitor()
+        self.websocket_connections = set()
+        self.redis_client = None
+        self.setup_routes()
+        self.setup_templates()
+
+    def setup_routes(self):
+        """Set up HTTP routes for the dashboard."""
+        self.app.router.add_get('/', self.dashboard_home)
+        self.app.router.add_get('/api/metrics/current', self.get_current_metrics)
+        self.app.router.add_get('/api/metrics/history', self.get_metrics_history)
+        self.app.router.add_get('/api/system/status', self.get_system_status)
+        self.app.router.add_get('/api/alerts', self.get_alerts)
+        self.app.router.add_get('/ws', self.websocket_handler)
+        self.app.router.add_static('/static', Path(__file__).parent / 'static')
+
+    def setup_templates(self):
+        """Set up Jinja2 templates for HTML rendering."""
+        template_dir = Path(__file__).parent / 'templates'
+        template_dir.mkdir(exist_ok=True)
+        aiohttp_jinja2.setup(self.app, loader=jinja2.FileSystemLoader(str(template_dir)))
+
+        # Create dashboard HTML template if it doesn't exist
+        self.create_dashboard_template()
+
+    def create_dashboard_template(self):
+        """Create the main dashboard HTML template (Issue #398: refactored)."""
+        template_path = Path(__file__).parent / 'templates' / 'dashboard.html'
+        template_path.parent.mkdir(exist_ok=True)
+
+        # Generate dashboard components using utility functions
+        header_html = create_dashboard_header(
+            title="🤖 AutoBot Performance Dashboard",
+            status="healthy",
+            theme="dark"
         )
 
-        with open(template_path, 'w') as f:
+        # Generate metric cards
+        metric_cards = "\n".join([
+            create_metric_card("CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"),
+            create_metric_card("Memory Usage", "--%", '<span id="memory-available">--GB</span> available', "memory-usage"),
+            create_metric_card("GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"),
+            create_metric_card("Active Services", "--/--", "Distributed across 6 VMs", "active-services"),
+        ])
+
+        # Build HTML content using extracted helper functions
+        html_content = _build_dashboard_html(
+            dark_theme_css=get_dark_theme_css(),
+            additional_css=_get_dashboard_additional_css(),
+            body_html=_get_dashboard_html_body(header_html, metric_cards),
+            javascript=_get_dashboard_javascript()
+        )
+
+        with open(template_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
     @aiohttp_jinja2.template('dashboard.html')
@@ -610,9 +643,9 @@ class PerformanceDashboard:
                     if msg.data == 'close':
                         await ws.close()
                 elif msg.type == WSMsgType.ERROR:
-                    print(f'WebSocket error: {ws.exception()}')
+                    logger.error(f'WebSocket error: {ws.exception()}')
         except Exception as e:
-            print(f'WebSocket connection error: {e}')
+            logger.error(f'WebSocket connection error: {e}')
         finally:
             self.websocket_connections.discard(ws)
 
@@ -651,7 +684,7 @@ class PerformanceDashboard:
                 await self.broadcast_metrics_update(metrics)
 
             except Exception as e:
-                print(f"Error in metrics broadcasting: {e}")
+                logger.error(f"Error in metrics broadcasting: {e}")
 
             # Wait before next update
             await asyncio.sleep(10)  # Update every 10 seconds
@@ -670,15 +703,15 @@ class PerformanceDashboard:
         site = web.TCPSite(runner, '0.0.0.0', self.port)
         await site.start()
 
-        print(f"🚀 AutoBot Performance Dashboard running on http://localhost:{self.port}")
-        print("📊 Real-time monitoring active with WebSocket updates")
+        logger.info(f"AutoBot Performance Dashboard running on http://localhost:{self.port}")
+        logger.info("Real-time monitoring active with WebSocket updates")
 
         # Keep the server running
         try:
             while True:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
-            print("🛑 Shutting down dashboard...")
+            logger.info("Shutting down dashboard...")
         finally:
             await runner.cleanup()
 
