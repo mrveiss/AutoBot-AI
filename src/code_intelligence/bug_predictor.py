@@ -440,7 +440,7 @@ class BugPredictor:
                 assessment = self.analyze_file(str(file_path))
                 assessments.append(assessment)
             except Exception as e:
-                logger.warning(f"Failed to analyze {file_path}: {e}")
+                logger.warning("Failed to analyze %s: %s", file_path, e)
 
         # Sort by risk score
         assessments.sort(key=lambda x: x.risk_score, reverse=True)
@@ -663,7 +663,7 @@ class BugPredictor:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to analyze complexity for {path}: {e}")
+            logger.warning("Failed to analyze complexity for %s: %s", path, e)
             return self._get_default_complexity_result()
 
     def _get_change_frequency(self, file_path: str) -> dict[str, Any]:
@@ -697,7 +697,7 @@ class BugPredictor:
                             self._change_freq_cache.get(line, 0) + 1
                         )
         except Exception as e:
-            logger.warning(f"Failed to get change frequency: {e}")
+            logger.warning("Failed to get change frequency: %s", e)
 
     def _get_bug_history(self, file_path: str) -> dict[str, Any]:
         """Get bug fix history for a file."""
@@ -774,7 +774,7 @@ class BugPredictor:
                     self._add_file_to_bug_cache(line, current_commit)
 
         except Exception as e:
-            logger.warning(f"Failed to get bug history: {e}")
+            logger.warning("Failed to get bug history: %s", e)
 
     # Issue #315 - File size thresholds for risk scoring
     _FILE_SIZE_THRESHOLDS: list[tuple[int, int]] = [

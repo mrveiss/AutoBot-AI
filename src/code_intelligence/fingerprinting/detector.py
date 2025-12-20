@@ -110,7 +110,7 @@ class CloneDetector:
                 with open(py_file, "r", encoding="utf-8") as f:
                     total_lines += len(f.readlines())
             except Exception as e:
-                logger.warning(f"Failed to process {py_file}: {e}")
+                logger.warning("Failed to process %s: %s", py_file, e)
 
         return fragments, total_files, total_lines
 
@@ -190,7 +190,7 @@ class CloneDetector:
         Returns:
             CloneDetectionReport with all findings
         """
-        logger.info(f"Starting clone detection in: {directory}")
+        logger.info("Starting clone detection in: %s", directory)
 
         # Reset fingerprint storage
         self._structural_fingerprints.clear()
@@ -199,7 +199,7 @@ class CloneDetector:
 
         # Issue #398: Use extracted helpers for phases
         fragments, total_files, total_lines = self._collect_fragments(directory)
-        logger.info(f"Extracted {len(fragments)} fragments from {total_files} files")
+        logger.info("Extracted %d fragments from %d files", len(fragments), total_files)
 
         # Generate fingerprints for all fragments
         for fragment in fragments:
@@ -214,8 +214,8 @@ class CloneDetector:
         )
 
         logger.info(
-            f"Clone detection complete: {len(clone_groups)} groups, "
-            f"{report.duplication_percentage:.1f}% duplication"
+            "Clone detection complete: %d groups, %.1f%% duplication",
+            len(clone_groups), report.duplication_percentage
         )
 
         return report
@@ -292,10 +292,10 @@ class CloneDetector:
         try:
             return self._extract_fragments_from_file(file_path)
         except SyntaxError as e:
-            logger.warning(f"Syntax error in {file_path}: {e}")
+            logger.warning("Syntax error in %s: %s", file_path, e)
             return []
         except Exception as e:
-            logger.error(f"Error extracting fragments from {file_path}: {e}")
+            logger.error("Error extracting fragments from %s: %s", file_path, e)
             return []
 
     def _extract_fragments_from_file(self, file_path: str) -> List[CodeFragment]:

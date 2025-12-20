@@ -156,18 +156,18 @@ class ModuleAnalyzer:
         logger = logging.getLogger(__name__)
 
         if depth > self.max_depth:
-            logger.warning(f"Max depth reached for package: {package_path}")
+            logger.warning("Max depth reached for package: %s", package_path)
             return None
 
         package_path = os.path.abspath(package_path)
 
         if not os.path.isdir(package_path):
-            logger.error(f"Not a directory: {package_path}")
+            logger.error("Not a directory: %s", package_path)
             return None
 
         init_file = os.path.join(package_path, "__init__.py")
         if not os.path.exists(init_file):
-            logger.warning(f"Not a Python package (no __init__.py): {package_path}")
+            logger.warning("Not a Python package (no __init__.py): %s", package_path)
             return None
 
         package_name = os.path.basename(package_path)

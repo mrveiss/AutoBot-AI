@@ -45,8 +45,8 @@ def create_multi_language_scanner() -> MultiLanguageAnalyzer:
     scanner.register_analyzer(ShellAnalyzer())
 
     logger.info(
-        f"Multi-language scanner initialized with {len(scanner.analyzers)} analyzers "
-        f"covering {len(scanner.get_supported_languages())} languages"
+        "Multi-language scanner initialized with %d analyzers covering %d languages",
+        len(scanner.analyzers), len(scanner.get_supported_languages())
     )
 
     return scanner
@@ -190,7 +190,7 @@ class CodebaseScanner:
 
         all_excludes = default_excludes + (exclude_patterns or [])
 
-        logger.info(f"Starting full codebase scan from {root_path}")
+        logger.info("Starting full codebase scan from %s", root_path)
         return self.scan_directory(
             root_path,
             recursive=True,

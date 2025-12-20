@@ -382,7 +382,7 @@ class PrecommitAnalyzer:
                 return [f for f in result.stdout.strip().split("\n") if f]
             return []
         except Exception as e:
-            logger.warning(f"Failed to get staged files: {e}")
+            logger.warning("Failed to get staged files: %s", e)
             return []
 
     def get_file_content(self, filepath: str) -> Optional[str]:
@@ -405,7 +405,7 @@ class PrecommitAnalyzer:
                 return path.read_text(encoding="utf-8")
             return None
         except Exception as e:
-            logger.warning(f"Failed to read file {filepath}: {e}")
+            logger.warning("Failed to read file %s: %s", filepath, e)
             return None
 
     def matches_file_pattern(self, filepath: str, patterns: List[str]) -> bool:
@@ -478,7 +478,7 @@ class PrecommitAnalyzer:
                         )
 
         except re.error as e:
-            logger.warning(f"Invalid regex in check {check.id}: {e}")
+            logger.warning("Invalid regex in check %s: %s", check.id, e)
 
         return results
 
@@ -532,7 +532,7 @@ class PrecommitAnalyzer:
                     results = future.result()
                     all_results.extend(results)
                 except Exception as e:
-                    logger.error(f"Error analyzing file: {e}")
+                    logger.error("Error analyzing file: %s", e)
         return all_results
 
     def _analyze_files_sequential(self, files: List[str]) -> List[CheckResult]:

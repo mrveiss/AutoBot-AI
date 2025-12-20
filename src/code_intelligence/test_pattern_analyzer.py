@@ -724,7 +724,7 @@ class TestPatternAnalyzer:
                 if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
                     gaps.append(self._create_function_gap(source_file, node))
         except Exception as e:
-            logger.debug(f"Could not parse {source_file}: {e}")
+            logger.debug("Could not parse %s: %s", source_file, e)
 
         return gaps
 
@@ -780,7 +780,7 @@ class TestPatternAnalyzer:
                     total_assertions += self._count_assertions(test)
                     total_lines += self._get_function_lines(test)
             except Exception as e:
-                logger.debug(f"Could not analyze {test_file}: {e}")
+                logger.debug("Could not analyze %s: %s", test_file, e)
 
         # Calculate metrics
         metrics = {}
@@ -887,7 +887,7 @@ class TestPatternAnalyzer:
                 suggestions.append("Ensure each test has at least one assertion")
 
         except Exception as e:
-            logger.error(f"Error analyzing test file {file_path}: {e}")
+            logger.error("Error analyzing test file %s: %s", file_path, e)
             suggestions.append(f"Failed to analyze: {e}")
 
         metrics = self._calculate_quality_metrics([file_path], anti_patterns)

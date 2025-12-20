@@ -74,7 +74,7 @@ class ASTHasher:
             try:
                 node = normalizer.visit(node)
             except Exception as e:
-                logger.debug(f"Normalization failed: {e}")
+                logger.debug("Normalization failed: %s", e)
 
         # Generate structural representation
         structure = self._node_to_structure(node)

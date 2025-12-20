@@ -99,7 +99,7 @@ class CodePatternScanner:
         try:
             content = file_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
-            logger.warning(f"Could not read {file_path}: {e}")
+            logger.warning("Could not read %s: %s", file_path, e)
             return [], []
 
         usage_patterns = []

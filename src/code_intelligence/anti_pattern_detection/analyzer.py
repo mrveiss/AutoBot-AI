@@ -127,9 +127,9 @@ class AntiPatternDetector:
                 patterns.extend(self._run_file_level_detections(tree, file_path))
 
             except SyntaxError as e:
-                logger.debug(f"Syntax error in {file_path}: {e}")
+                logger.debug("Syntax error in %s: %s", file_path, e)
             except Exception as e:
-                logger.debug(f"Error analyzing {file_path}: {e}")
+                logger.debug("Error analyzing %s: %s", file_path, e)
 
         # Detect circular dependencies across all files
         if self.detect_circular:
@@ -191,9 +191,9 @@ class AntiPatternDetector:
             patterns.extend(self._run_file_level_detections(tree, file_path))
 
         except SyntaxError as e:
-            logger.debug(f"Syntax error in {file_path}: {e}")
+            logger.debug("Syntax error in %s: %s", file_path, e)
         except Exception as e:
-            logger.debug(f"Error analyzing {file_path}: {e}")
+            logger.debug("Error analyzing %s: %s", file_path, e)
 
         return {
             "file_path": file_path,

@@ -451,7 +451,7 @@ class CodeReviewEngine:
                         pdef.pattern, re.IGNORECASE | re.MULTILINE
                     )
                 except re.error as e:
-                    logger.warning(f"Invalid pattern {pid}: {e}")
+                    logger.warning("Invalid pattern %s: %s", pid, e)
 
     def review_file(self, file_path: str, content: Optional[str] = None) -> list[ReviewComment]:
         """
@@ -470,7 +470,7 @@ class CodeReviewEngine:
             try:
                 content = path.read_text(encoding="utf-8", errors="ignore")
             except Exception as e:
-                logger.warning(f"Failed to read {file_path}: {e}")
+                logger.warning("Failed to read %s: %s", file_path, e)
                 return []
 
         lines = content.split("\n")
@@ -649,7 +649,7 @@ class CodeReviewEngine:
                     pattern.pattern, re.IGNORECASE | re.MULTILINE
                 )
             except re.error as e:
-                logger.warning(f"Invalid pattern {pattern.id}: {e}")
+                logger.warning("Invalid pattern %s: %s", pattern.id, e)
 
     def remove_pattern(self, pattern_id: str) -> bool:
         """Remove a pattern by ID."""
@@ -775,7 +775,7 @@ class CodeReviewEngine:
             )
             return result.stdout if result.returncode == 0 else ""
         except Exception as e:
-            logger.warning(f"Failed to get git diff: {e}")
+            logger.warning("Failed to get git diff: %s", e)
             return ""
 
     def _find_function_end(self, lines: list[str], start: int, indent: int) -> int:

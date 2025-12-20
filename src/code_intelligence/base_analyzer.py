@@ -303,7 +303,7 @@ class BaseLanguageAnalyzer(ABC):
             self._issue_counter = 0
             return True
         except Exception as e:
-            logger.error(f"Failed to load file {file_path}: {e}")
+            logger.error("Failed to load file %s: %s", file_path, e)
             return False
 
 
@@ -427,7 +427,7 @@ class MultiLanguageAnalyzer:
             if self.get_analyzers_for_file(file_path):
                 files_to_analyze.append(file_path)
 
-        logger.info(f"Analyzing {len(files_to_analyze)} files in {directory}")
+        logger.info("Analyzing %d files in %s", len(files_to_analyze), directory)
 
         # Analyze each file
         for file_path in files_to_analyze:

@@ -416,9 +416,9 @@ class RedisOptimizer:
             return self._run_all_detectors(file_path, visitor.operations, source, source_lines)
 
         except SyntaxError as e:
-            logger.warning(f"Syntax error parsing {file_path}: {e}")
+            logger.warning("Syntax error parsing %s: %s", file_path, e)
         except Exception as e:
-            logger.error(f"Error analyzing {file_path}: {e}")
+            logger.error("Error analyzing %s: %s", file_path, e)
 
         return []
 
@@ -469,7 +469,7 @@ class RedisOptimizer:
             if not self._is_path_excluded(rel_path, exclude_patterns):
                 self.results.extend(self.analyze_file(str(file_path)))
 
-        logger.info(f"Analyzed {len(python_files)} files, found {len(self.results)} optimizations")
+        logger.info("Analyzed %d files, found %d optimizations", len(python_files), len(self.results))
         return self.results
 
     def _group_consecutive_operations(self, operations: List[RedisOperation]) -> List[List[RedisOperation]]:

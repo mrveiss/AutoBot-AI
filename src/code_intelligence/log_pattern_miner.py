@@ -435,7 +435,7 @@ class LogPatternMiner:
         """
         path = Path(file_path)
         if not path.exists():
-            logger.warning(f"Log file not found: {file_path}")
+            logger.warning("Log file not found: %s", file_path)
             return []
 
         entries = []
@@ -446,7 +446,7 @@ class LogPatternMiner:
                     if entry:
                         entries.append(entry)
         except Exception as e:
-            logger.warning(f"Failed to parse log file {file_path}: {e}")
+            logger.warning("Failed to parse log file %s: %s", file_path, e)
 
         return entries
 

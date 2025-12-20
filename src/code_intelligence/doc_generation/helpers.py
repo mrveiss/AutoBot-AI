@@ -318,11 +318,11 @@ def validate_module_path(file_path: str) -> Optional[str]:
     abs_path = os.path.abspath(file_path)
 
     if not os.path.exists(abs_path):
-        logger.error(f"File not found: {abs_path}")
+        logger.error("File not found: %s", abs_path)
         return None
 
     if not abs_path.endswith(".py"):
-        logger.warning(f"Not a Python file: {abs_path}")
+        logger.warning("Not a Python file: %s", abs_path)
         return None
 
     return abs_path
@@ -344,14 +344,14 @@ def read_and_parse_module(file_path: str) -> Optional[Tuple[str, ast.Module]]:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
     except OSError as e:
-        logger.error(f"Failed to read file {file_path}: {e}")
+        logger.error("Failed to read file %s: %s", file_path, e)
         return None
 
     try:
         tree = ast.parse(source, filename=file_path)
         return (source, tree)
     except SyntaxError as e:
-        logger.error(f"Syntax error in {file_path}: {e}")
+        logger.error("Syntax error in %s: %s", file_path, e)
         return None
 
 

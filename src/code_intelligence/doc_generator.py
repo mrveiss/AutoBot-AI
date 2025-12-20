@@ -313,9 +313,9 @@ def generate_docs(
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(doc.content)
-            logger.info(f"Documentation written to: {output_path}")
+            logger.info("Documentation written to: %s", output_path)
         except OSError as e:
-            logger.error(f"Failed to write documentation: {e}")
+            logger.error("Failed to write documentation: %s", e)
 
     return doc
 

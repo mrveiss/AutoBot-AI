@@ -358,7 +358,7 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         self._check_set_options()
         self._check_unquoted_variables()
 
-        logger.debug(f"Shell Analyzer found {len(self.issues)} issues in {file_path}")
+        logger.debug("Shell Analyzer found %d issues in %s", len(self.issues), file_path)
         return self.issues
 
     def _should_skip_line(self, line: str) -> bool:

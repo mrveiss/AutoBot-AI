@@ -94,7 +94,7 @@ class CouplerDetector:
                 self._extract_imports_from_tree(tree)
             )
         except Exception as e:
-            logger.debug(f"Failed to collect imports from {file_path}: {e}")
+            logger.debug("Failed to collect imports from %s: %s", file_path, e)
 
     def _extract_imports_from_tree(self, tree: ast.AST) -> Set[str]:
         """Extract imported module names from AST."""

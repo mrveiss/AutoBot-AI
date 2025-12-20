@@ -737,13 +737,13 @@ class SecurityAnalyzer:
                 visitor.visit(tree)
                 findings.extend(visitor.findings)
             except SyntaxError as e:
-                logger.warning(f"Syntax error in {file_path}: {e}")
+                logger.warning("Syntax error in %s: %s", file_path, e)
 
             # Regex-based analysis for patterns AST can't catch
             findings.extend(self._regex_analysis(str(path), content, lines))
 
         except Exception as e:
-            logger.error(f"Error analyzing {file_path}: {e}")
+            logger.error("Error analyzing %s: %s", file_path, e)
 
         return findings
 

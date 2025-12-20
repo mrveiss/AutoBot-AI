@@ -314,7 +314,7 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         if style_section:
             self._analyze_style(style_section)
 
-        logger.debug(f"Vue Analyzer found {len(self.issues)} issues in {file_path}")
+        logger.debug("Vue Analyzer found %d issues in %s", len(self.issues), file_path)
         return self.issues
 
     def _extract_section(self, section_name: str) -> Optional[Dict[str, Any]]:
