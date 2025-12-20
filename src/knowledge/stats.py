@@ -565,51 +565,55 @@ class StatsMixin:
                 "generated_at": datetime.now().isoformat(),
             }
 
-    async def _calc_completeness_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Calculate completeness score - how complete is the metadata."""
-        issues = []
+    def _check_fact_completeness(
+        self, fact: Dict[str, Any], issues: List[Dict]
+    ) -> str:
+        """Check completeness of a single fact (Issue #398: extracted).
+
+        Returns: 'complete', 'partial', or 'incomplete'
+        """
         required_fields = ["content", "metadata"]
         recommended_fields = ["category", "tags", "title"]
 
-        complete_count = 0
-        partial_count = 0
+        has_required = all(fact.get(f) for f in required_fields)
+        metadata = fact.get("metadata", {})
+        has_recommended = sum(1 for f in recommended_fields if metadata.get(f))
+
+        if has_required and has_recommended == len(recommended_fields):
+            return "complete"
+        elif has_required:
+            fact_id = fact.get("fact_id")
+            if not metadata.get("category"):
+                issues.append({
+                    "fact_id": fact_id, "type": "missing_category",
+                    "severity": "warning", "message": "Fact missing category",
+                })
+            if not metadata.get("tags"):
+                issues.append({
+                    "fact_id": fact_id, "type": "missing_tags",
+                    "severity": "info", "message": "Fact has no tags",
+                })
+            return "partial"
+        else:
+            issues.append({
+                "fact_id": fact.get("fact_id"), "type": "incomplete_data",
+                "severity": "critical", "message": "Fact missing required fields",
+            })
+            return "incomplete"
+
+    async def _calc_completeness_score(
+        self, facts: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calculate completeness score (Issue #398: refactored)."""
+        issues: List[Dict] = []
+        complete_count = partial_count = 0
 
         for fact in facts:
-            has_required = all(fact.get(f) for f in required_fields)
-            metadata = fact.get("metadata", {})
-
-            has_recommended = sum(
-                1 for f in recommended_fields
-                if metadata.get(f)
-            )
-
-            if has_required and has_recommended == len(recommended_fields):
+            status = self._check_fact_completeness(fact, issues)
+            if status == "complete":
                 complete_count += 1
-            elif has_required:
+            elif status == "partial":
                 partial_count += 1
-                if not metadata.get("category"):
-                    issues.append({
-                        "fact_id": fact.get("fact_id"),
-                        "type": "missing_category",
-                        "severity": "warning",
-                        "message": "Fact missing category",
-                    })
-                if not metadata.get("tags"):
-                    issues.append({
-                        "fact_id": fact.get("fact_id"),
-                        "type": "missing_tags",
-                        "severity": "info",
-                        "message": "Fact has no tags",
-                    })
-            else:
-                issues.append({
-                    "fact_id": fact.get("fact_id"),
-                    "type": "incomplete_data",
-                    "severity": "critical",
-                    "message": "Fact missing required fields",
-                })
 
         total = len(facts)
         score = ((complete_count + 0.5 * partial_count) / total * 100) if total else 100
@@ -627,44 +631,38 @@ class StatsMixin:
             "complete_facts": complete_count,
             "partial_facts": partial_count,
             "incomplete_facts": total - complete_count - partial_count,
-            "issues": issues[:20],  # Limit to 20 issues
+            "issues": issues[:20],
             "recommendations": recommendations,
         }
 
-    async def _calc_consistency_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Calculate consistency score - how consistent is the data format."""
-        issues = []
-
-        # Check category consistency
-        categories = {}
+    def _analyze_category_consistency(
+        self, facts: List[Dict[str, Any]], issues: List[Dict]
+    ) -> Dict[str, int]:
+        """Analyze category consistency (Issue #398: extracted)."""
+        categories: Dict[str, int] = {}
         for fact in facts:
             cat = fact.get("metadata", {}).get("category", "uncategorized")
             categories[cat] = categories.get(cat, 0) + 1
 
-        # Check for too many categories (fragmentation)
         if len(categories) > 50:
             issues.append({
-                "type": "category_fragmentation",
-                "severity": "warning",
+                "type": "category_fragmentation", "severity": "warning",
                 "message": "Too many categories (%d), consider consolidating" % len(categories),
             })
 
-        # Check for very small categories
-        small_categories = [
-            c for c, count in categories.items()
-            if count < 3 and c != "uncategorized"
-        ]
+        small_categories = [c for c, n in categories.items() if n < 3 and c != "uncategorized"]
         if small_categories:
             issues.append({
-                "type": "sparse_categories",
-                "severity": "info",
+                "type": "sparse_categories", "severity": "info",
                 "message": "%d categories have fewer than 3 facts" % len(small_categories),
             })
+        return categories
 
-        # Check tag format consistency
-        all_tags = []
+    def _analyze_tag_consistency(
+        self, facts: List[Dict[str, Any]], issues: List[Dict]
+    ) -> List[str]:
+        """Analyze tag consistency (Issue #398: extracted)."""
+        all_tags: List[str] = []
         inconsistent_tags = 0
         for fact in facts:
             tags = fact.get("metadata", {}).get("tags", [])
@@ -675,15 +673,22 @@ class StatsMixin:
 
         if inconsistent_tags > 0:
             issues.append({
-                "type": "tag_format_inconsistency",
-                "severity": "warning",
+                "type": "tag_format_inconsistency", "severity": "warning",
                 "message": "%d tags have inconsistent format" % inconsistent_tags,
             })
+        return all_tags
 
-        # Calculate score
+    async def _calc_consistency_score(
+        self, facts: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calculate consistency score (Issue #398: refactored)."""
+        issues: List[Dict] = []
+
+        categories = self._analyze_category_consistency(facts, issues)
+        all_tags = self._analyze_tag_consistency(facts, issues)
+
         total_checks = 3
-        passed_checks = total_checks - len(issues)
-        score = (passed_checks / total_checks * 100)
+        score = ((total_checks - len(issues)) / total_checks * 100)
 
         recommendations = []
         if len(categories) > 30:
@@ -701,76 +706,68 @@ class StatsMixin:
             "recommendations": recommendations,
         }
 
+    def _get_age_bucket(self, age_days: int) -> str:
+        """Determine age bucket for a fact (Issue #398: extracted)."""
+        if age_days <= 1:
+            return "last_day"
+        elif age_days <= 7:
+            return "last_week"
+        elif age_days <= 30:
+            return "last_month"
+        elif age_days <= 365:
+            return "last_year"
+        return "older"
+
+    def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> Optional[datetime]:
+        """Parse timestamp from a fact (Issue #398: extracted)."""
+        timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
+        if not timestamp_str or not isinstance(timestamp_str, str):
+            return None
+        try:
+            if "T" in timestamp_str:
+                return datetime.fromisoformat(
+                    timestamp_str.replace("Z", "+00:00").split("+")[0]
+                )
+            return datetime.strptime(timestamp_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+
+    def _compute_age_buckets(self, facts: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Compute age distribution buckets (Issue #398: extracted)."""
+        now = datetime.now()
+        buckets = {"last_day": 0, "last_week": 0, "last_month": 0, "last_year": 0, "older": 0, "unknown": 0}
+
+        for fact in facts:
+            fact_dt = self._parse_fact_timestamp(fact)
+            if not fact_dt:
+                buckets["unknown"] += 1
+            else:
+                bucket = self._get_age_bucket((now - fact_dt).days)
+                buckets[bucket] += 1
+        return buckets
+
     async def _calc_freshness_score(
         self, facts: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Calculate freshness score - how recent is the data."""
-        issues = []
-        now = datetime.now()
-
-        age_buckets = {
-            "last_day": 0,
-            "last_week": 0,
-            "last_month": 0,
-            "last_year": 0,
-            "older": 0,
-            "unknown": 0,
-        }
-
-        for fact in facts:
-            timestamp_str = fact.get("timestamp") or fact.get(
-                "metadata", {}
-            ).get("created_at")
-
-            if not timestamp_str:
-                age_buckets["unknown"] += 1
-                continue
-
-            try:
-                if isinstance(timestamp_str, str):
-                    if "T" in timestamp_str:
-                        fact_dt = datetime.fromisoformat(
-                            timestamp_str.replace("Z", "+00:00").split("+")[0]
-                        )
-                    else:
-                        fact_dt = datetime.strptime(timestamp_str, "%Y-%m-%d")
-
-                    age_days = (now - fact_dt).days
-
-                    if age_days <= 1:
-                        age_buckets["last_day"] += 1
-                    elif age_days <= 7:
-                        age_buckets["last_week"] += 1
-                    elif age_days <= 30:
-                        age_buckets["last_month"] += 1
-                    elif age_days <= 365:
-                        age_buckets["last_year"] += 1
-                    else:
-                        age_buckets["older"] += 1
-                else:
-                    age_buckets["unknown"] += 1
-            except (ValueError, TypeError):
-                age_buckets["unknown"] += 1
-
+        """Calculate freshness score (Issue #398: refactored)."""
+        age_buckets = self._compute_age_buckets(facts)
         total = len(facts)
+
         if total == 0:
             return {"score": 100.0, "age_distribution": age_buckets, "issues": [], "recommendations": []}
 
-        # Score based on recency (higher weight for recent facts)
         recent = age_buckets["last_day"] + age_buckets["last_week"] + age_buckets["last_month"]
         score = (recent / total * 80) + ((total - age_buckets["older"]) / total * 20)
 
+        issues = []
         if age_buckets["older"] > total * 0.3:
             issues.append({
-                "type": "stale_data",
-                "severity": "warning",
+                "type": "stale_data", "severity": "warning",
                 "message": "%d facts are over 1 year old" % age_buckets["older"],
             })
-
         if age_buckets["unknown"] > total * 0.2:
             issues.append({
-                "type": "missing_timestamps",
-                "severity": "warning",
+                "type": "missing_timestamps", "severity": "warning",
                 "message": "%d facts have no timestamp" % age_buckets["unknown"],
             })
 
@@ -837,62 +834,51 @@ class StatsMixin:
             "recommendations": recommendations,
         }
 
+    def _validate_single_fact(self, fact: Dict[str, Any], issues: List[Dict]) -> bool:
+        """Validate a single fact for validity (Issue #398: extracted)."""
+        fact_valid = True
+        fact_id = fact.get("fact_id")
+
+        # Check content validity
+        content = fact.get("content", "")
+        if not content or len(content) < 10:
+            issues.append({
+                "fact_id": fact_id, "type": "short_content",
+                "severity": "warning", "message": "Content is too short (< 10 chars)",
+            })
+            fact_valid = False
+        elif len(content) > 100000:
+            issues.append({
+                "fact_id": fact_id, "type": "long_content",
+                "severity": "info", "message": "Content is very long (> 100k chars)",
+            })
+
+        # Check metadata validity
+        metadata = fact.get("metadata")
+        if metadata is not None and not isinstance(metadata, dict):
+            issues.append({
+                "fact_id": fact_id, "type": "invalid_metadata",
+                "severity": "critical", "message": "Metadata is not a valid dictionary",
+            })
+            fact_valid = False
+
+        # Check fact_id validity
+        if not fact_id or not isinstance(fact_id, str):
+            issues.append({
+                "fact_id": fact_id, "type": "invalid_fact_id",
+                "severity": "critical", "message": "Invalid or missing fact_id",
+            })
+            fact_valid = False
+
+        return fact_valid
+
     async def _calc_validity_score(
         self, facts: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Calculate validity score - is the data valid and well-formed."""
-        issues = []
-
-        valid_count = 0
-        invalid_count = 0
-
-        for fact in facts:
-            fact_valid = True
-
-            # Check content validity
-            content = fact.get("content", "")
-            if not content or len(content) < 10:
-                issues.append({
-                    "fact_id": fact.get("fact_id"),
-                    "type": "short_content",
-                    "severity": "warning",
-                    "message": "Content is too short (< 10 chars)",
-                })
-                fact_valid = False
-            elif len(content) > 100000:
-                issues.append({
-                    "fact_id": fact.get("fact_id"),
-                    "type": "long_content",
-                    "severity": "info",
-                    "message": "Content is very long (> 100k chars)",
-                })
-
-            # Check metadata validity
-            metadata = fact.get("metadata")
-            if metadata is not None and not isinstance(metadata, dict):
-                issues.append({
-                    "fact_id": fact.get("fact_id"),
-                    "type": "invalid_metadata",
-                    "severity": "critical",
-                    "message": "Metadata is not a valid dictionary",
-                })
-                fact_valid = False
-
-            # Check fact_id validity
-            fact_id = fact.get("fact_id")
-            if not fact_id or not isinstance(fact_id, str):
-                issues.append({
-                    "fact_id": fact_id,
-                    "type": "invalid_fact_id",
-                    "severity": "critical",
-                    "message": "Invalid or missing fact_id",
-                })
-                fact_valid = False
-
-            if fact_valid:
-                valid_count += 1
-            else:
-                invalid_count += 1
+        """Calculate validity score (Issue #398: refactored)."""
+        issues: List[Dict] = []
+        valid_count = sum(1 for f in facts if self._validate_single_fact(f, issues))
+        invalid_count = len(facts) - valid_count
 
         total = len(facts)
         score = (valid_count / total * 100) if total else 100
@@ -909,7 +895,7 @@ class StatsMixin:
             "score": round(score, 1),
             "valid_facts": valid_count,
             "invalid_facts": invalid_count,
-            "issues": issues[:20],  # Limit to 20 issues
+            "issues": issues[:20],
             "recommendations": recommendations,
         }
 
