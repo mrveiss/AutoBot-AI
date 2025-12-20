@@ -91,24 +91,12 @@ class CloneDetector:
         self._normalized_fingerprints: Dict[str, List[Fingerprint]] = defaultdict(list)
         self._semantic_fingerprints: Dict[str, List[Fingerprint]] = defaultdict(list)
 
-    def detect_clones(self, directory: str) -> CloneDetectionReport:
-        """
-        Detect all clones in a directory.
-
-        Args:
-            directory: Path to the directory to analyze
+    def _collect_fragments(self, directory: str) -> tuple:
+        """Collect all code fragments from directory (Issue #398: extracted).
 
         Returns:
-            CloneDetectionReport with all findings
+            Tuple of (fragments list, total_files, total_lines)
         """
-        logger.info(f"Starting clone detection in: {directory}")
-
-        # Reset fingerprint storage
-        self._structural_fingerprints.clear()
-        self._normalized_fingerprints.clear()
-        self._semantic_fingerprints.clear()
-
-        # Collect all fragments and generate fingerprints
         fragments: List[CodeFragment] = []
         total_files = 0
         total_lines = 0
@@ -119,20 +107,21 @@ class CloneDetector:
                 fragments.extend(file_fragments)
                 total_files += 1
 
-                # Count total lines
                 with open(py_file, "r", encoding="utf-8") as f:
                     total_lines += len(f.readlines())
-
             except Exception as e:
                 logger.warning(f"Failed to process {py_file}: {e}")
 
-        logger.info(f"Extracted {len(fragments)} fragments from {total_files} files")
+        return fragments, total_files, total_lines
 
-        # Generate fingerprints for all fragments
-        for fragment in fragments:
-            self._generate_fingerprints(fragment)
+    def _detect_all_clone_types(
+        self, fragments: List[CodeFragment]
+    ) -> List[CloneGroup]:
+        """Detect clones of all types (Issue #398: extracted).
 
-        # Detect clones of each type
+        Returns:
+            List of all detected clone groups
+        """
         clone_groups: List[CloneGroup] = []
 
         # Type 1: Exact clones (from structural fingerprints)
@@ -153,6 +142,21 @@ class CloneDetector:
         )
         clone_groups.extend(type4_groups)
 
+        return clone_groups
+
+    def _build_clone_report(
+        self,
+        directory: str,
+        fragments: List[CodeFragment],
+        clone_groups: List[CloneGroup],
+        total_files: int,
+        total_lines: int,
+    ) -> CloneDetectionReport:
+        """Build the final clone detection report (Issue #398: extracted).
+
+        Returns:
+            Complete CloneDetectionReport
+        """
         # Add refactoring suggestions
         for group in clone_groups:
             group.refactoring_suggestion = self._generate_refactoring_suggestion(group)
@@ -164,32 +168,54 @@ class CloneDetector:
             (total_duplicated_lines / total_lines * 100) if total_lines > 0 else 0
         )
 
-        # Calculate distributions
-        clone_type_dist = self._calculate_type_distribution(clone_groups)
-        severity_dist = self._calculate_severity_distribution(clone_groups)
-
-        # Find top cloned files
-        top_cloned_files = self._find_top_cloned_files(clone_groups)
-
-        # Prioritize refactoring
-        refactoring_priorities = self._prioritize_refactoring(clone_groups)
-
-        report = CloneDetectionReport(
+        return CloneDetectionReport(
             scan_path=directory,
             total_files=total_files,
             total_fragments=len(fragments),
             clone_groups=clone_groups,
-            clone_type_distribution=clone_type_dist,
-            severity_distribution=severity_dist,
+            clone_type_distribution=self._calculate_type_distribution(clone_groups),
+            severity_distribution=self._calculate_severity_distribution(clone_groups),
             total_duplicated_lines=total_duplicated_lines,
             duplication_percentage=duplication_percentage,
-            top_cloned_files=top_cloned_files,
-            refactoring_priorities=refactoring_priorities,
+            top_cloned_files=self._find_top_cloned_files(clone_groups),
+            refactoring_priorities=self._prioritize_refactoring(clone_groups),
+        )
+
+    def detect_clones(self, directory: str) -> CloneDetectionReport:
+        """Detect all clones in a directory (Issue #398: refactored to use helpers).
+
+        Args:
+            directory: Path to the directory to analyze
+
+        Returns:
+            CloneDetectionReport with all findings
+        """
+        logger.info(f"Starting clone detection in: {directory}")
+
+        # Reset fingerprint storage
+        self._structural_fingerprints.clear()
+        self._normalized_fingerprints.clear()
+        self._semantic_fingerprints.clear()
+
+        # Issue #398: Use extracted helpers for phases
+        fragments, total_files, total_lines = self._collect_fragments(directory)
+        logger.info(f"Extracted {len(fragments)} fragments from {total_files} files")
+
+        # Generate fingerprints for all fragments
+        for fragment in fragments:
+            self._generate_fingerprints(fragment)
+
+        # Detect all clone types
+        clone_groups = self._detect_all_clone_types(fragments)
+
+        # Build and return report
+        report = self._build_clone_report(
+            directory, fragments, clone_groups, total_files, total_lines
         )
 
         logger.info(
             f"Clone detection complete: {len(clone_groups)} groups, "
-            f"{duplication_percentage:.1f}% duplication"
+            f"{report.duplication_percentage:.1f}% duplication"
         )
 
         return report

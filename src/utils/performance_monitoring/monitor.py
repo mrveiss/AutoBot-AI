@@ -148,8 +148,64 @@ class PerformanceMonitor:
         """Collect service metrics (delegates to collector)."""
         return await self._service_collector.collect()
 
+    def _handle_metric_exception(self, metric_name: str, result: Any) -> Any:
+        """Handle exception from metric collection (Issue #398: extracted).
+
+        Args:
+            metric_name: Name of the metric for logging
+            result: Collection result (may be Exception)
+
+        Returns:
+            None if exception, original result otherwise
+        """
+        if isinstance(result, Exception):
+            self.logger.error(f"{metric_name} metrics collection failed: {result}")
+            return None
+        return result
+
+    def _update_metric_buffer(
+        self, buffer: List[Any], metrics: Any, max_size: int = 100
+    ) -> List[Any]:
+        """Update metrics buffer with size limit (Issue #398: extracted).
+
+        Args:
+            buffer: Buffer list to update
+            metrics: Metrics to append
+            max_size: Maximum buffer size
+
+        Returns:
+            Updated buffer (may be new list if trimmed)
+        """
+        if metrics:
+            buffer.append(metrics)
+            if len(buffer) > max_size:
+                return buffer[-max_size:]
+        return buffer
+
+    def _update_service_buffer(
+        self, service_metrics: List[Any], max_size: int = 100
+    ) -> None:
+        """Update service metrics buffer by service name (Issue #398: extracted).
+
+        Args:
+            service_metrics: List of service metric objects
+            max_size: Maximum buffer size per service
+        """
+        if not service_metrics:
+            return
+
+        for service_metric in service_metrics:
+            service_name = getattr(service_metric, "service_name", "unknown")
+            if service_name not in self.service_metrics_buffer:
+                self.service_metrics_buffer[service_name] = []
+            self.service_metrics_buffer[service_name].append(service_metric)
+            if len(self.service_metrics_buffer[service_name]) > max_size:
+                self.service_metrics_buffer[service_name] = (
+                    self.service_metrics_buffer[service_name][-max_size:]
+                )
+
     async def collect_all_metrics(self) -> Dict[str, Any]:
-        """Collect all performance metrics in parallel."""
+        """Collect all performance metrics in parallel (Issue #398: refactored to use helpers)."""
         try:
             tasks = [
                 self.collect_gpu_metrics(),
@@ -161,73 +217,29 @@ class PerformanceMonitor:
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            (
-                gpu_metrics,
-                npu_metrics,
-                multimodal_metrics,
-                system_metrics,
-                service_metrics,
-            ) = results
+            # Issue #398: Use extracted helper for exception handling
+            gpu_metrics = self._handle_metric_exception("GPU", results[0])
+            npu_metrics = self._handle_metric_exception("NPU", results[1])
+            multimodal_metrics = self._handle_metric_exception("Multimodal", results[2])
+            system_metrics = self._handle_metric_exception("System", results[3])
+            service_metrics = results[4] if not isinstance(results[4], Exception) else []
+            if isinstance(results[4], Exception):
+                self.logger.error(f"Service metrics collection failed: {results[4]}")
 
-            # Handle exceptions
-            if isinstance(gpu_metrics, Exception):
-                self.logger.error(f"GPU metrics collection failed: {gpu_metrics}")
-                gpu_metrics = None
-
-            if isinstance(npu_metrics, Exception):
-                self.logger.error(f"NPU metrics collection failed: {npu_metrics}")
-                npu_metrics = None
-
-            if isinstance(multimodal_metrics, Exception):
-                self.logger.error(
-                    f"Multimodal metrics collection failed: {multimodal_metrics}"
-                )
-                multimodal_metrics = None
-
-            if isinstance(system_metrics, Exception):
-                self.logger.error(f"System metrics collection failed: {system_metrics}")
-                system_metrics = None
-
-            if isinstance(service_metrics, Exception):
-                self.logger.error(
-                    f"Service metrics collection failed: {service_metrics}"
-                )
-                service_metrics = []
-
-            # Update metrics buffers for backward compatibility (Issue #427)
-            # Keep last 100 entries to prevent unbounded memory growth
-            max_buffer_size = 100
-            if gpu_metrics:
-                self.gpu_metrics_buffer.append(gpu_metrics)
-                if len(self.gpu_metrics_buffer) > max_buffer_size:
-                    self.gpu_metrics_buffer = self.gpu_metrics_buffer[-max_buffer_size:]
-            if npu_metrics:
-                self.npu_metrics_buffer.append(npu_metrics)
-                if len(self.npu_metrics_buffer) > max_buffer_size:
-                    self.npu_metrics_buffer = self.npu_metrics_buffer[-max_buffer_size:]
-            if multimodal_metrics:
-                self.multimodal_metrics_buffer.append(multimodal_metrics)
-                if len(self.multimodal_metrics_buffer) > max_buffer_size:
-                    self.multimodal_metrics_buffer = self.multimodal_metrics_buffer[
-                        -max_buffer_size:
-                    ]
-            if system_metrics:
-                self.system_metrics_buffer.append(system_metrics)
-                if len(self.system_metrics_buffer) > max_buffer_size:
-                    self.system_metrics_buffer = self.system_metrics_buffer[
-                        -max_buffer_size:
-                    ]
-            # Populate service_metrics_buffer by service name (Issue #427)
-            if service_metrics:
-                for service_metric in service_metrics:
-                    service_name = getattr(service_metric, "service_name", "unknown")
-                    if service_name not in self.service_metrics_buffer:
-                        self.service_metrics_buffer[service_name] = []
-                    self.service_metrics_buffer[service_name].append(service_metric)
-                    if len(self.service_metrics_buffer[service_name]) > max_buffer_size:
-                        self.service_metrics_buffer[service_name] = (
-                            self.service_metrics_buffer[service_name][-max_buffer_size:]
-                        )
+            # Issue #398: Use extracted helpers for buffer updates
+            self.gpu_metrics_buffer = self._update_metric_buffer(
+                self.gpu_metrics_buffer, gpu_metrics
+            )
+            self.npu_metrics_buffer = self._update_metric_buffer(
+                self.npu_metrics_buffer, npu_metrics
+            )
+            self.multimodal_metrics_buffer = self._update_metric_buffer(
+                self.multimodal_metrics_buffer, multimodal_metrics
+            )
+            self.system_metrics_buffer = self._update_metric_buffer(
+                self.system_metrics_buffer, system_metrics
+            )
+            self._update_service_buffer(service_metrics)
 
             # Persist to Redis if available
             if self.redis_client:

@@ -21,6 +21,48 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level frozenset for approval recommendations
 _APPROVAL_RECOMMENDATIONS: FrozenSet[str] = frozenset({"APPROVE", "CONDITIONAL"})
 
+# Issue #398: Module-level constant for arbitration criteria documentation
+_ARBITRATION_CRITERIA_TEMPLATE = """
+ARBITRATION CRITERIA:
+Please evaluate and compare these responses on the following dimensions (score 0.0 to 1.0):
+
+1. QUALITY: Overall excellence and usefulness of each response
+   - Is the response well-structured and clear?
+   - Does it demonstrate proper understanding?
+   - Is the quality consistent with user expectations?
+
+2. RELEVANCE: How well each response addresses the user request
+   - Does it directly answer what was asked?
+   - Is it focused on the right topic/domain?
+   - Does it stay within appropriate scope?
+
+3. ACCURACY: Correctness and reliability of information
+   - Are facts, data, and statements accurate?
+   - Are claims properly supported?
+   - Are there factual errors or misinformation?
+
+4. COMPLETENESS: Thoroughness in addressing the request
+   - Are all parts of the request addressed?
+   - Is sufficient detail provided?
+   - Are important aspects missing?
+
+5. CONSISTENCY: Internal coherence and logical flow
+   - Is each response internally consistent?
+   - Do responses align with expected agent behavior?
+   - Are there contradictions between responses?
+
+6. EFFICIENCY: Appropriateness and resource utilization
+   - Is the response appropriately concise or detailed?
+   - Does it avoid unnecessary complexity?
+   - Is the effort proportional to the request?
+
+ARBITRATION GOALS:
+- Select the BEST OVERALL response for the user
+- Identify any significant conflicts or contradictions
+- Recommend the most appropriate agent for this type of request
+- Suggest improvements for future multi-agent coordination
+"""
+
 
 class MultiAgentArbitrator(BaseLLMJudge):
     """Judge for arbitrating between multiple agent responses and coordinating agent interactions"""
@@ -282,49 +324,11 @@ AGENT RESPONSES TO EVALUATE:
         ]
         prompt += "\n" + "\n\n".join(response_sections) + "\n\n"
 
+        # Issue #398: Use module-level constant for criteria template
         prompt += f"""
 ARBITRATION CONTEXT:
 {arbitration_context_json}
-
-ARBITRATION CRITERIA:
-Please evaluate and compare these responses on the following dimensions (score 0.0 to 1.0):
-
-1. QUALITY: Overall excellence and usefulness of each response
-   - Is the response well-structured and clear?
-   - Does it demonstrate proper understanding?
-   - Is the quality consistent with user expectations?
-
-2. RELEVANCE: How well each response addresses the user request
-   - Does it directly answer what was asked?
-   - Is it focused on the right topic/domain?
-   - Does it stay within appropriate scope?
-
-3. ACCURACY: Correctness and reliability of information
-   - Are facts, data, and statements accurate?
-   - Are claims properly supported?
-   - Are there factual errors or misinformation?
-
-4. COMPLETENESS: Thoroughness in addressing the request
-   - Are all parts of the request addressed?
-   - Is sufficient detail provided?
-   - Are important aspects missing?
-
-5. CONSISTENCY: Internal coherence and logical flow
-   - Is each response internally consistent?
-   - Do responses align with expected agent behavior?
-   - Are there contradictions between responses?
-
-6. EFFICIENCY: Appropriateness and resource utilization
-   - Is the response appropriately concise or detailed?
-   - Does it avoid unnecessary complexity?
-   - Is the effort proportional to the request?
-
-ARBITRATION GOALS:
-- Select the BEST OVERALL response for the user
-- Identify any significant conflicts or contradictions
-- Recommend the most appropriate agent for this type of request
-- Suggest improvements for future multi-agent coordination
-
+{_ARBITRATION_CRITERIA_TEMPLATE}
 CONFLICT RESOLUTION STRATEGY: {context.get('conflict_resolution_strategy', 'quality_first')}
 
 DECISION WEIGHTS:
