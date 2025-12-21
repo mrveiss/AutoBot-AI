@@ -18,6 +18,7 @@ from .endpoints import (
     duplicates,
     cache,
     report,
+    api_endpoints,  # Issue #527: API Endpoint Checker
 )
 
 # Create main router with common prefix and tags
@@ -34,3 +35,4 @@ router.include_router(declarations.router)
 router.include_router(duplicates.router)
 router.include_router(cache.router)
 router.include_router(report.router)
+router.include_router(api_endpoints.router)  # Issue #527: API Endpoint Checker

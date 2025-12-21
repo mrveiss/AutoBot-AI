@@ -66,7 +66,7 @@ interface Alert {
   message: string
   recommendation: string
   // Issue #474: AlertManager-specific fields
-  source?: 'alertmanager' | 'phase9_monitor'
+  source?: 'alertmanager' | 'autobot_monitor'
   alertname?: string
   fingerprint?: string
   description?: string
@@ -164,7 +164,7 @@ const formatTimestamp = (timestamp: number) => {
   color: #1565c0;
 }
 
-.source-badge.phase9_monitor {
+.source-badge.autobot_monitor {
   background: #fce4ec;
   color: #c62828;
 }

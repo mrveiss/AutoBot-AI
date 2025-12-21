@@ -490,15 +490,16 @@ GET /api/monitoring/resources
 GET /api/monitoring/services/status
 ```
 
-#### Phase 9 Monitoring Dashboard
+#### Performance Monitoring Dashboard
+
 ```http
-GET /api/monitoring/phase9/api/monitoring/phase9/dashboard
+GET /api/monitoring/dashboard
 ```
 
 #### Hardware Metrics
 ```http
-GET /api/monitoring/phase9/api/monitoring/phase9/hardware/gpu
-GET /api/monitoring/phase9/api/monitoring/phase9/hardware/npu
+GET /api/monitoring/hardware/gpu
+GET /api/monitoring/hardware/npu
 ```
 
 ## 5. Authentication & Authorization

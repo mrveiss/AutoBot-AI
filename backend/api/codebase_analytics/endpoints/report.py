@@ -34,6 +34,8 @@ from src.utils.file_categorization import (
     get_category_info,
 )
 from ..storage import get_code_collection
+from ..api_endpoint_scanner import APIEndpointChecker
+from ..models import APIEndpointAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -429,6 +431,167 @@ BUG_PREDICTION_FILE_LIMIT = 100
 BUG_PREDICTION_TIMEOUT = 30.0
 # Maximum high-risk files to show in report
 TOP_HIGH_RISK_FILES_LIMIT = 10
+# Maximum items to show in API endpoint section (Issue #527)
+API_ENDPOINT_LIST_LIMIT = 20
+
+
+# =============================================================================
+# API Endpoint Analysis Section (Issue #527)
+# =============================================================================
+
+
+def _get_coverage_emoji(coverage: float) -> str:
+    """Get emoji indicator for coverage percentage."""
+    if coverage >= 80:
+        return "🟢"
+    elif coverage >= 60:
+        return "🟡"
+    elif coverage >= 40:
+        return "🟠"
+    else:
+        return "🔴"
+
+
+def _generate_api_overview(analysis: APIEndpointAnalysis) -> List[str]:
+    """Generate API endpoint overview section."""
+    coverage_emoji = _get_coverage_emoji(analysis.coverage_percentage)
+    lines = [
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Backend Endpoints | {analysis.backend_endpoints} |",
+        f"| Frontend API Calls | {analysis.frontend_calls} |",
+        f"| Used Endpoints | {analysis.used_endpoints} |",
+        f"| Orphaned Endpoints | {analysis.orphaned_endpoints} |",
+        f"| Missing Endpoints | {analysis.missing_endpoints} |",
+        f"| Coverage | {coverage_emoji} {analysis.coverage_percentage:.1f}% |",
+        "",
+    ]
+    return lines
+
+
+def _generate_orphaned_section(analysis: APIEndpointAnalysis) -> List[str]:
+    """Generate orphaned endpoints section."""
+    if not analysis.orphaned:
+        return []
+
+    lines = [
+        "### 🔴 Orphaned Endpoints",
+        "",
+        "> Backend endpoints with no matching frontend calls. Consider removing if unused.",
+        "",
+        "| Method | Path | File | Line |",
+        "|--------|------|------|------|",
+    ]
+
+    for ep in analysis.orphaned[:API_ENDPOINT_LIST_LIMIT]:
+        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
+
+    if len(analysis.orphaned) > API_ENDPOINT_LIST_LIMIT:
+        lines.append(f"| ... | *{len(analysis.orphaned) - API_ENDPOINT_LIST_LIMIT} more* | | |")
+
+    lines.append("")
+    return lines
+
+
+def _generate_missing_section(analysis: APIEndpointAnalysis) -> List[str]:
+    """Generate missing endpoints section."""
+    if not analysis.missing:
+        return []
+
+    lines = [
+        "### 🟠 Missing Endpoints",
+        "",
+        "> Frontend API calls with no matching backend endpoint. May indicate bugs or deprecated usage.",
+        "",
+        "| Method | Path | Called From | Line |",
+        "|--------|------|-------------|------|",
+    ]
+
+    for ep in analysis.missing[:API_ENDPOINT_LIST_LIMIT]:
+        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
+
+    if len(analysis.missing) > API_ENDPOINT_LIST_LIMIT:
+        lines.append(f"| ... | *{len(analysis.missing) - API_ENDPOINT_LIST_LIMIT} more* | | |")
+
+    lines.append("")
+    return lines
+
+
+def _generate_most_used_section(analysis: APIEndpointAnalysis) -> List[str]:
+    """Generate most used endpoints section."""
+    if not analysis.used:
+        return []
+
+    # Sort by call count
+    sorted_used = sorted(analysis.used, key=lambda x: x.call_count, reverse=True)
+
+    lines = [
+        "### 🟢 Most Used Endpoints",
+        "",
+        "| Method | Path | Call Count |",
+        "|--------|------|------------|",
+    ]
+
+    for usage in sorted_used[:10]:
+        ep = usage.endpoint
+        lines.append(f"| {ep.method} | `{ep.path}` | {usage.call_count} |")
+
+    lines.append("")
+    return lines
+
+
+def _generate_api_endpoint_section(analysis: Optional[APIEndpointAnalysis]) -> List[str]:
+    """
+    Generate the API Endpoint Analysis section for the report (Issue #527).
+
+    Args:
+        analysis: APIEndpointAnalysis from APIEndpointChecker
+
+    Returns:
+        List of markdown lines for the API endpoint section
+    """
+    if not analysis:
+        return []
+
+    lines = [
+        "## 🔌 API Endpoint Analysis",
+        "",
+        "> **Cross-reference analysis of backend endpoints and frontend API calls.**",
+        "",
+    ]
+
+    lines.extend(_generate_api_overview(analysis))
+    lines.extend(_generate_orphaned_section(analysis))
+    lines.extend(_generate_missing_section(analysis))
+    lines.extend(_generate_most_used_section(analysis))
+
+    lines.extend(["---", ""])
+
+    return lines
+
+
+async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
+    """
+    Get API endpoint analysis for the project (Issue #527).
+
+    Returns:
+        APIEndpointAnalysis or None if analysis fails
+    """
+    try:
+        checker = APIEndpointChecker()
+        analysis = checker.run_full_analysis()
+        logger.info(
+            "API endpoint analysis: %d endpoints, %d calls, %.1f%% coverage",
+            analysis.backend_endpoints,
+            analysis.frontend_calls,
+            analysis.coverage_percentage,
+        )
+        return analysis
+    except Exception as e:
+        logger.error("API endpoint analysis failed: %s", e, exc_info=True)
+        return None
 
 
 async def _get_bug_prediction(
@@ -618,6 +781,7 @@ def _generate_markdown_report(
     problems: List[Dict],
     analyzed_path: Optional[str] = None,
     bug_prediction: Optional[PredictionResult] = None,
+    api_endpoint_analysis: Optional[APIEndpointAnalysis] = None,
 ) -> str:
     """
     Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
@@ -631,6 +795,11 @@ def _generate_markdown_report(
     - High-risk files summary
     - Risk distribution
     - Correlation with detected issues
+
+    API endpoint analysis added (Issue #527):
+    - Endpoint coverage
+    - Orphaned endpoints
+    - Missing endpoints
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -642,6 +811,10 @@ def _generate_markdown_report(
     # Build report sections
     lines = _build_report_header(path_info, len(problems), counts)
     lines.extend(_build_summary_section(severity_counts, type_counts))
+
+    # Add API endpoint analysis section (Issue #527)
+    if api_endpoint_analysis:
+        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
 
     # Add bug risk section if prediction available (Issue #505)
     if bug_prediction:
@@ -677,12 +850,16 @@ def _generate_markdown_report(
     error_code_prefix="CODEBASE",
 )
 @router.get("/report")
-async def generate_analysis_report(format: str = "markdown"):
+async def generate_analysis_report(
+    format: str = "markdown",
+    include_api_analysis: bool = True,
+):
     """
     Generate a code analysis report from the indexed data.
 
     Args:
         format: Output format (currently only 'markdown' supported)
+        include_api_analysis: Whether to include API endpoint analysis (Issue #527)
 
     Returns:
         Markdown formatted report as plain text
@@ -717,37 +894,40 @@ async def generate_analysis_report(format: str = "markdown"):
     # Get bug prediction data (Issue #505)
     bug_prediction = await _get_bug_prediction()
 
+    # Get API endpoint analysis (Issue #527)
+    api_endpoint_analysis = None
+    if include_api_analysis:
+        api_endpoint_analysis = await _get_api_endpoint_analysis()
+
     if not problems:
-        # Even with no issues, include bug prediction if available (Issue #505)
+        # Even with no issues, include other analyses if available
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines = [
+            "# Code Analysis Report",
+            "",
+            f"**Generated:** {now}",
+            "**Status:** No code issues detected",
+            "",
+            "> No static analysis issues found.",
+            "",
+            "---",
+            "",
+        ]
+
+        # Add API endpoint analysis even with no code issues (Issue #527)
+        if api_endpoint_analysis:
+            lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
+
+        # Add bug prediction if available (Issue #505)
         if bug_prediction and bug_prediction.analyzed_files > 0:
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            lines = [
-                "# Code Analysis Report",
-                "",
-                f"**Generated:** {now}",
-                "**Status:** No code issues detected",
-                "",
-                "> No static analysis issues found. Bug risk analysis is shown below.",
-                "",
-                "---",
-                "",
-            ]
             lines.extend(_generate_bug_risk_section(bug_prediction))
-            lines.append("*Report generated by AutoBot Code Analysis*")
-            report = "\n".join(lines)
-        else:
-            report = """# Code Analysis Report
 
-**Status:** No issues found
+        if not api_endpoint_analysis and (not bug_prediction or bug_prediction.analyzed_files == 0):
+            lines.append("Run \"Index Codebase\" first to analyze the code.")
+            lines.append("")
 
-Either no analysis has been run yet, or the codebase has no detected issues.
-
-Run "Index Codebase" first to analyze the code.
-
----
-
-*Report generated by AutoBot Code Analysis*
-"""
+        lines.append("*Report generated by AutoBot Code Analysis*")
+        report = "\n".join(lines)
     else:
         # Try to get the analyzed path from the latest indexing task
         # For now, we'll note it as "Indexed Codebase"
@@ -755,6 +935,7 @@ Run "Index Codebase" first to analyze the code.
             problems,
             analyzed_path="Indexed Codebase",
             bug_prediction=bug_prediction,
+            api_endpoint_analysis=api_endpoint_analysis,
         )
 
     return PlainTextResponse(

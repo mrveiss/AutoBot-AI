@@ -101,9 +101,11 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
                 f"PerformanceMonitor missing required attribute: {attr}",
             )
 
-    def test_phase9_monitor_alias_has_attributes(self):
-        """Test that phase9_monitor alias has all required attributes."""
-        from src.utils.performance_monitor import phase9_monitor
+    @patch("src.utils.redis_client.get_redis_client")
+    def test_performance_monitor_singleton_has_attributes(self, mock_redis):
+        """Test that performance_monitor singleton has all required attributes."""
+        mock_redis.return_value = MagicMock()
+        from src.utils.performance_monitor import performance_monitor
 
         # Verify the singleton has all required attributes
         required_attrs = [
@@ -117,8 +119,8 @@ class TestPerformanceMonitorInitialization(unittest.TestCase):
 
         for attr in required_attrs:
             self.assertTrue(
-                hasattr(phase9_monitor, attr),
-                f"phase9_monitor missing required attribute: {attr}",
+                hasattr(performance_monitor, attr),
+                f"performance_monitor missing required attribute: {attr}",
             )
 
 

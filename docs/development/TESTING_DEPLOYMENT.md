@@ -9,7 +9,7 @@ flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503
 
 ### Test Commands
 - **Test mode verification**: `./run_agent.sh --test-mode` before full deployment
-- **Phase 9 testing**: `python test_phase9_ai.py` after multi-modal changes
+- **Multi-modal testing**: `python test_multimodal_ai.py` after multi-modal changes
 - **NPU worker testing**: `python test_npu_worker.py` after OpenVINO modifications
 - **Phase validation**: ON-DEMAND ONLY - use "Load Validation Data" button in GUI
 - **ALL test files MUST be in `tests/` folder or subfolders**

@@ -167,7 +167,7 @@ AUTOBOT_PHASE_7_MEMORY_ENHANCEMENT=phase_7_memory_enhancement
 # Configurable string value
 AUTOBOT_PHASE_8_ENHANCED_INTERFACE=phase_8_enhanced_interface
 # Configurable string value
-AUTOBOT_PHASE_9_LOCAL_MODELS=phase_9_local_models
+AUTOBOT_LOCAL_MODELS=local_models
 # Configurable string value
 AUTOBOT_PHASE_10_OPENVINO=phase_10_openvino
 # Configurable string value

@@ -11,7 +11,7 @@ Contains individual optimization strategy implementations.
 import logging
 from typing import Any, Dict
 
-from src.utils.performance_monitor import phase9_monitor
+from src.utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
 
@@ -27,7 +27,7 @@ async def optimize_memory_allocation(
         recommendations = []
 
         # Check current memory usage
-        gpu_metrics = await phase9_monitor.collect_gpu_metrics()
+        gpu_metrics = await performance_monitor.collect_gpu_metrics()
 
         if gpu_metrics:
             memory_util = gpu_metrics.memory_utilization_percent

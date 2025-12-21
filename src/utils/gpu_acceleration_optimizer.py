@@ -48,7 +48,7 @@ from src.utils.gpu_optimization import (  # noqa: F401
     benchmark_tensor_cores,
     generate_benchmark_recommendations,
 )
-from src.utils.performance_monitor import phase9_monitor
+from src.utils.performance_monitor import performance_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ class GPUAccelerationOptimizer:
     async def _collect_performance_baseline(self) -> Dict[str, float]:
         """Collect current performance metrics as baseline."""
         try:
-            gpu_metrics = await phase9_monitor.collect_gpu_metrics()
+            gpu_metrics = await performance_monitor.collect_gpu_metrics()
 
             baseline = {
                 "gpu_utilization_percent": 0.0,

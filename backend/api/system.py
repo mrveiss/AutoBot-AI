@@ -227,7 +227,7 @@ async def get_system_info():
 
     system_info = {
         "name": "AutoBot Backend",
-        "version": "Phase 9.0",
+        "version": "1.0.0",
         "python_version": python_version,
         "timestamp": datetime.now().isoformat(),
         "features": {

@@ -2,8 +2,8 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Phase 9 Monitoring Analytics API Module
-Provides Phase 9 monitoring endpoints for the dashboard
+Performance Monitoring Analytics API Module
+Provides monitoring endpoints for the dashboard
 Extracted from analytics.py to maintain <20 functions per file
 """
 
@@ -158,7 +158,7 @@ def _check_code_quality_recommendations(cached_analysis: dict, recommendations: 
 
 
 # ============================================================================
-# PHASE 9 MONITORING DASHBOARD ENDPOINTS
+# PERFORMANCE MONITORING DASHBOARD ENDPOINTS
 # ============================================================================
 
 
@@ -167,9 +167,9 @@ def _check_code_quality_recommendations(cached_analysis: dict, recommendations: 
     operation="get_monitoring_status",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/monitoring/phase9/status")
+@router.get("/monitoring/status")
 async def get_monitoring_status():
-    """Get Phase 9 monitoring status for dashboard"""
+    """Get performance monitoring status for dashboard"""
     collector = analytics_controller.metrics_collector
 
     status = {
@@ -183,7 +183,7 @@ async def get_monitoring_status():
             "analytics_collection": True,
             "websocket_streaming": len(analytics_state["websocket_connections"]) > 0,
         },
-        "version": "Phase9",
+        "version": "1.0",
         "uptime_seconds": time.time() - psutil.boot_time(),
     }
 
@@ -217,12 +217,12 @@ def _count_recent_api_calls(patterns: list, minutes: int = 5) -> int:
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_phase9_dashboard_data",
+    operation="get_dashboard_data",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/monitoring/phase9/dashboard")
-async def get_phase9_dashboard_data():
-    """Get comprehensive Phase 9 dashboard data (Issue #398: refactored)."""
+@router.get("/monitoring/dashboard")
+async def get_dashboard_data():
+    """Get comprehensive performance dashboard data (Issue #398: refactored)."""
     performance_data = await analytics_controller.collect_performance_metrics()
     system_health = await hardware_monitor.get_system_health()
     overall_score = _calculate_overall_health_score(performance_data)
@@ -246,12 +246,12 @@ async def get_phase9_dashboard_data():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_phase9_alerts",
+    operation="get_monitoring_alerts",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/monitoring/phase9/alerts")
-async def get_phase9_alerts():
-    """Get Phase 9 monitoring alerts (Issue #398: refactored)."""
+@router.get("/monitoring/alerts")
+async def get_monitoring_alerts():
+    """Get performance monitoring alerts (Issue #398: refactored)."""
     alerts = []
     performance_data = await analytics_controller.collect_performance_metrics()
 
@@ -266,12 +266,12 @@ async def get_phase9_alerts():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_phase9_optimization_recommendations",
+    operation="get_optimization_recommendations",
     error_code_prefix="ANALYTICS",
 )
-@router.get("/monitoring/phase9/optimization/recommendations")
-async def get_phase9_optimization_recommendations():
-    """Get Phase 9 optimization recommendations (Issue #398: refactored)."""
+@router.get("/monitoring/optimization/recommendations")
+async def get_analytics_optimization_recommendations():
+    """Get performance optimization recommendations (Issue #398: refactored)."""
     recommendations = []
 
     performance_data = await analytics_controller.collect_performance_metrics()
@@ -291,9 +291,9 @@ async def get_phase9_optimization_recommendations():
     operation="start_monitoring",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/monitoring/phase9/start")
+@router.post("/monitoring/start")
 async def start_monitoring():
-    """Start Phase 9 monitoring"""
+    """Start performance monitoring"""
     # Start metrics collection
     collector = analytics_controller.metrics_collector
     if hasattr(collector, "_is_collecting") and not collector._is_collecting:
@@ -304,7 +304,7 @@ async def start_monitoring():
 
     return {
         "status": "started",
-        "message": "Phase 9 monitoring started successfully",
+        "message": "Performance monitoring started successfully",
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -314,9 +314,9 @@ async def start_monitoring():
     operation="stop_monitoring",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/monitoring/phase9/stop")
+@router.post("/monitoring/stop")
 async def stop_monitoring():
-    """Stop Phase 9 monitoring"""
+    """Stop performance monitoring"""
     # Stop metrics collection
     collector = analytics_controller.metrics_collector
     if hasattr(collector, "_is_collecting") and collector._is_collecting:
@@ -324,19 +324,19 @@ async def stop_monitoring():
 
     return {
         "status": "stopped",
-        "message": "Phase 9 monitoring stopped successfully",
+        "message": "Performance monitoring stopped successfully",
         "timestamp": datetime.now().isoformat(),
     }
 
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="query_phase9_metrics",
+    operation="query_metrics",
     error_code_prefix="ANALYTICS",
 )
-@router.post("/monitoring/phase9/metrics/query")
-async def query_phase9_metrics(query_request: dict):
-    """Query Phase 9 metrics with filtering"""
+@router.post("/monitoring/metrics/query")
+async def query_metrics(query_request: dict):
+    """Query performance metrics with filtering"""
     metric_name = query_request.get("metric", "all")
     time_range = query_request.get("time_range", 3600)  # 1 hour default
 

@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from src.utils.performance_monitor import phase9_monitor
+from src.utils.performance_monitor import performance_monitor
 
 from .types import DEFAULT_PERFORMANCE_BASELINES, GPUCapabilities
 
@@ -191,7 +191,7 @@ async def monitor_gpu_acceleration_efficiency(
         logger.info("Monitoring GPU acceleration efficiency...")
 
         # Collect current GPU metrics
-        gpu_metrics = await phase9_monitor.collect_gpu_metrics()
+        gpu_metrics = await performance_monitor.collect_gpu_metrics()
 
         efficiency_report = {
             "timestamp": time.time(),

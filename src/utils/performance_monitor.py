@@ -124,13 +124,6 @@ __all__ = [
     "get_optimization_recommendations",
     "collect_metrics",
     "add_alert_callback",
-    # Backward compatibility aliases (Phase9 names deprecated)
-    "Phase9PerformanceMonitor",
-    "phase9_monitor",
-    "get_phase9_performance_dashboard",
-    "get_phase9_optimization_recommendations",
-    "collect_phase9_metrics",
-    "add_phase9_alert_callback",
 ]
 
 
@@ -174,54 +167,6 @@ async def collect_metrics() -> Dict[str, Any]:
 async def add_alert_callback(callback):
     """Add callback for performance alerts."""
     await performance_monitor.add_alert_callback(callback)
-
-
-# =============================================================================
-# BACKWARD COMPATIBILITY LAYER
-# =============================================================================
-# Support for old Phase9 naming (deprecated)
-
-# Alias for old class name
-Phase9PerformanceMonitor = PerformanceMonitor
-
-# Alias for old singleton name
-phase9_monitor = performance_monitor
-
-
-async def get_phase9_performance_dashboard() -> Dict[str, Any]:
-    """DEPRECATED: Use get_performance_dashboard() instead."""
-    logger.warning(
-        "DEPRECATED: get_phase9_performance_dashboard() is deprecated. "
-        "Use get_performance_dashboard() instead."
-    )
-    return await get_performance_dashboard()
-
-
-async def get_phase9_optimization_recommendations() -> List[Dict[str, Any]]:
-    """DEPRECATED: Use get_optimization_recommendations() instead."""
-    logger.warning(
-        "DEPRECATED: get_phase9_optimization_recommendations() is deprecated. "
-        "Use get_optimization_recommendations() instead."
-    )
-    return await get_optimization_recommendations()
-
-
-async def collect_phase9_metrics() -> Dict[str, Any]:
-    """DEPRECATED: Use collect_metrics() instead."""
-    logger.warning(
-        "DEPRECATED: collect_phase9_metrics() is deprecated. "
-        "Use collect_metrics() instead."
-    )
-    return await collect_metrics()
-
-
-async def add_phase9_alert_callback(callback):
-    """DEPRECATED: Use add_alert_callback() instead."""
-    logger.warning(
-        "DEPRECATED: add_phase9_alert_callback() is deprecated. "
-        "Use add_alert_callback() instead."
-    )
-    await add_alert_callback(callback)
 
 
 # =============================================================================

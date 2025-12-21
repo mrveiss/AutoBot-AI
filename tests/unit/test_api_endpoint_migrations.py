@@ -6095,12 +6095,12 @@ class TestBatch34MigrationStats:
 
 
 # ============================================================
-# Batch 35: backend/api/analytics.py GET /status & /monitoring/phase9/status
+# Batch 35: backend/api/analytics.py GET /status & /monitoring/status
 # ============================================================
 
 
 class TestBatch35AnalyticsEndpoints:
-    """Test batch 35 migrations: GET /status and GET /monitoring/phase9/status in analytics.py"""
+    """Test batch 35 migrations: GET /status and GET /monitoring/status in analytics.py"""
 
     def test_get_analytics_status_has_decorator(self):
         """Verify GET /status has @with_error_handling decorator"""
@@ -6159,10 +6159,10 @@ class TestBatch35AnalyticsEndpoints:
         assert '"integration_status"' in source
 
     def test_get_monitoring_status_has_decorator(self):
-        """Verify GET /monitoring/phase9/status has @with_error_handling decorator"""
+        """Verify GET /monitoring/status has @with_error_handling decorator"""
         import inspect
 
-        from backend.api.analytics import get_monitoring_status
+        from backend.api.analytics_monitoring import get_monitoring_status
 
         source = inspect.getsource(get_monitoring_status)
         assert "@with_error_handling" in source
@@ -6171,10 +6171,10 @@ class TestBatch35AnalyticsEndpoints:
         assert 'error_code_prefix="ANALYTICS"' in source
 
     def test_get_monitoring_status_try_catch_removed(self):
-        """Verify GET /monitoring/phase9/status try-catch completely removed"""
+        """Verify GET /monitoring/status try-catch completely removed"""
         import inspect
 
-        from backend.api.analytics import get_monitoring_status
+        from backend.api.analytics_monitoring import get_monitoring_status
 
         source = inspect.getsource(get_monitoring_status)
         # Should have NO try blocks in this endpoint
@@ -6182,10 +6182,10 @@ class TestBatch35AnalyticsEndpoints:
         assert "except Exception" not in source
 
     def test_get_monitoring_status_business_logic(self):
-        """Verify GET /monitoring/phase9/status business logic preserved"""
+        """Verify GET /monitoring/status business logic preserved"""
         import inspect
 
-        from backend.api.analytics import get_monitoring_status
+        from backend.api.analytics_monitoring import get_monitoring_status
 
         source = inspect.getsource(get_monitoring_status)
         assert "collector = analytics_controller.metrics_collector" in source
@@ -6194,7 +6194,7 @@ class TestBatch35AnalyticsEndpoints:
         assert '"components"' in source
         assert '"gpu_monitoring": True' in source
         assert '"npu_monitoring": True' in source
-        assert '"version": "Phase9"' in source
+        assert '"version": "1.0"' in source
         assert '"uptime_seconds"' in source
 
     def test_batch_35_import_added(self):
@@ -6282,18 +6282,18 @@ class TestBatch35MigrationStats:
 
 
 # ============================================================================
-# Batch 36: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# Batch 36: analytics_monitoring.py - Performance monitoring endpoints (2 endpoints)
 # ============================================================================
 
 
 class TestBatch36AnalyticsMigrations:
-    """Test batch 36 analytics.py endpoint migrations"""
+    """Test batch 36 analytics_monitoring.py endpoint migrations"""
 
-    def test_get_phase9_dashboard_has_decorator(self):
-        """Test GET /monitoring/phase9/dashboard has @with_error_handling decorator"""
-        from backend.api import analytics
+    def test_get_dashboard_data_has_decorator(self):
+        """Test GET /monitoring/dashboard has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        source = inspect.getsource(analytics_monitoring.get_dashboard_data)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6301,23 +6301,23 @@ class TestBatch36AnalyticsMigrations:
             "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
-            'operation="get_phase9_dashboard_data"' in source
+            'operation="get_dashboard_data"' in source
         ), "Decorator should specify operation name"
         assert (
             'error_code_prefix="ANALYTICS"' in source
         ), "Decorator should use ANALYTICS prefix"
 
-    def test_get_phase9_dashboard_no_outer_try_catch(self):
-        """Test GET /monitoring/phase9/dashboard has no outer try-catch block"""
-        from backend.api import analytics
+    def test_get_dashboard_data_no_outer_try_catch(self):
+        """Test GET /monitoring/dashboard has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        source = inspect.getsource(analytics_monitoring.get_dashboard_data)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if "async def get_phase9_dashboard_data" in line:
+            if "async def get_dashboard_data" in line:
                 function_body_started = True
                 continue
             if (
@@ -6330,38 +6330,30 @@ class TestBatch36AnalyticsMigrations:
                 ), "Endpoint should not have outer try-catch block"
                 break
 
-    def test_get_phase9_dashboard_preserves_business_logic(self):
-        """Test GET /monitoring/phase9/dashboard preserves business logic"""
-        from backend.api import analytics
+    def test_get_dashboard_data_preserves_business_logic(self):
+        """Test GET /monitoring/dashboard preserves business logic"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        source = inspect.getsource(analytics_monitoring.get_dashboard_data)
 
-        # Check key business logic is preserved
+        # Check key business logic is preserved (refactored to use helper functions)
         assert (
             "performance_data = await analytics_controller.collect_performance_metrics()"
             in source
         )
         assert "system_health = await hardware_monitor.get_system_health()" in source
-        assert 'cpu_health = 100 - performance_data.get("system_performance"' in source
-        assert (
-            'memory_health = 100 - performance_data.get("system_performance"' in source
-        )
-        assert (
-            'gpu_health = 100 - performance_data.get("hardware_performance"' in source
-        )
-        assert "overall_score = (cpu_health + memory_health + gpu_health) / 3" in source
-        assert "dashboard_data = {" in source
-        assert '"overall_health": {' in source
+        assert "_calculate_overall_health_score" in source
+        assert "_get_health_status" in source
+        assert '"overall_health":' in source
         assert '"gpu_metrics":' in source
         assert '"npu_metrics":' in source
         assert '"api_performance":' in source
-        assert "return dashboard_data" in source
 
-    def test_get_phase9_dashboard_no_manual_error_handling(self):
-        """Test GET /monitoring/phase9/dashboard has no manual error handling"""
-        from backend.api import analytics
+    def test_get_dashboard_data_no_manual_error_handling(self):
+        """Test GET /monitoring/dashboard has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        source = inspect.getsource(analytics_monitoring.get_dashboard_data)
 
         # Should not have except blocks
         assert (
@@ -6369,11 +6361,11 @@ class TestBatch36AnalyticsMigrations:
         ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
-    def test_get_phase9_alerts_has_decorator(self):
-        """Test GET /monitoring/phase9/alerts has @with_error_handling decorator"""
-        from backend.api import analytics
+    def test_get_monitoring_alerts_has_decorator(self):
+        """Test GET /monitoring/alerts has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_alerts)
+        source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6381,23 +6373,23 @@ class TestBatch36AnalyticsMigrations:
             "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
-            'operation="get_phase9_alerts"' in source
+            'operation="get_monitoring_alerts"' in source
         ), "Decorator should specify operation name"
         assert (
             'error_code_prefix="ANALYTICS"' in source
         ), "Decorator should use ANALYTICS prefix"
 
-    def test_get_phase9_alerts_no_outer_try_catch(self):
-        """Test GET /monitoring/phase9/alerts has no outer try-catch block"""
-        from backend.api import analytics
+    def test_get_monitoring_alerts_no_outer_try_catch(self):
+        """Test GET /monitoring/alerts has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_alerts)
+        source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if "async def get_phase9_alerts" in line:
+            if "async def get_monitoring_alerts" in line:
                 function_body_started = True
                 continue
             if (
@@ -6410,42 +6402,29 @@ class TestBatch36AnalyticsMigrations:
                 ), "Endpoint should not have outer try-catch block"
                 break
 
-    def test_get_phase9_alerts_preserves_business_logic(self):
-        """Test GET /monitoring/phase9/alerts preserves business logic"""
-        from backend.api import analytics
+    def test_get_monitoring_alerts_preserves_business_logic(self):
+        """Test GET /monitoring/alerts preserves business logic (refactored with helpers)"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_alerts)
+        source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
 
-        # Check key business logic is preserved
+        # Check key business logic is preserved (now uses helper functions)
         assert "alerts = []" in source
         assert (
             "performance_data = await analytics_controller.collect_performance_metrics()"
             in source
         )
-        assert "# CPU alerts" in source
-        assert 'cpu_percent = performance_data.get("system_performance"' in source
-        assert "if cpu_percent > 90:" in source
-        assert '"severity": "critical"' in source
-        assert '"title": "High CPU Usage"' in source
-        assert "# Memory alerts" in source
-        assert 'memory_percent = performance_data.get("system_performance"' in source
-        assert "if memory_percent > 90:" in source
-        assert '"title": "High Memory Usage"' in source
-        assert "# GPU alerts" in source
-        assert 'gpu_util = performance_data.get("hardware_performance"' in source
-        assert "if gpu_util > 95:" in source
-        assert '"title": "High GPU Utilization"' in source
-        assert "# API performance alerts" in source
-        assert 'api_performance = performance_data.get("api_performance"' in source
-        assert "slow_endpoints = [" in source
-        assert '"title": "Slow API Endpoints"' in source
+        assert "_check_cpu_alerts" in source
+        assert "_check_memory_alerts" in source
+        assert "_check_gpu_alerts" in source
+        assert "_check_api_alerts" in source
         assert "return alerts" in source
 
-    def test_get_phase9_alerts_no_manual_error_handling(self):
-        """Test GET /monitoring/phase9/alerts has no manual error handling"""
-        from backend.api import analytics
+    def test_get_monitoring_alerts_no_manual_error_handling(self):
+        """Test GET /monitoring/alerts has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_alerts)
+        source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
 
         # Should not have except blocks
         assert (
@@ -6455,11 +6434,11 @@ class TestBatch36AnalyticsMigrations:
 
     def test_batch36_all_endpoints_migrated(self):
         """Test all batch 36 endpoints have been migrated"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
         # Check both endpoints have decorators
-        dashboard_source = inspect.getsource(analytics.get_phase9_dashboard_data)
-        alerts_source = inspect.getsource(analytics.get_phase9_alerts)
+        dashboard_source = inspect.getsource(analytics_monitoring.get_dashboard_data)
+        alerts_source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
 
         assert (
             "@with_error_handling" in dashboard_source
@@ -6468,10 +6447,10 @@ class TestBatch36AnalyticsMigrations:
 
     def test_batch36_consistent_error_handling(self):
         """Test batch 36 endpoints use consistent error handling configuration"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
-        dashboard_source = inspect.getsource(analytics.get_phase9_dashboard_data)
-        alerts_source = inspect.getsource(analytics.get_phase9_alerts)
+        dashboard_source = inspect.getsource(analytics_monitoring.get_dashboard_data)
+        alerts_source = inspect.getsource(analytics_monitoring.get_monitoring_alerts)
 
         # All should use SERVER_ERROR category
         assert "category=ErrorCategory.SERVER_ERROR" in dashboard_source
@@ -6483,18 +6462,18 @@ class TestBatch36AnalyticsMigrations:
 
 
 # ============================================================================
-# Batch 37: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# Batch 37: analytics_monitoring.py - Performance monitoring endpoints (2 endpoints)
 # ============================================================================
 
 
 class TestBatch37AnalyticsMigrations:
-    """Test batch 37 analytics.py endpoint migrations"""
+    """Test batch 37 analytics_monitoring.py endpoint migrations"""
 
-    def test_get_phase9_optimization_recommendations_has_decorator(self):
-        """Test GET /monitoring/phase9/optimization/recommendations has @with_error_handling decorator"""
-        from backend.api import analytics
+    def test_get_optimization_recommendations_has_decorator(self):
+        """Test GET /monitoring/optimization/recommendations has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        source = inspect.getsource(analytics_monitoring.get_analytics_optimization_recommendations)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6502,23 +6481,23 @@ class TestBatch37AnalyticsMigrations:
             "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
-            'operation="get_phase9_optimization_recommendations"' in source
+            'operation="get_optimization_recommendations"' in source
         ), "Decorator should specify operation name"
         assert (
             'error_code_prefix="ANALYTICS"' in source
         ), "Decorator should use ANALYTICS prefix"
 
-    def test_get_phase9_optimization_recommendations_no_outer_try_catch(self):
-        """Test GET /monitoring/phase9/optimization/recommendations has no outer try-catch block"""
-        from backend.api import analytics
+    def test_get_optimization_recommendations_no_outer_try_catch(self):
+        """Test GET /monitoring/optimization/recommendations has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        source = inspect.getsource(analytics_monitoring.get_analytics_optimization_recommendations)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if "async def get_phase9_optimization_recommendations" in line:
+            if "async def get_analytics_optimization_recommendations" in line:
                 function_body_started = True
                 continue
             if (
@@ -6531,13 +6510,13 @@ class TestBatch37AnalyticsMigrations:
                 ), "Endpoint should not have outer try-catch block"
                 break
 
-    def test_get_phase9_optimization_recommendations_preserves_business_logic(self):
-        """Test GET /monitoring/phase9/optimization/recommendations preserves business logic"""
-        from backend.api import analytics
+    def test_get_optimization_recommendations_preserves_business_logic(self):
+        """Test GET /monitoring/optimization/recommendations preserves business logic (refactored)"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        source = inspect.getsource(analytics_monitoring.get_analytics_optimization_recommendations)
 
-        # Check key business logic is preserved
+        # Check key business logic is preserved (now uses helper functions)
         assert "recommendations = []" in source
         assert (
             "performance_data = await analytics_controller.collect_performance_metrics()"
@@ -6545,29 +6524,17 @@ class TestBatch37AnalyticsMigrations:
         )
         assert "communication_patterns =" in source
         assert "await analytics_controller.analyze_communication_patterns()" in source
-        assert "# CPU optimization recommendations" in source
-        assert 'cpu_percent = performance_data.get("system_performance"' in source
-        assert "if cpu_percent > 80:" in source
-        assert '"type": "cpu_optimization"' in source
-        assert '"title": "Optimize CPU Usage"' in source
-        assert "# Memory optimization recommendations" in source
-        assert 'memory_percent = performance_data.get("system_performance"' in source
-        assert "if memory_percent > 80:" in source
-        assert '"type": "memory_optimization"' in source
-        assert "# API optimization recommendations" in source
-        assert 'if communication_patterns.get("avg_response_time", 0) > 2.0:' in source
-        assert '"type": "api_optimization"' in source
-        assert "# Code analysis recommendations" in source
-        assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
-        assert "if complexity > 7:" in source
-        assert '"type": "code_quality"' in source
+        assert "_check_cpu_recommendations" in source
+        assert "_check_memory_recommendations" in source
+        assert "_check_api_recommendations" in source
+        assert "_check_code_quality_recommendations" in source
         assert "return recommendations" in source
 
-    def test_get_phase9_optimization_recommendations_no_manual_error_handling(self):
-        """Test GET /monitoring/phase9/optimization/recommendations has no manual error handling"""
-        from backend.api import analytics
+    def test_get_optimization_recommendations_no_manual_error_handling(self):
+        """Test GET /monitoring/optimization/recommendations has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        source = inspect.getsource(analytics_monitoring.get_analytics_optimization_recommendations)
 
         # Should not have except blocks
         assert (
@@ -6576,10 +6543,10 @@ class TestBatch37AnalyticsMigrations:
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_start_monitoring_has_decorator(self):
-        """Test POST /monitoring/phase9/start has @with_error_handling decorator"""
-        from backend.api import analytics
+        """Test POST /monitoring/start has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.start_monitoring)
+        source = inspect.getsource(analytics_monitoring.start_monitoring)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6594,10 +6561,10 @@ class TestBatch37AnalyticsMigrations:
         ), "Decorator should use ANALYTICS prefix"
 
     def test_start_monitoring_no_outer_try_catch(self):
-        """Test POST /monitoring/phase9/start has no outer try-catch block"""
-        from backend.api import analytics
+        """Test POST /monitoring/start has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.start_monitoring)
+        source = inspect.getsource(analytics_monitoring.start_monitoring)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
@@ -6617,10 +6584,10 @@ class TestBatch37AnalyticsMigrations:
                 break
 
     def test_start_monitoring_preserves_business_logic(self):
-        """Test POST /monitoring/phase9/start preserves business logic"""
-        from backend.api import analytics
+        """Test POST /monitoring/start preserves business logic"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.start_monitoring)
+        source = inspect.getsource(analytics_monitoring.start_monitoring)
 
         # Check key business logic is preserved
         assert "collector = analytics_controller.metrics_collector" in source
@@ -6632,14 +6599,14 @@ class TestBatch37AnalyticsMigrations:
         assert 'analytics_state["session_start"] = datetime.now().isoformat()' in source
         assert "return {" in source
         assert '"status": "started"' in source
-        assert '"message": "Phase 9 monitoring started successfully"' in source
+        assert '"message": "Performance monitoring started successfully"' in source
         assert '"timestamp": datetime.now().isoformat()' in source
 
     def test_start_monitoring_no_manual_error_handling(self):
-        """Test POST /monitoring/phase9/start has no manual error handling"""
-        from backend.api import analytics
+        """Test POST /monitoring/start has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.start_monitoring)
+        source = inspect.getsource(analytics_monitoring.start_monitoring)
 
         # Should not have except blocks
         assert (
@@ -6649,13 +6616,13 @@ class TestBatch37AnalyticsMigrations:
 
     def test_batch37_all_endpoints_migrated(self):
         """Test all batch 37 endpoints have been migrated"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
         # Check both endpoints have decorators
         recommendations_source = inspect.getsource(
-            analytics.get_phase9_optimization_recommendations
+            analytics_monitoring.get_analytics_optimization_recommendations
         )
-        start_source = inspect.getsource(analytics.start_monitoring)
+        start_source = inspect.getsource(analytics_monitoring.start_monitoring)
 
         assert (
             "@with_error_handling" in recommendations_source
@@ -6666,12 +6633,12 @@ class TestBatch37AnalyticsMigrations:
 
     def test_batch37_consistent_error_handling(self):
         """Test batch 37 endpoints use consistent error handling configuration"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
         recommendations_source = inspect.getsource(
-            analytics.get_phase9_optimization_recommendations
+            analytics_monitoring.get_analytics_optimization_recommendations
         )
-        start_source = inspect.getsource(analytics.start_monitoring)
+        start_source = inspect.getsource(analytics_monitoring.start_monitoring)
 
         # All should use SERVER_ERROR category
         assert "category=ErrorCategory.SERVER_ERROR" in recommendations_source
@@ -6683,18 +6650,18 @@ class TestBatch37AnalyticsMigrations:
 
 
 # ============================================================================
-# Batch 38: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# Batch 38: analytics_monitoring.py - Performance monitoring endpoints (2 endpoints)
 # ============================================================================
 
 
 class TestBatch38AnalyticsMigrations:
-    """Test batch 38 analytics.py endpoint migrations"""
+    """Test batch 38 analytics_monitoring.py endpoint migrations"""
 
     def test_stop_monitoring_has_decorator(self):
-        """Test POST /monitoring/phase9/stop has @with_error_handling decorator"""
-        from backend.api import analytics
+        """Test POST /monitoring/stop has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.stop_monitoring)
+        source = inspect.getsource(analytics_monitoring.stop_monitoring)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6709,10 +6676,10 @@ class TestBatch38AnalyticsMigrations:
         ), "Decorator should use ANALYTICS prefix"
 
     def test_stop_monitoring_no_outer_try_catch(self):
-        """Test POST /monitoring/phase9/stop has no outer try-catch block"""
-        from backend.api import analytics
+        """Test POST /monitoring/stop has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.stop_monitoring)
+        source = inspect.getsource(analytics_monitoring.stop_monitoring)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
@@ -6732,10 +6699,10 @@ class TestBatch38AnalyticsMigrations:
                 break
 
     def test_stop_monitoring_preserves_business_logic(self):
-        """Test POST /monitoring/phase9/stop preserves business logic"""
-        from backend.api import analytics
+        """Test POST /monitoring/stop preserves business logic"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.stop_monitoring)
+        source = inspect.getsource(analytics_monitoring.stop_monitoring)
 
         # Check key business logic is preserved
         assert "collector = analytics_controller.metrics_collector" in source
@@ -6746,14 +6713,14 @@ class TestBatch38AnalyticsMigrations:
         assert "await collector.stop_collection()" in source
         assert "return {" in source
         assert '"status": "stopped"' in source
-        assert '"message": "Phase 9 monitoring stopped successfully"' in source
+        assert '"message": "Performance monitoring stopped successfully"' in source
         assert '"timestamp": datetime.now().isoformat()' in source
 
     def test_stop_monitoring_no_manual_error_handling(self):
-        """Test POST /monitoring/phase9/stop has no manual error handling"""
-        from backend.api import analytics
+        """Test POST /monitoring/stop has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.stop_monitoring)
+        source = inspect.getsource(analytics_monitoring.stop_monitoring)
 
         # Should not have except blocks
         assert (
@@ -6761,11 +6728,11 @@ class TestBatch38AnalyticsMigrations:
         ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
-    def test_query_phase9_metrics_has_decorator(self):
-        """Test POST /monitoring/phase9/metrics/query has @with_error_handling decorator"""
-        from backend.api import analytics
+    def test_query_metrics_has_decorator(self):
+        """Test POST /monitoring/metrics/query has @with_error_handling decorator"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.query_phase9_metrics)
+        source = inspect.getsource(analytics_monitoring.query_metrics)
         assert (
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
@@ -6773,23 +6740,23 @@ class TestBatch38AnalyticsMigrations:
             "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
-            'operation="query_phase9_metrics"' in source
+            'operation="query_metrics"' in source
         ), "Decorator should specify operation name"
         assert (
             'error_code_prefix="ANALYTICS"' in source
         ), "Decorator should use ANALYTICS prefix"
 
-    def test_query_phase9_metrics_no_outer_try_catch(self):
-        """Test POST /monitoring/phase9/metrics/query has no outer try-catch block"""
-        from backend.api import analytics
+    def test_query_metrics_no_outer_try_catch(self):
+        """Test POST /monitoring/metrics/query has no outer try-catch block"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.query_phase9_metrics)
+        source = inspect.getsource(analytics_monitoring.query_metrics)
         lines = source.split("\n")
 
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if "async def query_phase9_metrics" in line:
+            if "async def query_metrics" in line:
                 function_body_started = True
                 continue
             if (
@@ -6802,11 +6769,11 @@ class TestBatch38AnalyticsMigrations:
                 ), "Endpoint should not have outer try-catch block"
                 break
 
-    def test_query_phase9_metrics_preserves_business_logic(self):
-        """Test POST /monitoring/phase9/metrics/query preserves business logic"""
-        from backend.api import analytics
+    def test_query_metrics_preserves_business_logic(self):
+        """Test POST /monitoring/metrics/query preserves business logic"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.query_phase9_metrics)
+        source = inspect.getsource(analytics_monitoring.query_metrics)
 
         # Check key business logic is preserved
         assert 'metric_name = query_request.get("metric", "all")' in source
@@ -6831,11 +6798,11 @@ class TestBatch38AnalyticsMigrations:
         assert '"metric": metric_name' in source
         assert '"time_range_seconds": time_range' in source
 
-    def test_query_phase9_metrics_no_manual_error_handling(self):
-        """Test POST /monitoring/phase9/metrics/query has no manual error handling"""
-        from backend.api import analytics
+    def test_query_metrics_no_manual_error_handling(self):
+        """Test POST /monitoring/metrics/query has no manual error handling"""
+        from backend.api import analytics_monitoring
 
-        source = inspect.getsource(analytics.query_phase9_metrics)
+        source = inspect.getsource(analytics_monitoring.query_metrics)
 
         # Should not have except blocks
         assert (
@@ -6845,11 +6812,11 @@ class TestBatch38AnalyticsMigrations:
 
     def test_batch38_all_endpoints_migrated(self):
         """Test all batch 38 endpoints have been migrated"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
         # Check both endpoints have decorators
-        stop_source = inspect.getsource(analytics.stop_monitoring)
-        query_source = inspect.getsource(analytics.query_phase9_metrics)
+        stop_source = inspect.getsource(analytics_monitoring.stop_monitoring)
+        query_source = inspect.getsource(analytics_monitoring.query_metrics)
 
         assert (
             "@with_error_handling" in stop_source
@@ -6860,10 +6827,10 @@ class TestBatch38AnalyticsMigrations:
 
     def test_batch38_consistent_error_handling(self):
         """Test batch 38 endpoints use consistent error handling configuration"""
-        from backend.api import analytics
+        from backend.api import analytics_monitoring
 
-        stop_source = inspect.getsource(analytics.stop_monitoring)
-        query_source = inspect.getsource(analytics.query_phase9_metrics)
+        stop_source = inspect.getsource(analytics_monitoring.stop_monitoring)
+        query_source = inspect.getsource(analytics_monitoring.query_metrics)
 
         # All should use SERVER_ERROR category
         assert "category=ErrorCategory.SERVER_ERROR" in stop_source
@@ -10016,9 +9983,9 @@ class TestBatch59MonitoringMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_monitoring_status)
         # Verify key business logic remains
-        self.assertIn("get_phase9_performance_dashboard", source)
+        self.assertIn("get_performance_dashboard", source)
         self.assertIn("MonitoringStatus", source)
-        self.assertIn("phase9_monitor.monitoring_active", source)
+        self.assertIn("performance_monitor.monitoring_active", source)
 
     def test_start_monitoring_endpoint_decorator_present(self):
         """Test start_monitoring_endpoint has @with_error_handling decorator"""
@@ -10056,7 +10023,7 @@ class TestBatch59MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(start_monitoring_endpoint)
         # Verify key business logic remains
         self.assertIn("background_tasks.add_task", source)
-        self.assertIn("add_phase9_alert_callback", source)
+        self.assertIn("add_alert_callback", source)
         self.assertIn("already_running", source)
 
     def test_stop_monitoring_endpoint_decorator_present(self):
@@ -10096,7 +10063,7 @@ class TestBatch59MonitoringMigrations(unittest.TestCase):
         # Verify key business logic remains
         self.assertIn("stop_monitoring()", source)
         self.assertIn("not_running", source)
-        self.assertIn("phase9_monitor.monitoring_active", source)
+        self.assertIn("performance_monitor.monitoring_active", source)
 
     def test_batch59_decorator_configuration(self):
         """Verify all batch 59 endpoints have correct decorator configuration"""
@@ -10180,7 +10147,7 @@ class TestBatch60MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_performance_dashboard)
 
         # Key business logic should be preserved
-        self.assertIn("get_phase9_performance_dashboard()", source)
+        self.assertIn("get_performance_dashboard()", source)
         self.assertIn('"analysis"', source)
         self.assertIn("_calculate_overall_health", source)
         self.assertIn("_calculate_performance_score", source)
@@ -10221,7 +10188,7 @@ class TestBatch60MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_dashboard_overview)
 
         # Key business logic should be preserved (same as get_performance_dashboard)
-        self.assertIn("get_phase9_performance_dashboard()", source)
+        self.assertIn("get_performance_dashboard()", source)
         self.assertIn('"analysis"', source)
         self.assertIn("_calculate_overall_health", source)
         self.assertIn("_calculate_performance_score", source)
@@ -10260,7 +10227,7 @@ class TestBatch60MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_current_metrics)
 
         # Key business logic should be preserved
-        self.assertIn("await collect_phase9_metrics()", source)
+        self.assertIn("await collect_metrics()", source)
         self.assertIn('"timestamp"', source)
         self.assertIn('"metrics"', source)
         self.assertIn('"collection_successful"', source)
@@ -10299,9 +10266,9 @@ class TestBatch60MonitoringMigrations(unittest.TestCase):
         # Key business logic should be preserved
         self.assertIn("query.dict()", source)
         self.assertIn("query.time_range_minutes", source)
-        self.assertIn("phase9_monitor.gpu_metrics_buffer", source)
-        self.assertIn("phase9_monitor.npu_metrics_buffer", source)
-        self.assertIn("phase9_monitor.system_metrics_buffer", source)
+        self.assertIn("performance_monitor.gpu_metrics_buffer", source)
+        self.assertIn("performance_monitor.npu_metrics_buffer", source)
+        self.assertIn("performance_monitor.system_metrics_buffer", source)
         self.assertIn("query.include_trends", source)
         self.assertIn("query.include_alerts", source)
 
@@ -10407,7 +10374,7 @@ class TestBatch61MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_optimization_recommendations)
 
         # Key business logic should be preserved
-        self.assertIn("get_phase9_optimization_recommendations()", source)
+        self.assertIn("get_optimization_recommendations()", source)
         self.assertIn("OptimizationRecommendation", source)
         self.assertIn('"category"', source)
         self.assertIn('"priority"', source)
@@ -10449,7 +10416,7 @@ class TestBatch61MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_performance_alerts)
 
         # Key business logic should be preserved
-        self.assertIn("phase9_monitor.performance_alerts", source)
+        self.assertIn("performance_monitor.performance_alerts", source)
         self.assertIn("if severity:", source)
         self.assertIn("if category:", source)
         self.assertIn("alerts.sort", source)
@@ -10487,7 +10454,7 @@ class TestBatch61MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(check_alerts)
 
         # Key business logic should be preserved
-        self.assertIn("phase9_monitor.performance_alerts", source)
+        self.assertIn("performance_monitor.performance_alerts", source)
         self.assertIn('"timestamp"', source)
         self.assertIn('"alerts"', source)
         self.assertIn('"total_count"', source)
@@ -10529,7 +10496,7 @@ class TestBatch61MonitoringMigrations(unittest.TestCase):
 
         # Key business logic should be preserved
         self.assertIn("threshold_key", source)
-        self.assertIn("phase9_monitor.performance_baselines", source)
+        self.assertIn("performance_monitor.performance_baselines", source)
         self.assertIn('"status"', source)
         self.assertIn('"updated"', source)
         self.assertIn('"created"', source)
@@ -10628,7 +10595,7 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
         from backend.api.monitoring import get_gpu_details
 
         source = inspect.getsource(get_gpu_details)
-        self.assertIn("await phase9_monitor.collect_gpu_metrics()", source)
+        self.assertIn("await performance_monitor.collect_gpu_metrics()", source)
         self.assertIn('"available"', source)
         self.assertIn('"current_metrics"', source)
         self.assertIn('"historical_data"', source)
@@ -10658,7 +10625,7 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
         from backend.api.monitoring import get_npu_details
 
         source = inspect.getsource(get_npu_details)
-        self.assertIn("await phase9_monitor.collect_npu_metrics()", source)
+        self.assertIn("await performance_monitor.collect_npu_metrics()", source)
         self.assertIn('"available"', source)
         self.assertIn('"current_metrics"', source)
         self.assertIn('"historical_data"', source)
@@ -10690,7 +10657,7 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_services_health)
         self.assertIn(
-            "await phase9_monitor.collect_service_performance_metrics()", source
+            "await performance_monitor.collect_service_performance_metrics()", source
         )
         self.assertIn('"total_services"', source)
         self.assertIn('"healthy_services"', source)
@@ -10720,9 +10687,9 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
         from backend.api.monitoring import export_metrics
 
         source = inspect.getsource(export_metrics)
-        self.assertIn("phase9_monitor.gpu_metrics_buffer", source)
-        self.assertIn("phase9_monitor.npu_metrics_buffer", source)
-        self.assertIn("phase9_monitor.system_metrics_buffer", source)
+        self.assertIn("performance_monitor.gpu_metrics_buffer", source)
+        self.assertIn("performance_monitor.npu_metrics_buffer", source)
+        self.assertIn("performance_monitor.system_metrics_buffer", source)
         self.assertIn('"json"', source)
         self.assertIn('"csv"', source)
 
@@ -10790,7 +10757,7 @@ class TestBatch63MonitoringMigrations(unittest.TestCase):
 
         source = inspect.getsource(test_performance_monitoring)
         self.assertIn("await asyncio.sleep(0.1)", source)
-        self.assertIn("await collect_phase9_metrics()", source)
+        self.assertIn("await collect_metrics()", source)
         self.assertIn('"message"', source)
         self.assertIn('"metrics_collected"', source)
         self.assertIn('"timestamp"', source)

@@ -771,19 +771,19 @@ async def get_analytics_status():
 
 
 # ============================================================================
-# PHASE 9 MONITORING DASHBOARD ENDPOINTS (MOVED TO analytics_monitoring.py)
+# PERFORMANCE MONITORING DASHBOARD ENDPOINTS (MOVED TO analytics_monitoring.py)
 # ============================================================================
 
 # The following functions have been moved to analytics_monitoring.py:
 # - get_monitoring_status
-# - get_phase9_dashboard_data
-# - get_phase9_alerts
-# - get_phase9_optimization_recommendations
+# - get_dashboard_data
+# - get_monitoring_alerts
+# - get_analytics_optimization_recommendations
 # - start_monitoring
 # - stop_monitoring
-# - query_phase9_metrics
+# - query_metrics
 
-# Phase 9 monitoring endpoints have been moved to analytics_monitoring.py
+# Performance monitoring endpoints have been moved to analytics_monitoring.py
 
 
 # ============================================================================
@@ -989,7 +989,7 @@ async def _send_health_update_if_due(
     """
     if current_time - last_update > 10:
         try:
-            alerts = await analytics_monitoring.get_phase9_alerts()
+            alerts = await analytics_monitoring.get_monitoring_alerts()
             critical = [a for a in alerts if a.get("severity") == "critical"]
             await websocket.send_json(_build_health_message(alerts, critical))
             return current_time

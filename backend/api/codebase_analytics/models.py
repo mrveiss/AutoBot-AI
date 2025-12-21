@@ -52,3 +52,63 @@ class DeclarationItem(BaseModel):
     usage_count: int
     is_exported: bool
     parameters: Optional[List[str]]
+
+
+# =============================================================================
+# API Endpoint Checker Models (Issue #527)
+# =============================================================================
+
+
+class APIEndpointItem(BaseModel):
+    """Represents a backend API endpoint definition"""
+    method: str  # 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'
+    path: str  # Full API path (e.g., '/api/monitoring/status')
+    file_path: str  # Source file containing the endpoint
+    line_number: int  # Line number of decorator
+    function_name: str  # Handler function name
+    router_prefix: Optional[str] = None  # Router prefix if any
+    tags: Optional[List[str]] = None  # API tags
+    is_async: bool = False  # Whether handler is async
+
+
+class FrontendAPICallItem(BaseModel):
+    """Represents a frontend API call"""
+    method: str  # 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'UNKNOWN'
+    path: str  # API path called (may include variables)
+    file_path: str  # Source file containing the call
+    line_number: int  # Line number of call
+    context: Optional[str] = None  # Surrounding code context
+    is_dynamic: bool = False  # True if path contains variables/templates
+
+
+class EndpointUsageItem(BaseModel):
+    """Represents an endpoint with its usage information"""
+    endpoint: APIEndpointItem
+    call_count: int  # Number of frontend calls
+    callers: List[FrontendAPICallItem]  # List of frontend locations calling this
+
+
+class EndpointMismatchItem(BaseModel):
+    """Represents an orphaned or missing endpoint"""
+    type: str  # 'orphaned' (no frontend calls) or 'missing' (no backend endpoint)
+    method: str
+    path: str
+    file_path: str
+    line_number: int
+    details: Optional[str] = None
+
+
+class APIEndpointAnalysis(BaseModel):
+    """Complete API endpoint analysis result"""
+    backend_endpoints: int
+    frontend_calls: int
+    used_endpoints: int
+    orphaned_endpoints: int
+    missing_endpoints: int
+    coverage_percentage: float
+    endpoints: List[APIEndpointItem]
+    api_calls: List[FrontendAPICallItem]
+    orphaned: List[EndpointMismatchItem]
+    missing: List[EndpointMismatchItem]
+    used: List[EndpointUsageItem]
+    scan_timestamp: str

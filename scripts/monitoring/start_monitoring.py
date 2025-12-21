@@ -3,7 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-AutoBot Phase 9 Monitoring Startup Script
+AutoBot Performance Monitoring Startup Script
 Comprehensive performance monitoring system initialization and management.
 """
 
@@ -21,14 +21,14 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Import Phase 9 monitoring components
+# Import performance monitoring components
 from src.utils.performance_monitor import (
-    phase9_monitor,
+    performance_monitor,
     start_monitoring,
     stop_monitoring,
-    get_phase9_performance_dashboard,
-    collect_phase9_metrics,
-    add_phase9_alert_callback
+    get_performance_dashboard,
+    collect_metrics,
+    add_alert_callback
 )
 from src.constants.threshold_constants import TimingConstants
 from src.utils.gpu_acceleration_optimizer import (
@@ -54,14 +54,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class Phase9MonitoringManager:
+class PerformanceMonitoringManager:
     """
-    Manager for Phase 9 comprehensive performance monitoring system.
+    Manager for comprehensive performance monitoring system.
     Coordinates GPU optimization, NPU acceleration, and system monitoring.
     """
 
     def __init__(self):
-        """Initialize Phase 9 monitoring manager with default configuration."""
+        """Initialize performance monitoring manager with default configuration."""
         self.monitoring_active = False
         self.optimization_active = False
         self.alerts_enabled = True
@@ -85,23 +85,23 @@ class Phase9MonitoringManager:
         }
 
     async def initialize(self):
-        """Initialize the Phase 9 monitoring system"""
+        """Initialize the performance monitoring system"""
         try:
-            logger.info("Initializing Phase 9 Performance Monitoring System...")
+            logger.info("Initializing Performance Monitoring System...")
 
             # Check hardware availability
             gpu_capabilities = get_gpu_capabilities()
             logger.info("GPU Available: %s", gpu_capabilities['gpu_available'])
-            logger.info("NPU Available: %s", phase9_monitor.npu_available)
+            logger.info("NPU Available: %s", performance_monitor.npu_available)
 
             # Setup alert callbacks
             if self.alerts_enabled:
-                add_phase9_alert_callback(self._handle_performance_alert)
+                await add_alert_callback(self._handle_performance_alert)
                 logger.info("Performance alert callbacks configured")
 
             # Initialize baseline metrics
             logger.info("Collecting baseline performance metrics...")
-            baseline_metrics = await collect_phase9_metrics()
+            baseline_metrics = await collect_metrics()
             if baseline_metrics.get("collection_successful", False):
                 logger.info("Baseline metrics collected successfully")
             else:
@@ -117,11 +117,11 @@ class Phase9MonitoringManager:
                 else:
                     logger.warning("GPU optimization failed")
 
-            logger.info("Phase 9 monitoring system initialized successfully")
+            logger.info("Performance monitoring system initialized successfully")
             return True
 
         except Exception as e:
-            logger.error("Failed to initialize Phase 9 monitoring: %s", e)
+            logger.error("Failed to initialize performance monitoring: %s", e)
             return False
 
     async def start_monitoring(self):
@@ -131,7 +131,7 @@ class Phase9MonitoringManager:
                 logger.warning("Monitoring already active")
                 return False
 
-            logger.info("Starting Phase 9 comprehensive performance monitoring...")
+            logger.info("Starting comprehensive performance monitoring...")
 
             # Start core monitoring
             await start_monitoring()
@@ -147,7 +147,7 @@ class Phase9MonitoringManager:
             self.monitoring_active = True
             self.start_time = time.time()
 
-            logger.info("Phase 9 monitoring started successfully")
+            logger.info("Performance monitoring started successfully")
             return True
 
         except Exception as e:
@@ -161,7 +161,7 @@ class Phase9MonitoringManager:
                 logger.warning("Monitoring not active")
                 return False
 
-            logger.info("Stopping Phase 9 performance monitoring...")
+            logger.info("Stopping performance monitoring...")
 
             # Stop core monitoring
             await stop_monitoring()
@@ -170,7 +170,7 @@ class Phase9MonitoringManager:
 
             # Generate final report
             uptime = time.time() - self.start_time if self.start_time else 0
-            logger.info("Monitoring stopped. Uptime: %ss, Metrics collected: %s", uptime:.1f, self.metrics_collected)
+            logger.info("Monitoring stopped. Uptime: %.1fs, Metrics collected: %s", uptime, self.metrics_collected)
 
             return True
 
@@ -221,7 +221,7 @@ class Phase9MonitoringManager:
                     break
 
                 # Collect current metrics
-                dashboard_data = get_phase9_performance_dashboard()
+                dashboard_data = await get_performance_dashboard()
 
                 if dashboard_data.get("monitoring_active", False):
                     self.metrics_collected += 1
@@ -329,7 +329,7 @@ class Phase9MonitoringManager:
 
             # Current performance metrics
             logger.info("Collecting performance metrics...")
-            results["performance_metrics"] = await collect_phase9_metrics()
+            results["performance_metrics"] = await collect_metrics()
 
             # GPU optimization test
             if self.config["gpu_optimization_enabled"]:
@@ -340,7 +340,7 @@ class Phase9MonitoringManager:
             reports_dir = project_root / "reports" / "performance"
             reports_dir.mkdir(parents=True, exist_ok=True)
 
-            benchmark_file = reports_dir / f"phase9_benchmark_{int(time.time())}.json"
+            benchmark_file = reports_dir / f"performance_benchmark_{int(time.time())}.json"
             with open(benchmark_file, 'w') as f:
                 json.dump(results, f, indent=2, default=str)
 
@@ -365,12 +365,12 @@ class Phase9MonitoringManager:
             "configuration": self.config,
             "hardware_status": {
                 "gpu_available": gpu_optimizer.gpu_available,
-                "npu_available": phase9_monitor.npu_available
+                "npu_available": performance_monitor.npu_available
             }
         }
 
 
-async def _run_daemon_loop(manager: Phase9MonitoringManager) -> None:
+async def _run_daemon_loop(manager: PerformanceMonitoringManager) -> None:
     """Run monitoring daemon loop (Issue #315: extracted helper)."""
     logger.info("Running in daemon mode...")
     try:
@@ -385,7 +385,7 @@ async def _run_daemon_loop(manager: Phase9MonitoringManager) -> None:
         await manager.stop_monitoring()
 
 
-async def _handle_start_command(manager: Phase9MonitoringManager, daemon: bool) -> None:
+async def _handle_start_command(manager: PerformanceMonitoringManager, daemon: bool) -> None:
     """Handle start command (Issue #315: extracted helper)."""
     if not await manager.initialize():
         logger.error("Failed to initialize monitoring")
@@ -395,7 +395,7 @@ async def _handle_start_command(manager: Phase9MonitoringManager, daemon: bool) 
         logger.error("Failed to start monitoring")
         sys.exit(1)
 
-    logger.info("Phase 9 monitoring started successfully")
+    logger.info("Performance monitoring started successfully")
 
     if daemon:
         await _run_daemon_loop(manager)
@@ -403,12 +403,12 @@ async def _handle_start_command(manager: Phase9MonitoringManager, daemon: bool) 
         logger.info("Monitoring started. Use 'stop' command to stop monitoring.")
 
 
-async def _handle_test_command(manager: Phase9MonitoringManager) -> None:
+async def _handle_test_command(manager: PerformanceMonitoringManager) -> None:
     """Handle test command (Issue #315: extracted helper)."""
     logger.info("Running quick test of monitoring components...")
     await manager.initialize()
 
-    metrics = await collect_phase9_metrics()
+    metrics = await collect_metrics()
     logger.info("Metrics collection test: %s", '✓' if metrics.get('collection_successful') else '✗')
 
     capabilities = get_gpu_capabilities()
@@ -421,8 +421,8 @@ async def _handle_test_command(manager: Phase9MonitoringManager) -> None:
 
 
 async def main():
-    """Main function for Phase 9 monitoring management (Issue #315: refactored)."""
-    parser = argparse.ArgumentParser(description="AutoBot Phase 9 Performance Monitoring")
+    """Main function for performance monitoring management (Issue #315: refactored)."""
+    parser = argparse.ArgumentParser(description="AutoBot Performance Monitoring")
     parser.add_argument("command", choices=["start", "stop", "status", "benchmark", "test"],
                        help="Command to execute")
     parser.add_argument("--config", type=str, help="Configuration file path")
@@ -434,7 +434,7 @@ async def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    manager = Phase9MonitoringManager()
+    manager = PerformanceMonitoringManager()
 
     # Load configuration if provided
     if args.config and os.path.exists(args.config):

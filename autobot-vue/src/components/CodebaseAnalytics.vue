@@ -33,6 +33,11 @@
             <button @click="testDataState" class="btn-debug" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px;">Debug State</button>
             <button @click="resetState" class="btn-debug" style="padding: 5px 10px; background: #FF5722; color: white; border: none; border-radius: 4px;">Reset State</button>
             <button @click="testAllEndpoints" class="btn-debug" style="padding: 5px 10px; background: #00BCD4; color: white; border: none; border-radius: 4px;">Test All APIs</button>
+            <!-- Issue #527: API Endpoint Checker -->
+            <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug" style="padding: 5px 10px; background: #3F51B5; color: white; border: none; border-radius: 4px;">
+              <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
+              {{ loadingApiEndpoints ? 'Scanning...' : 'API Coverage' }}
+            </button>
             <!-- Code Intelligence / Anti-Pattern Detection -->
             <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #E91E63; color: white; border: none; border-radius: 4px;">
               <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
@@ -1042,6 +1047,175 @@
           message="No code declarations found or analysis not run yet."
         />
       </div>
+
+      <!-- Issue #527: API Endpoint Checker Section -->
+      <div class="api-endpoints-section analytics-section">
+        <h3>
+          <i class="fas fa-plug"></i> API Endpoint Coverage
+          <span v-if="apiEndpointAnalysis" class="total-count">
+            ({{ apiEndpointAnalysis.coverage_percentage?.toFixed(1) || 0 }}% coverage)
+          </span>
+          <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="refresh-btn" style="margin-left: 10px;">
+            <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </h3>
+
+        <!-- Loading State -->
+        <div v-if="loadingApiEndpoints" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i> Scanning API endpoints...
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="apiEndpointsError" class="error-state">
+          <i class="fas fa-exclamation-triangle"></i> {{ apiEndpointsError }}
+          <button @click="getApiEndpointCoverage" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div v-else-if="apiEndpointAnalysis" class="section-content">
+          <!-- Summary Cards -->
+          <div class="summary-cards">
+            <div class="summary-card total">
+              <div class="summary-value">{{ apiEndpointAnalysis.backend_endpoints || 0 }}</div>
+              <div class="summary-label">Backend Endpoints</div>
+            </div>
+            <div class="summary-card info">
+              <div class="summary-value">{{ apiEndpointAnalysis.frontend_calls || 0 }}</div>
+              <div class="summary-label">Frontend Calls</div>
+            </div>
+            <div class="summary-card success">
+              <div class="summary-value">{{ apiEndpointAnalysis.used_endpoints || 0 }}</div>
+              <div class="summary-label">Used Endpoints</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-value">{{ apiEndpointAnalysis.orphaned_endpoints || 0 }}</div>
+              <div class="summary-label">Orphaned</div>
+            </div>
+            <div class="summary-card critical">
+              <div class="summary-value">{{ apiEndpointAnalysis.missing_endpoints || 0 }}</div>
+              <div class="summary-label">Missing</div>
+            </div>
+          </div>
+
+          <!-- Coverage Progress Bar -->
+          <div class="coverage-bar-container">
+            <div class="coverage-label">
+              <span>API Coverage</span>
+              <span class="coverage-value" :class="getCoverageClass(apiEndpointAnalysis.coverage_percentage)">
+                {{ apiEndpointAnalysis.coverage_percentage?.toFixed(1) || 0 }}%
+              </span>
+            </div>
+            <div class="coverage-bar">
+              <div
+                class="coverage-fill"
+                :style="{ width: (apiEndpointAnalysis.coverage_percentage || 0) + '%' }"
+                :class="getCoverageClass(apiEndpointAnalysis.coverage_percentage)"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Accordion Groups -->
+          <div class="accordion-groups">
+            <!-- Orphaned Endpoints (defined but not called) -->
+            <div v-if="apiEndpointAnalysis.orphaned?.length > 0" class="accordion-group">
+              <div class="accordion-header warning" @click="expandedApiEndpointGroups.orphaned = !expandedApiEndpointGroups.orphaned">
+                <div class="header-info">
+                  <i :class="expandedApiEndpointGroups.orphaned ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">Orphaned Endpoints</span>
+                  <span class="header-count">({{ apiEndpointAnalysis.orphaned.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge warning">Unused Code</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedApiEndpointGroups.orphaned" class="accordion-items">
+                  <div v-for="(ep, index) in apiEndpointAnalysis.orphaned.slice(0, 30)" :key="'orphan-' + index" class="list-item item-warning">
+                    <div class="item-header">
+                      <span class="method-badge" :class="ep.method?.toLowerCase()">{{ ep.method }}</span>
+                      <span class="item-path">{{ ep.path }}</span>
+                    </div>
+                    <div class="item-location">📁 {{ ep.file_path }}:{{ ep.line_number }}</div>
+                  </div>
+                  <div v-if="apiEndpointAnalysis.orphaned.length > 30" class="show-more">
+                    <span class="muted">Showing 30 of {{ apiEndpointAnalysis.orphaned.length }} orphaned endpoints</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <!-- Missing Endpoints (called but not defined) -->
+            <div v-if="apiEndpointAnalysis.missing?.length > 0" class="accordion-group">
+              <div class="accordion-header critical" @click="expandedApiEndpointGroups.missing = !expandedApiEndpointGroups.missing">
+                <div class="header-info">
+                  <i :class="expandedApiEndpointGroups.missing ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">Missing Endpoints</span>
+                  <span class="header-count">({{ apiEndpointAnalysis.missing.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge critical">Potential Bugs</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedApiEndpointGroups.missing" class="accordion-items">
+                  <div v-for="(ep, index) in apiEndpointAnalysis.missing.slice(0, 30)" :key="'missing-' + index" class="list-item item-critical">
+                    <div class="item-header">
+                      <span class="method-badge" :class="ep.method?.toLowerCase()">{{ ep.method }}</span>
+                      <span class="item-path">{{ ep.path }}</span>
+                    </div>
+                    <div class="item-location">📁 {{ ep.file_path }}:{{ ep.line_number }}</div>
+                    <div v-if="ep.details" class="item-details">{{ ep.details }}</div>
+                  </div>
+                  <div v-if="apiEndpointAnalysis.missing.length > 30" class="show-more">
+                    <span class="muted">Showing 30 of {{ apiEndpointAnalysis.missing.length }} missing endpoints</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+
+            <!-- Used Endpoints (matched and working) -->
+            <div v-if="apiEndpointAnalysis.used?.length > 0" class="accordion-group">
+              <div class="accordion-header success" @click="expandedApiEndpointGroups.used = !expandedApiEndpointGroups.used">
+                <div class="header-info">
+                  <i :class="expandedApiEndpointGroups.used ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
+                  <span class="header-name">Used Endpoints</span>
+                  <span class="header-count">({{ apiEndpointAnalysis.used.length }})</span>
+                </div>
+                <div class="header-badges">
+                  <span class="severity-badge success">Active</span>
+                </div>
+              </div>
+              <transition name="accordion">
+                <div v-if="expandedApiEndpointGroups.used" class="accordion-items">
+                  <div v-for="(usage, index) in apiEndpointAnalysis.used.slice(0, 30)" :key="'used-' + index" class="list-item item-success">
+                    <div class="item-header">
+                      <span class="method-badge" :class="usage.endpoint?.method?.toLowerCase()">{{ usage.endpoint?.method }}</span>
+                      <span class="item-path">{{ usage.endpoint?.path }}</span>
+                      <span class="call-count-badge">{{ usage.call_count }} calls</span>
+                    </div>
+                    <div class="item-location">📁 {{ usage.endpoint?.file_path }}:{{ usage.endpoint?.line_number }}</div>
+                  </div>
+                  <div v-if="apiEndpointAnalysis.used.length > 30" class="show-more">
+                    <span class="muted">Showing 30 of {{ apiEndpointAnalysis.used.length }} used endpoints</span>
+                  </div>
+                </div>
+              </transition>
+            </div>
+          </div>
+
+          <!-- Last Scan Timestamp -->
+          <div v-if="apiEndpointAnalysis.scan_timestamp" class="scan-timestamp">
+            <i class="fas fa-clock"></i> Last scan: {{ formatTimestamp(apiEndpointAnalysis.scan_timestamp) }}
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <EmptyState
+          v-else
+          icon="fas fa-plug"
+          message="No API endpoint analysis available. Click 'API Coverage' button to scan."
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -1186,6 +1360,16 @@ const callGraphData = ref({ nodes: [], edges: [] })
 const callGraphSummary = ref(null)
 const callGraphLoading = ref(false)
 const callGraphError = ref('')
+
+// Issue #527: API Endpoint Checker data
+const apiEndpointAnalysis = ref(null)
+const loadingApiEndpoints = ref(false)
+const apiEndpointsError = ref('')
+const expandedApiEndpointGroups = reactive({
+  orphaned: false,
+  missing: false,
+  used: false
+})
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -1989,6 +2173,70 @@ const getHardcodesData = async () => {
   }
 }
 
+// Issue #527: Get API Endpoint Coverage Analysis
+const getApiEndpointCoverage = async () => {
+  loadingApiEndpoints.value = true
+  apiEndpointsError.value = ''
+  progressStatus.value = 'Scanning API endpoints...'
+  const startTime = Date.now()
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
+
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+
+    if (data.status === 'success' && data.analysis) {
+      apiEndpointAnalysis.value = data.analysis
+      const coverage = data.analysis.coverage_percentage?.toFixed(1) || 0
+      const orphaned = data.analysis.orphaned_endpoints || 0
+      const missing = data.analysis.missing_endpoints || 0
+      notify(`API Coverage: ${coverage}% (${orphaned} orphaned, ${missing} missing) - ${responseTime}ms`, 'success')
+    } else {
+      throw new Error('Invalid response format')
+    }
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    logger.error('API Endpoint analysis failed:', error)
+    apiEndpointsError.value = error.message
+    notify(`API Endpoint analysis failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingApiEndpoints.value = false
+    progressStatus.value = 'Ready'
+  }
+}
+
+// Issue #527: Get coverage color class based on percentage
+const getCoverageClass = (percentage) => {
+  if (!percentage || percentage < 50) return 'critical'
+  if (percentage < 75) return 'warning'
+  if (percentage < 90) return 'info'
+  return 'success'
+}
+
+// Issue #527: Format timestamp for display
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return 'Unknown'
+  try {
+    const date = new Date(timestamp)
+    return date.toLocaleString()
+  } catch {
+    return timestamp
+  }
+}
+
 // Debug function to check data state
 const testDataState = () => {
   const summary = {
@@ -2086,7 +2334,7 @@ const testAllEndpoints = async () => {
 
     // Test NPU
     try {
-      const npuEndpoint = `${backendUrl}/api/monitoring/phase9/hardware/npu`
+      const npuEndpoint = `${backendUrl}/api/monitoring/hardware/npu`
       const response = await fetch(npuEndpoint)
       results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
@@ -5092,5 +5340,216 @@ const getDeclarationTypeClass = (type) => {
 
 .call-graph-content {
   margin-top: 16px;
+}
+
+/* Issue #527: API Endpoint Checker Section */
+.api-endpoints-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.api-endpoints-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px 0;
+  color: #e2e8f0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.api-endpoints-section h3 i {
+  color: #3b82f6;
+}
+
+.api-endpoints-section .loading-state,
+.api-endpoints-section .error-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.api-endpoints-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.api-endpoints-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* Coverage Bar */
+.coverage-bar-container {
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 8px;
+}
+
+.coverage-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.coverage-value {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.coverage-value.success { color: #22c55e; }
+.coverage-value.info { color: #3b82f6; }
+.coverage-value.warning { color: #f59e0b; }
+.coverage-value.critical { color: #ef4444; }
+
+.coverage-bar {
+  height: 12px;
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.coverage-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.coverage-fill.success { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.coverage-fill.info { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+.coverage-fill.warning { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.coverage-fill.critical { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+/* HTTP Method Badges */
+.method-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+
+.method-badge.get { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+.method-badge.post { background: #3b82f620; color: #3b82f6; border: 1px solid #3b82f640; }
+.method-badge.put { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
+.method-badge.patch { background: #8b5cf620; color: #8b5cf6; border: 1px solid #8b5cf640; }
+.method-badge.delete { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+.method-badge.unknown { background: #64748b20; color: #64748b; border: 1px solid #64748b40; }
+
+/* API Path Display */
+.item-path {
+  font-family: 'JetBrains Mono', monospace;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+/* Call Count Badge */
+.call-count-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-left: auto;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Item Details */
+.item-details {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Item Variants for API Endpoints */
+.list-item.item-success {
+  border-left: 3px solid #22c55e;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.list-item.item-warning {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.list-item.item-critical {
+  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* Accordion Header Variants */
+.accordion-header.success {
+  border-left: 3px solid #22c55e;
+}
+
+.accordion-header.warning {
+  border-left: 3px solid #f59e0b;
+}
+
+.accordion-header.critical {
+  border-left: 3px solid #ef4444;
+}
+
+/* Severity Badge Variants for API Endpoints */
+.severity-badge.success {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.severity-badge.warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+/* Summary Card Variants */
+.summary-card.success {
+  border-color: #22c55e;
+}
+
+.summary-card.success .summary-value {
+  color: #22c55e;
+}
+
+.summary-card.info {
+  border-color: #3b82f6;
+}
+
+.summary-card.info .summary-value {
+  color: #3b82f6;
+}
+
+/* Scan Timestamp */
+.scan-timestamp {
+  margin-top: 16px;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-timestamp i {
+  color: #94a3b8;
 }
 </style>

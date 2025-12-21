@@ -3,7 +3,7 @@
     <div class="header-title">
       <h1>
         <i class="fas fa-tachometer-alt"></i>
-        Phase 9 Performance Monitoring
+        Performance Monitoring
       </h1>
       <p class="subtitle">Real-time GPU/NPU utilization & Multi-modal AI performance</p>
     </div>

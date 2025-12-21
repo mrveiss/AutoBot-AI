@@ -312,11 +312,11 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         "monitoring": RouterConfig(
             name="monitoring",
             module_path="backend.api.monitoring",
-            prefix="/api/monitoring/phase9",
-            tags=["monitoring", "phase9", "gpu", "npu", "performance"],
+            prefix="/api/monitoring",
+            tags=["monitoring", "gpu", "npu", "performance"],
             status=RouterStatus.ENABLED,
             description=(
-                "Phase 9 comprehensive performance monitoring for GPU/NPU utilization and"
+                "Comprehensive performance monitoring for GPU/NPU utilization and "
                 "multi-modal AI"
             ),
         ),

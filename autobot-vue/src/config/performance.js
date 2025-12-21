@@ -37,8 +37,8 @@ export const PERFORMANCE_MODE = {
     FILE_BROWSER_REFRESH: 120000,      // 2 minutes
 
     // Monitoring dashboards
-    PHASE9_DASHBOARD_UPDATE: 300000,   // 5 minutes
-    PHASE9_CHARTS_UPDATE: 180000,      // 3 minutes
+    DASHBOARD_UPDATE: 300000,   // 5 minutes
+    CHARTS_UPDATE: 180000,      // 3 minutes
     MCP_DASHBOARD_REFRESH: 300000,     // 5 minutes (was 30 seconds)
   },
 

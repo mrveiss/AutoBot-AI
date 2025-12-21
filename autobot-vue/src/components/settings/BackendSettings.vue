@@ -1375,7 +1375,7 @@ const testNPU = async () => {
 
   try {
     const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
-    const response = await fetch(`${endpoint}/api/monitoring/phase9/hardware/npu`)
+    const response = await fetch(`${endpoint}/api/monitoring/hardware/npu`)
 
     if (response.ok) {
       const data = await response.json()
