@@ -36,6 +36,7 @@ from src.utils.file_categorization import (
 from ..storage import get_code_collection
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
+from ..duplicate_detector import DuplicateCodeDetector, DuplicateAnalysis  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -572,6 +573,189 @@ def _generate_api_endpoint_section(analysis: Optional[APIEndpointAnalysis]) -> L
     return lines
 
 
+# =============================================================================
+# Duplicate Code Analysis Section (Issue #528)
+# =============================================================================
+
+
+def _get_similarity_emoji(similarity: float) -> str:
+    """Get emoji indicator for similarity percentage."""
+    if similarity >= 90:
+        return "🔴"  # High similarity - exact or near-exact
+    elif similarity >= 70:
+        return "🟠"  # Medium similarity
+    else:
+        return "🟡"  # Low similarity
+
+
+def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
+    """Generate duplicate code overview section."""
+    lines = [
+        "### Overview",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Files Analyzed | {analysis.files_analyzed} |",
+        f"| Total Duplicate Pairs | {analysis.total_duplicates} |",
+        f"| High Similarity (90%+) | {analysis.high_similarity_count} |",
+        f"| Medium Similarity (70-89%) | {analysis.medium_similarity_count} |",
+        f"| Low Similarity (50-69%) | {analysis.low_similarity_count} |",
+        f"| Total Duplicate Lines | {analysis.total_duplicate_lines} |",
+        "",
+    ]
+    return lines
+
+
+def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
+    """Generate high similarity duplicates section."""
+    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= 0.90]
+    if not high_similarity_dups:
+        return []
+
+    lines = [
+        "### 🔴 High Similarity Duplicates (90%+)",
+        "",
+        "> These are exact or near-exact duplicates. Consider extracting to shared utility.",
+        "",
+        "| File 1 | Lines | File 2 | Lines | Similarity |",
+        "|--------|-------|--------|-------|------------|",
+    ]
+
+    for dup in high_similarity_dups[:15]:  # Limit to top 15
+        file1_short = _shorten_path(dup.file1)
+        file2_short = _shorten_path(dup.file2)
+        lines.append(
+            f"| `{file1_short}` | {dup.start_line1}-{dup.end_line1} | "
+            f"`{file2_short}` | {dup.start_line2}-{dup.end_line2} | "
+            f"{dup.similarity * 100:.0f}% |"
+        )
+
+    if len(high_similarity_dups) > 15:
+        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | | |")
+
+    lines.append("")
+    return lines
+
+
+def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
+    """Generate medium similarity duplicates section."""
+    medium_similarity_dups = [
+        d for d in analysis.duplicates
+        if 0.70 <= d.similarity < 0.90
+    ]
+    if not medium_similarity_dups:
+        return []
+
+    lines = [
+        "### 🟠 Medium Similarity Duplicates (70-89%)",
+        "",
+        "> Similar patterns that may benefit from consolidation.",
+        "",
+        "| File 1 | File 2 | Similarity | Lines |",
+        "|--------|--------|------------|-------|",
+    ]
+
+    for dup in medium_similarity_dups[:10]:  # Limit to top 10
+        file1_short = _shorten_path(dup.file1)
+        file2_short = _shorten_path(dup.file2)
+        lines.append(
+            f"| `{file1_short}` | `{file2_short}` | "
+            f"{dup.similarity * 100:.0f}% | {dup.line_count} |"
+        )
+
+    if len(medium_similarity_dups) > 10:
+        lines.append(f"| ... | *{len(medium_similarity_dups) - 10} more* | | |")
+
+    lines.append("")
+    return lines
+
+
+def _shorten_path(path: str, max_length: int = 50) -> str:
+    """Shorten a file path for table display."""
+    if len(path) <= max_length:
+        return path
+    # Keep the last portion
+    parts = path.split("/")
+    if len(parts) > 2:
+        return f".../{parts[-2]}/{parts[-1]}"
+    return path[-max_length:]
+
+
+def _generate_duplicate_code_section(analysis: Optional[DuplicateAnalysis]) -> List[str]:
+    """
+    Generate the Duplicate Code Analysis section for the report (Issue #528).
+
+    Args:
+        analysis: DuplicateAnalysis from DuplicateCodeDetector
+
+    Returns:
+        List of markdown lines for the duplicate code section
+    """
+    if not analysis or analysis.total_duplicates == 0:
+        return []
+
+    lines = [
+        "## 📋 Duplicate Code Analysis",
+        "",
+        "> **Detection of duplicate code blocks across the codebase.**",
+        "",
+    ]
+
+    lines.extend(_generate_duplicate_overview(analysis))
+    lines.extend(_generate_high_similarity_duplicates(analysis))
+    lines.extend(_generate_medium_similarity_duplicates(analysis))
+
+    # Add recommendations if high duplicates found
+    if analysis.high_similarity_count > 0:
+        lines.extend([
+            "### Recommendations",
+            "",
+            "- **Extract common code** to shared utilities or base classes",
+            "- **Review high-similarity pairs** for potential consolidation",
+            "- **Consider design patterns** like Template Method or Strategy for similar logic",
+            "",
+        ])
+
+    lines.extend(["---", ""])
+
+    return lines
+
+
+async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
+    """
+    Get duplicate code analysis for the project (Issue #528).
+
+    Returns:
+        DuplicateAnalysis or None if analysis fails
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        project_root = str(Path(__file__).resolve().parents[4])
+
+        analysis = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: DuplicateCodeDetector(project_root=project_root).run_analysis()
+            ),
+            timeout=60.0,  # 60 second timeout for duplicate detection
+        )
+
+        logger.info(
+            "Duplicate analysis: %d duplicates (%d high, %d medium, %d low)",
+            analysis.total_duplicates,
+            analysis.high_similarity_count,
+            analysis.medium_similarity_count,
+            analysis.low_similarity_count,
+        )
+        return analysis
+    except asyncio.TimeoutError:
+        logger.warning("Duplicate analysis timed out")
+        return None
+    except Exception as e:
+        logger.error("Duplicate analysis failed: %s", e, exc_info=True)
+        return None
+
+
 async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
     """
     Get API endpoint analysis for the project (Issue #527).
@@ -782,6 +966,7 @@ def _generate_markdown_report(
     analyzed_path: Optional[str] = None,
     bug_prediction: Optional[PredictionResult] = None,
     api_endpoint_analysis: Optional[APIEndpointAnalysis] = None,
+    duplicate_analysis: Optional[DuplicateAnalysis] = None,
 ) -> str:
     """
     Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
@@ -800,6 +985,11 @@ def _generate_markdown_report(
     - Endpoint coverage
     - Orphaned endpoints
     - Missing endpoints
+
+    Duplicate code analysis added (Issue #528):
+    - Duplicate code detection
+    - Similarity grouping
+    - Recommendations
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -815,6 +1005,10 @@ def _generate_markdown_report(
     # Add API endpoint analysis section (Issue #527)
     if api_endpoint_analysis:
         lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
+
+    # Add duplicate code analysis section (Issue #528)
+    if duplicate_analysis:
+        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
 
     # Add bug risk section if prediction available (Issue #505)
     if bug_prediction:
@@ -853,6 +1047,7 @@ def _generate_markdown_report(
 async def generate_analysis_report(
     format: str = "markdown",
     include_api_analysis: bool = True,
+    include_duplicate_analysis: bool = True,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -860,6 +1055,7 @@ async def generate_analysis_report(
     Args:
         format: Output format (currently only 'markdown' supported)
         include_api_analysis: Whether to include API endpoint analysis (Issue #527)
+        include_duplicate_analysis: Whether to include duplicate code analysis (Issue #528)
 
     Returns:
         Markdown formatted report as plain text
@@ -899,6 +1095,11 @@ async def generate_analysis_report(
     if include_api_analysis:
         api_endpoint_analysis = await _get_api_endpoint_analysis()
 
+    # Get duplicate code analysis (Issue #528)
+    duplicate_analysis = None
+    if include_duplicate_analysis:
+        duplicate_analysis = await _get_duplicate_analysis()
+
     if not problems:
         # Even with no issues, include other analyses if available
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -918,11 +1119,20 @@ async def generate_analysis_report(
         if api_endpoint_analysis:
             lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
 
+        # Add duplicate code analysis even with no code issues (Issue #528)
+        if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
+            lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+
         # Add bug prediction if available (Issue #505)
         if bug_prediction and bug_prediction.analyzed_files > 0:
             lines.extend(_generate_bug_risk_section(bug_prediction))
 
-        if not api_endpoint_analysis and (not bug_prediction or bug_prediction.analyzed_files == 0):
+        has_analyses = (
+            api_endpoint_analysis or
+            (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
+            (bug_prediction and bug_prediction.analyzed_files > 0)
+        )
+        if not has_analyses:
             lines.append("Run \"Index Codebase\" first to analyze the code.")
             lines.append("")
 
@@ -936,6 +1146,7 @@ async def generate_analysis_report(
             analyzed_path="Indexed Codebase",
             bug_prediction=bug_prediction,
             api_endpoint_analysis=api_endpoint_analysis,
+            duplicate_analysis=duplicate_analysis,
         )
 
     return PlainTextResponse(
