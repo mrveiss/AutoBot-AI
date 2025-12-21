@@ -49,18 +49,29 @@ class ServiceConfigMixin:
         Provides compatibility with config_helper.cfg.get_host()
         for config consolidation (Issue #63).
 
+        Priority order:
+        1. Environment variable AUTOBOT_{SERVICE}_HOST
+        2. Config file infrastructure.hosts.{service}
+        3. Hardcoded fallback map
+
         Args:
-            service: Service name (e.g., 'backend', 'redis', 'frontend')
+            service: Service name (e.g., 'backend', 'redis', 'frontend', 'ollama')
 
         Returns:
             Host address string
         """
-        # Try infrastructure.hosts first
+        # 1. Try environment variable first (highest priority)
+        env_key = f"AUTOBOT_{service.upper()}_HOST"
+        env_host = os.getenv(env_key)
+        if env_host:
+            return env_host
+
+        # 2. Try infrastructure.hosts from config file
         host = self.get_nested(f"infrastructure.hosts.{service}")
         if host:
             return host
 
-        # Fallback to module-level cached map (Issue #380)
+        # 3. Fallback to module-level cached map (Issue #380)
         return _HOST_SERVICE_MAP.get(service, "localhost")
 
     def get_port(self, service: str) -> int:
@@ -70,18 +81,29 @@ class ServiceConfigMixin:
         Provides compatibility with config_helper.cfg.get_port()
         for config consolidation (Issue #63).
 
+        Priority order:
+        1. Environment variable AUTOBOT_{SERVICE}_PORT
+        2. Config file infrastructure.ports.{service}
+        3. Hardcoded fallback map
+
         Args:
-            service: Service name (e.g., 'backend', 'redis', 'frontend')
+            service: Service name (e.g., 'backend', 'redis', 'frontend', 'ollama')
 
         Returns:
             Port number
         """
-        # Try infrastructure.ports first
+        # 1. Try environment variable first (highest priority)
+        env_key = f"AUTOBOT_{service.upper()}_PORT"
+        env_port = os.getenv(env_key)
+        if env_port:
+            return int(env_port)
+
+        # 2. Try infrastructure.ports from config file
         port = self.get_nested(f"infrastructure.ports.{service}")
         if port:
             return int(port)
 
-        # Fallback to module-level cached map (Issue #380)
+        # 3. Fallback to module-level cached map (Issue #380)
         return _PORT_SERVICE_MAP.get(service, 8000)
 
     def get_service_url(self, service: str, endpoint: str = None) -> str:
