@@ -22,6 +22,9 @@ This is the comprehensive documentation index for AutoBot - the definitive auton
 
 ### 🏗️ Architecture & Development
 - **[Visual Architecture](architecture/VISUAL_ARCHITECTURE.md)** - Complete system diagrams and flow charts
+- **[Architecture Decision Records](adr/)** - Historical architectural decisions (ADRs)
+- **[Data Flow Diagrams](architecture/data-flows.md)** - System data flow visualizations
+- **[Redis Schema](architecture/redis-schema.md)** - Database structure documentation
 - [System Architecture](architecture/NPU_WORKER_ARCHITECTURE.json) - NPU worker and system design
 - [GPU Recommendations](architecture/gpu_model_recommendations.json) - Hardware optimization
 - [Architecture Guide](developer/01-architecture.md) - System design principles
@@ -47,6 +50,8 @@ This is the comprehensive documentation index for AutoBot - the definitive auton
 
 ### 🛠️ Deployment & Operations
 - **[Enterprise Deployment Strategy](deployment/ENTERPRISE_DEPLOYMENT_STRATEGY.md)** - Complete enterprise rollout guide
+- **[Scaling Strategy](operations/scaling-strategy.md)** - Vertical and horizontal scaling playbooks
+- **[Disaster Recovery](operations/disaster-recovery.md)** - Recovery procedures for all failure scenarios
 - [Hybrid Deployment Guide](deployment/HYBRID_DEPLOYMENT_GUIDE.md) - Multi-container deployment
 - [Docker Architecture](deployment/DOCKER_ARCHITECTURE.md) - Container orchestration
 - [Docker Migration Notes](deployment/DOCKER_MIGRATION_NOTES.md) - Migration strategies
@@ -159,6 +164,8 @@ python scripts/utilities/report_manager.py --list
 
 This documentation index is automatically maintained and should reflect the current state of the AutoBot platform. For the most recent updates, see:
 
+- [Documentation Changelog](CHANGELOG.md) - Documentation version history
+- [Documentation Improvement Roadmap](DOCUMENTATION_IMPROVEMENT_ROADMAP.md) - Documentation gaps and resolutions
 - [Project Status](status.md) - Current development status
 - [Changes Log](CHANGES.md) - Recent modifications
 - [Task Tracking](tasks.md) - Ongoing development tasks
