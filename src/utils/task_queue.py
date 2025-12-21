@@ -454,16 +454,57 @@ class TaskQueue:
             self.logger.error(f"Failed to get next task from queue: {e}")
             return None  # Return None to allow worker to continue
 
+    async def _record_task_success(
+        self, result: TaskResult, task_result: Any, start_time: float
+    ) -> None:
+        """
+        Record successful task execution.
+
+        (Issue #398: extracted helper)
+        """
+        result.status = TaskStatus.COMPLETED
+        result.result = task_result
+        result.completed_at = datetime.utcnow()
+        result.execution_time = time.time() - start_time
+
+        async with self._stats_lock:
+            self.stats["tasks_processed"] += 1
+            self.stats["total_execution_time"] += result.execution_time
+
+        self.logger.info(
+            "Task %s completed successfully in %.2fs",
+            result.task_id, result.execution_time
+        )
+
+    def _record_task_failure(
+        self, result: TaskResult, error: str, start_time: float,
+        error_traceback: Optional[str] = None
+    ) -> None:
+        """
+        Record task failure.
+
+        (Issue #398: extracted helper)
+        """
+        result.status = TaskStatus.FAILED
+        result.error = error
+        if error_traceback:
+            result.error_traceback = error_traceback
+        result.completed_at = datetime.utcnow()
+        result.execution_time = time.time() - start_time
+
     async def _process_task(self, task_id: str, worker_name: str) -> None:
-        """Process a single task."""
+        """
+        Process a single task.
+
+        (Issue #398: refactored to use extracted helpers)
+        """
         start_time = time.time()
         task = await self._get_task(task_id)
 
         if not task:
-            self.logger.error(f"Task {task_id} not found")
+            self.logger.error("Task %s not found", task_id)
             return
 
-        # Check if task is expired
         if task.expires_at and datetime.utcnow() > task.expires_at:
             await self._handle_task_completion(
                 task,
@@ -474,23 +515,21 @@ class TaskQueue:
             return
 
         self.logger.info(
-            f"Worker {worker_name} processing task {task_id}: " f"{task.function_name}"
+            "Worker %s processing task %s: %s",
+            worker_name, task_id, task.function_name
         )
 
-        # Create result object
         result = TaskResult(
             task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.utcnow()
         )
 
         try:
-            # Get task function
             if task.function_name not in self.task_registry:
                 raise ValueError(f"Task function '{task.function_name}' not registered")
 
             func = self.task_registry[task.function_name]
-
-            # Execute task with timeout
             kwargs = task.kwargs or {}
+
             if task.timeout:
                 task_result = await asyncio.wait_for(
                     self._execute_function(func, task.args, kwargs),
@@ -499,37 +538,19 @@ class TaskQueue:
             else:
                 task_result = await self._execute_function(func, task.args, kwargs)
 
-            # Success
-            result.status = TaskStatus.COMPLETED
-            result.result = task_result
-            result.completed_at = datetime.utcnow()
-            result.execution_time = time.time() - start_time
-
-            async with self._stats_lock:
-                self.stats["tasks_processed"] += 1
-                self.stats["total_execution_time"] += result.execution_time
-
-            self.logger.info(
-                f"Task {task_id} completed successfully in "
-                f"{result.execution_time:.2f}s"
-            )
+            await self._record_task_success(result, task_result, start_time)
 
         except asyncio.TimeoutError:
-            result.status = TaskStatus.FAILED
-            result.error = f"Task timed out after {task.timeout}s"
-            result.completed_at = datetime.utcnow()
-            result.execution_time = time.time() - start_time
-
-            self.logger.error(f"Task {task_id} timed out")
+            self._record_task_failure(
+                result, f"Task timed out after {task.timeout}s", start_time
+            )
+            self.logger.error("Task %s timed out", task_id)
 
         except Exception as e:
-            result.status = TaskStatus.FAILED
-            result.error = str(e)
-            result.error_traceback = traceback.format_exc()
-            result.completed_at = datetime.utcnow()
-            result.execution_time = time.time() - start_time
-
-            self.logger.error(f"Task {task_id} failed: {e}")
+            self._record_task_failure(
+                result, str(e), start_time, traceback.format_exc()
+            )
+            self.logger.error("Task %s failed: %s", task_id, e)
 
         await self._handle_task_completion(task, result)
 

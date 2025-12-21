@@ -244,6 +244,57 @@ async def compare_agents(
     return comparison
 
 
+def _check_agent_metrics(metrics) -> list:
+    """
+    Check agent metrics and generate recommendations.
+
+    (Issue #398: extracted helper)
+    """
+    recommendations = []
+
+    if metrics.error_rate > 10:
+        recommendations.append({
+            "type": "high_error_rate",
+            "severity": "high" if metrics.error_rate > 25 else "medium",
+            "message": f"Error rate of {metrics.error_rate:.1f}% exceeds threshold",
+            "suggestion": "Review error logs and improve error handling",
+        })
+
+    if metrics.avg_duration_ms > 30000:
+        recommendations.append({
+            "type": "slow_performance",
+            "severity": "medium",
+            "message": f"Average duration of {metrics.avg_duration_ms/1000:.1f}s is high",
+            "suggestion": "Consider optimizing task processing or increasing resources",
+        })
+
+    if metrics.total_tasks > 10:
+        timeout_rate = (metrics.timeout_tasks / metrics.total_tasks) * 100
+        if timeout_rate > 5:
+            recommendations.append({
+                "type": "timeout_issues",
+                "severity": "high" if timeout_rate > 15 else "medium",
+                "message": f"Timeout rate of {timeout_rate:.1f}% indicates issues",
+                "suggestion": "Increase timeout limits or optimize long-running operations",
+            })
+
+    if metrics.total_tasks > 0 and metrics.last_activity:
+        from datetime import datetime, timedelta
+        try:
+            last = datetime.fromisoformat(metrics.last_activity)
+            if datetime.utcnow() - last > timedelta(days=7):
+                recommendations.append({
+                    "type": "low_activity",
+                    "severity": "low",
+                    "message": "No activity in the last 7 days",
+                    "suggestion": "Check if agent is properly configured and active",
+                })
+        except Exception as e:
+            logger.debug("Invalid date format in activity check: %s", e)
+
+    return recommendations
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_recommendations",
@@ -255,6 +306,8 @@ async def get_agent_recommendations():
     Get optimization recommendations for agents.
 
     Analyzes performance patterns and suggests improvements.
+
+    (Issue #398: refactored to use extracted helpers)
     """
     analytics = get_agent_analytics()
     metrics_list = await analytics.get_all_agents_metrics()
@@ -262,60 +315,14 @@ async def get_agent_recommendations():
     recommendations = []
 
     for metrics in metrics_list:
-        agent_recommendations = []
-
-        # High error rate
-        if metrics.error_rate > 10:
-            agent_recommendations.append({
-                "type": "high_error_rate",
-                "severity": "high" if metrics.error_rate > 25 else "medium",
-                "message": f"Error rate of {metrics.error_rate:.1f}% exceeds threshold",
-                "suggestion": "Review error logs and improve error handling",
-            })
-
-        # Slow performance
-        if metrics.avg_duration_ms > 30000:  # 30 seconds
-            agent_recommendations.append({
-                "type": "slow_performance",
-                "severity": "medium",
-                "message": f"Average duration of {metrics.avg_duration_ms/1000:.1f}s is high",
-                "suggestion": "Consider optimizing task processing or increasing resources",
-            })
-
-        # High timeout rate
-        if metrics.total_tasks > 10:
-            timeout_rate = (metrics.timeout_tasks / metrics.total_tasks) * 100
-            if timeout_rate > 5:
-                agent_recommendations.append({
-                    "type": "timeout_issues",
-                    "severity": "high" if timeout_rate > 15 else "medium",
-                    "message": f"Timeout rate of {timeout_rate:.1f}% indicates issues",
-                    "suggestion": "Increase timeout limits or optimize long-running operations",
-                })
-
-        # Low activity (if has history but no recent activity)
-        if metrics.total_tasks > 0 and metrics.last_activity:
-            from datetime import datetime, timedelta
-            try:
-                last = datetime.fromisoformat(metrics.last_activity)
-                if datetime.utcnow() - last > timedelta(days=7):
-                    agent_recommendations.append({
-                        "type": "low_activity",
-                        "severity": "low",
-                        "message": "No activity in the last 7 days",
-                        "suggestion": "Check if agent is properly configured and active",
-                    })
-            except Exception as e:
-                logger.debug("Invalid date format in activity check: %s", e)
-
-        if agent_recommendations:
+        agent_recs = _check_agent_metrics(metrics)
+        if agent_recs:
             recommendations.append({
                 "agent_id": metrics.agent_id,
                 "agent_type": metrics.agent_type,
-                "recommendations": agent_recommendations,
+                "recommendations": agent_recs,
             })
 
-    # Sort by severity (high first)
     severity_order = {"high": 0, "medium": 1, "low": 2}
     recommendations.sort(
         key=lambda x: min(

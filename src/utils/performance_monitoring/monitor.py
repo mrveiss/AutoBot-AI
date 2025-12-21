@@ -574,8 +574,39 @@ class PerformanceMonitor:
             self.logger.error(f"Error generating performance dashboard: {e}")
             return {"error": str(e), "timestamp": time.time()}
 
+    def _calculate_trend_direction(self, values: list) -> str:
+        """
+        Calculate trend direction from a list of values.
+
+        (Issue #398: extracted helper)
+        """
+        if not values or len(values) < 2:
+            return "stable"
+        if values[-1] > values[0]:
+            return "increasing"
+        if values[-1] < values[0]:
+            return "decreasing"
+        return "stable"
+
+    def _compute_metric_trend(
+        self, values: list, metric_name: str, decimals: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Compute trend statistics for a metric.
+
+        (Issue #398: extracted helper)
+        """
+        return {
+            "average": round(sum(values) / len(values), decimals),
+            "trend": self._calculate_trend_direction(values),
+        }
+
     async def _calculate_performance_trends(self) -> Dict[str, Any]:
-        """Calculate performance trends from recent metrics."""
+        """
+        Calculate performance trends from recent metrics.
+
+        (Issue #398: refactored to use extracted helpers)
+        """
         try:
             trends = {}
 
@@ -585,7 +616,6 @@ class PerformanceMonitor:
                 }
 
             try:
-
                 def _fetch_trend_data():
                     gpu_data = self.redis_client.zrange(
                         "performance_metrics:gpu", -5, -1
@@ -599,58 +629,25 @@ class PerformanceMonitor:
 
                 if gpu_data and len(gpu_data) >= 2:
                     gpu_metrics = [json.loads(d) for d in gpu_data]
-                    utilizations = [
-                        g.get("utilization_percent", 0) for g in gpu_metrics
-                    ]
-                    trends["gpu_utilization"] = {
-                        "average": round(sum(utilizations) / len(utilizations), 1),
-                        "trend": (
-                            "increasing"
-                            if utilizations[-1] > utilizations[0]
-                            else (
-                                "decreasing"
-                                if utilizations[-1] < utilizations[0]
-                                else "stable"
-                            )
-                        ),
-                    }
+                    utilizations = [g.get("utilization_percent", 0) for g in gpu_metrics]
+                    trends["gpu_utilization"] = self._compute_metric_trend(utilizations, "gpu")
 
                 if system_data and len(system_data) >= 2:
                     system_metrics = [json.loads(d) for d in system_data]
 
                     loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
-                    trends["cpu_load"] = {
-                        "average": round(sum(loads) / len(loads), 2),
-                        "trend": (
-                            "increasing"
-                            if loads[-1] > loads[0]
-                            else "decreasing" if loads[-1] < loads[0] else "stable"
-                        ),
-                    }
+                    trends["cpu_load"] = self._compute_metric_trend(loads, "cpu", decimals=2)
 
-                    memory_usage = [
-                        s.get("memory_usage_percent", 0) for s in system_metrics
-                    ]
-                    trends["memory_usage"] = {
-                        "average": round(sum(memory_usage) / len(memory_usage), 1),
-                        "trend": (
-                            "increasing"
-                            if memory_usage[-1] > memory_usage[0]
-                            else (
-                                "decreasing"
-                                if memory_usage[-1] < memory_usage[0]
-                                else "stable"
-                            )
-                        ),
-                    }
+                    memory_usage = [s.get("memory_usage_percent", 0) for s in system_metrics]
+                    trends["memory_usage"] = self._compute_metric_trend(memory_usage, "memory")
 
             except Exception as e:
-                self.logger.debug(f"Could not calculate trends from Redis: {e}")
+                self.logger.debug("Could not calculate trends from Redis: %s", e)
 
             return trends
 
         except Exception as e:
-            self.logger.error(f"Error calculating performance trends: {e}")
+            self.logger.error("Error calculating performance trends: %s", e)
             return {}
 
     async def add_alert_callback(self, callback: Callable):
