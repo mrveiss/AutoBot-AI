@@ -266,9 +266,11 @@ async def health_check():
 )
 @router.post("/reload")
 async def reload_agent():
-    """Reload the intelligent agent (development endpoint)."""
+    """Reload the intelligent agent (development endpoint, thread-safe)."""
     global _agent_instance
-    _agent_instance = None
+    # Issue #481: Use lock when modifying global state to prevent race conditions
+    async with _agent_initialization_lock:
+        _agent_instance = None
     await get_agent()
 
     return {"status": "reloaded", "message": "Agent reloaded successfully"}

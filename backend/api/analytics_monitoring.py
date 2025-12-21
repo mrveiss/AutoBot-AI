@@ -9,6 +9,7 @@ Extracted from analytics.py to maintain <20 functions per file
 
 import asyncio
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -23,16 +24,20 @@ analytics_controller = None
 analytics_state = None
 hardware_monitor = None
 
+# Thread-safe lock for global state modifications (Issue #481 - race condition fix)
+_analytics_deps_lock = threading.Lock()
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics", "monitoring"])
 
 
 def set_analytics_dependencies(controller, state, hw_monitor):
-    """Set dependencies from main analytics module"""
+    """Set dependencies from main analytics module (thread-safe)"""
     global analytics_controller, analytics_state, hardware_monitor
-    analytics_controller = controller
-    analytics_state = state
-    hardware_monitor = hw_monitor
+    with _analytics_deps_lock:
+        analytics_controller = controller
+        analytics_state = state
+        hardware_monitor = hw_monitor
 
 
 # ============================================================================

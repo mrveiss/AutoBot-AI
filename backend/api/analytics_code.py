@@ -9,6 +9,7 @@ Extracted from analytics.py to maintain <20 functions per file
 
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -22,15 +23,19 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 analytics_controller = None
 analytics_state = None
 
+# Thread-safe lock for global state modifications (Issue #481 - race condition fix)
+_analytics_deps_lock = threading.Lock()
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics", "code-analysis"])
 
 
 def set_analytics_dependencies(controller, state):
-    """Set dependencies from main analytics module"""
+    """Set dependencies from main analytics module (thread-safe)"""
     global analytics_controller, analytics_state
-    analytics_controller = controller
-    analytics_state = state
+    with _analytics_deps_lock:
+        analytics_controller = controller
+        analytics_state = state
 
 
 # ============================================================================

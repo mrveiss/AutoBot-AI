@@ -8,7 +8,9 @@ Eliminates duplication across settings.py, llm.py, and redis.py
 UPDATED: Now uses unified_config_manager for consistent model selection
 """
 
+import fcntl
 import logging
+import threading
 from typing import Dict
 
 import yaml
@@ -36,6 +38,8 @@ class ConfigService:
     _cached_config = None
     _cache_timestamp = None
     CACHE_DURATION = 30  # Cache for 30 seconds
+    # Issue #481: Thread-safe lock for config file writes
+    _config_write_lock = threading.Lock()
 
     @staticmethod
     def _should_refresh_cache() -> bool:
@@ -471,7 +475,7 @@ class ConfigService:
 
     @staticmethod
     def _save_config_to_file(config: Metadata) -> None:
-        """Save configuration to config.yaml file"""
+        """Save configuration to config.yaml file (thread-safe with file locking)"""
         # SAFETY NET: Always filter out prompts before saving (prompts are managed separately)
         import copy
 
@@ -485,5 +489,13 @@ class ConfigService:
         # Use the same dynamic path resolution as the config manager
         config_file_path = unified_config_manager.base_config_file
         config_file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(config_file_path, "w") as f:
-            yaml.dump(filtered_config, f, default_flow_style=False)
+
+        # Issue #481: Use thread lock + file lock for safe concurrent writes
+        with ConfigService._config_write_lock:
+            with open(config_file_path, "w", encoding="utf-8") as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                try:
+                    yaml.dump(filtered_config, f, default_flow_style=False)
+                    f.flush()
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)

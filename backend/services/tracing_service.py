@@ -23,6 +23,7 @@ Features:
 
 import logging
 import os
+import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
@@ -63,11 +64,15 @@ class TracingService:
 
     _instance: Optional["TracingService"] = None
     _initialized: bool = False
+    _lock: threading.Lock = threading.Lock()
 
     def __new__(cls) -> "TracingService":
-        """Singleton pattern - only one tracing service per process."""
+        """Singleton pattern - only one tracing service per process (thread-safe)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._lock:
+                # Double-check after acquiring lock (Issue #481 - race condition fix)
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
