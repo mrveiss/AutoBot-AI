@@ -662,20 +662,20 @@ def main():
 
     # Test ingesting a simple command
     success = manager.ingest_command("ls")
-    print(f"Ingested 'ls' command: {success}")
+    logger.debug("Ingested 'ls' command: %s", success)
 
     # Test retrieving the command
     manual = manager.get_manual("ls")
     if manual:
-        print("Retrieved manual for 'ls':")
-        print(f"  Description: {manual.description}")
-        print(f"  Risk Level: {manual.risk_level}")
-        print(f"  Category: {manual.category}")
-        print(f"  Common Options: {manual.common_options[:3]}")
+        logger.debug("Retrieved manual for 'ls':")
+        logger.debug("  Description: %s", manual.description)
+        logger.debug("  Risk Level: %s", manual.risk_level)
+        logger.debug("  Category: %s", manual.category)
+        logger.debug("  Common Options: %s", manual.common_options[:3])
 
     # Test searching
     results = manager.search_manuals("list files")
-    print(f"Search results for 'list files': {len(results)} commands found")
+    logger.debug(f"Search results for 'list files': {len(results)} commands found")
 
 
 if __name__ == "__main__":

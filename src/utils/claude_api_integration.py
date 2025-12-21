@@ -555,7 +555,7 @@ async def main():
             priority=RequestPriority.HIGH,
             context_type="documentation",
         )
-        print(f"Response 1: {response1}")
+        logger.debug("Response 1: %s", response1)
 
         # Test multiple requests
         requests = [
@@ -566,13 +566,13 @@ async def main():
 
         responses = await manager.submit_multiple_requests(requests, parallel=True)
         for i, response in enumerate(responses):
-            print(f"Response {i+2}: {response}")
+            logger.debug("Response %s: %s", i+2, response)
 
         # Print metrics
-        print("\nPerformance Metrics:")
+        logger.debug("\nPerformance Metrics:")
         metrics = await manager.get_metrics()
         for key, value in metrics.items():
-            print(f"  {key}: {value}")
+            logger.debug("  %s: %s", key, value)
 
 
 if __name__ == "__main__":

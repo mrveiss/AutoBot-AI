@@ -692,38 +692,38 @@ async def main():
             "How do I create a file in Python?",
         ]
 
-        print("Testing graceful degradation...")
+        logger.debug("Testing graceful degradation...")
 
         for i, request in enumerate(requests):
             response = await manager.handle_request(request)
-            print(f"\nRequest {i+1}: {request}")
-            print(f"Response: {response.content[:100]}...")
-            print(f"Source: {response.source}, Confidence: {response.confidence:.2f}")
-            print(f"Degradation Level: {response.degradation_level.name}")
+            logger.debug("\nRequest %s: %s", i+1, request)
+            logger.debug("Response: %s...", response.content[:100])
+            logger.debug("Source: %s, Confidence: %s", response.source, response.confidence:.2f)
+            logger.debug("Degradation Level: %s", response.degradation_level.name)
 
             # Simulate some delay between requests
             await asyncio.sleep(0.5)
 
         # Test forced degradation
-        print("\n" + "=" * 50)
-        print("Testing forced degradation levels...")
+        logger.debug("\n" + "=" * 50)
+        logger.debug("Testing forced degradation levels...")
 
         await manager.force_degradation_level(DegradationLevel.MINIMAL)
         response = await manager.handle_request(
             "Test request during minimal degradation"
         )
-        print(f"Minimal degradation response: {response.content}")
+        logger.debug("Minimal degradation response: %s", response.content)
 
         await manager.force_degradation_level(DegradationLevel.EMERGENCY)
         response = await manager.handle_request("Test request during emergency")
-        print(f"Emergency response: {response.content}")
+        logger.debug("Emergency response: %s", response.content)
 
         # Print final metrics
-        print("\n" + "=" * 50)
-        print("Final Metrics:")
+        logger.debug("\n" + "=" * 50)
+        logger.debug("Final Metrics:")
         metrics = await manager.get_metrics()
         for key, value in metrics.items():
-            print(f"  {key}: {value}")
+            logger.debug("  %s: %s", key, value)
 
 
 if __name__ == "__main__":

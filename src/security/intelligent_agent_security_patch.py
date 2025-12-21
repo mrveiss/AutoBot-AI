@@ -328,7 +328,7 @@ PATCH_INSTRUCTIONS = """
 
 def generate_patch_file():
     """Generate a diff-style patch file for the intelligent agent"""
-    print(PATCH_INSTRUCTIONS)
+    logger.debug("%s", PATCH_INSTRUCTIONS)
 
 
 if __name__ == "__main__":

@@ -151,7 +151,7 @@ async def main():
     # Test the GUIController
     controller = GUIController()
     if controller.virtual_display:
-        print(
+        logger.debug("%s", 
             "Running in virtual display. GUI operations will be performed in the background."
         )
         # Give Xvfb a moment to start
@@ -161,7 +161,7 @@ async def main():
     screenshot = await controller.capture_screen()
     if screenshot:
         screenshot.save("test_screenshot.png")
-        print("Screenshot saved as test_screenshot.png")
+        logger.debug("Screenshot saved as test_screenshot.png")
 
     # Test locating an element (requires an image file to match)
     # location = await controller.locate_element_by_image("sample_element.png")

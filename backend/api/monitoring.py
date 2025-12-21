@@ -30,12 +30,12 @@ from pydantic import BaseModel, Field
 # Import AutoBot monitoring system
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.performance_monitor import (
-    add_phase9_alert_callback,
-    collect_phase9_metrics,
-    get_phase9_optimization_recommendations,
-    get_phase9_performance_dashboard,
+    add_alert_callback,
+    collect_metrics,
+    get_optimization_recommendations,
+    get_performance_dashboard,
     monitor_performance,
-    phase9_monitor,
+    performance_monitor,
     start_monitoring,
     stop_monitoring,
 )
@@ -257,8 +257,8 @@ class MonitoringWebSocketManager:
         """Send periodic performance updates to connected clients"""
         while self.active_connections:
             try:
-                # Get current performance data
-                dashboard = get_phase9_performance_dashboard()
+                # Get current performance data (Issue #430: properly await async function)
+                dashboard = await get_performance_dashboard()
 
                 # Prepare update message
                 update = {
@@ -289,30 +289,30 @@ ws_manager = MonitoringWebSocketManager()
 @router.get("/status", response_model=MonitoringStatus)
 async def get_monitoring_status():
     """Get current monitoring system status"""
-    dashboard = get_phase9_performance_dashboard()
+    dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Calculate uptime
     uptime_seconds = 0
-    if phase9_monitor.monitoring_active:
+    if performance_monitor.monitoring_active:
         uptime_seconds = time.time() - getattr(
-            phase9_monitor, "start_time", time.time()
+            performance_monitor, "start_time", time.time()
         )
 
     # Count metrics collected
     metrics_collected = (
-        len(phase9_monitor.gpu_metrics_buffer)
-        + len(phase9_monitor.npu_metrics_buffer)
-        + len(phase9_monitor.multimodal_metrics_buffer)
-        + len(phase9_monitor.system_metrics_buffer)
+        len(performance_monitor.gpu_metrics_buffer)
+        + len(performance_monitor.npu_metrics_buffer)
+        + len(performance_monitor.multimodal_metrics_buffer)
+        + len(performance_monitor.system_metrics_buffer)
     )
 
     return MonitoringStatus(
-        active=phase9_monitor.monitoring_active,
+        active=performance_monitor.monitoring_active,
         uptime_seconds=uptime_seconds,
-        collection_interval=phase9_monitor.collection_interval,
+        collection_interval=performance_monitor.collection_interval,
         hardware_acceleration=dashboard.get("hardware_acceleration", {}),
         metrics_collected=metrics_collected,
-        alerts_count=len(phase9_monitor.performance_alerts),
+        alerts_count=len(performance_monitor.performance_alerts),
     )
 
 
@@ -324,7 +324,7 @@ async def get_monitoring_status():
 @router.post("/start")
 async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     """Start AutoBot performance monitoring"""
-    if phase9_monitor.monitoring_active:
+    if performance_monitor.monitoring_active:
         return {
             "status": "already_running",
             "message": "AutoBot monitoring is already active",
@@ -344,12 +344,12 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
             }
         )
 
-    add_phase9_alert_callback(alert_callback)
+    add_alert_callback(alert_callback)
 
     return {
         "status": "started",
         "message": "AutoBot comprehensive performance monitoring started",
-        "collection_interval": phase9_monitor.collection_interval,
+        "collection_interval": performance_monitor.collection_interval,
     }
 
 
@@ -361,7 +361,7 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
 @router.post("/stop")
 async def stop_monitoring_endpoint():
     """Stop AutoBot performance monitoring"""
-    if not phase9_monitor.monitoring_active:
+    if not performance_monitor.monitoring_active:
         return {
             "status": "not_running",
             "message": "AutoBot monitoring is not currently active",
@@ -381,9 +381,9 @@ async def stop_monitoring_endpoint():
     error_code_prefix="MONITORING",
 )
 @router.get("/dashboard")
-async def get_performance_dashboard():
+async def get_dashboard_endpoint():
     """Get comprehensive performance dashboard"""
-    dashboard = get_phase9_performance_dashboard()
+    dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Add additional analysis
     dashboard["analysis"] = {
@@ -404,7 +404,7 @@ async def get_performance_dashboard():
 @router.get("/dashboard/overview")
 async def get_dashboard_overview():
     """Get dashboard overview data for frontend"""
-    dashboard = get_phase9_performance_dashboard()
+    dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Add additional analysis
     dashboard["analysis"] = {
@@ -425,7 +425,7 @@ async def get_dashboard_overview():
 @router.get("/metrics/current")
 async def get_current_metrics():
     """Get current performance metrics snapshot"""
-    metrics = await collect_phase9_metrics()
+    metrics = await collect_metrics()
     return {
         "timestamp": time.time(),
         "metrics": metrics,
@@ -464,30 +464,30 @@ async def query_metrics(query: MetricsQuery):
 
     for category in categories:
         # Issue #372: Use model methods to reduce feature envy
-        if category == "gpu" and phase9_monitor.gpu_metrics_buffer:
+        if category == "gpu" and performance_monitor.gpu_metrics_buffer:
             filtered_metrics = [
                 m
-                for m in phase9_monitor.gpu_metrics_buffer
+                for m in performance_monitor.gpu_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["gpu"] = [
                 m.to_query_dict() for m in filtered_metrics
             ]
 
-        elif category == "npu" and phase9_monitor.npu_metrics_buffer:
+        elif category == "npu" and performance_monitor.npu_metrics_buffer:
             filtered_metrics = [
                 m
-                for m in phase9_monitor.npu_metrics_buffer
+                for m in performance_monitor.npu_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["npu"] = [
                 m.to_query_dict() for m in filtered_metrics
             ]
 
-        elif category == "system" and phase9_monitor.system_metrics_buffer:
+        elif category == "system" and performance_monitor.system_metrics_buffer:
             filtered_metrics = [
                 m
-                for m in phase9_monitor.system_metrics_buffer
+                for m in performance_monitor.system_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
             result["metrics"]["system"] = [
@@ -496,13 +496,13 @@ async def query_metrics(query: MetricsQuery):
 
     # Include trends if requested
     if query.include_trends:
-        result["trends"] = phase9_monitor._calculate_performance_trends()
+        result["trends"] = performance_monitor._calculate_performance_trends()
 
     # Include recent alerts if requested
     if query.include_alerts:
         result["alerts"] = [
             alert
-            for alert in phase9_monitor.performance_alerts
+            for alert in performance_monitor.performance_alerts
             if start_time <= alert.get("timestamp", 0) <= end_time
         ]
 
@@ -517,9 +517,9 @@ async def query_metrics(query: MetricsQuery):
 @router.get(
     "/optimization/recommendations", response_model=List[OptimizationRecommendation]
 )
-async def get_optimization_recommendations():
+async def get_optimization_recommendations_endpoint():
     """Get performance optimization recommendations"""
-    recommendations = get_phase9_optimization_recommendations()
+    recommendations = await get_optimization_recommendations()  # Issue #430: await
 
     return [
         OptimizationRecommendation(
@@ -545,7 +545,7 @@ async def get_performance_alerts(
     limit: int = Query(50, ge=1, le=500, description="Maximum number of alerts"),
 ):
     """Get performance alerts with optional filtering"""
-    alerts = list(phase9_monitor.performance_alerts)
+    alerts = list(performance_monitor.performance_alerts)
 
     # Apply filters
     if severity:
@@ -579,14 +579,14 @@ async def get_performance_alerts(
 async def check_alerts():
     """Check for performance alerts.
 
-    Issue #474: Now includes alerts from both phase9_monitor (legacy) and
+    Issue #474: Now includes alerts from both performance_monitor (legacy) and
     Prometheus AlertManager (preferred). AlertManager alerts take precedence
     and include richer metadata from the Prometheus alerting rules.
     """
     # Get legacy performance alerts
-    legacy_alerts = list(phase9_monitor.performance_alerts)
+    legacy_alerts = list(performance_monitor.performance_alerts)
     for alert in legacy_alerts:
-        alert["source"] = "phase9_monitor"
+        alert["source"] = "performance_monitor"
 
     # Issue #474: Fetch AlertManager alerts
     alertmanager_alerts = await _fetch_alertmanager_alerts()
@@ -603,7 +603,7 @@ async def check_alerts():
         "high_count": sum(1 for a in all_alerts if a.get("severity") == "high"),
         "sources": {
             "alertmanager": len(alertmanager_alerts),
-            "phase9_monitor": len(legacy_alerts),
+            "performance_monitor": len(legacy_alerts),
         },
     }
 
@@ -659,9 +659,9 @@ async def update_performance_threshold(threshold: ThresholdUpdate):
     # Update threshold in monitoring system
     threshold_key = f"{threshold.category}_{threshold.metric}"
 
-    if threshold_key in phase9_monitor.performance_baselines:
-        old_value = phase9_monitor.performance_baselines[threshold_key]
-        phase9_monitor.performance_baselines[threshold_key] = threshold.threshold
+    if threshold_key in performance_monitor.performance_baselines:
+        old_value = performance_monitor.performance_baselines[threshold_key]
+        performance_monitor.performance_baselines[threshold_key] = threshold.threshold
 
         return {
             "status": "updated",
@@ -687,7 +687,7 @@ async def update_performance_threshold(threshold: ThresholdUpdate):
 @router.get("/hardware/gpu")
 async def get_gpu_details():
     """Get detailed GPU information and metrics"""
-    gpu_metrics = await phase9_monitor.collect_gpu_metrics()
+    gpu_metrics = await performance_monitor.collect_gpu_metrics()
 
     if not gpu_metrics:
         return {"available": False, "message": "GPU not available or accessible"}
@@ -702,10 +702,10 @@ async def get_gpu_details():
                 "memory_utilization_percent": m.memory_utilization_percent,
                 "temperature_celsius": m.temperature_celsius,
             }
-            for m in list(phase9_monitor.gpu_metrics_buffer)[-60:]  # Last 60 samples
+            for m in list(performance_monitor.gpu_metrics_buffer)[-60:]  # Last 60 samples
         ],
         "optimization_status": {
-            "target_utilization": phase9_monitor.performance_baselines[
+            "target_utilization": performance_monitor.performance_baselines[
                 "gpu_utilization_target"
             ],
             "current_efficiency": _calculate_gpu_efficiency(gpu_metrics),
@@ -724,7 +724,7 @@ async def get_gpu_details():
 @router.get("/hardware/npu")
 async def get_npu_details():
     """Get detailed NPU information and metrics"""
-    npu_metrics = await phase9_monitor.collect_npu_metrics()
+    npu_metrics = await performance_monitor.collect_npu_metrics()
 
     if not npu_metrics:
         return {"available": False, "message": "NPU not available or not supported"}
@@ -739,10 +739,10 @@ async def get_npu_details():
                 "acceleration_ratio": m.acceleration_ratio,
                 "inference_count": m.inference_count,
             }
-            for m in list(phase9_monitor.npu_metrics_buffer)[-60:]  # Last 60 samples
+            for m in list(performance_monitor.npu_metrics_buffer)[-60:]  # Last 60 samples
         ],
         "optimization_status": {
-            "target_acceleration": phase9_monitor.performance_baselines[
+            "target_acceleration": performance_monitor.performance_baselines[
                 "npu_acceleration_target"
             ],
             "current_efficiency": _calculate_npu_efficiency(npu_metrics),
@@ -759,7 +759,7 @@ async def get_npu_details():
 @router.get("/services/health")
 async def get_services_health():
     """Get health status of all monitored services"""
-    service_metrics = await phase9_monitor.collect_service_performance_metrics()
+    service_metrics = await performance_monitor.collect_service_performance_metrics()
 
     services_health = {
         "timestamp": time.time(),
@@ -838,17 +838,17 @@ async def export_metrics(
     }
 
     # Filter GPU metrics
-    for metric in phase9_monitor.gpu_metrics_buffer:
+    for metric in performance_monitor.gpu_metrics_buffer:
         if start_time <= metric.timestamp <= end_time:
             export_data["gpu_metrics"].append(metric.__dict__)
 
     # Filter NPU metrics
-    for metric in phase9_monitor.npu_metrics_buffer:
+    for metric in performance_monitor.npu_metrics_buffer:
         if start_time <= metric.timestamp <= end_time:
             export_data["npu_metrics"].append(metric.__dict__)
 
     # Filter system metrics
-    for metric in phase9_monitor.system_metrics_buffer:
+    for metric in performance_monitor.system_metrics_buffer:
         if start_time <= metric.timestamp <= end_time:
             export_data["system_metrics"].append(metric.__dict__)
 
@@ -856,7 +856,7 @@ async def export_metrics(
     for (
         service_name,
         metrics_buffer,
-    ) in phase9_monitor.service_metrics_buffer.items():
+    ) in performance_monitor.service_metrics_buffer.items():
         filtered_metrics = [
             m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time
         ]
@@ -895,7 +895,7 @@ async def export_metrics(
 
 async def _handle_get_current_metrics(websocket: WebSocket, command: dict) -> None:
     """Handle get_current_metrics WebSocket command (Issue #315: extracted)."""
-    metrics = await collect_phase9_metrics()
+    metrics = await collect_metrics()
     await websocket.send_text(
         json.dumps({"type": "metrics_response", "data": metrics}, default=str)
     )
@@ -964,7 +964,7 @@ async def test_performance_monitoring():
     await asyncio.sleep(0.1)
 
     # Collect current metrics
-    metrics = await collect_phase9_metrics()
+    metrics = await collect_metrics()
 
     return {
         "message": "Performance monitoring test completed",

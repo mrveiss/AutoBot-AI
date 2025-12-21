@@ -359,9 +359,9 @@ class AnalyticsController:
             metrics["advanced_metrics"] = summary
             metrics["detailed_metrics"] = current_metrics
 
-            # Hardware performance from existing monitor
-            gpu_status = hardware_monitor.get_gpu_status()
-            npu_status = hardware_monitor.get_npu_status()
+            # Hardware performance from existing monitor (Issue #430: await async)
+            gpu_status = await hardware_monitor.get_gpu_status()
+            npu_status = await hardware_monitor.get_npu_status()
 
             metrics["hardware_performance"] = {
                 "gpu": gpu_status,

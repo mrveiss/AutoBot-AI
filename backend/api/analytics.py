@@ -211,8 +211,8 @@ async def get_detailed_system_health():
             detailed_health["service_connectivity"][service_name] = status
         detailed_health["service_connectivity"]["redis"] = "checked_via_redis"
 
-    # Resource alerts using helper
-    system_resources = hardware_monitor.get_system_resources()
+    # Resource alerts using helper (Issue #430: await async)
+    system_resources = await hardware_monitor.get_system_resources()
     detailed_health["resource_alerts"] = _check_resource_alerts(system_resources)
 
     return detailed_health
@@ -393,9 +393,9 @@ analytics_code.set_analytics_dependencies(analytics_controller, analytics_state)
 @router.get("/realtime/metrics")
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
-    # Get current system metrics
+    # Get current system metrics (Issue #430: await async)
     current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
-    system_resources = hardware_monitor.get_system_resources()
+    system_resources = await hardware_monitor.get_system_resources()
 
     realtime_data = {
         "timestamp": datetime.now().isoformat(),

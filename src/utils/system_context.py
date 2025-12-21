@@ -213,27 +213,27 @@ def generate_unique_key(
 # Test function for manual verification
 def test_system_context():
     """Test system context detection"""
-    print("=" * 80)
-    print("System Context Detection Test")
-    print("=" * 80)
+    logger.debug("=" * 80)
+    logger.debug("System Context Detection Test")
+    logger.debug("=" * 80)
 
     context = get_system_context()
 
-    print(f"\nMachine ID: {context['machine_id']}")
-    print(f"Machine IP: {context['machine_ip']}")
-    print(f"OS Name: {context['os_name']}")
-    print(f"OS Version: {context['os_version']}")
-    print(f"OS Type: {context['os_type']}")
-    print(f"Architecture: {context['architecture']}")
-    print(f"Kernel Version: {context['kernel_version']}")
+    logger.debug("\nMachine ID: %s", context['machine_id'])
+    logger.debug("Machine IP: %s", context['machine_ip'])
+    logger.debug("OS Name: %s", context['os_name'])
+    logger.debug("OS Version: %s", context['os_version'])
+    logger.debug("OS Type: %s", context['os_type'])
+    logger.debug("Architecture: %s", context['architecture'])
+    logger.debug("Kernel Version: %s", context['kernel_version'])
 
-    print(f"\nCompatible OSes: {get_compatible_os_list(context['os_name'])}")
+    logger.debug(f"\nCompatible OSes: {get_compatible_os_list(context['os_name'])}")
 
     # Test unique key generation
     test_key = generate_unique_key(context["machine_id"], context["os_name"], "ls", "1")
-    print(f"\nSample unique key (ls): {test_key}")
+    logger.debug(f"\nSample unique key (ls): {test_key}")
 
-    print("=" * 80)
+    logger.debug("=" * 80)
 
 
 if __name__ == "__main__":

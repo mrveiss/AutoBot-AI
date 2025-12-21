@@ -407,19 +407,19 @@ async def main():
         "use curl to test connection",
     ]
 
-    print("Testing Enhanced Command Detector")
-    print("=" * 50)
+    logger.debug("Testing Enhanced Command Detector")
+    logger.debug("=" * 50)
 
     for message in test_messages:
-        print(f"\nMessage: {message}")
+        logger.debug("\nMessage: %s", message)
         result = await detector.detect_command_needed(message)
         if result:
-            print(f"Command: {result['command']}")
-            print(f"Purpose: {result['purpose']}")
-            print(f"Risk: {result['risk_level']}")
-            print(f"From KB: {result.get('from_knowledge_base', False)}")
+            logger.debug("Command: %s", result['command'])
+            logger.debug("Purpose: %s", result['purpose'])
+            logger.debug("Risk: %s", result['risk_level'])
+            logger.debug(f"From KB: {result.get('from_knowledge_base', False)}")
         else:
-            print("No command detected")
+            logger.debug("No command detected")
 
 
 if __name__ == "__main__":

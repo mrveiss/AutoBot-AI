@@ -20,7 +20,7 @@ import logging
 import time
 
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.performance_monitor import get_phase9_performance_dashboard
+from src.utils.performance_monitor import get_performance_dashboard
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +32,14 @@ class HardwareMonitor:
     """Hardware monitor compatibility layer for analytics integration"""
 
     @staticmethod
-    def get_gpu_status():
+    async def get_gpu_status():
         """Get GPU status for analytics.
 
+        Issue #430: Made async to properly await get_performance_dashboard.
         Issue #471: Now also emits Prometheus metrics for GPU status.
         """
         try:
-            dashboard = get_phase9_performance_dashboard()
+            dashboard = await get_performance_dashboard()
             gpu_data = dashboard.get("gpu", {})
             hw_accel = dashboard.get("hardware_acceleration", {})
 
@@ -74,13 +75,14 @@ class HardwareMonitor:
             return {"available": False, "status": "error", "error": str(e)}
 
     @staticmethod
-    def get_npu_status():
+    async def get_npu_status():
         """Get NPU status for analytics.
 
+        Issue #430: Made async to properly await get_performance_dashboard.
         Issue #471: Now also emits Prometheus metrics for NPU status.
         """
         try:
-            dashboard = get_phase9_performance_dashboard()
+            dashboard = await get_performance_dashboard()
             npu_data = dashboard.get("npu", {})
             hw_accel = dashboard.get("hardware_acceleration", {})
 
@@ -111,10 +113,11 @@ class HardwareMonitor:
     async def get_system_health():
         """Get system health for analytics.
 
+        Issue #430: Now properly awaits get_performance_dashboard.
         Issue #471: Now also emits Prometheus metrics for system health.
         """
         try:
-            dashboard = get_phase9_performance_dashboard()
+            dashboard = await get_performance_dashboard()
             system_data = dashboard.get("system", {})
 
             cpu_usage = system_data.get("cpu_usage_percent", 0)
@@ -140,13 +143,14 @@ class HardwareMonitor:
             return {"status": "error", "error": str(e)}
 
     @staticmethod
-    def get_system_resources():
+    async def get_system_resources():
         """Get system resources for analytics.
 
+        Issue #430: Made async to properly await get_performance_dashboard.
         Issue #471: Now also emits Prometheus metrics for system resources.
         """
         try:
-            dashboard = get_phase9_performance_dashboard()
+            dashboard = await get_performance_dashboard()
             system_data = dashboard.get("system", {})
 
             cpu_usage = system_data.get("cpu_usage_percent", 0)

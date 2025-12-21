@@ -728,13 +728,13 @@ async def main():
         results = await asyncio.gather(*tasks)
 
         for i, result in enumerate(results):
-            print(f"Request {i+1} result: {result}")
+            logger.debug("Request %s result: %s", i+1, result)
 
         # Print statistics
-        print("\nBatching Statistics:")
+        logger.debug("\nBatching Statistics:")
         stats = await batcher.get_statistics()
         for key, value in stats.items():
-            print(f"  {key}: {value}")
+            logger.debug("  %s: %s", key, value)
 
     finally:
         await batcher.stop()

@@ -278,17 +278,17 @@ class VoiceInterface:
         with sr.Microphone() as source:
             # Adjust for ambient noise
             self.recognizer.adjust_for_ambient_noise(source)
-            print("Listening for speech...")
+            logger.info("Listening for speech...")
             try:
                 audio = self.recognizer.listen(
                     source,
                     timeout=timeout,
                     phrase_time_limit=phrase_time_limit,
                 )
-                print("Processing speech...")
+                logger.info("Processing speech...")
                 # Use Google Web Speech API for recognition
                 text = self.recognizer.recognize_google(audio)
-                print(f"Recognized: {text}")
+                logger.info("Recognized: %s", text)
                 return {"status": "success", "text": text}
             except sr.WaitTimeoutError:
                 return {
@@ -328,7 +328,7 @@ class VoiceInterface:
             }
 
         try:
-            print(f"Speaking: {text}")
+            logger.info("Speaking: %s", text)
             # pyttsx3 runAndWait() is blocking, so run in a thread
             # or process pool executor
             # to avoid blocking the asyncio event loop.
