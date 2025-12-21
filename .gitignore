@@ -44,11 +44,14 @@ autobot-vue/dist/
 autobot-vue/.vite/
 
 # === APPLICATION DATA ===
-# CRITICAL: Ignore ALL data directory contents (user data, runtime files, etc.)
-# Data files should NEVER be committed to git
-data/
+# CRITICAL: Ignore data directory contents EXCEPT configuration files
+# User data and runtime files should NEVER be committed to git
+# Issue #515: Allow mcp_tools/ and knowledge/ configuration YAML files
+data/*
 !data/.gitkeep
 !data/*/.gitkeep
+!data/mcp_tools/
+!data/knowledge/
 
 # Analysis outputs - large JSON files and results
 analysis/**/*.json

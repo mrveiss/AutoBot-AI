@@ -28,6 +28,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.template_loader import load_knowledge_data, knowledge_data_exists
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +103,28 @@ def _get_system_commands_data() -> list:
 
     Issue #281: Extracted from populate_system_commands to reduce function
     length and separate data from logic.
+    Issue #515: Data externalized to data/knowledge/system_commands.yaml
 
     Returns:
         List of command info dictionaries with keys:
         command, description, usage, examples, options
+    """
+    # Issue #515: Try loading from YAML first
+    if knowledge_data_exists("system_commands"):
+        try:
+            return load_knowledge_data("system_commands", key="commands")
+        except Exception as e:
+            logger.warning("Failed to load system commands from YAML: %s", e)
+
+    # Fallback to inline data for backwards compatibility
+    return _get_fallback_system_commands()
+
+
+def _get_fallback_system_commands() -> list:
+    """
+    Fallback system commands data if YAML file is not available.
+
+    Issue #515: Preserved for backwards compatibility during data migration.
     """
     return [
         {

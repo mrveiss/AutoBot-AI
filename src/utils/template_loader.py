@@ -14,7 +14,9 @@ Created: 2025-12-21
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional, Union
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -212,3 +214,147 @@ def get_data_path(data_path: str) -> Path:
         Full Path object to the data file
     """
     return DATA_DIR / data_path
+
+
+def load_yaml_data(
+    data_path: str,
+    substitutions: Optional[Dict[str, Any]] = None
+) -> Union[Dict[str, Any], List[Any]]:
+    """
+    Load and parse a YAML data file with optional placeholder substitution.
+
+    Issue #515: Load YAML data files for MCP tools, knowledge data, etc.
+
+    Args:
+        data_path: Relative path from data/ directory
+                  (e.g., "mcp_tools/http_client_tools.yaml")
+        substitutions: Optional dict of placeholder values to substitute
+                      e.g., {"DEFAULT_TIMEOUT": 30, "MAX_TIMEOUT": 120}
+
+    Returns:
+        Parsed YAML content (dict or list)
+
+    Raises:
+        FileNotFoundError: If data file doesn't exist
+        yaml.YAMLError: If YAML parsing fails
+    """
+    content = load_data_file(data_path)
+
+    # Apply placeholder substitutions if provided
+    if substitutions:
+        for key, value in substitutions.items():
+            placeholder = f"${{{key}}}"
+            content = content.replace(placeholder, str(value))
+
+    try:
+        return yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        logger.error("Failed to parse YAML %s: %s", data_path, e)
+        raise
+
+
+def load_mcp_tools(
+    tool_file: str,
+    config: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Load MCP tool definitions from a YAML file.
+
+    Issue #515: Externalize MCP tool definitions to YAML files.
+
+    Args:
+        tool_file: Filename in data/mcp_tools/ (with or without .yaml extension)
+        config: Configuration values to substitute in tool definitions
+               e.g., {"DEFAULT_TIMEOUT": 30, "MAX_TIMEOUT": 120}
+
+    Returns:
+        List of MCP tool definition dicts
+
+    Example YAML structure:
+        tools:
+          - name: http_get
+            description: "Perform HTTP GET request..."
+            input_schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: "Target URL"
+              required: ["url"]
+    """
+    if not tool_file.endswith(".yaml"):
+        tool_file = f"{tool_file}.yaml"
+
+    data_path = f"mcp_tools/{tool_file}"
+    data = load_yaml_data(data_path, substitutions=config)
+
+    if isinstance(data, dict) and "tools" in data:
+        return data["tools"]
+    elif isinstance(data, list):
+        return data
+    else:
+        logger.warning("Unexpected MCP tools YAML structure in %s", data_path)
+        return []
+
+
+def mcp_tools_exist(tool_file: str) -> bool:
+    """
+    Check if an MCP tools YAML file exists.
+
+    Args:
+        tool_file: Filename in data/mcp_tools/ (with or without .yaml extension)
+
+    Returns:
+        True if file exists, False otherwise
+    """
+    if not tool_file.endswith(".yaml"):
+        tool_file = f"{tool_file}.yaml"
+
+    return data_file_exists(f"mcp_tools/{tool_file}")
+
+
+def load_knowledge_data(
+    data_file: str,
+    key: Optional[str] = None
+) -> Union[Dict[str, Any], List[Any]]:
+    """
+    Load knowledge data from a YAML file in data/knowledge/.
+
+    Issue #515: Externalize knowledge base data to YAML files.
+
+    Args:
+        data_file: Filename in data/knowledge/ (with or without .yaml extension)
+        key: Optional key to extract from the YAML (e.g., "commands")
+
+    Returns:
+        Parsed YAML content (dict or list)
+
+    Example:
+        commands = load_knowledge_data("system_commands", key="commands")
+    """
+    if not data_file.endswith(".yaml"):
+        data_file = f"{data_file}.yaml"
+
+    data_path = f"knowledge/{data_file}"
+    data = load_yaml_data(data_path)
+
+    if key and isinstance(data, dict) and key in data:
+        return data[key]
+
+    return data
+
+
+def knowledge_data_exists(data_file: str) -> bool:
+    """
+    Check if a knowledge data YAML file exists.
+
+    Args:
+        data_file: Filename in data/knowledge/ (with or without .yaml extension)
+
+    Returns:
+        True if file exists, False otherwise
+    """
+    if not data_file.endswith(".yaml"):
+        data_file = f"{data_file}.yaml"
+
+    return data_file_exists(f"knowledge/{data_file}")

@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field, field_validator
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
+from src.utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["http_client_mcp", "mcp"])
@@ -521,6 +522,24 @@ def _get_http_write_tools() -> List[MCPTool]:
     ]
 
 
+def _load_tools_from_yaml() -> List[MCPTool]:
+    """
+    Load MCP tools from YAML file with placeholder substitution.
+
+    Issue #515: Externalized MCP tool definitions to data/mcp_tools/http_client_tools.yaml
+
+    Returns:
+        List of MCPTool objects loaded from YAML
+    """
+    config = {
+        "DEFAULT_TIMEOUT": DEFAULT_TIMEOUT,
+        "MAX_TIMEOUT": MAX_TIMEOUT,
+    }
+
+    tool_dicts = load_mcp_tools("http_client_tools", config=config)
+    return [MCPTool(**tool) for tool in tool_dicts]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_http_client_mcp_tools",
@@ -532,8 +551,16 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
     Return all available HTTP Client MCP tools
 
     This endpoint follows the MCP specification for tool discovery.
+    Issue #515: Tools now loaded from YAML with Python fallback.
     """
-    # Issue #281: Use extracted helpers for tool definitions by category
+    # Issue #515: Try loading from YAML first, fallback to Python definitions
+    if mcp_tools_exist("http_client_tools"):
+        try:
+            return _load_tools_from_yaml()
+        except Exception as e:
+            logger.warning("Failed to load MCP tools from YAML, using fallback: %s", e)
+
+    # Issue #281: Fallback to extracted helpers for tool definitions by category
     tools = []
     tools.extend(_get_http_read_tools())
     tools.extend(_get_http_write_tools())
